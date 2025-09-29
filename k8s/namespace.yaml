@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mvs-system
+  labels:
+    name: mvs-system
+    app: mvs-3.0

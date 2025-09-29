@@ -1,0 +1,101 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mvs-ingress
+  namespace: mvs-system
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+spec:
+  rules:
+  - host: mvs.local
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: mvs-backend-service
+            port:
+              number: 5000
+      - path: /socket.io
+        pathType: Prefix
+        backend:
+          service:
+            name: mvs-backend-service
+            port:
+              number: 5000
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: mvs-frontend-service
+            port:
+              number: 80
+  - host: api.mvs.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: mvs-backend-service
+            port:
+              number: 5000
+
+---
+# TLS 설정 (선택사항)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mvs-ingress-tls
+  namespace: mvs-system
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - mvs.local
+    - api.mvs.local
+    secretName: mvs-tls-secret
+  rules:
+  - host: mvs.local
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: mvs-backend-service
+            port:
+              number: 5000
+      - path: /socket.io
+        pathType: Prefix
+        backend:
+          service:
+            name: mvs-backend-service
+            port:
+              number: 5000
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: mvs-frontend-service
+            port:
+              number: 80
+  - host: api.mvs.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: mvs-backend-service
+            port:
+              number: 5000

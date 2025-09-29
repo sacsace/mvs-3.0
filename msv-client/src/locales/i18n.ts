@@ -1,0 +1,518 @@
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
+import LanguageDetector from 'i18next-browser-languagedetector';
+
+// 한국어 번역
+const ko = {
+  translation: {
+    // 공통
+    common: {
+      save: '저장',
+      cancel: '취소',
+      delete: '삭제',
+      edit: '수정',
+      add: '추가',
+      search: '검색',
+      filter: '필터',
+      export: '내보내기',
+      import: '가져오기',
+      print: '인쇄',
+      refresh: '새로고침',
+      loading: '로딩 중...',
+      noData: '데이터가 없습니다',
+      confirm: '확인',
+      yes: '예',
+      no: '아니오',
+      close: '닫기',
+      back: '뒤로',
+      next: '다음',
+      previous: '이전',
+      submit: '제출',
+      reset: '초기화',
+      clear: '지우기',
+      select: '선택',
+      selectAll: '전체 선택',
+      deselectAll: '전체 해제',
+      actions: '작업',
+      status: '상태',
+      created: '생성일',
+      updated: '수정일',
+      name: '이름',
+      description: '설명',
+      email: '이메일',
+      phone: '전화번호',
+      address: '주소',
+      date: '날짜',
+      time: '시간',
+      type: '유형',
+      category: '카테고리',
+      priority: '우선순위',
+      tags: '태그',
+      notes: '메모',
+    },
+    
+    // 인증
+    auth: {
+      login: '로그인',
+      logout: '로그아웃',
+      register: '회원가입',
+      forgotPassword: '비밀번호 찾기',
+      resetPassword: '비밀번호 재설정',
+      changePassword: '비밀번호 변경',
+      userid: '사용자 ID',
+      password: '비밀번호',
+      confirmPassword: '비밀번호 확인',
+      rememberMe: '로그인 상태 유지',
+      loginSuccess: '로그인에 성공했습니다',
+      loginFailed: '로그인에 실패했습니다',
+      logoutSuccess: '로그아웃되었습니다',
+      invalidCredentials: '잘못된 사용자 정보입니다',
+      sessionExpired: '세션이 만료되었습니다',
+      accessDenied: '접근이 거부되었습니다',
+    },
+    
+    // 네비게이션
+    nav: {
+      dashboard: '대시보드',
+      users: '사용자 관리',
+      menu: '메뉴 관리',
+      notifications: '알림',
+      chat: '채팅',
+      settings: '설정',
+      profile: '프로필',
+      help: '도움말',
+      about: '정보',
+    },
+    
+    // 사용자 관리
+    users: {
+      title: '사용자 관리',
+      addUser: '사용자 추가',
+      editUser: '사용자 수정',
+      deleteUser: '사용자 삭제',
+      userList: '사용자 목록',
+      userDetails: '사용자 상세',
+      username: '사용자명',
+      role: '역할',
+      department: '부서',
+      position: '직책',
+      status: '상태',
+      active: '활성',
+      inactive: '비활성',
+      lastLogin: '마지막 로그인',
+      createdAt: '생성일',
+      personalInfo: '개인 정보',
+      bankInfo: '은행 정보',
+      emergencyContact: '비상연락처',
+      skills: '기술',
+      languages: '언어',
+      socialMedia: '소셜 미디어',
+      firstName: '이름',
+      lastName: '성',
+      middleName: '중간 이름',
+      dateOfBirth: '생년월일',
+      gender: '성별',
+      nationality: '국적',
+      maritalStatus: '혼인상태',
+      bloodType: '혈액형',
+      personalEmail: '개인 이메일',
+      personalPhone: '개인 전화번호',
+      personalAddress: '개인 주소',
+      profilePicture: '프로필 사진',
+      bio: '자기소개',
+      accountHolder: '예금주',
+      bankName: '은행명',
+      accountNumber: '계좌번호',
+      ifscCode: 'IFSC 코드',
+      emergencyContactName: '비상연락처 이름',
+      emergencyContactPhone: '비상연락처 전화번호',
+      emergencyContactRelationship: '관계',
+      mfaEnabled: '2단계 인증 활성화',
+      preferences: '환경설정',
+    },
+    
+    // 역할
+    roles: {
+      root: 'Root',
+      audit: 'Audit',
+      admin: 'Admin',
+      user: 'User',
+    },
+    
+    // 성별
+    gender: {
+      male: '남성',
+      female: '여성',
+      other: '기타',
+    },
+    
+    // 혼인상태
+    maritalStatus: {
+      single: '미혼',
+      married: '기혼',
+      divorced: '이혼',
+      widowed: '사별',
+    },
+    
+    // 혈액형
+    bloodType: {
+      'A+': 'A+',
+      'A-': 'A-',
+      'B+': 'B+',
+      'B-': 'B-',
+      'AB+': 'AB+',
+      'AB-': 'AB-',
+      'O+': 'O+',
+      'O-': 'O-',
+    },
+    
+    // 알림
+    notifications: {
+      title: '알림',
+      markAsRead: '읽음으로 표시',
+      markAllAsRead: '모두 읽음으로 표시',
+      delete: '삭제',
+      deleteAll: '모두 삭제',
+      noNotifications: '알림이 없습니다',
+      newNotification: '새 알림',
+    },
+    
+    // 채팅
+    chat: {
+      title: '채팅',
+      rooms: '채팅방',
+      messages: '메시지',
+      sendMessage: '메시지 보내기',
+      typeMessage: '메시지를 입력하세요...',
+      online: '온라인',
+      offline: '오프라인',
+      typing: '입력 중...',
+      lastSeen: '마지막 접속',
+      createRoom: '채팅방 생성',
+      joinRoom: '채팅방 참여',
+      leaveRoom: '채팅방 나가기',
+      roomSettings: '채팅방 설정',
+      members: '멤버',
+      addMember: '멤버 추가',
+      removeMember: '멤버 제거',
+    },
+    
+    // 설정
+    settings: {
+      title: '설정',
+      general: '일반',
+      appearance: '외관',
+      language: '언어',
+      theme: '테마',
+      notifications: '알림',
+      security: '보안',
+      privacy: '개인정보',
+      account: '계정',
+      preferences: '환경설정',
+      lightMode: '라이트 모드',
+      darkMode: '다크 모드',
+      autoMode: '자동 모드',
+      korean: '한국어',
+      english: 'English',
+      saveSettings: '설정 저장',
+      resetSettings: '설정 초기화',
+    },
+    
+    // 에러 메시지
+    errors: {
+      required: '필수 입력 항목입니다',
+      invalidEmail: '올바른 이메일 형식이 아닙니다',
+      invalidPhone: '올바른 전화번호 형식이 아닙니다',
+      passwordMismatch: '비밀번호가 일치하지 않습니다',
+      passwordTooShort: '비밀번호는 최소 8자 이상이어야 합니다',
+      userExists: '이미 존재하는 사용자입니다',
+      userNotFound: '사용자를 찾을 수 없습니다',
+      networkError: '네트워크 오류가 발생했습니다',
+      serverError: '서버 오류가 발생했습니다',
+      unauthorized: '인증이 필요합니다',
+      forbidden: '접근 권한이 없습니다',
+      notFound: '요청한 리소스를 찾을 수 없습니다',
+      validationError: '입력 데이터가 올바르지 않습니다',
+    },
+    
+    // 성공 메시지
+    success: {
+      userCreated: '사용자가 성공적으로 생성되었습니다',
+      userUpdated: '사용자가 성공적으로 수정되었습니다',
+      userDeleted: '사용자가 성공적으로 삭제되었습니다',
+      settingsSaved: '설정이 성공적으로 저장되었습니다',
+      dataExported: '데이터가 성공적으로 내보내졌습니다',
+      dataImported: '데이터가 성공적으로 가져와졌습니다',
+      operationCompleted: '작업이 성공적으로 완료되었습니다',
+    },
+  },
+};
+
+// 영어 번역
+const en = {
+  translation: {
+    // Common
+    common: {
+      save: 'Save',
+      cancel: 'Cancel',
+      delete: 'Delete',
+      edit: 'Edit',
+      add: 'Add',
+      search: 'Search',
+      filter: 'Filter',
+      export: 'Export',
+      import: 'Import',
+      print: 'Print',
+      refresh: 'Refresh',
+      loading: 'Loading...',
+      noData: 'No data available',
+      confirm: 'Confirm',
+      yes: 'Yes',
+      no: 'No',
+      close: 'Close',
+      back: 'Back',
+      next: 'Next',
+      previous: 'Previous',
+      submit: 'Submit',
+      reset: 'Reset',
+      clear: 'Clear',
+      select: 'Select',
+      selectAll: 'Select All',
+      deselectAll: 'Deselect All',
+      actions: 'Actions',
+      status: 'Status',
+      created: 'Created',
+      updated: 'Updated',
+      name: 'Name',
+      description: 'Description',
+      email: 'Email',
+      phone: 'Phone',
+      address: 'Address',
+      date: 'Date',
+      time: 'Time',
+      type: 'Type',
+      category: 'Category',
+      priority: 'Priority',
+      tags: 'Tags',
+      notes: 'Notes',
+    },
+    
+    // Auth
+    auth: {
+      login: 'Login',
+      logout: 'Logout',
+      register: 'Register',
+      forgotPassword: 'Forgot Password',
+      resetPassword: 'Reset Password',
+      changePassword: 'Change Password',
+      userid: 'User ID',
+      password: 'Password',
+      confirmPassword: 'Confirm Password',
+      rememberMe: 'Remember Me',
+      loginSuccess: 'Login successful',
+      loginFailed: 'Login failed',
+      logoutSuccess: 'Logged out successfully',
+      invalidCredentials: 'Invalid credentials',
+      sessionExpired: 'Session expired',
+      accessDenied: 'Access denied',
+    },
+    
+    // Navigation
+    nav: {
+      dashboard: 'Dashboard',
+      users: 'User Management',
+      menu: 'Menu Management',
+      notifications: 'Notifications',
+      chat: 'Chat',
+      settings: 'Settings',
+      profile: 'Profile',
+      help: 'Help',
+      about: 'About',
+    },
+    
+    // User Management
+    users: {
+      title: 'User Management',
+      addUser: 'Add User',
+      editUser: 'Edit User',
+      deleteUser: 'Delete User',
+      userList: 'User List',
+      userDetails: 'User Details',
+      username: 'Username',
+      role: 'Role',
+      department: 'Department',
+      position: 'Position',
+      status: 'Status',
+      active: 'Active',
+      inactive: 'Inactive',
+      lastLogin: 'Last Login',
+      createdAt: 'Created At',
+      personalInfo: 'Personal Information',
+      bankInfo: 'Bank Information',
+      emergencyContact: 'Emergency Contact',
+      skills: 'Skills',
+      languages: 'Languages',
+      socialMedia: 'Social Media',
+      firstName: 'First Name',
+      lastName: 'Last Name',
+      middleName: 'Middle Name',
+      dateOfBirth: 'Date of Birth',
+      gender: 'Gender',
+      nationality: 'Nationality',
+      maritalStatus: 'Marital Status',
+      bloodType: 'Blood Type',
+      personalEmail: 'Personal Email',
+      personalPhone: 'Personal Phone',
+      personalAddress: 'Personal Address',
+      profilePicture: 'Profile Picture',
+      bio: 'Bio',
+      accountHolder: 'Account Holder',
+      bankName: 'Bank Name',
+      accountNumber: 'Account Number',
+      ifscCode: 'IFSC Code',
+      emergencyContactName: 'Emergency Contact Name',
+      emergencyContactPhone: 'Emergency Contact Phone',
+      emergencyContactRelationship: 'Relationship',
+      mfaEnabled: 'MFA Enabled',
+      preferences: 'Preferences',
+    },
+    
+    // Roles
+    roles: {
+      root: 'Root',
+      audit: 'Audit',
+      admin: 'Admin',
+      user: 'User',
+    },
+    
+    // Gender
+    gender: {
+      male: 'Male',
+      female: 'Female',
+      other: 'Other',
+    },
+    
+    // Marital Status
+    maritalStatus: {
+      single: 'Single',
+      married: 'Married',
+      divorced: 'Divorced',
+      widowed: 'Widowed',
+    },
+    
+    // Blood Type
+    bloodType: {
+      'A+': 'A+',
+      'A-': 'A-',
+      'B+': 'B+',
+      'B-': 'B-',
+      'AB+': 'AB+',
+      'AB-': 'AB-',
+      'O+': 'O+',
+      'O-': 'O-',
+    },
+    
+    // Notifications
+    notifications: {
+      title: 'Notifications',
+      markAsRead: 'Mark as Read',
+      markAllAsRead: 'Mark All as Read',
+      delete: 'Delete',
+      deleteAll: 'Delete All',
+      noNotifications: 'No notifications',
+      newNotification: 'New notification',
+    },
+    
+    // Chat
+    chat: {
+      title: 'Chat',
+      rooms: 'Rooms',
+      messages: 'Messages',
+      sendMessage: 'Send Message',
+      typeMessage: 'Type a message...',
+      online: 'Online',
+      offline: 'Offline',
+      typing: 'Typing...',
+      lastSeen: 'Last seen',
+      createRoom: 'Create Room',
+      joinRoom: 'Join Room',
+      leaveRoom: 'Leave Room',
+      roomSettings: 'Room Settings',
+      members: 'Members',
+      addMember: 'Add Member',
+      removeMember: 'Remove Member',
+    },
+    
+    // Settings
+    settings: {
+      title: 'Settings',
+      general: 'General',
+      appearance: 'Appearance',
+      language: 'Language',
+      theme: 'Theme',
+      notifications: 'Notifications',
+      security: 'Security',
+      privacy: 'Privacy',
+      account: 'Account',
+      preferences: 'Preferences',
+      lightMode: 'Light Mode',
+      darkMode: 'Dark Mode',
+      autoMode: 'Auto Mode',
+      korean: '한국어',
+      english: 'English',
+      saveSettings: 'Save Settings',
+      resetSettings: 'Reset Settings',
+    },
+    
+    // Error Messages
+    errors: {
+      required: 'This field is required',
+      invalidEmail: 'Invalid email format',
+      invalidPhone: 'Invalid phone format',
+      passwordMismatch: 'Passwords do not match',
+      passwordTooShort: 'Password must be at least 8 characters',
+      userExists: 'User already exists',
+      userNotFound: 'User not found',
+      networkError: 'Network error occurred',
+      serverError: 'Server error occurred',
+      unauthorized: 'Authentication required',
+      forbidden: 'Access denied',
+      notFound: 'Resource not found',
+      validationError: 'Invalid input data',
+    },
+    
+    // Success Messages
+    success: {
+      userCreated: 'User created successfully',
+      userUpdated: 'User updated successfully',
+      userDeleted: 'User deleted successfully',
+      settingsSaved: 'Settings saved successfully',
+      dataExported: 'Data exported successfully',
+      dataImported: 'Data imported successfully',
+      operationCompleted: 'Operation completed successfully',
+    },
+  },
+};
+
+i18n
+  .use(LanguageDetector)
+  .use(initReactI18next)
+  .init({
+    resources: {
+      ko,
+      en,
+    },
+    fallbackLng: 'ko',
+    debug: process.env.NODE_ENV === 'development',
+    
+    interpolation: {
+      escapeValue: false,
+    },
+    
+    detection: {
+      order: ['localStorage', 'navigator', 'htmlTag'],
+      caches: ['localStorage'],
+    },
+  });
+
+export default i18n;

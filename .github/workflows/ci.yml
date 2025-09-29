@@ -1,0 +1,206 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # 코드 품질 검사
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    # 백엔드 린트 및 테스트
+    - name: Install backend dependencies
+      working-directory: ./msv-server
+      run: npm ci
+
+    - name: Run backend linting
+      working-directory: ./msv-server
+      run: npm run lint
+
+    - name: Run backend tests
+      working-directory: ./msv-server
+      run: npm test
+
+    # 프론트엔드 린트 및 테스트
+    - name: Install frontend dependencies
+      working-directory: ./msv-frontend
+      run: npm ci
+
+    - name: Run frontend linting
+      working-directory: ./msv-frontend
+      run: npm run lint
+
+    - name: Run frontend tests
+      working-directory: ./msv-frontend
+      run: npm test
+
+    - name: Build frontend
+      working-directory: ./msv-frontend
+      run: npm run build
+
+  # Docker 이미지 빌드
+  build-images:
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    if: github.event_name == 'push'
+    strategy:
+      matrix:
+        service: [backend, frontend]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./msv-${{ matrix.service }}
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # 보안 스캔
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: build-images
+    if: github.event_name == 'push'
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-backend:latest
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # 배포 (개발 환경)
+  deploy-dev:
+    runs-on: ubuntu-latest
+    needs: [build-images, security-scan]
+    if: github.ref == 'refs/heads/develop'
+    environment: development
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check Kubernetes secrets
+      id: check-k8s-secrets
+      run: |
+        if [ -z "${{ secrets.KUBE_CONFIG_DEV }}" ]; then
+          echo "k8s-config-available=false" >> $GITHUB_OUTPUT
+          echo "Warning: KUBE_CONFIG_DEV secret not found. Skipping Kubernetes deployment."
+        else
+          echo "k8s-config-available=true" >> $GITHUB_OUTPUT
+          echo "Kubernetes config secret found."
+        fi
+
+    - name: Setup kubectl
+      if: steps.check-k8s-secrets.outputs.k8s-config-available == 'true'
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      if: steps.check-k8s-secrets.outputs.k8s-config-available == 'true'
+      run: |
+        echo "${{ secrets.KUBE_CONFIG_DEV || '' }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+        echo "Kubernetes config loaded successfully"
+
+    - name: Deploy to development
+      if: steps.check-k8s-secrets.outputs.k8s-config-available == 'true'
+      run: |
+        export KUBECONFIG=kubeconfig
+        ./scripts/deploy.sh develop
+
+  # 배포 (운영 환경)
+  deploy-prod:
+    runs-on: ubuntu-latest
+    needs: [build-images, security-scan]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check Kubernetes secrets
+      id: check-k8s-secrets
+      run: |
+        if [ -z "${{ secrets.KUBE_CONFIG_PROD }}" ]; then
+          echo "k8s-config-available=false" >> $GITHUB_OUTPUT
+          echo "Warning: KUBE_CONFIG_PROD secret not found. Skipping Kubernetes deployment."
+        else
+          echo "k8s-config-available=true" >> $GITHUB_OUTPUT
+          echo "Kubernetes config secret found."
+        fi
+
+    - name: Setup kubectl
+      if: steps.check-k8s-secrets.outputs.k8s-config-available == 'true'
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+
+    - name: Configure kubectl
+      if: steps.check-k8s-secrets.outputs.k8s-config-available == 'true'
+      run: |
+        echo "${{ secrets.KUBE_CONFIG_PROD || '' }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+        echo "Kubernetes config loaded successfully"
+
+    - name: Deploy to production
+      if: steps.check-k8s-secrets.outputs.k8s-config-available == 'true'
+      run: |
+        export KUBECONFIG=kubeconfig
+        ./scripts/deploy.sh production
+
+    - name: Run smoke tests
+      if: steps.check-k8s-secrets.outputs.k8s-config-available == 'true'
+      run: |
+        # 운영 환경 헬스체크
+        curl -f https://api.mvs.local/health
+        curl -f https://mvs.local

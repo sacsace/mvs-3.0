@@ -1,0 +1,41 @@
+{
+  "name": "mvs-3.0",
+  "version": "3.0.0",
+  "description": "MVS 3.0 - 차세대 기업용 통합 업무 관리 시스템",
+  "main": "index.js",
+  "scripts": {
+    "test": "node tests/integration/run-integration-tests.js",
+    "test:unit": "powershell -File scripts/run-tests.ps1 -TestType unit",
+    "test:integration": "powershell -File scripts/run-tests.ps1 -TestType integration",
+    "test:e2e": "powershell -File scripts/run-tests.ps1 -TestType e2e",
+    "test:performance": "powershell -File scripts/run-tests.ps1 -TestType performance",
+    "test:security": "powershell -File scripts/run-tests.ps1 -TestType security",
+    "test:all": "powershell -File scripts/run-tests.ps1 -TestType all",
+    "dev": "powershell -File scripts/dev.ps1 start",
+    "deploy:dev": "powershell -File scripts/deploy-dev.ps1 -Build",
+    "deploy:prod": "powershell -File scripts/deploy-prod.ps1 -Build -Push",
+    "deploy:all": "powershell -File scripts/deploy-all.ps1 -Environment production -Build -Push -Monitor -Backup",
+    "health": "powershell -File scripts/health-check.ps1 -Detailed",
+    "backup": "powershell -File scripts/backup.ps1 -All"
+  },
+  "devDependencies": {
+    "axios": "^1.7.2",
+    "chai": "^4.3.10",
+    "mocha": "^10.2.0",
+    "artillery": "^2.0.0",
+    "k6": "^0.0.0",
+    "@playwright/test": "^1.40.0",
+    "supertest": "^6.3.3"
+  },
+  "keywords": [
+    "enterprise",
+    "management",
+    "react",
+    "nodejs",
+    "postgresql",
+    "docker",
+    "kubernetes"
+  ],
+  "author": "MVS Team",
+  "license": "MIT"
+}

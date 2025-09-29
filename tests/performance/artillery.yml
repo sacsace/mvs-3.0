@@ -1,0 +1,133 @@
+# MVS 3.0 성능 테스트 설정 (Artillery)
+
+config:
+  target: 'http://localhost:5000'
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      name: "Warm up"
+    - duration: 120
+      arrivalRate: 10
+      name: "Ramp up load"
+    - duration: 300
+      arrivalRate: 20
+      name: "Sustained load"
+    - duration: 60
+      arrivalRate: 5
+      name: "Ramp down"
+  defaults:
+    headers:
+      Content-Type: 'application/json'
+  plugins:
+    metrics-by-endpoint:
+      useOnlyRequestNames: true
+
+scenarios:
+  - name: "Health Check"
+    weight: 20
+    flow:
+      - get:
+          url: "/health"
+          expect:
+            - statusCode: 200
+
+  - name: "User Authentication"
+    weight: 30
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            userid: "testuser"
+            password: "TestPassword123!"
+          expect:
+            - statusCode: 200
+            - hasProperty: "token"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+      
+      - get:
+          url: "/api/auth/verify"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          expect:
+            - statusCode: 200
+
+  - name: "User Management"
+    weight: 25
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            userid: "testuser"
+            password: "TestPassword123!"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+      
+      - get:
+          url: "/api/users"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          expect:
+            - statusCode: 200
+      
+      - post:
+          url: "/api/users"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          json:
+            userid: "perfuser{{ $randomInt(1, 10000) }}"
+            username: "Performance User {{ $randomInt(1, 10000) }}"
+            email: "perf{{ $randomInt(1, 10000) }}@test.com"
+            password: "TestPassword123!"
+            role: "user"
+            department: "Test"
+            position: "Tester"
+          expect:
+            - statusCode: 201
+
+  - name: "Menu Management"
+    weight: 15
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            userid: "testuser"
+            password: "TestPassword123!"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+      
+      - get:
+          url: "/api/menus"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          expect:
+            - statusCode: 200
+
+  - name: "Database Operations"
+    weight: 10
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            userid: "testuser"
+            password: "TestPassword123!"
+          capture:
+            - json: "$.token"
+              as: "authToken"
+      
+      - get:
+          url: "/api/companies"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          expect:
+            - statusCode: 200
+      
+      - get:
+          url: "/api/tenants"
+          headers:
+            Authorization: "Bearer {{ authToken }}"
+          expect:
+            - statusCode: 200

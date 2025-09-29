@@ -1,0 +1,167 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: mvs-system
+data:
+  NODE_ENV: "production"
+  PORT: "5000"
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  DB_NAME: "mvs_db"
+  DB_USER: "mvs_user"
+  REDIS_HOST: "redis-service"
+  REDIS_PORT: "6379"
+  JWT_EXPIRES_IN: "24h"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backend-secret
+  namespace: mvs-system
+type: Opaque
+data:
+  DB_PASSWORD: bXZzX3Bhc3N3b3Jk  # base64 encoded: mvs_password
+  JWT_SECRET: eW91ci1zdXBlci1zZWNyZXQtand0LWtleS1jaGFuZ2UtaW4tcHJvZHVjdGlvbg==  # base64 encoded: your-super-secret-jwt-key-change-in-production
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mvs-backend
+  namespace: mvs-system
+  labels:
+    app: mvs-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: mvs-backend
+  template:
+    metadata:
+      labels:
+        app: mvs-backend
+    spec:
+      containers:
+      - name: mvs-backend
+        image: mvs-backend:latest
+        ports:
+        - containerPort: 5000
+        env:
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: backend-config
+              key: NODE_ENV
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: backend-config
+              key: PORT
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: backend-config
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: backend-config
+              key: DB_PORT
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: backend-config
+              key: DB_NAME
+        - name: DB_USER
+          valueFrom:
+            configMapKeyRef:
+              name: backend-config
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: backend-secret
+              key: DB_PASSWORD
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: backend-config
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: backend-config
+              key: REDIS_PORT
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: backend-secret
+              key: JWT_SECRET
+        - name: JWT_EXPIRES_IN
+          valueFrom:
+            configMapKeyRef:
+              name: backend-config
+              key: JWT_EXPIRES_IN
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mvs-backend-service
+  namespace: mvs-system
+spec:
+  selector:
+    app: mvs-backend
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+  type: ClusterIP
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: mvs-backend-hpa
+  namespace: mvs-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: mvs-backend
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
