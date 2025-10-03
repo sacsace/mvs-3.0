@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Container,
@@ -30,27 +30,65 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [errorTimeout, setErrorTimeout] = useState<NodeJS.Timeout | null>(null);
+
+  // 컴포넌트 언마운트 시 타이머 정리
+  useEffect(() => {
+    return () => {
+      if (errorTimeout) {
+        clearTimeout(errorTimeout);
+      }
+    };
+  }, [errorTimeout]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
     });
+    // 에러 메시지를 즉시 지우지 않고 사용자가 로그인 버튼을 다시 클릭할 때까지 유지
+  };
+
+  const showError = (message: string) => {
+    setError(message);
+    // 기존 타이머가 있으면 클리어
+    if (errorTimeout) {
+      clearTimeout(errorTimeout);
+    }
+    // 10초 후에 에러 메시지 자동 제거
+    const timeout = setTimeout(() => {
+      setError('');
+      setErrorTimeout(null);
+    }, 10000);
+    setErrorTimeout(timeout);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setLoading(true);
     setError('');
+    
+    // 기존 타이머가 있으면 클리어
+    if (errorTimeout) {
+      clearTimeout(errorTimeout);
+      setErrorTimeout(null);
+    }
 
     try {
       const response = await api.post('/auth/login', formData);
-      const { token, user } = response.data.data;
       
-      login(token, user);
-      navigate('/dashboard');
+      if (response.data.success) {
+        const { token, user } = response.data.data;
+        login(token, user);
+        navigate('/dashboard');
+      } else {
+        showError(response.data.message || '로그인에 실패했습니다.');
+      }
     } catch (err: any) {
-      setError(err.response?.data?.message || '로그인에 실패했습니다.');
+      console.error('로그인 오류:', err);
+      const errorMessage = err.response?.data?.message || err.message || '로그인에 실패했습니다.';
+      showError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -110,7 +148,7 @@ const Login: React.FC = () => {
                 mb: 0.5
               }}
             >
-              Login
+              Welcome
             </Typography>
             <Typography 
               variant="body2" 
@@ -129,10 +167,50 @@ const Login: React.FC = () => {
               severity="error" 
               sx={{ 
                 mb: 3, 
-                fontSize: '0.875rem',
+                fontSize: '0.9rem',
                 borderRadius: 2,
+                animation: 'shake 0.6s ease-in-out, pulse 2s ease-in-out infinite',
+                border: '3px solid #e53e3e',
+                backgroundColor: '#fed7d7',
+                boxShadow: '0 4px 12px rgba(229, 62, 62, 0.3)',
+                position: 'relative',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  borderRadius: 2,
+                  background: 'linear-gradient(45deg, rgba(229, 62, 62, 0.1), rgba(197, 48, 48, 0.1))',
+                  animation: 'glow 2s ease-in-out infinite alternate'
+                },
                 '& .MuiAlert-message': {
-                  fontSize: '0.875rem'
+                  fontSize: '0.9rem',
+                  fontWeight: 700,
+                  color: '#c53030',
+                  position: 'relative',
+                  zIndex: 1
+                },
+                '& .MuiAlert-icon': {
+                  fontSize: '1.3rem',
+                  color: '#c53030',
+                  position: 'relative',
+                  zIndex: 1
+                },
+                '@keyframes shake': {
+                  '0%, 100%': { transform: 'translateX(0)' },
+                  '10%, 30%, 50%, 70%, 90%': { transform: 'translateX(-4px)' },
+                  '20%, 40%, 60%, 80%': { transform: 'translateX(4px)' }
+                },
+                '@keyframes pulse': {
+                  '0%': { opacity: 1 },
+                  '50%': { opacity: 0.8 },
+                  '100%': { opacity: 1 }
+                },
+                '@keyframes glow': {
+                  '0%': { opacity: 0.3 },
+                  '100%': { opacity: 0.6 }
                 }
               }}
             >
@@ -155,9 +233,21 @@ const Login: React.FC = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <PersonIcon sx={{ color: '#a0aec0', fontSize: '1.25rem' }} />
+                    <PersonIcon sx={{ 
+                      color: '#a0aec0', 
+                      fontSize: '1.25rem',
+                      margin: '0 4px'
+                    }} />
                   </InputAdornment>
                 ),
+                style: {
+                  outline: 'none !important',
+                  outlineOffset: '0 !important',
+                  WebkitTapHighlightColor: 'transparent !important',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none',
+                  appearance: 'none'
+                }
               }}
               sx={{ 
                 mb: 3,
@@ -165,33 +255,58 @@ const Login: React.FC = () => {
                   borderRadius: 2,
                   fontSize: '0.875rem',
                   backgroundColor: '#f7fafc',
+                  outline: 'none !important',
                   '& fieldset': {
                     borderColor: '#e2e8f0',
-                    borderWidth: 1,
+                    borderWidth: 2,
                   },
                   '&:hover fieldset': {
-                    borderColor: '#e2e8f0',
+                    borderColor: '#cbd5e0',
                   },
                   '&.Mui-focused fieldset': {
-                    borderColor: '#e2e8f0 !important',
-                    borderWidth: '1px !important',
+                    borderColor: '#3b82f6 !important',
+                    borderWidth: '2px !important',
                     outline: 'none !important',
-                    boxShadow: 'none !important',
+                    boxShadow: 'inset 0 0 0 1px #3b82f6 !important',
                   },
                   '&.Mui-focused': {
                     outline: 'none !important',
-                    boxShadow: 'none !important',
+                    boxShadow: 'inset 0 0 0 1px #3b82f6 !important',
                   },
+                },
+                '& .MuiOutlinedInput-root:focus': {
+                  outline: 'none !important',
+                  boxShadow: 'inset 0 0 0 1px #3b82f6 !important',
+                },
+                '& .MuiOutlinedInput-root:focus-visible': {
+                  outline: 'none !important',
+                  boxShadow: 'inset 0 0 0 1px #3b82f6 !important',
+                },
+                '& input:focus': {
+                  outline: 'none !important',
+                },
+                '& input:focus-visible': {
+                  outline: 'none !important',
+                },
+                '& input': {
+                  outline: 'none !important',
+                  outlineOffset: '0 !important',
+                  WebkitTapHighlightColor: 'transparent !important'
+                },
+                '& *': {
+                  outline: 'none !important',
+                  outlineOffset: '0 !important',
+                  WebkitTapHighlightColor: 'transparent !important'
                 },
                 '& .MuiOutlinedInput-notchedOutline': {
                   borderColor: '#e2e8f0 !important',
-                  borderWidth: '1px !important',
+                  borderWidth: '2px !important',
                 },
                 '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#e2e8f0 !important',
-                  borderWidth: '1px !important',
+                  borderColor: '#3b82f6 !important',
+                  borderWidth: '2px !important',
                   outline: 'none !important',
-                  boxShadow: 'none !important',
+                  boxShadow: 'inset 0 0 0 1px #3b82f6 !important',
                 },
                 '& .MuiInputLabel-root': {
                   fontSize: '0.875rem',
@@ -204,7 +319,7 @@ const Login: React.FC = () => {
                   transformOrigin: 'top left'
                 },
                 '& .MuiInputLabel-root.Mui-focused': {
-                  color: '#667eea',
+                  color: '#3b82f6',
                   backgroundColor: '#f7fafc !important',
                   zIndex: 10
                 },
@@ -214,7 +329,29 @@ const Login: React.FC = () => {
                 },
                 '& .MuiInputBase-input': {
                   padding: '12px 14px',
-                  fontSize: '0.875rem'
+                  fontSize: '0.875rem',
+                  outline: 'none !important',
+                  outlineOffset: '0 !important',
+                  WebkitTapHighlightColor: 'transparent !important',
+                  WebkitAppearance: 'none !important',
+                  MozAppearance: 'none !important',
+                  appearance: 'none !important'
+                },
+                '& .MuiOutlinedInput-input': {
+                  outline: 'none !important',
+                  outlineOffset: '0 !important',
+                  WebkitTapHighlightColor: 'transparent !important',
+                  WebkitAppearance: 'none !important',
+                  MozAppearance: 'none !important',
+                  appearance: 'none !important'
+                },
+                '& input[type="text"], & input[type="password"]': {
+                  outline: 'none !important',
+                  outlineOffset: '0 !important',
+                  WebkitTapHighlightColor: 'transparent !important',
+                  WebkitAppearance: 'none !important',
+                  MozAppearance: 'none !important',
+                  appearance: 'none !important'
                 }
               }}
             />
@@ -230,11 +367,15 @@ const Login: React.FC = () => {
               value={formData.password}
               onChange={handleChange}
               InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <LockIcon sx={{ color: '#a0aec0', fontSize: '1.25rem' }} />
-                  </InputAdornment>
-                ),
+                      startAdornment: (
+                        <InputAdornment position="start">
+                          <LockIcon sx={{ 
+                            color: '#a0aec0', 
+                            fontSize: '1.25rem',
+                            margin: '0 4px'
+                          }} />
+                        </InputAdornment>
+                      ),
                 endAdornment: (
                   <InputAdornment position="end">
                     <IconButton
@@ -246,6 +387,14 @@ const Login: React.FC = () => {
                     </IconButton>
                   </InputAdornment>
                 ),
+                style: {
+                  outline: 'none !important',
+                  outlineOffset: '0 !important',
+                  WebkitTapHighlightColor: 'transparent !important',
+                  WebkitAppearance: 'none',
+                  MozAppearance: 'none',
+                  appearance: 'none'
+                }
               }}
               sx={{ 
                 mb: 4,
@@ -253,33 +402,58 @@ const Login: React.FC = () => {
                   borderRadius: 2,
                   fontSize: '0.875rem',
                   backgroundColor: '#f7fafc',
+                  outline: 'none !important',
                   '& fieldset': {
                     borderColor: '#e2e8f0',
-                    borderWidth: 1,
+                    borderWidth: 2,
                   },
                   '&:hover fieldset': {
-                    borderColor: '#e2e8f0',
+                    borderColor: '#cbd5e0',
                   },
                   '&.Mui-focused fieldset': {
-                    borderColor: '#e2e8f0 !important',
-                    borderWidth: '1px !important',
+                    borderColor: '#3b82f6 !important',
+                    borderWidth: '2px !important',
                     outline: 'none !important',
-                    boxShadow: 'none !important',
+                    boxShadow: 'inset 0 0 0 1px #3b82f6 !important',
                   },
                   '&.Mui-focused': {
                     outline: 'none !important',
-                    boxShadow: 'none !important',
+                    boxShadow: 'inset 0 0 0 1px #3b82f6 !important',
                   },
+                },
+                '& .MuiOutlinedInput-root:focus': {
+                  outline: 'none !important',
+                  boxShadow: 'inset 0 0 0 1px #3b82f6 !important',
+                },
+                '& .MuiOutlinedInput-root:focus-visible': {
+                  outline: 'none !important',
+                  boxShadow: 'inset 0 0 0 1px #3b82f6 !important',
+                },
+                '& input:focus': {
+                  outline: 'none !important',
+                },
+                '& input:focus-visible': {
+                  outline: 'none !important',
+                },
+                '& input': {
+                  outline: 'none !important',
+                  outlineOffset: '0 !important',
+                  WebkitTapHighlightColor: 'transparent !important'
+                },
+                '& *': {
+                  outline: 'none !important',
+                  outlineOffset: '0 !important',
+                  WebkitTapHighlightColor: 'transparent !important'
                 },
                 '& .MuiOutlinedInput-notchedOutline': {
                   borderColor: '#e2e8f0 !important',
-                  borderWidth: '1px !important',
+                  borderWidth: '2px !important',
                 },
                 '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: '#e2e8f0 !important',
-                  borderWidth: '1px !important',
+                  borderColor: '#3b82f6 !important',
+                  borderWidth: '2px !important',
                   outline: 'none !important',
-                  boxShadow: 'none !important',
+                  boxShadow: 'inset 0 0 0 1px #3b82f6 !important',
                 },
                 '& .MuiInputLabel-root': {
                   fontSize: '0.875rem',
@@ -292,7 +466,7 @@ const Login: React.FC = () => {
                   transformOrigin: 'top left'
                 },
                 '& .MuiInputLabel-root.Mui-focused': {
-                  color: '#667eea',
+                  color: '#3b82f6',
                   backgroundColor: '#f7fafc !important',
                   zIndex: 10
                 },
@@ -302,7 +476,29 @@ const Login: React.FC = () => {
                 },
                 '& .MuiInputBase-input': {
                   padding: '12px 14px',
-                  fontSize: '0.875rem'
+                  fontSize: '0.875rem',
+                  outline: 'none !important',
+                  outlineOffset: '0 !important',
+                  WebkitTapHighlightColor: 'transparent !important',
+                  WebkitAppearance: 'none !important',
+                  MozAppearance: 'none !important',
+                  appearance: 'none !important'
+                },
+                '& .MuiOutlinedInput-input': {
+                  outline: 'none !important',
+                  outlineOffset: '0 !important',
+                  WebkitTapHighlightColor: 'transparent !important',
+                  WebkitAppearance: 'none !important',
+                  MozAppearance: 'none !important',
+                  appearance: 'none !important'
+                },
+                '& input[type="text"], & input[type="password"]': {
+                  outline: 'none !important',
+                  outlineOffset: '0 !important',
+                  WebkitTapHighlightColor: 'transparent !important',
+                  WebkitAppearance: 'none !important',
+                  MozAppearance: 'none !important',
+                  appearance: 'none !important'
                 }
               }}
             />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Drawer,
   List,
@@ -10,220 +10,209 @@ import {
   Box,
   Typography,
   Divider,
-  IconButton
+  IconButton,
+  Tooltip
 } from '@mui/material';
 import {
-  Dashboard as DashboardIcon,
-  People as PeopleIcon,
-  Business as BusinessIcon,
-  Settings as SettingsIcon,
-  Analytics as AnalyticsIcon,
-  BarChart as BarChartIcon,
-  List as ListIcon,
-  PersonAdd as PersonAddIcon,
-  Tune as TuneIcon,
-  Lock as LockIcon,
   ExpandLess,
   ExpandMore,
   Menu as MenuIcon,
-  // 새로운 아이콘들
-  Work as WorkIcon,
-  Assignment as AssignmentIcon,
-  AccountBalance as AccountBalanceIcon,
-  Inventory as InventoryIcon,
-  Psychology as PsychologyIcon,
-  Chat as ChatIcon,
-  Forum as ForumIcon,
-  Message as MessageIcon
+  Dashboard,
+  Inventory,
+  Description,
+  Receipt,
+  ReceiptLong,
+  LocalShipping,
+  People,
+  AccountBalance,
+  Assessment,
+  Person,
+  Settings,
+  Notifications,
+  Psychology,
+  Chat,
+  AttachMoney
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { api } from '../../services/api';
-
-interface MenuItem {
-  id: number;
-  name_ko: string;
-  name_en: string;
-  route: string;
-  icon: string;
-  description: string;
-  parent_id: number | null;
-  level: number;
-  order: number;
-  children?: MenuItem[];
-}
+import { useStore, useMenuStore } from '../../store';
+import menuService from '../../services/menuService';
 
 interface SidebarProps {
   open: boolean;
-  onToggle: () => void;
+  onClose: () => void;
+  onToggle?: () => void;
+  width?: number;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ open, onToggle }) => {
+const Sidebar: React.FC<SidebarProps> = ({ open, onClose, width = 280 }) => {
+  // 반응형 너비 설정
+  const responsiveWidth = {
+    xs: 240, // 모바일: 240px
+    sm: 260, // 태블릿: 260px
+    md: 280, // 데스크톱: 280px
+    lg: 280, // 큰 화면: 280px
+    xl: 280  // 매우 큰 화면: 280px
+  };
+  // 사이드바 닫기 기능 비활성화
+  const handleClose = () => {
+    // 사이드바가 닫히지 않도록 빈 함수로 설정
+  };
   const navigate = useNavigate();
   const location = useLocation();
-  const [menus, setMenus] = useState<MenuItem[]>([]);
-  const [expandedMenus, setExpandedMenus] = useState<number[]>([]);
+  const { user } = useStore();
+  const { 
+    menus, 
+    userPermissions, 
+    loading, 
+    error, 
+    language,
+    setMenus, 
+    setUserPermissions, 
+    setLoading, 
+    setError,
+    hasMenuPermission 
+  } = useMenuStore();
+  
+  const [expandedMenus, setExpandedMenus] = useState<Set<number>>(new Set());
 
   // 아이콘 매핑
-  const getIcon = (iconName: string, menuName?: string) => {
-    // 메뉴 이름에 따른 아이콘 매핑 (우선순위)
-    if (menuName) {
-      if (menuName.includes('업무관리') || menuName.includes('프로젝트')) {
-        return <WorkIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />;
-      }
-      if (menuName.includes('회계관리') || menuName.includes('회계')) {
-        return <AccountBalanceIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />;
-      }
-      if (menuName.includes('재고관리') || menuName.includes('재고')) {
-        return <InventoryIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />;
-      }
-      if (menuName.includes('AI 분석') || menuName.includes('AI')) {
-        return <PsychologyIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />;
-      }
-      if (menuName.includes('커뮤니케이션') || menuName.includes('채팅')) {
-        return <ChatIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />;
-      }
-    }
-
-    // 기존 아이콘 매핑
+  const getIcon = (iconName: string) => {
     const iconMap: { [key: string]: React.ReactElement } = {
-      'dashboard': <DashboardIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'people': <PeopleIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'menu': <MenuIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'analytics': <AnalyticsIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'bar_chart': <BarChartIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'list': <ListIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'person_add': <PersonAddIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'security': <LockIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'tune': <TuneIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'business': <BusinessIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'settings': <SettingsIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      // 새로운 아이콘 매핑
-      'work': <WorkIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'assignment': <AssignmentIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'account_balance': <AccountBalanceIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'inventory': <InventoryIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'psychology': <PsychologyIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'chat': <ChatIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'forum': <ForumIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />,
-      'message': <MessageIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />
+      dashboard: <Dashboard />,
+      inventory: <Inventory />,
+      description: <Description />,
+      receipt_long: <ReceiptLong />,
+      receipt: <Receipt />,
+      local_shipping: <LocalShipping />,
+      people: <People />,
+      account_balance: <AccountBalance />,
+      assessment: <Assessment />,
+      person: <Person />,
+      settings: <Settings />,
+      notifications: <Notifications />,
+      psychology: <Psychology />,
+      chat: <Chat />,
+      attach_money: <AttachMoney />
     };
-    return iconMap[iconName] || <MenuIcon sx={{ fontSize: '1.1rem', color: 'var(--primary-600)' }} />;
+    return iconMap[iconName] || <MenuIcon />;
   };
 
-  // 메뉴 데이터 가져오기
+  // 메뉴 데이터 로드
   useEffect(() => {
-    const fetchMenus = async () => {
+    const loadMenus = async () => {
+      if (!user) return;
+      
+      setLoading(true);
       try {
-        const response = await api.get('/menus');
-        const menuData = response.data.data || response.data;
-        
-        // 계층 구조로 변환
-        const menuMap = new Map();
-        const rootMenus: MenuItem[] = [];
-        
-        menuData.forEach((menu: MenuItem) => {
-          menuMap.set(menu.id, { ...menu, children: [] });
-        });
-        
-        menuData.forEach((menu: MenuItem) => {
-          if (menu.parent_id) {
-            const parent = menuMap.get(menu.parent_id);
-            if (parent) {
-              parent.children.push(menuMap.get(menu.id));
-            }
-          } else {
-            rootMenus.push(menuMap.get(menu.id));
-          }
-        });
-        
-        setMenus(rootMenus);
-      } catch (error) {
-        console.error('메뉴 데이터를 가져오는데 실패했습니다:', error);
-        // 기본 메뉴 데이터
-        setMenus([
-          {
-            id: 1,
-            name_ko: '대시보드',
-            name_en: 'Dashboard',
-            route: '/dashboard',
-            icon: 'dashboard',
-            description: '시스템 현황 및 통계',
-            parent_id: null,
-            level: 1,
-            order: 1
-          },
-          {
-            id: 2,
-            name_ko: '기본정보관리',
-            name_en: 'Basic Info',
-            route: '/company',
-            icon: 'business',
-            description: '회사 정보 및 기본 설정',
-            parent_id: null,
-            level: 1,
-            order: 2
-          }
+        const [menusResponse, permissionsResponse] = await Promise.all([
+          menuService.getUserMenus(user.id, user.tenant_id, language),
+          menuService.getUserPermissions(user.id)
         ]);
+        
+        if (menusResponse.success) {
+          setMenus(menusResponse.data);
+        }
+        
+        if (permissionsResponse.success) {
+          setUserPermissions(permissionsResponse.data);
+        }
+      } catch (error) {
+        console.error('메뉴 로드 오류:', error);
+        setError('메뉴를 불러오는데 실패했습니다.');
+      } finally {
+        setLoading(false);
       }
     };
 
-    fetchMenus();
-  }, []);
+    loadMenus();
+  }, [user, language, setMenus, setUserPermissions, setLoading, setError]);
 
-  const handleNavigation = (route: string) => {
-    navigate(route);
-  };
+  // 언어 변경 감지
+  useEffect(() => {
+    console.log('언어 변경됨:', language);
+  }, [language]);
 
+  // 메뉴 확장/축소 토글
   const handleMenuToggle = (menuId: number) => {
-    setExpandedMenus(prev => 
-      prev.includes(menuId) 
-        ? prev.filter(id => id !== menuId)
-        : [...prev, menuId]
-    );
+    const newExpanded = new Set(expandedMenus);
+    if (newExpanded.has(menuId)) {
+      newExpanded.delete(menuId);
+    } else {
+      newExpanded.add(menuId);
+    }
+    setExpandedMenus(newExpanded);
   };
 
-  const renderMenuItem = (menu: MenuItem) => {
-    const hasChildren = menu.children && menu.children.length > 0;
-    const isExpanded = expandedMenus.includes(menu.id);
-    const isActive = location.pathname === menu.route;
+  // 메뉴 클릭 처리
+  const handleMenuClick = (menu: any) => {
+    if (menu.children && menu.children.length > 0) {
+      handleMenuToggle(menu.id);
+    } else if (menu.route) {
+      navigate(menu.route);
+      // 사이드바 닫기 비활성화 (데스크톱에서 항상 열린 상태 유지)
+    }
+  };
 
+  // 메뉴 렌더링
+  const renderMenuItem = (menu: any, level: number = 0) => {
+    const hasChildren = menu.children && menu.children.length > 0;
+    const isExpanded = expandedMenus.has(menu.id);
+    const isActive = location.pathname === menu.route;
+    
     return (
       <React.Fragment key={menu.id}>
         <ListItem disablePadding>
           <ListItemButton
-            onClick={() => hasChildren ? handleMenuToggle(menu.id) : handleNavigation(menu.route)}
+            onClick={() => handleMenuClick(menu)}
             sx={{
-              py: 0.5,
-              px: 1.5,
-              mx: 0.5,
-              borderRadius: 'var(--radius-lg)',
-              backgroundColor: isActive ? 'var(--primary-50)' : 'transparent',
-              color: isActive ? 'var(--primary-700)' : 'var(--text-secondary)',
-              fontWeight: isActive ? '600' : '500',
+              pl: 2 + level * 2,
+              py: level === 0 ? 0.3 : 0.2, // 하위 메뉴는 더 작은 패딩
+              backgroundColor: isActive ? 'primary.main' : 'transparent',
+              color: isActive ? 'primary.contrastText' : 'text.primary',
               '&:hover': {
-                backgroundColor: 'var(--primary-50)',
-                color: 'var(--primary-700)',
-              },
-              transition: 'all var(--transition-fast)'
+                backgroundColor: isActive ? 'primary.dark' : 'action.hover'
+              }
             }}
           >
-            <ListItemIcon sx={{ minWidth: 40 }}>
-              {getIcon(menu.icon, menu.name_ko)}
+            <ListItemIcon sx={{ 
+              color: isActive ? 'primary.contrastText' : 'inherit',
+              minWidth: '36px', // 아이콘 영역 축소
+              '& .MuiSvgIcon-root': {
+                fontSize: '1.1rem' // 아이콘 크기 축소
+              }
+            }}>
+              {getIcon(menu.icon)}
             </ListItemIcon>
             <ListItemText 
-              primary={menu.name_ko}
-              secondary={menu.description}
-              primaryTypographyProps={{
-                fontSize: '0.8rem',
-                fontWeight: isActive ? '600' : '500'
-              }}
-              secondaryTypographyProps={{
-                fontSize: '0.7rem',
-                color: 'var(--text-tertiary)'
+              primary={language === 'ko' ? menu.name_ko : menu.name_en} 
+              secondary={level === 0 ? menu.description : null} // 최상위 메뉴에만 설명 표시
+              sx={{ 
+                '& .MuiListItemText-primary': {
+                  fontSize: '0.75rem',
+                  fontWeight: isActive ? 600 : 400,
+                  lineHeight: 1.1
+                },
+                '& .MuiListItemText-secondary': {
+                  fontSize: '0.65rem',
+                  lineHeight: 1.3, // 줄 간격을 1.0에서 1.3으로 증가
+                  color: 'text.secondary',
+                  mt: 0.4 // 상단 마진을 0.2에서 0.4로 증가하여 줄간격 늘림
+                }
               }}
             />
+            {/* 디버깅용 */}
+            {process.env.NODE_ENV === 'development' && (
+              <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'gray' }}>
+                {language}
+              </Typography>
+            )}
             {hasChildren && (
-              isExpanded ? <ExpandLess /> : <ExpandMore />
+              <IconButton size="small" onClick={(e) => {
+                e.stopPropagation();
+                handleMenuToggle(menu.id);
+              }}>
+                {isExpanded ? <ExpandLess /> : <ExpandMore />}
+              </IconButton>
             )}
           </ListItemButton>
         </ListItem>
@@ -231,38 +220,7 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle }) => {
         {hasChildren && (
           <Collapse in={isExpanded} timeout="auto" unmountOnExit>
             <List component="div" disablePadding>
-              {menu.children!.map((child) => (
-                <ListItem key={child.id} disablePadding>
-                  <ListItemButton
-                    onClick={() => handleNavigation(child.route)}
-                    sx={{
-                      py: 0.5,
-                      px: 3,
-                      mx: 0.5,
-                      borderRadius: 'var(--radius-lg)',
-                      backgroundColor: location.pathname === child.route ? 'var(--primary-50)' : 'transparent',
-                      color: location.pathname === child.route ? 'var(--primary-700)' : 'var(--text-secondary)',
-                      fontWeight: location.pathname === child.route ? '600' : '500',
-                      '&:hover': {
-                        backgroundColor: 'var(--primary-50)',
-                        color: 'var(--primary-700)',
-                      },
-                      transition: 'all var(--transition-fast)'
-                    }}
-                  >
-                    <ListItemIcon sx={{ minWidth: 32 }}>
-                      {getIcon(child.icon, child.name_ko)}
-                    </ListItemIcon>
-                    <ListItemText 
-                      primary={child.name_ko}
-                      primaryTypographyProps={{
-                        fontSize: '0.75rem',
-                        fontWeight: location.pathname === child.route ? '600' : '500'
-                      }}
-                    />
-                  </ListItemButton>
-                </ListItem>
-              ))}
+              {menu.children.map((child: any) => renderMenuItem(child, level + 1))}
             </List>
           </Collapse>
         )}
@@ -270,57 +228,129 @@ const Sidebar: React.FC<SidebarProps> = ({ open, onToggle }) => {
     );
   };
 
+  if (loading) {
+    return (
+      <Drawer
+        variant="temporary"
+        open={open}
+        onClose={handleClose}
+        sx={{
+          width,
+          flexShrink: 0,
+          '& .MuiDrawer-paper': {
+            width,
+            boxSizing: 'border-box'
+          }
+        }}
+      >
+        <Box sx={{ p: 2, textAlign: 'center' }}>
+          <Typography>메뉴 로딩 중...</Typography>
+        </Box>
+      </Drawer>
+    );
+  }
+
+  if (error) {
+    return (
+      <Drawer
+        variant="temporary"
+        open={open}
+        onClose={handleClose}
+        sx={{
+          width,
+          flexShrink: 0,
+          '& .MuiDrawer-paper': {
+            width,
+            boxSizing: 'border-box'
+          }
+        }}
+      >
+        <Box sx={{ p: 2, textAlign: 'center' }}>
+          <Typography color="error">{error}</Typography>
+        </Box>
+      </Drawer>
+    );
+  }
+
   return (
     <Drawer
       variant="permanent"
+      open={true}
       sx={{
-        width: open ? 280 : 72,
+        width: responsiveWidth,
         flexShrink: 0,
         '& .MuiDrawer-paper': {
-          width: open ? 280 : 72,
+          width: responsiveWidth,
           boxSizing: 'border-box',
-          background: 'rgba(255, 255, 255, 0.95)',
-          backdropFilter: 'blur(20px)',
-          borderRight: '1px solid rgba(226, 232, 240, 0.8)',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-          transition: 'width 0.3s ease-in-out',
-          overflowX: 'hidden'
-        },
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'fixed', // 고정 위치로 변경하여 동적 높이 조정
+          top: '64px', // 헤더 아래에서 시작
+          left: 0,
+          height: 'calc(100vh - 64px)', // 헤더 높이 제외한 나머지 높이
+          minHeight: 'calc(100vh - 64px)', // 최소 높이 보장
+          backgroundColor: '#ffffff', // 사이드바 배경색 (흰색)
+          borderRight: '1px solid #e2e8f0',
+          boxShadow: '2px 0 8px rgba(0, 0, 0, 0.04)',
+          zIndex: 1200, // 헤더보다 낮은 z-index
+          '&::after': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            width: '1px',
+            height: '100%',
+            background: 'linear-gradient(180deg, transparent 0%, #e2e8f0 20%, #e2e8f0 80%, transparent 100%)',
+          }
+        }
       }}
     >
+      {/* 메뉴 리스트 - 헤더 바로 아래부터 시작, 전체 높이 사용 */}
       <Box sx={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: open ? 'space-between' : 'center',
-        p: 2,
-        minHeight: 64,
-        borderBottom: '1px solid rgba(226, 232, 240, 0.8)'
+        flexGrow: 1, 
+        overflow: 'auto',
+        backgroundColor: '#ffffff',
+        pt: 1,
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column'
       }}>
-        {open && (
-          <Typography variant="h6" sx={{ 
-            fontWeight: '700', 
-            color: 'var(--text-primary)',
-            fontSize: '1.125rem'
-          }}>
-            메뉴
-          </Typography>
-        )}
-        <IconButton onClick={onToggle} sx={{ 
-          color: 'var(--text-secondary)',
-          '&:hover': {
-            backgroundColor: 'var(--primary-50)',
-            color: 'var(--primary-700)'
+        <List sx={{ flexGrow: 1, px: 1 }}>
+          {menus.map((menu) => renderMenuItem(menu))}
+        </List>
+        
+        {/* 저작권 정보 - 메뉴 영역 내부 하단 고정 */}
+        <Box sx={{ 
+          mt: 'auto', 
+          p: 2, 
+          textAlign: 'center',
+          borderTop: '1px solid #f1f5f9',
+          backgroundColor: '#ffffff',
+          flexShrink: 0,
+          position: 'relative',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            left: '20%',
+            right: '20%',
+            top: 0,
+            height: '1px',
+            background: 'linear-gradient(90deg, transparent 0%, #e2e8f0 20%, #e2e8f0 80%, transparent 100%)',
           }
         }}>
-          <MenuIcon />
-        </IconButton>
+          <Typography 
+            variant="caption" 
+            color="text.secondary"
+            sx={{ 
+              fontSize: '0.75rem',
+              opacity: 0.7,
+              display: 'block'
+            }}
+          >
+            © 2025 Minsub Ventures
+          </Typography>
+        </Box>
       </Box>
-      
-      <Divider />
-      
-      <List sx={{ px: 0.5, py: 1 }}>
-        {menus.map(renderMenuItem)}
-      </List>
     </Drawer>
   );
 };

@@ -120,43 +120,90 @@ const Dashboard: React.FC = () => {
         position: 'relative', 
         overflow: 'hidden',
         cursor: onClick ? 'pointer' : 'default',
+        border: '1px solid #f1f5f9',
+        borderRadius: 2,
+        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
         '&:hover': onClick ? { 
-          boxShadow: 6,
-          transform: 'translateY(-2px)',
-          transition: 'all 0.2s ease-in-out'
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+          transform: 'translateY(-1px)',
+          borderColor: '#e2e8f0'
         } : {}
       }}
       onClick={onClick}
     >
-      <CardContent>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Box>
-            <Typography color="textSecondary" gutterBottom variant="h6">
+      <CardContent sx={{ p: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <Box sx={{ flex: 1 }}>
+            <Typography 
+              color="text.secondary" 
+              gutterBottom 
+              variant="subtitle2"
+              sx={{ 
+                fontSize: '0.8125rem',
+                fontWeight: 500,
+                mb: 1
+              }}
+            >
               {title}
             </Typography>
-            <Typography variant="h4" component="div" sx={{ fontWeight: 'bold' }}>
+            <Typography 
+              variant="h3" 
+              component="div" 
+              sx={{ 
+                fontWeight: 700,
+                fontSize: '1.5rem',
+                color: 'text.primary',
+                mb: trend ? 1 : 0
+              }}
+            >
               {value.toLocaleString()}
             </Typography>
             {trend && (
-              <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center',
+                gap: 0.5
+              }}>
                 {trend > 0 ? (
-                  <TrendingUp sx={{ color: 'success.main', mr: 0.5 }} />
+                  <TrendingUp sx={{ 
+                    color: 'success.main', 
+                    fontSize: '1rem'
+                  }} />
                 ) : (
-                  <TrendingDown sx={{ color: 'error.main', mr: 0.5 }} />
+                  <TrendingDown sx={{ 
+                    color: 'error.main', 
+                    fontSize: '1rem'
+                  }} />
                 )}
-                <Typography variant="body2" color={trend > 0 ? 'success.main' : 'error.main'}>
+                <Typography 
+                  variant="caption" 
+                  sx={{ 
+                    color: trend > 0 ? 'success.main' : 'error.main',
+                    fontSize: '0.75rem',
+                    fontWeight: 600
+                  }}
+                >
                   {Math.abs(trend)}%
                 </Typography>
               </Box>
             )}
           </Box>
-          <Avatar sx={{ bgcolor: `${color}.main`, width: 56, height: 56 }}>
-            {icon}
+          <Avatar sx={{ 
+            bgcolor: `${color}.main`, 
+            width: 48, 
+            height: 48,
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+          }}>
+            {React.cloneElement(icon, { sx: { fontSize: '1.25rem' } })}
           </Avatar>
         </Box>
         {onClick && (
-          <Box sx={{ position: 'absolute', top: 8, right: 8 }}>
-            <ArrowForwardIcon sx={{ color: 'text.secondary', fontSize: 16 }} />
+          <Box sx={{ position: 'absolute', top: 12, right: 12 }}>
+            <ArrowForwardIcon sx={{ 
+              color: 'text.secondary', 
+              fontSize: '0.875rem',
+              opacity: 0.6
+            }} />
           </Box>
         )}
       </CardContent>
@@ -190,62 +237,134 @@ const Dashboard: React.FC = () => {
   );
 
   return (
-    <Box sx={{ width: '100%' }}>
+    <Box sx={{ 
+      width: '100%',
+      backgroundColor: 'workArea.main',
+      borderRadius: 2,
+      minHeight: '100%',
+      p: 2 // 패딩을 3에서 2로 줄임
+    }}>
       <Box sx={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
-        alignItems: 'center', 
-        mb: 3
+        alignItems: 'flex-start', 
+        mb: 3, // 마진을 4에서 3으로 줄임
+        p: 2, // 패딩을 3에서 2로 줄임
+        backgroundColor: 'background.paper',
+        borderRadius: 2,
+        boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+        border: '1px solid #f1f5f9'
       }}>
         <Box>
-          <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <DashboardIcon color="primary" />
+          <Typography variant="h5" gutterBottom sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1.5,
+            fontWeight: 600,
+            color: 'text.primary',
+            mb: 1,
+            fontSize: '1.25rem'
+          }}>
+            <DashboardIcon sx={{ fontSize: '1.25rem', color: 'primary.main' }} />
             대시보드
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {user?.username}님, 안녕하세요! 오늘의 업무 현황을 확인해보세요.
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem' }}>
+            {user?.role === 'root' ? 'Root Administrator' : user?.username}님, 안녕하세요! 오늘의 업무 현황을 확인해보세요.
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{ display: 'flex', gap: 0.5 }}>
           <Tooltip title="새로고침">
-            <IconButton onClick={handleRefresh} disabled={loading}>
-              <Refresh />
+            <IconButton 
+              onClick={handleRefresh} 
+              disabled={loading}
+              size="small"
+              sx={{ 
+                backgroundColor: 'grey.50',
+                '&:hover': { backgroundColor: 'grey.100' }
+              }}
+            >
+              <Refresh sx={{ fontSize: '1rem' }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="더보기">
-            <IconButton>
-              <MoreVert />
+            <IconButton 
+              size="small"
+              sx={{ 
+                backgroundColor: 'grey.50',
+                '&:hover': { backgroundColor: 'grey.100' }
+              }}
+            >
+              <MoreVert sx={{ fontSize: '1rem' }} />
             </IconButton>
           </Tooltip>
         </Box>
       </Box>
 
       {/* 대시보드 타입 선택 */}
-      <Card sx={{ mb: 3, mx: 2 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
+      <Card sx={{ mb: 4, mx: 0 }}>
+        <CardContent sx={{ p: 2 }}>
+          <Typography variant="h5" gutterBottom sx={{ 
+            mb: 3, 
+            fontWeight: 600,
+            color: 'text.primary'
+          }}>
             대시보드 타입 선택
           </Typography>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Box sx={{ 
+            borderBottom: 1, 
+            borderColor: 'divider',
+            '& .MuiTabs-indicator': {
+              backgroundColor: 'primary.main',
+              height: 3,
+              borderRadius: '2px 2px 0 0'
+            }
+          }}>
             <Tabs value={activeTab} onChange={handleTabChange}>
               <Tab 
                 label="개인 대시보드" 
-                icon={<PersonIcon />} 
+                icon={<PersonIcon sx={{ fontSize: '1.125rem' }} />} 
                 iconPosition="start"
                 onClick={() => navigate('/dashboard/personal')}
+                sx={{ 
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  textTransform: 'none',
+                  minHeight: 48,
+                  '&.Mui-selected': {
+                    color: 'primary.main'
+                  }
+                }}
               />
               <Tab 
                 label="팀 대시보드" 
-                icon={<GroupIcon />} 
+                icon={<GroupIcon sx={{ fontSize: '1.125rem' }} />} 
                 iconPosition="start"
                 onClick={() => navigate('/dashboard/team')}
+                sx={{ 
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  textTransform: 'none',
+                  minHeight: 48,
+                  '&.Mui-selected': {
+                    color: 'primary.main'
+                  }
+                }}
               />
               {user?.role === 'root' || user?.role === 'admin' ? (
                 <Tab 
                   label="관리자 대시보드" 
-                  icon={<AdminPanelSettingsIcon />} 
+                  icon={<AdminPanelSettingsIcon sx={{ fontSize: '1.125rem' }} />} 
                   iconPosition="start"
                   onClick={() => navigate('/dashboard/admin')}
+                  sx={{ 
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                    textTransform: 'none',
+                    minHeight: 48,
+                    '&.Mui-selected': {
+                      color: 'primary.main'
+                    }
+                  }}
                 />
               ) : null}
             </Tabs>
@@ -262,9 +381,9 @@ const Dashboard: React.FC = () => {
           md: 'repeat(3, 1fr)',
           lg: 'repeat(4, 1fr)'
         },
-        gap: 3,
-        mb: 3,
-        px: 2
+        gap: 2, // 간격을 3에서 2로 줄임
+        mb: 2, // 마진을 3에서 2로 줄임
+        px: 0 // 패딩을 0으로 설정하여 카드들이 완전히 정렬되도록 함
       }}>
         <StatCard
           title="총 매출"
@@ -301,8 +420,8 @@ const Dashboard: React.FC = () => {
       </Box>
 
       {/* 빠른 액션 */}
-      <Card sx={{ mb: 3, mx: 2 }}>
-        <CardContent>
+      <Card sx={{ mb: 3, mx: 0 }}>
+        <CardContent sx={{ p: 2 }}>
           <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
             빠른 액션
           </Typography>
@@ -313,7 +432,7 @@ const Dashboard: React.FC = () => {
               sm: 'repeat(2, 1fr)',
               md: 'repeat(4, 1fr)'
             },
-            gap: 2 
+            gap: 1.5 // 간격을 2에서 1.5로 줄임
           }}>
             <QuickActionCard
               title="새 인보이스"
@@ -355,9 +474,9 @@ const Dashboard: React.FC = () => {
           md: 'repeat(2, 1fr)',
           lg: 'repeat(2, 1fr)'
         },
-        gap: 3,
-        px: 2,
-        pb: 3
+        gap: 2, // 간격을 3에서 2로 줄임
+        px: 0, // 패딩을 0으로 설정하여 카드들이 완전히 정렬되도록 함
+        pb: 2 // 패딩을 3에서 2로 줄임
       }}>
         {/* 매출 차트 */}
         <Card>

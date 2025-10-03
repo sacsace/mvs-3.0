@@ -1,4 +1,5 @@
 import { createTheme } from '@mui/material/styles';
+import './types';
 
 // Fanruan 스타일 컬러 팔레트
 const theme = createTheme({
@@ -59,6 +60,17 @@ const theme = createTheme({
       default: '#f8fafc',
       paper: '#ffffff',
     },
+    // 작업 영역과 body 영역 구분을 위한 추가 색상
+    workArea: {
+      main: '#ffffff',
+      light: '#f8fafc',
+      dark: '#f1f5f9',
+    },
+    bodyArea: {
+      main: '#f8fafc',
+      light: '#f1f5f9',
+      dark: '#e2e8f0',
+    },
     text: {
       primary: '#0f172a',
       secondary: '#64748b',
@@ -79,46 +91,67 @@ const theme = createTheme({
   typography: {
     fontFamily: '"Inter", "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
     h1: {
-      fontSize: '2.25rem', // 36px
+      fontSize: '2rem', // 32px - 축소
       fontWeight: 700,
       lineHeight: 1.2,
+      letterSpacing: '-0.025em',
     },
     h2: {
-      fontSize: '1.875rem', // 30px
+      fontSize: '1.75rem', // 28px - 축소
       fontWeight: 700,
       lineHeight: 1.3,
+      letterSpacing: '-0.025em',
     },
     h3: {
-      fontSize: '1.5rem', // 24px
+      fontSize: '1.375rem', // 22px - 축소
       fontWeight: 600,
       lineHeight: 1.4,
+      letterSpacing: '-0.025em',
     },
     h4: {
-      fontSize: '1.25rem', // 20px
+      fontSize: '1.125rem', // 18px - 축소
       fontWeight: 600,
       lineHeight: 1.4,
+      letterSpacing: '-0.025em',
     },
     h5: {
-      fontSize: '1.125rem', // 18px
+      fontSize: '1rem', // 16px - 축소
       fontWeight: 600,
       lineHeight: 1.5,
+      letterSpacing: '-0.025em',
     },
     h6: {
-      fontSize: '1rem', // 16px
+      fontSize: '0.875rem', // 14px - 축소
       fontWeight: 600,
       lineHeight: 1.5,
+      letterSpacing: '-0.025em',
     },
     body1: {
-      fontSize: '1rem', // 16px
+      fontSize: '0.875rem', // 14px - 축소
       lineHeight: 1.6,
+      letterSpacing: '0.01em',
     },
     body2: {
-      fontSize: '0.875rem', // 14px
+      fontSize: '0.8125rem', // 13px - 축소
       lineHeight: 1.6,
+      letterSpacing: '0.01em',
     },
     caption: {
       fontSize: '0.75rem', // 12px
       lineHeight: 1.5,
+      letterSpacing: '0.025em',
+    },
+    subtitle1: {
+      fontSize: '0.875rem', // 14px
+      fontWeight: 500,
+      lineHeight: 1.5,
+      letterSpacing: '0.01em',
+    },
+    subtitle2: {
+      fontSize: '0.8125rem', // 13px
+      fontWeight: 500,
+      lineHeight: 1.5,
+      letterSpacing: '0.01em',
     },
   },
   shape: {
@@ -159,8 +192,10 @@ const theme = createTheme({
           borderRadius: 8,
           textTransform: 'none',
           fontWeight: 500,
-          padding: '8px 16px',
-          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+          fontSize: '0.875rem',
+          padding: '6px 12px',
+          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
           '&:hover': {
             boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
             transform: 'translateY(-1px)',
@@ -172,19 +207,27 @@ const theme = createTheme({
             background: 'linear-gradient(135deg, #0066cc 0%, #0052a3 100%)',
           },
         },
+        sizeSmall: {
+          fontSize: '0.8125rem',
+          padding: '4px 8px',
+        },
+        sizeLarge: {
+          fontSize: '0.9375rem',
+          padding: '8px 16px',
+        },
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 16,
-          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
-          border: '1px solid #e2e8f0',
-          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          borderRadius: 12,
+          boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+          border: '1px solid #f1f5f9',
+          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
           '&:hover': {
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-            transform: 'translateY(-2px)',
-            borderColor: '#b8ddff',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+            transform: 'translateY(-1px)',
+            borderColor: '#e2e8f0',
           },
         },
       },
@@ -193,14 +236,6 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 12,
-        },
-      },
-    },
-    MuiChip: {
-      styleOverrides: {
-        root: {
-          borderRadius: 6,
-          fontWeight: 500,
         },
       },
     },
@@ -271,6 +306,58 @@ const theme = createTheme({
               backgroundColor: '#b8ddff',
             },
           },
+        },
+      },
+    },
+    MuiTableHead: {
+      styleOverrides: {
+        root: {
+          backgroundColor: '#f8fafc',
+          '& .MuiTableCell-head': {
+            fontSize: '0.8125rem',
+            fontWeight: 600,
+            color: '#475569',
+            borderBottom: '1px solid #e2e8f0',
+          },
+        },
+      },
+    },
+    MuiTableCell: {
+      styleOverrides: {
+        root: {
+          fontSize: '0.8125rem',
+          borderBottom: '1px solid #f1f5f9',
+          padding: '8px 16px',
+        },
+      },
+    },
+    MuiChip: {
+      styleOverrides: {
+        root: {
+          fontSize: '0.75rem',
+          height: 24,
+          borderRadius: 6,
+          fontWeight: 500,
+        },
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          padding: '6px',
+          '&:hover': {
+            backgroundColor: '#f1f5f9',
+          },
+        },
+      },
+    },
+    MuiTooltip: {
+      styleOverrides: {
+        tooltip: {
+          fontSize: '0.75rem',
+          backgroundColor: '#1e293b',
+          borderRadius: 6,
         },
       },
     },

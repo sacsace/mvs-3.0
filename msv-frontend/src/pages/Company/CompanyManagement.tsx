@@ -101,6 +101,10 @@ interface Company {
   employee_count: number;
   subscription_plan: string;
   subscription_status: string;
+  // 인도 관련 필드
+  gst_number: string;
+  msme_number: string;
+  pan_number: string;
   // 회사 이미지 정보
   company_logo: string;
   company_seal: string;
@@ -165,6 +169,9 @@ const CompanyManagement: React.FC = () => {
     employee_count: 0,
     subscription_plan: 'basic',
     subscription_status: 'active',
+    gst_number: '',
+    msme_number: '',
+    pan_number: '',
     company_logo: '',
     company_seal: '',
     ceo_signature: '',
@@ -188,11 +195,33 @@ const CompanyManagement: React.FC = () => {
     const fetchCompanies = async () => {
       try {
         setLoading(true);
-        // root 사용자는 모든 회사 조회, 일반 사용자는 자신의 회사만 조회
-        const endpoint = user?.role === 'root' ? '/companies' : '/company';
-        const response = await api.get(endpoint);
+        // 실제 API 호출
+        const response = await api.get('/company');
         if (response.data.success) {
-          setCompanies(Array.isArray(response.data.data) ? response.data.data : [response.data.data]);
+          const companiesData = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
+          
+          // 데이터베이스 필드를 프론트엔드 인터페이스에 맞게 변환
+          const transformedCompanies = companiesData.map((company: any) => ({
+            ...company,
+            employee_count: company.employee_count || 0,
+            subscription_plan: company.subscription_plan || 'basic',
+            subscription_status: company.status || 'active',
+            company_logo: company.company_logo || '',
+            company_seal: company.company_seal || '',
+            ceo_signature: company.ceo_signature || '',
+            account_holder_name: company.account_holder_name || '',
+            bank_name: company.bank_name || '',
+            account_number: company.account_number || '',
+            ifsc_code: company.ifsc_code || '',
+            login_period_start: company.login_period_start || '',
+            login_period_end: company.login_period_end || '',
+            login_time_start: company.login_time_start || '09:00:00',
+            login_time_end: company.login_time_end || '18:00:00',
+            timezone: company.timezone || 'Asia/Seoul',
+            settings: company.settings || {}
+          }));
+          
+          setCompanies(transformedCompanies);
         }
       } catch (error) {
         console.error('회사 목록 로드 오류:', error);
@@ -220,6 +249,9 @@ const CompanyManagement: React.FC = () => {
       employee_count: 0,
       subscription_plan: 'basic',
       subscription_status: 'active',
+      gst_number: '',
+      msme_number: '',
+      pan_number: '',
       company_logo: '',
       company_seal: '',
       ceo_signature: '',
@@ -262,18 +294,40 @@ const CompanyManagement: React.FC = () => {
 
     try {
       if (dialogMode === 'add') {
-        await api.post('/companies', formData);
+        await api.post('/company', formData);
         setSuccess('회사가 성공적으로 추가되었습니다.');
       } else if (dialogMode === 'edit' && selectedCompany) {
-        await api.put(`/companies/${selectedCompany.id}`, formData);
+        await api.put(`/company/${selectedCompany.id}`, formData);
         setSuccess('회사 정보가 성공적으로 수정되었습니다.');
       }
       
       // 목록 새로고침
-      const endpoint = user?.role === 'root' ? '/companies' : '/company';
-      const response = await api.get(endpoint);
+      const response = await api.get('/company');
       if (response.data.success) {
-        setCompanies(Array.isArray(response.data.data) ? response.data.data : [response.data.data]);
+        const companiesData = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
+        
+        // 데이터베이스 필드를 프론트엔드 인터페이스에 맞게 변환
+        const transformedCompanies = companiesData.map((company: any) => ({
+          ...company,
+          employee_count: company.employee_count || 0,
+          subscription_plan: company.subscription_plan || 'basic',
+          subscription_status: company.status || 'active',
+          company_logo: company.company_logo || '',
+          company_seal: company.company_seal || '',
+          ceo_signature: company.ceo_signature || '',
+          account_holder_name: company.account_holder_name || '',
+          bank_name: company.bank_name || '',
+          account_number: company.account_number || '',
+          ifsc_code: company.ifsc_code || '',
+          login_period_start: company.login_period_start || '',
+          login_period_end: company.login_period_end || '',
+          login_time_start: company.login_time_start || '09:00:00',
+          login_time_end: company.login_time_end || '18:00:00',
+          timezone: company.timezone || 'Asia/Seoul',
+          settings: company.settings || {}
+        }));
+        
+        setCompanies(transformedCompanies);
       }
       
       setOpenDialog(false);
@@ -294,14 +348,36 @@ const CompanyManagement: React.FC = () => {
     setSuccess('');
 
     try {
-      await api.delete(`/companies/${id}`);
+      await api.delete(`/company/${id}`);
       setSuccess('회사가 성공적으로 삭제되었습니다.');
       
       // 목록 새로고침
-      const endpoint = user?.role === 'root' ? '/companies' : '/company';
-      const response = await api.get(endpoint);
+      const response = await api.get('/company');
       if (response.data.success) {
-        setCompanies(Array.isArray(response.data.data) ? response.data.data : [response.data.data]);
+        const companiesData = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
+        
+        // 데이터베이스 필드를 프론트엔드 인터페이스에 맞게 변환
+        const transformedCompanies = companiesData.map((company: any) => ({
+          ...company,
+          employee_count: company.employee_count || 0,
+          subscription_plan: company.subscription_plan || 'basic',
+          subscription_status: company.status || 'active',
+          company_logo: company.company_logo || '',
+          company_seal: company.company_seal || '',
+          ceo_signature: company.ceo_signature || '',
+          account_holder_name: company.account_holder_name || '',
+          bank_name: company.bank_name || '',
+          account_number: company.account_number || '',
+          ifsc_code: company.ifsc_code || '',
+          login_period_start: company.login_period_start || '',
+          login_period_end: company.login_period_end || '',
+          login_time_start: company.login_time_start || '09:00:00',
+          login_time_end: company.login_time_end || '18:00:00',
+          timezone: company.timezone || 'Asia/Seoul',
+          settings: company.settings || {}
+        }));
+        
+        setCompanies(transformedCompanies);
       }
     } catch (error: any) {
       console.error('회사 삭제 오류:', error);

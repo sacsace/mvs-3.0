@@ -2,9 +2,9 @@
 -- PostgreSQL 15+ 호환
 
 -- 데이터베이스 생성 (필요시)
--- CREATE DATABASE mvs_db;
--- CREATE USER mvs_user WITH PASSWORD 'mvs_password';
--- GRANT ALL PRIVILEGES ON DATABASE mvs_db TO mvs_user;
+CREATE DATABASE mvs_db;
+CREATE USER mvs_user WITH PASSWORD 'mvs_password';
+GRANT ALL PRIVILEGES ON DATABASE mvs_db TO mvs_user;
 
 -- 확장 기능 활성화
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

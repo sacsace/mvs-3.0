@@ -60,75 +60,82 @@ MVS 3.0/
 
 ## 🚀 빠른 시작
 
-### 1. 개발 환경 설정
+### 1. Docker Compose로 시작 (권장)
 
-```powershell
+```bash
 # 저장소 클론
 git clone <repository-url>
 cd MVS-3.0
 
-# 개발 환경 시작
-.\scripts\deploy-dev.ps1 -Build
-
-# 또는 Docker Compose 사용
+# 전체 시스템 시작
+npm start
+# 또는
 docker-compose up -d
+
+# 상태 확인
+npm run status
 ```
 
-### 2. 운영 환경 배포
+### 2. 접속 정보
 
-```powershell
-# 전체 배포 (권장)
-.\scripts\deploy-all.ps1 -Environment production -Build -Push -Monitor -Backup
+- **프론트엔드**: https://localhost:3000
+- **백엔드 API**: https://localhost:5000
+- **PostgreSQL**: localhost:5432
+- **Redis**: localhost:6379
 
-# 또는 개별 배포
-.\scripts\deploy-prod.ps1 -Version v1.0.0 -Build -Push
+### 3. 기본 명령어
+
+```bash
+npm start          # 시스템 시작
+npm run stop       # 시스템 중지
+npm run restart    # 시스템 재시작
+npm run build      # 이미지 빌드
+npm run logs       # 로그 확인
+npm run status     # 상태 확인
+npm run clean      # 환경 정리
 ```
 
-### 3. 접속 정보
+> **⚠️ 중요**: MVS 3.0은 이제 **Docker Compose만 사용**합니다. 다른 실행 방법들은 모두 비활성화되었습니다.
 
-- **개발 환경**: http://localhost:3000
-- **운영 환경**: https://mvs.local
-- **API**: https://api.mvs.local
-- **모니터링**: 
-  - Prometheus: `kubectl port-forward -n mvs-system service/prometheus-service 9090:9090`
-  - Grafana: `kubectl port-forward -n mvs-system service/grafana-service 3000:3000`
+### 4. 상세 가이드
+
+자세한 Docker Compose 사용법은 [DOCKER_GUIDE.md](./DOCKER_GUIDE.md)를 참조하세요.
 
 ## 🔧 개발 가이드
 
-### 백엔드 개발
+### Docker Compose 개발
 
-```powershell
-cd msv-server
-
-# 의존성 설치
-npm install
-
-# 개발 서버 시작
-npm run dev
-
-# 데이터베이스 마이그레이션
-npm run db:migrate
-
-# 테스트 실행
-npm test
-```
-
-### 프론트엔드 개발
-
-```powershell
-cd msv-frontend
-
-# 의존성 설치
-npm install
-
-# 개발 서버 시작
+```bash
+# 전체 시스템 시작
 npm start
 
-# 빌드
-npm run build
+# 특정 서비스 재시작 (코드 변경 후)
+docker-compose restart backend
+docker-compose restart frontend
+
+# 컨테이너 내부 접근
+docker-compose exec backend bash
+docker-compose exec frontend sh
+
+# 데이터베이스 마이그레이션
+docker-compose exec backend npm run db:migrate
 
 # 테스트 실행
-npm test
+docker-compose exec backend npm test
+```
+
+### 코드 변경 시
+
+```bash
+# 백엔드 코드 변경 후
+docker-compose restart backend
+
+# 프론트엔드 코드 변경 후  
+docker-compose restart frontend
+
+# 로그 확인
+docker-compose logs -f backend
+docker-compose logs -f frontend
 ```
 
 ## 📊 모니터링 및 로깅

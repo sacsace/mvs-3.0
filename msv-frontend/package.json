@@ -30,6 +30,7 @@
     "react-i18next": "^16.0.0",
     "react-router-dom": "^7.9.3",
     "react-scripts": "5.0.1",
+    "reactflow": "^11.11.4",
     "recharts": "^2.15.4",
     "serve": "^14.2.1",
     "typescript": "^4.9.5",
@@ -38,10 +39,10 @@
     "zustand": "^5.0.8"
   },
   "scripts": {
-    "start": "set HOST=0.0.0.0 && set HTTPS=true && react-scripts start",
     "build": "set GENERATE_SOURCEMAP=false && react-scripts build",
     "start:railway": "npx serve -s build -l 3000",
     "test": "react-scripts test",
+    "test:all": "npm run test",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

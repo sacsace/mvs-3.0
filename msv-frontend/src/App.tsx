@@ -20,8 +20,7 @@ import AttendanceManagement from './pages/Attendance/AttendanceManagement';
 import ProjectManagement from './pages/Projects/ProjectManagement';
 import EInvoiceManagement from './pages/Invoice/EInvoiceManagement';
 import ProformaInvoiceManagement from './pages/Invoice/ProformaInvoiceManagement';
-import QuotationManagement from './pages/Invoice/QuotationManagement';
-import EWayBillManagement from './pages/Invoice/EWayBillManagement';
+import QuotationManagement from './pages/Quotation/QuotationManagement';
 import InventoryStatus from './pages/Inventory/InventoryStatus';
 import CostAnalysis from './pages/AI/CostAnalysis';
 import EfficiencyMetrics from './pages/AI/EfficiencyMetrics';
@@ -41,54 +40,38 @@ import VacationManagement from './pages/HR/VacationManagement';
 import TaskManagement from './pages/Tasks/TaskManagement';
 import SystemSettings from './pages/System/SystemSettings';
 
-// 개발중 페이지 컴포넌트들
-const ProformaInvoice = () => (
-  <UnderDevelopment 
-    pageName="프로포마 인보이스 관리"
-    description="견적서에서 생성된 프로포마 인보이스를 관리하는 페이지입니다."
-    estimatedCompletion="2024년 12월"
-    features={[
-      "프로포마 인보이스 생성 및 관리",
-      "견적서 연동 자동화",
-      "고객 승인 워크플로우",
-      "E-Invoice 자동 생성",
-      "상태 추적 및 알림"
-    ]}
-    status="development"
-  />
-);
+// Communication 페이지들
+import ChatRoom from './pages/Communication/ChatRoom';
+import NoticeBoard from './pages/Communication/NoticeBoard';
+import EmailManagement from './pages/Communication/EmailManagement';
+import SMSManagement from './pages/Communication/SMSManagement';
 
-const RegularInvoice = () => (
-  <UnderDevelopment 
-    pageName="일반 인보이스 관리"
-    description="기본 인보이스 생성 및 관리 기능을 제공하는 페이지입니다."
-    estimatedCompletion="2024년 12월"
-    features={[
-      "인보이스 생성 및 편집",
-      "고객 정보 관리",
-      "상품/서비스 항목 관리",
-      "세금 계산 자동화",
-      "인쇄 및 PDF 생성"
-    ]}
-    status="development"
-  />
-);
+// System Management 페이지들
+import SystemUserManagement from './pages/System/UserManagement';
+import LogManagement from './pages/System/LogManagement';
+import BackupManagement from './pages/System/BackupManagement';
 
-const EInvoice = () => (
-  <UnderDevelopment 
-    pageName="E-인보이스 관리"
-    description="전자 인보이스 생성 및 관리 기능을 제공하는 페이지입니다."
-    estimatedCompletion="2024년 12월"
-    features={[
-      "전자 인보이스 생성",
-      "디지털 서명 기능",
-      "전자 문서 관리",
-      "법적 요구사항 준수",
-      "자동 전송 및 알림"
-    ]}
-    status="development"
-  />
-);
+// 새로 추가된 페이지들
+import PayrollManagement from './pages/HR/PayrollManagement';
+import PerformanceManagement from './pages/HR/PerformanceManagement';
+import WorkStatistics from './pages/Work/WorkStatistics';
+import ElectronicApproval from './pages/Work/ElectronicApproval';
+import MeetingRoomBooking from './pages/Work/MeetingRoomBooking';
+import RoomBookingManagement from './pages/Work/RoomBookingManagement';
+import WorkReport from './pages/Work/WorkReport';
+import EInvoiceCreate from './pages/Invoice/EInvoiceCreate';
+import ExpenseApproval from './pages/Accounting/ExpenseApproval';
+import BudgetManagement from './pages/Accounting/BudgetManagement';
+
+// 고객관리 관련 페이지들
+import CustomerManagement from './pages/Customers/CustomerManagement';
+import SalesOpportunityManagement from './pages/Sales/SalesOpportunityManagement';
+import ContractManagement from './pages/Sales/ContractManagement';
+import CustomerSupport from './pages/Sales/CustomerSupport';
+
+// Invoice 페이지들
+import RegularInvoice from './pages/Invoice/RegularInvoice';
+
 
 const EWayBill = () => (
   <UnderDevelopment 
@@ -106,21 +89,6 @@ const EWayBill = () => (
   />
 );
 
-const CustomerManagement = () => (
-  <UnderDevelopment 
-    pageName="고객 관리"
-    description="고객 정보를 체계적으로 관리하는 페이지입니다."
-    estimatedCompletion="2024년 12월"
-    features={[
-      "고객 정보 등록 및 수정",
-      "고객 분류 및 태그 관리",
-      "거래 이력 추적",
-      "고객별 통계 및 분석",
-      "고객 지원 시스템"
-    ]}
-    status="development"
-  />
-);
 const Accounting = () => (
   <UnderDevelopment 
     pageName="회계 관리"
@@ -227,34 +195,38 @@ function App() {
                   <Route path="dashboard/monitoring" element={<UnderDevelopment pageName="실시간 모니터링" description="시스템을 실시간으로 모니터링하는 페이지입니다." estimatedCompletion="2024년 12월" features={["실시간 모니터링", "알림 관리", "성능 지표", "모니터링 설정", "모니터링 보고서"]} status="development" />} />
             
             {/* 기본정보관리 */}
-            <Route path="company" element={<CompanyManagement />} />
-            <Route path="partners" element={<PartnerManagement />} />
-            <Route path="organization" element={<OrganizationChart />} />
-            <Route path="permissions" element={<MenuPermissionManagement />} />
+            <Route path="basic-info" element={<Navigate to="/basic-info/company" replace />} />
+            <Route path="basic-info/company" element={<CompanyManagement />} />
+            <Route path="basic-info/partners" element={<PartnerManagement />} />
+            <Route path="basic-info/organization" element={<OrganizationChart />} />
+            <Route path="basic-info/menu-permissions" element={<MenuPermissionManagement />} />
+            <Route path="basic-info/system-settings" element={<SystemSettings />} />
             
             {/* 인사관리 */}
-            <Route path="attendance" element={<AttendanceManagement />} />
-            <Route path="employees" element={<EmployeeManagement />} />
-            <Route path="payroll" element={<UnderDevelopment pageName="급여 관리" description="직원 급여를 체계적으로 관리하는 페이지입니다." estimatedCompletion="2025년 1월" features={["급여 계산", "세금 계산", "급여 지급", "급여 이력", "급여 통계"]} status="planning" />} />
-            <Route path="leave" element={<VacationManagement />} />
-            <Route path="performance" element={<UnderDevelopment pageName="성과 관리" description="직원 성과를 평가하고 관리하는 페이지입니다." estimatedCompletion="2025년 1월" features={["성과 평가", "목표 설정", "피드백 관리", "성과 분석", "보상 관리"]} status="planning" />} />
+            <Route path="hr" element={<Navigate to="/hr/users" replace />} />
+            <Route path="hr/users" element={<UserManagement />} />
+            <Route path="hr/attendance" element={<AttendanceManagement />} />
+            <Route path="hr/payroll" element={<PayrollManagement />} />
+            <Route path="hr/leave" element={<VacationManagement />} />
+            <Route path="hr/performance" element={<PerformanceManagement />} />
             
             {/* 업무관리 */}
-            <Route path="projects" element={<ProjectManagement />} />
-            <Route path="tasks" element={<TaskManagement />} />
-            <Route path="work-stats" element={<UnderDevelopment pageName="업무 통계" description="업무 효율성과 생산성을 분석하는 페이지입니다." estimatedCompletion="2024년 12월" features={["업무 시간 분석", "생산성 지표", "팀 성과 분석", "업무 패턴 분석", "효율성 개선 제안"]} status="development" />} />
-            <Route path="approval" element={<UnderDevelopment pageName="전자결재" description="문서 결재 워크플로우를 관리하는 페이지입니다." estimatedCompletion="2024년 12월" features={["결재 워크플로우", "문서 승인", "결재 이력", "알림 관리", "결재 통계"]} status="development" />} />
-            <Route path="meeting" element={<UnderDevelopment pageName="회의실 예약" description="회의실 예약 및 관리를 위한 페이지입니다." estimatedCompletion="2024년 12월" features={["회의실 예약", "일정 관리", "회의실 상태", "예약 이력", "회의실 통계"]} status="development" />} />
-            <Route path="room-booking" element={<UnderDevelopment pageName="객실 예약 관리" description="객실 예약 및 시설 관리를 위한 페이지입니다." estimatedCompletion="2024년 12월" features={["객실 예약", "시설 관리", "예약 승인", "예약 이력", "시설 통계"]} status="development" />} />
+            <Route path="work" element={<Navigate to="/work/projects" replace />} />
+            <Route path="work/projects" element={<ProjectManagement />} />
+            <Route path="work/statistics" element={<WorkStatistics />} />
+            <Route path="work/approval" element={<ElectronicApproval />} />
+            <Route path="work/quotation" element={<QuotationManagement />} />
+            <Route path="work/meeting-room" element={<MeetingRoomBooking />} />
+            <Route path="work/room-reservation" element={<RoomBookingManagement />} />
+            <Route path="work/reports" element={<WorkReport />} />
             
-            {/* 재고 관리 */}
-            <Route path="inventory" element={<InventoryManagement />} />
+            {/* 재고관리 */}
+            <Route path="inventory" element={<Navigate to="/inventory/basic" replace />} />
+            <Route path="inventory/basic" element={<InventoryManagement />} />
             <Route path="inventory/status" element={<InventoryStatus />} />
-            <Route path="inventory/stock-in" element={<StockInManagement />} />
-            <Route path="inventory/stock-out" element={<StockOutManagement />} />
-            <Route path="inventory/initial" element={<Navigate to="/inventory" replace />} />
-            <Route path="inventory/adjustment" element={<UnderDevelopment pageName="재고 조정" description="재고 수량을 조정하고 관리하는 페이지입니다." estimatedCompletion="2024년 12월" features={["재고 조정", "조정 사유 관리", "조정 승인", "조정 이력", "조정 통계"]} status="development" />} />
-            <Route path="inventory/history" element={<UnderDevelopment pageName="재고 이력" description="재고 변동 이력을 추적하는 페이지입니다." estimatedCompletion="2024년 12월" features={["재고 변동 이력", "입출고 추적", "재고 회전율", "이력 분석", "보고서 생성"]} status="development" />} />
+            <Route path="inventory/transaction" element={<StockInManagement />} />
+            <Route path="inventory/movement" element={<StockOutManagement />} />
+            <Route path="inventory/report" element={<UnderDevelopment pageName="재고 보고서" description="재고 관련 보고서를 생성하는 페이지입니다." estimatedCompletion="2024년 12월" features={["재고 분석", "재고 회전율", "재고 부족 알림", "재고 예측", "재고 최적화"]} status="development" />} />
             
             {/* 견적서 관리 */}
             <Route path="quotation" element={<QuotationManagement />} />
@@ -280,31 +252,32 @@ function App() {
             {/* E-인보이스 */}
             <Route path="e-invoice" element={<EInvoiceManagement />} />
             <Route path="e-invoice/list" element={<UnderDevelopment pageName="E-인보이스 목록" description="생성된 E-인보이스 목록을 관리하는 페이지입니다." estimatedCompletion="2024년 12월" features={["E-인보이스 목록 조회", "상태별 필터링", "GST 규정 준수", "일괄 작업", "내보내기"]} status="development" />} />
-            <Route path="e-invoice/create" element={<UnderDevelopment pageName="E-인보이스 생성" description="새로운 E-인보이스를 생성하는 페이지입니다." estimatedCompletion="2024년 12월" features={["E-인보이스 생성", "GST 규정 준수", "IRN 생성", "QR 코드 생성", "자동 전송"]} status="development" />} />
+            <Route path="e-invoice/create" element={<EInvoiceCreate />} />
             <Route path="e-invoice/send" element={<UnderDevelopment pageName="E-인보이스 전송" description="E-인보이스를 GST 포털에 전송하는 페이지입니다." estimatedCompletion="2024년 12월" features={["GST 포털 전송", "전송 상태 추적", "전송 이력", "전송 통계", "자동 재전송"]} status="development" />} />
             <Route path="e-invoice/status" element={<UnderDevelopment pageName="E-인보이스 상태" description="E-인보이스 상태를 모니터링하는 페이지입니다." estimatedCompletion="2024년 12월" features={["실시간 상태 모니터링", "상태 이력", "알림 관리", "상태 통계", "자동 업데이트"]} status="development" />} />
             
             {/* E-Way Bill */}
-            <Route path="eway-bill" element={<EWayBillManagement />} />
+            <Route path="eway-bill" element={<EWayBill />} />
             <Route path="eway-bill/list" element={<UnderDevelopment pageName="E-Way Bill 목록" description="생성된 E-Way Bill 목록을 관리하는 페이지입니다." estimatedCompletion="2024년 12월" features={["E-Way Bill 목록 조회", "상태별 필터링", "운송 정보", "일괄 작업", "내보내기"]} status="development" />} />
             <Route path="eway-bill/create" element={<UnderDevelopment pageName="E-Way Bill 생성" description="새로운 E-Way Bill을 생성하는 페이지입니다." estimatedCompletion="2024년 12월" features={["E-Way Bill 생성", "운송 정보 입력", "QR 코드 생성", "자동 생성", "검증"]} status="development" />} />
             <Route path="eway-bill/send" element={<UnderDevelopment pageName="E-Way Bill 전송" description="E-Way Bill을 GST 포털에 전송하는 페이지입니다." estimatedCompletion="2024년 12월" features={["GST 포털 전송", "전송 상태 추적", "전송 이력", "전송 통계", "자동 재전송"]} status="development" />} />
             <Route path="eway-bill/track" element={<UnderDevelopment pageName="E-Way Bill 추적" description="E-Way Bill 운송 상태를 추적하는 페이지입니다." estimatedCompletion="2024년 12월" features={["실시간 추적", "위치 정보", "상태 업데이트", "알림 관리", "추적 통계"]} status="development" />} />
             
-            {/* 고객 관리 */}
-            <Route path="customers" element={<CustomerManagement />} />
-            <Route path="customers/list" element={<CustomerList />} />
-            <Route path="customers/register" element={<UnderDevelopment pageName="고객 등록" description="새로운 고객을 등록하는 페이지입니다." estimatedCompletion="2024년 12월" features={["고객 정보 등록", "고객 분류", "연락처 관리", "거래 이력", "자동 중복 검사"]} status="development" />} />
-            <Route path="customers/details" element={<UnderDevelopment pageName="고객 상세" description="고객의 상세 정보를 보여주는 페이지입니다." estimatedCompletion="2024년 12월" features={["고객 상세 정보", "거래 이력", "연락처 이력", "고객 통계", "관련 문서"]} status="development" />} />
-            <Route path="customers/stats" element={<UnderDevelopment pageName="고객 통계" description="고객 관련 통계를 분석하는 페이지입니다." estimatedCompletion="2024년 12월" features={["고객 분석", "거래 패턴", "고객 분류", "통계 차트", "보고서 생성"]} status="development" />} />
+            {/* 고객관리 */}
+            <Route path="customers" element={<Navigate to="/customers/info" replace />} />
+            <Route path="customers/info" element={<CustomerManagement />} />
+            <Route path="customers/sales" element={<SalesOpportunityManagement />} />
+            <Route path="customers/contracts" element={<ContractManagement />} />
+            <Route path="customers/support" element={<CustomerSupport />} />
             
-            {/* 회계 관리 */}
-            <Route path="accounting" element={<Accounting />} />
-            <Route path="accounting/income" element={<UnderDevelopment pageName="수입 관리" description="회사 수입을 체계적으로 관리하는 페이지입니다." estimatedCompletion="2025년 1월" features={["수입 등록", "수입 분류", "세금 계산", "수입 분석", "수입 보고서"]} status="planning" />} />
-            <Route path="accounting/expense" element={<UnderDevelopment pageName="지출 관리" description="회사 지출을 체계적으로 관리하는 페이지입니다." estimatedCompletion="2025년 1월" features={["지출 등록", "지출 분류", "세금 계산", "지출 분석", "지출 보고서"]} status="planning" />} />
+            {/* 회계관리 */}
+            <Route path="accounting" element={<Navigate to="/accounting/e-invoice" replace />} />
+            <Route path="accounting/e-invoice" element={<EInvoiceManagement />} />
+            <Route path="accounting/invoice" element={<RegularInvoice />} />
+            <Route path="accounting/expense" element={<ExpenseApproval />} />
+            <Route path="accounting/budget" element={<BudgetManagement />} />
             <Route path="accounting/assets" element={<UnderDevelopment pageName="자산 관리" description="회사 자산을 체계적으로 관리하는 페이지입니다." estimatedCompletion="2025년 1월" features={["자산 등록", "자산 분류", "감가상각", "자산 평가", "자산 보고서"]} status="planning" />} />
-            <Route path="accounting/budget" element={<UnderDevelopment pageName="예산 관리" description="회사 예산을 계획하고 관리하는 페이지입니다." estimatedCompletion="2025년 1월" features={["예산 계획", "예산 분배", "예산 실행", "예산 분석", "예산 보고서"]} status="planning" />} />
-            <Route path="accounting/reports" element={<UnderDevelopment pageName="재무 보고서" description="재무 관련 보고서를 생성하는 페이지입니다." estimatedCompletion="2025년 1월" features={["손익계산서", "대차대조표", "현금흐름표", "재무 분석", "보고서 내보내기"]} status="planning" />} />
+            <Route path="accounting/statistics" element={<UnderDevelopment pageName="회계 통계" description="회계 관련 통계를 분석하는 페이지입니다." estimatedCompletion="2025년 1월" features={["수입 분석", "지출 분석", "세금 분석", "통계 차트", "보고서 생성"]} status="planning" />} />
             
             {/* 보고서 */}
             <Route path="reports" element={<Reports />} />
@@ -333,11 +306,27 @@ function App() {
             <Route path="notifications" element={<Notifications />} />
             
             {/* AI 분석 */}
-            <Route path="ai" element={<AIAnalytics />} />
+            <Route path="ai" element={<Navigate to="/ai/cost-analysis" replace />} />
             <Route path="ai/cost-analysis" element={<CostAnalysis />} />
             <Route path="ai/efficiency-metrics" element={<EfficiencyMetrics />} />
             <Route path="ai/forecasting-data" element={<ForecastingData />} />
             <Route path="ai/recommendation-engine" element={<RecommendationEngine />} />
+            
+            {/* 커뮤니케이션 */}
+            <Route path="communication" element={<Navigate to="/communication/chat" replace />} />
+            <Route path="communication/chat" element={<ChatRoom />} />
+            <Route path="communication/notice" element={<NoticeBoard />} />
+            <Route path="communication/email" element={<EmailManagement />} />
+            <Route path="communication/sms" element={<SMSManagement />} />
+            
+            {/* 시스템관리 */}
+            <Route path="system" element={<Navigate to="/system/users" replace />} />
+            <Route path="system/users" element={<SystemUserManagement />} />
+            <Route path="system/logs" element={<LogManagement />} />
+            <Route path="system/backup" element={<BackupManagement />} />
+            <Route path="system/settings" element={<SystemSettings />} />
+            <Route path="system/security" element={<UnderDevelopment pageName="보안 관리" description="시스템 보안 설정 및 관리 페이지입니다." estimatedCompletion="2024년 12월" features={["보안 정책", "암호 정책", "접근 제어", "보안 로그", "보안 알림"]} status="development" />} />
+            <Route path="system/monitoring" element={<UnderDevelopment pageName="시스템 모니터링" description="시스템을 실시간으로 모니터링하는 페이지입니다." estimatedCompletion="2024년 12월" features={["실시간 모니터링", "알림 관리", "성능 지표", "모니터링 설정", "모니터링 보고서"]} status="development" />} />
             
             {/* AI 분석 단축 경로 */}
             <Route path="efficiency" element={<EfficiencyMetrics />} />

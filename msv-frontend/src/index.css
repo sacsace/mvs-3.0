@@ -186,6 +186,11 @@ body::before {
   --transition-fast: 150ms ease-in-out;
   --transition-normal: 250ms ease-in-out;
   --transition-slow: 350ms ease-in-out;
+  
+  /* Layout Variables */
+  --sidebar-width: 280px;
+  --sidebar-width-mobile: 240px;
+  --sidebar-width-tablet: 260px;
 }
 
 /* 루트 컨테이너 */
@@ -533,10 +538,71 @@ h6 { font-size: 0.875rem !important; }
   background: var(--text-quaternary);
 }
 
-/* 포커스 스타일 */
+/* 포커스 스타일 - 아웃라인 제거 */
 *:focus {
-  outline: 2px solid var(--primary-500) !important;
-  outline-offset: 2px !important;
+  outline: none !important;
+  outline-offset: 0 !important;
+}
+
+*:focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+}
+
+/* 모든 입력 요소의 포커스 아웃라인 제거 */
+input:focus,
+input:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+select:focus,
+select:focus-visible,
+button:focus,
+button:focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+}
+
+/* Material-UI 특정 요소들 */
+.MuiOutlinedInput-root:focus,
+.MuiOutlinedInput-root:focus-visible,
+.MuiInputBase-root:focus,
+.MuiInputBase-root:focus-visible,
+.MuiTextField-root:focus,
+.MuiTextField-root:focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+}
+
+/* 가장 강력한 포커스 아웃라인 제거 */
+.MuiOutlinedInput-root,
+.MuiOutlinedInput-root *,
+.MuiInputBase-root,
+.MuiInputBase-root *,
+.MuiTextField-root,
+.MuiTextField-root *,
+input,
+textarea,
+select,
+button {
+  outline: none !important;
+  outline-offset: 0 !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+/* 포커스 상태에서도 아웃라인 제거 */
+.MuiOutlinedInput-root:focus,
+.MuiOutlinedInput-root:focus-within,
+.MuiInputBase-root:focus,
+.MuiInputBase-root:focus-within,
+.MuiTextField-root:focus,
+.MuiTextField-root:focus-within,
+input:focus,
+textarea:focus,
+select:focus,
+button:focus {
+  outline: none !important;
+  outline-offset: 0 !important;
+  -webkit-tap-highlight-color: transparent !important;
 }
 
 /* 선택 스타일 */
@@ -551,4 +617,31 @@ code {
   padding: var(--space-1) var(--space-2) !important;
   border-radius: var(--radius-sm) !important;
   font-size: 0.875rem !important;
+}
+
+/* 메인 콘텐츠 영역 레이아웃 - 초기 로딩 시에도 올바른 위치에 표시 */
+.main-content-area {
+  padding-left: var(--sidebar-width) !important;
+  padding-right: 24px !important;
+  padding-top: 32px !important;
+  padding-bottom: 32px !important;
+}
+
+/* 반응형 패딩 */
+@media (max-width: 600px) {
+  .main-content-area {
+    padding-left: var(--sidebar-width-mobile) !important;
+    padding-right: 8px !important;
+    padding-top: 16px !important;
+    padding-bottom: 16px !important;
+  }
+}
+
+@media (min-width: 600px) and (max-width: 960px) {
+  .main-content-area {
+    padding-left: var(--sidebar-width-tablet) !important;
+    padding-right: 16px !important;
+    padding-top: 24px !important;
+    padding-bottom: 24px !important;
+  }
 }

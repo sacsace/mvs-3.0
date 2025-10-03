@@ -22,18 +22,18 @@ import {
   Settings as SettingsIcon,
   Language as LanguageIcon
 } from '@mui/icons-material';
-import { useStore } from '../../store';
+import { useStore, useMenuStore } from '../../store';
 import { api } from '../../services/api';
 
 const Header: React.FC = () => {
   const { user, logout } = useStore();
+  const { language, setLanguage } = useMenuStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [languageAnchorEl, setLanguageAnchorEl] = useState<null | HTMLElement>(null);
   const [companyInfo, setCompanyInfo] = useState<{
     name: string;
     logo: string;
   } | null>(null);
-  const [language, setLanguage] = useState<'ko' | 'en'>('ko');
 
   // 회사 정보 로드
   useEffect(() => {
@@ -91,6 +91,7 @@ const Header: React.FC = () => {
   };
 
   const handleLanguageChange = (lang: 'ko' | 'en') => {
+    console.log('언어 변경:', lang);
     setLanguage(lang);
     handleLanguageClose();
   };
@@ -100,13 +101,22 @@ const Header: React.FC = () => {
       position="fixed" 
       elevation={0}
       sx={{ 
-        background: 'rgba(255, 255, 255, 0.95)',
+        background: '#ffffff',
         backdropFilter: 'blur(20px)',
-        borderBottom: '1px solid rgba(226, 232, 240, 0.8)',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+        borderBottom: '1px solid #e2e8f0',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
         zIndex: (theme) => theme.zIndex.drawer + 1,
         '& *': {
           color: '#1e293b',
+        },
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '1px',
+          background: 'linear-gradient(90deg, transparent 0%, #e2e8f0 20%, #e2e8f0 80%, transparent 100%)',
         }
       }}
     >
@@ -271,7 +281,7 @@ const Header: React.FC = () => {
                   {user?.username || '사용자'}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.625rem' }}>
-                  {user?.role || 'user'} • {user?.email || 'user@example.com'}
+                  {user?.role === 'root' ? 'Root' : user?.role || 'user'} • {user?.email || 'user@example.com'}
                 </Typography>
               </Box>
             </MenuItem>

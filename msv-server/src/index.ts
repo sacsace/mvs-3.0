@@ -8,17 +8,52 @@ import { config } from 'dotenv';
 import { connectDB } from './models';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
-import menuRoutes from './routes/menus';
+import menuRoutes from './routes/menuRoutes';
 import notificationRoutes from './routes/notifications';
+import companyRoutes from './routes/companies';
+import customerRoutes from './routes/customers';
+import salesOpportunityRoutes from './routes/salesOpportunities';
+import contractRoutes from './routes/contracts';
+import supportTicketRoutes from './routes/supportTickets';
+import accountingRoutes from './routes/accounting';
+import inventoryRoutes from './routes/inventory';
+import hrRoutes from './routes/hr';
+import projectRoutes from './routes/projects';
 import SocketService from './services/socketService';
 import { createServer } from 'http';
+import { createServer as createHttpsServer } from 'https';
+import fs from 'fs';
+import path from 'path';
 
 // 환경 변수 로드
 config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const server = createServer(app);
+
+// SSL 인증서 설정
+let server;
+const isHttps = process.env.HTTPS === 'true';
+
+if (isHttps) {
+  try {
+    const certPath = path.join(__dirname, '../../ssl/cert.pem');
+    const keyPath = path.join(__dirname, '../../ssl/key.pem');
+    
+    const options = {
+      cert: fs.readFileSync(certPath),
+      key: fs.readFileSync(keyPath)
+    };
+    
+    server = createHttpsServer(options, app);
+    console.log('🔒 HTTPS server configured');
+  } catch (error) {
+    console.warn('⚠️ SSL certificate not found, falling back to HTTP');
+    server = createServer(app);
+  }
+} else {
+  server = createServer(app);
+}
 
 // 데이터베이스 연결
 connectDB();
@@ -84,6 +119,16 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/menus', menuRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/company', companyRoutes);
+app.use('/api/companies', companyRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/sales-opportunities', salesOpportunityRoutes);
+app.use('/api/contracts', contractRoutes);
+app.use('/api/support-tickets', supportTicketRoutes);
+app.use('/api/accounting', accountingRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/hr', hrRoutes);
+app.use('/api/projects', projectRoutes);
 
 // 메뉴 데이터 API (한글 지원)
 app.get('/api/menus', async (req, res) => {
@@ -103,6 +148,43 @@ app.get('/api/menus', async (req, res) => {
     res.status(500).json({
       success: false,
       message: '메뉴 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 메뉴 한글 업데이트 API
+app.post('/api/menus/update-korean', async (req, res) => {
+  try {
+    const { Menu } = require('./models');
+    
+    const koreanMenus = [
+      { id: 1, name_ko: '대시보드' },
+      { id: 2, name_ko: '사용자 관리' },
+      { id: 3, name_ko: '회사 관리' },
+      { id: 4, name_ko: '프로젝트 관리' },
+      { id: 5, name_ko: '회계 관리' },
+      { id: 6, name_ko: '재고 관리' },
+      { id: 7, name_ko: '고객 관리' },
+      { id: 8, name_ko: '보고서' },
+      { id: 9, name_ko: '설정' }
+    ];
+    
+    for (const menu of koreanMenus) {
+      await Menu.update(
+        { name_ko: menu.name_ko },
+        { where: { id: menu.id } }
+      );
+    }
+    
+    res.json({
+      success: true,
+      message: '메뉴 한글명이 업데이트되었습니다.'
+    });
+  } catch (error) {
+    console.error('메뉴 업데이트 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '메뉴 업데이트 중 오류가 발생했습니다.'
     });
   }
 });

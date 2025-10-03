@@ -1,16 +1,15 @@
 import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
 import { User } from '../models';
 
-// 간단한 비밀번호 해싱 함수 (개발용)
+// 비밀번호 해싱 함수
 const hashPassword = async (password: string): Promise<string> => {
-  // 실제 프로덕션에서는 bcrypt 사용
-  return Buffer.from(password).toString('base64');
+  return await bcrypt.hash(password, 10);
 };
 
 const comparePassword = async (password: string, hash: string): Promise<boolean> => {
-  // 실제 프로덕션에서는 bcrypt 사용
-  return Buffer.from(password).toString('base64') === hash;
+  return await bcrypt.compare(password, hash);
 };
 
 interface LoginRequest extends Request {
@@ -44,7 +43,10 @@ export const login = async (req: LoginRequest, res: Response) => {
     }
 
     // 비밀번호 확인
+    console.log('🔍 디버깅 - 입력된 비밀번호:', password);
+    console.log('🔍 디버깅 - 저장된 해시:', user.password_hash);
     const isValidPassword = await comparePassword(password, user.password_hash);
+    console.log('🔍 디버깅 - 비밀번호 검증 결과:', isValidPassword);
     if (!isValidPassword) {
       return res.status(401).json({
         success: false,
@@ -79,7 +81,9 @@ export const login = async (req: LoginRequest, res: Response) => {
           email: user.email,
           role: user.role,
           department: user.department,
-          position: user.position
+          position: user.position,
+          tenant_id: user.tenant_id,
+          company_id: user.company_id
         }
       },
       message: '로그인 성공'

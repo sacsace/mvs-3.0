@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { Menu, UserPermission } from '../services/menuService';
 
 export interface User {
   id: number;
@@ -18,6 +19,22 @@ interface AuthState {
   login: (token: string, user: User) => void;
   logout: () => void;
   updateUser: (user: Partial<User>) => void;
+}
+
+interface MenuState {
+  menus: Menu[];
+  userPermissions: UserPermission[];
+  loading: boolean;
+  error: string | null;
+  language: 'ko' | 'en';
+  setMenus: (menus: Menu[]) => void;
+  setUserPermissions: (permissions: UserPermission[]) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
+  setLanguage: (language: 'ko' | 'en') => void;
+  hasMenuPermission: (menuId: number, action: 'view' | 'create' | 'edit' | 'delete') => boolean;
+  getMenuByRoute: (route: string) => Menu | undefined;
+  getMenusByLevel: (level: number) => Menu[];
 }
 
 export const useStore = create<AuthState>()(
@@ -59,3 +76,67 @@ export const useStore = create<AuthState>()(
     }
   )
 );
+
+export const useMenuStore = create<MenuState>()((set, get) => ({
+  menus: [],
+  userPermissions: [],
+  loading: false,
+  error: null,
+  language: 'ko',
+  
+  setMenus: (menus: Menu[]) => set({ menus }),
+  setUserPermissions: (permissions: UserPermission[]) => set({ userPermissions: permissions }),
+  setLoading: (loading: boolean) => set({ loading }),
+  setError: (error: string | null) => set({ error }),
+  setLanguage: (language: 'ko' | 'en') => set({ language }),
+  
+  hasMenuPermission: (menuId: number, action: 'view' | 'create' | 'edit' | 'delete') => {
+    const { userPermissions } = get();
+    const permission = userPermissions.find(p => p.menu_id === menuId);
+    if (!permission) return false;
+    
+    switch (action) {
+      case 'view':
+        return permission.can_view;
+      case 'create':
+        return permission.can_create;
+      case 'edit':
+        return permission.can_edit;
+      case 'delete':
+        return permission.can_delete;
+      default:
+        return false;
+    }
+  },
+  
+  getMenuByRoute: (route: string) => {
+    const { menus } = get();
+    const findMenuByRoute = (menuList: Menu[]): Menu | undefined => {
+      for (const menu of menuList) {
+        if (menu.route === route) return menu;
+        if (menu.children) {
+          const found = findMenuByRoute(menu.children);
+          if (found) return found;
+        }
+      }
+      return undefined;
+    };
+    return findMenuByRoute(menus);
+  },
+  
+  getMenusByLevel: (level: number) => {
+    const { menus } = get();
+    const getMenusAtLevel = (menuList: Menu[], currentLevel: number = 0): Menu[] => {
+      if (currentLevel === level) return menuList;
+      
+      const result: Menu[] = [];
+      menuList.forEach(menu => {
+        if (menu.children) {
+          result.push(...getMenusAtLevel(menu.children, currentLevel + 1));
+        }
+      });
+      return result;
+    };
+    return getMenusAtLevel(menus);
+  }
+}));

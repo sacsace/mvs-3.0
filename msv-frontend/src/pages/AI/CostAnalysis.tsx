@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   Typography,
-  Grid,
   Table,
   TableBody,
   TableCell,
@@ -14,7 +13,6 @@ import {
   Paper,
   Chip,
   Button,
-  IconButton,
   Alert,
   Divider,
   List,
@@ -25,55 +23,30 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
+  Tabs,
+  Tab,
+  CircularProgress,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent,
-  Tabs,
-  Tab,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  LinearProgress,
-  Avatar,
-  Tooltip as MuiTooltip,
-  CircularProgress
+  LinearProgress
 } from '@mui/material';
 import {
   TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
   AttachMoney as AttachMoneyIcon,
   Assessment as AssessmentIcon,
   Lightbulb as LightbulbIcon,
-  Warning as WarningIcon,
-  CheckCircle as CheckCircleIcon,
-  Info as InfoIcon,
-  Refresh as RefreshIcon,
-  Download as DownloadIcon,
-  Share as ShareIcon,
-  Settings as SettingsIcon,
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  MoreVert as MoreVertIcon,
   Psychology as PsychologyIcon,
   AutoAwesome as AutoAwesomeIcon,
   Insights as InsightsIcon,
   Analytics as AnalyticsIcon,
   Speed as SpeedIcon,
-  Security as SecurityIcon,
-  Nature as EcoIcon,
-  ExpandMore as ExpandMoreIcon,
   Timeline as TimelineIcon,
   Compare as CompareIcon,
-  TrendingFlat as TrendingFlatIcon
+  Download as DownloadIcon
 } from '@mui/icons-material';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, AreaChart, Area, ComposedChart, Scatter, ScatterChart, ZAxis, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ComposedChart, Area, PieChart, Pie, Cell } from 'recharts';
 import { useStore } from '../../store';
 import { api } from '../../services/api';
 
