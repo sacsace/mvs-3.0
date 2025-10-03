@@ -4,10 +4,10 @@
   "description": "MVS 3.0 - 차세대 기업용 통합 업무 관리 시스템",
   "main": "index.js",
   "scripts": {
-    "start": "docker-compose up -d",
+    "start": "cd msv-server && npm run start",
     "stop": "docker-compose down",
     "restart": "docker-compose restart",
-    "build": "docker-compose build",
+    "build": "cd msv-server && npm run build",
     "logs": "docker-compose logs -f",
     "status": "docker-compose ps",
     "clean": "docker-compose down -v && docker system prune -f",
@@ -15,7 +15,7 @@
     "test:all": "docker-compose exec backend npm run test:all",
     "db:migrate": "docker-compose exec backend npm run db:migrate",
     "db:seed": "docker-compose exec backend npm run db:seed",
-    "health": "docker-compose exec backend npm run health",
+    "health": "cd msv-server && npm run health",
     "backup": "docker-compose exec postgres pg_dump -U mvs_user mvs_db > backup.sql"
   },
   "devDependencies": {
