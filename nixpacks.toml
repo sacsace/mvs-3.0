@@ -6,17 +6,16 @@
 nixPkgs = ["nodejs", "npm", "python3", "make", "gcc"]
 
 [phases.install]
-# 의존성 설치 명령어
+# 의존성 설치 명령어 (루트에서 실행)
 cmds = [
-  "cd msv-server && npm ci --only=production",
-  "cd msv-frontend && npm ci --only=production"
+  "npm ci --only=production",
+  "cd msv-server && npm ci"
 ]
 
 [phases.build]
 # 빌드 명령어
 cmds = [
-  "cd msv-server && npm run build",
-  "cd msv-frontend && npm run build"
+  "cd msv-server && npm run build"
 ]
 
 [start]
