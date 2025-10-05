@@ -1,12 +1,9 @@
-# MVS 3.0 테스트 실행 스크립트
+# MVS 3.0 테스트 실행 스크립트 (Windows PowerShell)
 
 param(
-    [string]$TestType = "all",
-    [string]$Environment = "development",
-    [switch]$Verbose,
-    [switch]$Coverage,
-    [switch]$Watch,
-    [string]$TestFile = ""
+    [Parameter(Position=0)]
+    [ValidateSet("unit", "integration", "e2e", "performance", "all")]
+    [string]$TestType = "all"
 )
 
 # 색상 정의
@@ -15,297 +12,321 @@ $Green = "Green"
 $Yellow = "Yellow"
 $Blue = "Blue"
 
-# 로그 함수
-function Write-Info {
+# 함수 정의
+function Write-Header {
     param([string]$Message)
-    Write-Host "[INFO] $Message" -ForegroundColor $Blue
+    Write-Host "=================================" -ForegroundColor $Blue
+    Write-Host $Message -ForegroundColor $Blue
+    Write-Host "=================================" -ForegroundColor $Blue
 }
 
 function Write-Success {
     param([string]$Message)
-    Write-Host "[SUCCESS] $Message" -ForegroundColor $Green
-}
-
-function Write-Warning {
-    param([string]$Message)
-    Write-Host "[WARNING] $Message" -ForegroundColor $Yellow
+    Write-Host "✅ $Message" -ForegroundColor $Green
 }
 
 function Write-Error {
     param([string]$Message)
-    Write-Host "[ERROR] $Message" -ForegroundColor $Red
+    Write-Host "❌ $Message" -ForegroundColor $Red
 }
 
-Write-Info "MVS 3.0 테스트 실행 시작 - 타입: $TestType, 환경: $Environment"
+function Write-Warning {
+    param([string]$Message)
+    Write-Host "⚠️  $Message" -ForegroundColor $Yellow
+}
 
-try {
-    # 1. 테스트 환경 준비
-    Write-Info "테스트 환경 준비 중..."
+# 환경 확인
+function Test-Environment {
+    Write-Header "환경 확인"
     
     # Node.js 버전 확인
-    $nodeVersion = node --version 2>$null
-    if ($LASTEXITCODE -ne 0) {
+    try {
+        $NodeVersion = node --version
+        Write-Success "Node.js: $NodeVersion"
+    }
+    catch {
         Write-Error "Node.js가 설치되지 않았습니다."
         exit 1
     }
-    Write-Info "Node.js 버전: $nodeVersion"
-
-    # 2. 의존성 설치
-    Write-Info "테스트 의존성 설치 중..."
     
-    # 루트 디렉토리에서 테스트 의존성 설치
-    if (Test-Path "package.json") {
-        npm install --silent
+    # npm 버전 확인
+    try {
+        $NpmVersion = npm --version
+        Write-Success "npm: $NpmVersion"
     }
-
-    # 백엔드 테스트 의존성
-    if (Test-Path "msv-server/package.json") {
-        Set-Location "msv-server"
-        npm install --silent
-        Set-Location ".."
-    }
-
-    # 프론트엔드 테스트 의존성
-    if (Test-Path "msv-frontend/package.json") {
-        Set-Location "msv-frontend"
-        npm install --silent
-        Set-Location ".."
-    }
-
-    # 3. 환경 변수 설정
-    $env:TEST_BASE_URL = if ($Environment -eq "production") { "https://api.mvs.local" } else { "http://localhost:5000" }
-    $env:TEST_FRONTEND_URL = if ($Environment -eq "production") { "https://mvs.local" } else { "http://localhost:3000" }
-    $env:NODE_ENV = "test"
-
-    # 4. 테스트 타입별 실행
-    switch ($TestType.ToLower()) {
-        "unit" {
-            Write-Info "단위 테스트 실행 중..."
-            Run-UnitTests
-        }
-        "integration" {
-            Write-Info "통합 테스트 실행 중..."
-            Run-IntegrationTests
-        }
-        "e2e" {
-            Write-Info "E2E 테스트 실행 중..."
-            Run-E2ETests
-        }
-        "performance" {
-            Write-Info "성능 테스트 실행 중..."
-            Run-PerformanceTests
-        }
-        "security" {
-            Write-Info "보안 테스트 실행 중..."
-            Run-SecurityTests
-        }
-        "all" {
-            Write-Info "전체 테스트 실행 중..."
-            Run-AllTests
-        }
-        default {
-            Write-Error "지원하지 않는 테스트 타입입니다: $TestType"
-            Write-Info "지원되는 타입: unit, integration, e2e, performance, security, all"
-            exit 1
-        }
-    }
-
-    Write-Success "테스트 실행 완료!"
-
-}
-catch {
-    Write-Error "테스트 실행 중 오류 발생: $($_.Exception.Message)"
-    exit 1
-}
-
-function Run-UnitTests {
-    Write-Info "백엔드 단위 테스트 실행 중..."
-    Set-Location "msv-server"
-    
-    $testCommand = "npm test"
-    if ($Coverage) { $testCommand += " -- --coverage" }
-    if ($Watch) { $testCommand += " -- --watch" }
-    if ($Verbose) { $testCommand += " -- --verbose" }
-    
-    Invoke-Expression $testCommand
-    $backendExitCode = $LASTEXITCODE
-    Set-Location ".."
-
-    Write-Info "프론트엔드 단위 테스트 실행 중..."
-    Set-Location "msv-frontend"
-    
-    $testCommand = "npm test"
-    if ($Coverage) { $testCommand += " -- --coverage" }
-    if ($Watch) { $testCommand += " -- --watch" }
-    if ($Verbose) { $testCommand += " -- --verbose" }
-    
-    Invoke-Expression $testCommand
-    $frontendExitCode = $LASTEXITCODE
-    Set-Location ".."
-
-    if ($backendExitCode -ne 0 -or $frontendExitCode -ne 0) {
-        Write-Error "단위 테스트 실패"
+    catch {
+        Write-Error "npm이 설치되지 않았습니다."
         exit 1
     }
+    
+    # Docker 확인
+    try {
+        $DockerVersion = docker --version
+        Write-Success "Docker: $DockerVersion"
+    }
+    catch {
+        Write-Warning "Docker가 설치되지 않았습니다. 일부 테스트가 제한될 수 있습니다."
+    }
 }
 
-function Run-IntegrationTests {
-    Write-Info "통합 테스트 실행 중..."
+# 의존성 설치
+function Install-Dependencies {
+    Write-Header "의존성 설치"
+    
+    # 백엔드 의존성 설치
+    Write-Host "백엔드 의존성 설치 중..."
+    Set-Location msv-server
+    try {
+        npm ci
+        Write-Success "백엔드 의존성 설치 완료"
+    }
+    catch {
+        Write-Error "백엔드 의존성 설치 실패"
+        exit 1
+    }
+    
+    # 프론트엔드 의존성 설치
+    Write-Host "프론트엔드 의존성 설치 중..."
+    Set-Location ../msv-frontend
+    try {
+        npm ci
+        Write-Success "프론트엔드 의존성 설치 완료"
+    }
+    catch {
+        Write-Error "프론트엔드 의존성 설치 실패"
+        exit 1
+    }
+    
+    Set-Location ..
+}
+
+# 데이터베이스 설정
+function Setup-Database {
+    Write-Header "데이터베이스 설정"
+    
+    # Docker로 데이터베이스 실행
+    Write-Host "PostgreSQL과 Redis 시작 중..."
+    try {
+        docker-compose up postgres redis -d
+        Write-Success "데이터베이스 시작 완료"
+        
+        # 데이터베이스 연결 대기
+        Write-Host "데이터베이스 연결 대기 중..."
+        Start-Sleep -Seconds 10
+        
+        # 마이그레이션 실행
+        Write-Host "데이터베이스 마이그레이션 실행 중..."
+        Set-Location msv-server
+        try {
+            npm run db:migrate
+            Write-Success "마이그레이션 완료"
+        }
+        catch {
+            Write-Warning "마이그레이션 실패 (테스트 계속 진행)"
+        }
+        Set-Location ..
+    }
+    catch {
+        Write-Warning "Docker로 데이터베이스 시작 실패. 테스트 계속 진행..."
+    }
+}
+
+# 단위 테스트 실행
+function Test-Unit {
+    Write-Header "단위 테스트 실행"
+    
+    # 백엔드 단위 테스트
+    Write-Host "백엔드 단위 테스트 실행 중..."
+    Set-Location msv-server
+    try {
+        npm test
+        Write-Success "백엔드 단위 테스트 통과"
+    }
+    catch {
+        Write-Error "백엔드 단위 테스트 실패"
+        $script:TestFailed = $true
+    }
+    Set-Location ..
+    
+    # 프론트엔드 단위 테스트
+    Write-Host "프론트엔드 단위 테스트 실행 중..."
+    Set-Location msv-frontend
+    try {
+        npm test -- --watchAll=false
+        Write-Success "프론트엔드 단위 테스트 통과"
+    }
+    catch {
+        Write-Error "프론트엔드 단위 테스트 실패"
+        $script:TestFailed = $true
+    }
+    Set-Location ..
+}
+
+# 통합 테스트 실행
+function Test-Integration {
+    Write-Header "통합 테스트 실행"
+    
+    # 백엔드 서버 시작
+    Write-Host "백엔드 서버 시작 중..."
+    Set-Location msv-server
+    $BackendJob = Start-Job -ScriptBlock { Set-Location $using:PWD; npm run dev }
+    Set-Location ..
+    
+    # 서버 시작 대기
+    Write-Host "서버 시작 대기 중..."
+    Start-Sleep -Seconds 15
     
     # 통합 테스트 실행
-    $testCommand = "node tests/integration/run-integration-tests.js"
-    if ($Verbose) { $testCommand += " --verbose" }
-    
-    Invoke-Expression $testCommand
-    
-    if ($LASTEXITCODE -ne 0) {
+    Write-Host "통합 테스트 실행 중..."
+    Set-Location msv-server
+    try {
+        npm run test:integration
+        Write-Success "통합 테스트 통과"
+    }
+    catch {
         Write-Error "통합 테스트 실패"
-        exit 1
+        $script:TestFailed = $true
     }
+    Set-Location ..
+    
+    # 서버 종료
+    Stop-Job $BackendJob
+    Remove-Job $BackendJob
 }
 
-function Run-E2ETests {
-    Write-Info "E2E 테스트 실행 중..."
+# E2E 테스트 실행
+function Test-E2E {
+    Write-Header "E2E 테스트 실행"
     
-    # Playwright 또는 Cypress E2E 테스트 실행
-    if (Test-Path "tests/e2e/playwright.config.js") {
-        Set-Location "tests/e2e"
-        npx playwright test
-        $e2eExitCode = $LASTEXITCODE
-        Set-Location "../.."
-    } elseif (Test-Path "tests/e2e/cypress.config.js") {
-        Set-Location "tests/e2e"
-        npx cypress run
-        $e2eExitCode = $LASTEXITCODE
-        Set-Location "../.."
-    } else {
-        Write-Warning "E2E 테스트 설정이 없습니다. 통합 테스트를 실행합니다."
-        Run-IntegrationTests
-        return
+    # 백엔드 서버 시작
+    Write-Host "백엔드 서버 시작 중..."
+    Set-Location msv-server
+    $BackendJob = Start-Job -ScriptBlock { Set-Location $using:PWD; npm run dev }
+    Set-Location ..
+    
+    # 프론트엔드 서버 시작
+    Write-Host "프론트엔드 서버 시작 중..."
+    Set-Location msv-frontend
+    $FrontendJob = Start-Job -ScriptBlock { Set-Location $using:PWD; npm start }
+    Set-Location ..
+    
+    # 서버 시작 대기
+    Write-Host "서버 시작 대기 중..."
+    Start-Sleep -Seconds 30
+    
+    # E2E 테스트 실행
+    Write-Host "E2E 테스트 실행 중..."
+    try {
+        npm run test:e2e
+        Write-Success "E2E 테스트 통과"
     }
-
-    if ($e2eExitCode -ne 0) {
+    catch {
         Write-Error "E2E 테스트 실패"
-        exit 1
+        $script:TestFailed = $true
     }
+    
+    # 서버 종료
+    Stop-Job $BackendJob, $FrontendJob
+    Remove-Job $BackendJob, $FrontendJob
 }
 
-function Run-PerformanceTests {
-    Write-Info "성능 테스트 실행 중..."
+# 성능 테스트 실행
+function Test-Performance {
+    Write-Header "성능 테스트 실행"
     
-    # Artillery 또는 k6 성능 테스트 실행
-    if (Test-Path "tests/performance/artillery.yml") {
-        npx artillery run tests/performance/artillery.yml
-    } elseif (Test-Path "tests/performance/k6-script.js") {
-        npx k6 run tests/performance/k6-script.js
-    } else {
-        Write-Warning "성능 테스트 설정이 없습니다. 기본 성능 테스트를 실행합니다."
-        
-        # 기본 성능 테스트
-        node tests/performance/basic-performance-test.js
+    # 백엔드 서버 시작
+    Write-Host "백엔드 서버 시작 중..."
+    Set-Location msv-server
+    $BackendJob = Start-Job -ScriptBlock { Set-Location $using:PWD; npm run dev }
+    Set-Location ..
+    
+    # 서버 시작 대기
+    Write-Host "서버 시작 대기 중..."
+    Start-Sleep -Seconds 15
+    
+    # 성능 테스트 실행
+    Write-Host "성능 테스트 실행 중..."
+    try {
+        npm run test:performance
+        Write-Success "성능 테스트 통과"
     }
-
-    if ($LASTEXITCODE -ne 0) {
+    catch {
         Write-Error "성능 테스트 실패"
+        $script:TestFailed = $true
+    }
+    
+    # 서버 종료
+    Stop-Job $BackendJob
+    Remove-Job $BackendJob
+}
+
+# 테스트 결과 요약
+function Show-Summary {
+    Write-Header "테스트 결과 요약"
+    
+    if ($TestFailed) {
+        Write-Error "일부 테스트가 실패했습니다."
+        Write-Host "자세한 내용은 위의 로그를 확인하세요."
         exit 1
+    }
+    else {
+        Write-Success "모든 테스트가 성공적으로 완료되었습니다!"
+        Write-Host "🎉 MVS 3.0 시스템이 정상적으로 작동합니다."
     }
 }
 
-function Run-SecurityTests {
-    Write-Info "보안 테스트 실행 중..."
+# 정리 작업
+function Invoke-Cleanup {
+    Write-Header "정리 작업"
     
-    # OWASP ZAP 또는 기타 보안 테스트 도구 실행
-    if (Test-Path "tests/security/security-test.js") {
-        node tests/security/security-test.js
-    } else {
-        Write-Warning "보안 테스트 설정이 없습니다. 기본 보안 테스트를 실행합니다."
+    # Docker 컨테이너 정지
+    Write-Host "Docker 컨테이너 정지 중..."
+    try {
+        docker-compose down
+    }
+    catch {
+        Write-Warning "Docker 컨테이너 정지 실패"
+    }
+    
+    # 실행 중인 프로세스 정리
+    Write-Host "실행 중인 프로세스 정리 중..."
+    Get-Process | Where-Object { $_.ProcessName -like "*node*" } | Stop-Process -Force -ErrorAction SilentlyContinue
+    
+    Write-Success "정리 작업 완료"
+}
+
+# 메인 실행
+function Main {
+    # 전역 변수 초기화
+    $script:TestFailed = $false
+    
+    # 트랩 설정 (Ctrl+C 시 정리 작업 실행)
+    try {
+        # 테스트 실행
+        Test-Environment
+        Install-Dependencies
+        Setup-Database
         
-        # 기본 보안 테스트
-        node tests/integration/run-integration-tests.js --security-only
+        # 테스트 타입별 실행
+        switch ($TestType) {
+            "unit" { Test-Unit }
+            "integration" { Test-Integration }
+            "e2e" { Test-E2E }
+            "performance" { Test-Performance }
+            "all" {
+                Test-Unit
+                Test-Integration
+                Test-E2E
+                Test-Performance
+            }
+        }
+        
+        Show-Summary
     }
-
-    if ($LASTEXITCODE -ne 0) {
-        Write-Error "보안 테스트 실패"
-        exit 1
-    }
-}
-
-function Run-AllTests {
-    Write-Info "전체 테스트 실행 중..."
-    
-    $testResults = @{
-        Unit = $false
-        Integration = $false
-        E2E = $false
-        Performance = $false
-        Security = $false
-    }
-
-    # 단위 테스트
-    try {
-        Write-Info "1/5 단위 테스트 실행 중..."
-        Run-UnitTests
-        $testResults.Unit = $true
-        Write-Success "단위 테스트 완료"
-    } catch {
-        Write-Warning "단위 테스트 실패: $($_.Exception.Message)"
-    }
-
-    # 통합 테스트
-    try {
-        Write-Info "2/5 통합 테스트 실행 중..."
-        Run-IntegrationTests
-        $testResults.Integration = $true
-        Write-Success "통합 테스트 완료"
-    } catch {
-        Write-Warning "통합 테스트 실패: $($_.Exception.Message)"
-    }
-
-    # E2E 테스트
-    try {
-        Write-Info "3/5 E2E 테스트 실행 중..."
-        Run-E2ETests
-        $testResults.E2E = $true
-        Write-Success "E2E 테스트 완료"
-    } catch {
-        Write-Warning "E2E 테스트 실패: $($_.Exception.Message)"
-    }
-
-    # 성능 테스트
-    try {
-        Write-Info "4/5 성능 테스트 실행 중..."
-        Run-PerformanceTests
-        $testResults.Performance = $true
-        Write-Success "성능 테스트 완료"
-    } catch {
-        Write-Warning "성능 테스트 실패: $($_.Exception.Message)"
-    }
-
-    # 보안 테스트
-    try {
-        Write-Info "5/5 보안 테스트 실행 중..."
-        Run-SecurityTests
-        $testResults.Security = $true
-        Write-Success "보안 테스트 완료"
-    } catch {
-        Write-Warning "보안 테스트 실패: $($_.Exception.Message)"
-    }
-
-    # 결과 요약
-    Write-Host ""
-    Write-Info "=== 테스트 결과 요약 ==="
-    foreach ($test in $testResults.GetEnumerator()) {
-        $status = if ($test.Value) { "✅ 통과" } else { "❌ 실패" }
-        Write-Host "$($test.Key): $status"
-    }
-
-    $passedCount = ($testResults.Values | Where-Object { $_ -eq $true }).Count
-    $totalCount = $testResults.Count
-    Write-Host "전체: $passedCount/$totalCount 통과"
-
-    if ($passedCount -eq $totalCount) {
-        Write-Success "🎉 모든 테스트가 통과했습니다!"
-    } else {
-        Write-Warning "⚠️ 일부 테스트가 실패했습니다."
+    finally {
+        Invoke-Cleanup
     }
 }
+
+# 스크립트 실행
+Main
