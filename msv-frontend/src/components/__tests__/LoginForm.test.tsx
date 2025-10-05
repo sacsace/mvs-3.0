@@ -1,4 +1,4 @@
-// MVS 3.0 프론트엔드 단위 테스트 예제
+// MVS 3.0 Frontend Unit Test Example
 // msv-frontend/src/components/__tests__/LoginForm.test.tsx
 
 import React from 'react';
@@ -8,7 +8,7 @@ import { ThemeProvider } from '@mui/material/styles';
 import { theme } from '../../theme';
 import LoginForm from '../LoginForm';
 
-// Mock API 호출
+// Mock API calls
 jest.mock('../../services/api', () => ({
   login: jest.fn(),
 }));
@@ -26,7 +26,7 @@ describe('LoginForm', () => {
     jest.clearAllMocks();
   });
 
-  test('로그인 폼이 올바르게 렌더링된다', () => {
+  test('Login form renders correctly', () => {
     render(<MockedLoginForm />);
     
     expect(screen.getByLabelText(/user id/i)).toBeInTheDocument();
@@ -34,7 +34,7 @@ describe('LoginForm', () => {
     expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
   });
 
-  test('사용자 입력이 올바르게 처리된다', () => {
+  test('User input is handled correctly', () => {
     render(<MockedLoginForm />);
     
     const useridInput = screen.getByLabelText(/user id/i);
@@ -47,7 +47,7 @@ describe('LoginForm', () => {
     expect(passwordInput).toHaveValue('password123');
   });
 
-  test('빈 필드로 제출 시 에러 메시지 표시', async () => {
+  test('Error message displayed for empty fields', async () => {
     render(<MockedLoginForm />);
     
     const submitButton = screen.getByRole('button', { name: /sign in/i });
@@ -58,7 +58,7 @@ describe('LoginForm', () => {
     });
   });
 
-  test('유효한 입력으로 로그인 시도', async () => {
+  test('Login attempt with valid input', async () => {
     const mockLogin = require('../../services/api').login;
     mockLogin.mockResolvedValue({
       success: true,
@@ -84,7 +84,7 @@ describe('LoginForm', () => {
     });
   });
 
-  test('로그인 실패 시 에러 메시지 표시', async () => {
+  test('Error message displayed on login failure', async () => {
     const mockLogin = require('../../services/api').login;
     mockLogin.mockRejectedValue({
       response: {
@@ -107,25 +107,25 @@ describe('LoginForm', () => {
     });
   });
 
-  test('비밀번호 표시/숨기기 토글 기능', () => {
+  test('Password visibility toggle functionality', () => {
     render(<MockedLoginForm />);
     
     const passwordInput = screen.getByLabelText(/password/i);
     const toggleButton = screen.getByRole('button', { name: /toggle password visibility/i });
     
-    // 기본적으로 비밀번호는 숨겨져 있음
+    // Password is hidden by default
     expect(passwordInput).toHaveAttribute('type', 'password');
     
-    // 토글 버튼 클릭
+    // Click toggle button
     fireEvent.click(toggleButton);
     expect(passwordInput).toHaveAttribute('type', 'text');
     
-    // 다시 토글 버튼 클릭
+    // Click toggle button again
     fireEvent.click(toggleButton);
     expect(passwordInput).toHaveAttribute('type', 'password');
   });
 
-  test('로딩 상태 표시', async () => {
+  test('Loading state display', async () => {
     const mockLogin = require('../../services/api').login;
     mockLogin.mockImplementation(() => new Promise(resolve => setTimeout(resolve, 1000)));
 
@@ -139,7 +139,7 @@ describe('LoginForm', () => {
     fireEvent.change(passwordInput, { target: { value: 'password123' } });
     fireEvent.click(submitButton);
     
-    // 로딩 상태 확인
+    // Check loading state
     expect(screen.getByText(/loading/i)).toBeInTheDocument();
     expect(submitButton).toBeDisabled();
   });
