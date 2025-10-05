@@ -9,7 +9,7 @@ export const getUserMenus = async (req: Request, res: Response) => {
     const { language = 'ko' } = req.query;
 
     // 사용자 권한이 있는 메뉴만 조회
-    const userMenus = await Menu.findAll({
+    const userMenus = await (Menu as any).findAll({
       where: {
         tenant_id: tenantId,
         is_active: true
@@ -52,7 +52,7 @@ export const getAllMenus = async (req: Request, res: Response) => {
     const { tenantId } = req.params;
     const { language = 'ko' } = req.query;
 
-    const menus = await Menu.findAll({
+    const menus = await (Menu as any).findAll({
       where: {
         tenant_id: tenantId,
         is_active: true
@@ -86,7 +86,7 @@ export const createMenu = async (req: Request, res: Response) => {
       tenant_id: tenantId
     };
 
-    const newMenu = await Menu.create(menuData);
+    const newMenu = await (Menu as any).create(menuData);
 
     res.status(201).json({
       success: true,
@@ -109,7 +109,7 @@ export const updateMenu = async (req: Request, res: Response) => {
     const { menuId } = req.params;
     const updateData = req.body;
 
-    const [updatedRowsCount] = await Menu.update(updateData, {
+    const [updatedRowsCount] = await (Menu as any).update(updateData, {
       where: { id: menuId }
     });
 
@@ -120,7 +120,7 @@ export const updateMenu = async (req: Request, res: Response) => {
       });
     }
 
-    const updatedMenu = await Menu.findByPk(menuId);
+    const updatedMenu = await (Menu as any).findByPk(menuId);
 
     res.json({
       success: true,
@@ -143,7 +143,7 @@ export const deleteMenu = async (req: Request, res: Response) => {
     const { menuId } = req.params;
 
     // 하위 메뉴가 있는지 확인
-    const childMenus = await Menu.count({
+    const childMenus = await (Menu as any).count({
       where: { parent_id: menuId }
     });
 
@@ -154,7 +154,7 @@ export const deleteMenu = async (req: Request, res: Response) => {
       });
     }
 
-    const deletedRowsCount = await Menu.destroy({
+    const deletedRowsCount = await (Menu as any).destroy({
       where: { id: menuId }
     });
 
@@ -186,7 +186,7 @@ export const setUserPermissions = async (req: Request, res: Response) => {
     const { permissions } = req.body;
 
     // 기존 권한 삭제
-    await UserPermission.destroy({
+    await (UserPermission as any).destroy({
       where: { user_id: userId }
     });
 
@@ -200,7 +200,7 @@ export const setUserPermissions = async (req: Request, res: Response) => {
       can_delete: perm.can_delete || false
     }));
 
-    await UserPermission.bulkCreate(permissionData);
+    await (UserPermission as any).bulkCreate(permissionData);
 
     res.json({
       success: true,
@@ -221,7 +221,7 @@ export const getUserPermissions = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
 
-    const permissions = await UserPermission.findAll({
+    const permissions = await (UserPermission as any).findAll({
       where: { user_id: userId },
       include: [
         {

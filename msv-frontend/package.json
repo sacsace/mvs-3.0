@@ -39,6 +39,7 @@
     "zustand": "^5.0.8"
   },
   "scripts": {
+    "start": "set PORT=3000 && react-scripts start",
     "build": "set GENERATE_SOURCEMAP=false && react-scripts build",
     "start:railway": "npx serve -s build -l 3000",
     "test": "react-scripts test",

@@ -31,6 +31,10 @@ config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// 디버깅: 환경변수 확인
+console.log('Environment PORT:', process.env.PORT);
+console.log('Final PORT:', PORT);
+
 // SSL 인증서 설정
 let server;
 const isHttps = process.env.HTTPS === 'true';
@@ -63,8 +67,13 @@ const socketService = new SocketService(server);
 
 // 미들웨어 설정
 app.use(helmet());
+// CORS 설정 - 여러 origin 허용
+const allowedOrigins = process.env.CORS_ORIGIN 
+  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+  : ['http://localhost:3000'];
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: allowedOrigins,
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -148,6 +157,289 @@ app.get('/api/menus', async (req, res) => {
     res.status(500).json({
       success: false,
       message: '메뉴 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 사용자별 메뉴 조회 API (테스트용 - 인증 우회)
+app.get('/api/menus/user/:userId/tenant/:tenantId', async (req, res) => {
+  try {
+    const { Menu } = require('./models');
+    const { userId, tenantId } = req.params;
+    
+    const menus = await Menu.findAll({
+      where: { 
+        tenant_id: parseInt(tenantId), 
+        is_active: true 
+      },
+      order: [['order', 'ASC']]
+    });
+    
+    res.json({
+      success: true,
+      data: menus
+    });
+  } catch (error) {
+    console.error('사용자 메뉴 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '사용자 메뉴 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 회사 정보 API (테스트용 - 인증 우회)
+app.get('/api/company', async (req, res) => {
+  try {
+    const { Company } = require('./models');
+    const companies = await Company.findAll({
+      where: { tenant_id: 1 },
+      order: [['created_at', 'DESC']]
+    });
+    
+    // 이미지 데이터를 Base64로 변환
+    const companiesData = companies.map(company => {
+      const companyData = company.toJSON();
+      
+      // Buffer 데이터를 Base64 문자열로 변환
+      if (companyData.company_logo) {
+        companyData.company_logo = `data:image/png;base64,${companyData.company_logo.toString('base64')}`;
+      }
+      if (companyData.company_seal) {
+        companyData.company_seal = `data:image/png;base64,${companyData.company_seal.toString('base64')}`;
+      }
+      if (companyData.ceo_signature) {
+        companyData.ceo_signature = `data:image/png;base64,${companyData.ceo_signature.toString('base64')}`;
+      }
+      
+      return companyData;
+    });
+    
+    res.json({
+      success: true,
+      data: companiesData
+    });
+  } catch (error) {
+    console.error('회사 정보 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '회사 정보 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 특정 회사 정보 조회 (인증 없이)
+app.get('/api/company/:id', async (req, res) => {
+  try {
+    const { Company } = require('./models');
+    const { id } = req.params;
+    
+    const company = await Company.findOne({
+      where: { 
+        id: parseInt(id),
+        tenant_id: 1 
+      }
+    });
+
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        message: '회사를 찾을 수 없습니다.'
+      });
+    }
+
+    // 이미지 데이터를 Base64로 변환
+    const companyData = company.toJSON();
+    
+    // Buffer 데이터를 Base64 문자열로 변환
+    if (companyData.company_logo) {
+      companyData.company_logo = `data:image/png;base64,${companyData.company_logo.toString('base64')}`;
+    }
+    if (companyData.company_seal) {
+      companyData.company_seal = `data:image/png;base64,${companyData.company_seal.toString('base64')}`;
+    }
+    if (companyData.ceo_signature) {
+      companyData.ceo_signature = `data:image/png;base64,${companyData.ceo_signature.toString('base64')}`;
+    }
+
+    res.json({
+      success: true,
+      data: companyData
+    });
+  } catch (error) {
+    console.error('회사 정보 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '회사 정보 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 대시보드 통계 API (실제 DB 데이터)
+app.get('/api/dashboard/stats', async (req, res) => {
+  try {
+    const { Invoice, Customer, Product, Project } = require('./models');
+    const tenantId = req.query.tenantId || process.env.DEFAULT_TENANT_ID || 1;
+    
+    // 총 매출 계산
+    const totalRevenue = await Invoice.sum('total_amount', {
+      where: { 
+        tenant_id: tenantId,
+        status: 'paid'
+      }
+    }) || 0;
+    
+    // 고객 수
+    const customerCount = await Customer.count({
+      where: { tenant_id: tenantId }
+    });
+    
+    // 인보이스 수
+    const invoiceCount = await Invoice.count({
+      where: { tenant_id: tenantId }
+    });
+    
+    // 재고 수량
+    const inventoryCount = await Product.sum('stock_quantity', {
+      where: { tenant_id: tenantId }
+    }) || 0;
+    
+    res.json({
+      success: true,
+      data: {
+        totalRevenue,
+        customerCount,
+        invoiceCount,
+        inventoryCount
+      }
+    });
+  } catch (error) {
+    console.error('대시보드 통계 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '대시보드 통계 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 월별 매출 추이 API
+app.get('/api/dashboard/revenue-trend', async (req, res) => {
+  try {
+    const { Invoice } = require('./models');
+    const { Op } = require('sequelize');
+    const tenantId = req.query.tenantId || process.env.DEFAULT_TENANT_ID || 1;
+    
+    // 최근 12개월 데이터
+    const twelveMonthsAgo = new Date();
+    twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+    
+    const revenueData = await Invoice.findAll({
+      attributes: [
+        [require('sequelize').fn('DATE_TRUNC', 'month', require('sequelize').col('created_at')), 'month'],
+        [require('sequelize').fn('SUM', require('sequelize').col('total_amount')), 'revenue']
+      ],
+      where: {
+        tenant_id: tenantId,
+        status: 'paid',
+        created_at: {
+          [Op.gte]: twelveMonthsAgo
+        }
+      },
+      group: [require('sequelize').fn('DATE_TRUNC', 'month', require('sequelize').col('created_at'))],
+      order: [[require('sequelize').fn('DATE_TRUNC', 'month', require('sequelize').col('created_at')), 'ASC']]
+    });
+    
+    res.json({
+      success: true,
+      data: revenueData
+    });
+  } catch (error) {
+    console.error('매출 추이 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '매출 추이 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 재고 현황 API
+app.get('/api/dashboard/inventory-status', async (req, res) => {
+  try {
+    const { Product } = require('./models');
+    const tenantId = req.query.tenantId || process.env.DEFAULT_TENANT_ID || 1;
+    const lowStockThreshold = parseInt(process.env.LOW_STOCK_THRESHOLD || '10');
+    const highStockThreshold = parseInt(process.env.HIGH_STOCK_THRESHOLD || '100');
+    
+    // 재고 부족 (설정값 미만)
+    const lowStock = await Product.count({
+      where: {
+        tenant_id: tenantId,
+        stock_quantity: {
+          [require('sequelize').Op.lt]: lowStockThreshold
+        }
+      }
+    });
+    
+    // 정상 재고 (설정값 범위)
+    const normalStock = await Product.count({
+      where: {
+        tenant_id: tenantId,
+        stock_quantity: {
+          [require('sequelize').Op.between]: [lowStockThreshold, highStockThreshold]
+        }
+      }
+    });
+    
+    // 과다 재고 (설정값 초과)
+    const overStock = await Product.count({
+      where: {
+        tenant_id: tenantId,
+        stock_quantity: {
+          [require('sequelize').Op.gt]: highStockThreshold
+        }
+      }
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        lowStock,
+        normalStock,
+        overStock
+      }
+    });
+  } catch (error) {
+    console.error('재고 현황 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '재고 현황 조회 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 공지사항 API
+app.get('/api/dashboard/notices', async (req, res) => {
+  try {
+    const { Notification } = require('./models');
+    
+    const notices = await Notification.findAll({
+      where: { 
+        tenant_id: 1,
+        type: 'notice' // 공지사항 타입
+      },
+      order: [['created_at', 'DESC']],
+      limit: 5
+    });
+    
+    res.json({
+      success: true,
+      data: notices
+    });
+  } catch (error) {
+    console.error('공지사항 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '공지사항 조회 중 오류가 발생했습니다.'
     });
   }
 });

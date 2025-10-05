@@ -254,7 +254,7 @@ const Login: React.FC = () => {
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 2,
                   fontSize: '0.875rem',
-                  backgroundColor: '#f7fafc',
+                  backgroundColor: '#ffffff',
                   outline: 'none !important',
                   '& fieldset': {
                     borderColor: '#e2e8f0',
@@ -311,7 +311,7 @@ const Login: React.FC = () => {
                 '& .MuiInputLabel-root': {
                   fontSize: '0.875rem',
                   color: '#718096',
-                  backgroundColor: '#f7fafc !important',
+                  backgroundColor: '#ffffff !important',
                   padding: '0 6px !important',
                   zIndex: 10,
                   position: 'relative',
@@ -320,11 +320,11 @@ const Login: React.FC = () => {
                 },
                 '& .MuiInputLabel-root.Mui-focused': {
                   color: '#3b82f6',
-                  backgroundColor: '#f7fafc !important',
+                  backgroundColor: '#ffffff !important',
                   zIndex: 10
                 },
                 '& .MuiInputLabel-shrink': {
-                  backgroundColor: '#f7fafc !important',
+                  backgroundColor: '#ffffff !important',
                   zIndex: 10
                 },
                 '& .MuiInputBase-input': {
@@ -401,7 +401,7 @@ const Login: React.FC = () => {
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 2,
                   fontSize: '0.875rem',
-                  backgroundColor: '#f7fafc',
+                  backgroundColor: '#ffffff',
                   outline: 'none !important',
                   '& fieldset': {
                     borderColor: '#e2e8f0',
@@ -458,7 +458,7 @@ const Login: React.FC = () => {
                 '& .MuiInputLabel-root': {
                   fontSize: '0.875rem',
                   color: '#718096',
-                  backgroundColor: '#f7fafc !important',
+                  backgroundColor: '#ffffff !important',
                   padding: '0 6px !important',
                   zIndex: 10,
                   position: 'relative',
@@ -467,11 +467,11 @@ const Login: React.FC = () => {
                 },
                 '& .MuiInputLabel-root.Mui-focused': {
                   color: '#3b82f6',
-                  backgroundColor: '#f7fafc !important',
+                  backgroundColor: '#ffffff !important',
                   zIndex: 10
                 },
                 '& .MuiInputLabel-shrink': {
-                  backgroundColor: '#f7fafc !important',
+                  backgroundColor: '#ffffff !important',
                   zIndex: 10
                 },
                 '& .MuiInputBase-input': {

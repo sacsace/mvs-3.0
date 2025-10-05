@@ -23,7 +23,7 @@ export const getProducts = async (req: RequestWithUser, res: Response) => {
       whereClause.category = category;
     }
 
-    const products = await Product.findAndCountAll({
+    const products = await (Product as any).findAndCountAll({
       where: whereClause,
       limit: Number(limit),
       offset: (Number(page) - 1) * Number(limit),
@@ -52,7 +52,7 @@ export const getProduct = async (req: RequestWithUser, res: Response) => {
     const { id } = req.params;
     const { tenant_id, company_id } = req.user;
 
-    const product = await Product.findOne({
+    const product = await (Product as any).findOne({
       where: { id, tenant_id, company_id }
     });
 
@@ -73,7 +73,7 @@ export const createProduct = async (req: RequestWithUser, res: Response) => {
     const { tenant_id, company_id, id: user_id } = req.user;
     const productData = { ...req.body, tenant_id, company_id, created_by: user_id };
 
-    const product = await Product.create(productData);
+    const product = await (Product as any).create(productData);
 
     res.status(201).json({ success: true, data: product });
   } catch (error) {
@@ -88,7 +88,7 @@ export const updateProduct = async (req: RequestWithUser, res: Response) => {
     const { id } = req.params;
     const { tenant_id, company_id } = req.user;
 
-    const product = await Product.findOne({
+    const product = await (Product as any).findOne({
       where: { id, tenant_id, company_id }
     });
 
@@ -111,7 +111,7 @@ export const deleteProduct = async (req: RequestWithUser, res: Response) => {
     const { id } = req.params;
     const { tenant_id, company_id } = req.user;
 
-    const product = await Product.findOne({
+    const product = await (Product as any).findOne({
       where: { id, tenant_id, company_id }
     });
 
@@ -144,7 +144,7 @@ export const getInventoryTransactions = async (req: RequestWithUser, res: Respon
       whereClause.transaction_type = transaction_type;
     }
 
-    const transactions = await InventoryTransaction.findAndCountAll({
+    const transactions = await (InventoryTransaction as any).findAndCountAll({
       where: whereClause,
       include: [
         {
@@ -180,7 +180,7 @@ export const stockIn = async (req: RequestWithUser, res: Response) => {
     const { tenant_id, company_id, id: user_id } = req.user;
     const { product_id, quantity, notes } = req.body;
 
-    const product = await Product.findOne({
+    const product = await (Product as any).findOne({
       where: { id: product_id, tenant_id, company_id }
     });
 
@@ -189,7 +189,7 @@ export const stockIn = async (req: RequestWithUser, res: Response) => {
     }
 
     // 재고 거래 기록 생성
-    const transaction = await InventoryTransaction.create({
+    const transaction = await (InventoryTransaction as any).create({
       tenant_id,
       company_id,
       product_id,
@@ -218,7 +218,7 @@ export const stockOut = async (req: RequestWithUser, res: Response) => {
     const { tenant_id, company_id, id: user_id } = req.user;
     const { product_id, quantity, notes } = req.body;
 
-    const product = await Product.findOne({
+    const product = await (Product as any).findOne({
       where: { id: product_id, tenant_id, company_id }
     });
 
@@ -231,7 +231,7 @@ export const stockOut = async (req: RequestWithUser, res: Response) => {
     }
 
     // 재고 거래 기록 생성
-    const transaction = await InventoryTransaction.create({
+    const transaction = await (InventoryTransaction as any).create({
       tenant_id,
       company_id,
       product_id,
@@ -260,7 +260,7 @@ export const adjustStock = async (req: RequestWithUser, res: Response) => {
     const { tenant_id, company_id, id: user_id } = req.user;
     const { product_id, new_quantity, notes } = req.body;
 
-    const product = await Product.findOne({
+    const product = await (Product as any).findOne({
       where: { id: product_id, tenant_id, company_id }
     });
 
@@ -271,7 +271,7 @@ export const adjustStock = async (req: RequestWithUser, res: Response) => {
     const quantity_diff = new_quantity - product.stock_quantity;
 
     // 재고 거래 기록 생성
-    const transaction = await InventoryTransaction.create({
+    const transaction = await (InventoryTransaction as any).create({
       tenant_id,
       company_id,
       product_id,

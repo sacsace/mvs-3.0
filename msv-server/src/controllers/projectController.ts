@@ -20,7 +20,7 @@ export const getProjects = async (req: RequestWithUser, res: Response) => {
       whereClause.project_manager = manager_id;
     }
 
-    const projects = await Project.findAndCountAll({
+    const projects = await (Project as any).findAndCountAll({
       where: whereClause,
       include: [
         {
@@ -61,7 +61,7 @@ export const getProject = async (req: RequestWithUser, res: Response) => {
     const { id } = req.params;
     const { tenant_id, company_id } = req.user;
 
-    const project = await Project.findOne({
+    const project = await (Project as any).findOne({
       where: { id, tenant_id, company_id },
       include: [
         {
@@ -94,7 +94,7 @@ export const createProject = async (req: RequestWithUser, res: Response) => {
     const { tenant_id, company_id, id: user_id } = req.user;
     const projectData = { ...req.body, tenant_id, company_id, created_by: user_id };
 
-    const project = await Project.create(projectData);
+    const project = await (Project as any).create(projectData);
 
     res.status(201).json({ success: true, data: project });
   } catch (error) {
@@ -109,7 +109,7 @@ export const updateProject = async (req: RequestWithUser, res: Response) => {
     const { id } = req.params;
     const { tenant_id, company_id } = req.user;
 
-    const project = await Project.findOne({
+    const project = await (Project as any).findOne({
       where: { id, tenant_id, company_id }
     });
 
@@ -132,7 +132,7 @@ export const deleteProject = async (req: RequestWithUser, res: Response) => {
     const { id } = req.params;
     const { tenant_id, company_id } = req.user;
 
-    const project = await Project.findOne({
+    const project = await (Project as any).findOne({
       where: { id, tenant_id, company_id }
     });
 
@@ -156,7 +156,7 @@ export const updateProjectStatus = async (req: RequestWithUser, res: Response) =
     const { status } = req.body;
     const { tenant_id, company_id } = req.user;
 
-    const project = await Project.findOne({
+    const project = await (Project as any).findOne({
       where: { id, tenant_id, company_id }
     });
 
@@ -180,7 +180,7 @@ export const updateProjectManager = async (req: RequestWithUser, res: Response) 
     const { project_manager } = req.body;
     const { tenant_id, company_id } = req.user;
 
-    const project = await Project.findOne({
+    const project = await (Project as any).findOne({
       where: { id, tenant_id, company_id }
     });
 
@@ -203,7 +203,7 @@ export const getProjectStats = async (req: RequestWithUser, res: Response) => {
     const { tenant_id, company_id } = req.user;
 
     // 전체 프로젝트 통계
-    const totalStats = await Project.findOne({
+    const totalStats = await (Project as any).findOne({
       where: { tenant_id, company_id },
       attributes: [
         [sequelize.fn('COUNT', sequelize.col('id')), 'total_count'],
@@ -212,7 +212,7 @@ export const getProjectStats = async (req: RequestWithUser, res: Response) => {
     });
 
     // 상태별 통계
-    const statusStats = await Project.findAll({
+    const statusStats = await (Project as any).findAll({
       where: { tenant_id, company_id },
       attributes: [
         'status',
@@ -222,7 +222,7 @@ export const getProjectStats = async (req: RequestWithUser, res: Response) => {
     });
 
     // 우선순위별 통계
-    const priorityStats = await Project.findAll({
+    const priorityStats = await (Project as any).findAll({
       where: { tenant_id, company_id },
       attributes: [
         'priority',

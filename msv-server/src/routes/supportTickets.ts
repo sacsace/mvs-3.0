@@ -7,7 +7,7 @@ const router = express.Router();
 // 지원 티켓 목록 조회
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const tickets = await SupportTicket.findAll({
+    const tickets = await (SupportTicket as any).findAll({
       where: { tenant_id: 1 },
       order: [['created_at', 'DESC']]
     });
@@ -29,7 +29,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const ticket = await SupportTicket.findOne({
+    const ticket = await (SupportTicket as any).findOne({
       where: { id, tenant_id: 1 }
     });
 
@@ -62,7 +62,7 @@ router.post('/', async (req: Request, res: Response) => {
       company_id: 1
     };
 
-    const ticket = await SupportTicket.create(ticketData);
+    const ticket = await (SupportTicket as any).create(ticketData);
 
     res.status(201).json({
       success: true,
@@ -82,7 +82,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const ticket = await SupportTicket.findOne({
+    const ticket = await (SupportTicket as any).findOne({
       where: { id, tenant_id: 1 }
     });
 
@@ -113,7 +113,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const ticket = await SupportTicket.findOne({
+    const ticket = await (SupportTicket as any).findOne({
       where: { id, tenant_id: 1 }
     });
 
@@ -143,7 +143,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 router.get('/:id/responses', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const responses = await SupportResponse.findAll({
+    const responses = await (SupportResponse as any).findAll({
       where: { ticket_id: id },
       order: [['created_at', 'ASC']]
     });
@@ -171,10 +171,10 @@ router.post('/:id/responses', async (req: Request, res: Response) => {
       user_id: 1 // 실제로는 인증된 사용자 ID를 사용해야 함
     };
 
-    const response = await SupportResponse.create(responseData);
+    const response = await (SupportResponse as any).create(responseData);
 
     // 티켓의 마지막 응답 시간 업데이트
-    await SupportTicket.update(
+    await (SupportTicket as any).update(
       { last_response_at: new Date() },
       { where: { id } }
     );

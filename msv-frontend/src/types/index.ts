@@ -77,9 +77,9 @@ export interface Company {
   employee_count: number;
   subscription_plan: string;
   subscription_status: string;
-  company_logo?: string;
-  company_seal?: string;
-  ceo_signature?: string;
+  company_logo?: string; // Base64 인코딩된 이미지 데이터
+  company_seal?: string; // Base64 인코딩된 이미지 데이터
+  ceo_signature?: string; // Base64 인코딩된 이미지 데이터
   account_holder_name?: string;
   bank_name?: string;
   account_number?: string;

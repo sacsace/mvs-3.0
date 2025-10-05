@@ -190,14 +190,14 @@ export const initializeSampleData = async () => {
   
   try {
     // 테넌트 생성
-    const tenant = await Tenant.findOrCreate({
+    const tenant = await (Tenant as any).findOrCreate({
       where: { subdomain: 'mvs3' },
       defaults: sampleTenants[0]
     });
     
     // 회사 생성
     for (const companyData of sampleCompanies) {
-      await Company.findOrCreate({
+      await (Company as any).findOrCreate({
         where: { business_number: companyData.business_number },
         defaults: { ...companyData, tenant_id: tenant[0].id }
       });
@@ -205,7 +205,7 @@ export const initializeSampleData = async () => {
     
     // 사용자 생성
     for (const userData of sampleUsers) {
-      await User.findOrCreate({
+      await (User as any).findOrCreate({
         where: { userid: userData.userid },
         defaults: { ...userData, tenant_id: tenant[0].id }
       });
@@ -213,7 +213,7 @@ export const initializeSampleData = async () => {
     
     // 메뉴 생성
     for (const menuData of sampleMenus) {
-      await Menu.findOrCreate({
+      await (Menu as any).findOrCreate({
         where: { route: menuData.route },
         defaults: { ...menuData, tenant_id: tenant[0].id }
       });

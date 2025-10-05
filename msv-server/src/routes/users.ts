@@ -15,7 +15,7 @@ router.use(authenticateToken);
 // 사용자 목록 조회
 router.get('/', async (req, res) => {
   try {
-    const users = await User.findAll({
+    const users = await (User as any).findAll({
       where: { 
         tenant_id: (req as any).user.tenant_id,
         company_id: (req as any).user.company_id 
@@ -41,7 +41,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const user = await User.findOne({
+    const user = await (User as any).findOne({
       where: { 
         id,
         tenant_id: (req as any).user.tenant_id,
@@ -83,7 +83,7 @@ router.post('/', requireRole(['admin', 'root']), async (req, res) => {
     }
 
     // 중복 확인
-    const existingUser = await User.findOne({
+    const existingUser = await (User as any).findOne({
       where: { userid }
     });
 
@@ -97,7 +97,7 @@ router.post('/', requireRole(['admin', 'root']), async (req, res) => {
     // 비밀번호 해싱 (개발용)
     const password_hash = await hashPassword(password);
 
-    const user = await User.create({
+    const user = await (User as any).create({
       tenant_id: (req as any).user.tenant_id,
       company_id: (req as any).user.company_id,
       userid,

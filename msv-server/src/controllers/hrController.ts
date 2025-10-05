@@ -20,7 +20,7 @@ export const getPayrolls = async (req: RequestWithUser, res: Response) => {
       whereClause.payroll_period = period;
     }
 
-    const payrolls = await Payroll.findAndCountAll({
+    const payrolls = await (Payroll as any).findAndCountAll({
       where: whereClause,
       include: [
         {
@@ -56,7 +56,7 @@ export const getPayroll = async (req: RequestWithUser, res: Response) => {
     const { id } = req.params;
     const { tenant_id, company_id } = req.user;
 
-    const payroll = await Payroll.findOne({
+    const payroll = await (Payroll as any).findOne({
       where: { id, tenant_id, company_id },
       include: [
         {
@@ -84,7 +84,7 @@ export const createPayroll = async (req: RequestWithUser, res: Response) => {
     const { tenant_id, company_id, id: user_id } = req.user;
     const payrollData = { ...req.body, tenant_id, company_id, created_by: user_id };
 
-    const payroll = await Payroll.create(payrollData);
+    const payroll = await (Payroll as any).create(payrollData);
 
     res.status(201).json({ success: true, data: payroll });
   } catch (error) {
@@ -99,7 +99,7 @@ export const updatePayroll = async (req: RequestWithUser, res: Response) => {
     const { id } = req.params;
     const { tenant_id, company_id } = req.user;
 
-    const payroll = await Payroll.findOne({
+    const payroll = await (Payroll as any).findOne({
       where: { id, tenant_id, company_id }
     });
 
@@ -122,7 +122,7 @@ export const deletePayroll = async (req: RequestWithUser, res: Response) => {
     const { id } = req.params;
     const { tenant_id, company_id } = req.user;
 
-    const payroll = await Payroll.findOne({
+    const payroll = await (Payroll as any).findOne({
       where: { id, tenant_id, company_id }
     });
 
@@ -145,7 +145,7 @@ export const approvePayroll = async (req: RequestWithUser, res: Response) => {
     const { id } = req.params;
     const { tenant_id, company_id } = req.user;
 
-    const payroll = await Payroll.findOne({
+    const payroll = await (Payroll as any).findOne({
       where: { id, tenant_id, company_id }
     });
 
@@ -168,7 +168,7 @@ export const payPayroll = async (req: RequestWithUser, res: Response) => {
     const { id } = req.params;
     const { tenant_id, company_id } = req.user;
 
-    const payroll = await Payroll.findOne({
+    const payroll = await (Payroll as any).findOne({
       where: { id, tenant_id, company_id }
     });
 
@@ -193,7 +193,7 @@ export const getEmployees = async (req: RequestWithUser, res: Response) => {
   try {
     const { tenant_id, company_id } = req.user;
 
-    const employees = await User.findAll({
+    const employees = await (User as any).findAll({
       where: { tenant_id, company_id, status: 'active' },
       attributes: ['id', 'username', 'email', 'first_name', 'last_name', 'position', 'department']
     });
@@ -217,7 +217,7 @@ export const getPayrollStats = async (req: RequestWithUser, res: Response) => {
       whereClause.payroll_period = period;
     }
 
-    const stats = await Payroll.findOne({
+    const stats = await (Payroll as any).findOne({
       where: whereClause,
       attributes: [
         [sequelize.fn('SUM', sequelize.col('gross_salary')), 'total_gross'],
@@ -228,7 +228,7 @@ export const getPayrollStats = async (req: RequestWithUser, res: Response) => {
     });
 
     // 상태별 통계
-    const statusStats = await Payroll.findAll({
+    const statusStats = await (Payroll as any).findAll({
       where: whereClause,
       attributes: [
         'status',

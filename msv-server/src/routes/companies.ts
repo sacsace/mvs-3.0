@@ -9,7 +9,7 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     const tenantId = (req as any).user.tenant_id;
     
-    const companies = await Company.findAll({
+    const companies = await (Company as any).findAll({
       where: { tenant_id: tenantId },
       order: [['created_at', 'DESC']]
     });
@@ -33,7 +33,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const tenantId = (req as any).user.tenant_id;
     
-    const company = await Company.findOne({
+    const company = await (Company as any).findOne({
       where: { 
         id: id,
         tenant_id: tenantId 
@@ -69,7 +69,7 @@ router.post('/', authenticateToken, async (req, res) => {
       tenant_id: tenantId
     };
 
-    const company = await Company.create(companyData);
+    const company = await (Company as any).create(companyData);
 
     res.status(201).json({
       success: true,
@@ -91,9 +91,34 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const tenantId = (req as any).user.tenant_id;
     
-    const [updatedRowsCount] = await Company.update(req.body, {
+    // 요청 데이터 검증 및 정리
+    const updateData = { ...req.body };
+    
+    // 날짜 필드 처리
+    if (updateData.login_period_start && updateData.login_period_start === 'Invalid date') {
+      updateData.login_period_start = null;
+    }
+    if (updateData.login_period_end && updateData.login_period_end === 'Invalid date') {
+      updateData.login_period_end = null;
+    }
+    
+    // 빈 문자열을 null로 변환
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === '') {
+        updateData[key] = null;
+      }
+    });
+    
+    // tenant_id는 업데이트하지 않음
+    delete updateData.tenant_id;
+    delete updateData.id;
+    delete updateData.created_at;
+    
+    console.log('회사 수정 데이터:', updateData);
+    
+    const [updatedRowsCount] = await (Company as any).update(updateData, {
       where: { 
-        id: id,
+        id: parseInt(id),
         tenant_id: tenantId 
       }
     });
@@ -105,7 +130,12 @@ router.put('/:id', authenticateToken, async (req, res) => {
       });
     }
 
-    const updatedCompany = await Company.findByPk(id);
+    const updatedCompany = await (Company as any).findOne({
+      where: { 
+        id: parseInt(id),
+        tenant_id: tenantId 
+      }
+    });
 
     res.json({
       success: true,
@@ -116,7 +146,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
     console.error('회사 수정 오류:', error);
     res.status(500).json({
       success: false,
-      message: '회사 수정에 실패했습니다.'
+      message: '회사 수정에 실패했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
@@ -127,7 +158,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const tenantId = (req as any).user.tenant_id;
     
-    const deletedRowsCount = await Company.destroy({
+    const deletedRowsCount = await (Company as any).destroy({
       where: { 
         id: id,
         tenant_id: tenantId 

@@ -7,7 +7,7 @@ const router = express.Router();
 // 영업 기회 목록 조회
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const opportunities = await SalesOpportunity.findAll({
+    const opportunities = await (SalesOpportunity as any).findAll({
       where: { tenant_id: 1 },
       order: [['created_at', 'DESC']]
     });
@@ -29,7 +29,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const opportunity = await SalesOpportunity.findOne({
+    const opportunity = await (SalesOpportunity as any).findOne({
       where: { id, tenant_id: 1 }
     });
 
@@ -62,7 +62,7 @@ router.post('/', async (req: Request, res: Response) => {
       company_id: 1
     };
 
-    const opportunity = await SalesOpportunity.create(opportunityData);
+    const opportunity = await (SalesOpportunity as any).create(opportunityData);
 
     res.status(201).json({
       success: true,
@@ -82,7 +82,7 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const opportunity = await SalesOpportunity.findOne({
+    const opportunity = await (SalesOpportunity as any).findOne({
       where: { id, tenant_id: 1 }
     });
 
@@ -113,7 +113,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const opportunity = await SalesOpportunity.findOne({
+    const opportunity = await (SalesOpportunity as any).findOne({
       where: { id, tenant_id: 1 }
     });
 

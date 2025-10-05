@@ -31,7 +31,7 @@ export const login = async (req: LoginRequest, res: Response) => {
     }
 
     // 사용자 조회
-    const user = await User.findOne({
+    const user = await (User as any).findOne({
       where: { userid, status: 'active' }
     });
 

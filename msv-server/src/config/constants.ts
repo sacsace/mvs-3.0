@@ -3,7 +3,7 @@ export const SYSTEM_CONSTANTS = {
   // 기본 설정
   DEFAULT_PORT: 5000,
   DEFAULT_DB_PORT: 5432,
-  DEFAULT_CORS_ORIGIN: 'http://localhost:3000',
+  DEFAULT_CORS_ORIGIN: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'],
   
   // 데이터베이스 설정
   DB_POOL: {
@@ -89,7 +89,7 @@ export const ENV_CONFIG = {
   test: {
     DB_HOST: 'localhost',
     DB_PORT: 5433,
-    CORS_ORIGIN: 'http://localhost:3001',
+    CORS_ORIGIN: 'http://localhost:3000',
     LOG_LEVEL: 'error'
   }
 };

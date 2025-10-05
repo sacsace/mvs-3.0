@@ -20,7 +20,7 @@ export const getInvoices = async (req: RequestWithUser, res: Response) => {
       whereClause.customer_id = customer_id;
     }
 
-    const invoices = await Invoice.findAndCountAll({
+    const invoices = await (Invoice as any).findAndCountAll({
       where: whereClause,
       include: [
         {
@@ -56,7 +56,7 @@ export const getInvoice = async (req: RequestWithUser, res: Response) => {
     const { id } = req.params;
     const { tenant_id, company_id } = req.user;
 
-    const invoice = await Invoice.findOne({
+    const invoice = await (Invoice as any).findOne({
       where: { id, tenant_id, company_id },
       include: [
         {
@@ -90,7 +90,7 @@ export const createInvoice = async (req: RequestWithUser, res: Response) => {
     const { items, ...invoiceData } = req.body;
 
     // 인보이스 생성
-    const invoice = await Invoice.create({
+    const invoice = await (Invoice as any).create({
       ...invoiceData,
       tenant_id,
       company_id,
@@ -104,11 +104,11 @@ export const createInvoice = async (req: RequestWithUser, res: Response) => {
         invoice_id: invoice.id
       }));
       
-      await InvoiceItem.bulkCreate(invoiceItems);
+      await (InvoiceItem as any).bulkCreate(invoiceItems);
     }
 
     // 생성된 인보이스와 아이템들을 함께 반환
-    const createdInvoice = await Invoice.findOne({
+    const createdInvoice = await (Invoice as any).findOne({
       where: { id: invoice.id },
       include: [
         {
@@ -132,7 +132,7 @@ export const updateInvoice = async (req: RequestWithUser, res: Response) => {
     const { tenant_id, company_id } = req.user;
     const { items, ...invoiceData } = req.body;
 
-    const invoice = await Invoice.findOne({
+    const invoice = await (Invoice as any).findOne({
       where: { id, tenant_id, company_id }
     });
 
@@ -145,18 +145,18 @@ export const updateInvoice = async (req: RequestWithUser, res: Response) => {
 
     // 기존 아이템들 삭제 후 새로 생성
     if (items) {
-      await InvoiceItem.destroy({ where: { invoice_id: id } });
+      await (InvoiceItem as any).destroy({ where: { invoice_id: id } });
       
       const invoiceItems = items.map((item: any) => ({
         ...item,
         invoice_id: id
       }));
       
-      await InvoiceItem.bulkCreate(invoiceItems);
+      await (InvoiceItem as any).bulkCreate(invoiceItems);
     }
 
     // 업데이트된 인보이스 반환
-    const updatedInvoice = await Invoice.findOne({
+    const updatedInvoice = await (Invoice as any).findOne({
       where: { id },
       include: [
         {
@@ -179,7 +179,7 @@ export const deleteInvoice = async (req: RequestWithUser, res: Response) => {
     const { id } = req.params;
     const { tenant_id, company_id } = req.user;
 
-    const invoice = await Invoice.findOne({
+    const invoice = await (Invoice as any).findOne({
       where: { id, tenant_id, company_id }
     });
 
@@ -188,7 +188,7 @@ export const deleteInvoice = async (req: RequestWithUser, res: Response) => {
     }
 
     // 관련 아이템들 먼저 삭제
-    await InvoiceItem.destroy({ where: { invoice_id: id } });
+    await (InvoiceItem as any).destroy({ where: { invoice_id: id } });
     
     // 인보이스 삭제
     await invoice.destroy();
@@ -207,7 +207,7 @@ export const updateInvoiceStatus = async (req: Request, res: Response) => {
     const { status, payment_status } = req.body;
     const { tenant_id, company_id } = (req as any).user;
 
-    const invoice = await Invoice.findOne({
+    const invoice = await (Invoice as any).findOne({
       where: { id, tenant_id, company_id }
     });
 
@@ -242,7 +242,7 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
       };
     }
 
-    const invoices = await Invoice.findAll({
+    const invoices = await (Invoice as any).findAll({
       where: whereClause,
       attributes: [
         'status',
@@ -254,7 +254,7 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
     });
 
     // 전체 통계 계산
-    const totalStats = await Invoice.findOne({
+    const totalStats = await (Invoice as any).findOne({
       where: whereClause,
       attributes: [
         [sequelize.fn('SUM', sequelize.col('total_amount')), 'total_amount'],
