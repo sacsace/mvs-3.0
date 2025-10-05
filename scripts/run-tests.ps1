@@ -1,4 +1,4 @@
-# MVS 3.0 테스트 실행 스크립트 (Windows PowerShell)
+# MVS 3.0 Test Execution Script (Windows PowerShell)
 
 param(
     [Parameter(Position=0)]
@@ -6,13 +6,13 @@ param(
     [string]$TestType = "all"
 )
 
-# 색상 정의
+# Color definitions
 $Red = "Red"
 $Green = "Green"
 $Yellow = "Yellow"
 $Blue = "Blue"
 
-# 함수 정의
+# Function definitions
 function Write-Header {
     param([string]$Message)
     Write-Host "=================================" -ForegroundColor $Blue
@@ -35,279 +35,279 @@ function Write-Warning {
     Write-Host "⚠️  $Message" -ForegroundColor $Yellow
 }
 
-# 환경 확인
+# Environment check
 function Test-Environment {
-    Write-Header "환경 확인"
+    Write-Header "Environment Check"
     
-    # Node.js 버전 확인
+    # Check Node.js version
     try {
         $NodeVersion = node --version
         Write-Success "Node.js: $NodeVersion"
     }
     catch {
-        Write-Error "Node.js가 설치되지 않았습니다."
+        Write-Error "Node.js is not installed."
         exit 1
     }
     
-    # npm 버전 확인
+    # Check npm version
     try {
         $NpmVersion = npm --version
         Write-Success "npm: $NpmVersion"
     }
     catch {
-        Write-Error "npm이 설치되지 않았습니다."
+        Write-Error "npm is not installed."
         exit 1
     }
     
-    # Docker 확인
+    # Check Docker
     try {
         $DockerVersion = docker --version
         Write-Success "Docker: $DockerVersion"
     }
     catch {
-        Write-Warning "Docker가 설치되지 않았습니다. 일부 테스트가 제한될 수 있습니다."
+        Write-Warning "Docker is not installed. Some tests may be limited."
     }
 }
 
-# 의존성 설치
+# Install dependencies
 function Install-Dependencies {
-    Write-Header "의존성 설치"
+    Write-Header "Installing Dependencies"
     
-    # 백엔드 의존성 설치
-    Write-Host "백엔드 의존성 설치 중..."
+    # Install backend dependencies
+    Write-Host "Installing backend dependencies..."
     Set-Location msv-server
     try {
         npm ci
-        Write-Success "백엔드 의존성 설치 완료"
+        Write-Success "Backend dependencies installed successfully"
     }
     catch {
-        Write-Error "백엔드 의존성 설치 실패"
+        Write-Error "Failed to install backend dependencies"
         exit 1
     }
     
-    # 프론트엔드 의존성 설치
-    Write-Host "프론트엔드 의존성 설치 중..."
+    # Install frontend dependencies
+    Write-Host "Installing frontend dependencies..."
     Set-Location ../msv-frontend
     try {
         npm ci
-        Write-Success "프론트엔드 의존성 설치 완료"
+        Write-Success "Frontend dependencies installed successfully"
     }
     catch {
-        Write-Error "프론트엔드 의존성 설치 실패"
+        Write-Error "Failed to install frontend dependencies"
         exit 1
     }
     
     Set-Location ..
 }
 
-# 데이터베이스 설정
+# Setup database
 function Setup-Database {
-    Write-Header "데이터베이스 설정"
+    Write-Header "Database Setup"
     
-    # Docker로 데이터베이스 실행
-    Write-Host "PostgreSQL과 Redis 시작 중..."
+    # Start database with Docker
+    Write-Host "Starting PostgreSQL and Redis..."
     try {
         docker-compose up postgres redis -d
-        Write-Success "데이터베이스 시작 완료"
+        Write-Success "Database started successfully"
         
-        # 데이터베이스 연결 대기
-        Write-Host "데이터베이스 연결 대기 중..."
+        # Wait for database connection
+        Write-Host "Waiting for database connection..."
         Start-Sleep -Seconds 10
         
-        # 마이그레이션 실행
-        Write-Host "데이터베이스 마이그레이션 실행 중..."
+        # Run migrations
+        Write-Host "Running database migrations..."
         Set-Location msv-server
         try {
             npm run db:migrate
-            Write-Success "마이그레이션 완료"
+            Write-Success "Migrations completed"
         }
         catch {
-            Write-Warning "마이그레이션 실패 (테스트 계속 진행)"
+            Write-Warning "Migration failed (continuing with tests)"
         }
         Set-Location ..
     }
     catch {
-        Write-Warning "Docker로 데이터베이스 시작 실패. 테스트 계속 진행..."
+        Write-Warning "Failed to start database with Docker. Continuing with tests..."
     }
 }
 
-# 단위 테스트 실행
+# Run unit tests
 function Test-Unit {
-    Write-Header "단위 테스트 실행"
+    Write-Header "Running Unit Tests"
     
-    # 백엔드 단위 테스트
-    Write-Host "백엔드 단위 테스트 실행 중..."
+    # Backend unit tests
+    Write-Host "Running backend unit tests..."
     Set-Location msv-server
     try {
         npm test
-        Write-Success "백엔드 단위 테스트 통과"
+        Write-Success "Backend unit tests passed"
     }
     catch {
-        Write-Error "백엔드 단위 테스트 실패"
+        Write-Error "Backend unit tests failed"
         $script:TestFailed = $true
     }
     Set-Location ..
     
-    # 프론트엔드 단위 테스트
-    Write-Host "프론트엔드 단위 테스트 실행 중..."
+    # Frontend unit tests
+    Write-Host "Running frontend unit tests..."
     Set-Location msv-frontend
     try {
         npm test -- --watchAll=false
-        Write-Success "프론트엔드 단위 테스트 통과"
+        Write-Success "Frontend unit tests passed"
     }
     catch {
-        Write-Error "프론트엔드 단위 테스트 실패"
+        Write-Error "Frontend unit tests failed"
         $script:TestFailed = $true
     }
     Set-Location ..
 }
 
-# 통합 테스트 실행
+# Run integration tests
 function Test-Integration {
-    Write-Header "통합 테스트 실행"
+    Write-Header "Running Integration Tests"
     
-    # 백엔드 서버 시작
-    Write-Host "백엔드 서버 시작 중..."
+    # Start backend server
+    Write-Host "Starting backend server..."
     Set-Location msv-server
     $BackendJob = Start-Job -ScriptBlock { Set-Location $using:PWD; npm run dev }
     Set-Location ..
     
-    # 서버 시작 대기
-    Write-Host "서버 시작 대기 중..."
+    # Wait for server startup
+    Write-Host "Waiting for server startup..."
     Start-Sleep -Seconds 15
     
-    # 통합 테스트 실행
-    Write-Host "통합 테스트 실행 중..."
+    # Run integration tests
+    Write-Host "Running integration tests..."
     Set-Location msv-server
     try {
         npm run test:integration
-        Write-Success "통합 테스트 통과"
+        Write-Success "Integration tests passed"
     }
     catch {
-        Write-Error "통합 테스트 실패"
+        Write-Error "Integration tests failed"
         $script:TestFailed = $true
     }
     Set-Location ..
     
-    # 서버 종료
+    # Stop server
     Stop-Job $BackendJob
     Remove-Job $BackendJob
 }
 
-# E2E 테스트 실행
+# Run E2E tests
 function Test-E2E {
-    Write-Header "E2E 테스트 실행"
+    Write-Header "Running E2E Tests"
     
-    # 백엔드 서버 시작
-    Write-Host "백엔드 서버 시작 중..."
+    # Start backend server
+    Write-Host "Starting backend server..."
     Set-Location msv-server
     $BackendJob = Start-Job -ScriptBlock { Set-Location $using:PWD; npm run dev }
     Set-Location ..
     
-    # 프론트엔드 서버 시작
-    Write-Host "프론트엔드 서버 시작 중..."
+    # Start frontend server
+    Write-Host "Starting frontend server..."
     Set-Location msv-frontend
     $FrontendJob = Start-Job -ScriptBlock { Set-Location $using:PWD; npm start }
     Set-Location ..
     
-    # 서버 시작 대기
-    Write-Host "서버 시작 대기 중..."
+    # Wait for server startup
+    Write-Host "Waiting for server startup..."
     Start-Sleep -Seconds 30
     
-    # E2E 테스트 실행
-    Write-Host "E2E 테스트 실행 중..."
+    # Run E2E tests
+    Write-Host "Running E2E tests..."
     try {
         npm run test:e2e
-        Write-Success "E2E 테스트 통과"
+        Write-Success "E2E tests passed"
     }
     catch {
-        Write-Error "E2E 테스트 실패"
+        Write-Error "E2E tests failed"
         $script:TestFailed = $true
     }
     
-    # 서버 종료
+    # Stop servers
     Stop-Job $BackendJob, $FrontendJob
     Remove-Job $BackendJob, $FrontendJob
 }
 
-# 성능 테스트 실행
+# Run performance tests
 function Test-Performance {
-    Write-Header "성능 테스트 실행"
+    Write-Header "Running Performance Tests"
     
-    # 백엔드 서버 시작
-    Write-Host "백엔드 서버 시작 중..."
+    # Start backend server
+    Write-Host "Starting backend server..."
     Set-Location msv-server
     $BackendJob = Start-Job -ScriptBlock { Set-Location $using:PWD; npm run dev }
     Set-Location ..
     
-    # 서버 시작 대기
-    Write-Host "서버 시작 대기 중..."
+    # Wait for server startup
+    Write-Host "Waiting for server startup..."
     Start-Sleep -Seconds 15
     
-    # 성능 테스트 실행
-    Write-Host "성능 테스트 실행 중..."
+    # Run performance tests
+    Write-Host "Running performance tests..."
     try {
         npm run test:performance
-        Write-Success "성능 테스트 통과"
+        Write-Success "Performance tests passed"
     }
     catch {
-        Write-Error "성능 테스트 실패"
+        Write-Error "Performance tests failed"
         $script:TestFailed = $true
     }
     
-    # 서버 종료
+    # Stop server
     Stop-Job $BackendJob
     Remove-Job $BackendJob
 }
 
-# 테스트 결과 요약
+# Test results summary
 function Show-Summary {
-    Write-Header "테스트 결과 요약"
+    Write-Header "Test Results Summary"
     
     if ($TestFailed) {
-        Write-Error "일부 테스트가 실패했습니다."
-        Write-Host "자세한 내용은 위의 로그를 확인하세요."
+        Write-Error "Some tests failed."
+        Write-Host "Please check the logs above for details."
         exit 1
     }
     else {
-        Write-Success "모든 테스트가 성공적으로 완료되었습니다!"
-        Write-Host "🎉 MVS 3.0 시스템이 정상적으로 작동합니다."
+        Write-Success "All tests completed successfully!"
+        Write-Host "🎉 MVS 3.0 system is working properly."
     }
 }
 
-# 정리 작업
+# Cleanup tasks
 function Invoke-Cleanup {
-    Write-Header "정리 작업"
+    Write-Header "Cleanup Tasks"
     
-    # Docker 컨테이너 정지
-    Write-Host "Docker 컨테이너 정지 중..."
+    # Stop Docker containers
+    Write-Host "Stopping Docker containers..."
     try {
         docker-compose down
     }
     catch {
-        Write-Warning "Docker 컨테이너 정지 실패"
+        Write-Warning "Failed to stop Docker containers"
     }
     
-    # 실행 중인 프로세스 정리
-    Write-Host "실행 중인 프로세스 정리 중..."
+    # Clean up running processes
+    Write-Host "Cleaning up running processes..."
     Get-Process | Where-Object { $_.ProcessName -like "*node*" } | Stop-Process -Force -ErrorAction SilentlyContinue
     
-    Write-Success "정리 작업 완료"
+    Write-Success "Cleanup completed"
 }
 
-# 메인 실행
+# Main execution
 function Main {
-    # 전역 변수 초기화
+    # Initialize global variables
     $script:TestFailed = $false
     
-    # 트랩 설정 (Ctrl+C 시 정리 작업 실행)
+    # Setup trap (run cleanup on Ctrl+C)
     try {
-        # 테스트 실행
+        # Execute tests
         Test-Environment
         Install-Dependencies
         Setup-Database
         
-        # 테스트 타입별 실행
+        # Execute tests by type
         switch ($TestType) {
             "unit" { Test-Unit }
             "integration" { Test-Integration }
@@ -328,5 +328,5 @@ function Main {
     }
 }
 
-# 스크립트 실행
+# Execute script
 Main
