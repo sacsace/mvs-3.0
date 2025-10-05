@@ -1,11 +1,28 @@
+# MVS 3.0 Frontend - Nixpacks 설정 파일
+# 프론트엔드 전용 Railway 배포 설정
+
 [phases.setup]
-nixPkgs = ['nodejs', 'npm']
+# Node.js 런타임 설치
+nixPkgs = ["nodejs", "npm"]
 
 [phases.install]
-cmds = ['npm ci']
+# 의존성 설치
+cmds = ["npm ci --only=production"]
 
 [phases.build]
-cmds = ['npm run build']
+# React 앱 빌드
+cmds = ["npm run build"]
 
 [start]
-cmd = 'npx serve -s build -l 3000'
+# 정적 파일 서빙 (Nginx 사용)
+cmd = "npx serve -s build -l 3000"
+
+# 환경 변수 설정
+[env]
+NODE_ENV = "production"
+PORT = "3000"
+REACT_APP_API_URL = "https://mvs30.railway.com/api"
+
+# 변수 설정
+[variables]
+NODE_ENV = "production"

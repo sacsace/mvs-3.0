@@ -209,6 +209,43 @@ MVS 3.0은 **현대적이고 확장 가능한 기업용 통합 업무 관리 시
 - 팀 협업 강화
 - 사용자 피드백 반영
 
+## 🚀 배포 및 개발 환경
+
+### Railway 배포 (프로덕션)
+- **Nixpacks 사용**: 빠르고 간단한 자동 배포
+- **도커 불필요**: Railway가 자동으로 환경 구성
+- **Git 기반 배포**: 푸시 시 자동 배포 트리거
+
+### 로컬 개발 환경
+- **선택적 도커**: 데이터베이스(PostgreSQL)와 Redis만 도커 사용
+- **직접 실행**: 프론트엔드/백엔드는 npm으로 직접 실행
+- **빠른 개발**: 핫 리로드와 디버깅 지원
+
+### 개발 명령어
+```bash
+# 로컬 개발 (권장)
+docker-compose up postgres redis  # DB만 도커 실행
+cd msv-server && npm run dev      # 백엔드 직접 실행
+cd msv-frontend && npm start     # 프론트엔드 직접 실행
+
+# Railway 배포
+git push origin main              # 자동 배포
+railway up                        # 수동 배포
+```
+
+### 파일 구조
+```
+MVS 3.0/
+├── nixpacks.toml              # Railway 배포 설정
+├── docker-compose.yml         # 로컬 개발용 (DB/Redis)
+├── msv-server/
+│   ├── nixpacks.toml          # 백엔드 배포 설정
+│   └── railway.json           # Railway 서비스 설정
+└── msv-frontend/
+    ├── nixpacks.toml          # 프론트엔드 배포 설정
+    └── railway.json           # Railway 서비스 설정
+```
+
 ---
 
 **MVS 3.0 개발팀과 함께 차세대 기업용 시스템을 만들어가세요!** 🚀
