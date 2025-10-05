@@ -4,7 +4,7 @@
   "description": "MVS 3.0 - 차세대 기업용 통합 업무 관리 시스템",
   "main": "index.js",
   "scripts": {
-    "start": "cd msv-server && npm run start",
+    "start": "cd msv-server && npx ts-node --transpile-only src/index.ts",
     "stop": "docker-compose down",
     "restart": "docker-compose restart",
     "build": "cd msv-server && npm run build",
