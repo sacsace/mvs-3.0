@@ -1,4 +1,4 @@
-// Jest configuration for MVS 3.0 Backend
+// Jest configuration for MVS Backend
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
@@ -8,7 +8,9 @@ module.exports = {
     '**/?(*.)+(spec|test).ts'
   ],
   transform: {
-    '^.+\\.ts$': 'ts-jest',
+    '^.+\\.ts$': ['ts-jest', {
+      useESM: true
+    }],
   },
   collectCoverageFrom: [
     'src/**/*.ts',
@@ -24,7 +26,7 @@ module.exports = {
     'html'
   ],
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'
   },
   testTimeout: 10000,
@@ -32,5 +34,9 @@ module.exports = {
   forceExit: true,
   clearMocks: true,
   resetMocks: true,
-  restoreMocks: true
+  restoreMocks: true,
+  transformIgnorePatterns: [
+    'node_modules/(?!(.*\\.mjs$))'
+  ],
+  extensionsToTreatAsEsm: ['.ts']
 };

@@ -1,4 +1,4 @@
--- MVS 3.0 사용자 권한 설정
+-- MVS 사용자 권한 설정
 
 -- 관리자 권한 (user_id = 1, 모든 메뉴에 대한 모든 권한)
 INSERT INTO user_permissions (user_id, menu_id, can_view, can_create, can_edit, can_delete) 

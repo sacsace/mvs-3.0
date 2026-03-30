@@ -1,0 +1,805 @@
+import { Response } from 'express';
+import { RequestWithUser } from '../types';
+import { Approval, User } from '../models';
+import { Op } from 'sequelize';
+
+// 전자 결제 목록 조회
+export const getApprovals = async (req: RequestWithUser, res: Response) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
+    const userRole = req.user?.role;
+    const userId = req.user?.id;
+    const { requester_id, status, type, priority, company_id } = req.query;
+
+    const whereClause: any = {};
+    
+    // root나 audit 권한이면 모든 결제 조회 가능, 아니면 자신의 회사 결제만
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = companyId;
+      
+      // 일반 사용자는 자신이 요청한 결제만 조회
+      if (userRole === 'user') {
+        whereClause.requester_id = userId;
+      }
+    } else {
+      // root는 company_id 쿼리 파라미터로 회사별 필터링 가능
+      if (userRole === 'root' && company_id) {
+        whereClause.company_id = parseInt(company_id as string);
+      } else if (userRole === 'root') {
+        // root가 company_id를 지정하지 않으면 모든 회사 조회
+      } else {
+        // audit는 모든 회사 조회 가능
+        if (tenantId) whereClause.tenant_id = tenantId;
+        if (companyId) whereClause.company_id = companyId;
+      }
+    }
+
+    if (requester_id) {
+      whereClause.requester_id = requester_id;
+    }
+
+    if (status) {
+      whereClause.status = status;
+    }
+
+    if (type) {
+      whereClause.type = type;
+    }
+
+    if (priority) {
+      whereClause.priority = priority;
+    }
+
+    // 활성화된 전자 결제만 조회
+    whereClause.is_active = true;
+
+    const approvals = await (Approval as any).findAll({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: 'requester',
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
+        },
+        {
+          model: User,
+          as: 'currentApprover',
+          attributes: ['id', 'username'],
+          required: false
+        }
+      ],
+      order: [['created_at', 'DESC']]
+    });
+
+    res.json({
+      success: true,
+      data: approvals
+    });
+  } catch (error: any) {
+    console.error('전자 결제 목록 조회 오류:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: '전자 결제 목록 조회 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// 전자 결제 상세 조회
+export const getApproval = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { id } = req.params;
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
+    const userRole = req.user?.role;
+    const userId = req.user?.id;
+
+    const whereClause: any = { id };
+    
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = companyId;
+      
+      if (userRole === 'user') {
+        whereClause.requester_id = userId;
+      }
+    }
+
+    // 활성화된 전자 결제만 조회
+    whereClause.is_active = true;
+
+    const approval = await (Approval as any).findOne({
+      where: whereClause,
+      include: [
+        {
+          model: User,
+          as: 'requester',
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
+        },
+        {
+          model: User,
+          as: 'currentApprover',
+          attributes: ['id', 'username'],
+          required: false
+        }
+      ]
+    });
+
+    if (!approval) {
+      return res.status(404).json({ 
+        success: false, 
+        message: '전자 결제를 찾을 수 없습니다.' 
+      });
+    }
+
+    res.json({ success: true, data: approval });
+  } catch (error: any) {
+    console.error('전자 결제 상세 조회 오류:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: '전자 결제 상세 조회 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// 전자 결제 생성
+export const createApproval = async (req: RequestWithUser, res: Response) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
+    const userId = req.user?.id;
+    const { document_id, title, type, category, amount, description, attachments, priority, due_date, approval_flow } = req.body;
+
+    if (!document_id || !title || !type || !category || !description) {
+      return res.status(400).json({ 
+        success: false, 
+        message: '필수 필드가 누락되었습니다.' 
+      });
+    }
+
+    // document_id 중복 확인
+    const existing = await (Approval as any).findOne({
+      where: {
+        document_id,
+        tenant_id: tenantId,
+        company_id: companyId
+      }
+    });
+
+    if (existing) {
+      return res.status(400).json({ 
+        success: false, 
+        message: '이미 존재하는 문서 ID입니다.' 
+      });
+    }
+
+    const approval = await (Approval as any).create({
+      tenant_id: tenantId,
+      company_id: companyId,
+      document_id,
+      is_active: true,
+      title,
+      type,
+      category,
+      amount: amount || null,
+      requester_id: userId,
+      description,
+      attachments: attachments ? JSON.stringify(attachments) : null,
+      status: 'draft',
+      priority: priority || 'medium',
+      approval_flow: approval_flow ? JSON.stringify(approval_flow) : '[]',
+      due_date: due_date || null
+    });
+
+    // 사용자 정보 포함하여 반환
+    const approvalWithUser = await (Approval as any).findByPk(approval.id, {
+      include: [
+        {
+          model: User,
+          as: 'requester',
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
+        }
+      ]
+    });
+
+    res.status(201).json({ 
+      success: true, 
+      data: approvalWithUser 
+    });
+  } catch (error: any) {
+    console.error('전자 결제 생성 오류:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: '전자 결제 생성 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// 전자 결제 수정
+export const updateApproval = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { id } = req.params;
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
+    const userRole = req.user?.role;
+    const userId = req.user?.id;
+    const { title, type, category, amount, description, attachments, priority, due_date, approval_flow, status } = req.body;
+
+    const whereClause: any = { id, is_active: true };
+    
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = companyId;
+      
+      // 일반 사용자는 자신이 요청한 결제만 수정 가능 (draft 상태만)
+      if (userRole === 'user') {
+        whereClause.requester_id = userId;
+        whereClause.status = 'draft';
+      }
+    }
+
+    const approval = await (Approval as any).findOne({
+      where: whereClause
+    });
+
+    if (!approval) {
+      return res.status(404).json({ 
+        success: false, 
+        message: '전자 결제를 찾을 수 없습니다.' 
+      });
+    }
+
+    await approval.update({
+      title: title !== undefined ? title : approval.title,
+      type: type !== undefined ? type : approval.type,
+      category: category !== undefined ? category : approval.category,
+      amount: amount !== undefined ? amount : approval.amount,
+      description: description !== undefined ? description : approval.description,
+      attachments: attachments !== undefined ? JSON.stringify(attachments) : approval.attachments,
+      priority: priority !== undefined ? priority : approval.priority,
+      due_date: due_date !== undefined ? due_date : approval.due_date,
+      approval_flow: approval_flow !== undefined ? JSON.stringify(approval_flow) : approval.approval_flow,
+      status: status !== undefined ? status : approval.status
+    });
+
+    // 사용자 정보 포함하여 반환
+    const approvalWithUser = await (Approval as any).findByPk(approval.id, {
+      include: [
+        {
+          model: User,
+          as: 'requester',
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
+        },
+        {
+          model: User,
+          as: 'currentApprover',
+          attributes: ['id', 'username'],
+          required: false
+        }
+      ]
+    });
+
+    res.json({ 
+      success: true, 
+      data: approvalWithUser 
+    });
+  } catch (error: any) {
+    console.error('전자 결제 수정 오류:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: '전자 결제 수정 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// 전자 결제 삭제
+export const deleteApproval = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { id } = req.params;
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
+    const userRole = req.user?.role;
+    const userId = req.user?.id;
+
+    const whereClause: any = { id };
+    
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = companyId;
+      
+      // 일반 사용자는 자신이 요청한 결제만 삭제 가능 (draft 상태만)
+      if (userRole === 'user') {
+        whereClause.requester_id = userId;
+        whereClause.status = 'draft';
+      }
+    }
+
+    const approval = await (Approval as any).findOne({
+      where: whereClause
+    });
+
+    if (!approval) {
+      return res.status(404).json({ 
+        success: false, 
+        message: '전자 결제를 찾을 수 없습니다.' 
+      });
+    }
+
+    // 소프트 삭제: is_active를 false로 설정
+    await approval.update({ is_active: false });
+
+    res.json({ 
+      success: true, 
+      message: '전자 결제가 비활성화되었습니다.' 
+    });
+  } catch (error: any) {
+    console.error('전자 결제 삭제 오류:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: '전자 결제 삭제 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// 전자 결제 제출
+export const submitApproval = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { id } = req.params;
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
+    const userId = req.user?.id;
+
+    const approval = await (Approval as any).findOne({
+      where: {
+        id,
+        tenant_id: tenantId,
+        company_id: companyId,
+        requester_id: userId,
+        status: 'draft'
+      }
+    });
+
+    if (!approval) {
+      return res.status(404).json({ 
+        success: false, 
+        message: '전자 결제를 찾을 수 없거나 제출할 수 없습니다.' 
+      });
+    }
+
+    // approval_flow에서 첫 번째 승인자 설정
+    const approvalFlow = approval.approval_flow ? JSON.parse(approval.approval_flow) : [];
+    const firstApprover = approvalFlow.length > 0 ? approvalFlow[0] : null;
+
+    await approval.update({
+      status: 'submitted',
+      current_approver_id: firstApprover ? firstApprover.approverId : null
+    });
+
+    // 사용자 정보 포함하여 반환
+    const approvalWithUser = await (Approval as any).findByPk(approval.id, {
+      include: [
+        {
+          model: User,
+          as: 'requester',
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
+        },
+        {
+          model: User,
+          as: 'currentApprover',
+          attributes: ['id', 'username'],
+          required: false
+        }
+      ]
+    });
+
+    res.json({ 
+      success: true, 
+      data: approvalWithUser 
+    });
+  } catch (error: any) {
+    console.error('전자 결제 제출 오류:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: '전자 결제 제출 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// 전자 결제 승인
+export const approveApproval = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { comment, signature } = req.body;
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
+    const userId = req.user?.id;
+
+    const approval = await (Approval as any).findOne({
+      where: {
+        id,
+        tenant_id: tenantId,
+        company_id: companyId,
+        current_approver_id: userId,
+        status: { [Op.in]: ['submitted', 'in_review'] }
+      }
+    });
+
+    if (!approval) {
+      return res.status(404).json({ 
+        success: false, 
+        message: '승인할 수 있는 전자 결제를 찾을 수 없습니다.' 
+      });
+    }
+
+    // approval_flow 업데이트
+    const approvalFlow = approval.approval_flow ? JSON.parse(approval.approval_flow) : [];
+    const currentStepIndex = approvalFlow.findIndex((step: any) => step.approverId === userId && step.status === 'pending');
+    
+    if (currentStepIndex >= 0) {
+      approvalFlow[currentStepIndex].status = 'approved';
+      approvalFlow[currentStepIndex].approvedAt = new Date().toISOString();
+      approvalFlow[currentStepIndex].comment = comment || null;
+      approvalFlow[currentStepIndex].signature = signature || null; // 서명 추가
+    }
+
+    // 다음 승인자 확인
+    const nextStep = approvalFlow.find((step: any) => step.status === 'pending');
+    
+    if (nextStep) {
+      // 다음 승인자가 있으면 in_review 상태 유지
+      await approval.update({
+        status: 'in_review',
+        current_approver_id: nextStep.approverId,
+        approval_flow: JSON.stringify(approvalFlow)
+      });
+    } else {
+      // 모든 승인이 완료되면 approved 상태로 변경
+      await approval.update({
+        status: 'approved',
+        current_approver_id: null,
+        approval_flow: JSON.stringify(approvalFlow)
+      });
+    }
+
+    // 사용자 정보 포함하여 반환
+    const approvalWithUser = await (Approval as any).findByPk(approval.id, {
+      include: [
+        {
+          model: User,
+          as: 'requester',
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
+        },
+        {
+          model: User,
+          as: 'currentApprover',
+          attributes: ['id', 'username'],
+          required: false
+        }
+      ]
+    });
+
+    res.json({ 
+      success: true, 
+      data: approvalWithUser 
+    });
+  } catch (error: any) {
+    console.error('전자 결제 승인 오류:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: '전자 결제 승인 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// 댓글 추가
+export const addComment = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { comment, parentId } = req.body;
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
+    const userId = req.user?.id;
+
+    if (!comment || !comment.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: '댓글 내용을 입력해주세요.'
+      });
+    }
+
+    const approval = await (Approval as any).findOne({
+      where: {
+        id,
+        tenant_id: tenantId,
+        company_id: companyId
+      }
+    });
+
+    if (!approval) {
+      return res.status(404).json({
+        success: false,
+        message: '전자 결제를 찾을 수 없습니다.'
+      });
+    }
+
+    // 기존 댓글 목록 가져오기
+    const comments = approval.comments ? (typeof approval.comments === 'string' ? JSON.parse(approval.comments) : approval.comments) : [];
+    
+    // 새 댓글 생성
+    const newComment = {
+      id: Date.now(), // 임시 ID (실제로는 DB에서 생성)
+      userId,
+      userName: req.user?.username || '알 수 없음',
+      comment: comment.trim(),
+      createdAt: new Date().toISOString(),
+      isInternal: false,
+      parentId: parentId || null,
+      replies: []
+    };
+
+    // 부모 댓글이 있으면 대댓글로 추가
+    if (parentId) {
+      const parentIndex = comments.findIndex((c: any) => c.id === parentId);
+      if (parentIndex >= 0) {
+        if (!comments[parentIndex].replies) {
+          comments[parentIndex].replies = [];
+        }
+        comments[parentIndex].replies.push(newComment);
+      } else {
+        return res.status(404).json({
+          success: false,
+          message: '부모 댓글을 찾을 수 없습니다.'
+        });
+      }
+    } else {
+      // 일반 댓글로 추가
+      comments.push(newComment);
+    }
+
+    // 댓글 업데이트
+    await approval.update({
+      comments: JSON.stringify(comments)
+    });
+
+    res.json({
+      success: true,
+      data: newComment,
+      message: parentId ? '답글이 추가되었습니다.' : '댓글이 추가되었습니다.'
+    });
+  } catch (error: any) {
+    console.error('댓글 추가 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// 전자 결제 거부
+export const rejectApproval = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { comment } = req.body;
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
+    const userId = req.user?.id;
+
+    const approval = await (Approval as any).findOne({
+      where: {
+        id,
+        tenant_id: tenantId,
+        company_id: companyId,
+        current_approver_id: userId,
+        status: { [Op.in]: ['submitted', 'in_review'] }
+      }
+    });
+
+    if (!approval) {
+      return res.status(404).json({ 
+        success: false, 
+        message: '거부할 수 있는 전자 결제를 찾을 수 없습니다.' 
+      });
+    }
+
+    // approval_flow 업데이트
+    const approvalFlow = approval.approval_flow ? JSON.parse(approval.approval_flow) : [];
+    const currentStepIndex = approvalFlow.findIndex((step: any) => step.approverId === userId && step.status === 'pending');
+    
+    if (currentStepIndex >= 0) {
+      approvalFlow[currentStepIndex].status = 'rejected';
+      approvalFlow[currentStepIndex].approvedAt = new Date().toISOString();
+      approvalFlow[currentStepIndex].comment = comment || null;
+    }
+
+    await approval.update({
+      status: 'rejected',
+      current_approver_id: null,
+      approval_flow: JSON.stringify(approvalFlow)
+    });
+
+    // 사용자 정보 포함하여 반환
+    const approvalWithUser = await (Approval as any).findByPk(approval.id, {
+      include: [
+        {
+          model: User,
+          as: 'requester',
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
+        },
+        {
+          model: User,
+          as: 'currentApprover',
+          attributes: ['id', 'username'],
+          required: false
+        }
+      ]
+    });
+
+    res.json({ 
+      success: true, 
+      data: approvalWithUser 
+    });
+  } catch (error: any) {
+    console.error('전자 결제 거부 오류:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: '전자 결제 거부 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// 전자 결제 에스컬레이션
+export const escalateApproval = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { next_approver_id, comment } = req.body;
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
+    const userId = req.user?.id;
+
+    if (!next_approver_id) {
+      return res.status(400).json({
+        success: false,
+        message: '에스컬레이션 대상이 필요합니다.'
+      });
+    }
+
+    const approval = await (Approval as any).findOne({
+      where: {
+        id,
+        tenant_id: tenantId,
+        company_id: companyId,
+        current_approver_id: userId,
+        status: { [Op.in]: ['submitted', 'in_review'] }
+      }
+    });
+
+    if (!approval) {
+      return res.status(404).json({
+        success: false,
+        message: '에스컬레이션할 수 있는 전자 결제를 찾을 수 없습니다.'
+      });
+    }
+
+    const approvalFlowRaw = approval.approval_flow || [];
+    const approvalFlow = typeof approvalFlowRaw === 'string' ? JSON.parse(approvalFlowRaw) : approvalFlowRaw;
+    const escalationCount = approvalFlow.filter((step: any) => step.escalated).length;
+
+    if (escalationCount >= 4) {
+      return res.status(400).json({
+        success: false,
+        message: '에스컬레이션은 최대 4번까지 가능합니다.'
+      });
+    }
+
+    const currentStepIndex = approvalFlow.findIndex(
+      (step: any) => step.approverId === userId && step.status === 'pending'
+    );
+
+    if (currentStepIndex < 0) {
+      return res.status(400).json({
+        success: false,
+        message: '현재 승인 단계가 올바르지 않습니다.'
+      });
+    }
+
+    if (Number(next_approver_id) === userId) {
+      return res.status(400).json({
+        success: false,
+        message: '자기 자신에게는 에스컬레이션할 수 없습니다.'
+      });
+    }
+
+    const nextApprover = await (User as any).findOne({
+      where: {
+        id: next_approver_id,
+        tenant_id: tenantId,
+        company_id: companyId
+      }
+    });
+
+    if (!nextApprover) {
+      return res.status(404).json({
+        success: false,
+        message: '에스컬레이션 대상 사용자를 찾을 수 없습니다.'
+      });
+    }
+
+    const alreadyInFlow = approvalFlow.some((step: any) => step.approverId === nextApprover.id);
+    if (alreadyInFlow) {
+      return res.status(400).json({
+        success: false,
+        message: '이미 결재 흐름에 포함된 사용자입니다.'
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+    approvalFlow[currentStepIndex] = {
+      ...approvalFlow[currentStepIndex],
+      status: 'skipped',
+      approvedAt: nowIso,
+      comment: comment || '에스컬레이션',
+      escalated: true,
+      escalatedToId: nextApprover.id,
+      escalatedToName: nextApprover.username,
+      escalatedAt: nowIso
+    };
+
+    const maxStepOrder = approvalFlow.reduce((max: number, step: any) => Math.max(max, step.stepOrder || 0), 0);
+    const maxStepId = approvalFlow.reduce((max: number, step: any) => Math.max(max, step.id || 0), 0);
+
+    approvalFlow.push({
+      id: maxStepId + 1,
+      stepOrder: maxStepOrder + 1,
+      approverId: nextApprover.id,
+      approverName: nextApprover.username,
+      approverDepartment: nextApprover.department || '-',
+      approverPosition: nextApprover.position || '-',
+      status: 'pending'
+    });
+
+    await approval.update({
+      status: 'in_review',
+      current_approver_id: nextApprover.id,
+      approval_flow: JSON.stringify(approvalFlow)
+    });
+
+    const approvalWithUser = await (Approval as any).findByPk(approval.id, {
+      include: [
+        {
+          model: User,
+          as: 'requester',
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
+        },
+        {
+          model: User,
+          as: 'currentApprover',
+          attributes: ['id', 'username'],
+          required: false
+        }
+      ]
+    });
+
+    res.json({
+      success: true,
+      data: approvalWithUser
+    });
+  } catch (error: any) {
+    console.error('전자 결제 에스컬레이션 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '전자 결제 에스컬레이션 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+

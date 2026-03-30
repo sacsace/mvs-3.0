@@ -1,4 +1,4 @@
--- MVS 3.0 데이터베이스 최적화 스크립트
+-- MVS 데이터베이스 최적화 스크립트
 -- 인덱스 생성 및 성능 최적화
 
 -- 1. 기본 인덱스 (Primary Keys는 자동으로 생성됨)
@@ -134,4 +134,4 @@ ANALYZE;
 -- work_mem = 4MB
 -- maintenance_work_mem = 64MB
 
-COMMENT ON DATABASE mvs_db IS 'MVS 3.0 Enterprise Management System Database - Optimized for Performance';
+COMMENT ON DATABASE mvs IS 'MVS Enterprise Management System Database - Optimized for Performance';

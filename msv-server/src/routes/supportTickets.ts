@@ -1,14 +1,47 @@
 import express from 'express';
 import { Request, Response } from 'express';
 import { SupportTicket, SupportResponse } from '../models';
+import { validateBody } from '../middleware/validate';
 
 const router = express.Router();
+
+let hasSupportTicketCompanyIdColumn: boolean | null = null;
+
+const ensureSupportTicketSchemaInfo = async () => {
+  if (hasSupportTicketCompanyIdColumn !== null) return;
+  try {
+    const queryInterface = (SupportTicket as any).sequelize?.getQueryInterface?.();
+    if (!queryInterface) {
+      hasSupportTicketCompanyIdColumn = true;
+      return;
+    }
+    const tableDefinition = await queryInterface.describeTable('support_tickets');
+    hasSupportTicketCompanyIdColumn = Boolean(tableDefinition?.company_id);
+  } catch (error) {
+    console.warn('support_tickets 스키마 조회 실패, company_id 컬럼 존재로 가정합니다.', error);
+    hasSupportTicketCompanyIdColumn = true;
+  }
+};
+
+const supportTicketFindOptions = async () => {
+  await ensureSupportTicketSchemaInfo();
+  if (hasSupportTicketCompanyIdColumn) {
+    return {};
+  }
+  return {
+    attributes: {
+      exclude: ['company_id']
+    }
+  };
+};
 
 // 지원 티켓 목록 조회
 router.get('/', async (req: Request, res: Response) => {
   try {
+    const ticketOptionPatch = await supportTicketFindOptions();
     const tickets = await (SupportTicket as any).findAll({
       where: { tenant_id: 1 },
+      ...ticketOptionPatch,
       order: [['created_at', 'DESC']]
     });
 
@@ -29,8 +62,10 @@ router.get('/', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const ticketOptionPatch = await supportTicketFindOptions();
     const ticket = await (SupportTicket as any).findOne({
-      where: { id, tenant_id: 1 }
+      where: { id, tenant_id: 1 },
+      ...ticketOptionPatch
     });
 
     if (!ticket) {
@@ -54,13 +89,28 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // 지원 티켓 생성
-router.post('/', async (req: Request, res: Response) => {
+router.post(
+  '/',
+  validateBody({
+    customer_id: { required: true, type: 'number' },
+    ticket_number: { required: true, type: 'string', minLength: 1, maxLength: 50 },
+    title: { required: true, type: 'string', minLength: 1, maxLength: 200 },
+    description: { required: true, type: 'string', minLength: 1 },
+    category: { type: 'string', maxLength: 50 },
+    priority: { type: 'string', maxLength: 20 },
+    status: { type: 'string', maxLength: 20 },
+    assigned_to: { type: 'number' }
+  }),
+  async (req: Request, res: Response) => {
   try {
+    await ensureSupportTicketSchemaInfo();
     const ticketData = {
       ...req.body,
-      tenant_id: 1,
-      company_id: 1
+      tenant_id: 1
     };
+    if (hasSupportTicketCompanyIdColumn) {
+      (ticketData as any).company_id = 1;
+    }
 
     const ticket = await (SupportTicket as any).create(ticketData);
 
@@ -79,11 +129,25 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // 지원 티켓 수정
-router.put('/:id', async (req: Request, res: Response) => {
+router.put(
+  '/:id',
+  validateBody({
+    customer_id: { type: 'number' },
+    ticket_number: { type: 'string', minLength: 1, maxLength: 50 },
+    title: { type: 'string', minLength: 1, maxLength: 200 },
+    description: { type: 'string', minLength: 1 },
+    category: { type: 'string', maxLength: 50 },
+    priority: { type: 'string', maxLength: 20 },
+    status: { type: 'string', maxLength: 20 },
+    assigned_to: { type: 'number' }
+  }),
+  async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const ticketOptionPatch = await supportTicketFindOptions();
     const ticket = await (SupportTicket as any).findOne({
-      where: { id, tenant_id: 1 }
+      where: { id, tenant_id: 1 },
+      ...ticketOptionPatch
     });
 
     if (!ticket) {
@@ -113,8 +177,10 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const ticketOptionPatch = await supportTicketFindOptions();
     const ticket = await (SupportTicket as any).findOne({
-      where: { id, tenant_id: 1 }
+      where: { id, tenant_id: 1 },
+      ...ticketOptionPatch
     });
 
     if (!ticket) {
@@ -162,7 +228,12 @@ router.get('/:id/responses', async (req: Request, res: Response) => {
 });
 
 // 지원 티켓 응답 생성
-router.post('/:id/responses', async (req: Request, res: Response) => {
+router.post(
+  '/:id/responses',
+  validateBody({
+    response: { required: true, type: 'string', minLength: 1 }
+  }),
+  async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const responseData = {

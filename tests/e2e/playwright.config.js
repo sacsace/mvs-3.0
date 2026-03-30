@@ -1,4 +1,4 @@
-// MVS 3.0 E2E 테스트 설정 (Playwright)
+// MVS E2E 테스트 설정 (Playwright)
 
 const { defineConfig, devices } = require('@playwright/test');
 

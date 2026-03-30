@@ -1,4 +1,4 @@
-// MVS 3.0 샘플 데이터 정의
+// MVS 샘플 데이터 정의
 import { APP_CONSTANTS, SAMPLE_DATA } from './index';
 
 // 인보이스 샘플 데이터

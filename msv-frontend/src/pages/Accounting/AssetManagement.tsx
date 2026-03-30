@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Typography,
@@ -11,44 +11,33 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
-  Chip,
   TextField,
   FormControl,
-  InputLabel,
   Select,
   MenuItem,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Tooltip,
   Alert,
   Snackbar,
   Pagination,
   InputAdornment,
   Grid,
-  Divider,
-  Stack,
-  LinearProgress
+  Chip,
+  CircularProgress,
+  Tooltip,
+  IconButton,
 } from '@mui/material';
 import {
-  Business as BusinessIcon,
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Visibility as ViewIcon,
-  Print as PrintIcon,
-  Download as DownloadIcon,
   Search as SearchIcon,
-  FilterList as FilterIcon,
-  AttachMoney as MoneyIcon,
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  CalendarToday as CalendarIcon,
-  LocationOn as LocationIcon
 } from '@mui/icons-material';
+import { accountingService } from '../../services/api';
+
+type AssetStatus = 'active' | 'maintenance' | 'disposed' | 'lost' | 'transferred';
 
 interface Asset {
   id: number;
@@ -62,162 +51,186 @@ interface Asset {
   depreciation_rate: number;
   accumulated_depreciation: number;
   location: string;
-  status: string;
+  status: AssetStatus;
   maintenance_date?: string;
   next_maintenance?: string;
   warranty_expiry?: string;
-  description: string;
+  description?: string;
+  vendor?: string;
+  serial_number?: string;
+  assigned_to?: string;
+  department?: string;
+  useful_life?: number;
+  depreciation_method?: 'straight_line' | 'declining_balance' | 'units_of_production';
 }
+
+const assetCategories = [
+  { value: 'IT Equipment', subCategories: ['Computer', 'Server', 'Network', 'Printer', 'Monitor', 'Other IT'] },
+  { value: 'Office Supplies', subCategories: ['Printer', 'Copier', 'Fax', 'Phone', 'Chair', 'Desk', 'Other Office'] },
+  { value: 'Furniture', subCategories: ['Desk', 'Chair', 'Cabinet', 'Meeting Table', 'Sofa', 'Other Furniture'] },
+  { value: 'Vehicle', subCategories: ['Passenger', 'Cargo', 'Other Vehicle'] },
+  { value: 'Machinery', subCategories: ['Production', 'Manufacturing', 'Other Machinery'] },
+  { value: 'Other', subCategories: ['Other Asset'] },
+];
+
+const emptyForm = {
+  asset_code: '',
+  name: '',
+  category: '',
+  subcategory: '',
+  purchase_date: new Date().toISOString().split('T')[0],
+  purchase_price: 0,
+  depreciation_rate: 10,
+  location: '',
+  status: 'active' as AssetStatus,
+  maintenance_date: '',
+  next_maintenance: '',
+  warranty_expiry: '',
+  description: '',
+  vendor: '',
+  serial_number: '',
+  assigned_to: '',
+  department: '',
+  useful_life: 5,
+  depreciation_method: 'straight_line' as 'straight_line' | 'declining_balance' | 'units_of_production',
+};
+
+const formatCurrency = (value: number) => `Rs. ${Number(value || 0).toLocaleString()}`;
+
+const calculateDepreciationValues = (
+  purchasePrice: number,
+  depreciationRate: number,
+  purchaseDate: string
+) => {
+  const basePrice = Number(purchasePrice || 0);
+  const rate = Number(depreciationRate || 0);
+  if (basePrice <= 0 || rate <= 0 || !purchaseDate) {
+    return { currentValue: basePrice, accumulatedDepreciation: 0 };
+  }
+
+  const start = new Date(`${purchaseDate}T00:00:00`);
+  if (Number.isNaN(start.getTime())) {
+    return { currentValue: basePrice, accumulatedDepreciation: 0 };
+  }
+
+  const now = new Date();
+  const years = Math.max(0, (now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+  const accumulated = Math.min(basePrice, basePrice * (rate / 100) * years);
+  const current = Math.max(0, basePrice - accumulated);
+
+  return {
+    currentValue: Number(current.toFixed(2)),
+    accumulatedDepreciation: Number(accumulated.toFixed(2))
+  };
+};
 
 const AssetManagement: React.FC = () => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [filters, setFilters] = useState({ search: '', category: 'all', status: 'all' });
+  const [page, setPage] = useState(1);
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
-  const [formData, setFormData] = useState({
-    asset_code: '',
-    name: '',
-    category: '',
-    subcategory: '',
-    purchase_date: new Date().toISOString().split('T')[0],
-    purchase_price: 0,
-    depreciation_rate: 10,
-    location: '',
-    status: 'active',
-    maintenance_date: '',
-    next_maintenance: '',
-    warranty_expiry: '',
-    description: ''
-  });
-  const [filters, setFilters] = useState({
-    category: '',
-    status: '',
-    location: '',
-    search: ''
-  });
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const [formData, setFormData] = useState({ ...emptyForm });
 
-  // 샘플 데이터
-  const sampleAssets: Asset[] = [
-    {
-      id: 1,
-      asset_code: 'AST-001',
-      name: '데스크톱 컴퓨터',
-      category: 'IT 장비',
-      subcategory: '컴퓨터',
-      purchase_date: '2023-01-15',
-      purchase_price: 1500000,
-      current_value: 1200000,
-      depreciation_rate: 20,
-      accumulated_depreciation: 300000,
-      location: '본사 3층 개발팀',
-      status: 'active',
-      maintenance_date: '2024-01-15',
-      next_maintenance: '2025-01-15',
-      warranty_expiry: '2026-01-15',
-      description: '개발용 데스크톱 컴퓨터'
-    },
-    {
-      id: 2,
-      asset_code: 'AST-002',
-      name: '프린터',
-      category: '사무용품',
-      subcategory: '프린터',
-      purchase_date: '2023-03-20',
-      purchase_price: 800000,
-      current_value: 600000,
-      depreciation_rate: 25,
-      accumulated_depreciation: 200000,
-      location: '본사 2층 사무실',
-      status: 'active',
-      maintenance_date: '2024-03-20',
-      next_maintenance: '2025-03-20',
-      warranty_expiry: '2025-03-20',
-      description: '레이저 프린터'
-    },
-    {
-      id: 3,
-      asset_code: 'AST-003',
-      name: '회의용 테이블',
-      category: '가구',
-      subcategory: '테이블',
-      purchase_date: '2022-12-10',
-      purchase_price: 500000,
-      current_value: 350000,
-      depreciation_rate: 15,
-      accumulated_depreciation: 150000,
-      location: '본사 4층 회의실',
-      status: 'active',
-      description: '8인용 회의 테이블'
+  const itemsPerPage = 10;
+
+  const filteredAssets = useMemo(() => {
+    let list = [...assets];
+
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      list = list.filter(asset =>
+        asset.asset_code.toLowerCase().includes(q) ||
+        asset.name.toLowerCase().includes(q) ||
+        asset.serial_number?.toLowerCase().includes(q) ||
+        asset.location.toLowerCase().includes(q)
+      );
     }
-  ];
 
-  useEffect(() => {
-    loadAssets();
-  }, [page, filters]);
+    if (filters.category !== 'all') {
+      list = list.filter(asset => asset.category === filters.category);
+    }
+
+    if (filters.status !== 'all') {
+      list = list.filter(asset => asset.status === filters.status);
+    }
+
+    return list;
+  }, [assets, filters]);
+
+  const paginatedAssets = useMemo(() => {
+    const start = (page - 1) * itemsPerPage;
+    return filteredAssets.slice(start, start + itemsPerPage);
+  }, [filteredAssets, page]);
+
+  const summary = useMemo(() => {
+    const totalCount = filteredAssets.length;
+    const activeCount = filteredAssets.filter((asset) => asset.status === 'active').length;
+    const totalPurchase = filteredAssets.reduce((sum, asset) => sum + Number(asset.purchase_price || 0), 0);
+    const totalCurrent = filteredAssets.reduce((sum, asset) => sum + Number(asset.current_value || 0), 0);
+    return { totalCount, activeCount, totalPurchase, totalCurrent };
+  }, [filteredAssets]);
 
   const loadAssets = async () => {
     setLoading(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      let filteredAssets = sampleAssets;
-      
-      if (filters.category) {
-        filteredAssets = filteredAssets.filter(asset => asset.category === filters.category);
+      const response = await accountingService.getAssets();
+      if (response.success) {
+        const list = Array.isArray(response.data) ? response.data : [];
+        setAssets(list.map((asset: any) => ({
+          id: asset.id,
+          asset_code: asset.asset_code || '',
+          name: asset.name || '',
+          category: asset.category || '',
+          subcategory: asset.subcategory || '',
+          purchase_date: asset.purchase_date || '',
+          purchase_price: Number(asset.purchase_price) || 0,
+          current_value: Number(asset.current_value) || 0,
+          depreciation_rate: Number(asset.depreciation_rate) || 0,
+          accumulated_depreciation: Number(asset.accumulated_depreciation) || 0,
+          location: asset.location || '',
+          status: (asset.status || 'active') as AssetStatus,
+          maintenance_date: asset.maintenance_date || '',
+          next_maintenance: asset.next_maintenance || '',
+          warranty_expiry: asset.warranty_expiry || '',
+          description: asset.description || '',
+          vendor: asset.vendor || '',
+          serial_number: asset.serial_number || '',
+          assigned_to: asset.assigned_to || '',
+          department: asset.department || '',
+          useful_life: Number(asset.useful_life) || 5,
+          depreciation_method: (asset.depreciation_method || 'straight_line') as 'straight_line' | 'declining_balance' | 'units_of_production',
+        })));
+      } else {
+        setAssets([]);
+        setError(response.message || 'Failed to load assets.');
       }
-      
-      if (filters.status) {
-        filteredAssets = filteredAssets.filter(asset => asset.status === filters.status);
-      }
-      
-      if (filters.location) {
-        filteredAssets = filteredAssets.filter(asset => asset.location.includes(filters.location));
-      }
-      
-      if (filters.search) {
-        filteredAssets = filteredAssets.filter(asset => 
-          asset.asset_code.toLowerCase().includes(filters.search.toLowerCase()) ||
-          asset.name.toLowerCase().includes(filters.search.toLowerCase())
-        );
-      }
-      
-      setAssets(filteredAssets);
-      setTotalPages(Math.ceil(filteredAssets.length / 10));
-    } catch (error) {
-      showSnackbar('자산 목록을 불러오는데 실패했습니다.', 'error');
+    } catch (err) {
+      console.error('asset load error:', err);
+      setError('Failed to load assets.');
     } finally {
       setLoading(false);
     }
   };
 
-  const showSnackbar = (message: string, severity: 'success' | 'error') => {
-    setSnackbar({ open: true, message, severity });
-  };
+  useEffect(() => {
+    loadAssets();
+  }, []);
 
-  const handleCreateAsset = () => {
+  useEffect(() => {
+    setPage(1);
+  }, [filters]);
+
+  const handleCreate = () => {
     setSelectedAsset(null);
-    setFormData({
-      asset_code: '',
-      name: '',
-      category: '',
-      subcategory: '',
-      purchase_date: new Date().toISOString().split('T')[0],
-      purchase_price: 0,
-      depreciation_rate: 10,
-      location: '',
-      status: 'active',
-      maintenance_date: '',
-      next_maintenance: '',
-      warranty_expiry: '',
-      description: ''
-    });
+    setFormData({ ...emptyForm });
     setOpenDialog(true);
   };
 
-  const handleEditAsset = (asset: Asset) => {
+  const handleEdit = (asset: Asset) => {
     setSelectedAsset(asset);
     setFormData({
       asset_code: asset.asset_code,
@@ -232,158 +245,182 @@ const AssetManagement: React.FC = () => {
       maintenance_date: asset.maintenance_date || '',
       next_maintenance: asset.next_maintenance || '',
       warranty_expiry: asset.warranty_expiry || '',
-      description: asset.description
+      description: asset.description || '',
+      vendor: asset.vendor || '',
+      serial_number: asset.serial_number || '',
+      assigned_to: asset.assigned_to || '',
+      department: asset.department || '',
+      useful_life: Number(asset.useful_life) || 5,
+      depreciation_method: (asset.depreciation_method || 'straight_line') as 'straight_line' | 'declining_balance' | 'units_of_production',
     });
     setOpenDialog(true);
   };
 
-  const handleSaveAsset = () => {
-    showSnackbar('자산이 저장되었습니다.', 'success');
-    setOpenDialog(false);
-    loadAssets();
-  };
+  const handleSave = async () => {
+    if (!formData.name || !formData.category || !formData.purchase_date) {
+      setError('필수 항목(자산명, 분류, 취득일)을 입력해주세요.');
+      return;
+    }
 
-  const handleDeleteAsset = (id: number) => {
-    if (window.confirm('이 자산을 삭제하시겠습니까?')) {
-      showSnackbar('자산이 삭제되었습니다.', 'success');
-      loadAssets();
+    const resolvedAssetCode =
+      formData.asset_code.trim() || `AST-${Date.now().toString().slice(-6)}`;
+    const depreciation = calculateDepreciationValues(
+      Number(formData.purchase_price) || 0,
+      Number(formData.depreciation_rate) || 0,
+      formData.purchase_date
+    );
+
+    const payload = {
+      ...formData,
+      asset_code: resolvedAssetCode,
+      purchase_price: Number(formData.purchase_price) || 0,
+      depreciation_rate: Number(formData.depreciation_rate) || 0,
+      useful_life: Number(formData.useful_life) || 0,
+      current_value: depreciation.currentValue,
+      accumulated_depreciation: depreciation.accumulatedDepreciation,
+    };
+
+    try {
+      if (selectedAsset) {
+        const response = await accountingService.updateAsset(selectedAsset.id, payload);
+        if (!response.success) {
+          throw new Error(response.message || 'Update failed');
+        }
+        setSuccess('자산 정보를 수정했습니다.');
+      } else {
+        const response = await accountingService.createAsset(payload);
+        if (!response.success) {
+          throw new Error(response.message || 'Create failed');
+        }
+        setSuccess('자산을 등록했습니다.');
+      }
+      setOpenDialog(false);
+      setSelectedAsset(null);
+      await loadAssets();
+    } catch (err) {
+      console.error('asset save error:', err);
+      setError('자산 저장에 실패했습니다.');
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('이 자산을 삭제하시겠습니까?')) return;
+    try {
+      const response = await accountingService.deleteAsset(id);
+      if (!response.success) {
+        throw new Error(response.message || 'Delete failed');
+      }
+      setSuccess('자산을 삭제했습니다.');
+      await loadAssets();
+    } catch (err) {
+      console.error('asset delete error:', err);
+      setError('자산 삭제에 실패했습니다.');
+    }
+  };
+
+  const getStatusLabel = (status: AssetStatus) => {
     switch (status) {
-      case 'active': return 'success';
-      case 'maintenance': return 'warning';
-      case 'disposed': return 'error';
-      case 'lost': return 'default';
-      default: return 'default';
+      case 'active':
+        return '사용중';
+      case 'maintenance':
+        return '점검중';
+      case 'disposed':
+        return '폐기';
+      case 'lost':
+        return '분실';
+      case 'transferred':
+        return '이관';
+      default:
+        return status;
     }
   };
 
-  const getStatusText = (status: string) => {
+  const getStatusColor = (status: AssetStatus) => {
     switch (status) {
-      case 'active': return '사용중';
-      case 'maintenance': return '유지보수';
-      case 'disposed': return '폐기';
-      case 'lost': return '분실';
-      default: return status;
+      case 'active':
+        return 'success';
+      case 'maintenance':
+        return 'warning';
+      case 'disposed':
+        return 'error';
+      case 'lost':
+        return 'default';
+      case 'transferred':
+        return 'info';
+      default:
+        return 'default';
     }
-  };
-
-  const calculateDepreciationProgress = (asset: Asset) => {
-    return (asset.accumulated_depreciation / asset.purchase_price) * 100;
-  };
-
-  const getTotalAssetValue = () => {
-    return assets.reduce((sum, asset) => sum + asset.current_value, 0);
-  };
-
-  const getTotalPurchaseValue = () => {
-    return assets.reduce((sum, asset) => sum + asset.purchase_price, 0);
   };
 
   return (
     <Box sx={{ p: 3 }}>
-      {/* 헤더 */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" component="h1" gutterBottom sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: 1.5,
-          fontWeight: 600,
-          color: 'text.primary'
-        }}>
-          <BusinessIcon sx={{ fontSize: '2rem', color: 'primary.main' }} />
-          자산 관리
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          회사의 모든 유형 및 무형 자산을 효율적으로 관리하는 페이지입니다.
-        </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Box>
+          <Typography variant="h6">자산 관리</Typography>
+          <Typography variant="body2" color="text.secondary">
+            자산 등록, 감가상각, 상태 관리를 한 번에 처리합니다.
+          </Typography>
+        </Box>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
+          자산 등록
+        </Button>
       </Box>
 
-      {/* 통계 카드 */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid size={{ xs: 12, md: 3 }}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                    총 자산 수
-                  </Typography>
-                  <Typography variant="h4" fontWeight={600}>
-                    {assets.length}
-                  </Typography>
-                </Box>
-                <BusinessIcon sx={{ fontSize: '2.5rem', color: 'primary.main', opacity: 0.7 }} />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, md: 3 }}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                    총 구매가
-                  </Typography>
-                  <Typography variant="h4" fontWeight={600}>
-                    {getTotalPurchaseValue().toLocaleString()}원
-                  </Typography>
-                </Box>
-                <MoneyIcon sx={{ fontSize: '2.5rem', color: 'success.main', opacity: 0.7 }} />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, md: 3 }}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                    현재 가치
-                  </Typography>
-                  <Typography variant="h4" fontWeight={600}>
-                    {getTotalAssetValue().toLocaleString()}원
-                  </Typography>
-                </Box>
-                <TrendingUpIcon sx={{ fontSize: '2.5rem', color: 'info.main', opacity: 0.7 }} />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, md: 3 }}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                    감가상각률
-                  </Typography>
-                  <Typography variant="h4" fontWeight={600}>
-                    {assets.length > 0 ? Math.round(assets.reduce((sum, asset) => sum + asset.depreciation_rate, 0) / assets.length) : 0}%
-                  </Typography>
-                </Box>
-                <TrendingDownIcon sx={{ fontSize: '2.5rem', color: 'warning.main', opacity: 0.7 }} />
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+          {error}
+        </Alert>
+      )}
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
+          {success}
+        </Alert>
+      )}
 
-      {/* 필터 및 액션 */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Grid container spacing={2} alignItems="center">
-            <Grid size={{ xs: 12, md: 3 }}>
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="body2" color="text.secondary">자산 수</Typography>
+                  <Typography variant="h6">{summary.totalCount}건</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="body2" color="text.secondary">사용중 자산</Typography>
+                  <Typography variant="h6" color="success.main">{summary.activeCount}건</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="body2" color="text.secondary">총 취득가</Typography>
+                  <Typography variant="h6">{formatCurrency(summary.totalPurchase)}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="body2" color="text.secondary">총 현재가</Typography>
+                  <Typography variant="h6" color="primary.main">{formatCurrency(summary.totalCurrent)}</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+
+          <Grid container spacing={2} alignItems="flex-end">
+            <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 fullWidth
-                size="small"
-                placeholder="자산 코드 또는 이름 검색"
+                placeholder="코드/자산명/시리얼/위치 검색"
                 value={filters.search}
-                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                onChange={e => setFilters({ ...filters, search: e.target.value })}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -393,327 +430,264 @@ const AssetManagement: React.FC = () => {
                 }}
               />
             </Grid>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>카테고리</InputLabel>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <FormControl fullWidth>
                 <Select
                   value={filters.category}
-                  label="카테고리"
-                  onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+                  onChange={e => setFilters({ ...filters, category: e.target.value })}
                 >
-                  <MenuItem value="">전체</MenuItem>
-                  <MenuItem value="IT 장비">IT 장비</MenuItem>
-                  <MenuItem value="사무용품">사무용품</MenuItem>
-                  <MenuItem value="가구">가구</MenuItem>
-                  <MenuItem value="기타">기타</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel>상태</InputLabel>
-                <Select
-                  value={filters.status}
-                  label="상태"
-                  onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                >
-                  <MenuItem value="">전체</MenuItem>
-                  <MenuItem value="active">사용중</MenuItem>
-                  <MenuItem value="maintenance">유지보수</MenuItem>
-                  <MenuItem value="disposed">폐기</MenuItem>
-                  <MenuItem value="lost">분실</MenuItem>
+                  <MenuItem value="all">전체 분류</MenuItem>
+                  {assetCategories.map(cat => (
+                    <MenuItem key={cat.value} value={cat.value}>{cat.value}</MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder="위치 검색"
-                value={filters.location}
-                onChange={(e) => setFilters({ ...filters, location: e.target.value })}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <LocationIcon />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <Stack direction="row" spacing={1}>
-                <Button
-                  variant="outlined"
-                  startIcon={<FilterIcon />}
-                  onClick={() => setFilters({ category: '', status: '', location: '', search: '' })}
-                >
-                  초기화
-                </Button>
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={handleCreateAsset}
-                >
-                  자산 등록
-                </Button>
-              </Stack>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
-
-      {/* 자산 목록 */}
-      <Card>
-        <CardContent>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>자산 코드</TableCell>
-                  <TableCell>자산명</TableCell>
-                  <TableCell>카테고리</TableCell>
-                  <TableCell>구매일</TableCell>
-                  <TableCell>구매가</TableCell>
-                  <TableCell>현재가치</TableCell>
-                  <TableCell>감가상각</TableCell>
-                  <TableCell>위치</TableCell>
-                  <TableCell>상태</TableCell>
-                  <TableCell align="center">작업</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {assets.map((asset) => (
-                  <TableRow key={asset.id} hover>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={500}>
-                        {asset.asset_code}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Box>
-                        <Typography variant="body2" fontWeight={500}>
-                          {asset.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {asset.description}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {asset.category}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {asset.subcategory}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {new Date(asset.purchase_date).toLocaleDateString()}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={500}>
-                        {asset.purchase_price.toLocaleString()}원
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight={500}>
-                        {asset.current_value.toLocaleString()}원
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ minWidth: 100 }}>
-                        <LinearProgress
-                          variant="determinate"
-                          value={calculateDepreciationProgress(asset)}
-                          sx={{ mb: 1 }}
-                        />
-                        <Typography variant="caption" color="text.secondary">
-                          {asset.accumulated_depreciation.toLocaleString()}원
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {asset.location}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={getStatusText(asset.status)}
-                        color={getStatusColor(asset.status)}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell align="center">
-                      <Stack direction="row" spacing={0.5} justifyContent="center">
-                        <Tooltip title="보기">
-                          <IconButton size="small">
-                            <ViewIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="수정">
-                          <IconButton size="small" onClick={() => handleEditAsset(asset)}>
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="인쇄">
-                          <IconButton size="small">
-                            <PrintIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="삭제">
-                          <IconButton size="small" onClick={() => handleDeleteAsset(asset.id)}>
-                            <DeleteIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-
-          {/* 페이지네이션 */}
-          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-            <Pagination
-              count={totalPages}
-              page={page}
-              onChange={(_, newPage) => setPage(newPage)}
-              color="primary"
-            />
-          </Box>
-        </CardContent>
-      </Card>
-
-      {/* 자산 등록/수정 다이얼로그 */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {selectedAsset ? '자산 수정' : '새 자산 등록'}
-        </DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label="자산 코드"
-                value={formData.asset_code}
-                onChange={(e) => setFormData({ ...formData, asset_code: e.target.value })}
-                required
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label="자산명"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                required
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <FormControl fullWidth required>
-                <InputLabel>카테고리</InputLabel>
+              <FormControl fullWidth>
                 <Select
-                  value={formData.category}
-                  label="카테고리"
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  value={filters.status}
+                  onChange={e => setFilters({ ...filters, status: e.target.value as AssetStatus | 'all' })}
                 >
-                  <MenuItem value="IT 장비">IT 장비</MenuItem>
-                  <MenuItem value="사무용품">사무용품</MenuItem>
-                  <MenuItem value="가구">가구</MenuItem>
-                  <MenuItem value="기타">기타</MenuItem>
+                  <MenuItem value="all">전체 상태</MenuItem>
+                  <MenuItem value="active">사용중</MenuItem>
+                  <MenuItem value="maintenance">점검중</MenuItem>
+                  <MenuItem value="disposed">폐기</MenuItem>
+                  <MenuItem value="lost">분실</MenuItem>
+                  <MenuItem value="transferred">이관</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label="세부 분류"
-                value={formData.subcategory}
-                onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label="구매일"
-                type="date"
-                value={formData.purchase_date}
-                onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })}
-                InputLabelProps={{ shrink: true }}
-                required
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label="구매가"
-                type="number"
-                value={formData.purchase_price}
-                onChange={(e) => setFormData({ ...formData, purchase_price: Number(e.target.value) })}
-                InputProps={{
-                  endAdornment: <InputAdornment position="end">원</InputAdornment>
-                }}
-                required
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label="감가상각률"
-                type="number"
-                value={formData.depreciation_rate}
-                onChange={(e) => setFormData({ ...formData, depreciation_rate: Number(e.target.value) })}
-                InputProps={{
-                  endAdornment: <InputAdornment position="end">%</InputAdornment>
-                }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label="위치"
-                value={formData.location}
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                required
-              />
-            </Grid>
-            <Grid size={{ xs: 12 }}>
-              <TextField
-                fullWidth
-                label="설명"
-                multiline
-                rows={3}
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              />
-            </Grid>
           </Grid>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent>
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : filteredAssets.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" align="center">
+              자산 데이터가 없습니다.
+            </Typography>
+          ) : (
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>코드</TableCell>
+                    <TableCell>자산명</TableCell>
+                    <TableCell>분류</TableCell>
+                    <TableCell>취득일</TableCell>
+                    <TableCell>취득가</TableCell>
+                    <TableCell>현재가</TableCell>
+                    <TableCell>상태</TableCell>
+                    <TableCell align="center">관리</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {paginatedAssets.map(asset => (
+                    <TableRow key={asset.id} hover>
+                      <TableCell>{asset.asset_code}</TableCell>
+                      <TableCell>{asset.name}</TableCell>
+                      <TableCell>{asset.category}</TableCell>
+                      <TableCell>{asset.purchase_date}</TableCell>
+                      <TableCell>{formatCurrency(asset.purchase_price)}</TableCell>
+                      <TableCell>{formatCurrency(asset.current_value)}</TableCell>
+                      <TableCell>
+                        <Chip size="small" label={getStatusLabel(asset.status)} color={getStatusColor(asset.status) as any} />
+                      </TableCell>
+                      <TableCell align="center">
+                        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
+                          <Tooltip title="수정">
+                            <IconButton size="small" onClick={() => handleEdit(asset)}>
+                              <EditIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="삭제">
+                            <IconButton size="small" onClick={() => handleDelete(asset.id)} color="error">
+                              <DeleteIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+
+          {filteredAssets.length > itemsPerPage && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+              <Pagination
+                count={Math.ceil(filteredAssets.length / itemsPerPage)}
+                page={page}
+                onChange={(_, value) => setPage(value)}
+              />
+            </Box>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>{selectedAsset ? '자산 수정' : '자산 등록'}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>코드</Typography>
+                <TextField
+                  fullWidth
+                  value={formData.asset_code}
+                  onChange={e => setFormData({ ...formData, asset_code: e.target.value })}
+                  required
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>자산명 *</Typography>
+                <TextField
+                  fullWidth
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                  required
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>분류 *</Typography>
+                <FormControl fullWidth>
+                  <Select
+                    value={formData.category}
+                    onChange={e => setFormData({ ...formData, category: e.target.value, subcategory: '' })}
+                  >
+                    <MenuItem value="">선택</MenuItem>
+                    {assetCategories.map(cat => (
+                      <MenuItem key={cat.value} value={cat.value}>{cat.value}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>하위 분류</Typography>
+                <FormControl fullWidth>
+                  <Select
+                    value={formData.subcategory}
+                    onChange={e => setFormData({ ...formData, subcategory: e.target.value })}
+                    disabled={!formData.category}
+                  >
+                    <MenuItem value="">선택</MenuItem>
+                    {assetCategories.find(cat => cat.value === formData.category)?.subCategories.map(sub => (
+                      <MenuItem key={sub} value={sub}>{sub}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>취득일 *</Typography>
+                <TextField
+                  fullWidth
+                  type="date"
+                  value={formData.purchase_date}
+                  onChange={e => setFormData({ ...formData, purchase_date: e.target.value })}
+                  required
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>취득가</Typography>
+                <TextField
+                  fullWidth
+                  type="number"
+                  value={formData.purchase_price}
+                  onChange={e => setFormData({ ...formData, purchase_price: Number(e.target.value) || 0 })}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>위치</Typography>
+                <TextField
+                  fullWidth
+                  value={formData.location}
+                  onChange={e => setFormData({ ...formData, location: e.target.value })}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>상태</Typography>
+                <FormControl fullWidth>
+                  <Select
+                    value={formData.status}
+                    onChange={e => setFormData({ ...formData, status: e.target.value as AssetStatus })}
+                  >
+                    <MenuItem value="active">사용중</MenuItem>
+                    <MenuItem value="maintenance">점검중</MenuItem>
+                    <MenuItem value="disposed">폐기</MenuItem>
+                    <MenuItem value="lost">분실</MenuItem>
+                    <MenuItem value="transferred">이관</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>담당자</Typography>
+                <TextField
+                  fullWidth
+                  value={formData.assigned_to}
+                  onChange={e => setFormData({ ...formData, assigned_to: e.target.value })}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>부서</Typography>
+                <TextField
+                  fullWidth
+                  value={formData.department}
+                  onChange={e => setFormData({ ...formData, department: e.target.value })}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>내용연수(년)</Typography>
+                <TextField
+                  fullWidth
+                  type="number"
+                  value={formData.useful_life}
+                  onChange={e => setFormData({ ...formData, useful_life: Number(e.target.value) || 0 })}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>감가상각 방식</Typography>
+                <FormControl fullWidth>
+                  <Select
+                    value={formData.depreciation_method}
+                    onChange={e => setFormData({ ...formData, depreciation_method: e.target.value as 'straight_line' | 'declining_balance' | 'units_of_production' })}
+                  >
+                    <MenuItem value="straight_line">정액법</MenuItem>
+                    <MenuItem value="declining_balance">정률법</MenuItem>
+                    <MenuItem value="units_of_production">생산량비례법</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>설명</Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  value={formData.description}
+                  onChange={e => setFormData({ ...formData, description: e.target.value })}
+                />
+              </Grid>
+            </Grid>
+          </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDialog(false)}>취소</Button>
-          <Button variant="contained" onClick={handleSaveAsset}>
-            저장
-          </Button>
+          <Button variant="contained" onClick={handleSave}>저장</Button>
         </DialogActions>
       </Dialog>
 
-      {/* 스낵바 */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
-      >
-        <Alert
-          onClose={() => setSnackbar({ ...snackbar, open: false })}
-          severity={snackbar.severity}
-        >
-          {snackbar.message}
-        </Alert>
+      <Snackbar open={!!error} autoHideDuration={4000} onClose={() => setError('')}>
+        <Alert onClose={() => setError('')} severity="error">{error}</Alert>
+      </Snackbar>
+      <Snackbar open={!!success} autoHideDuration={3000} onClose={() => setSuccess('')}>
+        <Alert onClose={() => setSuccess('')} severity="success">{success}</Alert>
       </Snackbar>
     </Box>
   );

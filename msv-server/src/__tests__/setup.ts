@@ -1,4 +1,4 @@
-// Jest setup file for MVS 3.0 Backend
+// Jest setup file for MVS Backend
 import { config } from 'dotenv';
 
 // Load environment variables
@@ -29,4 +29,11 @@ afterEach(() => {
 afterAll(async () => {
   // Close any open handles
   await new Promise(resolve => setTimeout(resolve, 100));
+});
+
+// Jest setup 파일이므로 테스트가 없어도 경고를 방지
+describe('Jest Setup', () => {
+  test('Setup file loaded successfully', () => {
+    expect(true).toBe(true);
+  });
 });

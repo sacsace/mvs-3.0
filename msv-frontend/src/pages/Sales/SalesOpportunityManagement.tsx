@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -11,7 +11,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   IconButton,
   Chip,
   TextField,
@@ -29,8 +28,7 @@ import {
   Tooltip,
   Alert,
   Snackbar,
-  LinearProgress,
-  Badge
+  LinearProgress
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -39,15 +37,12 @@ import {
   Delete as DeleteIcon,
   Visibility as ViewIcon,
   TrendingUp as TrendingUpIcon,
-  Business as BusinessIcon,
   CalendarToday as CalendarIcon,
   AttachMoney as MoneyIcon,
   Refresh as RefreshIcon,
-  FilterList as FilterIcon,
   Download as DownloadIcon,
   Print as PrintIcon,
   CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
   Info as InfoIcon
 } from '@mui/icons-material';
 import { api } from '../../services/api';
@@ -79,9 +74,21 @@ interface Customer {
   industry?: string;
 }
 
+interface User {
+  id: number;
+  userid: string;
+  username: string;
+  email: string;
+  role: string;
+  department?: string;
+  position?: string;
+  status?: string;
+}
+
 const SalesOpportunityManagement: React.FC = () => {
   const [opportunities, setOpportunities] = useState<SalesOpportunity[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
@@ -104,32 +111,48 @@ const SalesOpportunityManagement: React.FC = () => {
     status: 'active'
   });
 
-  useEffect(() => {
-    loadOpportunities();
-    loadCustomers();
-  }, []);
-
-  const loadOpportunities = async () => {
+  const loadOpportunities = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get('/sales-opportunities');
-      setOpportunities(response.data.data || []);
+      if (response.data?.success) {
+        setOpportunities(response.data.data || []);
+      } else {
+        setOpportunities([]);
+      }
     } catch (error) {
       console.error('영업 기회 로드 오류:', error);
-      showSnackbar('영업 기회 목록을 불러오는 중 오류가 발생했습니다.', 'error');
+      setOpportunities([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadCustomers = async () => {
+  const loadCustomers = useCallback(async () => {
     try {
       const response = await api.get('/customers');
       setCustomers(response.data.data || []);
     } catch (error) {
       console.error('고객 목록 로드 오류:', error);
     }
-  };
+  }, []);
+
+  const loadUsers = useCallback(async () => {
+    try {
+      const response = await api.get('/users');
+      if (response.data.success) {
+        setUsers(response.data.data || []);
+      }
+    } catch (error) {
+      console.error('사용자 목록 로드 오류:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadOpportunities();
+    loadCustomers();
+    loadUsers();
+  }, [loadCustomers, loadOpportunities, loadUsers]);
 
   const showSnackbar = (message: string, severity: 'success' | 'error') => {
     setSnackbar({ open: true, message, severity });
@@ -400,7 +423,7 @@ const SalesOpportunityManagement: React.FC = () => {
                     총 영업 가치
                   </Typography>
                   <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                    {getTotalValue().toLocaleString()}원
+                    Rs. {getTotalValue().toLocaleString()}
                   </Typography>
                 </Box>
                 <Avatar sx={{ bgcolor: 'warning.main' }}>
@@ -506,8 +529,17 @@ const SalesOpportunityManagement: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredOpportunities.map((opportunity) => (
-                  <TableRow key={opportunity.id} hover>
+                {filteredOpportunities.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={10}>
+                      <Box sx={{ py: 4, textAlign: 'center', color: 'text.secondary' }}>
+                        데이터가 없습니다.
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredOpportunities.map((opportunity) => (
+                    <TableRow key={opportunity.id} hover>
                     <TableCell>
                       <Box>
                         <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
@@ -534,7 +566,7 @@ const SalesOpportunityManagement: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main' }}>
-                        {opportunity.value.toLocaleString()}원
+                        Rs. {opportunity.value.toLocaleString()}
                       </Typography>
                     </TableCell>
                     <TableCell>
@@ -620,8 +652,9 @@ const SalesOpportunityManagement: React.FC = () => {
                         </Tooltip>
                       </Box>
                     </TableCell>
-                  </TableRow>
-                ))}
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </TableContainer>
@@ -667,7 +700,7 @@ const SalesOpportunityManagement: React.FC = () => {
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
-                label="영업 가치 (원)"
+                label="영업 가치 (INR)"
                 type="number"
                 value={formData.value}
                 onChange={(e) => setFormData({ ...formData, value: e.target.value })}
@@ -725,9 +758,13 @@ const SalesOpportunityManagement: React.FC = () => {
                   disabled={dialogMode === 'view'}
                 >
                   <MenuItem value="">담당자 없음</MenuItem>
-                  {/* 실제 사용자 목록으로 교체 필요 */}
-                  <MenuItem value="1">관리자</MenuItem>
-                  <MenuItem value="2">영업팀장</MenuItem>
+                  {users
+                    .filter(u => u.status === 'active')
+                    .map((user) => (
+                      <MenuItem key={user.id} value={user.id.toString()}>
+                        {user.username} {user.department ? `(${user.department})` : ''}
+                      </MenuItem>
+                    ))}
                 </Select>
               </FormControl>
             </Grid>

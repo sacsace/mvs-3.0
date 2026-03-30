@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -11,7 +11,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   IconButton,
   Chip,
   TextField,
@@ -28,24 +27,17 @@ import {
   Avatar,
   Tooltip,
   Alert,
-  Snackbar,
-  Badge,
-  Divider
+  Snackbar
 } from '@mui/material';
 import {
   Add as AddIcon,
   Search as SearchIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Visibility as ViewIcon,
   Description as DescriptionIcon,
-  Business as BusinessIcon,
   CalendarToday as CalendarIcon,
   AttachMoney as MoneyIcon,
   Refresh as RefreshIcon,
-  FilterList as FilterIcon,
-  Download as DownloadIcon,
-  Print as PrintIcon,
   CheckCircle as CheckCircleIcon,
   Warning as WarningIcon,
   Schedule as ScheduleIcon,
@@ -55,15 +47,17 @@ import { api } from '../../services/api';
 
 interface Contract {
   id: number;
-  customer_id: number;
+  customer_id: number | null;
   customer_name?: string;
   contract_number: string;
   title: string;
   description?: string;
+  contract_type?: 'sales' | 'purchase_lease';
   contract_value: number;
   start_date: string;
   end_date: string;
   status: string;
+  attachments?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -84,6 +78,7 @@ const ContractManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [contractTypeFilter, setContractTypeFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -97,37 +92,51 @@ const ContractManagement: React.FC = () => {
     title: '',
     description: '',
     contract_value: '',
+    contract_type: 'sales',
     start_date: '',
     end_date: '',
-    status: 'active'
+    status: 'active',
+    attachments: [] as string[]
   });
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
-  useEffect(() => {
-    loadContracts();
-    loadCustomers();
-  }, []);
-
-  const loadContracts = async () => {
+  const loadContracts = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get('/contracts');
-      setContracts(response.data.data || []);
+      const rows = (response.data.data || []).map((row: any) => ({
+        ...row,
+        contract_type: row.contract_type || 'sales',
+        contract_value: Number(row.contract_value ?? row.value ?? 0),
+        attachments: Array.isArray(row.attachments) ? row.attachments : []
+      }));
+      setContracts(rows);
     } catch (error) {
       console.error('계약 목록 로드 오류:', error);
       showSnackbar('계약 목록을 불러오는 중 오류가 발생했습니다.', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadCustomers = async () => {
+  const loadCustomers = useCallback(async () => {
     try {
       const response = await api.get('/customers');
-      setCustomers(response.data.data || []);
+      const rows = (response.data.data || []).filter((customer: any) => {
+        if (customer?.source_type && customer.source_type !== 'customer') return false;
+        if (typeof customer?.id === 'number' && customer.id >= 1000000000) return false;
+        return true;
+      });
+      setCustomers(rows);
     } catch (error) {
       console.error('고객 목록 로드 오류:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadContracts();
+    loadCustomers();
+  }, [loadContracts, loadCustomers]);
 
   const showSnackbar = (message: string, severity: 'success' | 'error') => {
     setSnackbar({ open: true, message, severity });
@@ -145,12 +154,17 @@ const ContractManagement: React.FC = () => {
     setDateFilter(event.target.value);
   };
 
+  const handleContractTypeFilter = (event: any) => {
+    setContractTypeFilter(event.target.value);
+  };
+
   const filteredContracts = contracts.filter(contract => {
     const matchesSearch = contract.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          contract.contract_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          contract.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          contract.description?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || contract.status === statusFilter;
+    const matchesType = contractTypeFilter === 'all' || (contract.contract_type || 'sales') === contractTypeFilter;
     
     let matchesDate = true;
     if (dateFilter !== 'all') {
@@ -175,7 +189,7 @@ const ContractManagement: React.FC = () => {
       }
     }
     
-    return matchesSearch && matchesStatus && matchesDate;
+    return matchesSearch && matchesStatus && matchesType && matchesDate;
   });
 
   const handleCreateContract = () => {
@@ -185,31 +199,50 @@ const ContractManagement: React.FC = () => {
       title: '',
       description: '',
       contract_value: '',
+      contract_type: 'sales',
       start_date: '',
       end_date: '',
-      status: 'active'
+      status: 'active',
+      attachments: []
     });
+    setSelectedFiles([]);
     setDialogMode('create');
     setDialogOpen(true);
   };
 
   const handleEditContract = (contract: Contract) => {
     setFormData({
-      customer_id: contract.customer_id.toString(),
+      customer_id: contract.customer_id ? contract.customer_id.toString() : '',
       contract_number: contract.contract_number,
       title: contract.title,
       description: contract.description || '',
       contract_value: contract.contract_value.toString(),
+      contract_type: contract.contract_type || 'sales',
       start_date: contract.start_date,
       end_date: contract.end_date,
-      status: contract.status
+      status: contract.status,
+      attachments: Array.isArray(contract.attachments) ? contract.attachments : []
     });
+    setSelectedFiles([]);
     setSelectedContract(contract);
     setDialogMode('edit');
     setDialogOpen(true);
   };
 
   const handleViewContract = (contract: Contract) => {
+    setFormData({
+      customer_id: contract.customer_id ? contract.customer_id.toString() : '',
+      contract_number: contract.contract_number,
+      title: contract.title,
+      description: contract.description || '',
+      contract_value: contract.contract_value.toString(),
+      contract_type: contract.contract_type || 'sales',
+      start_date: contract.start_date,
+      end_date: contract.end_date,
+      status: contract.status,
+      attachments: Array.isArray(contract.attachments) ? contract.attachments : []
+    });
+    setSelectedFiles([]);
     setSelectedContract(contract);
     setDialogMode('view');
     setDialogOpen(true);
@@ -219,19 +252,36 @@ const ContractManagement: React.FC = () => {
     try {
       const data = {
         ...formData,
-        customer_id: parseInt(formData.customer_id),
-        contract_value: parseFloat(formData.contract_value)
+        customer_id: formData.customer_id ? parseInt(formData.customer_id, 10) : null,
+        contract_value: parseFloat(formData.contract_value),
+        attachments: formData.attachments
       };
 
       if (dialogMode === 'create') {
-        await api.post('/contracts', data);
+        const createResponse = await api.post('/contracts', data);
+        const createdContractId = createResponse.data?.data?.id;
+        if (createdContractId && selectedFiles.length > 0) {
+          const form = new FormData();
+          selectedFiles.forEach((file) => form.append('files', file));
+          await api.post(`/contracts/${createdContractId}/upload-files`, form, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+        }
         showSnackbar('계약이 성공적으로 등록되었습니다.', 'success');
       } else if (dialogMode === 'edit' && selectedContract) {
         await api.put(`/contracts/${selectedContract.id}`, data);
+        if (selectedFiles.length > 0) {
+          const form = new FormData();
+          selectedFiles.forEach((file) => form.append('files', file));
+          await api.post(`/contracts/${selectedContract.id}/upload-files`, form, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+        }
         showSnackbar('계약이 성공적으로 수정되었습니다.', 'success');
       }
       
       setDialogOpen(false);
+      setSelectedFiles([]);
       loadContracts();
     } catch (error) {
       console.error('계약 저장 오류:', error);
@@ -318,6 +368,8 @@ const ContractManagement: React.FC = () => {
       return endDate < now;
     }).length;
   };
+
+  const uploadBaseUrl = (api.defaults.baseURL || '').replace(/\/api\/?$/, '');
 
   return (
     <Box sx={{ p: 3 }}>
@@ -416,7 +468,7 @@ const ContractManagement: React.FC = () => {
                     총 계약 가치
                   </Typography>
                   <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                    {getTotalValue().toLocaleString()}원
+                    Rs. {getTotalValue().toLocaleString()}
                   </Typography>
                 </Box>
                 <Avatar sx={{ bgcolor: 'info.main' }}>
@@ -463,7 +515,21 @@ const ContractManagement: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
+            <Grid size={{ xs: 12, md: 2 }}>
+              <FormControl fullWidth>
+                <InputLabel>계약 구분</InputLabel>
+                <Select
+                  value={contractTypeFilter}
+                  onChange={handleContractTypeFilter}
+                  label="계약 구분"
+                >
+                  <MenuItem value="all">전체</MenuItem>
+                  <MenuItem value="sales">매출 계약</MenuItem>
+                  <MenuItem value="purchase_lease">매입(구매/임대)</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid size={{ xs: 12, md: 2 }}>
               <FormControl fullWidth>
                 <InputLabel>기간</InputLabel>
                 <Select
@@ -479,24 +545,6 @@ const ContractManagement: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid size={{ xs: 12, md: 2 }}>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<DownloadIcon />}
-                  size="small"
-                >
-                  내보내기
-                </Button>
-                <Button
-                  variant="outlined"
-                  startIcon={<PrintIcon />}
-                  size="small"
-                >
-                  인쇄
-                </Button>
-              </Box>
-            </Grid>
           </Grid>
         </CardContent>
       </Card>
@@ -511,6 +559,7 @@ const ContractManagement: React.FC = () => {
                   <TableCell>계약명</TableCell>
                   <TableCell>계약번호</TableCell>
                   <TableCell>고객</TableCell>
+                  <TableCell>계약 구분</TableCell>
                   <TableCell>계약 가치</TableCell>
                   <TableCell>계약 기간</TableCell>
                   <TableCell>계약 상태</TableCell>
@@ -523,7 +572,12 @@ const ContractManagement: React.FC = () => {
                 {filteredContracts.map((contract) => {
                   const contractStatus = getContractStatus(contract);
                   return (
-                    <TableRow key={contract.id} hover>
+                    <TableRow
+                      key={contract.id}
+                      hover
+                      onClick={() => handleViewContract(contract)}
+                      sx={{ cursor: 'pointer' }}
+                    >
                       <TableCell>
                         <Box>
                           <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
@@ -557,8 +611,15 @@ const ContractManagement: React.FC = () => {
                         </Box>
                       </TableCell>
                       <TableCell>
+                        <Chip
+                          size="small"
+                          color={(contract.contract_type || 'sales') === 'sales' ? 'primary' : 'secondary'}
+                          label={(contract.contract_type || 'sales') === 'sales' ? '매출 계약' : '매입(구매/임대)'}
+                        />
+                      </TableCell>
+                      <TableCell>
                         <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main' }}>
-                          {contract.contract_value.toLocaleString()}원
+                          Rs. {contract.contract_value.toLocaleString()}
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -598,18 +659,13 @@ const ContractManagement: React.FC = () => {
                       </TableCell>
                       <TableCell align="center">
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
-                          <Tooltip title="보기">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleViewContract(contract)}
-                            >
-                              <ViewIcon />
-                            </IconButton>
-                          </Tooltip>
                           <Tooltip title="수정">
                             <IconButton
                               size="small"
-                              onClick={() => handleEditContract(contract)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleEditContract(contract);
+                              }}
                             >
                               <EditIcon />
                             </IconButton>
@@ -617,7 +673,10 @@ const ContractManagement: React.FC = () => {
                           <Tooltip title="삭제">
                             <IconButton
                               size="small"
-                              onClick={() => handleDeleteContract(contract)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleDeleteContract(contract);
+                              }}
                               color="error"
                             >
                               <DeleteIcon />
@@ -644,14 +703,15 @@ const ContractManagement: React.FC = () => {
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <FormControl fullWidth required>
-                <InputLabel>고객</InputLabel>
+              <FormControl fullWidth>
+                <InputLabel>고객(선택)</InputLabel>
                 <Select
                   value={formData.customer_id}
                   onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })}
-                  label="고객"
+                  label="고객(선택)"
                   disabled={dialogMode === 'view'}
                 >
+                  <MenuItem value="">일반 임대 계약(고객 없음)</MenuItem>
                   {customers.map((customer) => (
                     <MenuItem key={customer.id} value={customer.id.toString()}>
                       {customer.name}
@@ -661,14 +721,22 @@ const ContractManagement: React.FC = () => {
               </FormControl>
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
-                fullWidth
-                label="계약번호"
-                value={formData.contract_number}
-                onChange={(e) => setFormData({ ...formData, contract_number: e.target.value })}
-                disabled={dialogMode === 'view'}
-                required
-              />
+              {dialogMode === 'create' ? (
+                <TextField
+                  fullWidth
+                  label="계약번호"
+                  value="자동 생성"
+                  disabled
+                  helperText="등록 시 계약번호가 자동으로 생성됩니다."
+                />
+              ) : (
+                <TextField
+                  fullWidth
+                  label="계약번호"
+                  value={formData.contract_number}
+                  disabled
+                />
+              )}
             </Grid>
             <Grid size={{ xs: 12 }}>
               <TextField
@@ -683,7 +751,7 @@ const ContractManagement: React.FC = () => {
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
-                label="계약 가치 (원)"
+                label="계약 가치 (INR)"
                 type="number"
                 value={formData.contract_value}
                 onChange={(e) => setFormData({ ...formData, contract_value: e.target.value })}
@@ -693,17 +761,15 @@ const ContractManagement: React.FC = () => {
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl fullWidth>
-                <InputLabel>상태</InputLabel>
+                <InputLabel>계약 구분</InputLabel>
                 <Select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                  label="상태"
+                  value={formData.contract_type}
+                  onChange={(e) => setFormData({ ...formData, contract_type: e.target.value })}
+                  label="계약 구분"
                   disabled={dialogMode === 'view'}
                 >
-                  <MenuItem value="active">활성</MenuItem>
-                  <MenuItem value="inactive">비활성</MenuItem>
-                  <MenuItem value="expired">만료</MenuItem>
-                  <MenuItem value="suspended">정지</MenuItem>
+                  <MenuItem value="sales">매출 계약</MenuItem>
+                  <MenuItem value="purchase_lease">매입(구매/임대)</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -732,6 +798,22 @@ const ContractManagement: React.FC = () => {
               />
             </Grid>
             <Grid size={{ xs: 12 }}>
+              <FormControl fullWidth>
+                <InputLabel>상태</InputLabel>
+                <Select
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  label="상태"
+                  disabled={dialogMode === 'view'}
+                >
+                  <MenuItem value="active">활성</MenuItem>
+                  <MenuItem value="inactive">비활성</MenuItem>
+                  <MenuItem value="expired">만료</MenuItem>
+                  <MenuItem value="suspended">정지</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid size={{ xs: 12 }}>
               <TextField
                 fullWidth
                 label="계약 설명"
@@ -741,6 +823,45 @@ const ContractManagement: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 disabled={dialogMode === 'view'}
               />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <Button
+                variant="outlined"
+                component="label"
+                disabled={dialogMode === 'view'}
+              >
+                계약서 파일 첨부
+                <input
+                  hidden
+                  type="file"
+                  multiple
+                  onChange={(event) => {
+                    const files = Array.from(event.target.files || []);
+                    setSelectedFiles(files);
+                  }}
+                />
+              </Button>
+              {selectedFiles.length > 0 && (
+                <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
+                  선택 파일: {selectedFiles.map((file) => file.name).join(', ')}
+                </Typography>
+              )}
+              {Array.isArray(formData.attachments) && formData.attachments.length > 0 && (
+                <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                  <Typography variant="caption" color="text.secondary">기존 첨부파일</Typography>
+                  {formData.attachments.map((filePath) => (
+                    <a
+                      key={filePath}
+                      href={`${uploadBaseUrl}/uploads/${filePath}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ fontSize: '0.85rem' }}
+                    >
+                      {filePath.split('/').pop()}
+                    </a>
+                  ))}
+                </Box>
+              )}
             </Grid>
           </Grid>
         </DialogContent>

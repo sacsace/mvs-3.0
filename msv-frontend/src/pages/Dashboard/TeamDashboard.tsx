@@ -460,7 +460,7 @@ const TeamDashboard: React.FC = () => {
                   sx={{ mt: 1, height: 8, borderRadius: 4 }}
                 />
                 <Typography variant="caption" color="text.secondary">
-                  ₩{(teamStats?.teamResources?.usedBudget || 0).toLocaleString()} / ₩{(teamStats?.teamResources?.budget || 0).toLocaleString()}
+                  Rs. {(teamStats?.teamResources?.usedBudget || 0).toLocaleString()} / Rs. {(teamStats?.teamResources?.budget || 0).toLocaleString()}
                 </Typography>
               </Box>
               <Box>

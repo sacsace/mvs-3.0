@@ -3,7 +3,7 @@
 const { execSync } = require('child_process');
 const path = require('path');
 
-console.log('🚀 MVS 3.0 데이터베이스 마이그레이션 시작...\n');
+console.log('🚀 MVS 데이터베이스 마이그레이션 시작...\n');
 
 try {
   // 마이그레이션 실행
@@ -22,7 +22,7 @@ try {
     cwd: path.join(__dirname, '..')
   });
 
-  console.log('\n🎉 MVS 3.0 데이터베이스 설정이 완료되었습니다!');
+  console.log('\n🎉 MVS 데이터베이스 설정이 완료되었습니다!');
   console.log('\n📋 생성된 테이블:');
   console.log('   - tenant (테넌트)');
   console.log('   - company (회사)');

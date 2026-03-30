@@ -1,4 +1,4 @@
--- MVS 3.0 테이블 생성 스크립트
+-- MVS 테이블 생성 스크립트
 -- PostgreSQL 15+ 호환
 
 -- 확장 기능 활성화
@@ -20,14 +20,14 @@ CREATE TABLE IF NOT EXISTS tenant (
 );
 
 -- 2. 회사 테이블
-CREATE TABLE IF NOT EXISTS company (
+CREATE TABLE IF NOT EXISTS companies (
     id SERIAL PRIMARY KEY,
     tenant_id INTEGER NOT NULL,
     name VARCHAR(255) NOT NULL,
     business_number VARCHAR(50) UNIQUE NOT NULL,
     ceo_name VARCHAR(100),
     address TEXT,
-    phone VARCHAR(20),
+    phone VARCHAR(50),
     email VARCHAR(100),
     website VARCHAR(100),
     industry VARCHAR(100),
@@ -41,6 +41,12 @@ CREATE TABLE IF NOT EXISTS company (
     bank_name VARCHAR(100),
     account_number VARCHAR(50),
     ifsc_code VARCHAR(11),
+    bank_address TEXT,
+    swift_code VARCHAR(11),
+    msme_number VARCHAR(50),
+    iec_number VARCHAR(50),
+    pan_number VARCHAR(50),
+    status VARCHAR(20) DEFAULT 'active',
     login_period_start DATE,
     login_period_end DATE,
     login_time_start TIME DEFAULT '09:00:00',

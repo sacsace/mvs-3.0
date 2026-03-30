@@ -1,4 +1,4 @@
-// MVS 3.0 E2E 테스트 - 대시보드 기능
+// MVS E2E 테스트 - 대시보드 기능
 
 const { test, expect } = require('@playwright/test');
 

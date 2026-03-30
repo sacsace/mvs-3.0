@@ -64,8 +64,13 @@ export const sampleCompanies = [
     email: 'info@mvs3.com',
     website: 'https://mvs3.com',
     industry: 'IT/소프트웨어',
-    size: 'medium' as const,
-    status: 'active' as const
+    employee_count: 50,
+    subscription_plan: 'premium',
+    subscription_status: 'active',
+    login_time_start: '09:00:00',
+    login_time_end: '18:00:00',
+    timezone: 'Asia/Seoul',
+    settings: {}
   },
   {
     tenant_id: 1,
@@ -76,8 +81,13 @@ export const sampleCompanies = [
     phone: '02-1234-5678',
     email: 'contact@abc.com',
     industry: '제조업',
-    size: 'large' as const,
-    status: 'active' as const
+    employee_count: 200,
+    subscription_plan: 'enterprise',
+    subscription_status: 'active',
+    login_time_start: '09:00:00',
+    login_time_end: '18:00:00',
+    timezone: 'Asia/Seoul',
+    settings: {}
   },
   {
     tenant_id: 1,
@@ -88,15 +98,20 @@ export const sampleCompanies = [
     phone: '031-1111-2222',
     email: 'billing@xyz.com',
     industry: '금융',
-    size: 'enterprise' as const,
-    status: 'active' as const
+    employee_count: 500,
+    subscription_plan: 'enterprise',
+    subscription_status: 'active',
+    login_time_start: '09:00:00',
+    login_time_end: '18:00:00',
+    timezone: 'Asia/Seoul',
+    settings: {}
   }
 ];
 
 // 샘플 테넌트 데이터
 export const sampleTenants = [
   {
-    name: 'MVS 3.0 Solutions',
+    name: 'MVS Solutions',
     domain: 'mvs3.com',
     subdomain: 'mvs3',
     plan: 'premium' as const,
@@ -198,7 +213,7 @@ export const initializeSampleData = async () => {
     // 회사 생성
     for (const companyData of sampleCompanies) {
       await (Company as any).findOrCreate({
-        where: { business_number: companyData.business_number },
+        where: { tenant_id: tenant[0].id, business_number: companyData.business_number },
         defaults: { ...companyData, tenant_id: tenant[0].id }
       });
     }
@@ -206,7 +221,7 @@ export const initializeSampleData = async () => {
     // 사용자 생성
     for (const userData of sampleUsers) {
       await (User as any).findOrCreate({
-        where: { userid: userData.userid },
+        where: { tenant_id: tenant[0].id, userid: userData.userid },
         defaults: { ...userData, tenant_id: tenant[0].id }
       });
     }
@@ -214,7 +229,7 @@ export const initializeSampleData = async () => {
     // 메뉴 생성
     for (const menuData of sampleMenus) {
       await (Menu as any).findOrCreate({
-        where: { route: menuData.route },
+        where: { tenant_id: tenant[0].id, route: menuData.route },
         defaults: { ...menuData, tenant_id: tenant[0].id }
       });
     }

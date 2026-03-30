@@ -9,10 +9,12 @@ interface ContractAttributes {
   contract_number: string;
   title: string;
   description?: string;
+  contract_type: 'sales' | 'purchase_lease';
   contract_value: number;
   start_date: string;
   end_date: string;
   status: string;
+  attachments?: string[];
   created_at: Date;
   updated_at: Date;
 }
@@ -27,10 +29,12 @@ class Contract extends Model<ContractAttributes, ContractCreationAttributes> imp
   public contract_number!: string;
   public title!: string;
   public description?: string;
+  public contract_type!: 'sales' | 'purchase_lease';
   public contract_value!: number;
   public start_date!: string;
   public end_date!: string;
   public status!: string;
+  public attachments?: string[];
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
 }
@@ -60,7 +64,7 @@ Contract.init(
     },
     customer_id: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: 'customers',
         key: 'id',
@@ -78,6 +82,11 @@ Contract.init(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    contract_type: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+      defaultValue: 'sales'
+    },
     contract_value: {
       type: DataTypes.DECIMAL(15, 2),
       allowNull: false,
@@ -94,6 +103,11 @@ Contract.init(
       type: DataTypes.STRING(20),
       allowNull: false,
       defaultValue: 'active',
+    },
+    attachments: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: []
     },
     created_at: {
       type: DataTypes.DATE,

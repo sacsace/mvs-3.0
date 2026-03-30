@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lotus Korean Hotel | hotellotus.in</title>
+    <meta
+      name="description"
+      content="Lotus Korean Hotel - A premium Korean-inspired stay in India. Book your room at hotellotus.in."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-row">
+        <div class="brand">
+          <span class="brand-mark">LOTUS</span>
+          <span class="brand-sub">KOREAN HOTEL</span>
+        </div>
+        <nav class="nav">
+          <a href="#rooms">Rooms</a>
+          <a href="#amenities">Amenities</a>
+          <a href="#booking">Booking</a>
+          <a href="#contact">Contact</a>
+        </nav>
+        <a class="primary-btn" href="#booking">Book Now</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="container hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">hotellotus.in</p>
+            <h1>Lotus Korean Hotel</h1>
+            <p class="lead">
+              A Korean-inspired retreat with warm hospitality, modern comfort, and
+              curated experiences for business and leisure travelers.
+            </p>
+            <div class="hero-actions">
+              <a class="primary-btn" href="#booking">Reserve a Room</a>
+              <a class="ghost-btn" href="#rooms">View Rooms</a>
+            </div>
+            <div class="hero-badges">
+              <div class="badge">Premium Service</div>
+              <div class="badge">Central Location</div>
+              <div class="badge">24/7 Support</div>
+            </div>
+          </div>
+          <div class="hero-card">
+            <h3>Signature Experience</h3>
+            <p>
+              Enjoy authentic Korean hospitality, serene interiors, and curated dining
+              inspired by modern Seoul.
+            </p>
+            <div class="hero-card-list">
+              <span>Quiet luxury rooms</span>
+              <span>In-room dining</span>
+              <span>Airport transfer</span>
+              <span>Business lounge</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="rooms">
+        <div class="container">
+          <div class="section-head">
+            <h2>Rooms & Suites</h2>
+            <p>Select a room that matches your stay. All rooms include breakfast and Wi-Fi.</p>
+          </div>
+          <div class="card-grid">
+            <article class="room-card">
+              <h3>Lotus Standard</h3>
+              <p>Queen bed, city view, smart amenities.</p>
+              <ul>
+                <li>24 sqm</li>
+                <li>Smart TV</li>
+                <li>Work desk</li>
+              </ul>
+            </article>
+            <article class="room-card">
+              <h3>Lotus Deluxe</h3>
+              <p>Spacious comfort with lounge seating.</p>
+              <ul>
+                <li>32 sqm</li>
+                <li>Premium bedding</li>
+                <li>Mini bar</li>
+              </ul>
+            </article>
+            <article class="room-card">
+              <h3>Lotus Suite</h3>
+              <p>Executive suite with dedicated living area.</p>
+              <ul>
+                <li>48 sqm</li>
+                <li>Suite lounge</li>
+                <li>Private balcony</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section soft" id="amenities">
+        <div class="container">
+          <div class="section-head">
+            <h2>Amenities</h2>
+            <p>Thoughtfully designed services for a seamless stay.</p>
+          </div>
+          <div class="amenities-grid">
+            <div class="amenity">Korean Breakfast</div>
+            <div class="amenity">High-speed Wi-Fi</div>
+            <div class="amenity">Airport Pickup</div>
+            <div class="amenity">Meeting Rooms</div>
+            <div class="amenity">Spa & Wellness</div>
+            <div class="amenity">24/7 Concierge</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="booking">
+        <div class="container booking-grid">
+          <div class="section-head">
+            <h2>Book Your Stay</h2>
+            <p>
+              Share your dates and preferences. Our team will confirm availability
+              and pricing.
+            </p>
+          </div>
+          <form class="booking-form" id="bookingForm">
+            <div class="form-row">
+              <label>
+                Full Name
+                <input type="text" name="guestName" placeholder="Guest name" required />
+              </label>
+              <label>
+                Email
+                <input type="email" name="guestEmail" placeholder="email@example.com" required />
+              </label>
+            </div>
+            <div class="form-row">
+              <label>
+                Check-in
+                <input type="date" name="checkIn" required />
+              </label>
+              <label>
+                Check-out
+                <input type="date" name="checkOut" required />
+              </label>
+            </div>
+            <div class="form-row">
+              <label>
+                Room Type
+                <select name="roomType" required>
+                  <option value="">Select room</option>
+                  <option value="standard">Lotus Standard</option>
+                  <option value="deluxe">Lotus Deluxe</option>
+                  <option value="suite">Lotus Suite</option>
+                </select>
+              </label>
+              <label>
+                Guests
+                <input type="number" name="guests" min="1" max="6" value="2" />
+              </label>
+            </div>
+            <label>
+              Special Requests
+              <textarea name="requests" rows="3" placeholder="Any special requests"></textarea>
+            </label>
+            <button class="primary-btn" type="submit">Submit Booking Request</button>
+            <p class="form-note" id="bookingNote"></p>
+          </form>
+        </div>
+      </section>
+
+      <section class="section soft" id="contact">
+        <div class="container contact-grid">
+          <div>
+            <h2>Contact</h2>
+            <p>Lotus Korean Hotel, India</p>
+            <p>Email: reservations@hotellotus.in</p>
+            <p>Phone: +91-XXXXXXXXXX</p>
+          </div>
+          <div class="contact-card">
+            <h3>Location</h3>
+            <p>Detailed address will be provided here.</p>
+            <p class="muted">Domain: hotellotus.in</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-row">
+        <span>Lotus Korean Hotel</span>
+        <span>hotellotus.in</span>
+      </div>
+    </footer>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

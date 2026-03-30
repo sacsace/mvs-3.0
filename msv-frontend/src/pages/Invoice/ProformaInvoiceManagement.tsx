@@ -25,45 +25,20 @@ import {
   MenuItem,
   Alert,
   Divider,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
   Tooltip,
-  Badge,
   Tabs,
   Tab
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon,
   Visibility as ViewIcon,
   Send as SendIcon,
   Download as DownloadIcon,
   Print as PrintIcon,
-  ContentCopy as CopyIcon,
   CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon,
-  Schedule as ScheduleIcon,
   Receipt as ReceiptIcon,
-  Business as BusinessIcon,
-  Person as PersonIcon,
-  AttachMoney as AttachMoneyIcon,
-  Description as DescriptionIcon,
-  Email as EmailIcon,
-  Phone as PhoneIcon,
-  LocationOn as LocationOnIcon,
-  CalendarToday as CalendarTodayIcon,
-  AccessTime as AccessTimeIcon,
-  Warning as WarningIcon,
-  Info as InfoIcon,
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  Refresh as RefreshIcon,
-  FilterList as FilterListIcon,
-  Search as SearchIcon,
-  MoreVert as MoreVertIcon
+  Search as SearchIcon
 } from '@mui/icons-material';
 import { useStore } from '../../store';
 import { api } from '../../services/api';
@@ -176,7 +151,7 @@ const ProformaInvoiceManagement: React.FC = () => {
       setLoading(true);
       try {
         const [invoicesResponse, quotationsResponse, customersResponse] = await Promise.all([
-          api.get('/proforma-invoices'),
+          api.get('/accounting/proforma-invoices'),
           api.get('/quotations?status=accepted'),
           api.get('/customers')
         ]);
@@ -209,7 +184,7 @@ const ProformaInvoiceManagement: React.FC = () => {
   // 프로포마 인보이스 생성
   const handleCreate = async () => {
     try {
-      const response = await api.post('/proforma-invoices', formData);
+      const response = await api.post('/accounting/proforma-invoices', formData);
       if (response.data.success) {
         setProformaInvoices(prev => [response.data.data, ...prev]);
         setOpenDialog(false);
@@ -246,7 +221,7 @@ const ProformaInvoiceManagement: React.FC = () => {
   // 상태 업데이트
   const handleStatusUpdate = async (id: string, status: string) => {
     try {
-      const response = await api.put(`/proforma-invoices/${id}/status`, { status });
+      const response = await api.put(`/accounting/proforma-invoices/${id}/status`, { status });
       if (response.data.success) {
         setProformaInvoices(prev => prev.map(invoice => 
           invoice.id === id ? { ...invoice, status: status as any } : invoice
@@ -399,7 +374,7 @@ const ProformaInvoiceManagement: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" fontWeight="bold">
-                          ₩{invoice.totalAmount.toLocaleString()}
+                          Rs. {invoice.totalAmount.toLocaleString()}
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -495,7 +470,7 @@ const ProformaInvoiceManagement: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" fontWeight="bold">
-                          ₩{quotation.totalAmount.toLocaleString()}
+                          Rs. {quotation.totalAmount.toLocaleString()}
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -560,7 +535,7 @@ const ProformaInvoiceManagement: React.FC = () => {
               <Card>
                 <CardContent>
                   <Typography variant="h6" color="warning">
-                    ₩{proformaInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0).toLocaleString()}
+                    Rs. {proformaInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0).toLocaleString()}
                   </Typography>
                   <Typography variant="body2">총 금액</Typography>
                 </CardContent>
@@ -655,7 +630,7 @@ const ProformaInvoiceManagement: React.FC = () => {
                     color={getStatusColor(selectedInvoice.status) as any}
                   />
                   <Typography variant="h5" sx={{ mt: 1 }}>
-                    ₩{selectedInvoice.totalAmount.toLocaleString()}
+                    Rs. {selectedInvoice.totalAmount.toLocaleString()}
                   </Typography>
                 </Box>
               </Box>
@@ -705,10 +680,10 @@ const ProformaInvoiceManagement: React.FC = () => {
                         <TableRow key={item.id}>
                           <TableCell>{item.description}</TableCell>
                           <TableCell align="right">{item.quantity}</TableCell>
-                          <TableCell align="right">₩{item.unitPrice.toLocaleString()}</TableCell>
-                          <TableCell align="right">₩{item.total.toLocaleString()}</TableCell>
-                          <TableCell align="right">₩{item.taxAmount.toLocaleString()}</TableCell>
-                          <TableCell align="right">₩{(item.total + item.taxAmount).toLocaleString()}</TableCell>
+                          <TableCell align="right">Rs. {item.unitPrice.toLocaleString()}</TableCell>
+                          <TableCell align="right">Rs. {item.total.toLocaleString()}</TableCell>
+                          <TableCell align="right">Rs. {item.taxAmount.toLocaleString()}</TableCell>
+                          <TableCell align="right">Rs. {(item.total + item.taxAmount).toLocaleString()}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -721,20 +696,20 @@ const ProformaInvoiceManagement: React.FC = () => {
                 <Box sx={{ minWidth: 300 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2">소계:</Typography>
-                    <Typography variant="body2">₩{selectedInvoice.subtotal.toLocaleString()}</Typography>
+                    <Typography variant="body2">Rs. {selectedInvoice.subtotal.toLocaleString()}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2">할인:</Typography>
-                    <Typography variant="body2">-₩{selectedInvoice.discountAmount.toLocaleString()}</Typography>
+                    <Typography variant="body2">-Rs. {selectedInvoice.discountAmount.toLocaleString()}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2">세금:</Typography>
-                    <Typography variant="body2">₩{selectedInvoice.taxAmount.toLocaleString()}</Typography>
+                    <Typography variant="body2">Rs. {selectedInvoice.taxAmount.toLocaleString()}</Typography>
                   </Box>
                   <Divider sx={{ my: 1 }} />
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="h6">총액:</Typography>
-                    <Typography variant="h6">₩{selectedInvoice.totalAmount.toLocaleString()}</Typography>
+                    <Typography variant="h6">Rs. {selectedInvoice.totalAmount.toLocaleString()}</Typography>
                   </Box>
                 </Box>
               </Box>

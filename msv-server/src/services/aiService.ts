@@ -22,8 +22,8 @@ class AIService {
     const productivityScore = this.calculateProductivityScore(actions, duration);
     
     let category = 'normal';
-    let insights: string[] = [];
-    let recommendations: string[] = [];
+    const insights: string[] = [];
+    const recommendations: string[] = [];
 
     if (productivityScore > 0.8) {
       category = 'high_performance';

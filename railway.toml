@@ -1,0 +1,13 @@
+# MVS Root Directory - Railway 설정
+# 주의: 이 디렉토리는 배포용이 아닙니다.
+# 각 서비스는 msv-server와 msv-frontend 디렉토리에서 별도로 배포됩니다.
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+# 루트 디렉토리는 배포하지 않음
+# Railway 서비스 설정에서 Root Directory를 지정해야 합니다.
+# - 백엔드: msv-server
+# - 프론트엔드: msv-frontend
+startCommand = "echo 'Monorepo root detected. Set Root Directory to msv-server or msv-frontend in Railway service settings.' && exit 1"

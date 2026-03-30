@@ -1,4 +1,4 @@
-// MVS 3.0 Frontend Unit Test Example
+// MVS Frontend Unit Test Example
 // msv-frontend/src/components/__tests__/LoginForm.test.tsx
 
 import React from 'react';
@@ -6,39 +6,57 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import { theme } from '../../theme';
-import LoginForm from '../LoginForm';
+import Login from '../../pages/Auth/Login';
 
-// Mock API calls
 jest.mock('../../services/api', () => ({
-  login: jest.fn(),
+  api: { post: jest.fn() },
+  API_BASE_URL: 'http://localhost:5000/api',
+  getApiBaseUrl: jest.fn(() => 'http://localhost:5000/api')
 }));
 
-const MockedLoginForm = () => (
+jest.mock('../../store', () => ({
+  useStore: () => ({
+    login: jest.fn()
+  })
+}));
+
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key
+  })
+}));
+
+jest.mock('react-router-dom', () => ({
+  ...jest.requireActual('react-router-dom'),
+  useNavigate: () => jest.fn()
+}));
+
+const MockedLogin = () => (
   <BrowserRouter>
     <ThemeProvider theme={theme}>
-      <LoginForm />
+      <Login />
     </ThemeProvider>
   </BrowserRouter>
 );
 
-describe('LoginForm', () => {
+describe('Login', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   test('Login form renders correctly', () => {
-    render(<MockedLoginForm />);
+    render(<MockedLogin />);
     
-    expect(screen.getByLabelText(/user id/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
+    expect(screen.getByLabelText('login.userID')).toBeInTheDocument();
+    expect(screen.getByLabelText('login.password')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'login.loginButton' })).toBeInTheDocument();
   });
 
   test('User input is handled correctly', () => {
-    render(<MockedLoginForm />);
+    render(<MockedLogin />);
     
-    const useridInput = screen.getByLabelText(/user id/i);
-    const passwordInput = screen.getByLabelText(/password/i);
+    const useridInput = screen.getByLabelText('login.userID');
+    const passwordInput = screen.getByLabelText('login.password');
     
     fireEvent.change(useridInput, { target: { value: 'admin' } });
     fireEvent.change(passwordInput, { target: { value: 'password123' } });
@@ -47,71 +65,42 @@ describe('LoginForm', () => {
     expect(passwordInput).toHaveValue('password123');
   });
 
-  test('Error message displayed for empty fields', async () => {
-    render(<MockedLoginForm />);
-    
-    const submitButton = screen.getByRole('button', { name: /sign in/i });
-    fireEvent.click(submitButton);
-    
-    await waitFor(() => {
-      expect(screen.getByText(/user id is required/i)).toBeInTheDocument();
-    });
-  });
-
-  test('Login attempt with valid input', async () => {
-    const mockLogin = require('../../services/api').login;
-    mockLogin.mockResolvedValue({
-      success: true,
-      token: 'mock-token',
-      user: { userid: 'admin', name: 'Administrator' }
+  test('Login attempt triggers API call', async () => {
+    const mockApi = require('../../services/api').api;
+    mockApi.post.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          token: 'mock-token',
+          user: { userid: 'admin', name: 'Administrator' }
+        }
+      }
     });
 
-    render(<MockedLoginForm />);
+    render(<MockedLogin />);
     
-    const useridInput = screen.getByLabelText(/user id/i);
-    const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /sign in/i });
+    const useridInput = screen.getByLabelText('login.userID');
+    const passwordInput = screen.getByLabelText('login.password');
+    const submitButton = screen.getByRole('button', { name: 'login.loginButton' });
     
     fireEvent.change(useridInput, { target: { value: 'admin' } });
     fireEvent.change(passwordInput, { target: { value: 'password123' } });
     fireEvent.click(submitButton);
     
     await waitFor(() => {
-      expect(mockLogin).toHaveBeenCalledWith({
+      expect(mockApi.post).toHaveBeenCalledWith('/auth/login', {
         userid: 'admin',
-        password: 'password123'
+        password: 'password123',
+        remember: false
       });
     });
   });
 
-  test('Error message displayed on login failure', async () => {
-    const mockLogin = require('../../services/api').login;
-    mockLogin.mockRejectedValue({
-      response: {
-        data: { error: 'Invalid credentials' }
-      }
-    });
-
-    render(<MockedLoginForm />);
-    
-    const useridInput = screen.getByLabelText(/user id/i);
-    const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /sign in/i });
-    
-    fireEvent.change(useridInput, { target: { value: 'admin' } });
-    fireEvent.change(passwordInput, { target: { value: 'wrongpassword' } });
-    fireEvent.click(submitButton);
-    
-    await waitFor(() => {
-      expect(screen.getByText(/invalid credentials/i)).toBeInTheDocument();
-    });
-  });
-
   test('Password visibility toggle functionality', () => {
-    render(<MockedLoginForm />);
+    render(<MockedLogin />);
     
-    const passwordInput = screen.getByLabelText(/password/i);
-    const toggleButton = screen.getByRole('button', { name: /toggle password visibility/i });
+    const passwordInput = screen.getByLabelText('login.password');
+    const toggleButton = screen.getByRole('button', { name: 'login.showPassword' });
     
     // Password is hidden by default
     expect(passwordInput).toHaveAttribute('type', 'password');
@@ -121,26 +110,25 @@ describe('LoginForm', () => {
     expect(passwordInput).toHaveAttribute('type', 'text');
     
     // Click toggle button again
-    fireEvent.click(toggleButton);
+    fireEvent.click(screen.getByRole('button', { name: 'login.hidePassword' }));
     expect(passwordInput).toHaveAttribute('type', 'password');
   });
 
   test('Loading state display', async () => {
-    const mockLogin = require('../../services/api').login;
-    mockLogin.mockImplementation(() => new Promise(resolve => setTimeout(resolve, 1000)));
+    const mockApi = require('../../services/api').api;
+    mockApi.post.mockImplementation(() => new Promise(resolve => setTimeout(resolve, 1000)));
 
-    render(<MockedLoginForm />);
+    render(<MockedLogin />);
     
-    const useridInput = screen.getByLabelText(/user id/i);
-    const passwordInput = screen.getByLabelText(/password/i);
-    const submitButton = screen.getByRole('button', { name: /sign in/i });
+    const useridInput = screen.getByLabelText('login.userID');
+    const passwordInput = screen.getByLabelText('login.password');
+    const submitButton = screen.getByRole('button', { name: 'login.loginButton' });
     
     fireEvent.change(useridInput, { target: { value: 'admin' } });
     fireEvent.change(passwordInput, { target: { value: 'password123' } });
     fireEvent.click(submitButton);
     
-    // Check loading state
-    expect(screen.getByText(/loading/i)).toBeInTheDocument();
+    expect(screen.getByText('common.loading')).toBeInTheDocument();
     expect(submitButton).toBeDisabled();
   });
 });

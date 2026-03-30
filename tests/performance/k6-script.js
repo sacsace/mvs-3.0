@@ -1,4 +1,4 @@
-// MVS 3.0 성능 테스트 스크립트 (k6)
+// MVS 성능 테스트 스크립트 (k6)
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
@@ -33,7 +33,7 @@ const TEST_USER = {
 let authToken = null;
 
 export function setup() {
-  console.log('🚀 MVS 3.0 성능 테스트 시작');
+  console.log('🚀 MVS 성능 테스트 시작');
   console.log(`대상 URL: ${BASE_URL}`);
   
   // 초기 인증

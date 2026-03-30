@@ -1,4 +1,4 @@
--- MVS 3.0 누락된 테이블 생성 스크립트
+-- MVS 누락된 테이블 생성 스크립트
 -- 기존 테이블: tenants, companies, users, menus, user_permissions
 
 -- 1. 인사관리 관련 테이블

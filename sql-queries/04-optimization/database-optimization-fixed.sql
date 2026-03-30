@@ -1,4 +1,4 @@
--- MVS 3.0 데이터베이스 최적화 스크립트 (수정된 버전)
+-- MVS 데이터베이스 최적화 스크립트 (수정된 버전)
 -- 인덱스 생성 및 성능 최적화
 
 -- 1. 기본 인덱스 (Primary Keys는 자동으로 생성됨)
@@ -116,4 +116,4 @@ ALTER TABLE inventory_transactions ADD CONSTRAINT chk_inventory_quantity CHECK (
 -- 9. 성능 최적화를 위한 통계 정보 업데이트
 ANALYZE;
 
-COMMENT ON DATABASE mvs_db IS 'MVS 3.0 Enterprise Management System Database - Optimized for Performance';
+COMMENT ON DATABASE mvs IS 'MVS Enterprise Management System Database - Optimized for Performance';

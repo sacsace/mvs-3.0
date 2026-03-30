@@ -7,10 +7,29 @@ import sequelize from '../config/database';
 // 급여 목록 조회
 export const getPayrolls = async (req: RequestWithUser, res: Response) => {
   try {
-    const { tenant_id, company_id } = req.user;
-    const { page = 1, limit = 10, employee_id = '', period = '' } = req.query;
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
+    const userRole = req.user?.role;
+    const { page = 1, limit = 10, employee_id = '', period = '', company_id } = req.query;
 
-    const whereClause: any = { tenant_id, company_id };
+    const whereClause: any = {};
+    
+    // root나 audit 권한이면 모든 급여 조회 가능, 아니면 자신의 회사 급여만
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = companyId;
+    } else {
+      // root는 company_id 쿼리 파라미터로 회사별 필터링 가능
+      if (userRole === 'root' && company_id) {
+        whereClause.company_id = parseInt(company_id as string);
+      } else if (userRole === 'root') {
+        // root가 company_id를 지정하지 않으면 모든 회사 조회
+      } else {
+        // audit는 모든 회사 조회 가능
+        if (tenantId) whereClause.tenant_id = tenantId;
+        if (companyId) whereClause.company_id = companyId;
+      }
+    }
     
     if (employee_id) {
       whereClause.employee_id = employee_id;
@@ -20,18 +39,21 @@ export const getPayrolls = async (req: RequestWithUser, res: Response) => {
       whereClause.payroll_period = period;
     }
 
+    // 활성화된 급여만 조회
+    whereClause.is_active = true;
+
     const payrolls = await (Payroll as any).findAndCountAll({
       where: whereClause,
       include: [
         {
           model: User,
           as: 'employee',
-          attributes: ['username', 'email', 'first_name', 'last_name']
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
         }
       ],
       limit: Number(limit),
       offset: (Number(page) - 1) * Number(limit),
-      order: [['payroll_period', 'DESC']]
+      order: [['payroll_period', 'DESC'], ['created_at', 'DESC']]
     });
 
     res.json({
@@ -54,15 +76,27 @@ export const getPayrolls = async (req: RequestWithUser, res: Response) => {
 export const getPayroll = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id } = req.user;
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
+    const userRole = req.user?.role;
+
+    const whereClause: any = { id };
+    
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = companyId;
+    }
+
+    // 활성화된 급여만 조회
+    whereClause.is_active = true;
 
     const payroll = await (Payroll as any).findOne({
-      where: { id, tenant_id, company_id },
+      where: whereClause,
       include: [
         {
           model: User,
           as: 'employee',
-          attributes: ['username', 'email', 'first_name', 'last_name', 'position']
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
         }
       ]
     });
@@ -82,7 +116,7 @@ export const getPayroll = async (req: RequestWithUser, res: Response) => {
 export const createPayroll = async (req: RequestWithUser, res: Response) => {
   try {
     const { tenant_id, company_id, id: user_id } = req.user;
-    const payrollData = { ...req.body, tenant_id, company_id, created_by: user_id };
+    const payrollData = { ...req.body, tenant_id, company_id, created_by: user_id, is_active: true };
 
     const payroll = await (Payroll as any).create(payrollData);
 
@@ -100,7 +134,7 @@ export const updatePayroll = async (req: RequestWithUser, res: Response) => {
     const { tenant_id, company_id } = req.user;
 
     const payroll = await (Payroll as any).findOne({
-      where: { id, tenant_id, company_id }
+      where: { id, tenant_id, company_id, is_active: true }
     });
 
     if (!payroll) {
@@ -130,9 +164,10 @@ export const deletePayroll = async (req: RequestWithUser, res: Response) => {
       return res.status(404).json({ success: false, message: '급여 정보를 찾을 수 없습니다.' });
     }
 
-    await payroll.destroy();
+    // 소프트 삭제: is_active를 false로 설정
+    await payroll.update({ is_active: false });
 
-    res.json({ success: true, message: '급여 정보가 삭제되었습니다.' });
+    res.json({ success: true, message: '급여 정보가 비활성화되었습니다.' });
   } catch (error) {
     console.error('급여 삭제 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
@@ -195,7 +230,7 @@ export const getEmployees = async (req: RequestWithUser, res: Response) => {
 
     const employees = await (User as any).findAll({
       where: { tenant_id, company_id, status: 'active' },
-      attributes: ['id', 'username', 'email', 'first_name', 'last_name', 'position', 'department']
+      attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
     });
 
     res.json({ success: true, data: employees });

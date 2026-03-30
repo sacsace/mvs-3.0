@@ -1,8 +1,8 @@
 {
   "development": {
     "username": "mvs_user",
-    "password": "mvs_password",
-    "database": "mvs_db",
+    "password": "Korean@2026",
+    "database": "mvs",
     "host": "localhost",
     "port": 5432,
     "dialect": "postgres",
@@ -16,7 +16,7 @@
   },
   "test": {
     "username": "mvs_user",
-    "password": "mvs_password",
+    "password": "Korean@2026",
     "database": "mvs_test_db",
     "host": "localhost",
     "port": 5432,
@@ -25,8 +25,8 @@
   },
   "production": {
     "username": "mvs_user",
-    "password": "mvs_password",
-    "database": "mvs_db",
+    "password": "Korean@2026",
+    "database": "mvs_prod",
     "host": "localhost",
     "port": 5432,
     "dialect": "postgres",

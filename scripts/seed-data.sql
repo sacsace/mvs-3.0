@@ -1,4 +1,4 @@
--- MVS 3.0 초기 데이터 시드 스크립트
+-- MVS 초기 데이터 시드 스크립트
 
 -- 테넌트 데이터 (이미 존재한다면 무시)
 INSERT INTO tenants (id, name, domain, subdomain, plan, status, created_at, updated_at) 

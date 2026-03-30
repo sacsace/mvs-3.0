@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -11,7 +11,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   IconButton,
   Chip,
   TextField,
@@ -29,13 +28,11 @@ import {
   Tooltip,
   Alert,
   Snackbar,
-  Badge,
   Divider,
   List,
   ListItem,
   ListItemText,
-  ListItemAvatar,
-  ListItemSecondaryAction
+  ListItemAvatar
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -44,24 +41,15 @@ import {
   Delete as DeleteIcon,
   Visibility as ViewIcon,
   SupportAgent as SupportAgentIcon,
-  Business as BusinessIcon,
-  CalendarToday as CalendarIcon,
-  AttachMoney as MoneyIcon,
   Refresh as RefreshIcon,
-  FilterList as FilterIcon,
-  Download as DownloadIcon,
-  Print as PrintIcon,
-  CheckCircle as CheckCircleIcon,
   Warning as WarningIcon,
   Schedule as ScheduleIcon,
-  Chat as ChatIcon,
-  Email as EmailIcon,
-  Phone as PhoneIcon,
   PriorityHigh as PriorityHighIcon,
   Assignment as AssignmentIcon,
   Person as PersonIcon,
   Reply as ReplyIcon,
-  Close as CloseIcon
+  Download as DownloadIcon,
+  Print as PrintIcon
 } from '@mui/icons-material';
 import { api } from '../../services/api';
 
@@ -132,12 +120,7 @@ const CustomerSupport: React.FC = () => {
     response: ''
   });
 
-  useEffect(() => {
-    loadTickets();
-    loadCustomers();
-  }, []);
-
-  const loadTickets = async () => {
+  const loadTickets = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get('/support-tickets');
@@ -148,25 +131,30 @@ const CustomerSupport: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadCustomers = async () => {
+  const loadCustomers = useCallback(async () => {
     try {
       const response = await api.get('/customers');
       setCustomers(response.data.data || []);
     } catch (error) {
       console.error('고객 목록 로드 오류:', error);
     }
-  };
+  }, []);
 
-  const loadResponses = async (ticketId: number) => {
+  const loadResponses = useCallback(async (ticketId: number) => {
     try {
       const response = await api.get(`/support-tickets/${ticketId}/responses`);
       setResponses(response.data.data || []);
     } catch (error) {
       console.error('지원 응답 로드 오류:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadTickets();
+    loadCustomers();
+  }, [loadCustomers, loadTickets]);
 
   const showSnackbar = (message: string, severity: 'success' | 'error') => {
     setSnackbar({ open: true, message, severity });

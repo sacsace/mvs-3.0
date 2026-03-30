@@ -102,11 +102,8 @@ class MenuService {
   // 사용자 권한 조회
   async getUserPermissions(userId: number) {
     try {
-      // 임시로 성공 응답 반환 (권한 체크는 백엔드에서 처리)
-      return {
-        success: true,
-        data: []
-      };
+      const response = await api.get(`/menus/permissions/user/${userId}`);
+      return response.data;
     } catch (error) {
       console.error('사용자 권한 조회 오류:', error);
       throw error;
@@ -184,4 +181,6 @@ class MenuService {
   }
 }
 
-export default new MenuService();
+const menuService = new MenuService();
+
+export default menuService;

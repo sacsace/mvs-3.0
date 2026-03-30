@@ -1,4 +1,4 @@
--- MVS 3.0 메뉴 구조 재구성 (이미지와 일치)
+-- MVS 메뉴 구조 재구성 (이미지와 일치)
 
 -- 기존 데이터 삭제
 DELETE FROM user_permissions;

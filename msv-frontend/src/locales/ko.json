@@ -1,4 +1,15 @@
 {
+  "login": {
+    "userID": "아이디",
+    "password": "비밀번호",
+    "loginButton": "로그인",
+    "showPassword": "비밀번호 표시",
+    "hidePassword": "비밀번호 숨기기",
+    "rememberMe": "로그인 상태 유지",
+    "loginFailed": "로그인에 실패했습니다.",
+    "welcome": "환영합니다",
+    "signIn": "계정으로 로그인하세요"
+  },
   "common": {
     "search": "검색",
     "add": "추가",
@@ -60,12 +71,12 @@
     "payroll": "급여 관리",
     "leave": "휴가 관리",
     "performance": "성과 관리",
-    "projects": "프로젝트 관리",
+    "projects": "업무 관리",
     "statistics": "업무 통계",
     "approval": "전자결재",
     "quotation": "견적서 관리",
     "meetingRoom": "회의실 예약",
-    "roomReservation": "객실 예약 관리",
+    "roomReservation": "투숙객 명단",
     "reports": "업무 보고서",
     "eInvoice": "E-Invoice",
     "regularInvoice": "일반 인보이스",
@@ -109,6 +120,31 @@
     "statistics": "통계",
     "charts": "차트",
     "monitoring": "실시간 모니터링"
+  },
+  "approval": {
+    "searchPlaceholder": "제목, 문서번호, 신청자 검색",
+    "status": "상태",
+    "type": "유형",
+    "priority": "우선순위",
+    "all": "전체",
+    "draft": "초안",
+    "submitted": "제출됨",
+    "inReview": "검토중",
+    "approved": "승인됨",
+    "rejected": "반려됨",
+    "cancelled": "취소됨",
+    "expense": "지출",
+    "vacation": "휴가",
+    "purchase": "구매",
+    "contract": "계약",
+    "other": "기타",
+    "low": "낮음",
+    "normal": "보통",
+    "high": "높음",
+    "urgent": "긴급",
+    "reset": "초기화",
+    "documentNumber": "문서번호",
+    "requester": "신청자"
   },
   "customer": {
     "title": "고객 관리",
@@ -289,11 +325,11 @@
   "currency": {
     "inr": "인도 루피",
     "usd": "미국 달러",
-    "krw": "한국 원",
+    "krw": "루피",
     "symbol": {
       "inr": "₹",
       "usd": "$",
-      "krw": "₩"
+      "krw": "Rs."
     }
   },
   "settings": {

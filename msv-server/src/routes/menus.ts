@@ -1,6 +1,7 @@
 import express from 'express';
 import { getUserMenus, createMenu, updateMenu, deleteMenu } from '../controllers/menuController';
 import { authenticateToken, requireRole } from '../middleware/auth';
+import { UserPermission, Menu } from '../models';
 
 const router = express.Router();
 
@@ -10,11 +11,10 @@ router.use(authenticateToken);
 // 사용자 권한 조회 (더 구체적인 경로를 먼저 정의)
 router.get('/user/:userId/permissions', async (req, res) => {
   try {
-    const { UserPermission } = require('../models');
-    const permissions = await UserPermission.findAll({
+    const permissions = await (UserPermission as any).findAll({
       where: { user_id: req.params.userId },
       include: [{
-        model: require('../models').Menu,
+        model: Menu,
         as: 'menu'
       }]
     });

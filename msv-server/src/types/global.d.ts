@@ -1,4 +1,4 @@
-// Global type definitions for MVS 3.0 Backend
+// Global type definitions for MVS Backend
 
 declare namespace NodeJS {
   interface ProcessEnv {
@@ -14,6 +14,8 @@ declare namespace NodeJS {
     CORS_ORIGIN: string;
     REDIS_HOST: string;
     REDIS_PORT: string;
+    REDIS_URL?: string;
+    REDIS_PASSWORD?: string;
     UPLOAD_PATH: string;
     MAX_FILE_SIZE: string;
     LOG_LEVEL: string;

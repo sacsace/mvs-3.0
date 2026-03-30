@@ -69,6 +69,7 @@ const NoticeBoard: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'view'>('list');
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -229,7 +230,8 @@ const NoticeBoard: React.FC = () => {
       n.id === notice.id ? { ...n, views: n.views + 1, isRead: true } : n
     );
     setNotices(updatedNotices);
-    console.log('View notice:', notice);
+    setSelectedNotice(notice);
+    setViewMode('view');
   };
 
   const getPriorityColor = (priority: string) => {
@@ -380,7 +382,12 @@ const NoticeBoard: React.FC = () => {
               </TableHead>
               <TableBody>
                 {notices.map((notice) => (
-                  <TableRow key={notice.id} hover>
+                  <TableRow 
+                    key={notice.id} 
+                    hover
+                    onClick={() => handleViewNotice(notice)}
+                    sx={{ cursor: 'pointer' }}
+                  >
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         {!notice.isRead && (
@@ -438,20 +445,10 @@ const NoticeBoard: React.FC = () => {
                         {notice.views}회
                       </Typography>
                     </TableCell>
-                    <TableCell align="center">
+                    <TableCell align="center" onClick={(e) => e.stopPropagation()}>
                       <Stack direction="row" spacing={0.5} justifyContent="center">
-                        <Tooltip title="보기">
-                          <IconButton size="small" onClick={() => handleViewNotice(notice)}>
-                            <ViewIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="수정">
-                          <IconButton size="small" onClick={() => handleEditNotice(notice)}>
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
                         <Tooltip title="삭제">
-                          <IconButton size="small" onClick={() => handleDeleteNotice(notice.id)}>
+                          <IconButton size="small" onClick={() => handleDeleteNotice(notice.id)} color="error">
                             <DeleteIcon />
                           </IconButton>
                         </Tooltip>

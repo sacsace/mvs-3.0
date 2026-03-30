@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -27,8 +27,7 @@ import {
   Snackbar,
   Pagination,
   InputAdornment,
-  Divider,
-  Avatar
+  Divider
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -39,19 +38,11 @@ import {
   FilterList as FilterIcon,
   LocalShipping as LocalShippingIcon,
   CheckCircle as CheckCircleIcon,
-  Pending as PendingIcon,
   Cancel as CancelIcon,
-  Person as PersonIcon,
-  Schedule as ScheduleIcon,
-  Send as SendIcon,
   Print as PrintIcon,
-  Download as DownloadIcon,
-  Refresh as RefreshIcon,
-  AttachMoney as MoneyIcon,
-  Business as BusinessIcon,
-  LocationOn as LocationIcon
+  Download as DownloadIcon
 } from '@mui/icons-material';
-import { useStore } from '../../store';
+import { ewayBillService } from '../../services/api';
 
 interface EWayBillItem {
   id: number;
@@ -111,11 +102,8 @@ interface EWayBill {
   notes?: string;
 }
 
-const EWayBill: React.FC = () => {
-  const { user } = useStore();
-  const [ewayBills, setEwayBills] = useState<EWayBill[]>([]);
+const EWayBillComponent: React.FC = () => {
   const [filteredEwayBills, setFilteredEwayBills] = useState<EWayBill[]>([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
@@ -126,9 +114,10 @@ const EWayBill: React.FC = () => {
   const [supplyTypeFilter, setSupplyTypeFilter] = useState('');
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [allEwayBills, setAllEwayBills] = useState<EWayBill[]>([]);
 
   // 샘플 데이터
-  const sampleData: EWayBill[] = [
+  const sampleData = useMemo<EWayBill[]>(() => [
     {
       id: 1,
       ewayBillNumber: 'EWB-2024-001',
@@ -140,7 +129,7 @@ const EWayBill: React.FC = () => {
       documentNumber: 'INV-2024-001',
       documentDate: '2024-01-20',
       fromGstin: '29ABCDE1234F1Z5',
-      fromName: 'MVS 3.0 Solutions',
+      fromName: 'MVS Solutions',
       fromAddress: '서울시 서초구 서초대로 456',
       fromPincode: '06592',
       fromState: '서울특별시',
@@ -197,7 +186,7 @@ const EWayBill: React.FC = () => {
       documentNumber: 'INV-2024-002',
       documentDate: '2024-01-22',
       fromGstin: '29ABCDE1234F1Z5',
-      fromName: 'MVS 3.0 Solutions',
+      fromName: 'MVS Solutions',
       fromAddress: '서울시 서초구 서초대로 456',
       fromPincode: '06592',
       fromState: '서울특별시',
@@ -243,31 +232,27 @@ const EWayBill: React.FC = () => {
       updatedAt: '2024-01-22 14:15:00',
       notes: 'IT 장비 배송'
     }
-  ];
+  ], []);
 
-  useEffect(() => {
-    loadEwayBillData();
-  }, []);
-
-  useEffect(() => {
-    filterEwayBills();
-  }, [ewayBills, searchTerm, statusFilter, supplyTypeFilter]);
-
-  const loadEwayBillData = async () => {
-    setLoading(true);
+  const loadEwayBillData = useCallback(async () => {
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setEwayBills(sampleData);
+      const response = await ewayBillService.getEWayBills({ page, limit: itemsPerPage });
+      if (response.success && response.data) {
+        const bills = Array.isArray(response.data) ? response.data : response.data.items || [];
+        setAllEwayBills(bills);
+      } else {
+        // API 실패 시 샘플 데이터 사용
+        setAllEwayBills(sampleData);
+      }
     } catch (error) {
       console.error('E-Way Bill 데이터 로드 오류:', error);
-      setError('E-Way Bill 데이터를 불러오는데 실패했습니다.');
-    } finally {
-      setLoading(false);
+      // API 실패 시 샘플 데이터 사용
+      setAllEwayBills(sampleData);
     }
-  };
+  }, [itemsPerPage, page, sampleData]);
 
-  const filterEwayBills = () => {
-    let filtered = ewayBills;
+  const filterEwayBills = useCallback(() => {
+    let filtered = allEwayBills;
 
     if (searchTerm) {
       filtered = filtered.filter(ewayBill =>
@@ -288,7 +273,15 @@ const EWayBill: React.FC = () => {
     }
 
     setFilteredEwayBills(filtered);
-  };
+  }, [allEwayBills, searchTerm, statusFilter, supplyTypeFilter]);
+
+  useEffect(() => {
+    loadEwayBillData();
+  }, [loadEwayBillData]);
+
+  useEffect(() => {
+    filterEwayBills();
+  }, [filterEwayBills]);
 
   const getStatusChip = (status: string) => {
     switch (status) {
@@ -348,51 +341,50 @@ const EWayBill: React.FC = () => {
   const handleDeleteEwayBill = async (id: number) => {
     if (window.confirm('정말로 이 E-Way Bill을 삭제하시겠습니까?')) {
       try {
-        setEwayBills(prev => prev.filter(ewayBill => ewayBill.id !== id));
+        await ewayBillService.deleteEWayBill(id);
         setSuccess('E-Way Bill이 성공적으로 삭제되었습니다.');
-      } catch (error) {
+        setAllEwayBills(prev => prev.filter(bill => bill.id !== id));
+        loadEwayBillData();
+      } catch (error: any) {
         console.error('삭제 오류:', error);
-        setError('삭제 중 오류가 발생했습니다.');
+        setError(error.response?.data?.message || '삭제 중 오류가 발생했습니다.');
       }
     }
   };
 
-  const handleGenerateEwayBill = (id: number) => {
-    setEwayBills(prev =>
-      prev.map(ewayBill =>
-        ewayBill.id === id 
-          ? { 
-              ...ewayBill, 
-              status: 'generated' as const,
-              generatedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
-              validUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().replace('T', ' ').substring(0, 19),
-              updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 19)
-            } 
-          : ewayBill
-      )
-    );
-    setSuccess('E-Way Bill이 성공적으로 생성되었습니다.');
+  const handleGenerateEwayBill = async (id: number) => {
+    try {
+      const response = await ewayBillService.generateEWayBill(id);
+      if (response.success) {
+        setSuccess('E-Way Bill이 성공적으로 생성되었습니다.');
+        loadEwayBillData();
+      }
+    } catch (error: any) {
+      console.error('생성 오류:', error);
+      setError(error.response?.data?.message || 'E-Way Bill 생성 중 오류가 발생했습니다.');
+    }
   };
 
-  const handleCancelEwayBill = (id: number) => {
-    setEwayBills(prev =>
-      prev.map(ewayBill =>
-        ewayBill.id === id 
-          ? { 
-              ...ewayBill, 
-              status: 'cancelled' as const,
-              updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 19)
-            } 
-          : ewayBill
-      )
-    );
-    setSuccess('E-Way Bill이 취소되었습니다.');
+  const handleCancelEwayBill = async (id: number) => {
+    const reason = window.prompt('취소 사유를 입력하세요:');
+    if (reason !== null) {
+      try {
+        const response = await ewayBillService.cancelEWayBill(id, reason);
+        if (response.success) {
+          setSuccess('E-Way Bill이 취소되었습니다.');
+          loadEwayBillData();
+        }
+      } catch (error: any) {
+        console.error('취소 오류:', error);
+        setError(error.response?.data?.message || 'E-Way Bill 취소 중 오류가 발생했습니다.');
+      }
+    }
   };
 
-  const totalBills = ewayBills.length;
-  const activeBills = ewayBills.filter(ewayBill => ewayBill.status === 'active').length;
-  const expiredBills = ewayBills.filter(ewayBill => ewayBill.status === 'expired').length;
-  const totalValue = ewayBills.reduce((sum, ewayBill) => sum + ewayBill.totalValue, 0);
+  const totalBills = allEwayBills.length;
+  const activeBills = allEwayBills.filter(ewayBill => ewayBill.status === 'active').length;
+  const expiredBills = allEwayBills.filter(ewayBill => ewayBill.status === 'expired').length;
+  const totalValue = allEwayBills.reduce((sum, ewayBill) => sum + ewayBill.totalValue, 0);
 
   const paginatedEwayBills = filteredEwayBills.slice(
     (page - 1) * itemsPerPage,
@@ -437,7 +429,7 @@ const EWayBill: React.FC = () => {
               </Box>
               <Box sx={{ textAlign: 'right' }}>
                 <Typography variant="h4" color="primary.main">
-                  ₩{selectedEwayBill.totalAmount.toLocaleString()}
+                  Rs. {selectedEwayBill.totalAmount.toLocaleString()}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   총 금액
@@ -559,9 +551,9 @@ const EWayBill: React.FC = () => {
                         <TableCell>{item.itemName}</TableCell>
                         <TableCell>{item.hsnCode}</TableCell>
                         <TableCell>{item.quantity}</TableCell>
-                        <TableCell>₩{item.unitPrice.toLocaleString()}</TableCell>
-                        <TableCell>₩{item.totalValue.toLocaleString()}</TableCell>
-                        <TableCell>₩{item.totalTaxAmount.toLocaleString()}</TableCell>
+                        <TableCell>Rs. {item.unitPrice.toLocaleString()}</TableCell>
+                        <TableCell>Rs. {item.totalValue.toLocaleString()}</TableCell>
+                        <TableCell>Rs. {item.totalTaxAmount.toLocaleString()}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -590,13 +582,13 @@ const EWayBill: React.FC = () => {
                 </Box>
                 <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
                   <Typography variant="body2" gutterBottom>
-                    <strong>총 상품가액:</strong> ₩{selectedEwayBill.totalValue.toLocaleString()}
+                    <strong>총 상품가액:</strong> Rs. {selectedEwayBill.totalValue.toLocaleString()}
                   </Typography>
                   <Typography variant="body2" gutterBottom>
-                    <strong>총 세금:</strong> ₩{selectedEwayBill.totalTaxAmount.toLocaleString()}
+                    <strong>총 세금:</strong> Rs. {selectedEwayBill.totalTaxAmount.toLocaleString()}
                   </Typography>
                   <Typography variant="body2" gutterBottom>
-                    <strong>총 금액:</strong> ₩{selectedEwayBill.totalAmount.toLocaleString()}
+                    <strong>총 금액:</strong> Rs. {selectedEwayBill.totalAmount.toLocaleString()}
                   </Typography>
                 </Box>
               </Box>
@@ -726,7 +718,7 @@ const EWayBill: React.FC = () => {
               총 상품가액
             </Typography>
             <Typography variant="h4">
-              ₩{totalValue.toLocaleString()}
+              Rs. {totalValue.toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
@@ -862,7 +854,7 @@ const EWayBill: React.FC = () => {
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" fontWeight="bold">
-                      ₩{ewayBill.totalAmount.toLocaleString()}
+                      Rs. {ewayBill.totalAmount.toLocaleString()}
                     </Typography>
                   </TableCell>
                   <TableCell>{getStatusChip(ewayBill.status)}</TableCell>
@@ -971,4 +963,4 @@ const EWayBill: React.FC = () => {
   );
 };
 
-export default EWayBill;
+export default EWayBillComponent;

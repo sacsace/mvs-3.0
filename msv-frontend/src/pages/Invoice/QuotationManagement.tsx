@@ -68,6 +68,7 @@ import {
 } from '@mui/icons-material';
 import { useStore } from '../../store';
 import { api } from '../../services/api';
+import { quotationService } from '../../services/api';
 
 // TabPanel 컴포넌트 정의
 interface TabPanelProps {
@@ -161,21 +162,48 @@ const QuotationManagement: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setError('');
       try {
         const [quotationsResponse, customersResponse] = await Promise.all([
-          api.get('/quotations'),
+          quotationService.getQuotations(),
           api.get('/customers')
         ]);
 
-        if (quotationsResponse.data.success) {
-          setQuotations(quotationsResponse.data.data);
+        if (quotationsResponse.success) {
+          const quotationsData: Quotation[] = (quotationsResponse.data || []).map((q: any) => ({
+            id: q.id.toString(),
+            quotationNumber: q.quotation_number || '',
+            customer: {
+              id: q.customer_id?.toString() || '',
+              name: q.customer_name || '',
+              email: q.customer_email || '',
+              phone: q.customer_phone || '',
+              address: q.customer_address || ''
+            },
+            items: q.items ? JSON.parse(q.items) : [],
+            subtotal: parseFloat(q.subtotal || 0),
+            taxAmount: parseFloat(q.tax_amount || 0),
+            discountAmount: parseFloat(q.discount || 0),
+            totalAmount: parseFloat(q.total_amount || 0),
+            status: q.status || 'draft',
+            issueDate: q.created_at ? q.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+            validUntil: q.valid_until || '',
+            notes: q.notes || '',
+            terms: q.terms || '',
+            createdBy: q.creator?.username || '알 수 없음',
+            createdAt: q.created_at || new Date().toISOString(),
+            updatedAt: q.updated_at || new Date().toISOString()
+          }));
+          setQuotations(quotationsData);
+        } else {
+          setError(quotationsResponse.message || '견적서 목록을 불러올 수 없습니다.');
         }
         if (customersResponse.data.success) {
           setCustomers(customersResponse.data.data);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('데이터 로드 오류:', error);
-        setError('데이터를 불러오는데 실패했습니다.');
+        setError(error.response?.data?.message || '데이터를 불러오는데 실패했습니다.');
       } finally {
         setLoading(false);
       }
@@ -192,9 +220,59 @@ const QuotationManagement: React.FC = () => {
   // 견적서 생성
   const handleCreate = async () => {
     try {
-      const response = await api.post('/quotations', formData);
-      if (response.data.success) {
-        setQuotations(prev => [response.data.data, ...prev]);
+      setError('');
+      // 실제 데이터 구조에 맞게 변환 필요
+      const quotationData = {
+        quotation_number: `QUO-${Date.now()}`,
+        customer_id: formData.customerId ? parseInt(formData.customerId) : null,
+        customer_name: customers.find(c => c.id === formData.customerId)?.name || '',
+        customer_email: customers.find(c => c.id === formData.customerId)?.email || '',
+        customer_phone: customers.find(c => c.id === formData.customerId)?.phone || '',
+        customer_address: customers.find(c => c.id === formData.customerId)?.address || '',
+        items: JSON.stringify([]),
+        subtotal: 0,
+        tax_rate: 0,
+        tax_amount: 0,
+        discount: 0,
+        total_amount: 0,
+        currency: 'KRW',
+        valid_until: formData.validUntil || null,
+        notes: formData.notes || '',
+        terms: formData.terms || ''
+      };
+      
+      const response = await quotationService.createQuotation(quotationData);
+      if (response.success) {
+        setError('');
+        // 목록 새로고침
+        const quotationsResponse = await quotationService.getQuotations();
+        if (quotationsResponse.success) {
+          const quotationsData: Quotation[] = (quotationsResponse.data || []).map((q: any) => ({
+            id: q.id.toString(),
+            quotationNumber: q.quotation_number || '',
+            customer: {
+              id: q.customer_id?.toString() || '',
+              name: q.customer_name || '',
+              email: q.customer_email || '',
+              phone: q.customer_phone || '',
+              address: q.customer_address || ''
+            },
+            items: q.items ? JSON.parse(q.items) : [],
+            subtotal: parseFloat(q.subtotal || 0),
+            taxAmount: parseFloat(q.tax_amount || 0),
+            discountAmount: parseFloat(q.discount || 0),
+            totalAmount: parseFloat(q.total_amount || 0),
+            status: q.status || 'draft',
+            issueDate: q.created_at ? q.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+            validUntil: q.valid_until || '',
+            notes: q.notes || '',
+            terms: q.terms || '',
+            createdBy: q.creator?.username || '알 수 없음',
+            createdAt: q.created_at || new Date().toISOString(),
+            updatedAt: q.updated_at || new Date().toISOString()
+          }));
+          setQuotations(quotationsData);
+        }
         setOpenDialog(false);
         setFormData({
           customerId: '',
@@ -203,10 +281,12 @@ const QuotationManagement: React.FC = () => {
           notes: '',
           terms: 'This quotation is valid for 30 days from the date of issue.'
         });
+      } else {
+        setError(response.message || '견적서 생성에 실패했습니다.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('견적서 생성 오류:', error);
-      setError('견적서를 생성하는데 실패했습니다.');
+      setError(error.response?.data?.message || '견적서를 생성하는데 실패했습니다.');
     }
   };
 
@@ -232,15 +312,43 @@ const QuotationManagement: React.FC = () => {
   // 상태 업데이트
   const handleStatusUpdate = async (id: string, status: string) => {
     try {
-      const response = await api.put(`/quotations/${id}/status`, { status });
-      if (response.data.success) {
-        setQuotations(prev => prev.map(quotation => 
-          quotation.id === id ? { ...quotation, status: status as any } : quotation
-        ));
+      const response = await quotationService.updateQuotation(parseInt(id), { status });
+      if (response.success) {
+        // 목록 새로고침
+        const quotationsResponse = await quotationService.getQuotations();
+        if (quotationsResponse.success) {
+          const quotationsData: Quotation[] = (quotationsResponse.data || []).map((q: any) => ({
+            id: q.id.toString(),
+            quotationNumber: q.quotation_number || '',
+            customer: {
+              id: q.customer_id?.toString() || '',
+              name: q.customer_name || '',
+              email: q.customer_email || '',
+              phone: q.customer_phone || '',
+              address: q.customer_address || ''
+            },
+            items: q.items ? JSON.parse(q.items) : [],
+            subtotal: parseFloat(q.subtotal || 0),
+            taxAmount: parseFloat(q.tax_amount || 0),
+            discountAmount: parseFloat(q.discount || 0),
+            totalAmount: parseFloat(q.total_amount || 0),
+            status: q.status || 'draft',
+            issueDate: q.created_at ? q.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+            validUntil: q.valid_until || '',
+            notes: q.notes || '',
+            terms: q.terms || '',
+            createdBy: q.creator?.username || '알 수 없음',
+            createdAt: q.created_at || new Date().toISOString(),
+            updatedAt: q.updated_at || new Date().toISOString()
+          }));
+          setQuotations(quotationsData);
+        }
+      } else {
+        setError(response.message || '상태 업데이트에 실패했습니다.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('상태 업데이트 오류:', error);
-      setError('상태를 업데이트하는데 실패했습니다.');
+      setError(error.response?.data?.message || '상태를 업데이트하는데 실패했습니다.');
     }
   };
 
@@ -380,7 +488,7 @@ const QuotationManagement: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" fontWeight="bold">
-                          ₩{quotation.totalAmount.toLocaleString()}
+                          Rs. {quotation.totalAmount.toLocaleString()}
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -499,7 +607,7 @@ const QuotationManagement: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" fontWeight="bold">
-                          ₩{quotation.totalAmount.toLocaleString()}
+                          Rs. {quotation.totalAmount.toLocaleString()}
                         </Typography>
                       </TableCell>
                       <TableCell>
@@ -583,7 +691,7 @@ const QuotationManagement: React.FC = () => {
               <Card>
                 <CardContent>
                   <Typography variant="h6" color="warning">
-                    ₩{quotations.reduce((sum, q) => sum + q.totalAmount, 0).toLocaleString()}
+                    Rs. {quotations.reduce((sum, q) => sum + q.totalAmount, 0).toLocaleString()}
                   </Typography>
                   <Typography variant="body2">총 금액</Typography>
                 </CardContent>
@@ -678,7 +786,7 @@ const QuotationManagement: React.FC = () => {
                     color={getStatusColor(selectedQuotation.status) as any}
                   />
                   <Typography variant="h5" sx={{ mt: 1 }}>
-                    ₩{selectedQuotation.totalAmount.toLocaleString()}
+                    Rs. {selectedQuotation.totalAmount.toLocaleString()}
                   </Typography>
                 </Box>
               </Box>
@@ -728,10 +836,10 @@ const QuotationManagement: React.FC = () => {
                         <TableRow key={item.id}>
                           <TableCell>{item.description}</TableCell>
                           <TableCell align="right">{item.quantity}</TableCell>
-                          <TableCell align="right">₩{item.unitPrice.toLocaleString()}</TableCell>
-                          <TableCell align="right">₩{item.total.toLocaleString()}</TableCell>
-                          <TableCell align="right">₩{item.taxAmount.toLocaleString()}</TableCell>
-                          <TableCell align="right">₩{(item.total + item.taxAmount).toLocaleString()}</TableCell>
+                          <TableCell align="right">Rs. {item.unitPrice.toLocaleString()}</TableCell>
+                          <TableCell align="right">Rs. {item.total.toLocaleString()}</TableCell>
+                          <TableCell align="right">Rs. {item.taxAmount.toLocaleString()}</TableCell>
+                          <TableCell align="right">Rs. {(item.total + item.taxAmount).toLocaleString()}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -744,20 +852,20 @@ const QuotationManagement: React.FC = () => {
                 <Box sx={{ minWidth: 300 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2">소계:</Typography>
-                    <Typography variant="body2">₩{selectedQuotation.subtotal.toLocaleString()}</Typography>
+                    <Typography variant="body2">Rs. {selectedQuotation.subtotal.toLocaleString()}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2">할인:</Typography>
-                    <Typography variant="body2">-₩{selectedQuotation.discountAmount.toLocaleString()}</Typography>
+                    <Typography variant="body2">-Rs. {selectedQuotation.discountAmount.toLocaleString()}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2">세금:</Typography>
-                    <Typography variant="body2">₩{selectedQuotation.taxAmount.toLocaleString()}</Typography>
+                    <Typography variant="body2">Rs. {selectedQuotation.taxAmount.toLocaleString()}</Typography>
                   </Box>
                   <Divider sx={{ my: 1 }} />
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                     <Typography variant="h6">총액:</Typography>
-                    <Typography variant="h6">₩{selectedQuotation.totalAmount.toLocaleString()}</Typography>
+                    <Typography variant="h6">Rs. {selectedQuotation.totalAmount.toLocaleString()}</Typography>
                   </Box>
                 </Box>
               </Box>

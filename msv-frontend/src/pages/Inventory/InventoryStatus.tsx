@@ -153,10 +153,22 @@ const InventoryStatus: React.FC = () => {
   return (
     <Box sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <InventoryIcon sx={{ mr: 2, fontSize: '2rem', color: 'primary.main' }} />
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
-          재고 현황 확인
-        </Typography>
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <InventoryIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
+            <Typography component="h1" sx={{
+              fontSize: '16px !important',
+              fontWeight: 600,
+              color: 'red',
+              lineHeight: 1.5
+            }}>
+              재고 현황 조회
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+            재고 현황을 조회하는 페이지입니다.
+          </Typography>
+        </Box>
       </Box>
 
       {/* 요약 카드 */}

@@ -1,4 +1,4 @@
--- MVS 3.0 원래 기초 메뉴 데이터 복원
+-- MVS 원래 기초 메뉴 데이터 복원
 
 -- 기존 데이터 삭제
 DELETE FROM user_permissions;

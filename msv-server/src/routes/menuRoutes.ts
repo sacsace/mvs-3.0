@@ -5,10 +5,12 @@ import {
   createMenu,
   updateMenu,
   deleteMenu,
+  updateMenuOrder,
   setUserPermissions,
   getUserPermissions
 } from '../controllers/menuController';
 import { authenticateToken } from '../middleware/auth';
+import { validateBody } from '../middleware/validate';
 
 const router = express.Router();
 
@@ -19,10 +21,43 @@ router.get('/user/:userId/tenant/:tenantId', authenticateToken, getUserMenus);
 router.get('/tenant/:tenantId', authenticateToken, getAllMenus);
 
 // 메뉴 생성 (관리자용)
-router.post('/tenant/:tenantId', authenticateToken, createMenu);
+router.post(
+  '/tenant/:tenantId',
+  authenticateToken,
+  validateBody({
+    name_ko: { required: true, type: 'string', minLength: 1, maxLength: 100 },
+    name_en: { required: true, type: 'string', minLength: 1, maxLength: 100 },
+    route: { required: true, type: 'string', minLength: 1, maxLength: 255 },
+    icon: { required: true, type: 'string', minLength: 1, maxLength: 50 },
+    order: { type: 'number' },
+    level: { type: 'number' },
+    parent_id: { type: 'number' },
+    is_active: { type: 'boolean' },
+    description: { type: 'string' }
+  }),
+  createMenu
+);
+
+// 메뉴 순서 업데이트 (관리자용) - 동적 경로보다 먼저 정의해야 함
+router.put('/order', authenticateToken, updateMenuOrder);
 
 // 메뉴 수정 (관리자용)
-router.put('/:menuId', authenticateToken, updateMenu);
+router.put(
+  '/:menuId',
+  authenticateToken,
+  validateBody({
+    name_ko: { type: 'string', minLength: 1, maxLength: 100 },
+    name_en: { type: 'string', minLength: 1, maxLength: 100 },
+    route: { type: 'string', minLength: 1, maxLength: 255 },
+    icon: { type: 'string', minLength: 1, maxLength: 50 },
+    order: { type: 'number' },
+    level: { type: 'number' },
+    parent_id: { type: 'number' },
+    is_active: { type: 'boolean' },
+    description: { type: 'string' }
+  }),
+  updateMenu
+);
 
 // 메뉴 삭제 (관리자용)
 router.delete('/:menuId', authenticateToken, deleteMenu);

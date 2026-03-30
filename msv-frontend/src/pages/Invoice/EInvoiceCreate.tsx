@@ -126,7 +126,7 @@ const EInvoiceCreate: React.FC = () => {
     customerEmail: '',
     customerPhone: '',
     companyGstin: '29ABCDE1234F1Z5',
-    companyName: 'MVS 3.0 Solutions',
+    companyName: 'MVS Solutions',
     companyAddress: '123 Business Park, Bangalore, Karnataka 560001',
     invoiceDate: new Date().toISOString().split('T')[0],
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
@@ -320,10 +320,10 @@ const EInvoiceCreate: React.FC = () => {
                 <TableRow key={item.id}>
                   <TableCell>{item.itemName}</TableCell>
                   <TableCell>{item.quantity}</TableCell>
-                  <TableCell>₩{item.unitPrice.toLocaleString()}</TableCell>
-                  <TableCell>₩{item.totalPrice.toLocaleString()}</TableCell>
+                  <TableCell>Rs. {item.unitPrice.toLocaleString()}</TableCell>
+                  <TableCell>Rs. {item.totalPrice.toLocaleString()}</TableCell>
                   <TableCell>{item.taxRate}%</TableCell>
-                  <TableCell>₩{item.taxAmount.toLocaleString()}</TableCell>
+                  <TableCell>Rs. {item.taxAmount.toLocaleString()}</TableCell>
                   <TableCell>
                     <IconButton size="small" onClick={() => handleEditItem(item)}>
                       <EditIcon />
@@ -349,14 +349,14 @@ const EInvoiceCreate: React.FC = () => {
           <Grid size={{ xs: 12, md: 6 }}>
             <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
               <Typography variant="body1" gutterBottom>
-                공급가액: ₩{invoice.subtotal?.toLocaleString() || 0}
+                공급가액: Rs. {invoice.subtotal?.toLocaleString() || 0}
               </Typography>
               <Typography variant="body1" gutterBottom>
-                총 세금: ₩{invoice.totalTax?.toLocaleString() || 0}
+                총 세금: Rs. {invoice.totalTax?.toLocaleString() || 0}
               </Typography>
               <Divider sx={{ my: 1 }} />
               <Typography variant="h6" color="primary.main">
-                총 금액: ₩{invoice.totalAmount?.toLocaleString() || 0}
+                총 금액: Rs. {invoice.totalAmount?.toLocaleString() || 0}
               </Typography>
             </Box>
           </Grid>
@@ -391,7 +391,7 @@ const EInvoiceCreate: React.FC = () => {
             <Typography variant="subtitle1" gutterBottom>인보이스 요약</Typography>
             <Typography variant="body2">인보이스 번호: {invoice.invoiceNumber}</Typography>
             <Typography variant="body2">인보이스 날짜: {invoice.invoiceDate}</Typography>
-            <Typography variant="body2">총 금액: ₩{invoice.totalAmount?.toLocaleString() || 0}</Typography>
+            <Typography variant="body2">총 금액: Rs. {invoice.totalAmount?.toLocaleString() || 0}</Typography>
           </Grid>
         </Grid>
       </CardContent>

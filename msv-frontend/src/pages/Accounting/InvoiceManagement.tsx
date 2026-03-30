@@ -257,10 +257,10 @@ const InvoiceManagement: React.FC = () => {
                   <TableCell>
                     <Box>
                       <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                        {invoice.totalAmount.toLocaleString()}원
+                        Rs. {invoice.totalAmount.toLocaleString()}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        (세금: {invoice.tax.toLocaleString()}원)
+                        (세금: Rs. {invoice.tax.toLocaleString()})
                       </Typography>
                     </Box>
                   </TableCell>
@@ -358,7 +358,7 @@ const InvoiceManagement: React.FC = () => {
             <Box sx={{ display: 'flex', gap: 2 }}>
               <TextField
                 fullWidth
-                label="금액 (원)"
+                label="금액 (Rs.)"
                 type="number"
                 value={formData.amount}
                 onChange={(e) => {
@@ -370,7 +370,7 @@ const InvoiceManagement: React.FC = () => {
               />
               <TextField
                 fullWidth
-                label="세금 (원)"
+                label="세금 (Rs.)"
                 type="number"
                 value={formData.tax}
                 onChange={(e) => {
@@ -381,7 +381,7 @@ const InvoiceManagement: React.FC = () => {
               />
               <TextField
                 fullWidth
-                label="총 금액 (원)"
+                label="총 금액 (Rs.)"
                 type="number"
                 value={formData.totalAmount}
                 onChange={(e) => setFormData({...formData, totalAmount: parseInt(e.target.value) || 0})}

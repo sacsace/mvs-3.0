@@ -23,22 +23,16 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Divider,
   InputAdornment
 } from '@mui/material';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Visibility as ViewIcon,
   Description as DescriptionIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
-  Download as DownloadIcon,
-  Send as SendIcon,
-  CheckCircle as CheckCircleIcon,
-  Pending as PendingIcon,
-  Cancel as CancelIcon
+  Download as DownloadIcon
 } from '@mui/icons-material';
 
 const QuotationList: React.FC = () => {
@@ -136,10 +130,22 @@ const QuotationList: React.FC = () => {
       py: 3
     }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <DescriptionIcon sx={{ mr: 2, fontSize: '2rem', color: 'primary.main' }} />
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
-          견적서 목록
-        </Typography>
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <DescriptionIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
+            <Typography component="h1" sx={{
+              fontSize: '16px !important',
+              fontWeight: 600,
+              color: 'red',
+              lineHeight: 1.5
+            }}>
+              견적서
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+            견적서를 관리하고 조회하는 페이지입니다.
+          </Typography>
+        </Box>
       </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
@@ -180,7 +186,7 @@ const QuotationList: React.FC = () => {
               총 견적 금액
             </Typography>
             <Typography variant="h4" color="warning.main">
-              {quotations.reduce((sum, item) => sum + item.totalAmount, 0).toLocaleString()}원
+              Rs. {quotations.reduce((sum, item) => sum + item.totalAmount, 0).toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
@@ -276,7 +282,7 @@ const QuotationList: React.FC = () => {
                         <TableCell>{quotation.customerName}</TableCell>
                         <TableCell>{quotation.customerEmail}</TableCell>
                         <TableCell align="right">
-                          {quotation.totalAmount.toLocaleString()}원
+                          Rs. {quotation.totalAmount.toLocaleString()}
                         </TableCell>
                         <TableCell>
                           <Chip

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// MVS 3.0 통합 테스트 실행기
+// MVS 통합 테스트 실행기
 
 const { IntegrationTestSuite } = require('./test-setup');
 const { execSync } = require('child_process');
@@ -15,7 +15,7 @@ const options = {
 
 if (options.help) {
   console.log(`
-MVS 3.0 통합 테스트 실행기
+MVS 통합 테스트 실행기
 
 사용법:
   node run-integration-tests.js [옵션]
@@ -35,7 +35,7 @@ MVS 3.0 통합 테스트 실행기
 
 // 테스트 실행
 async function main() {
-  console.log('🚀 MVS 3.0 통합 테스트 실행기 시작\n');
+  console.log('🚀 MVS 통합 테스트 실행기 시작\n');
 
   try {
     // 환경 확인

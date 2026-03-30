@@ -129,7 +129,7 @@ const ProformaInvoice: React.FC = () => {
       customerEmail: 'contact@abc.com',
       customerPhone: '02-1234-5678',
       customerAddress: '서울시 강남구 테헤란로 123',
-      companyName: 'MVS 3.0 Solutions',
+      companyName: 'MVS Solutions',
       companyAddress: '서울시 서초구 서초대로 456',
       companyPhone: '02-9876-5432',
       companyEmail: 'info@mvs3.com',
@@ -138,7 +138,7 @@ const ProformaInvoice: React.FC = () => {
       items: [
         {
           id: 1,
-          itemName: 'MVS 3.0 시스템 개발',
+          itemName: 'MVS 시스템 개발',
           description: '완전한 ERP 시스템 개발',
           quantity: 1,
           unitPrice: 50000000,
@@ -183,7 +183,7 @@ const ProformaInvoice: React.FC = () => {
       customerEmail: 'billing@xyz.com',
       customerPhone: '031-1111-2222',
       customerAddress: '경기도 성남시 분당구 판교로 789',
-      companyName: 'MVS 3.0 Solutions',
+      companyName: 'MVS Solutions',
       companyAddress: '서울시 서초구 서초대로 456',
       companyPhone: '02-9876-5432',
       companyEmail: 'info@mvs3.com',
@@ -225,7 +225,7 @@ const ProformaInvoice: React.FC = () => {
       customerEmail: 'finance@def.com',
       customerPhone: '051-3333-4444',
       customerAddress: '부산시 해운대구 센텀중앙로 101',
-      companyName: 'MVS 3.0 Solutions',
+      companyName: 'MVS Solutions',
       companyAddress: '서울시 서초구 서초대로 456',
       companyPhone: '02-9876-5432',
       companyEmail: 'info@mvs3.com',
@@ -435,7 +435,7 @@ const ProformaInvoice: React.FC = () => {
               </Box>
               <Box sx={{ textAlign: 'right' }}>
                 <Typography variant="h4" color="primary.main">
-                  ₩{selectedProformaInvoice.totalAmount.toLocaleString()}
+                  Rs. {selectedProformaInvoice.totalAmount.toLocaleString()}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {selectedProformaInvoice.currency}
@@ -512,13 +512,13 @@ const ProformaInvoice: React.FC = () => {
                           </Typography>
                         </TableCell>
                         <TableCell>{item.quantity}</TableCell>
-                        <TableCell>₩{item.unitPrice.toLocaleString()}</TableCell>
-                        <TableCell>₩{item.totalPrice.toLocaleString()}</TableCell>
+                        <TableCell>Rs. {item.unitPrice.toLocaleString()}</TableCell>
+                        <TableCell>Rs. {item.totalPrice.toLocaleString()}</TableCell>
                         <TableCell>
                           {item.discountAmount ? (
                             <Box>
                               <Typography variant="body2">
-                                ₩{item.discountAmount.toLocaleString()}
+                                Rs. {item.discountAmount.toLocaleString()}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
                                 ({item.discountRate}%)
@@ -527,7 +527,7 @@ const ProformaInvoice: React.FC = () => {
                           ) : '-'}
                         </TableCell>
                         <TableCell>{item.taxRate}%</TableCell>
-                        <TableCell>₩{item.taxAmount.toLocaleString()}</TableCell>
+                        <TableCell>Rs. {item.taxAmount.toLocaleString()}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -544,19 +544,19 @@ const ProformaInvoice: React.FC = () => {
               }}>
                 <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
                   <Typography variant="body1" gutterBottom>
-                    공급가액: ₩{selectedProformaInvoice.subtotal.toLocaleString()}
+                    공급가액: Rs. {selectedProformaInvoice.subtotal.toLocaleString()}
                   </Typography>
                   {selectedProformaInvoice.totalDiscount > 0 && (
                     <Typography variant="body1" gutterBottom>
-                      할인: -₩{selectedProformaInvoice.totalDiscount.toLocaleString()}
+                      할인: -Rs. {selectedProformaInvoice.totalDiscount.toLocaleString()}
                     </Typography>
                   )}
                   <Typography variant="body1" gutterBottom>
-                    세금: ₩{selectedProformaInvoice.totalTax.toLocaleString()}
+                    세금: Rs. {selectedProformaInvoice.totalTax.toLocaleString()}
                   </Typography>
                   <Divider sx={{ my: 1 }} />
                   <Typography variant="h6" color="primary.main">
-                    총 금액: ₩{selectedProformaInvoice.totalAmount.toLocaleString()}
+                    총 금액: Rs. {selectedProformaInvoice.totalAmount.toLocaleString()}
                   </Typography>
                 </Box>
                 <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
@@ -687,7 +687,7 @@ const ProformaInvoice: React.FC = () => {
               총 프로포마 금액
             </Typography>
             <Typography variant="h4">
-              ₩{totalAmount.toLocaleString()}
+              Rs. {totalAmount.toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
@@ -697,7 +697,7 @@ const ProformaInvoice: React.FC = () => {
               발송된 금액
             </Typography>
             <Typography variant="h4" color="info.main">
-              ₩{sentAmount.toLocaleString()}
+              Rs. {sentAmount.toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
@@ -707,7 +707,7 @@ const ProformaInvoice: React.FC = () => {
               승인된 금액
             </Typography>
             <Typography variant="h4" color="success.main">
-              ₩{acceptedAmount.toLocaleString()}
+              Rs. {acceptedAmount.toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
@@ -831,7 +831,7 @@ const ProformaInvoice: React.FC = () => {
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" fontWeight="bold">
-                      ₩{proformaInvoice.totalAmount.toLocaleString()}
+                      Rs. {proformaInvoice.totalAmount.toLocaleString()}
                     </Typography>
                   </TableCell>
                   <TableCell>

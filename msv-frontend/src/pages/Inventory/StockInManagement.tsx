@@ -176,10 +176,22 @@ const StockInManagement: React.FC = () => {
       py: 3
     }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <InventoryIcon sx={{ mr: 2, fontSize: '2rem', color: 'primary.main' }} />
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
-          입고 관리
-        </Typography>
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <InventoryIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
+            <Typography component="h1" sx={{
+              fontSize: '16px !important',
+              fontWeight: 600,
+              color: 'red',
+              lineHeight: 1.5
+            }}>
+              입출고 관리
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+            입출고를 관리하는 페이지입니다.
+          </Typography>
+        </Box>
       </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
@@ -220,7 +232,7 @@ const StockInManagement: React.FC = () => {
               총 입고 금액
             </Typography>
             <Typography variant="h4" color="info.main">
-              {stockIns.reduce((sum, item) => sum + item.totalPrice, 0).toLocaleString()}원
+              Rs. {stockIns.reduce((sum, item) => sum + item.totalPrice, 0).toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
@@ -272,8 +284,8 @@ const StockInManagement: React.FC = () => {
                         <TableCell>{stockIn.productName}</TableCell>
                         <TableCell>{stockIn.sku}</TableCell>
                         <TableCell align="right">{stockIn.quantity.toLocaleString()}</TableCell>
-                        <TableCell align="right">{stockIn.unitPrice.toLocaleString()}원</TableCell>
-                        <TableCell align="right">{stockIn.totalPrice.toLocaleString()}원</TableCell>
+                        <TableCell align="right">Rs. {stockIn.unitPrice.toLocaleString()}</TableCell>
+                        <TableCell align="right">Rs. {stockIn.totalPrice.toLocaleString()}</TableCell>
                         <TableCell>{stockIn.supplier}</TableCell>
                         <TableCell>
                           <Chip
@@ -315,44 +327,68 @@ const StockInManagement: React.FC = () => {
         </DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2, mt: 1 }}>
-            <TextField
-              fullWidth
-              label="상품명"
-              value={formData.productName}
-              onChange={(e) => setFormData({...formData, productName: e.target.value})}
-            />
-            <TextField
-              fullWidth
-              label="SKU"
-              value={formData.sku}
-              onChange={(e) => setFormData({...formData, sku: e.target.value})}
-            />
-            <TextField
-              fullWidth
-              label="수량"
-              type="number"
-              value={formData.quantity}
-              onChange={(e) => setFormData({...formData, quantity: e.target.value})}
-            />
-            <TextField
-              fullWidth
-              label="단가"
-              type="number"
-              value={formData.unitPrice}
-              onChange={(e) => setFormData({...formData, unitPrice: e.target.value})}
-            />
-            <TextField
-              fullWidth
-              label="공급업체"
-              value={formData.supplier}
-              onChange={(e) => setFormData({...formData, supplier: e.target.value})}
-            />
-            <TextField
-              fullWidth
-              label="비고"
-              value={formData.notes}
-              onChange={(e) => setFormData({...formData, notes: e.target.value})}
-            />
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.3, color: 'text.secondary', fontSize: '0.875rem' }}>
+                상품명
+              </Typography>
+              <TextField
+                fullWidth
+                value={formData.productName}
+                onChange={(e) => setFormData({...formData, productName: e.target.value})}
+              />
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.3, color: 'text.secondary', fontSize: '0.875rem' }}>
+                SKU
+              </Typography>
+              <TextField
+                fullWidth
+                value={formData.sku}
+                onChange={(e) => setFormData({...formData, sku: e.target.value})}
+              />
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.3, color: 'text.secondary', fontSize: '0.875rem' }}>
+                수량
+              </Typography>
+              <TextField
+                fullWidth
+                type="number"
+                value={formData.quantity}
+                onChange={(e) => setFormData({...formData, quantity: e.target.value})}
+              />
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.3, color: 'text.secondary', fontSize: '0.875rem' }}>
+                단가
+              </Typography>
+              <TextField
+                fullWidth
+                type="number"
+                value={formData.unitPrice}
+                onChange={(e) => setFormData({...formData, unitPrice: e.target.value})}
+              />
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.3, color: 'text.secondary', fontSize: '0.875rem' }}>
+                공급업체
+              </Typography>
+              <TextField
+                fullWidth
+                value={formData.supplier}
+                onChange={(e) => setFormData({...formData, supplier: e.target.value})}
+              />
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.3, color: 'text.secondary', fontSize: '0.875rem' }}>
+                비고
+              </Typography>
+              <TextField
+                fullWidth
+                value={formData.notes}
+                onChange={(e) => setFormData({...formData, notes: e.target.value})}
+              />
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions>

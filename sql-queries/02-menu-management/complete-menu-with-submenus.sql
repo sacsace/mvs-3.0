@@ -1,4 +1,4 @@
--- MVS 3.0 완전한 메뉴 구조 (하위 메뉴 포함)
+-- MVS 완전한 메뉴 구조 (하위 메뉴 포함)
 
 -- 기존 데이터 삭제
 DELETE FROM user_permissions;

@@ -1,4 +1,4 @@
--- MVS 3.0 데이터베이스 상태 확인
+-- MVS 데이터베이스 상태 확인
 
 -- 사용자 수 확인
 SELECT COUNT(*) as user_count FROM "user";

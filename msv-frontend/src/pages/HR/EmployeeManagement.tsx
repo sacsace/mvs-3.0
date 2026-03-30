@@ -229,7 +229,7 @@ const EmployeeManagement: React.FC = () => {
               평균 연봉
             </Typography>
             <Typography variant="h4" color="warning.main">
-              {Math.round(employees.reduce((sum, emp) => sum + emp.salary, 0) / employees.length).toLocaleString()}원
+              Rs. {Math.round(employees.reduce((sum, emp) => sum + emp.salary, 0) / employees.length).toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
@@ -413,7 +413,7 @@ const EmployeeManagement: React.FC = () => {
                       />
                     </TableCell>
                     <TableCell>{employee.joinDate}</TableCell>
-                    <TableCell align="right">{employee.salary.toLocaleString()}원</TableCell>
+                    <TableCell align="right">Rs. {employee.salary.toLocaleString()}</TableCell>
                     <TableCell>
                       <IconButton
                         size="small"

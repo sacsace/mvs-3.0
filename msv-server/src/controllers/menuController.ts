@@ -7,26 +7,44 @@ export const getUserMenus = async (req: Request, res: Response) => {
   try {
     const { userId, tenantId } = req.params;
     const { language = 'ko' } = req.query;
-
-    // 사용자 권한이 있는 메뉴만 조회
-    const userMenus = await (Menu as any).findAll({
-      where: {
-        tenant_id: tenantId,
-        is_active: true
-      },
-      include: [
-        {
-          model: UserPermission,
-          as: 'permissions',
-          where: {
-            user_id: userId,
-            can_view: true
-          },
-          required: true
-        }
-      ],
-      order: [['order', 'ASC']]
-    });
+    
+    // 현재 사용자 정보 확인 (req.user는 authenticateToken 미들웨어에서 설정됨)
+    const currentUser = (req as any).user;
+    const isRoot = currentUser?.role === 'root';
+    
+    let userMenus: any[] = [];
+    
+    // root 역할 사용자만 모든 메뉴 조회 (권한 체크 없이)
+    // admin과 일반 사용자는 권한이 있는 메뉴만 조회
+    if (isRoot) {
+      userMenus = await (Menu as any).findAll({
+        where: {
+          tenant_id: tenantId,
+          is_active: true
+        },
+        order: [['order', 'ASC']]
+      });
+    } else {
+      // admin과 일반 사용자는 권한이 있는 메뉴만 조회
+      userMenus = await (Menu as any).findAll({
+        where: {
+          tenant_id: tenantId,
+          is_active: true
+        },
+        include: [
+          {
+            model: UserPermission,
+            as: 'permissions',
+            where: {
+              user_id: userId,
+              can_view: true
+            },
+            required: true
+          }
+        ],
+        order: [['order', 'ASC']]
+      });
+    }
 
     // 계층 구조로 변환
     const menuTree = buildMenuTree(userMenus, language as string);
@@ -36,12 +54,12 @@ export const getUserMenus = async (req: Request, res: Response) => {
       data: menuTree,
       message: '사용자 메뉴 목록을 성공적으로 조회했습니다.'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('메뉴 조회 오류:', error);
     res.status(500).json({
       success: false,
       message: '메뉴 조회 중 오류가 발생했습니다.',
-      error: error.message
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -147,27 +165,23 @@ export const deleteMenu = async (req: Request, res: Response) => {
       where: { parent_id: menuId }
     });
 
-    if (childMenus > 0) {
-      return res.status(400).json({
-        success: false,
-        message: '하위 메뉴가 있는 메뉴는 삭제할 수 없습니다.'
-      });
-    }
-
-    const deletedRowsCount = await (Menu as any).destroy({
-      where: { id: menuId }
-    });
-
-    if (deletedRowsCount === 0) {
+    const menu = await (Menu as any).findOne({ where: { id: menuId } });
+    
+    if (!menu) {
       return res.status(404).json({
         success: false,
         message: '메뉴를 찾을 수 없습니다.'
       });
     }
 
+    // 소프트 삭제: 하위 메뉴가 있어도 비활성화 가능
+    // 하위 메뉴도 함께 비활성화
+    await (Menu as any).update({ is_active: false }, { where: { parent_id: menuId } });
+    await menu.update({ is_active: false });
+
     res.json({
       success: true,
-      message: '메뉴가 성공적으로 삭제되었습니다.'
+      message: '메뉴가 성공적으로 비활성화되었습니다.'
     });
   } catch (error) {
     console.error('메뉴 삭제 오류:', error);
@@ -175,6 +189,46 @@ export const deleteMenu = async (req: Request, res: Response) => {
       success: false,
       message: '메뉴 삭제 중 오류가 발생했습니다.',
       error: error.message
+    });
+  }
+};
+
+// 메뉴 순서 업데이트
+export const updateMenuOrder = async (req: Request, res: Response) => {
+  try {
+    const { menus } = req.body;
+
+    if (!menus || !Array.isArray(menus)) {
+      return res.status(400).json({
+        success: false,
+        message: '메뉴 목록이 필요합니다.'
+      });
+    }
+
+    // 트랜잭션으로 모든 메뉴 순서 업데이트
+    const sequelize = Menu.sequelize!;
+    await sequelize.transaction(async (transaction) => {
+      for (const menuItem of menus) {
+        await (Menu as any).update(
+          { order: menuItem.order },
+          {
+            where: { id: menuItem.id },
+            transaction
+          }
+        );
+      }
+    });
+
+    res.json({
+      success: true,
+      message: '메뉴 순서가 성공적으로 업데이트되었습니다.'
+    });
+  } catch (error: any) {
+    console.error('메뉴 순서 업데이트 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '메뉴 순서 업데이트 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };

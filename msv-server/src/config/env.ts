@@ -1,10 +1,12 @@
 import { config } from 'dotenv';
 import { ENV_CONFIG, SYSTEM_CONSTANTS } from './constants';
 
-// 환경 변수 로드
-config();
+// 환경 변수 로드 (시스템 환경변수보다 .env 우선)
+config({ override: true });
 
 // 필수 환경 변수 검증
+// Railway에서는 DATABASE_URL을 사용하므로, DATABASE_URL이 있으면 개별 DB 환경 변수는 선택사항
+const hasDatabaseUrl = !!process.env.DATABASE_URL;
 const requiredEnvVars = [
   'DB_HOST',
   'DB_NAME', 
@@ -12,17 +14,44 @@ const requiredEnvVars = [
   'DB_PASSWORD'
 ];
 
-const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-
-if (missingVars.length > 0) {
-  console.error('❌ 필수 환경 변수가 누락되었습니다:', missingVars.join(', '));
-  console.error('💡 .env 파일을 확인하거나 환경 변수를 설정해주세요.');
-  process.exit(1);
+if (!hasDatabaseUrl) {
+  const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+  
+  if (missingVars.length > 0) {
+    console.error('❌ 필수 환경 변수가 누락되었습니다:', missingVars.join(', '));
+    console.error('💡 .env 파일을 확인하거나 환경 변수를 설정해주세요.');
+    console.error('💡 또는 Railway 환경에서는 DATABASE_URL을 설정해주세요.');
+    process.exit(1);
+  }
+} else {
+  console.log('✅ DATABASE_URL이 설정되어 있습니다. Railway 환경으로 감지되었습니다.');
 }
 
 // 환경별 설정 가져오기
 const currentEnv = process.env.NODE_ENV || 'development';
 const envConfig = ENV_CONFIG[currentEnv as keyof typeof ENV_CONFIG];
+
+const redisUrl = process.env.REDIS_URL;
+let redisHost = process.env.REDIS_HOST;
+let redisPort = process.env.REDIS_PORT;
+let redisPassword = process.env.REDIS_PASSWORD;
+
+if (redisUrl) {
+  try {
+    const parsedRedisUrl = new URL(redisUrl);
+    if (!redisHost) {
+      redisHost = parsedRedisUrl.hostname;
+    }
+    if (!redisPort) {
+      redisPort = parsedRedisUrl.port || '6379';
+    }
+    if (!redisPassword && parsedRedisUrl.password) {
+      redisPassword = parsedRedisUrl.password;
+    }
+  } catch (error) {
+    console.warn('⚠️  REDIS_URL 파싱 실패:', error);
+  }
+}
 
 // 환경 변수 검증 및 기본값 설정
 export const env = {
@@ -45,8 +74,9 @@ export const env = {
   SESSION_SECRET: process.env.SESSION_SECRET || SYSTEM_CONSTANTS.SESSION.SECRET,
   
   // 외부 서비스
-  REDIS_HOST: process.env.REDIS_HOST || 'localhost',
-  REDIS_PORT: parseInt(process.env.REDIS_PORT || '6379'),
+  REDIS_HOST: redisHost || 'localhost',
+  REDIS_PORT: parseInt(redisPort || '6379'),
+  REDIS_PASSWORD: redisPassword,
   
   // 로깅
   LOG_LEVEL: process.env.LOG_LEVEL || envConfig.LOG_LEVEL,
@@ -67,6 +97,15 @@ export const env = {
   
   // AI 서비스
   OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+
+  // 은행 송금 API
+  ICICI_API_URL: process.env.ICICI_API_URL,
+  ICICI_API_KEY: process.env.ICICI_API_KEY,
+  ICICI_TRANSFER_PATH: process.env.ICICI_TRANSFER_PATH || '/transfers',
+  KOTAK_API_URL: process.env.KOTAK_API_URL,
+  KOTAK_API_KEY: process.env.KOTAK_API_KEY,
+  KOTAK_TRANSFER_PATH: process.env.KOTAK_TRANSFER_PATH || '/transfers',
+  DEFAULT_BANK_PROVIDER: process.env.DEFAULT_BANK_PROVIDER,
   
   // 모니터링
   HEALTH_CHECK_INTERVAL: parseInt(process.env.HEALTH_CHECK_INTERVAL || '30000'),
@@ -92,14 +131,16 @@ export const validateEnv = () => {
     errors.push('JWT_SECRET은 최소 32자 이상이어야 합니다.');
   }
   
-  // 프로덕션 환경에서 추가 검증
+  // 프로덕션 환경에서 추가 검증 (Railway 환경에서는 경고만)
   if (env.NODE_ENV === 'production') {
+    if (!env.CORS_ORIGIN) {
+      errors.push('프로덕션 환경에서는 CORS_ORIGIN을 반드시 설정해야 합니다.');
+    }
     if (env.CORS_ORIGIN === 'http://localhost:3000') {
       errors.push('프로덕션 환경에서는 CORS_ORIGIN을 localhost로 설정하면 안됩니다.');
     }
-    
-    if (env.JWT_SECRET === SYSTEM_CONSTANTS.JWT.SECRET) {
-      errors.push('프로덕션 환경에서는 기본 JWT_SECRET을 사용하면 안됩니다.');
+    if (!process.env.JWT_SECRET || env.JWT_SECRET === SYSTEM_CONSTANTS.JWT.SECRET) {
+      errors.push('프로덕션 환경에서는 JWT_SECRET을 반드시 설정해야 합니다.');
     }
   }
   

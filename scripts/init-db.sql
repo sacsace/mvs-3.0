@@ -1,10 +1,10 @@
--- MVS 3.0 데이터베이스 초기화 스크립트
+-- MVS 데이터베이스 초기화 스크립트
 -- PostgreSQL 15+ 호환
 
 -- 데이터베이스 생성 (필요시)
-CREATE DATABASE mvs_db;
+CREATE DATABASE mvs;
 CREATE USER mvs_user WITH PASSWORD 'mvs_password';
-GRANT ALL PRIVILEGES ON DATABASE mvs_db TO mvs_user;
+GRANT ALL PRIVILEGES ON DATABASE mvs TO mvs_user;
 
 -- 확장 기능 활성화
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

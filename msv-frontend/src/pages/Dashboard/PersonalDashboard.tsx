@@ -4,51 +4,33 @@ import {
   Card,
   CardContent,
   Typography,
-  Grid,
   List,
   ListItem,
   ListItemText,
   ListItemIcon,
-  Avatar,
   Chip,
   LinearProgress,
-  IconButton,
   Button,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Alert,
-  Divider,
-  Paper,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent
+  Alert
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
-  Person as PersonIcon,
   Assignment as AssignmentIcon,
-  CheckCircle as CheckCircleIcon,
-  Pending as PendingIcon,
   Schedule as ScheduleIcon,
   TrendingUp as TrendingUpIcon,
   Notifications as NotificationsIcon,
   Star as StarIcon,
-  Settings as SettingsIcon,
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Refresh as RefreshIcon,
-  MoreVert as MoreVertIcon
+  Settings as SettingsIcon
 } from '@mui/icons-material';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useStore } from '../../store';
 import { api } from '../../services/api';
 
@@ -213,8 +195,6 @@ const PersonalDashboard: React.FC = () => {
     setOpenTaskDialog(true);
   };
 
-  // 색상 팔레트
-  const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00ff00'];
 
   if (loading) {
     return (

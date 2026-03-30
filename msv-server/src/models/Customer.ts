@@ -65,7 +65,7 @@ Customer.init(
       allowNull: false,
     },
     business_number: {
-      type: DataTypes.STRING(20),
+      type: DataTypes.STRING(50),
       allowNull: true,
     },
     ceo_name: {

@@ -183,10 +183,22 @@ const ExpenseManagement: React.FC = () => {
     <Box sx={{ width: '100%', px: 2, py: 3 }}>
       {/* 헤더 */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <ReceiptIcon sx={{ mr: 2, fontSize: '2rem', color: 'primary.main' }} />
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
-          지출결의서 관리
-        </Typography>
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <ReceiptIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
+            <Typography component="h1" sx={{
+              fontSize: '16px !important',
+              fontWeight: 600,
+              color: 'red',
+              lineHeight: 1.5
+            }}>
+              지출결의서
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+            지출결의서를 관리하는 페이지입니다.
+          </Typography>
+        </Box>
       </Box>
 
       {/* 검색 및 필터 */}
@@ -295,7 +307,7 @@ const ExpenseManagement: React.FC = () => {
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <MoneyIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary' }} />
                       <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                        {expense.amount.toLocaleString()}원
+                        Rs. {expense.amount.toLocaleString()}
                       </Typography>
                     </Box>
                   </TableCell>
@@ -405,7 +417,7 @@ const ExpenseManagement: React.FC = () => {
               </FormControl>
               <TextField
                 fullWidth
-                label="금액 (원)"
+                label="금액 (INR)"
                 type="number"
                 value={formData.amount}
                 onChange={(e) => setFormData({...formData, amount: parseInt(e.target.value) || 0})}

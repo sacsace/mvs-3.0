@@ -1,4 +1,4 @@
-// MVS 3.0 통합 테스트 설정
+// MVS 통합 테스트 설정
 
 const { execSync } = require('child_process');
 const axios = require('axios');
@@ -111,7 +111,7 @@ class IntegrationTestSuite {
   }
 
   async runAllTests() {
-    console.log('🚀 MVS 3.0 통합 테스트 시작\n');
+    console.log('🚀 MVS 통합 테스트 시작\n');
 
     try {
       // 1. 환경 준비
@@ -408,7 +408,7 @@ class IntegrationTestSuite {
   async testPageLoading() {
     const response = await axios.get(TEST_CONFIG.frontendURL, { timeout: 10000 });
     expect(response.status).to.equal(200);
-    expect(response.data).to.include('MVS 3.0');
+    expect(response.data).to.include('MVS');
   }
 
   async testRouting() {

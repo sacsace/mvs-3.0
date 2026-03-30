@@ -1,0 +1,279 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+  color: #1f2937;
+  background: #f9fafb;
+  line-height: 1.6;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+.container {
+  width: min(1100px, 92%);
+  margin: 0 auto;
+}
+
+.site-header {
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  gap: 24px;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+.brand-mark {
+  font-size: 20px;
+  color: #a16207;
+}
+
+.brand-sub {
+  font-size: 12px;
+  color: #6b7280;
+  letter-spacing: 3px;
+}
+
+.nav {
+  display: flex;
+  gap: 18px;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.primary-btn,
+.ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 18px;
+  border-radius: 24px;
+  font-weight: 600;
+}
+
+.primary-btn {
+  background: #a16207;
+  color: #ffffff;
+}
+
+.ghost-btn {
+  border: 1px solid #d1d5db;
+  color: #374151;
+}
+
+.hero {
+  background: linear-gradient(120deg, #fff7ed 0%, #fef3c7 100%);
+  padding: 80px 0;
+}
+
+.hero-grid {
+  display: grid;
+  gap: 32px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.hero-copy h1 {
+  font-size: clamp(32px, 4vw, 48px);
+  margin-bottom: 12px;
+}
+
+.lead {
+  font-size: 16px;
+  color: #4b5563;
+  margin-bottom: 24px;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.hero-badges {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.hero-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 24px;
+  border: 1px solid #f3f4f6;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.08);
+}
+
+.hero-card-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  color: #6b7280;
+}
+
+.section {
+  padding: 70px 0;
+}
+
+.section.soft {
+  background: #ffffff;
+}
+
+.section-head {
+  margin-bottom: 32px;
+  max-width: 640px;
+}
+
+.section-head h2 {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.section-head p {
+  color: #6b7280;
+}
+
+.card-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.room-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid #e5e7eb;
+}
+
+.room-card ul {
+  list-style: none;
+  margin-top: 14px;
+  color: #6b7280;
+  display: grid;
+  gap: 6px;
+}
+
+.amenities-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.amenity {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #fef3c7;
+  color: #92400e;
+  font-weight: 600;
+  text-align: center;
+}
+
+.booking-grid {
+  display: grid;
+  gap: 32px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.booking-form {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px;
+  border: 1px solid #e5e7eb;
+  display: grid;
+  gap: 16px;
+}
+
+.booking-form label {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.booking-form input,
+.booking-form select,
+.booking-form textarea {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.form-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.form-note {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.contact-grid {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.contact-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid #e5e7eb;
+}
+
+.muted {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.site-footer {
+  padding: 24px 0;
+  border-top: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.footer-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+@media (max-width: 720px) {
+  .nav {
+    display: none;
+  }
+}

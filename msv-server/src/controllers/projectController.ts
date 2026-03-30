@@ -7,10 +7,29 @@ import sequelize from '../config/database';
 // 프로젝트 목록 조회
 export const getProjects = async (req: RequestWithUser, res: Response) => {
   try {
-    const { tenant_id, company_id } = req.user;
-    const { page = 1, limit = 10, status = '', manager_id = '' } = req.query;
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
+    const userRole = req.user?.role;
+    const { page = 1, limit = 10, status = '', manager_id = '', company_id } = req.query;
 
-    const whereClause: any = { tenant_id, company_id };
+    const whereClause: any = {};
+    
+    // root나 audit 권한이면 모든 프로젝트 조회 가능, 아니면 자신의 회사 프로젝트만
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = companyId;
+    } else {
+      // root는 company_id 쿼리 파라미터로 회사별 필터링 가능
+      if (userRole === 'root' && company_id) {
+        whereClause.company_id = parseInt(company_id as string);
+      } else if (userRole === 'root') {
+        // root가 company_id를 지정하지 않으면 모든 회사 조회
+      } else {
+        // audit는 모든 회사 조회 가능
+        if (tenantId) whereClause.tenant_id = tenantId;
+        if (companyId) whereClause.company_id = companyId;
+      }
+    }
     
     if (status) {
       whereClause.status = status;
@@ -19,6 +38,9 @@ export const getProjects = async (req: RequestWithUser, res: Response) => {
     if (manager_id) {
       whereClause.project_manager = manager_id;
     }
+
+    // 활성화된 프로젝트만 조회
+    whereClause.is_active = true;
 
     const projects = await (Project as any).findAndCountAll({
       where: whereClause,
@@ -31,7 +53,7 @@ export const getProjects = async (req: RequestWithUser, res: Response) => {
         {
           model: User,
           as: 'manager',
-          attributes: ['username', 'first_name', 'last_name']
+          attributes: ['id', 'username', 'email', 'department', 'position']
         }
       ],
       limit: Number(limit),
@@ -49,9 +71,13 @@ export const getProjects = async (req: RequestWithUser, res: Response) => {
         totalPages: Math.ceil(projects.count / Number(limit))
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('프로젝트 목록 조회 오류:', error);
-    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+    res.status(500).json({ 
+      success: false, 
+      message: '서버 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 };
 
@@ -59,10 +85,19 @@ export const getProjects = async (req: RequestWithUser, res: Response) => {
 export const getProject = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id } = req.user;
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
+    const userRole = req.user?.role;
+
+    const whereClause: any = { id, is_active: true };
+    
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = companyId;
+    }
 
     const project = await (Project as any).findOne({
-      where: { id, tenant_id, company_id },
+      where: whereClause,
       include: [
         {
           model: Customer,
@@ -72,7 +107,7 @@ export const getProject = async (req: RequestWithUser, res: Response) => {
         {
           model: User,
           as: 'manager',
-          attributes: ['username', 'email', 'first_name', 'last_name', 'phone']
+          attributes: ['id', 'username', 'email', 'department', 'position', 'phone']
         }
       ]
     });
@@ -92,7 +127,7 @@ export const getProject = async (req: RequestWithUser, res: Response) => {
 export const createProject = async (req: RequestWithUser, res: Response) => {
   try {
     const { tenant_id, company_id, id: user_id } = req.user;
-    const projectData = { ...req.body, tenant_id, company_id, created_by: user_id };
+    const projectData = { ...req.body, tenant_id, company_id, created_by: user_id, is_active: true };
 
     const project = await (Project as any).create(projectData);
 
@@ -110,7 +145,7 @@ export const updateProject = async (req: RequestWithUser, res: Response) => {
     const { tenant_id, company_id } = req.user;
 
     const project = await (Project as any).findOne({
-      where: { id, tenant_id, company_id }
+      where: { id, tenant_id, company_id, is_active: true }
     });
 
     if (!project) {
@@ -140,9 +175,10 @@ export const deleteProject = async (req: RequestWithUser, res: Response) => {
       return res.status(404).json({ success: false, message: '프로젝트를 찾을 수 없습니다.' });
     }
 
-    await project.destroy();
+    // 소프트 삭제: is_active를 false로 설정
+    await project.update({ is_active: false });
 
-    res.json({ success: true, message: '프로젝트가 삭제되었습니다.' });
+    res.json({ success: true, message: '프로젝트가 비활성화되었습니다.' });
   } catch (error) {
     console.error('프로젝트 삭제 오류:', error);
     res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });

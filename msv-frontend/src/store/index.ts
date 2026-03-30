@@ -10,6 +10,7 @@ export interface User {
   role: string;
   tenant_id: number;
   company_id: number;
+  is_payment_officer?: boolean;
 }
 
 interface AuthState {

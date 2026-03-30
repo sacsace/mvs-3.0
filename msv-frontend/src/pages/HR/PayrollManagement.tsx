@@ -35,6 +35,7 @@ import {
   ListItemText,
   ListItemAvatar
 } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -49,9 +50,10 @@ import {
   Calculate as CalculateIcon,
   Receipt as ReceiptIcon
 } from '@mui/icons-material';
+import { APP_CONSTANTS } from '../../constants';
 import { useStore } from '../../store';
-import { APP_CONSTANTS, UTILS } from '../../constants';
-import { SAMPLE_PAYROLLS } from '../../constants/sampleData';
+import { payrollService } from '../../services/api';
+import { api } from '../../services/api';
 
 interface PayrollItem {
   id: number;
@@ -75,6 +77,7 @@ interface PayrollItem {
 }
 
 const PayrollManagement: React.FC = () => {
+  const { t } = useTranslation();
   const { user } = useStore();
   const [payrolls, setPayrolls] = useState<PayrollItem[]>([]);
   const [filteredPayrolls, setFilteredPayrolls] = useState<PayrollItem[]>([]);
@@ -95,9 +98,6 @@ const PayrollManagement: React.FC = () => {
   const isHR = user?.role === 'hr';
   const canManagePayroll = isAdmin || isHR;
 
-  // 샘플 데이터
-  const sampleData: PayrollItem[] = SAMPLE_PAYROLLS;
-
   useEffect(() => {
     loadPayrollData();
   }, []);
@@ -108,21 +108,38 @@ const PayrollManagement: React.FC = () => {
 
   const loadPayrollData = async () => {
     setLoading(true);
+    setError('');
     try {
-      await UTILS.delay();
-      
-      // 권한에 따라 다른 데이터 로드
-      if (canManagePayroll) {
-        // 관리자/HR: 전체 급여 데이터
-        setPayrolls(sampleData);
+      const response = await payrollService.getPayrolls({ page: 1, limit: 1000 });
+      if (response.success) {
+        // API 응답을 프론트엔드 형식으로 변환
+        const payrollData: PayrollItem[] = (response.data || []).map((p: any) => ({
+          id: p.id,
+          employeeId: p.employee_id,
+          employeeName: p.employee?.username || t('payrollManagement.unknown'),
+          department: p.employee?.department || '-',
+          position: p.employee?.position || '-',
+          basicSalary: parseFloat(p.basic_salary || 0),
+          overtimePay: parseFloat(p.overtime_pay || 0),
+          bonus: parseFloat(p.bonus || 0),
+          allowances: parseFloat(p.allowances || 0),
+          deductions: parseFloat(p.deductions || 0),
+          grossSalary: parseFloat(p.gross_salary || 0),
+          tax: parseFloat(p.tax_amount || 0),
+          netSalary: parseFloat(p.net_salary || 0),
+          payPeriod: p.payroll_period || '',
+          status: p.status || 'pending',
+          paymentDate: p.payment_date || undefined,
+          createdAt: p.created_at || new Date().toISOString(),
+          createdBy: t('payrollManagement.system')
+        }));
+        setPayrolls(payrollData);
       } else {
-        // 일반 사용자: 자신의 급여만 (사용자 ID가 1001인 경우)
-        const userPayrolls = sampleData.filter(payroll => payroll.employeeId === 1001);
-        setPayrolls(userPayrolls);
+        setError(response.message || t('payrollManagement.errors.loadFailed'));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('급여 데이터 로드 오류:', error);
-      setError('급여 데이터를 불러오는데 실패했습니다.');
+      setError(error.response?.data?.message || t('payrollManagement.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -153,15 +170,15 @@ const PayrollManagement: React.FC = () => {
   const getStatusChip = (status: string) => {
     switch (status) {
       case 'pending':
-        return <Chip label="대기중" color="warning" size="small" />;
+        return <Chip label={t('payrollManagement.status.pending')} color="warning" size="small" />;
       case 'approved':
-        return <Chip label="승인됨" color="info" size="small" />;
+        return <Chip label={t('payrollManagement.status.approved')} color="info" size="small" />;
       case 'paid':
-        return <Chip label="지급완료" color="success" size="small" />;
+        return <Chip label={t('payrollManagement.status.paid')} color="success" size="small" />;
       case 'cancelled':
-        return <Chip label="취소됨" color="error" size="small" />;
+        return <Chip label={t('payrollManagement.status.cancelled')} color="error" size="small" />;
       default:
-        return <Chip label="알 수 없음" color="default" size="small" />;
+        return <Chip label={t('payrollManagement.unknown')} color="default" size="small" />;
     }
   };
 
@@ -176,35 +193,50 @@ const PayrollManagement: React.FC = () => {
   };
 
   const handleDeletePayroll = async (id: number) => {
-    if (window.confirm('정말로 이 급여 항목을 삭제하시겠습니까?')) {
+    if (window.confirm(t('payrollManagement.confirmDelete'))) {
       try {
-        setPayrolls(prev => prev.filter(payroll => payroll.id !== id));
-        setSuccess('급여 항목이 성공적으로 삭제되었습니다.');
-      } catch (error) {
+        const response = await payrollService.deletePayroll(id);
+        if (response.success) {
+          setSuccess(t('payrollManagement.success.deleted'));
+          loadPayrollData();
+        } else {
+          setError(response.message || t('payrollManagement.errors.deleteFailed'));
+        }
+      } catch (error: any) {
         console.error('삭제 오류:', error);
-        setError('삭제 중 오류가 발생했습니다.');
+        setError(error.response?.data?.message || t('payrollManagement.errors.deleteError'));
       }
     }
   };
 
-  const handleApprovePayroll = (id: number) => {
-    setPayrolls(prev =>
-      prev.map(payroll =>
-        payroll.id === id ? { ...payroll, status: 'approved' as const } : payroll
-      )
-    );
-    setSuccess('급여가 승인되었습니다.');
+  const handleApprovePayroll = async (id: number) => {
+    try {
+      const response = await payrollService.approvePayroll(id);
+      if (response.success) {
+        setSuccess(t('payrollManagement.success.approved'));
+        loadPayrollData();
+      } else {
+        setError(response.message || t('payrollManagement.errors.approveFailed'));
+      }
+    } catch (error: any) {
+      console.error('급여 승인 오류:', error);
+      setError(error.response?.data?.message || t('payrollManagement.errors.approveError'));
+    }
   };
 
-  const handlePayPayroll = (id: number) => {
-    setPayrolls(prev =>
-      prev.map(payroll =>
-        payroll.id === id 
-          ? { ...payroll, status: 'paid' as const, paymentDate: new Date().toISOString().split('T')[0] } 
-          : payroll
-      )
-    );
-    setSuccess('급여가 지급되었습니다.');
+  const handlePayPayroll = async (id: number) => {
+    try {
+      const response = await payrollService.payPayroll(id);
+      if (response.success) {
+        setSuccess(t('payrollManagement.success.paid'));
+        loadPayrollData();
+      } else {
+        setError(response.message || t('payrollManagement.errors.payFailed'));
+      }
+    } catch (error: any) {
+      console.error('급여 지급 오류:', error);
+      setError(error.response?.data?.message || t('payrollManagement.errors.payError'));
+    }
   };
 
   const totalGrossSalary = payrolls.reduce((sum, payroll) => sum + payroll.grossSalary, 0);
@@ -230,13 +262,13 @@ const PayrollManagement: React.FC = () => {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <ReceiptIcon />
-            급여 상세 정보
+            {t('payrollManagement.detailTitle')}
           </Typography>
           <Button
             variant="outlined"
             onClick={() => setViewMode('list')}
           >
-            목록으로
+            {t('payrollManagement.backToList')}
           </Button>
         </Box>
 
@@ -260,71 +292,71 @@ const PayrollManagement: React.FC = () => {
 
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3 }}>
               <Box>
-                <Typography variant="h6" gutterBottom>급여 정보</Typography>
+                <Typography variant="h6" gutterBottom>{t('payrollManagement.payInfo')}</Typography>
                 <List>
                   <ListItem>
                     <ListItemText 
-                      primary="급여 기간" 
+                      primary={t('payrollManagement.columns.payPeriod')}
                       secondary={selectedPayroll.payPeriod}
                     />
                   </ListItem>
                   <ListItem>
                     <ListItemText 
-                      primary="기본급" 
-                      secondary={`₩${selectedPayroll.basicSalary.toLocaleString()}`}
+                      primary={t('payrollManagement.columns.basicSalary')}
+                      secondary={`Rs. ${selectedPayroll.basicSalary.toLocaleString()}`}
                     />
                   </ListItem>
                   <ListItem>
                     <ListItemText 
-                      primary="초과근무수당" 
-                      secondary={`₩${selectedPayroll.overtimePay.toLocaleString()}`}
+                      primary={t('payrollManagement.overtimePay')}
+                      secondary={`Rs. ${selectedPayroll.overtimePay.toLocaleString()}`}
                     />
                   </ListItem>
                   <ListItem>
                     <ListItemText 
-                      primary="보너스" 
-                      secondary={`₩${selectedPayroll.bonus.toLocaleString()}`}
+                      primary={t('payrollManagement.bonus')}
+                      secondary={`Rs. ${selectedPayroll.bonus.toLocaleString()}`}
                     />
                   </ListItem>
                   <ListItem>
                     <ListItemText 
-                      primary="제수당" 
-                      secondary={`₩${selectedPayroll.allowances.toLocaleString()}`}
+                      primary={t('payrollManagement.allowances')}
+                      secondary={`Rs. ${selectedPayroll.allowances.toLocaleString()}`}
                     />
                   </ListItem>
                 </List>
               </Box>
 
               <Box>
-                <Typography variant="h6" gutterBottom>공제 정보</Typography>
+                <Typography variant="h6" gutterBottom>{t('payrollManagement.deductionInfo')}</Typography>
                 <List>
                   <ListItem>
                     <ListItemText 
-                      primary="공제액" 
-                      secondary={`₩${selectedPayroll.deductions.toLocaleString()}`}
+                      primary={t('payrollManagement.deductions')}
+                      secondary={`Rs. ${selectedPayroll.deductions.toLocaleString()}`}
                     />
                   </ListItem>
                   <ListItem>
                     <ListItemText 
-                      primary="세금" 
-                      secondary={`₩${selectedPayroll.tax.toLocaleString()}`}
+                      primary={t('payrollManagement.columns.tax')}
+                      secondary={`Rs. ${selectedPayroll.tax.toLocaleString()}`}
                     />
                   </ListItem>
                   <ListItem>
                     <ListItemText 
-                      primary="총 급여" 
-                      secondary={`₩${selectedPayroll.grossSalary.toLocaleString()}`}
+                      primary={t('payrollManagement.columns.totalSalary')}
+                      secondary={`Rs. ${selectedPayroll.grossSalary.toLocaleString()}`}
                     />
                   </ListItem>
                   <ListItem>
                     <ListItemText 
-                      primary="실수령액" 
-                      secondary={`₩${selectedPayroll.netSalary.toLocaleString()}`}
+                      primary={t('payrollManagement.columns.netSalary')}
+                      secondary={`Rs. ${selectedPayroll.netSalary.toLocaleString()}`}
                     />
                   </ListItem>
                   <ListItem>
                     <ListItemText 
-                      primary="상태" 
+                      primary={t('payrollManagement.columns.status')}
                       secondary={getStatusChip(selectedPayroll.status)}
                     />
                   </ListItem>
@@ -338,19 +370,19 @@ const PayrollManagement: React.FC = () => {
                 startIcon={<EditIcon />}
                 onClick={() => handleEditPayroll(selectedPayroll)}
               >
-                수정
+                {t('payrollManagement.actions.edit')}
               </Button>
               <Button
                 variant="outlined"
                 startIcon={<PrintIcon />}
               >
-                인쇄
+                {t('payrollManagement.actions.print')}
               </Button>
               <Button
                 variant="contained"
                 startIcon={<DownloadIcon />}
               >
-                PDF 다운로드
+                {t('payrollManagement.actions.downloadPdf')}
               </Button>
             </Box>
           </CardContent>
@@ -367,17 +399,24 @@ const PayrollManagement: React.FC = () => {
       minHeight: '100%'
     }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <MoneyIcon />
-          급여 관리
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <MoneyIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
+          <Typography component="h1" sx={{ 
+            fontSize: '16px !important',
+            fontWeight: 600,
+            color: 'text.primary',
+            lineHeight: 1.5
+          }}>
+            {t('payrollManagement.title')}
+          </Typography>
+        </Box>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => setOpenDialog(true)}
           sx={{ borderRadius: 2 }}
         >
-          급여 생성
+          {t('payrollManagement.actions.createPayroll')}
         </Button>
       </Box>
 
@@ -391,37 +430,37 @@ const PayrollManagement: React.FC = () => {
         <Card>
           <CardContent>
             <Typography color="textSecondary" gutterBottom>
-              총 급여액
+              {t('payrollManagement.summary.totalSalary')}
             </Typography>
             <Typography variant="h4">
-              ₩{totalGrossSalary.toLocaleString()}
+              Rs. {totalGrossSalary.toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
             <Typography color="textSecondary" gutterBottom>
-              실수령액
+              {t('payrollManagement.summary.netSalary')}
             </Typography>
             <Typography variant="h4">
-              ₩{totalNetSalary.toLocaleString()}
+              Rs. {totalNetSalary.toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
             <Typography color="textSecondary" gutterBottom>
-              총 세금
+              {t('payrollManagement.summary.totalTax')}
             </Typography>
             <Typography variant="h4">
-              ₩{totalTax.toLocaleString()}
+              Rs. {totalTax.toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
             <Typography color="textSecondary" gutterBottom>
-              대기중인 급여
+              {t('payrollManagement.summary.pendingPayroll')}
             </Typography>
             <Typography variant="h4" color="warning.main">
               {pendingCount}
@@ -437,11 +476,11 @@ const PayrollManagement: React.FC = () => {
             display: 'grid', 
             gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr' },
             gap: 2, 
-            alignItems: 'center' 
+            alignItems: 'flex-end' 
           }}>
             <TextField
               fullWidth
-              placeholder="직원명, 부서, 직책 검색"
+              placeholder={t('payrollManagement.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{
@@ -453,25 +492,33 @@ const PayrollManagement: React.FC = () => {
               }}
             />
             <FormControl fullWidth>
-              <InputLabel>상태</InputLabel>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {t('payrollManagement.columns.status')}
+              </Typography>
               <Select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
+                displayEmpty
+                sx={{ height: '40px' }}
               >
-                <MenuItem value="">전체</MenuItem>
-                <MenuItem value="pending">대기중</MenuItem>
-                <MenuItem value="approved">승인됨</MenuItem>
-                <MenuItem value="paid">지급완료</MenuItem>
-                <MenuItem value="cancelled">취소됨</MenuItem>
+                <MenuItem value="">{t('payrollManagement.all')}</MenuItem>
+                <MenuItem value="pending">{t('payrollManagement.status.pending')}</MenuItem>
+                <MenuItem value="approved">{t('payrollManagement.status.approved')}</MenuItem>
+                <MenuItem value="paid">{t('payrollManagement.status.paid')}</MenuItem>
+                <MenuItem value="cancelled">{t('payrollManagement.status.cancelled')}</MenuItem>
               </Select>
             </FormControl>
             <FormControl fullWidth>
-              <InputLabel>부서</InputLabel>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {t('payrollManagement.department')}
+              </Typography>
               <Select
                 value={departmentFilter}
                 onChange={(e) => setDepartmentFilter(e.target.value)}
+                displayEmpty
+                sx={{ height: '40px' }}
               >
-                <MenuItem value="">전체</MenuItem>
+                <MenuItem value="">{t('payrollManagement.all')}</MenuItem>
                 {departments.map(dept => (
                   <MenuItem key={dept} value={dept}>{dept}</MenuItem>
                 ))}
@@ -487,7 +534,7 @@ const PayrollManagement: React.FC = () => {
                 setDepartmentFilter('');
               }}
             >
-              초기화
+              {t('payrollManagement.actions.reset')}
             </Button>
           </Box>
         </CardContent>
@@ -499,14 +546,14 @@ const PayrollManagement: React.FC = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>직원 정보</TableCell>
-                <TableCell>급여 기간</TableCell>
-                <TableCell>기본급</TableCell>
-                <TableCell>총 급여</TableCell>
-                <TableCell>실수령액</TableCell>
-                <TableCell>상태</TableCell>
-                <TableCell>지급일</TableCell>
-                <TableCell>작업</TableCell>
+                <TableCell>{t('payrollManagement.columns.employeeInfo')}</TableCell>
+                <TableCell>{t('payrollManagement.columns.payPeriod')}</TableCell>
+                <TableCell>{t('payrollManagement.columns.basicSalary')}</TableCell>
+                <TableCell>{t('payrollManagement.columns.totalSalary')}</TableCell>
+                <TableCell>{t('payrollManagement.columns.netSalary')}</TableCell>
+                <TableCell>{t('payrollManagement.columns.status')}</TableCell>
+                <TableCell>{t('payrollManagement.columns.paymentDate')}</TableCell>
+                <TableCell>{t('payrollManagement.columns.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -523,25 +570,25 @@ const PayrollManagement: React.FC = () => {
                     </Box>
                   </TableCell>
                   <TableCell>{payroll.payPeriod}</TableCell>
-                  <TableCell>₩{payroll.basicSalary.toLocaleString()}</TableCell>
-                  <TableCell>₩{payroll.grossSalary.toLocaleString()}</TableCell>
-                  <TableCell>₩{payroll.netSalary.toLocaleString()}</TableCell>
+                  <TableCell>Rs. {payroll.basicSalary.toLocaleString()}</TableCell>
+                  <TableCell>Rs. {payroll.grossSalary.toLocaleString()}</TableCell>
+                  <TableCell>Rs. {payroll.netSalary.toLocaleString()}</TableCell>
                   <TableCell>{getStatusChip(payroll.status)}</TableCell>
                   <TableCell>{payroll.paymentDate || '-'}</TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Tooltip title="보기">
+                      <Tooltip title={t('payrollManagement.actions.view')}>
                         <IconButton size="small" onClick={() => handleViewPayroll(payroll)}>
                           <ViewIcon />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="수정">
+                      <Tooltip title={t('payrollManagement.actions.edit')}>
                         <IconButton size="small" onClick={() => handleEditPayroll(payroll)}>
                           <EditIcon />
                         </IconButton>
                       </Tooltip>
                       {payroll.status === 'pending' && (
-                        <Tooltip title="승인">
+                        <Tooltip title={t('payrollManagement.actions.approve')}>
                           <IconButton 
                             size="small" 
                             onClick={() => handleApprovePayroll(payroll.id)}
@@ -552,7 +599,7 @@ const PayrollManagement: React.FC = () => {
                         </Tooltip>
                       )}
                       {payroll.status === 'approved' && (
-                        <Tooltip title="지급">
+                        <Tooltip title={t('payrollManagement.actions.pay')}>
                           <IconButton 
                             size="small" 
                             onClick={() => handlePayPayroll(payroll.id)}
@@ -562,7 +609,7 @@ const PayrollManagement: React.FC = () => {
                           </IconButton>
                         </Tooltip>
                       )}
-                      <Tooltip title="삭제">
+                      <Tooltip title={t('payrollManagement.actions.delete')}>
                         <IconButton size="small" onClick={() => handleDeletePayroll(payroll.id)}>
                           <DeleteIcon />
                         </IconButton>
@@ -589,22 +636,22 @@ const PayrollManagement: React.FC = () => {
       {/* 급여 생성/수정 다이얼로그 */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle>
-          {selectedPayroll ? '급여 수정' : '급여 생성'}
+          {selectedPayroll ? t('payrollManagement.dialog.editTitle') : t('payrollManagement.dialog.createTitle')}
         </DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
             <Typography variant="h6" gutterBottom>
-              급여 정보를 입력해주세요.
+              {t('payrollManagement.dialog.enterInfo')}
             </Typography>
             <Typography variant="body2" color="text.secondary" gutterBottom>
-              급여 생성 기능은 개발 중입니다.
+              {t('payrollManagement.dialog.underDevelopment')}
             </Typography>
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>취소</Button>
+          <Button onClick={() => setOpenDialog(false)}>{t('common.cancel')}</Button>
           <Button variant="contained">
-            {selectedPayroll ? '수정' : '생성'}
+            {selectedPayroll ? t('payrollManagement.actions.edit') : t('payrollManagement.actions.create')}
           </Button>
         </DialogActions>
       </Dialog>

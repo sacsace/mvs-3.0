@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -11,7 +11,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Chip,
   TextField,
   FormControl,
@@ -23,6 +22,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  FormControlLabel,
+  Checkbox,
   Tooltip,
   Alert,
   Snackbar,
@@ -33,14 +34,7 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemAvatar,
-  LinearProgress,
-  Grid,
-  Tabs,
-  Tab,
-  Stepper,
-  Step,
-  StepLabel
+  ListItemAvatar
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -55,19 +49,14 @@ import {
   Cancel as CancelIcon,
   Person as PersonIcon,
   Schedule as ScheduleIcon,
-  Send as SendIcon,
   Print as PrintIcon,
   Download as DownloadIcon,
-  Refresh as RefreshIcon,
-  Event as EventIcon,
-  AccessTime as AccessTimeIcon,
-  Comment as CommentIcon,
-  AttachFile as AttachFileIcon,
-  Star as StarIcon
+  AttachFile as AttachFileIcon
 } from '@mui/icons-material';
-import { useStore } from '../../store';
+import { workReportService } from '../../services/api';
+import { useTranslation } from 'react-i18next';
 
-interface WorkReport {
+interface WorkReportItem {
   id: number;
   reportId: string;
   title: string;
@@ -98,14 +87,16 @@ interface WorkReport {
 }
 
 const WorkReport: React.FC = () => {
-  const { user } = useStore();
-  const [reports, setReports] = useState<WorkReport[]>([]);
-  const [filteredReports, setFilteredReports] = useState<WorkReport[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { i18n } = useTranslation();
+  const isEnglish = i18n.language.startsWith('en');
+  const tr = (ko: string, en: string) => (isEnglish ? en : ko);
+
+  const [reports, setReports] = useState<WorkReportItem[]>([]);
+  const [filteredReports, setFilteredReports] = useState<WorkReportItem[]>([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
-  const [selectedReport, setSelectedReport] = useState<WorkReport | null>(null);
+  const [selectedReport, setSelectedReport] = useState<WorkReportItem | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'view'>('list');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -113,156 +104,70 @@ const WorkReport: React.FC = () => {
   const [priorityFilter, setPriorityFilter] = useState('');
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [saving, setSaving] = useState(false);
+  const [formState, setFormState] = useState({
+    title: '',
+    type: 'daily' as WorkReportItem['type'],
+    category: '',
+    priority: 'medium' as WorkReportItem['priority'],
+    reportDate: new Date().toISOString().split('T')[0],
+    dueDate: '',
+    content: '',
+    summary: '',
+    achievements: '',
+    challenges: '',
+    nextSteps: '',
+    tags: '',
+    isPublic: false
+  });
 
-  // 샘플 데이터
-  const sampleData: WorkReport[] = [
-    {
-      id: 1,
-      reportId: 'WR-2024-001',
-      title: 'MVS 3.0 프로젝트 주간 보고서',
-      type: 'weekly',
-      category: '프로젝트 진행',
-      authorId: 1001,
-      authorName: '김개발',
-      authorDepartment: '개발팀',
-      authorPosition: '개발팀장',
-      content: '이번 주 MVS 3.0 프로젝트의 주요 진행사항과 성과를 보고드립니다.\n\n1. 백엔드 API 개발 완료\n- 사용자 인증 시스템 구현\n- 메뉴 관리 API 개발\n- 권한 관리 시스템 구축\n\n2. 프론트엔드 UI 개발\n- 대시보드 화면 구현\n- 재고 관리 페이지 개발\n- 견적서 관리 시스템 구축\n\n3. 데이터베이스 설계\n- 사용자 테이블 구조 설계\n- 메뉴 권한 테이블 설계\n- 인덱스 최적화 적용',
-      summary: 'MVS 3.0 프로젝트의 핵심 기능들이 성공적으로 구현되었으며, 예정된 일정보다 2일 앞서 진행되고 있습니다.',
-      achievements: [
-        '백엔드 API 80% 완성',
-        '프론트엔드 UI 70% 완성',
-        '데이터베이스 설계 완료',
-        '테스트 환경 구축 완료'
-      ],
-      challenges: [
-        '복잡한 권한 관리 로직 구현',
-        '대용량 데이터 처리 최적화',
-        '사용자 인터페이스 일관성 유지'
-      ],
-      nextSteps: [
-        '남은 API 엔드포인트 개발',
-        '프론트엔드 컴포넌트 완성',
-        '통합 테스트 진행',
-        '배포 환경 준비'
-      ],
-      attachments: ['프로젝트_진행상황.pdf', 'API_문서.pdf', 'UI_목업.png'],
-      status: 'approved',
-      priority: 'high',
-      reportDate: '2024-01-22',
-      dueDate: '2024-01-25',
-      reviewerId: 2001,
-      reviewerName: '이부장',
-      reviewComment: '훌륭한 진행상황입니다. 다음 주까지 남은 작업들을 완료해주세요.',
-      reviewedAt: '2024-01-23 10:30:00',
-      createdAt: '2024-01-22 17:00:00',
-      updatedAt: '2024-01-23 10:30:00',
-      tags: ['MVS3.0', '프로젝트', '개발', '주간보고서'],
-      isPublic: false
-    },
-    {
-      id: 2,
-      reportId: 'WR-2024-002',
-      title: '재고 관리 시스템 개선 제안',
-      type: 'project',
-      category: '시스템 개선',
-      authorId: 1002,
-      authorName: '이프론트',
-      authorDepartment: '개발팀',
-      authorPosition: '프론트엔드 개발자',
-      content: '현재 재고 관리 시스템의 사용성을 개선하기 위한 제안사항을 정리했습니다.\n\n현재 문제점:\n1. 재고 수량 입력이 번거로움\n2. 검색 기능이 제한적\n3. 실시간 업데이트가 되지 않음\n\n개선 방안:\n1. 바코드 스캔 기능 추가\n2. 고급 검색 필터 구현\n3. WebSocket을 이용한 실시간 업데이트\n4. 모바일 반응형 UI 개선',
-      summary: '재고 관리 시스템의 사용성을 크게 개선할 수 있는 구체적인 방안을 제시했습니다.',
-      achievements: [
-        '사용자 피드백 수집 완료',
-        '개선 방안 도출',
-        '기술적 구현 방안 검토'
-      ],
-      challenges: [
-        '기존 시스템과의 호환성',
-        '사용자 교육 필요',
-        '개발 리소스 확보'
-      ],
-      nextSteps: [
-        '개선 방안 검토 및 승인',
-        '개발 일정 수립',
-        '프로토타입 개발',
-        '사용자 테스트 진행'
-      ],
-      attachments: ['개선제안서.pdf', 'UI_목업.png', '기술문서.pdf'],
-      status: 'submitted',
-      priority: 'medium',
-      reportDate: '2024-01-23',
-      dueDate: '2024-01-26',
-      createdAt: '2024-01-23 14:30:00',
-      updatedAt: '2024-01-23 14:30:00',
-      tags: ['재고관리', '시스템개선', 'UI/UX', '제안서'],
-      isPublic: true
-    },
-    {
-      id: 3,
-      reportId: 'WR-2024-003',
-      title: '시스템 장애 보고서',
-      type: 'incident',
-      category: '시스템 장애',
-      authorId: 1003,
-      authorName: '박백엔드',
-      authorDepartment: '개발팀',
-      authorPosition: '백엔드 개발자',
-      content: '2024년 1월 24일 오전 9시경 발생한 시스템 장애에 대한 보고서입니다.\n\n장애 상황:\n- 발생 시간: 2024-01-24 09:15\n- 복구 시간: 2024-01-24 10:45\n- 장애 지속 시간: 1시간 30분\n- 영향 범위: 전체 사용자\n\n원인 분석:\n데이터베이스 연결 풀이 고갈되어 새로운 연결을 생성할 수 없었습니다.\n\n대응 과정:\n1. 장애 감지 및 알림 발송\n2. 데이터베이스 연결 상태 확인\n3. 연결 풀 재시작\n4. 서비스 정상화 확인\n\n재발 방지 대책:\n1. 연결 풀 모니터링 강화\n2. 자동 복구 시스템 구축\n3. 장애 대응 매뉴얼 보완',
-      summary: '데이터베이스 연결 풀 고갈로 인한 1시간 30분간의 서비스 중단이 발생했으나, 신속한 대응으로 복구되었습니다.',
-      achievements: [
-        '장애 원인 정확히 파악',
-        '신속한 복구 작업 완료',
-        '재발 방지 대책 수립'
-      ],
-      challenges: [
-        '장애 발생 시점의 정확한 원인 파악',
-        '서비스 중단 최소화',
-        '사용자 불편 최소화'
-      ],
-      nextSteps: [
-        '모니터링 시스템 강화',
-        '자동 복구 시스템 개발',
-        '장애 대응 매뉴얼 업데이트',
-        '정기 점검 일정 수립'
-      ],
-      attachments: ['장애보고서.pdf', '로그분석.pdf', '복구과정.pdf'],
-      status: 'reviewed',
-      priority: 'urgent',
-      reportDate: '2024-01-24',
-      dueDate: '2024-01-25',
-      reviewerId: 2001,
-      reviewerName: '이부장',
-      reviewComment: '신속한 대응이었습니다. 재발 방지 대책을 즉시 실행해주세요.',
-      reviewedAt: '2024-01-24 16:00:00',
-      createdAt: '2024-01-24 11:00:00',
-      updatedAt: '2024-01-24 16:00:00',
-      tags: ['장애', '데이터베이스', '긴급', '복구'],
-      isPublic: false
+  const loadReportData = useCallback(async () => {
+    setError('');
+    try {
+      const response = await workReportService.getWorkReports();
+      if (response.success) {
+        const reportsData: WorkReportItem[] = (response.data || []).map((r: any) => ({
+          id: r.id,
+          reportId: r.report_id || '',
+          title: r.title || '',
+          type: r.type || 'other',
+          category: r.category || '',
+          authorId: r.author_id,
+          authorName: r.author?.username || tr('알 수 없음', 'Unknown'),
+          authorDepartment: r.author?.department || '-',
+          authorPosition: r.author?.position || '-',
+          content: r.content || '',
+          summary: r.summary || '',
+          achievements: r.achievements ? JSON.parse(r.achievements) : [],
+          challenges: r.challenges ? JSON.parse(r.challenges) : [],
+          nextSteps: r.next_steps ? JSON.parse(r.next_steps) : [],
+          attachments: r.attachments ? JSON.parse(r.attachments) : [],
+          status: r.status || 'draft',
+          priority: r.priority || 'medium',
+          reportDate: r.report_date || new Date().toISOString().split('T')[0],
+          dueDate: r.due_date,
+          reviewerId: r.reviewer_id,
+          reviewerName: r.reviewer?.username,
+          reviewComment: r.review_comment,
+          reviewedAt: r.reviewed_at,
+          createdAt: r.created_at || new Date().toISOString(),
+          updatedAt: r.updated_at || new Date().toISOString(),
+          tags: r.tags ? JSON.parse(r.tags) : [],
+          isPublic: r.is_public || false
+        }));
+        setReports(reportsData);
+      } else {
+        setError(response.message || tr('보고서 목록을 불러올 수 없습니다.', 'Failed to load report list.'));
+        setReports([]);
+      }
+    } catch (error: any) {
+      console.error('보고서 데이터 로드 오류:', error);
+      setError(error.response?.data?.message || tr('보고서 데이터를 불러오는데 실패했습니다.', 'Failed to load report data.'));
+      setReports([]);
     }
-  ];
-
-  useEffect(() => {
-    loadReportData();
   }, []);
 
-  useEffect(() => {
-    filterReports();
-  }, [reports, searchTerm, statusFilter, typeFilter, priorityFilter]);
-
-  const loadReportData = async () => {
-    setLoading(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setReports(sampleData);
-    } catch (error) {
-      console.error('보고서 데이터 로드 오류:', error);
-      setError('보고서 데이터를 불러오는데 실패했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filterReports = () => {
+  const filterReports = useCallback(() => {
     let filtered = reports;
 
     if (searchTerm) {
@@ -288,112 +193,228 @@ const WorkReport: React.FC = () => {
     }
 
     setFilteredReports(filtered);
-  };
+  }, [reports, searchTerm, statusFilter, typeFilter, priorityFilter]);
+
+  useEffect(() => {
+    loadReportData();
+  }, [loadReportData]);
+
+  useEffect(() => {
+    filterReports();
+  }, [filterReports]);
 
   const getStatusChip = (status: string) => {
     switch (status) {
       case 'draft':
-        return <Chip label="초안" color="default" size="small" />;
+        return <Chip label={tr('초안', 'Draft')} color="default" size="small" />;
       case 'submitted':
-        return <Chip label="제출됨" color="info" size="small" />;
+        return <Chip label={tr('제출됨', 'Submitted')} color="info" size="small" />;
       case 'reviewed':
-        return <Chip label="검토됨" color="warning" size="small" />;
+        return <Chip label={tr('검토됨', 'Reviewed')} color="warning" size="small" />;
       case 'approved':
-        return <Chip label="승인됨" color="success" size="small" />;
+        return <Chip label={tr('승인됨', 'Approved')} color="success" size="small" />;
       case 'rejected':
-        return <Chip label="반려됨" color="error" size="small" />;
+        return <Chip label={tr('반려됨', 'Rejected')} color="error" size="small" />;
       default:
-        return <Chip label="알 수 없음" color="default" size="small" />;
+        return <Chip label={tr('알 수 없음', 'Unknown')} color="default" size="small" />;
     }
   };
 
   const getPriorityChip = (priority: string) => {
     switch (priority) {
       case 'low':
-        return <Chip label="낮음" color="default" size="small" />;
+        return <Chip label={tr('낮음', 'Low')} color="default" size="small" />;
       case 'medium':
-        return <Chip label="보통" color="info" size="small" />;
+        return <Chip label={tr('보통', 'Medium')} color="info" size="small" />;
       case 'high':
-        return <Chip label="높음" color="warning" size="small" />;
+        return <Chip label={tr('높음', 'High')} color="warning" size="small" />;
       case 'urgent':
-        return <Chip label="긴급" color="error" size="small" />;
+        return <Chip label={tr('긴급', 'Urgent')} color="error" size="small" />;
       default:
-        return <Chip label="알 수 없음" color="default" size="small" />;
+        return <Chip label={tr('알 수 없음', 'Unknown')} color="default" size="small" />;
     }
   };
 
   const getTypeLabel = (type: string) => {
     switch (type) {
       case 'daily':
-        return '일일 보고서';
+        return tr('일일 보고서', 'Daily Report');
       case 'weekly':
-        return '주간 보고서';
+        return tr('주간 보고서', 'Weekly Report');
       case 'monthly':
-        return '월간 보고서';
+        return tr('월간 보고서', 'Monthly Report');
       case 'project':
-        return '프로젝트 보고서';
+        return tr('프로젝트 보고서', 'Project Report');
       case 'incident':
-        return '장애 보고서';
+        return tr('장애 보고서', 'Incident Report');
       case 'other':
-        return '기타';
+        return tr('기타', 'Other');
       default:
-        return '알 수 없음';
+        return tr('알 수 없음', 'Unknown');
     }
   };
 
-  const handleViewReport = (report: WorkReport) => {
+  const handleViewReport = (report: WorkReportItem) => {
     setSelectedReport(report);
     setViewMode('view');
   };
 
-  const handleEditReport = (report: WorkReport) => {
+  const handleEditReport = (report: WorkReportItem) => {
     setSelectedReport(report);
+    setFormState({
+      title: report.title,
+      type: report.type,
+      category: report.category,
+      priority: report.priority,
+      reportDate: report.reportDate,
+      dueDate: report.dueDate || '',
+      content: report.content,
+      summary: report.summary,
+      achievements: report.achievements.join('\n'),
+      challenges: report.challenges.join('\n'),
+      nextSteps: report.nextSteps.join('\n'),
+      tags: report.tags.join(', '),
+      isPublic: report.isPublic
+    });
     setOpenDialog(true);
   };
 
+  const handleOpenCreate = () => {
+    setSelectedReport(null);
+    setFormState({
+      title: '',
+      type: 'daily',
+      category: '',
+      priority: 'medium',
+      reportDate: new Date().toISOString().split('T')[0],
+      dueDate: '',
+      content: '',
+      summary: '',
+      achievements: '',
+      challenges: '',
+      nextSteps: '',
+      tags: '',
+      isPublic: false
+    });
+    setOpenDialog(true);
+  };
+
+  const handleSaveReport = async () => {
+    if (!formState.title.trim() || !formState.content.trim()) {
+      setError(tr('제목과 내용을 입력해주세요.', 'Please enter title and content.'));
+      return;
+    }
+
+    const toList = (value: string) =>
+      value
+        .split('\n')
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+    const tags = formState.tags
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    const payload = {
+      title: formState.title.trim(),
+      type: formState.type,
+      category: formState.category.trim(),
+      priority: formState.priority,
+      report_date: formState.reportDate,
+      due_date: formState.dueDate || null,
+      content: formState.content.trim(),
+      summary: formState.summary.trim(),
+      achievements: toList(formState.achievements),
+      challenges: toList(formState.challenges),
+      next_steps: toList(formState.nextSteps),
+      tags,
+      is_public: formState.isPublic,
+      status: selectedReport?.status || 'draft'
+    };
+
+    try {
+      setSaving(true);
+      const response = selectedReport
+        ? await workReportService.updateWorkReport(selectedReport.id, payload)
+        : await workReportService.createWorkReport(payload);
+
+      if (response.success) {
+        setSuccess(
+          selectedReport
+            ? tr('보고서가 수정되었습니다.', 'Report has been updated.')
+            : tr('보고서가 작성되었습니다.', 'Report has been created.')
+        );
+        setOpenDialog(false);
+        loadReportData();
+      } else {
+        setError(response.message || tr('보고서 저장에 실패했습니다.', 'Failed to save report.'));
+      }
+    } catch (error: any) {
+      console.error('보고서 저장 오류:', error);
+      setError(error.response?.data?.message || tr('An error occurred while saving report.', 'An error occurred while saving report.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleDeleteReport = async (id: number) => {
-    if (window.confirm('정말로 이 보고서를 삭제하시겠습니까?')) {
+    if (window.confirm(tr('정말로 이 보고서를 삭제하시겠습니까?', 'Are you sure you want to delete this report?'))) {
       try {
-        setReports(prev => prev.filter(report => report.id !== id));
-        setSuccess('보고서가 성공적으로 삭제되었습니다.');
-      } catch (error) {
+        const response = await workReportService.deleteWorkReport(id);
+        if (response.success) {
+          setSuccess(tr('보고서가 성공적으로 삭제되었습니다.', 'Report deleted successfully.'));
+          loadReportData();
+        } else {
+          setError(response.message || tr('보고서 삭제에 실패했습니다.', 'Failed to delete report.'));
+        }
+      } catch (error: any) {
         console.error('삭제 오류:', error);
-        setError('삭제 중 오류가 발생했습니다.');
+        setError(error.response?.data?.message || tr('삭제 중 오류가 발생했습니다.', 'An error occurred while deleting.'));
       }
     }
   };
 
-  const handleApproveReport = (id: number) => {
-    setReports(prev =>
-      prev.map(report =>
-        report.id === id 
-          ? { 
-              ...report, 
-              status: 'approved' as const,
-              reviewedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
-              updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 19)
-            } 
-          : report
-      )
-    );
-    setSuccess('보고서가 승인되었습니다.');
+  const handleApproveReport = async (id: number) => {
+    try {
+      const response = await workReportService.reviewWorkReport(id, 'approved');
+      if (response.success) {
+        setSuccess(tr('보고서가 승인되었습니다.', 'Report approved.'));
+        loadReportData();
+        if (viewMode === 'view' && selectedReport?.id === id) {
+          setViewMode('list');
+        }
+      } else {
+        setError(response.message || tr('보고서 승인에 실패했습니다.', 'Failed to approve report.'));
+      }
+    } catch (error: any) {
+      console.error('보고서 승인 오류:', error);
+      setError(error.response?.data?.message || tr('보고서 승인 중 오류가 발생했습니다.', 'An error occurred while approving report.'));
+    }
   };
 
-  const handleRejectReport = (id: number) => {
-    setReports(prev =>
-      prev.map(report =>
-        report.id === id 
-          ? { 
-              ...report, 
-              status: 'rejected' as const,
-              reviewedAt: new Date().toISOString().replace('T', ' ').substring(0, 19),
-              updatedAt: new Date().toISOString().replace('T', ' ').substring(0, 19)
-            } 
-          : report
-      )
-    );
-    setSuccess('보고서가 반려되었습니다.');
+  const handleRejectReport = async (id: number) => {
+    const comment = window.prompt(tr('반려 사유를 입력하세요:', 'Enter rejection reason:'));
+    if (comment !== null) {
+      try {
+        const response = await workReportService.reviewWorkReport(id, 'rejected', comment);
+        if (response.success) {
+          setSuccess(tr('보고서가 반려되었습니다.', 'Report rejected.'));
+          loadReportData();
+          if (viewMode === 'view' && selectedReport?.id === id) {
+            setViewMode('list');
+          }
+        } else {
+          setError(response.message || tr('보고서 반려에 실패했습니다.', 'Failed to reject report.'));
+        }
+      } catch (error: any) {
+        console.error('보고서 반려 오류:', error);
+        setError(error.response?.data?.message || tr('보고서 반려 중 오류가 발생했습니다.', 'An error occurred while rejecting report.'));
+      }
+    }
   };
+
+
 
   const pendingCount = reports.filter(report => report.status === 'submitted' || report.status === 'reviewed').length;
   const approvedCount = reports.filter(report => report.status === 'approved').length;
@@ -416,13 +437,13 @@ const WorkReport: React.FC = () => {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <AssignmentIcon />
-            업무 보고서 상세
+            {tr('업무 보고서 상세', 'Work Report Detail')}
           </Typography>
           <Button
             variant="outlined"
             onClick={() => setViewMode('list')}
           >
-            목록으로
+            {tr('목록으로', 'Back to List')}
           </Button>
         </Box>
 
@@ -434,22 +455,22 @@ const WorkReport: React.FC = () => {
                   {selectedReport.title}
                 </Typography>
                 <Typography variant="body1" color="text.secondary" gutterBottom>
-                  보고서 번호: {selectedReport.reportId}
+                  {tr('보고서 번호', 'Report No.')}: {selectedReport.reportId}
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
                   {getStatusChip(selectedReport.status)}
                   {getPriorityChip(selectedReport.priority)}
                   <Chip label={getTypeLabel(selectedReport.type)} color="primary" size="small" />
-                  {selectedReport.isPublic && <Chip label="공개" color="info" size="small" />}
+                  {selectedReport.isPublic && <Chip label={tr('공개', 'Public')} color="info" size="small" />}
                 </Box>
               </Box>
               <Box sx={{ textAlign: 'right' }}>
                 <Typography variant="body2" color="text.secondary">
-                  작성일: {selectedReport.reportDate}
+                  {tr('작성일', 'Report Date')}: {selectedReport.reportDate}
                 </Typography>
                 {selectedReport.dueDate && (
                   <Typography variant="body2" color="text.secondary">
-                    마감일: {selectedReport.dueDate}
+                    {tr('마감일', 'Due Date')}: {selectedReport.dueDate}
                   </Typography>
                 )}
               </Box>
@@ -459,7 +480,7 @@ const WorkReport: React.FC = () => {
 
             {/* 작성자 정보 */}
             <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" gutterBottom>작성자 정보</Typography>
+              <Typography variant="h6" gutterBottom>{tr('작성자 정보', 'Author Info')}</Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
                 <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
                   <PersonIcon />
@@ -477,7 +498,7 @@ const WorkReport: React.FC = () => {
 
             {/* 요약 */}
             <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" gutterBottom>요약</Typography>
+              <Typography variant="h6" gutterBottom>{tr('요약', 'Summary')}</Typography>
               <Card sx={{ p: 2, bgcolor: 'grey.50' }}>
                 <Typography variant="body1">
                   {selectedReport.summary}
@@ -487,7 +508,7 @@ const WorkReport: React.FC = () => {
 
             {/* 주요 성과 */}
             <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" gutterBottom>주요 성과</Typography>
+              <Typography variant="h6" gutterBottom>{tr('주요 성과', 'Key Achievements')}</Typography>
               <List>
                 {selectedReport.achievements.map((achievement, index) => (
                   <ListItem key={index}>
@@ -504,7 +525,7 @@ const WorkReport: React.FC = () => {
 
             {/* 도전과제 */}
             <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" gutterBottom>도전과제</Typography>
+              <Typography variant="h6" gutterBottom>{tr('도전과제', 'Challenges')}</Typography>
               <List>
                 {selectedReport.challenges.map((challenge, index) => (
                   <ListItem key={index}>
@@ -521,7 +542,7 @@ const WorkReport: React.FC = () => {
 
             {/* 다음 단계 */}
             <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" gutterBottom>다음 단계</Typography>
+              <Typography variant="h6" gutterBottom>{tr('다음 단계', 'Next Steps')}</Typography>
               <List>
                 {selectedReport.nextSteps.map((step, index) => (
                   <ListItem key={index}>
@@ -538,7 +559,7 @@ const WorkReport: React.FC = () => {
 
             {/* 상세 내용 */}
             <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" gutterBottom>상세 내용</Typography>
+              <Typography variant="h6" gutterBottom>{tr('상세 내용', 'Details')}</Typography>
               <Card sx={{ p: 2, bgcolor: 'grey.50' }}>
                 <Typography variant="body1" sx={{ whiteSpace: 'pre-line' }}>
                   {selectedReport.content}
@@ -549,7 +570,7 @@ const WorkReport: React.FC = () => {
             {/* 첨부파일 */}
             {selectedReport.attachments.length > 0 && (
               <Box sx={{ mb: 4 }}>
-                <Typography variant="h6" gutterBottom>첨부파일</Typography>
+                <Typography variant="h6" gutterBottom>{tr('첨부파일', 'Attachments')}</Typography>
                 <List>
                   {selectedReport.attachments.map((file, index) => (
                     <ListItem key={index}>
@@ -567,7 +588,7 @@ const WorkReport: React.FC = () => {
 
             {/* 태그 */}
             <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" gutterBottom>태그</Typography>
+              <Typography variant="h6" gutterBottom>{tr('태그', 'Tags')}</Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                 {selectedReport.tags.map((tag, index) => (
                   <Chip key={index} label={tag} variant="outlined" />
@@ -578,17 +599,17 @@ const WorkReport: React.FC = () => {
             {/* 검토 정보 */}
             {selectedReport.reviewerName && (
               <Box sx={{ mb: 4 }}>
-                <Typography variant="h6" gutterBottom>검토 정보</Typography>
+                <Typography variant="h6" gutterBottom>{tr('검토 정보', 'Review Info')}</Typography>
                 <Card sx={{ p: 2, bgcolor: 'grey.50' }}>
                   <Typography variant="body1" gutterBottom>
-                    <strong>검토자:</strong> {selectedReport.reviewerName}
+                    <strong>{tr('검토자', 'Reviewer')}:</strong> {selectedReport.reviewerName}
                   </Typography>
                   <Typography variant="body1" gutterBottom>
-                    <strong>검토일:</strong> {selectedReport.reviewedAt}
+                    <strong>{tr('검토일', 'Reviewed At')}:</strong> {selectedReport.reviewedAt}
                   </Typography>
                   {selectedReport.reviewComment && (
                     <Typography variant="body1">
-                      <strong>검토 의견:</strong> {selectedReport.reviewComment}
+                      <strong>{tr('검토 의견', 'Review Comment')}:</strong> {selectedReport.reviewComment}
                     </Typography>
                   )}
                 </Card>
@@ -601,19 +622,19 @@ const WorkReport: React.FC = () => {
                 startIcon={<EditIcon />}
                 onClick={() => handleEditReport(selectedReport)}
               >
-                수정
+                {tr('수정', 'Edit')}
               </Button>
               <Button
                 variant="outlined"
                 startIcon={<PrintIcon />}
               >
-                인쇄
+                {tr('인쇄', 'Print')}
               </Button>
               <Button
                 variant="outlined"
                 startIcon={<DownloadIcon />}
               >
-                PDF 다운로드
+                {tr('PDF 다운로드', 'Download PDF')}
               </Button>
               {selectedReport.status === 'submitted' && (
                 <>
@@ -623,7 +644,7 @@ const WorkReport: React.FC = () => {
                     startIcon={<CheckCircleIcon />}
                     onClick={() => handleApproveReport(selectedReport.id)}
                   >
-                    승인
+                    {tr('승인', 'Approve')}
                   </Button>
                   <Button
                     variant="contained"
@@ -631,7 +652,7 @@ const WorkReport: React.FC = () => {
                     startIcon={<CancelIcon />}
                     onClick={() => handleRejectReport(selectedReport.id)}
                   >
-                    반려
+                    {tr('반려', 'Reject')}
                   </Button>
                 </>
               )}
@@ -650,17 +671,24 @@ const WorkReport: React.FC = () => {
       minHeight: '100%'
     }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <AssignmentIcon />
-          업무 보고서
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <AssignmentIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
+          <Typography component="h1" sx={{ 
+            fontSize: '16px !important',
+            fontWeight: 600,
+            color: 'text.primary',
+            lineHeight: 1.5
+          }}>
+            {tr('업무 보고서', 'Work Reports')}
+          </Typography>
+        </Box>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => setOpenDialog(true)}
+          onClick={handleOpenCreate}
           sx={{ borderRadius: 2 }}
         >
-          보고서 작성
+          {tr('보고서 작성', 'Create Report')}
         </Button>
       </Box>
 
@@ -674,7 +702,7 @@ const WorkReport: React.FC = () => {
         <Card>
           <CardContent>
             <Typography color="textSecondary" gutterBottom>
-              대기중인 보고서
+              {tr('대기중인 보고서', 'Pending Reports')}
             </Typography>
             <Typography variant="h4" color="warning.main">
               {pendingCount}
@@ -684,7 +712,7 @@ const WorkReport: React.FC = () => {
         <Card>
           <CardContent>
             <Typography color="textSecondary" gutterBottom>
-              승인된 보고서
+              {tr('승인된 보고서', 'Approved Reports')}
             </Typography>
             <Typography variant="h4" color="success.main">
               {approvedCount}
@@ -694,7 +722,7 @@ const WorkReport: React.FC = () => {
         <Card>
           <CardContent>
             <Typography color="textSecondary" gutterBottom>
-              반려된 보고서
+              {tr('반려된 보고서', 'Rejected Reports')}
             </Typography>
             <Typography variant="h4" color="error.main">
               {rejectedCount}
@@ -704,7 +732,7 @@ const WorkReport: React.FC = () => {
         <Card>
           <CardContent>
             <Typography color="textSecondary" gutterBottom>
-              긴급 보고서
+              {tr('긴급 보고서', 'Urgent Reports')}
             </Typography>
             <Typography variant="h4" color="error.main">
               {urgentCount}
@@ -724,7 +752,7 @@ const WorkReport: React.FC = () => {
           }}>
             <TextField
               fullWidth
-              placeholder="제목, 보고서번호, 작성자, 내용 검색"
+              placeholder={tr('제목, 보고서번호, 작성자, 내용 검색', 'Search title, report no, author, content')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{
@@ -736,45 +764,45 @@ const WorkReport: React.FC = () => {
               }}
             />
             <FormControl fullWidth>
-              <InputLabel>상태</InputLabel>
+              <InputLabel>{tr('상태', 'Status')}</InputLabel>
               <Select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
-                <MenuItem value="">전체</MenuItem>
-                <MenuItem value="draft">초안</MenuItem>
-                <MenuItem value="submitted">제출됨</MenuItem>
-                <MenuItem value="reviewed">검토됨</MenuItem>
-                <MenuItem value="approved">승인됨</MenuItem>
-                <MenuItem value="rejected">반려됨</MenuItem>
+                <MenuItem value="">{tr('전체', 'All')}</MenuItem>
+                <MenuItem value="draft">{tr('초안', 'Draft')}</MenuItem>
+                <MenuItem value="submitted">{tr('제출됨', 'Submitted')}</MenuItem>
+                <MenuItem value="reviewed">{tr('검토됨', 'Reviewed')}</MenuItem>
+                <MenuItem value="approved">{tr('승인됨', 'Approved')}</MenuItem>
+                <MenuItem value="rejected">{tr('반려됨', 'Rejected')}</MenuItem>
               </Select>
             </FormControl>
             <FormControl fullWidth>
-              <InputLabel>유형</InputLabel>
+              <InputLabel>{tr('유형', 'Type')}</InputLabel>
               <Select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
               >
-                <MenuItem value="">전체</MenuItem>
-                <MenuItem value="daily">일일 보고서</MenuItem>
-                <MenuItem value="weekly">주간 보고서</MenuItem>
-                <MenuItem value="monthly">월간 보고서</MenuItem>
-                <MenuItem value="project">프로젝트 보고서</MenuItem>
-                <MenuItem value="incident">장애 보고서</MenuItem>
-                <MenuItem value="other">기타</MenuItem>
+                <MenuItem value="">{tr('전체', 'All')}</MenuItem>
+                <MenuItem value="daily">{tr('일일 보고서', 'Daily Report')}</MenuItem>
+                <MenuItem value="weekly">{tr('주간 보고서', 'Weekly Report')}</MenuItem>
+                <MenuItem value="monthly">{tr('월간 보고서', 'Monthly Report')}</MenuItem>
+                <MenuItem value="project">{tr('프로젝트 보고서', 'Project Report')}</MenuItem>
+                <MenuItem value="incident">{tr('장애 보고서', 'Incident Report')}</MenuItem>
+                <MenuItem value="other">{tr('기타', 'Other')}</MenuItem>
               </Select>
             </FormControl>
             <FormControl fullWidth>
-              <InputLabel>우선순위</InputLabel>
+              <InputLabel>{tr('우선순위', 'Priority')}</InputLabel>
               <Select
                 value={priorityFilter}
                 onChange={(e) => setPriorityFilter(e.target.value)}
               >
-                <MenuItem value="">전체</MenuItem>
-                <MenuItem value="low">낮음</MenuItem>
-                <MenuItem value="medium">보통</MenuItem>
-                <MenuItem value="high">높음</MenuItem>
-                <MenuItem value="urgent">긴급</MenuItem>
+                <MenuItem value="">{tr('전체', 'All')}</MenuItem>
+                <MenuItem value="low">{tr('낮음', 'Low')}</MenuItem>
+                <MenuItem value="medium">{tr('보통', 'Medium')}</MenuItem>
+                <MenuItem value="high">{tr('높음', 'High')}</MenuItem>
+                <MenuItem value="urgent">{tr('긴급', 'Urgent')}</MenuItem>
               </Select>
             </FormControl>
             <Button
@@ -788,7 +816,7 @@ const WorkReport: React.FC = () => {
                 setPriorityFilter('');
               }}
             >
-              초기화
+              {tr('초기화', 'Reset')}
             </Button>
           </Box>
         </CardContent>
@@ -800,13 +828,13 @@ const WorkReport: React.FC = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>보고서 정보</TableCell>
-                <TableCell>작성자</TableCell>
-                <TableCell>유형</TableCell>
-                <TableCell>우선순위</TableCell>
-                <TableCell>상태</TableCell>
-                <TableCell>작성일</TableCell>
-                <TableCell>작업</TableCell>
+                <TableCell>{tr('보고서 정보', 'Report')}</TableCell>
+                <TableCell>{tr('작성자', 'Author')}</TableCell>
+                <TableCell>{tr('유형', 'Type')}</TableCell>
+                <TableCell>{tr('우선순위', 'Priority')}</TableCell>
+                <TableCell>{tr('상태', 'Status')}</TableCell>
+                <TableCell>{tr('작성일', 'Date')}</TableCell>
+                <TableCell>{tr('작업', 'Actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -853,19 +881,19 @@ const WorkReport: React.FC = () => {
                   <TableCell>{report.reportDate}</TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Tooltip title="보기">
+                      <Tooltip title={tr('보기', 'View')}>
                         <IconButton size="small" onClick={() => handleViewReport(report)}>
                           <ViewIcon />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="수정">
+                      <Tooltip title={tr('수정', 'Edit')}>
                         <IconButton size="small" onClick={() => handleEditReport(report)}>
                           <EditIcon />
                         </IconButton>
                       </Tooltip>
                       {report.status === 'submitted' && (
                         <>
-                          <Tooltip title="승인">
+                          <Tooltip title={tr('승인', 'Approve')}>
                             <IconButton 
                               size="small" 
                               onClick={() => handleApproveReport(report.id)}
@@ -874,7 +902,7 @@ const WorkReport: React.FC = () => {
                               <CheckCircleIcon />
                             </IconButton>
                           </Tooltip>
-                          <Tooltip title="반려">
+                          <Tooltip title={tr('반려', 'Reject')}>
                             <IconButton 
                               size="small" 
                               onClick={() => handleRejectReport(report.id)}
@@ -885,7 +913,7 @@ const WorkReport: React.FC = () => {
                           </Tooltip>
                         </>
                       )}
-                      <Tooltip title="삭제">
+                      <Tooltip title={tr('삭제', 'Delete')}>
                         <IconButton size="small" onClick={() => handleDeleteReport(report.id)}>
                           <DeleteIcon />
                         </IconButton>
@@ -912,22 +940,178 @@ const WorkReport: React.FC = () => {
       {/* 보고서 작성/수정 다이얼로그 */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle>
-          {selectedReport ? '보고서 수정' : '보고서 작성'}
+          {selectedReport ? tr('보고서 수정', 'Edit Report') : tr('보고서 작성', 'Create Report')}
         </DialogTitle>
         <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              보고서 정보를 입력해주세요.
-            </Typography>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              보고서 작성 기능은 개발 중입니다.
-            </Typography>
+          <Box sx={{ mt: 2, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {tr('제목', 'Title')} *
+              </Typography>
+              <TextField
+                value={formState.title}
+                onChange={(e) => setFormState((prev) => ({ ...prev, title: e.target.value }))}
+                fullWidth
+                placeholder={tr('제목을 입력하세요', 'Enter title')}
+              />
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {tr('유형', 'Type')}
+              </Typography>
+              <FormControl fullWidth>
+                <Select
+                  value={formState.type}
+                  onChange={(e) => setFormState((prev) => ({ ...prev, type: e.target.value as WorkReportItem['type'] }))}
+                >
+                  <MenuItem value="daily">{tr('일일 보고서', 'Daily Report')}</MenuItem>
+                  <MenuItem value="weekly">{tr('주간 보고서', 'Weekly Report')}</MenuItem>
+                  <MenuItem value="monthly">{tr('월간 보고서', 'Monthly Report')}</MenuItem>
+                  <MenuItem value="project">{tr('프로젝트 보고서', 'Project Report')}</MenuItem>
+                  <MenuItem value="incident">{tr('장애 보고서', 'Incident Report')}</MenuItem>
+                  <MenuItem value="other">{tr('기타', 'Other')}</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {tr('카테고리', 'Category')}
+              </Typography>
+              <TextField
+                value={formState.category}
+                onChange={(e) => setFormState((prev) => ({ ...prev, category: e.target.value }))}
+                fullWidth
+                placeholder={tr('카테고리를 입력하세요', 'Enter category')}
+              />
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {tr('우선순위', 'Priority')}
+              </Typography>
+              <FormControl fullWidth>
+                <Select
+                  value={formState.priority}
+                  onChange={(e) =>
+                    setFormState((prev) => ({ ...prev, priority: e.target.value as WorkReportItem['priority'] }))
+                  }
+                >
+                  <MenuItem value="low">{tr('낮음', 'Low')}</MenuItem>
+                  <MenuItem value="medium">{tr('보통', 'Medium')}</MenuItem>
+                  <MenuItem value="high">{tr('높음', 'High')}</MenuItem>
+                  <MenuItem value="urgent">{tr('긴급', 'Urgent')}</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {tr('작성일', 'Report Date')}
+              </Typography>
+              <TextField
+                type="date"
+                value={formState.reportDate}
+                onChange={(e) => setFormState((prev) => ({ ...prev, reportDate: e.target.value }))}
+                fullWidth
+              />
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {tr('마감일', 'Due Date')}
+              </Typography>
+              <TextField
+                type="date"
+                value={formState.dueDate}
+                onChange={(e) => setFormState((prev) => ({ ...prev, dueDate: e.target.value }))}
+                fullWidth
+              />
+            </Box>
+            <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {tr('내용', 'Content')} *
+              </Typography>
+              <TextField
+                value={formState.content}
+                onChange={(e) => setFormState((prev) => ({ ...prev, content: e.target.value }))}
+                fullWidth
+                multiline
+                minRows={6}
+                placeholder={tr('보고서 내용을 입력하세요', 'Enter report content')}
+              />
+            </Box>
+            <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {tr('요약', 'Summary')}
+              </Typography>
+              <TextField
+                value={formState.summary}
+                onChange={(e) => setFormState((prev) => ({ ...prev, summary: e.target.value }))}
+                fullWidth
+                multiline
+                minRows={2}
+                placeholder={tr('요약을 입력하세요', 'Enter summary')}
+              />
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {tr('성과 (한 줄에 하나씩)', 'Achievements (one per line)')}
+              </Typography>
+              <TextField
+                value={formState.achievements}
+                onChange={(e) => setFormState((prev) => ({ ...prev, achievements: e.target.value }))}
+                fullWidth
+                multiline
+                minRows={3}
+              />
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {tr('이슈/도전 과제 (한 줄에 하나씩)', 'Issues/Challenges (one per line)')}
+              </Typography>
+              <TextField
+                value={formState.challenges}
+                onChange={(e) => setFormState((prev) => ({ ...prev, challenges: e.target.value }))}
+                fullWidth
+                multiline
+                minRows={3}
+              />
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {tr('다음 계획 (한 줄에 하나씩)', 'Next plans (one per line)')}
+              </Typography>
+              <TextField
+                value={formState.nextSteps}
+                onChange={(e) => setFormState((prev) => ({ ...prev, nextSteps: e.target.value }))}
+                fullWidth
+                multiline
+                minRows={3}
+              />
+            </Box>
+            <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {tr('태그 (쉼표로 구분)', 'Tags (comma separated)')}
+              </Typography>
+              <TextField
+                value={formState.tags}
+                onChange={(e) => setFormState((prev) => ({ ...prev, tags: e.target.value }))}
+                fullWidth
+                placeholder={tr('태그를 입력하세요', 'Enter tags')}
+              />
+            </Box>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={formState.isPublic}
+                  onChange={(e) => setFormState((prev) => ({ ...prev, isPublic: e.target.checked }))}
+                />
+              }
+              label={tr('공개 보고서', 'Public report')}
+            />
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>취소</Button>
-          <Button variant="contained">
-            {selectedReport ? '수정' : '작성'}
+          <Button onClick={() => setOpenDialog(false)}>{tr('취소', 'Cancel')}</Button>
+          <Button variant="contained" onClick={handleSaveReport} disabled={saving}>
+            {selectedReport ? tr('수정', 'Update') : tr('작성', 'Create')}
           </Button>
         </DialogActions>
       </Dialog>

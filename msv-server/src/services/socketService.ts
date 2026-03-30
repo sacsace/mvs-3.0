@@ -1,5 +1,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
+import jwt from 'jsonwebtoken';
 
 interface AuthenticatedSocket extends Socket {
   user?: {
@@ -10,16 +11,29 @@ interface AuthenticatedSocket extends Socket {
   };
 }
 
+interface JwtSocketPayload {
+  userId: number;
+  userid?: string;
+  tenantId?: number;
+  companyId?: number;
+}
+
 class SocketService {
   private io: SocketIOServer;
   private connectedUsers: Map<number, string> = new Map();
 
   constructor(server: HTTPServer) {
+    const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean);
+
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+        origin: allowedOrigins,
         methods: ['GET', 'POST']
-      }
+      },
+      maxHttpBufferSize: 1e6
     });
 
     this.setupSocketHandlers();
@@ -27,18 +41,39 @@ class SocketService {
 
   private setupSocketHandlers() {
     this.io.use((socket: AuthenticatedSocket, next) => {
-      // 간단한 인증 (실제로는 JWT 토큰 검증)
-      const token = socket.handshake.auth.token;
-      if (token) {
-        // 토큰 검증 로직 (실제로는 JWT 검증)
-        socket.user = {
-          id: 1,
-          userid: 'testuser',
-          tenant_id: 1,
-          company_id: 1
-        };
+      const authToken = socket.handshake.auth?.token;
+      const bearerHeader = socket.handshake.headers?.authorization;
+      const bearerToken =
+        typeof bearerHeader === 'string' && bearerHeader.startsWith('Bearer ')
+          ? bearerHeader.split(' ')[1]
+          : undefined;
+      const token = typeof authToken === 'string' && authToken.trim() ? authToken.trim() : bearerToken;
+
+      if (!token) {
+        return next(new Error('인증 토큰이 필요합니다.'));
       }
-      next();
+
+      const secret = process.env.JWT_SECRET;
+      if (!secret) {
+        return next(new Error('서버 JWT 설정이 누락되었습니다.'));
+      }
+
+      try {
+        const decoded = jwt.verify(token, secret) as JwtSocketPayload;
+        if (!decoded?.userId || typeof decoded.userId !== 'number') {
+          return next(new Error('유효하지 않은 토큰 payload입니다.'));
+        }
+
+        socket.user = {
+          id: decoded.userId,
+          userid: decoded.userid || `user-${decoded.userId}`,
+          tenant_id: Number(decoded.tenantId || 0),
+          company_id: Number(decoded.companyId || 0)
+        };
+        return next();
+      } catch {
+        return next(new Error('유효하지 않은 소켓 인증 토큰입니다.'));
+      }
     });
 
     this.io.on('connection', (socket: AuthenticatedSocket) => {
@@ -49,10 +84,12 @@ class SocketService {
       }
 
       // 사용자별 알림 구독
-      socket.on('subscribe_notifications', (data) => {
+      socket.on('subscribe_notifications', (_data) => {
         if (socket.user) {
           socket.join(`user_${socket.user.id}`);
-          socket.join(`tenant_${socket.user.tenant_id}`);
+          if (socket.user.tenant_id > 0) {
+            socket.join(`tenant_${socket.user.tenant_id}`);
+          }
         }
       });
 

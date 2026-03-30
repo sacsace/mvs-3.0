@@ -11,6 +11,7 @@ interface InvoiceItemAttributes {
   total_price: number;
   tax_rate: number;
   tax_amount: number;
+  is_active: boolean;
   created_at: Date;
   updated_at: Date;
 }
@@ -27,6 +28,7 @@ class InvoiceItem extends Model<InvoiceItemAttributes, InvoiceItemCreationAttrib
   public total_price!: number;
   public tax_rate!: number;
   public tax_amount!: number;
+  public is_active!: boolean;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
 }
@@ -78,6 +80,11 @@ InvoiceItem.init(
       type: DataTypes.DECIMAL(15, 2),
       allowNull: false,
       defaultValue: 0,
+    },
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
     },
     created_at: {
       type: DataTypes.DATE,

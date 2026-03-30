@@ -1,4 +1,4 @@
-// MVS 3.0 타입 정의
+// MVS 타입 정의
 
 // 사용자 관련 타입
 export interface User {

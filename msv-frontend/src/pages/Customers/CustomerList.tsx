@@ -202,7 +202,7 @@ const CustomerList: React.FC = () => {
               총 거래 금액
             </Typography>
             <Typography variant="h4" color="warning.main">
-              {customers.reduce((sum, item) => sum + item.totalAmount, 0).toLocaleString()}원
+              Rs. {customers.reduce((sum, item) => sum + item.totalAmount, 0).toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
@@ -353,7 +353,7 @@ const CustomerList: React.FC = () => {
                         <TableCell>{customer.registrationDate}</TableCell>
                         <TableCell>{customer.lastOrderDate}</TableCell>
                         <TableCell align="right">{customer.totalOrders}건</TableCell>
-                        <TableCell align="right">{customer.totalAmount.toLocaleString()}원</TableCell>
+                        <TableCell align="right">Rs. {customer.totalAmount.toLocaleString()}</TableCell>
                         <TableCell>
                           <IconButton
                             size="small"

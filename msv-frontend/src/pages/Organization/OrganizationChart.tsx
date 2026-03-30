@@ -5,7 +5,6 @@ import {
   Card,
   CardContent,
   Button,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -16,30 +15,21 @@ import {
   Select,
   MenuItem,
   Chip,
-  Tooltip,
   Alert,
   Snackbar,
-  Fab,
   Paper,
   Avatar,
   Divider
 } from '@mui/material';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
   Person as PersonIcon,
   Group as GroupIcon,
   Business as BusinessIcon,
-  ZoomIn as ZoomInIcon,
-  ZoomOut as ZoomOutIcon,
-  FitScreen as FitScreenIcon,
-  Save as SaveIcon,
   Refresh as RefreshIcon,
   AccountTree as TreeIcon
 } from '@mui/icons-material';
 import ReactFlow, {
-  Node,
   Edge,
   addEdge,
   Connection,
@@ -49,11 +39,12 @@ import ReactFlow, {
   Background,
   MiniMap,
   NodeTypes,
-  Position,
   MarkerType,
   BackgroundVariant
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { api } from '../../services/api';
+import { useStore } from '../../store';
 
 // 조직도 노드 타입 정의
 interface OrganizationNode {
@@ -210,6 +201,7 @@ const nodeTypes: NodeTypes = {
 };
 
 const OrganizationChart: React.FC = () => {
+  const { user } = useStore();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [openDialog, setOpenDialog] = useState(false);
@@ -217,6 +209,7 @@ const OrganizationChart: React.FC = () => {
   const [dialogMode, setDialogMode] = useState<'add' | 'edit'>('add');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     name: '',
     position: '',
@@ -227,149 +220,152 @@ const OrganizationChart: React.FC = () => {
     managerId: ''
   });
 
-  // 샘플 데이터
-  const sampleData: OrganizationNode[] = [
-    {
-      id: '1',
-      type: 'company',
-      data: {
-        label: 'MVS 3.0',
-        name: 'MVS 3.0',
-        level: 0,
-        employeeCount: 25
-      },
-      position: { x: 400, y: 50 }
-    },
-    {
-      id: '2',
-      type: 'department',
-      data: {
-        label: '개발팀',
-        name: '개발팀',
-        level: 1,
-        employeeCount: 8
-      },
-      position: { x: 200, y: 200 }
-    },
-    {
-      id: '3',
-      type: 'department',
-      data: {
-        label: '마케팅팀',
-        name: '마케팅팀',
-        level: 1,
-        employeeCount: 5
-      },
-      position: { x: 600, y: 200 }
-    },
-    {
-      id: '4',
-      type: 'person',
-      data: {
-        label: '김개발',
-        name: '김개발',
-        position: '개발팀장',
-        department: '개발팀',
-        email: 'kim.dev@mvs.com',
-        phone: '010-1234-5678',
-        level: 2,
-        managerId: '2'
-      },
-      position: { x: 100, y: 350 }
-    },
-    {
-      id: '5',
-      type: 'person',
-      data: {
-        label: '이프론트',
-        name: '이프론트',
-        position: '프론트엔드 개발자',
-        department: '개발팀',
-        email: 'lee.front@mvs.com',
-        phone: '010-2345-6789',
-        level: 2,
-        managerId: '4'
-      },
-      position: { x: 50, y: 500 }
-    },
-    {
-      id: '6',
-      type: 'person',
-      data: {
-        label: '박백엔드',
-        name: '박백엔드',
-        position: '백엔드 개발자',
-        department: '개발팀',
-        email: 'park.back@mvs.com',
-        phone: '010-3456-7890',
-        level: 2,
-        managerId: '4'
-      },
-      position: { x: 150, y: 500 }
-    },
-    {
-      id: '7',
-      type: 'person',
-      data: {
-        label: '최마케팅',
-        name: '최마케팅',
-        position: '마케팅팀장',
-        department: '마케팅팀',
-        email: 'choi.marketing@mvs.com',
-        phone: '010-4567-8901',
-        level: 2,
-        managerId: '3'
-      },
-      position: { x: 500, y: 350 }
-    },
-    {
-      id: '8',
-      type: 'person',
-      data: {
-        label: '정디자인',
-        name: '정디자인',
-        position: 'UI/UX 디자이너',
-        department: '마케팅팀',
-        email: 'jung.design@mvs.com',
-        phone: '010-5678-9012',
-        level: 2,
-        managerId: '7'
-      },
-      position: { x: 450, y: 500 }
-    },
-    {
-      id: '9',
-      type: 'person',
-      data: {
-        label: '한콘텐츠',
-        name: '한콘텐츠',
-        position: '콘텐츠 마케터',
-        department: '마케팅팀',
-        email: 'han.content@mvs.com',
-        phone: '010-6789-0123',
-        level: 2,
-        managerId: '7'
-      },
-      position: { x: 550, y: 500 }
+  // DB에서 조직도 데이터 로드
+  const loadOrganizationData = useCallback(async () => {
+    try {
+      setLoading(true);
+      
+      // 회사 정보 가져오기
+      const companyResponse = await api.get(`/company/${user?.company_id}`);
+      const company = companyResponse.data.success ? companyResponse.data.data : null;
+      
+      // 사용자 목록 가져오기
+      const usersResponse = await api.get('/users');
+      const users = usersResponse.data.success ? usersResponse.data.data : [];
+      
+      // 활성 사용자만 필터링
+      const activeUsers = users.filter((u: any) => u.status === 'active');
+      
+      // 부서별로 그룹화
+      const departmentMap = new Map<string, any[]>();
+      activeUsers.forEach((user: any) => {
+        const dept = user.department || '미지정';
+        if (!departmentMap.has(dept)) {
+          departmentMap.set(dept, []);
+        }
+        departmentMap.get(dept)!.push(user);
+      });
+      
+      const orgNodes: OrganizationNode[] = [];
+      const orgEdges: Edge[] = [];
+      
+      // 회사 노드 생성
+      if (company) {
+        const companyNode: OrganizationNode = {
+          id: `company-${company.id}`,
+          type: 'company',
+          data: {
+            label: company.name,
+            name: company.name,
+            level: 0,
+            employeeCount: activeUsers.length
+          },
+          position: { x: 400, y: 50 }
+        };
+        orgNodes.push(companyNode);
+      }
+      
+      // 부서 노드 및 사용자 노드 생성
+      const departments = Array.from(departmentMap.keys());
+      const deptNodeWidth = 300;
+      const startX = 400 - ((departments.length - 1) * deptNodeWidth) / 2;
+      
+      departments.forEach((deptName, deptIndex) => {
+        const deptUsers = departmentMap.get(deptName)!;
+        const deptNodeId = `dept-${deptName}`;
+        
+        // 부서 노드 생성
+        const deptNode: OrganizationNode = {
+          id: deptNodeId,
+          type: 'department',
+          data: {
+            label: deptName,
+            name: deptName,
+            level: 1,
+            employeeCount: deptUsers.length
+          },
+          position: { x: startX + deptIndex * deptNodeWidth, y: 200 }
+        };
+        orgNodes.push(deptNode);
+        
+        // 회사 -> 부서 엣지
+        if (company) {
+          orgEdges.push({
+            id: `edge-company-${deptNodeId}`,
+            source: `company-${company.id}`,
+            target: deptNodeId,
+            type: 'smoothstep',
+            markerEnd: { type: MarkerType.ArrowClosed }
+          });
+        }
+        
+        // 사용자 노드 생성
+        const userNodeWidth = 200;
+        const userStartX = deptNode.position.x - ((deptUsers.length - 1) * userNodeWidth) / 2;
+        
+        deptUsers.forEach((userData, userIndex) => {
+          const userNode: OrganizationNode = {
+            id: `user-${userData.id}`,
+            type: 'person',
+            data: {
+              label: userData.username,
+              name: userData.username,
+              position: userData.position || '',
+              department: userData.department || '',
+              email: userData.email || '',
+              phone: userData.phone || '', // 사용자 테이블의 phone 필드 사용
+              level: 2,
+              managerId: deptNodeId
+            },
+            position: { 
+              x: userStartX + userIndex * userNodeWidth, 
+              y: 350 
+            }
+          };
+          orgNodes.push(userNode);
+          
+          // 부서 -> 사용자 엣지
+          orgEdges.push({
+            id: `edge-${deptNodeId}-user-${userData.id}`,
+            source: deptNodeId,
+            target: `user-${userData.id}`,
+            type: 'smoothstep',
+            markerEnd: { type: MarkerType.ArrowClosed }
+          });
+        });
+      });
+      
+      console.log('🔍 [조직도] 노드 생성 완료:', {
+        노드개수: orgNodes.length,
+        엣지개수: orgEdges.length,
+        부서개수: departments.length
+      });
+      
+      setNodes(orgNodes);
+      setEdges(orgEdges);
+    } catch (error: any) {
+      console.error('❌ [조직도] 데이터 로드 오류:', error);
+      console.error('❌ [조직도] 에러 상세:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
+      const errorMessage = error.response?.data?.message || error.message || '조직도 데이터를 불러오는데 실패했습니다.';
+      setError(errorMessage);
+      setNodes([]);
+      setEdges([]);
+    } finally {
+      setLoading(false);
+      console.log('🔍 [조직도] 로딩 완료');
     }
-  ];
-
-  const sampleEdges: Edge[] = [
-    { id: 'e1-2', source: '1', target: '2', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
-    { id: 'e1-3', source: '1', target: '3', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
-    { id: 'e2-4', source: '2', target: '4', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
-    { id: 'e4-5', source: '4', target: '5', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
-    { id: 'e4-6', source: '4', target: '6', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
-    { id: 'e3-7', source: '3', target: '7', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
-    { id: 'e7-8', source: '7', target: '8', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } },
-    { id: 'e7-9', source: '7', target: '9', type: 'smoothstep', markerEnd: { type: MarkerType.ArrowClosed } }
-  ];
+  }, [user?.company_id]);
 
   // 초기 데이터 로드
   React.useEffect(() => {
-    setNodes(sampleData);
-    setEdges(sampleEdges);
-  }, []);
+    if (user?.company_id) {
+      loadOrganizationData();
+    }
+  }, [loadOrganizationData, user?.company_id]);
 
   // 연결 생성
   const onConnect = useCallback(
@@ -441,28 +437,6 @@ const OrganizationChart: React.FC = () => {
     setSuccess(dialogMode === 'edit' ? '노드가 수정되었습니다.' : '노드가 추가되었습니다.');
   };
 
-  // 노드 삭제
-  const handleDeleteNode = (nodeId: string) => {
-    if (window.confirm('정말로 이 노드를 삭제하시겠습니까?')) {
-      setNodes((nds) => nds.filter((node) => node.id !== nodeId));
-      setEdges((eds) => eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId));
-      setSuccess('노드가 삭제되었습니다.');
-    }
-  };
-
-  // 줌 컨트롤
-  const handleZoomIn = () => {
-    // ReactFlow의 줌 인 기능은 Controls 컴포넌트에서 처리됩니다
-  };
-
-  const handleZoomOut = () => {
-    // ReactFlow의 줌 아웃 기능은 Controls 컴포넌트에서 처리됩니다
-  };
-
-  const handleFitView = () => {
-    // ReactFlow의 fit view 기능은 Controls 컴포넌트에서 처리됩니다
-  };
-
   // 통계 계산
   const stats = useMemo(() => {
     const totalEmployees = nodes.filter(node => node.type === 'person').length;
@@ -482,10 +456,22 @@ const OrganizationChart: React.FC = () => {
     }}>
       {/* 헤더 */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <TreeIcon />
-          조직도 관리
-        </Typography>
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <TreeIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
+            <Typography component="h1" sx={{
+              fontSize: '16px !important',
+              fontWeight: 600,
+              color: 'red',
+              lineHeight: 1.5
+            }}>
+              조직도 관리
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+            회사 조직 구조를 시각화하고 관리하는 페이지입니다.
+          </Typography>
+        </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
             variant="contained"
@@ -498,13 +484,11 @@ const OrganizationChart: React.FC = () => {
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}
-            onClick={() => {
-              setNodes(sampleData);
-              setEdges(sampleEdges);
-            }}
+            onClick={loadOrganizationData}
             sx={{ borderRadius: 2 }}
+            disabled={loading}
           >
-            초기화
+            새로고침
           </Button>
         </Box>
       </Box>
@@ -549,32 +533,65 @@ const OrganizationChart: React.FC = () => {
       </Box>
 
       {/* 조직도 다이어그램 */}
-      <Paper sx={{ height: 'calc(100vh - 400px)', minHeight: 500, borderRadius: 2, overflow: 'hidden' }}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          nodeTypes={nodeTypes}
-          fitView
-          attributionPosition="bottom-left"
-        >
-          <Controls />
-          <MiniMap 
-            nodeColor={(node) => {
-              switch (node.type) {
-                case 'company': return '#22c55e';
-                case 'department': return '#3b82f6';
-                case 'person': return '#0d8aff';
-                default: return '#64748b';
-              }
-            }}
-            nodeStrokeWidth={3}
-            nodeBorderRadius={8}
-          />
-          <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-        </ReactFlow>
+      <Paper sx={{ height: 'calc(100vh - 400px)', minHeight: 500, borderRadius: 2, overflow: 'hidden', position: 'relative' }}>
+        {loading ? (
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            height: '100%' 
+          }}>
+            <Typography variant="h6" color="text.secondary">
+              조직도 데이터를 불러오는 중...
+            </Typography>
+          </Box>
+        ) : nodes.length === 0 ? (
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center', 
+            height: '100%',
+            flexDirection: 'column',
+            gap: 2
+          }}>
+            <Typography variant="h6" color="text.secondary">
+              조직도 데이터가 없습니다.
+            </Typography>
+            <Button
+              variant="contained"
+              startIcon={<RefreshIcon />}
+              onClick={loadOrganizationData}
+            >
+              새로고침
+            </Button>
+          </Box>
+        ) : (
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            nodeTypes={nodeTypes}
+            fitView
+            attributionPosition="bottom-left"
+          >
+            <Controls />
+            <MiniMap 
+              nodeColor={(node) => {
+                switch (node.type) {
+                  case 'company': return '#22c55e';
+                  case 'department': return '#3b82f6';
+                  case 'person': return '#0d8aff';
+                  default: return '#64748b';
+                }
+              }}
+              nodeStrokeWidth={3}
+              nodeBorderRadius={8}
+            />
+            <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
+          </ReactFlow>
+        )}
       </Paper>
 
       {/* 노드 추가/수정 다이얼로그 */}

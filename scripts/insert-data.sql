@@ -1,4 +1,4 @@
--- MVS 3.0 초기 데이터 삽입 스크립트
+-- MVS 초기 데이터 삽입 스크립트
 
 -- 기본 테넌트 생성
 INSERT INTO tenant (tenant_code, name, domain, plan, status, settings) 

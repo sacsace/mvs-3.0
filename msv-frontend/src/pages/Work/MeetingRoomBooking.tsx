@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -11,7 +11,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Chip,
   TextField,
   FormControl,
@@ -30,13 +29,7 @@ import {
   InputAdornment,
   Divider,
   Avatar,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar,
-  LinearProgress,
-  Grid,
-  Badge
+  Grid
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -46,19 +39,13 @@ import {
   Search as SearchIcon,
   FilterList as FilterIcon,
   MeetingRoom as MeetingRoomIcon,
-  Schedule as ScheduleIcon,
   Person as PersonIcon,
-  Group as GroupIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   Print as PrintIcon,
   Download as DownloadIcon,
-  Refresh as RefreshIcon,
-  Event as EventIcon,
-  AccessTime as AccessTimeIcon,
-  LocationOn as LocationOnIcon
+  Event as EventIcon
 } from '@mui/icons-material';
-import { useStore } from '../../store';
 
 interface MeetingRoom {
   id: number;
@@ -96,11 +83,9 @@ interface Booking {
 }
 
 const MeetingRoomBooking: React.FC = () => {
-  const { user } = useStore();
   const [rooms, setRooms] = useState<MeetingRoom[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
@@ -114,7 +99,7 @@ const MeetingRoomBooking: React.FC = () => {
   const [itemsPerPage] = useState(10);
 
   // 샘플 데이터
-  const sampleRooms: MeetingRoom[] = [
+  const sampleRooms = useMemo<MeetingRoom[]>(() => [
     {
       id: 1,
       name: '대회의실',
@@ -155,9 +140,9 @@ const MeetingRoomBooking: React.FC = () => {
       description: '소규모 미팅용 회의실 (점검중)',
       imageUrl: '/images/meeting-room-4.jpg'
     }
-  ];
+  ], []);
 
-  const sampleBookings: Booking[] = [
+  const sampleBookings = useMemo<Booking[]>(() => [
     {
       id: 1,
       bookingId: 'MR-2024-001',
@@ -188,7 +173,7 @@ const MeetingRoomBooking: React.FC = () => {
       roomName: '중회의실',
       roomLocation: '3층 302호',
       title: '프로젝트 리뷰',
-      description: 'MVS 3.0 프로젝트 진행 상황 리뷰',
+      description: 'MVS 프로젝트 진행 상황 리뷰',
       organizerId: 1002,
       organizerName: '이프론트',
       organizerDepartment: '개발팀',
@@ -221,18 +206,9 @@ const MeetingRoomBooking: React.FC = () => {
       createdAt: '2024-01-23 15:20:00',
       updatedAt: '2024-01-23 15:20:00'
     }
-  ];
+  ], []);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  useEffect(() => {
-    filterBookings();
-  }, [bookings, searchTerm, statusFilter, roomFilter, dateFilter]);
-
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = useCallback(async () => {
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
       setRooms(sampleRooms);
@@ -240,12 +216,10 @@ const MeetingRoomBooking: React.FC = () => {
     } catch (error) {
       console.error('데이터 로드 오류:', error);
       setError('데이터를 불러오는데 실패했습니다.');
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [sampleRooms, sampleBookings]);
 
-  const filterBookings = () => {
+  const filterBookings = useCallback(() => {
     let filtered = bookings;
 
     if (searchTerm) {
@@ -270,7 +244,15 @@ const MeetingRoomBooking: React.FC = () => {
     }
 
     setFilteredBookings(filtered);
-  };
+  }, [bookings, searchTerm, statusFilter, roomFilter, dateFilter]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    filterBookings();
+  }, [filterBookings]);
 
   const getStatusChip = (status: string) => {
     switch (status) {
@@ -558,10 +540,17 @@ const MeetingRoomBooking: React.FC = () => {
       minHeight: '100%'
     }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <MeetingRoomIcon />
-          회의실 예약
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <MeetingRoomIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
+          <Typography component="h1" sx={{ 
+            fontSize: '16px !important',
+            fontWeight: 600,
+            color: 'red',
+            lineHeight: 1.5
+          }}>
+            회의실 예약
+          </Typography>
+        </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
             variant="outlined"

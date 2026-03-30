@@ -231,7 +231,7 @@ const CostAnalysis: React.FC = () => {
         AI 비용 분석
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        AI 기반 비용 최적화 제안과 예측 분석을 제공합니다.
+        최근 비용 추이와 카테고리별 지출을 분석하고, AI가 절감 포인트와 향후 비용을 예측합니다.
       </Typography>
 
       {error && (
@@ -310,7 +310,7 @@ const CostAnalysis: React.FC = () => {
                 총 비용
               </Typography>
               <Typography variant="h4" color="primary.main">
-                ₩{analysisData?.totalCost?.toLocaleString() || 0}
+                Rs. {analysisData?.totalCost?.toLocaleString() || 0}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 현재 기간 기준
@@ -388,8 +388,8 @@ const CostAnalysis: React.FC = () => {
                     {analysisData?.departmentCosts?.map((dept, index) => (
                       <TableRow key={index}>
                         <TableCell>{dept.department}</TableCell>
-                        <TableCell align="right">₩{dept.cost.toLocaleString()}</TableCell>
-                        <TableCell align="right">₩{dept.budget.toLocaleString()}</TableCell>
+                        <TableCell align="right">Rs. {dept.cost.toLocaleString()}</TableCell>
+                        <TableCell align="right">Rs. {dept.budget.toLocaleString()}</TableCell>
                         <TableCell align="right">
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <LinearProgress 
@@ -457,7 +457,7 @@ const CostAnalysis: React.FC = () => {
                 {insight.estimatedSavings && (
                   <Box sx={{ mt: 2, p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
                     <Typography variant="body2" color="success.dark">
-                      <strong>예상 절약액:</strong> ₩{insight.estimatedSavings.toLocaleString()}
+                      <strong>예상 절약액:</strong> Rs. {insight.estimatedSavings.toLocaleString()}
                     </Typography>
                   </Box>
                 )}
@@ -499,7 +499,7 @@ const CostAnalysis: React.FC = () => {
                   <ListItem key={index}>
                     <ListItemText
                       primary={prediction.period}
-                      secondary={`₩${prediction.predictedCost.toLocaleString()} (신뢰도: ${prediction.confidence}%)`}
+                      secondary={`Rs. ${prediction.predictedCost.toLocaleString()} (신뢰도: ${prediction.confidence}%)`}
                     />
                     <Chip
                       label={prediction.factors.length} 
@@ -584,7 +584,7 @@ const CostAnalysis: React.FC = () => {
               {selectedInsight.estimatedSavings && (
                 <Box sx={{ p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
                   <Typography variant="h6" color="success.dark">
-                    예상 절약액: ₩{selectedInsight.estimatedSavings.toLocaleString()}
+                    예상 절약액: Rs. {selectedInsight.estimatedSavings.toLocaleString()}
                   </Typography>
                 </Box>
               )}

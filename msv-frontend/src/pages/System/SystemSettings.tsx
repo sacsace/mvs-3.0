@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -7,41 +7,48 @@ import {
   Button,
   TextField,
   FormControl,
-  InputLabel,
   Select,
   MenuItem,
   Switch,
   FormControlLabel,
   Divider,
-  Grid,
   Avatar,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  CircularProgress,
+  Alert,
+  Snackbar
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
-  Language as LanguageIcon,
-  Palette as PaletteIcon,
   Notifications as NotificationsIcon,
   Security as SecurityIcon,
   Storage as StorageIcon,
   CloudUpload as CloudUploadIcon,
-  Save as SaveIcon,
-  Edit as EditIcon
+  Save as SaveIcon
 } from '@mui/icons-material';
+import { systemSettingsService } from '../../services/api';
+import { useStore, useMenuStore } from '../../store';
 
 const SystemSettings: React.FC = () => {
+  const { user } = useStore();
+  const { language, setLanguage } = useMenuStore();
+  const canManageAll = user?.role === 'root' || user?.role === 'admin';
   const [settings, setSettings] = useState({
     general: {
-      companyName: 'MVS 3.0',
+      companyName: 'MVS',
       companyLogo: '',
-      timezone: 'Asia/Seoul',
+      timezone: 'Asia/Kolkata',
       language: 'ko',
       dateFormat: 'YYYY-MM-DD',
-      currency: 'KRW'
+      currency: 'INR',
+      officeLocation: {
+        latitude: '',
+        longitude: '',
+        radiusMeters: 200
+      }
     },
     appearance: {
       theme: 'light',
@@ -68,12 +75,75 @@ const SystemSettings: React.FC = () => {
       autoBackup: true,
       backupFrequency: 'daily',
       retentionDays: 30,
-      cloudBackup: false
+      cloudBackup: false,
+      lastBackup: null as string | null
     }
   });
 
   const [openDialog, setOpenDialog] = useState(false);
   const [dialogType, setDialogType] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
+  const [locatingOffice, setLocatingOffice] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewLogo, setPreviewLogo] = useState<string>('');
+
+  // 설정 로드
+  const loadSettings = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await systemSettingsService.getSettings();
+      if (response.success && response.data) {
+        const normalizedSettings = {
+          ...response.data,
+          general: {
+            ...response.data.general,
+            // 인도 서비스 기본 통화 고정
+            currency: 'INR'
+          }
+        };
+        setSettings(normalizedSettings);
+        if (response.data.general?.companyLogo) {
+          setPreviewLogo(response.data.general.companyLogo);
+        }
+      }
+    } catch (error: any) {
+      console.error('설정 로드 오류:', error);
+      
+      // Network Error인 경우 서버 연결 문제 안내
+      let errorMessage = '설정을 불러오는 중 오류가 발생했습니다.';
+      if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
+        errorMessage = '서버에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.';
+      } else if (error.response?.status === 401) {
+        errorMessage = '인증이 필요합니다. 다시 로그인해주세요.';
+      } else if (error.response?.status === 403) {
+        errorMessage = '접근 권한이 없습니다. root 권한이 필요합니다.';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      setSnackbar({
+        open: true,
+        message: errorMessage,
+        severity: 'error'
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSettings();
+  }, [loadSettings]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem('sidebarAutoCollapse', settings.appearance.sidebarCollapsed ? 'true' : 'false');
+    window.dispatchEvent(new CustomEvent('mvs-sidebar-auto-collapse'));
+  }, [settings.appearance.sidebarCollapsed]);
 
   const handleSettingChange = (category: string, key: string, value: any) => {
     setSettings(prev => ({
@@ -85,14 +155,167 @@ const SystemSettings: React.FC = () => {
     }));
   };
 
-  const handleSave = () => {
-    console.log('설정 저장:', settings);
-    // 실제 저장 로직 구현
+  const handleOfficeLocationChange = (key: 'latitude' | 'longitude' | 'radiusMeters', value: string) => {
+    setSettings(prev => ({
+      ...prev,
+      general: {
+        ...prev.general,
+        officeLocation: {
+          ...prev.general.officeLocation,
+          [key]: value
+        }
+      }
+    }));
+  };
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setSnackbar({
+        open: true,
+        message: '이 브라우저에서는 위치 정보를 사용할 수 없습니다.',
+        severity: 'error'
+      });
+      return;
+    }
+
+    setLocatingOffice(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setSettings(prev => ({
+          ...prev,
+          general: {
+            ...prev.general,
+            officeLocation: {
+              ...prev.general.officeLocation,
+              latitude: latitude.toString(),
+              longitude: longitude.toString()
+            }
+          }
+        }));
+        setLocatingOffice(false);
+      },
+      () => {
+        setSnackbar({
+          open: true,
+          message: '현재 위치를 가져올 수 없습니다. 위치 권한을 확인해주세요.',
+          severity: 'error'
+        });
+        setLocatingOffice(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      const payload = canManageAll ? settings : { appearance: settings.appearance };
+      const response = await systemSettingsService.saveSettings(payload);
+      if (response.success) {
+        setSnackbar({
+          open: true,
+          message: '설정이 저장되었습니다.',
+          severity: 'success'
+        });
+        
+        // 언어 설정이 변경되면 store 업데이트
+        if (canManageAll && settings.general.language !== language) {
+          setLanguage(settings.general.language as 'ko' | 'en');
+        }
+
+        // 테마 모드 변경 반영
+        setTimeout(() => {
+          window.location.reload();
+        }, 300);
+      }
+    } catch (error: any) {
+      console.error('설정 저장 오류:', error);
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || '설정 저장 중 오류가 발생했습니다.',
+        severity: 'error'
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleLogoUpload = () => {
     setDialogType('logo');
     setOpenDialog(true);
+    setSelectedFile(null);
+    setPreviewLogo('');
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (!file.type.startsWith('image/')) {
+        setSnackbar({
+          open: true,
+          message: '이미지 파일만 업로드할 수 있습니다.',
+          severity: 'error'
+        });
+        return;
+      }
+      
+      if (file.size > 5 * 1024 * 1024) { // 5MB 제한
+        setSnackbar({
+          open: true,
+          message: '파일 크기는 5MB 이하여야 합니다.',
+          severity: 'error'
+        });
+        return;
+      }
+
+      setSelectedFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreviewLogo(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleLogoConfirm = async () => {
+    if (!previewLogo) {
+      setSnackbar({
+        open: true,
+        message: '로고 파일을 선택해주세요.',
+        severity: 'error'
+      });
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const response = await systemSettingsService.uploadLogo(previewLogo);
+      if (response.success) {
+        setSettings(prev => ({
+          ...prev,
+          general: {
+            ...prev.general,
+            companyLogo: response.data.logo
+          }
+        }));
+        setSnackbar({
+          open: true,
+          message: '로고가 업로드되었습니다.',
+          severity: 'success'
+        });
+        setOpenDialog(false);
+      }
+    } catch (error: any) {
+      console.error('로고 업로드 오류:', error);
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || '로고 업로드 중 오류가 발생했습니다.',
+        severity: 'error'
+      });
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleBackupNow = () => {
@@ -100,26 +323,91 @@ const SystemSettings: React.FC = () => {
     setOpenDialog(true);
   };
 
+  const handleBackupConfirm = async () => {
+    try {
+      setBackingUp(true);
+      const response = await systemSettingsService.runBackup();
+      if (response.success) {
+        setSettings(prev => ({
+          ...prev,
+          backup: {
+            ...prev.backup,
+            lastBackup: new Date().toISOString()
+          }
+        }));
+        setSnackbar({
+          open: true,
+          message: '백업이 시작되었습니다.',
+          severity: 'success'
+        });
+        setOpenDialog(false);
+      }
+    } catch (error: any) {
+      console.error('백업 실행 오류:', error);
+      setSnackbar({
+        open: true,
+        message: error.response?.data?.message || '백업 실행 중 오류가 발생했습니다.',
+        severity: 'error'
+      });
+    } finally {
+      setBackingUp(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ 
+        p: 3, 
+        backgroundColor: 'workArea.main',
+        borderRadius: 2,
+        minHeight: '100%',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center'
+      }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ 
-      width: '100%',
-      px: 2,
-      py: 3
+      p: 3, 
+      backgroundColor: 'workArea.main',
+      borderRadius: 2,
+      minHeight: '100%'
     }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <SettingsIcon sx={{ mr: 2, fontSize: '2rem', color: 'primary.main' }} />
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
-          시스템 설정
-        </Typography>
-      </Box>
-
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
+      {/* 헤더 */}
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        mb: 3 
+      }}>
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <SettingsIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
+            <Typography component="h1" sx={{
+              fontSize: '16px !important',
+              fontWeight: 600,
+              color: 'text.primary',
+              lineHeight: 1.5
+            }}>
+              시스템 설정
+            </Typography>
+          </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+            시스템 전반의 설정을 관리하는 페이지입니다.
+          </Typography>
+        </Box>
         <Button
           variant="contained"
-          startIcon={<SaveIcon />}
+          startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
           onClick={handleSave}
+          disabled={saving}
+          sx={{ borderRadius: 2 }}
         >
-          설정 저장
+          {saving ? '저장 중...' : '설정 저장'}
         </Button>
       </Box>
 
@@ -134,109 +422,212 @@ const SystemSettings: React.FC = () => {
             <Divider sx={{ mb: 2 }} />
             
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <Avatar sx={{ mr: 2, width: 60, height: 60 }}>
+              <Avatar 
+                sx={{ mr: 2, width: 60, height: 60 }}
+                src={previewLogo || settings.general.companyLogo}
+              >
                 {settings.general.companyName.charAt(0)}
               </Avatar>
               <Box>
                 <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
                   회사 로고
                 </Typography>
-                <Button size="small" onClick={handleLogoUpload}>
+                <Button size="small" onClick={handleLogoUpload} disabled={!canManageAll}>
                   로고 변경
                 </Button>
               </Box>
             </Box>
 
-            <TextField
-              fullWidth
-              label="회사명"
-              value={settings.general.companyName}
-              onChange={(e) => handleSettingChange('general', 'companyName', e.target.value)}
-              sx={{ mb: 2 }}
-            />
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+                회사명
+              </Typography>
+              <TextField
+                fullWidth
+                value={settings.general.companyName}
+                onChange={(e) => handleSettingChange('general', 'companyName', e.target.value)}
+                variant="outlined"
+                disabled={!canManageAll}
+              />
+            </Box>
 
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel>시간대</InputLabel>
-              <Select
-                value={settings.general.timezone}
-                onChange={(e) => handleSettingChange('general', 'timezone', e.target.value)}
-              >
-                <MenuItem value="Asia/Seoul">한국 표준시 (KST)</MenuItem>
-                <MenuItem value="UTC">협정 세계시 (UTC)</MenuItem>
-                <MenuItem value="America/New_York">미국 동부시 (EST)</MenuItem>
-                <MenuItem value="Europe/London">영국 표준시 (GMT)</MenuItem>
-              </Select>
-            </FormControl>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+                사무실 위치 (출근 제한 기준)
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 1 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="caption" sx={{ mb: 0.5, color: 'text.secondary', fontWeight: 600 }}>
+                    위도
+                  </Typography>
+                  <TextField
+                    type="number"
+                    inputProps={{ step: '0.000001' }}
+                    value={settings.general.officeLocation.latitude}
+                    onChange={(e) => handleOfficeLocationChange('latitude', e.target.value)}
+                    fullWidth
+                    disabled={!canManageAll}
+                  />
+                </Box>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="caption" sx={{ mb: 0.5, color: 'text.secondary', fontWeight: 600 }}>
+                    경도
+                  </Typography>
+                  <TextField
+                    type="number"
+                    inputProps={{ step: '0.000001' }}
+                    value={settings.general.officeLocation.longitude}
+                    onChange={(e) => handleOfficeLocationChange('longitude', e.target.value)}
+                    fullWidth
+                    disabled={!canManageAll}
+                  />
+                </Box>
+              </Box>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="caption" sx={{ mb: 0.5, color: 'text.secondary', fontWeight: 600 }}>
+                    허용 반경 (미터)
+                  </Typography>
+                  <TextField
+                    type="number"
+                    inputProps={{ min: 10, step: '10' }}
+                    value={settings.general.officeLocation.radiusMeters}
+                    onChange={(e) => handleOfficeLocationChange('radiusMeters', e.target.value)}
+                    fullWidth
+                    disabled={!canManageAll}
+                  />
+                </Box>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                  <Box sx={{ height: '18px', mb: 0.5 }} />
+                  <Button
+                    variant="outlined"
+                    onClick={handleUseCurrentLocation}
+                    disabled={locatingOffice || !canManageAll}
+                    fullWidth
+                    sx={{ height: '56px' }}
+                  >
+                    {locatingOffice ? '위치 확인 중...' : '현재 위치 가져오기'}
+                  </Button>
+                </Box>
+              </Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block', fontSize: '0.75rem' }}>
+                등록된 위치에서만 출근할 수 있습니다.
+              </Typography>
+            </Box>
 
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel>언어</InputLabel>
-              <Select
-                value={settings.general.language}
-                onChange={(e) => handleSettingChange('general', 'language', e.target.value)}
-              >
-                <MenuItem value="ko">한국어</MenuItem>
-                <MenuItem value="en">English</MenuItem>
-                <MenuItem value="ja">日本語</MenuItem>
-                <MenuItem value="zh">中文</MenuItem>
-              </Select>
-            </FormControl>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+                시간대
+              </Typography>
+              <TextField
+                value="인도 표준시 (IST)"
+                fullWidth
+                disabled
+                sx={{
+                  '& .MuiInputBase-root': {
+                    backgroundColor: 'action.disabledBackground'
+                  }
+                }}
+              />
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block', fontSize: '0.75rem' }}>
+                시간대는 항상 인도 표준시(IST)로 고정됩니다.
+              </Typography>
+            </Box>
 
-            <FormControl fullWidth>
-              <InputLabel>통화</InputLabel>
-              <Select
-                value={settings.general.currency}
-                onChange={(e) => handleSettingChange('general', 'currency', e.target.value)}
-              >
-                <MenuItem value="KRW">원 (₩)</MenuItem>
-                <MenuItem value="USD">달러 ($)</MenuItem>
-                <MenuItem value="EUR">유로 (€)</MenuItem>
-                <MenuItem value="JPY">엔 (¥)</MenuItem>
-              </Select>
-            </FormControl>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+                언어
+              </Typography>
+              <FormControl fullWidth>
+                <Select
+                  value={settings.general.language}
+                  onChange={(e) => handleSettingChange('general', 'language', e.target.value)}
+                  displayEmpty
+                  disabled={!canManageAll}
+                >
+                  <MenuItem value="ko">한국어</MenuItem>
+                  <MenuItem value="en">English</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+
+            <Box>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+                통화
+              </Typography>
+              <FormControl fullWidth>
+                <Select
+                  value={'INR'}
+                  onChange={(e) => handleSettingChange('general', 'currency', e.target.value)}
+                  displayEmpty
+                  disabled={!canManageAll}
+                >
+                  <MenuItem value="INR">INR (Rs.)</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
           </CardContent>
         </Card>
 
         {/* 외관 설정 */}
         <Card>
           <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <PaletteIcon sx={{ mr: 1, color: 'primary.main' }} />
-              <Typography variant="h6">외관 설정</Typography>
-            </Box>
+            <Typography variant="h6" sx={{ mb: 2 }}>화면 설정</Typography>
             <Divider sx={{ mb: 2 }} />
 
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel>테마</InputLabel>
-              <Select
-                value={settings.appearance.theme}
-                onChange={(e) => handleSettingChange('appearance', 'theme', e.target.value)}
-              >
-                <MenuItem value="light">라이트 테마</MenuItem>
-                <MenuItem value="dark">다크 테마</MenuItem>
-                <MenuItem value="auto">시스템 설정</MenuItem>
-              </Select>
-            </FormControl>
-
-            <TextField
-              fullWidth
-              label="주 색상"
-              type="color"
-              value={settings.appearance.primaryColor}
-              onChange={(e) => handleSettingChange('appearance', 'primaryColor', e.target.value)}
-              sx={{ mb: 2 }}
-            />
-
-            <FormControl fullWidth sx={{ mb: 2 }}>
-              <InputLabel>글자 크기</InputLabel>
-              <Select
-                value={settings.appearance.fontSize}
-                onChange={(e) => handleSettingChange('appearance', 'fontSize', e.target.value)}
-              >
-                <MenuItem value="small">작게</MenuItem>
-                <MenuItem value="medium">보통</MenuItem>
-                <MenuItem value="large">크게</MenuItem>
-              </Select>
-            </FormControl>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+                테마
+              </Typography>
+              <FormControl fullWidth>
+                <Select
+                  value={(() => {
+                    const rawTheme = String(settings.appearance.theme || 'light');
+                    const normalizedTheme = rawTheme === 'ocean' ? 'forest' : rawTheme;
+                    return ['light', 'dark', 'forest', 'sunset', 'lavender', 'graphite'].includes(normalizedTheme) ? normalizedTheme : 'light';
+                  })()}
+                  onChange={(e) => handleSettingChange('appearance', 'theme', e.target.value)}
+                  displayEmpty
+                  renderValue={(selected) => {
+                    const labelMap: Record<string, string> = {
+                      light: '라이트 테마',
+                      dark: '다크 테마',
+                      forest: '포레스트 테마',
+                      sunset: '선셋 테마',
+                      lavender: '라벤더 테마',
+                      graphite: '그래파이트 테마'
+                    };
+                    return labelMap[String(selected)] || '라이트 테마';
+                  }}
+                  sx={{
+                    '& .MuiSelect-select': {
+                      color: 'text.primary',
+                      WebkitTextFillColor: (theme) => theme.palette.text.primary
+                    },
+                    '& .MuiSvgIcon-root': {
+                      color: 'text.primary'
+                    }
+                  }}
+                >
+                  <MenuItem value="light">라이트 테마</MenuItem>
+                  <MenuItem value="dark">다크 테마</MenuItem>
+                  <MenuItem value="forest">포레스트 테마</MenuItem>
+                  <MenuItem value="sunset">선셋 테마</MenuItem>
+                  <MenuItem value="lavender">라벤더 테마</MenuItem>
+                  <MenuItem value="graphite">그래파이트 테마</MenuItem>
+                </Select>
+              </FormControl>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+                {{
+                  light: '밝고 깔끔한 기본 테마',
+                  dark: '중성 다크 톤의 기본 야간 테마',
+                  forest: '차분한 딥그린 계열 테마 (헤더/카드/선택영역이 녹색 계열로 표현됨)',
+                  sunset: '따뜻한 오렌지 계열 라이트 테마',
+                  lavender: '부드러운 보라 계열 라이트 테마',
+                  graphite: '무채색 중심의 고대비 다크 테마'
+                }[(String(settings.appearance.theme) === 'ocean' ? 'forest' : String(settings.appearance.theme))] || '밝고 깔끔한 기본 테마'}
+              </Typography>
+            </Box>
 
             <FormControlLabel
               control={
@@ -275,6 +666,7 @@ const SystemSettings: React.FC = () => {
                 <Switch
                   checked={settings.notifications.emailNotifications}
                   onChange={(e) => handleSettingChange('notifications', 'emailNotifications', e.target.checked)}
+                  disabled={!canManageAll}
                 />
               }
               label="이메일 알림"
@@ -286,6 +678,7 @@ const SystemSettings: React.FC = () => {
                 <Switch
                   checked={settings.notifications.pushNotifications}
                   onChange={(e) => handleSettingChange('notifications', 'pushNotifications', e.target.checked)}
+                  disabled={!canManageAll}
                 />
               }
               label="푸시 알림"
@@ -297,6 +690,7 @@ const SystemSettings: React.FC = () => {
                 <Switch
                   checked={settings.notifications.smsNotifications}
                   onChange={(e) => handleSettingChange('notifications', 'smsNotifications', e.target.checked)}
+                  disabled={!canManageAll}
                 />
               }
               label="SMS 알림"
@@ -308,6 +702,7 @@ const SystemSettings: React.FC = () => {
                 <Switch
                   checked={settings.notifications.taskReminders}
                   onChange={(e) => handleSettingChange('notifications', 'taskReminders', e.target.checked)}
+                  disabled={!canManageAll}
                 />
               }
               label="업무 알림"
@@ -319,6 +714,7 @@ const SystemSettings: React.FC = () => {
                 <Switch
                   checked={settings.notifications.systemAlerts}
                   onChange={(e) => handleSettingChange('notifications', 'systemAlerts', e.target.checked)}
+                  disabled={!canManageAll}
                 />
               }
               label="시스템 알림"
@@ -335,29 +731,40 @@ const SystemSettings: React.FC = () => {
             </Box>
             <Divider sx={{ mb: 2 }} />
 
-            <TextField
-              fullWidth
-              label="최소 비밀번호 길이"
-              type="number"
-              value={settings.security.passwordMinLength}
-              onChange={(e) => handleSettingChange('security', 'passwordMinLength', parseInt(e.target.value))}
-              sx={{ mb: 2 }}
-            />
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+                최소 비밀번호 길이
+              </Typography>
+              <TextField
+                fullWidth
+                type="number"
+                value={settings.security.passwordMinLength}
+                onChange={(e) => handleSettingChange('security', 'passwordMinLength', parseInt(e.target.value))}
+                variant="outlined"
+                disabled={!canManageAll}
+              />
+            </Box>
 
-            <TextField
-              fullWidth
-              label="세션 타임아웃 (분)"
-              type="number"
-              value={settings.security.sessionTimeout}
-              onChange={(e) => handleSettingChange('security', 'sessionTimeout', parseInt(e.target.value))}
-              sx={{ mb: 2 }}
-            />
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+                세션 타임아웃 (분)
+              </Typography>
+              <TextField
+                fullWidth
+                type="number"
+                value={settings.security.sessionTimeout}
+                onChange={(e) => handleSettingChange('security', 'sessionTimeout', parseInt(e.target.value))}
+                variant="outlined"
+                disabled={!canManageAll}
+              />
+            </Box>
 
             <FormControlLabel
               control={
                 <Switch
                   checked={settings.security.requireSpecialChars}
                   onChange={(e) => handleSettingChange('security', 'requireSpecialChars', e.target.checked)}
+                  disabled={!canManageAll}
                 />
               }
               label="특수문자 필수"
@@ -369,6 +776,7 @@ const SystemSettings: React.FC = () => {
                 <Switch
                   checked={settings.security.twoFactorAuth}
                   onChange={(e) => handleSettingChange('security', 'twoFactorAuth', e.target.checked)}
+                  disabled={!canManageAll}
                 />
               }
               label="2단계 인증"
@@ -380,6 +788,7 @@ const SystemSettings: React.FC = () => {
                 <Switch
                   checked={settings.security.ipWhitelist}
                   onChange={(e) => handleSettingChange('security', 'ipWhitelist', e.target.checked)}
+                  disabled={!canManageAll}
                 />
               }
               label="IP 화이트리스트"
@@ -403,33 +812,45 @@ const SystemSettings: React.FC = () => {
                     <Switch
                       checked={settings.backup.autoBackup}
                       onChange={(e) => handleSettingChange('backup', 'autoBackup', e.target.checked)}
+                      disabled={!canManageAll}
                     />
                   }
                   label="자동 백업"
                   sx={{ mb: 2 }}
                 />
 
-                <FormControl fullWidth sx={{ mb: 2 }}>
-                  <InputLabel>백업 주기</InputLabel>
-                  <Select
-                    value={settings.backup.backupFrequency}
-                    onChange={(e) => handleSettingChange('backup', 'backupFrequency', e.target.value)}
-                  >
-                    <MenuItem value="hourly">매시간</MenuItem>
-                    <MenuItem value="daily">매일</MenuItem>
-                    <MenuItem value="weekly">매주</MenuItem>
-                    <MenuItem value="monthly">매월</MenuItem>
-                  </Select>
-                </FormControl>
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+                    백업 주기
+                  </Typography>
+                  <FormControl fullWidth>
+                    <Select
+                      value={settings.backup.backupFrequency}
+                      onChange={(e) => handleSettingChange('backup', 'backupFrequency', e.target.value)}
+                      displayEmpty
+                      disabled={!canManageAll}
+                    >
+                      <MenuItem value="hourly">매시간</MenuItem>
+                      <MenuItem value="daily">매일</MenuItem>
+                      <MenuItem value="weekly">매주</MenuItem>
+                      <MenuItem value="monthly">매월</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Box>
 
-                <TextField
-                  fullWidth
-                  label="보관 기간 (일)"
-                  type="number"
-                  value={settings.backup.retentionDays}
-                  onChange={(e) => handleSettingChange('backup', 'retentionDays', parseInt(e.target.value))}
-                  sx={{ mb: 2 }}
-                />
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+                    보관 기간 (일)
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    value={settings.backup.retentionDays}
+                    onChange={(e) => handleSettingChange('backup', 'retentionDays', parseInt(e.target.value))}
+                    variant="outlined"
+                    disabled={!canManageAll}
+                  />
+                </Box>
               </Box>
 
               <Box>
@@ -438,6 +859,7 @@ const SystemSettings: React.FC = () => {
                     <Switch
                       checked={settings.backup.cloudBackup}
                       onChange={(e) => handleSettingChange('backup', 'cloudBackup', e.target.checked)}
+                      disabled={!canManageAll}
                     />
                   }
                   label="클라우드 백업"
@@ -448,13 +870,16 @@ const SystemSettings: React.FC = () => {
                   variant="outlined"
                   startIcon={<CloudUploadIcon />}
                   onClick={handleBackupNow}
+                  disabled={!canManageAll}
                   sx={{ mb: 2 }}
                 >
                   지금 백업하기
                 </Button>
 
                 <Typography variant="body2" color="text.secondary">
-                  마지막 백업: 2024-01-15 14:30
+                  마지막 백업: {settings.backup.lastBackup 
+                    ? new Date(settings.backup.lastBackup).toLocaleString('ko-KR')
+                    : '없음'}
                 </Typography>
               </Box>
             </Box>
@@ -470,18 +895,43 @@ const SystemSettings: React.FC = () => {
         <DialogContent>
           {dialogType === 'logo' ? (
             <Box sx={{ textAlign: 'center', py: 3 }}>
-              <CloudUploadIcon sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
+              {previewLogo ? (
+                <Box sx={{ mb: 2 }}>
+                  <Avatar 
+                    src={previewLogo} 
+                    sx={{ width: 120, height: 120, mx: 'auto', mb: 2 }}
+                  />
+                  <Typography variant="body2" color="text.secondary">
+                    미리보기
+                  </Typography>
+                </Box>
+              ) : (
+                <CloudUploadIcon sx={{ fontSize: 40, color: 'text.secondary', mb: 2 }} />
+              )}
               <Typography variant="body1" gutterBottom>
                 로고 파일을 선택하세요
               </Typography>
-              <Button variant="contained" component="label">
-                파일 선택
-                <input type="file" hidden accept="image/*" />
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                이미지 파일만 업로드 가능 (최대 5MB)
+              </Typography>
+              <Button 
+                variant="contained" 
+                component="label"
+                disabled={uploading}
+                startIcon={uploading ? <CircularProgress size={20} color="inherit" /> : <CloudUploadIcon />}
+              >
+                {uploading ? '업로드 중...' : '파일 선택'}
+                <input 
+                  type="file" 
+                  hidden 
+                  accept="image/*" 
+                  onChange={handleFileSelect}
+                />
               </Button>
             </Box>
           ) : (
             <Box sx={{ textAlign: 'center', py: 3 }}>
-              <StorageIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
+              <StorageIcon sx={{ fontSize: 40, color: 'primary.main', mb: 2 }} />
               <Typography variant="body1" gutterBottom>
                 데이터베이스 백업을 시작하시겠습니까?
               </Typography>
@@ -492,12 +942,35 @@ const SystemSettings: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>취소</Button>
-          <Button variant="contained" onClick={() => setOpenDialog(false)}>
-            {dialogType === 'logo' ? '업로드' : '백업 시작'}
+          <Button onClick={() => setOpenDialog(false)} disabled={uploading || backingUp}>
+            취소
+          </Button>
+          <Button 
+            variant="contained" 
+            onClick={dialogType === 'logo' ? handleLogoConfirm : handleBackupConfirm}
+            disabled={uploading || backingUp || (dialogType === 'logo' && !previewLogo)}
+            startIcon={(uploading || backingUp) ? <CircularProgress size={20} color="inherit" /> : null}
+          >
+            {uploading ? '업로드 중...' : backingUp ? '백업 중...' : dialogType === 'logo' ? '업로드' : '백업 시작'}
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* 스낵바 */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert 
+          onClose={() => setSnackbar({ ...snackbar, open: false })} 
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

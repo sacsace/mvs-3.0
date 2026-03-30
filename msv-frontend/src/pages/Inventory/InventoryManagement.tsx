@@ -29,7 +29,8 @@ import {
   Alert,
   Snackbar,
   Pagination,
-  InputAdornment
+  InputAdornment,
+  TableSortLabel
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -43,7 +44,7 @@ import {
   TrendingDown as TrendingDownIcon,
   Warning as WarningIcon
 } from '@mui/icons-material';
-import { useStore } from '../../store';
+import { inventoryService } from '../../services/api';
 
 interface InventoryItem {
   id: number;
@@ -61,10 +62,23 @@ interface InventoryItem {
   location: string;
 }
 
+interface InventoryStats {
+  totalProducts: number;
+  totalValue: number;
+  lowStockItems: number;
+  outOfStockItems: number;
+}
+
 const InventoryManagement: React.FC = () => {
-  const { user } = useStore();
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
+  const [inventoryStats, setInventoryStats] = useState<InventoryStats>({
+    totalProducts: 0,
+    totalValue: 0,
+    lowStockItems: 0,
+    outOfStockItems: 0
+  });
+  const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -75,122 +89,117 @@ const InventoryManagement: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(10);
-
-  // 샘플 데이터
-  const sampleData: InventoryItem[] = [
-    {
-      id: 1,
-      name: '노트북 컴퓨터',
-      sku: 'LAPTOP-001',
-      category: '전자제품',
-      currentStock: 25,
-      minStock: 10,
-      maxStock: 100,
-      unitPrice: 1200000,
-      totalValue: 30000000,
-      status: 'in_stock',
-      lastUpdated: '2024-01-15',
-      supplier: '삼성전자',
-      location: 'A-01-01'
-    },
-    {
-      id: 2,
-      name: '무선 마우스',
-      sku: 'MOUSE-002',
-      category: '전자제품',
-      currentStock: 5,
-      minStock: 20,
-      maxStock: 200,
-      unitPrice: 25000,
-      totalValue: 125000,
-      status: 'low_stock',
-      lastUpdated: '2024-01-14',
-      supplier: '로지텍',
-      location: 'A-01-02'
-    },
-    {
-      id: 3,
-      name: '키보드',
-      sku: 'KEYBOARD-003',
-      category: '전자제품',
-      currentStock: 0,
-      minStock: 15,
-      maxStock: 150,
-      unitPrice: 80000,
-      totalValue: 0,
-      status: 'out_of_stock',
-      lastUpdated: '2024-01-10',
-      supplier: '체리',
-      location: 'A-01-03'
-    },
-    {
-      id: 4,
-      name: '모니터',
-      sku: 'MONITOR-004',
-      category: '전자제품',
-      currentStock: 12,
-      minStock: 5,
-      maxStock: 50,
-      unitPrice: 300000,
-      totalValue: 3600000,
-      status: 'in_stock',
-      lastUpdated: '2024-01-16',
-      supplier: 'LG전자',
-      location: 'A-02-01'
-    },
-    {
-      id: 5,
-      name: '책상',
-      sku: 'DESK-005',
-      category: '가구',
-      currentStock: 8,
-      minStock: 3,
-      maxStock: 30,
-      unitPrice: 150000,
-      totalValue: 1200000,
-      status: 'in_stock',
-      lastUpdated: '2024-01-12',
-      supplier: '이케아',
-      location: 'B-01-01'
-    }
-  ];
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [orderBy, setOrderBy] = useState<keyof InventoryItem | ''>('');
+  const [order, setOrder] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
     loadInventoryData();
-  }, []);
-
-  useEffect(() => {
-    filterItems();
-  }, [inventoryItems, searchTerm, categoryFilter, statusFilter]);
+  }, [page, searchTerm, categoryFilter]);
 
   const loadInventoryData = async () => {
     setLoading(true);
     try {
-      // 실제 API 호출 대신 샘플 데이터 사용
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setInventoryItems(sampleData);
-    } catch (error) {
+      const [productsResponse, reportResponse] = await Promise.all([
+        inventoryService.getProducts({
+          page,
+          limit: itemsPerPage,
+          search: searchTerm,
+          category: categoryFilter
+        }),
+        inventoryService.getInventoryReport()
+      ]);
+      
+      if (productsResponse.success && productsResponse.data) {
+        // 백엔드 데이터를 프론트엔드 형식으로 변환
+        const transformedData = productsResponse.data.map((product: any) => {
+          // 재고 상태 계산
+          const currentStock = product.stock_quantity || product.current_stock || 0;
+          const minStock = product.min_stock_level || product.min_stock || 0;
+          const maxStock = product.max_stock_level || product.max_stock || 0;
+          
+          let status = 'in_stock';
+          if (currentStock === 0) {
+            status = 'out_of_stock';
+          } else if (minStock && currentStock <= minStock) {
+            status = 'low_stock';
+          }
+          
+          return {
+            id: product.id,
+            name: product.name,
+            sku: product.product_code || product.sku || '',
+            category: product.category || '',
+            currentStock: currentStock,
+            minStock: minStock,
+            maxStock: maxStock,
+            unitPrice: parseFloat(product.unit_price || 0),
+            totalValue: currentStock * parseFloat(product.unit_price || 0),
+            status: status,
+            lastUpdated: product.updated_at ? new Date(product.updated_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+            supplier: product.supplier || '',
+            location: product.location || ''
+          };
+        });
+        setInventoryItems(transformedData);
+        
+        // 페이지네이션 정보 업데이트
+        if (productsResponse.pagination) {
+          setTotalPages(productsResponse.pagination.totalPages || 1);
+          setTotalItems(productsResponse.pagination.total || 0);
+        }
+      } else {
+        setInventoryItems([]);
+        setTotalPages(1);
+        setTotalItems(0);
+      }
+
+      if (reportResponse?.success && reportResponse?.data?.stats) {
+        setInventoryStats({
+          totalProducts: Number(reportResponse.data.stats.totalProducts || 0),
+          totalValue: Number(reportResponse.data.stats.totalValue || 0),
+          lowStockItems: Number(reportResponse.data.stats.lowStockItems || 0),
+          outOfStockItems: Number(reportResponse.data.stats.outOfStockItems || 0)
+        });
+      } else {
+        setInventoryStats({
+          totalProducts: 0,
+          totalValue: 0,
+          lowStockItems: 0,
+          outOfStockItems: 0
+        });
+      }
+
+      const categoryNames = (reportResponse?.data?.categoryDistribution || [])
+        .map((category: any) => String(category?.name || '').trim())
+        .filter((name: string) => name.length > 0);
+      setCategories(Array.from(new Set(categoryNames)));
+    } catch (error: any) {
       console.error('재고 데이터 로드 오류:', error);
-      setError('재고 데이터를 불러오는데 실패했습니다.');
+      setError(error.response?.data?.message || '재고 데이터를 불러오는데 실패했습니다.');
+      setInventoryItems([]);
+      setTotalPages(1);
+      setTotalItems(0);
+      setInventoryStats({
+        totalProducts: 0,
+        totalValue: 0,
+        lowStockItems: 0,
+        outOfStockItems: 0
+      });
+      setCategories([]);
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    filterItems();
+  }, [inventoryItems, statusFilter]);
+
   const filterItems = () => {
+    // 검색과 카테고리는 API에서 처리되므로, 상태 필터만 클라이언트에서 처리
     let filtered = inventoryItems;
-
-    if (searchTerm) {
-      filtered = filtered.filter(item =>
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.category.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (categoryFilter) {
-      filtered = filtered.filter(item => item.category === categoryFilter);
-    }
 
     if (statusFilter) {
       filtered = filtered.filter(item => item.status === statusFilter);
@@ -238,50 +247,85 @@ const InventoryManagement: React.FC = () => {
   const handleDeleteItem = async (id: number) => {
     if (window.confirm('정말로 이 항목을 삭제하시겠습니까?')) {
       try {
-        setInventoryItems(prev => prev.filter(item => item.id !== id));
+        await inventoryService.deleteProduct(id);
         setSuccess('재고 항목이 성공적으로 삭제되었습니다.');
-      } catch (error) {
+        loadInventoryData();
+      } catch (error: any) {
         console.error('삭제 오류:', error);
-        setError('삭제 중 오류가 발생했습니다.');
+        setError(error.response?.data?.message || '삭제 중 오류가 발생했습니다.');
       }
     }
   };
 
   const handleSaveItem = async (itemData: Partial<InventoryItem>) => {
     try {
+      const productData = {
+        name: itemData.name,
+        product_code: itemData.sku,
+        category: itemData.category,
+        stock_quantity: itemData.currentStock,
+        min_stock_level: itemData.minStock,
+        max_stock_level: itemData.maxStock,
+        unit_price: itemData.unitPrice,
+        supplier: itemData.supplier,
+        location: itemData.location
+      };
+
       if (selectedItem) {
         // 수정
-        setInventoryItems(prev =>
-          prev.map(item => item.id === selectedItem.id ? { ...item, ...itemData } : item)
-        );
-        setSuccess('재고 항목이 성공적으로 수정되었습니다.');
+        const response = await inventoryService.updateProduct(selectedItem.id, productData);
+        if (response.success) {
+          setSuccess('재고 항목이 성공적으로 수정되었습니다.');
+          setOpenDialog(false);
+          loadInventoryData();
+        }
       } else {
         // 추가
-        const newItem: InventoryItem = {
-          id: Math.max(...inventoryItems.map(i => i.id)) + 1,
-          ...itemData,
-          totalValue: (itemData.currentStock || 0) * (itemData.unitPrice || 0),
-          lastUpdated: new Date().toISOString().split('T')[0]
-        } as InventoryItem;
-        setInventoryItems(prev => [...prev, newItem]);
-        setSuccess('재고 항목이 성공적으로 추가되었습니다.');
+        const response = await inventoryService.createProduct(productData);
+        if (response.success) {
+          setSuccess('재고 항목이 성공적으로 추가되었습니다.');
+          setOpenDialog(false);
+          loadInventoryData();
+        }
       }
-      setOpenDialog(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('저장 오류:', error);
-      setError('저장 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || '저장 중 오류가 발생했습니다.');
     }
   };
 
-  const categories = Array.from(new Set(inventoryItems.map(item => item.category)));
-  const totalValue = inventoryItems.reduce((sum, item) => sum + item.totalValue, 0);
-  const lowStockItems = inventoryItems.filter(item => item.status === 'low_stock').length;
-  const outOfStockItems = inventoryItems.filter(item => item.status === 'out_of_stock').length;
+  // 정렬 처리
+  const sortedItems = [...filteredItems].sort((a, b) => {
+    if (!orderBy) return 0;
+    
+    let aValue: any = a[orderBy as keyof InventoryItem];
+    let bValue: any = b[orderBy as keyof InventoryItem];
+    
+    // 숫자 타입 처리
+    if (orderBy === 'currentStock' || orderBy === 'unitPrice' || orderBy === 'totalValue' || orderBy === 'minStock' || orderBy === 'maxStock') {
+      aValue = Number(aValue) || 0;
+      bValue = Number(bValue) || 0;
+    }
+    
+    // 문자열 타입 처리
+    if (typeof aValue === 'string') {
+      aValue = aValue.toLowerCase();
+      bValue = (bValue || '').toLowerCase();
+    }
+    
+    if (aValue < bValue) return order === 'asc' ? -1 : 1;
+    if (aValue > bValue) return order === 'asc' ? 1 : -1;
+    return 0;
+  });
 
-  const paginatedItems = filteredItems.slice(
-    (page - 1) * itemsPerPage,
-    page * itemsPerPage
-  );
+  // 상태 필터가 적용된 항목 사용 (API에서 이미 페이지네이션 처리됨)
+  const paginatedItems = sortedItems;
+
+  const handleSort = (property: keyof InventoryItem | '') => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
+  };
 
   return (
     <Box sx={{ 
@@ -291,10 +335,17 @@ const InventoryManagement: React.FC = () => {
       minHeight: '100%'
     }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <InventoryIcon />
-          재고 관리
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <InventoryIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
+          <Typography component="h1" sx={{
+            fontSize: '16px !important',
+            fontWeight: 600,
+            color: 'red',
+            lineHeight: 1.5
+          }}>
+            기본 재고 등록
+          </Typography>
+        </Box>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
@@ -314,7 +365,7 @@ const InventoryManagement: React.FC = () => {
                 총 재고 항목
               </Typography>
               <Typography variant="h4">
-                {inventoryItems.length}
+                {inventoryStats.totalProducts}
               </Typography>
             </CardContent>
           </Card>
@@ -326,7 +377,7 @@ const InventoryManagement: React.FC = () => {
                 총 재고 가치
               </Typography>
               <Typography variant="h4">
-                ₩{totalValue.toLocaleString()}
+                Rs. {inventoryStats.totalValue.toLocaleString()}
               </Typography>
             </CardContent>
           </Card>
@@ -338,7 +389,7 @@ const InventoryManagement: React.FC = () => {
                 재고 부족
               </Typography>
               <Typography variant="h4" color="warning.main">
-                {lowStockItems}
+                {inventoryStats.lowStockItems}
               </Typography>
             </CardContent>
           </Card>
@@ -350,7 +401,7 @@ const InventoryManagement: React.FC = () => {
                 품절
               </Typography>
               <Typography variant="h4" color="error.main">
-                {outOfStockItems}
+                {inventoryStats.outOfStockItems}
               </Typography>
             </CardContent>
           </Card>
@@ -428,16 +479,96 @@ const InventoryManagement: React.FC = () => {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>상태</TableCell>
-                <TableCell>제품명</TableCell>
-                <TableCell>SKU</TableCell>
-                <TableCell>카테고리</TableCell>
-                <TableCell>현재 재고</TableCell>
-                <TableCell>단가</TableCell>
-                <TableCell>총 가치</TableCell>
-                <TableCell>공급업체</TableCell>
-                <TableCell>위치</TableCell>
-                <TableCell>마지막 업데이트</TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'status'}
+                    direction={orderBy === 'status' ? order : 'asc'}
+                    onClick={() => handleSort('status')}
+                  >
+                    상태
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'name'}
+                    direction={orderBy === 'name' ? order : 'asc'}
+                    onClick={() => handleSort('name')}
+                  >
+                    제품명
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'sku'}
+                    direction={orderBy === 'sku' ? order : 'asc'}
+                    onClick={() => handleSort('sku')}
+                  >
+                    SKU
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'category'}
+                    direction={orderBy === 'category' ? order : 'asc'}
+                    onClick={() => handleSort('category')}
+                  >
+                    카테고리
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'currentStock'}
+                    direction={orderBy === 'currentStock' ? order : 'asc'}
+                    onClick={() => handleSort('currentStock')}
+                  >
+                    현재 재고
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'unitPrice'}
+                    direction={orderBy === 'unitPrice' ? order : 'asc'}
+                    onClick={() => handleSort('unitPrice')}
+                  >
+                    단가
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'totalValue'}
+                    direction={orderBy === 'totalValue' ? order : 'asc'}
+                    onClick={() => handleSort('totalValue')}
+                  >
+                    총 가치
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'supplier'}
+                    direction={orderBy === 'supplier' ? order : 'asc'}
+                    onClick={() => handleSort('supplier')}
+                  >
+                    공급업체
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'location'}
+                    direction={orderBy === 'location' ? order : 'asc'}
+                    onClick={() => handleSort('location')}
+                  >
+                    위치
+                  </TableSortLabel>
+                </TableCell>
+                <TableCell>
+                  <TableSortLabel
+                    active={orderBy === 'lastUpdated'}
+                    direction={orderBy === 'lastUpdated' ? order : 'asc'}
+                    onClick={() => handleSort('lastUpdated')}
+                  >
+                    마지막 업데이트
+                  </TableSortLabel>
+                </TableCell>
                 <TableCell>작업</TableCell>
               </TableRow>
             </TableHead>
@@ -470,8 +601,8 @@ const InventoryManagement: React.FC = () => {
                       {item.currentStock} / {item.maxStock}
                     </Typography>
                   </TableCell>
-                  <TableCell>₩{item.unitPrice.toLocaleString()}</TableCell>
-                  <TableCell>₩{item.totalValue.toLocaleString()}</TableCell>
+                  <TableCell>Rs. {item.unitPrice.toLocaleString()}</TableCell>
+                  <TableCell>Rs. {item.totalValue.toLocaleString()}</TableCell>
                   <TableCell>{item.supplier}</TableCell>
                   <TableCell>{item.location}</TableCell>
                   <TableCell>{item.lastUpdated}</TableCell>
@@ -503,7 +634,7 @@ const InventoryManagement: React.FC = () => {
         {/* 페이지네이션 */}
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
           <Pagination
-            count={Math.ceil(filteredItems.length / itemsPerPage)}
+            count={totalPages}
             page={page}
             onChange={(_, value) => setPage(value)}
             color="primary"
@@ -578,45 +709,55 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel })
     <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, sm: 6 }}>
+          <Typography variant="body2" sx={{ mb: 0.3, color: 'text.secondary', fontSize: '0.875rem' }}>
+            제품명 *
+          </Typography>
           <TextField
             fullWidth
-            label="제품명"
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             required
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
+          <Typography variant="body2" sx={{ mb: 0.3, color: 'text.secondary', fontSize: '0.875rem' }}>
+            SKU *
+          </Typography>
           <TextField
             fullWidth
-            label="SKU"
             value={formData.sku}
             onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
             required
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
+          <Typography variant="body2" sx={{ mb: 0.3, color: 'text.secondary', fontSize: '0.875rem' }}>
+            카테고리 *
+          </Typography>
           <TextField
             fullWidth
-            label="카테고리"
             value={formData.category}
             onChange={(e) => setFormData({ ...formData, category: e.target.value })}
             required
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
+          <Typography variant="body2" sx={{ mb: 0.3, color: 'text.secondary', fontSize: '0.875rem' }}>
+            공급업체 *
+          </Typography>
           <TextField
             fullWidth
-            label="공급업체"
             value={formData.supplier}
             onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
             required
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 4 }}>
+          <Typography variant="body2" sx={{ mb: 0.3, color: 'text.secondary', fontSize: '0.875rem' }}>
+            현재 재고 *
+          </Typography>
           <TextField
             fullWidth
-            label="현재 재고"
             type="number"
             value={formData.currentStock}
             onChange={(e) => setFormData({ ...formData, currentStock: parseInt(e.target.value) || 0 })}
@@ -624,9 +765,11 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel })
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 4 }}>
+          <Typography variant="body2" sx={{ mb: 0.3, color: 'text.secondary', fontSize: '0.875rem' }}>
+            최소 재고 *
+          </Typography>
           <TextField
             fullWidth
-            label="최소 재고"
             type="number"
             value={formData.minStock}
             onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) || 0 })}
@@ -634,9 +777,11 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel })
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 4 }}>
+          <Typography variant="body2" sx={{ mb: 0.3, color: 'text.secondary', fontSize: '0.875rem' }}>
+            최대 재고 *
+          </Typography>
           <TextField
             fullWidth
-            label="최대 재고"
             type="number"
             value={formData.maxStock}
             onChange={(e) => setFormData({ ...formData, maxStock: parseInt(e.target.value) || 0 })}
@@ -644,9 +789,11 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel })
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
+          <Typography variant="body2" sx={{ mb: 0.3, color: 'text.secondary', fontSize: '0.875rem' }}>
+            단가 *
+          </Typography>
           <TextField
             fullWidth
-            label="단가"
             type="number"
             value={formData.unitPrice}
             onChange={(e) => setFormData({ ...formData, unitPrice: parseInt(e.target.value) || 0 })}
@@ -654,9 +801,11 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel })
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
+          <Typography variant="body2" sx={{ mb: 0.3, color: 'text.secondary', fontSize: '0.875rem' }}>
+            위치 *
+          </Typography>
           <TextField
             fullWidth
-            label="위치"
             value={formData.location}
             onChange={(e) => setFormData({ ...formData, location: e.target.value })}
             required

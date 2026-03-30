@@ -1,5 +1,40 @@
-// Jest setup file for MVS 3.0 Frontend
+// Jest setup file for MVS Frontend
 import '@testing-library/jest-dom';
+
+jest.mock('axios', () => ({
+  __esModule: true,
+  default: {
+    create: () => ({
+      get: jest.fn(),
+      post: jest.fn(),
+      put: jest.fn(),
+      delete: jest.fn(),
+      interceptors: {
+        request: { use: jest.fn() },
+        response: { use: jest.fn() }
+      }
+    })
+  }
+}));
+
+Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+  value: () => null
+});
+
+jest.mock('jspdf', () => ({
+  __esModule: true,
+  default: jest.fn().mockImplementation(() => ({
+    addImage: jest.fn(),
+    save: jest.fn(),
+    text: jest.fn(),
+    setFontSize: jest.fn()
+  }))
+}));
+
+jest.mock('html2canvas', () => ({
+  __esModule: true,
+  default: jest.fn(() => Promise.resolve({ toDataURL: () => '' }))
+}));
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {

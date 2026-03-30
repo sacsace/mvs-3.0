@@ -18,6 +18,7 @@ export interface RequestWithUser extends Request {
     department?: string;
     position?: string;
     status: 'active' | 'inactive' | 'suspended';
+    is_payment_officer?: boolean;
     last_login?: Date;
     created_at?: Date;
     updated_at?: Date;

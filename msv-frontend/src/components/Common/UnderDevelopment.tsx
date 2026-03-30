@@ -19,6 +19,7 @@ import {
   CheckCircle as CheckCircleIcon,
   Pending as PendingIcon
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 
 interface UnderDevelopmentProps {
   pageName: string;
@@ -30,11 +31,14 @@ interface UnderDevelopmentProps {
 
 const UnderDevelopment: React.FC<UnderDevelopmentProps> = ({
   pageName,
-  description = "이 페이지는 현재 개발 중입니다.",
+  description,
   estimatedCompletion,
   features = [],
   status = 'development'
 }) => {
+  const { t } = useTranslation();
+  const desc = description ?? t('common.defaultPageDesc');
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'planning': return 'info';
@@ -47,11 +51,11 @@ const UnderDevelopment: React.FC<UnderDevelopmentProps> = ({
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'planning': return '기획 중';
-      case 'development': return '개발 중';
-      case 'testing': return '테스트 중';
-      case 'review': return '검토 중';
-      default: return '개발 중';
+      case 'planning': return t('common.statusPlanning');
+      case 'development': return t('common.statusDevelopment');
+      case 'testing': return t('common.statusTesting');
+      case 'review': return t('common.statusReview');
+      default: return t('common.statusDevelopment');
     }
   };
 
@@ -120,7 +124,7 @@ const UnderDevelopment: React.FC<UnderDevelopmentProps> = ({
             />
             
             <Typography variant="h6" color="text.secondary" sx={{ mb: 3 }}>
-              {description}
+              {desc}
             </Typography>
           </Box>
 
@@ -128,7 +132,7 @@ const UnderDevelopment: React.FC<UnderDevelopmentProps> = ({
 
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 3, mb: 4 }}>
             {/* 개발 현황 */}
-            <Card sx={{ 
+            <Card sx={{
               background: 'rgba(255,255,255,0.7)',
               backdropFilter: 'blur(10px)',
               border: '1px solid rgba(255,255,255,0.2)'
@@ -136,28 +140,28 @@ const UnderDevelopment: React.FC<UnderDevelopmentProps> = ({
               <CardContent>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <RocketIcon color="primary" />
-                  개발 현황
+                  {t('common.developmentProgress')}
                 </Typography>
                 <Stack spacing={2}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <CheckCircleIcon color="success" />
-                    <Typography variant="body2">UI/UX 디자인 완료</Typography>
+                    <Typography variant="body2">{t('common.uiDesignDone')}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <CheckCircleIcon color="success" />
-                    <Typography variant="body2">컴포넌트 구조 설계</Typography>
+                    <Typography variant="body2">{t('common.componentStructure')}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <PendingIcon color="warning" />
-                    <Typography variant="body2">백엔드 API 연동</Typography>
+                    <Typography variant="body2">{t('common.backendApi')}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <PendingIcon color="warning" />
-                    <Typography variant="body2">데이터베이스 연동</Typography>
+                    <Typography variant="body2">{t('common.dbIntegration')}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                     <PendingIcon color="warning" />
-                    <Typography variant="body2">테스트 및 검증</Typography>
+                    <Typography variant="body2">{t('common.testingValidation')}</Typography>
                   </Box>
                 </Stack>
               </CardContent>
@@ -165,7 +169,7 @@ const UnderDevelopment: React.FC<UnderDevelopmentProps> = ({
 
             {/* 예상 기능 */}
             {features.length > 0 && (
-              <Card sx={{ 
+              <Card sx={{
                 background: 'rgba(255,255,255,0.7)',
                 backdropFilter: 'blur(10px)',
                 border: '1px solid rgba(255,255,255,0.2)'
@@ -173,7 +177,7 @@ const UnderDevelopment: React.FC<UnderDevelopmentProps> = ({
                 <CardContent>
                   <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <CodeIcon color="primary" />
-                    예상 기능
+                    {t('common.expectedFeatures')}
                   </Typography>
                   <Stack spacing={1}>
                     {features.map((feature, index) => (
@@ -195,7 +199,7 @@ const UnderDevelopment: React.FC<UnderDevelopmentProps> = ({
 
             {/* 예상 완료일 */}
             {estimatedCompletion && (
-              <Card sx={{ 
+              <Card sx={{
                 background: 'rgba(255,255,255,0.7)',
                 backdropFilter: 'blur(10px)',
                 border: '1px solid rgba(255,255,255,0.2)'
@@ -203,13 +207,13 @@ const UnderDevelopment: React.FC<UnderDevelopmentProps> = ({
                 <CardContent>
                   <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <ScheduleIcon color="primary" />
-                    예상 완료일
+                    {t('common.expectedCompletion')}
                   </Typography>
                   <Typography variant="h5" color="primary.main" sx={{ fontWeight: 'bold' }}>
                     {estimatedCompletion}
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    개발 일정은 변경될 수 있습니다.
+                    {t('common.scheduleSubjectToChange')}
                   </Typography>
                 </CardContent>
               </Card>
@@ -234,7 +238,7 @@ const UnderDevelopment: React.FC<UnderDevelopmentProps> = ({
                 }
               }}
             >
-              개발 진행 상황 확인
+              {t('common.checkProgress')}
             </Button>
           </Box>
         </CardContent>

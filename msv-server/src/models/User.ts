@@ -14,6 +14,19 @@ interface UserAttributes {
   position?: string;
   status: 'active' | 'inactive' | 'suspended';
   last_login?: Date;
+  // 인사관리 필드
+  employee_number?: string;
+  birth_date?: Date;
+  gender?: 'male' | 'female' | 'other';
+  phone?: string;
+  address?: string;
+  emergency_contact?: string;
+  emergency_phone?: string;
+  hire_date?: Date;
+  employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern';
+  salary?: number;
+  is_payment_officer?: boolean;
+  settings?: any;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -33,6 +46,19 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   public position?: string;
   public status!: 'active' | 'inactive' | 'suspended';
   public last_login?: Date;
+  // 인사관리 필드
+  public employee_number?: string;
+  public birth_date?: Date;
+  public gender?: 'male' | 'female' | 'other';
+  public phone?: string;
+  public address?: string;
+  public emergency_contact?: string;
+  public emergency_phone?: string;
+  public hire_date?: Date;
+  public employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern';
+  public salary?: number;
+  public is_payment_officer?: boolean;
+  public settings?: any;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
 }
@@ -94,6 +120,56 @@ User.init(
     last_login: {
       type: DataTypes.DATE,
       allowNull: true
+    },
+    // 인사관리 필드
+    employee_number: {
+      type: DataTypes.STRING(50),
+      allowNull: true
+    },
+    birth_date: {
+      type: DataTypes.DATEONLY,
+      allowNull: true
+    },
+    gender: {
+      type: DataTypes.ENUM('male', 'female', 'other'),
+      allowNull: true
+    },
+    phone: {
+      type: DataTypes.STRING(50),
+      allowNull: true
+    },
+    address: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    emergency_contact: {
+      type: DataTypes.STRING(100),
+      allowNull: true
+    },
+    emergency_phone: {
+      type: DataTypes.STRING(50),
+      allowNull: true
+    },
+    hire_date: {
+      type: DataTypes.DATEONLY,
+      allowNull: true
+    },
+    employment_type: {
+      type: DataTypes.ENUM('fulltime', 'contract', 'parttime', 'intern'),
+      allowNull: true
+    },
+    salary: {
+      type: DataTypes.DECIMAL(15, 2),
+      allowNull: true
+    },
+    is_payment_officer: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
+    },
+    settings: {
+      type: DataTypes.JSON,
+      allowNull: true
     }
   },
   {
@@ -108,6 +184,9 @@ User.init(
       },
       {
         fields: ['email']
+      },
+      {
+        fields: ['employee_number']
       }
     ]
   }

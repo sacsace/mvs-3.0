@@ -304,7 +304,7 @@ const SalesOpportunity: React.FC = () => {
               <Typography variant="h6">예상 매출</Typography>
             </Box>
             <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'info.main' }}>
-              {totalEstimatedValue.toLocaleString()}원
+              Rs. {totalEstimatedValue.toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
@@ -462,11 +462,11 @@ const SalesOpportunity: React.FC = () => {
                   <TableCell>
                     <Box>
                       <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                        {opportunity.estimatedValue.toLocaleString()}원
+                        Rs. {opportunity.estimatedValue.toLocaleString()}
                       </Typography>
                       {opportunity.actualValue > 0 && (
                         <Typography variant="caption" color="success.main">
-                          실제: {opportunity.actualValue.toLocaleString()}원
+                          실제: Rs. {opportunity.actualValue.toLocaleString()}
                         </Typography>
                       )}
                     </Box>
@@ -610,7 +610,7 @@ const SalesOpportunity: React.FC = () => {
             <Box sx={{ display: 'flex', gap: 2 }}>
               <TextField
                 fullWidth
-                label="예상 금액 (원)"
+                label="예상 금액 (INR)"
                 type="number"
                 value={formData.estimatedValue}
                 onChange={(e) => setFormData({...formData, estimatedValue: parseInt(e.target.value) || 0})}
@@ -618,7 +618,7 @@ const SalesOpportunity: React.FC = () => {
               />
               <TextField
                 fullWidth
-                label="실제 금액 (원)"
+                label="실제 금액 (INR)"
                 type="number"
                 value={formData.actualValue}
                 onChange={(e) => setFormData({...formData, actualValue: parseInt(e.target.value) || 0})}

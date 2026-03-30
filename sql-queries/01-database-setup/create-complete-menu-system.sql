@@ -1,4 +1,4 @@
--- MVS 3.0 완전한 메뉴 시스템 구축
+-- MVS 완전한 메뉴 시스템 구축
 
 -- 기존 메뉴 삭제
 DELETE FROM user_permissions;

@@ -3,7 +3,7 @@ export const SYSTEM_CONSTANTS = {
   // 기본 설정
   DEFAULT_PORT: 5000,
   DEFAULT_DB_PORT: 5432,
-  DEFAULT_CORS_ORIGIN: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'],
+  DEFAULT_CORS_ORIGIN: ['http://localhost:3000'],
   
   // 데이터베이스 설정
   DB_POOL: {
@@ -56,7 +56,7 @@ export const SAMPLE_DATA = {
     ABC: 'ABC 회사',
     XYZ: 'XYZ 기업',
     DEF: 'DEF 주식회사',
-    MVS: 'MVS 3.0 Solutions'
+    MVS: 'MVS Solutions'
   },
   DEPARTMENTS: {
     DEVELOPMENT: '개발팀',

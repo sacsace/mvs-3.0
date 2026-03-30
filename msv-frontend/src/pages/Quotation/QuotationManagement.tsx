@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -10,7 +10,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Button,
   Chip,
   TextField,
@@ -19,21 +18,12 @@ import {
   Select,
   MenuItem,
   IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Fab,
   Tooltip,
   Alert,
   Snackbar,
   Pagination,
   InputAdornment,
   Divider,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -45,13 +35,15 @@ import {
   Description as QuotationIcon,
   Print as PrintIcon,
   Email as EmailIcon,
-  Download as DownloadIcon,
   CheckCircle as ApprovedIcon,
   Pending as PendingIcon,
-  Cancel as RejectedIcon,
-  AttachMoney as MoneyIcon
+  Cancel as RejectedIcon
 } from '@mui/icons-material';
 import { useStore } from '../../store';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import { useTranslation } from 'react-i18next';
+import { companyService, partnerService, quotationService } from '../../services/api';
 
 interface QuotationItem {
   id: number;
@@ -85,142 +77,108 @@ interface Quotation {
   lastModified: string;
 }
 
+interface PartnerCustomer {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  status?: string;
+  businessType?: string;
+}
+
+interface CompanyInfo {
+  id?: number;
+  name: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  business_number?: string;
+}
+
 const QuotationManagement: React.FC = () => {
+  const { t } = useTranslation();
   const { user } = useStore();
+  const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [quotations, setQuotations] = useState<Quotation[]>([]);
   const [filteredQuotations, setFilteredQuotations] = useState<Quotation[]>([]);
+  const [partners, setPartners] = useState<PartnerCustomer[]>([]);
+  const [issuingCompany, setIssuingCompany] = useState<CompanyInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [openDialog, setOpenDialog] = useState(false);
   const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [customerFilter, setCustomerFilter] = useState('');
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [activeStep, setActiveStep] = useState(0);
 
-  // 샘플 데이터
-  const sampleData: Quotation[] = [
-    {
-      id: 1,
-      quotationNumber: 'QUO-2024-001',
-      customerName: '삼성전자',
-      customerEmail: 'contact@samsung.com',
-      customerPhone: '02-1234-5678',
-      customerAddress: '서울시 강남구 테헤란로 123',
-      issueDate: '2024-01-15',
-      validUntil: '2024-02-15',
-      status: 'sent',
-      subtotal: 5000000,
-      taxRate: 10,
-      taxAmount: 500000,
-      discount: 100000,
-      totalAmount: 5400000,
-      notes: '긴급 견적 요청',
-      items: [
-        {
-          id: 1,
-          productName: '노트북 컴퓨터',
-          description: '고성능 비즈니스 노트북',
-          quantity: 10,
-          unitPrice: 500000,
-          totalPrice: 5000000,
-          discount: 100000,
-          finalPrice: 4900000
-        }
-      ],
-      createdBy: '김영희',
-      lastModified: '2024-01-15 14:30:00'
-    },
-    {
-      id: 2,
-      quotationNumber: 'QUO-2024-002',
-      customerName: 'LG전자',
-      customerEmail: 'contact@lg.com',
-      customerPhone: '02-2345-6789',
-      customerAddress: '서울시 서초구 서초대로 456',
-      issueDate: '2024-01-16',
-      validUntil: '2024-02-16',
-      status: 'approved',
-      subtotal: 3000000,
-      taxRate: 10,
-      taxAmount: 300000,
-      discount: 0,
-      totalAmount: 3300000,
-      notes: '정기 구매 견적',
-      items: [
-        {
-          id: 1,
-          productName: '모니터',
-          description: '27인치 4K 모니터',
-          quantity: 20,
-          unitPrice: 150000,
-          totalPrice: 3000000,
-          discount: 0,
-          finalPrice: 3000000
-        }
-      ],
-      createdBy: '박민수',
-      lastModified: '2024-01-16 09:15:00'
-    },
-    {
-      id: 3,
-      quotationNumber: 'QUO-2024-003',
-      customerName: '현대자동차',
-      customerEmail: 'contact@hyundai.com',
-      customerPhone: '02-3456-7890',
-      customerAddress: '서울시 영등포구 여의대로 789',
-      issueDate: '2024-01-17',
-      validUntil: '2024-02-17',
-      status: 'draft',
-      subtotal: 15000000,
-      taxRate: 10,
-      taxAmount: 1500000,
-      discount: 500000,
-      totalAmount: 16000000,
-      notes: '대량 구매 견적',
-      items: [
-        {
-          id: 1,
-          productName: '서버 장비',
-          description: '고성능 웹서버',
-          quantity: 5,
-          unitPrice: 3000000,
-          totalPrice: 15000000,
-          discount: 500000,
-          finalPrice: 14500000
-        }
-      ],
-      createdBy: '이지은',
-      lastModified: '2024-01-17 16:45:00'
-    }
-  ];
-
-  useEffect(() => {
-    loadQuotationData();
-  }, []);
-
-  useEffect(() => {
-    filterQuotations();
-  }, [quotations, searchTerm, statusFilter, customerFilter]);
-
-  const loadQuotationData = async () => {
+  const loadQuotationData = useCallback(async () => {
     setLoading(true);
     try {
-      // 실제 API 호출 대신 샘플 데이터 사용
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setQuotations(sampleData);
+      const response = await quotationService.getQuotations({});
+      if (response?.success) {
+        const list = Array.isArray(response.data) ? response.data : [];
+        setQuotations(list);
+      } else {
+        setQuotations([]);
+      }
     } catch (error) {
       console.error('견적서 데이터 로드 오류:', error);
-      setError('견적서 데이터를 불러오는데 실패했습니다.');
+      setError(t('quotationManagement.loadFailed'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
-  const filterQuotations = () => {
+  const loadPartners = useCallback(async () => {
+    try {
+      const response = await partnerService.getPartners();
+      if (response?.success) {
+        const data = Array.isArray(response.data) ? response.data : (response.data ? [response.data] : []);
+        const mapped = data.map((p: any) => ({
+          name: p.company_name || p.companyName || '',
+          email: p.email || '',
+          phone: p.phone || '',
+          address: p.address || '',
+          status: p.status,
+          businessType: p.business_type || p.businessType
+        }));
+        setPartners(
+          mapped.filter((p: PartnerCustomer) => p.name && p.name.toLowerCase() !== 'test industries')
+        );
+      }
+    } catch (error) {
+      console.error('파트너 목록 로드 오류:', error);
+    }
+  }, []);
+
+  const loadIssuingCompany = useCallback(async () => {
+    try {
+      if (!user?.company_id) {
+        setIssuingCompany(null);
+        return;
+      }
+      const response = await companyService.getCompany(Number(user.company_id));
+      if (response?.success) {
+        const data = response.data;
+        setIssuingCompany({
+          id: data.id,
+          name: data.name || '',
+          address: data.address || '',
+          phone: data.phone || '',
+          email: data.email || '',
+          business_number: data.business_number || ''
+        });
+      }
+    } catch (error) {
+      console.error('회사 정보 로드 오류:', error);
+    }
+  }, [user?.company_id]);
+
+  const filterQuotations = useCallback(() => {
     let filtered = quotations;
 
     if (searchTerm) {
@@ -242,22 +200,48 @@ const QuotationManagement: React.FC = () => {
     }
 
     setFilteredQuotations(filtered);
+  }, [quotations, searchTerm, statusFilter, customerFilter]);
+
+  useEffect(() => {
+    loadQuotationData();
+    loadPartners();
+    loadIssuingCompany();
+  }, [loadIssuingCompany, loadPartners, loadQuotationData]);
+
+  useEffect(() => {
+    filterQuotations();
+  }, [filterQuotations]);
+
+  const getNextQuotationNumber = () => {
+    const year = new Date().getFullYear();
+    let maxSeq = 0;
+    quotations.forEach((quotation) => {
+      const match = quotation.quotationNumber?.match(/QUO-(\d{4})-(\d+)/);
+      if (match) {
+        const seq = Number(match[2]);
+        if (!Number.isNaN(seq)) {
+          maxSeq = Math.max(maxSeq, seq);
+        }
+      }
+    });
+    const nextSeq = String(maxSeq + 1).padStart(3, '0');
+    return `QUO-${year}-${nextSeq}`;
   };
 
   const getStatusChip = (status: string) => {
     switch (status) {
       case 'draft':
-        return <Chip label="초안" color="default" size="small" />;
+        return <Chip label={t('quotationManagement.statusDraft')} color="default" size="small" />;
       case 'sent':
-        return <Chip label="발송됨" color="info" size="small" />;
+        return <Chip label={t('quotationManagement.statusSent')} color="info" size="small" />;
       case 'approved':
-        return <Chip label="승인됨" color="success" size="small" />;
+        return <Chip label={t('quotationManagement.statusApproved')} color="success" size="small" />;
       case 'rejected':
-        return <Chip label="거절됨" color="error" size="small" />;
+        return <Chip label={t('quotationManagement.statusRejected')} color="error" size="small" />;
       case 'expired':
-        return <Chip label="만료됨" color="warning" size="small" />;
+        return <Chip label={t('quotationManagement.statusExpired')} color="warning" size="small" />;
       default:
-        return <Chip label="알 수 없음" color="default" size="small" />;
+        return <Chip label={t('quotationManagement.statusUnknown')} color="default" size="small" />;
     }
   };
 
@@ -280,26 +264,30 @@ const QuotationManagement: React.FC = () => {
 
   const handleAddQuotation = () => {
     setSelectedQuotation(null);
-    setOpenDialog(true);
-    setActiveStep(0);
+    setIsCreating(true);
+    setIsEditing(false);
   };
 
   const handleEditQuotation = (quotation: Quotation) => {
     setSelectedQuotation(quotation);
-    setOpenDialog(true);
-    setActiveStep(0);
+    setIsEditing(true);
+    setIsCreating(false);
   };
 
   const handleDeleteQuotation = async (id: number) => {
-    if (window.confirm('정말로 이 견적서를 삭제하시겠습니까?')) {
-      try {
-        setQuotations(prev => prev.filter(quotation => quotation.id !== id));
-        setSuccess('견적서가 성공적으로 삭제되었습니다.');
-      } catch (error) {
-        console.error('삭제 오류:', error);
-        setError('삭제 중 오류가 발생했습니다.');
-      }
-    }
+    showConfirm(
+      t('quotationManagement.confirmDelete'),
+      async () => {
+        try {
+          setQuotations(prev => prev.filter(quotation => quotation.id !== id));
+          setSuccess(t('quotationManagement.deleted'));
+        } catch (error) {
+          console.error('삭제 오류:', error);
+          setError(t('quotationManagement.deleteFailed'));
+        }
+      },
+      { confirmColor: 'error' }
+    );
   };
 
   const handleSaveQuotation = async (quotationData: Partial<Quotation>) => {
@@ -307,37 +295,50 @@ const QuotationManagement: React.FC = () => {
       if (selectedQuotation) {
         // 수정
         setQuotations(prev =>
-          prev.map(quotation => quotation.id === selectedQuotation.id ? { ...quotation, ...quotationData } : quotation)
+          prev.map(quotation => quotation.id === selectedQuotation.id ? { 
+            ...quotation, 
+            ...quotationData,
+            quotationNumber: quotation.quotationNumber
+          } : quotation)
         );
-        setSuccess('견적서가 성공적으로 수정되었습니다.');
+        setSuccess(t('quotationManagement.updated'));
       } else {
         // 추가
+        const nextQuotationNumber = getNextQuotationNumber();
         const newQuotation: Quotation = {
           id: Math.max(...quotations.map(q => q.id)) + 1,
-          quotationNumber: `QUO-2024-${String(Math.max(...quotations.map(q => q.id)) + 1).padStart(3, '0')}`,
+          quotationNumber: nextQuotationNumber,
           ...quotationData,
           lastModified: new Date().toISOString().replace('T', ' ').substring(0, 19)
         } as Quotation;
         setQuotations(prev => [...prev, newQuotation]);
-        setSuccess('견적서가 성공적으로 추가되었습니다.');
+        setSuccess(t('quotationManagement.created'));
       }
-      setOpenDialog(false);
+      setIsCreating(false);
+      setIsEditing(false);
+      setSelectedQuotation(null);
     } catch (error) {
       console.error('저장 오류:', error);
-      setError('저장 중 오류가 발생했습니다.');
+      setError(t('quotationManagement.saveFailed'));
     }
+  };
+
+  const handleCancelForm = () => {
+    setIsCreating(false);
+    setIsEditing(false);
+    setSelectedQuotation(null);
   };
 
   const handlePrintQuotation = (quotation: Quotation) => {
     // 실제 구현에서는 PDF 생성 로직
     console.log('견적서 인쇄:', quotation);
-    setSuccess('견적서가 인쇄되었습니다.');
+    setSuccess(t('quotationManagement.printed'));
   };
 
   const handleEmailQuotation = (quotation: Quotation) => {
     // 실제 구현에서는 이메일 발송 로직
     console.log('견적서 이메일 발송:', quotation);
-    setSuccess('견적서가 이메일로 발송되었습니다.');
+    setSuccess(t('quotationManagement.emailed'));
   };
 
   const totalAmount = quotations.reduce((sum, quotation) => sum + quotation.totalAmount, 0);
@@ -358,18 +359,31 @@ const QuotationManagement: React.FC = () => {
       minHeight: '100%'
     }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <QuotationIcon />
-          견적서 관리
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleAddQuotation}
-          sx={{ borderRadius: 2 }}
-        >
-          견적서 작성
-        </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <QuotationIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
+          <Typography component="h1" sx={{ 
+            fontSize: '16px !important',
+            fontWeight: 600,
+            color: 'red',
+            lineHeight: 1.5
+          }}>
+            {t('quotationManagement.title')}
+          </Typography>
+        </Box>
+        {isCreating || isEditing ? (
+          <Button variant="outlined" onClick={handleCancelForm} sx={{ borderRadius: 2 }}>
+            {t('common.back')}
+          </Button>
+        ) : (
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={handleAddQuotation}
+            sx={{ borderRadius: 2 }}
+          >
+            {t('quotationManagement.create')}
+          </Button>
+        )}
       </Box>
 
       {/* 통계 카드 */}
@@ -382,7 +396,7 @@ const QuotationManagement: React.FC = () => {
         <Card>
           <CardContent>
             <Typography color="textSecondary" gutterBottom>
-              총 견적서
+              {t('quotationManagement.totalQuotations')}
             </Typography>
             <Typography variant="h4">
               {quotations.length}
@@ -392,17 +406,17 @@ const QuotationManagement: React.FC = () => {
         <Card>
           <CardContent>
             <Typography color="textSecondary" gutterBottom>
-              총 견적 금액
+              {t('quotationManagement.totalAmount')}
             </Typography>
             <Typography variant="h4">
-              ₩{totalAmount.toLocaleString()}
+              Rs. {totalAmount.toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
             <Typography color="textSecondary" gutterBottom>
-              승인된 견적서
+              {t('quotationManagement.approvedQuotations')}
             </Typography>
             <Typography variant="h4" color="success.main">
               {approvedQuotations}
@@ -412,7 +426,7 @@ const QuotationManagement: React.FC = () => {
         <Card>
           <CardContent>
             <Typography color="textSecondary" gutterBottom>
-              대기 중인 견적서
+              {t('quotationManagement.pendingQuotations')}
             </Typography>
             <Typography variant="h4" color="warning.main">
               {pendingQuotations}
@@ -421,173 +435,193 @@ const QuotationManagement: React.FC = () => {
         </Card>
       </Box>
 
-      {/* 필터 및 검색 */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box sx={{ 
-            display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr' },
-            gap: 2, 
-            alignItems: 'center' 
-          }}>
-            <TextField
-              fullWidth
-              placeholder="견적서 번호, 고객명, 이메일 검색"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                ),
-              }}
+      {isCreating || isEditing ? (
+        <Card>
+          <CardContent>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
+              {selectedQuotation ? t('quotationManagement.editTitle') : t('quotationManagement.create')}
+            </Typography>
+            <QuotationForm
+              quotation={selectedQuotation}
+              onSave={handleSaveQuotation}
+              onCancel={handleCancelForm}
+              customers={
+                partners.length
+                  ? partners.filter(p => !p.status || p.status === 'active')
+                  : Array.from(
+                      new Map(
+                        quotations.map(quotation => [
+                          quotation.customerName,
+                          {
+                            name: quotation.customerName,
+                            email: quotation.customerEmail,
+                            phone: quotation.customerPhone,
+                            address: quotation.customerAddress,
+                          },
+                        ])
+                      ).values()
+                    )
+              }
+              issuingCompany={issuingCompany}
+              nextQuotationNumber={getNextQuotationNumber()}
             />
-            <FormControl fullWidth>
-              <InputLabel>상태</InputLabel>
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <MenuItem value="">전체</MenuItem>
-                <MenuItem value="draft">초안</MenuItem>
-                <MenuItem value="sent">발송됨</MenuItem>
-                <MenuItem value="approved">승인됨</MenuItem>
-                <MenuItem value="rejected">거절됨</MenuItem>
-                <MenuItem value="expired">만료됨</MenuItem>
-              </Select>
-            </FormControl>
-            <TextField
-              fullWidth
-              placeholder="고객명 검색"
-              value={customerFilter}
-              onChange={(e) => setCustomerFilter(e.target.value)}
-            />
-            <Button
-              fullWidth
-              variant="outlined"
-              startIcon={<FilterIcon />}
-              onClick={() => {
-                setSearchTerm('');
-                setStatusFilter('');
-                setCustomerFilter('');
-              }}
-            >
-              초기화
-            </Button>
-          </Box>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* 필터 및 검색 */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Box sx={{ 
+                display: 'grid', 
+                gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr' },
+                gap: 2, 
+                alignItems: 'center' 
+              }}>
+                <TextField
+                  fullWidth
+                  placeholder={t('quotationManagement.searchPlaceholder')}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+                <FormControl fullWidth>
+                  <InputLabel>{t('quotationManagement.status')}</InputLabel>
+                  <Select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                  >
+                    <MenuItem value="">{t('menuPermissionManagement.all')}</MenuItem>
+                    <MenuItem value="draft">{t('quotationManagement.statusDraft')}</MenuItem>
+                    <MenuItem value="sent">{t('quotationManagement.statusSent')}</MenuItem>
+                    <MenuItem value="approved">{t('quotationManagement.statusApproved')}</MenuItem>
+                    <MenuItem value="rejected">{t('quotationManagement.statusRejected')}</MenuItem>
+                    <MenuItem value="expired">{t('quotationManagement.statusExpired')}</MenuItem>
+                  </Select>
+                </FormControl>
+                <TextField
+                  fullWidth
+                  placeholder={t('quotationManagement.customerSearchPlaceholder')}
+                  value={customerFilter}
+                  onChange={(e) => setCustomerFilter(e.target.value)}
+                />
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<FilterIcon />}
+                  onClick={() => {
+                    setSearchTerm('');
+                    setStatusFilter('');
+                    setCustomerFilter('');
+                  }}
+                >
+                  {t('common.reset')}
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
 
-      {/* 견적서 목록 테이블 */}
-      <Card>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>상태</TableCell>
-                <TableCell>견적서 번호</TableCell>
-                <TableCell>고객명</TableCell>
-                <TableCell>발행일</TableCell>
-                <TableCell>유효기간</TableCell>
-                <TableCell>총 금액</TableCell>
-                <TableCell>작성자</TableCell>
-                <TableCell>작업</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {paginatedQuotations.map((quotation) => (
-                <TableRow key={quotation.id} hover>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      {getStatusIcon(quotation.status)}
-                      {getStatusChip(quotation.status)}
-                    </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="subtitle2" fontWeight="bold">
-                      {quotation.quotationNumber}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Box>
-                      <Typography variant="subtitle2" fontWeight="bold">
-                        {quotation.customerName}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {quotation.customerEmail}
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell>{quotation.issueDate}</TableCell>
-                  <TableCell>{quotation.validUntil}</TableCell>
-                  <TableCell>
-                    <Typography variant="subtitle2" fontWeight="bold">
-                      ₩{quotation.totalAmount.toLocaleString()}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{quotation.createdBy}</TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Tooltip title="보기">
-                        <IconButton size="small" onClick={() => handleEditQuotation(quotation)}>
-                          <ViewIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="수정">
-                        <IconButton size="small" onClick={() => handleEditQuotation(quotation)}>
-                          <EditIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="인쇄">
-                        <IconButton size="small" onClick={() => handlePrintQuotation(quotation)}>
-                          <PrintIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="이메일 발송">
-                        <IconButton size="small" onClick={() => handleEmailQuotation(quotation)}>
-                          <EmailIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="삭제">
-                        <IconButton size="small" onClick={() => handleDeleteQuotation(quotation.id)}>
-                          <DeleteIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+          {/* 견적서 목록 테이블 */}
+          <Card>
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t('quotationManagement.status')}</TableCell>
+                    <TableCell>{t('quotationManagement.quotationNumber')}</TableCell>
+                    <TableCell>{t('quotationManagement.customerName')}</TableCell>
+                    <TableCell>{t('quotationManagement.issueDate')}</TableCell>
+                    <TableCell>{t('quotationManagement.validUntil')}</TableCell>
+                    <TableCell>{t('quotationManagement.totalAmount')}</TableCell>
+                    <TableCell>{t('common.create')}</TableCell>
+                    <TableCell>{t('quotationManagement.actions')}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {paginatedQuotations.map((quotation) => (
+                    <TableRow key={quotation.id} hover>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          {getStatusIcon(quotation.status)}
+                          {getStatusChip(quotation.status)}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="subtitle2" fontWeight="bold">
+                          {quotation.quotationNumber}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Box>
+                          <Typography variant="subtitle2" fontWeight="bold">
+                            {quotation.customerName}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {quotation.customerEmail}
+                          </Typography>
+                        </Box>
+                      </TableCell>
+                      <TableCell>{quotation.issueDate}</TableCell>
+                      <TableCell>{quotation.validUntil}</TableCell>
+                      <TableCell>
+                        <Typography variant="subtitle2" fontWeight="bold">
+                          Rs. {quotation.totalAmount.toLocaleString()}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>{quotation.createdBy}</TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                          <Tooltip title={t('quotationManagement.view')}>
+                            <IconButton size="small" onClick={() => handleEditQuotation(quotation)}>
+                              <ViewIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title={t('quotationManagement.edit')}>
+                            <IconButton size="small" onClick={() => handleEditQuotation(quotation)}>
+                              <EditIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title={t('quotationManagement.print')}>
+                            <IconButton size="small" onClick={() => handlePrintQuotation(quotation)}>
+                              <PrintIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title={t('quotationManagement.email')}>
+                            <IconButton size="small" onClick={() => handleEmailQuotation(quotation)}>
+                              <EmailIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title={t('quotationManagement.delete')}>
+                            <IconButton size="small" onClick={() => handleDeleteQuotation(quotation.id)}>
+                              <DeleteIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
 
-        {/* 페이지네이션 */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-          <Pagination
-            count={Math.ceil(filteredQuotations.length / itemsPerPage)}
-            page={page}
-            onChange={(_, value) => setPage(value)}
-            color="primary"
-          />
-        </Box>
-      </Card>
-
-      {/* 견적서 작성/수정 다이얼로그 */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="lg" fullWidth>
-        <DialogTitle>
-          {selectedQuotation ? '견적서 수정' : '견적서 작성'}
-        </DialogTitle>
-        <DialogContent>
-          <QuotationForm
-            quotation={selectedQuotation}
-            onSave={handleSaveQuotation}
-            onCancel={() => setOpenDialog(false)}
-            activeStep={activeStep}
-            setActiveStep={setActiveStep}
-          />
-        </DialogContent>
-      </Dialog>
+            {/* 페이지네이션 */}
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+              <Pagination
+                count={Math.ceil(filteredQuotations.length / itemsPerPage)}
+                page={page}
+                onChange={(_, value) => setPage(value)}
+                color="primary"
+              />
+            </Box>
+          </Card>
+        </>
+      )}
 
       {/* 스낵바 */}
       <Snackbar
@@ -609,6 +643,18 @@ const QuotationManagement: React.FC = () => {
           {success}
         </Alert>
       </Snackbar>
+
+      {/* 확인 다이얼로그 */}
+      <ConfirmDialog
+        open={dialogState.open}
+        title={dialogState.title}
+        message={dialogState.message}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+        confirmColor={dialogState.confirmColor}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
     </Box>
   );
 };
@@ -618,17 +664,26 @@ interface QuotationFormProps {
   quotation: Quotation | null;
   onSave: (data: Partial<Quotation>) => void;
   onCancel: () => void;
-  activeStep: number;
-  setActiveStep: (step: number) => void;
+  customers: Array<{
+    name: string;
+    email: string;
+    phone: string;
+    address: string;
+  }>;
+  issuingCompany: CompanyInfo | null;
+  nextQuotationNumber: string;
 }
 
 const QuotationForm: React.FC<QuotationFormProps> = ({ 
   quotation, 
   onSave, 
-  onCancel, 
-  activeStep, 
-  setActiveStep 
+  onCancel,
+  customers,
+  issuingCompany,
+  nextQuotationNumber
 }) => {
+  const productNameRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const [pendingFocusIndex, setPendingFocusIndex] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     customerName: quotation?.customerName || '',
     customerEmail: quotation?.customerEmail || '',
@@ -636,7 +691,10 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
     customerAddress: quotation?.customerAddress || '',
     validUntil: quotation?.validUntil || '',
     notes: quotation?.notes || '',
-    taxRate: quotation?.taxRate || 10,
+    taxType: 'cgst_sgst',
+    cgstRate: 9,
+    sgstRate: 9,
+    igstRate: 0,
     discount: quotation?.discount || 0
   });
 
@@ -655,16 +713,6 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
     ]
   );
 
-  const steps = ['고객 정보', '상품 정보', '견적 요약'];
-
-  const handleNext = () => {
-    setActiveStep(activeStep + 1);
-  };
-
-  const handleBack = () => {
-    setActiveStep(activeStep - 1);
-  };
-
   const handleItemChange = (index: number, field: keyof QuotationItem, value: any) => {
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
@@ -673,21 +721,20 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
     if (field === 'quantity' || field === 'unitPrice' || field === 'discount') {
       const quantity = field === 'quantity' ? value : newItems[index].quantity;
       const unitPrice = field === 'unitPrice' ? value : newItems[index].unitPrice;
-      const discount = field === 'discount' ? value : newItems[index].discount;
       
       const totalPrice = quantity * unitPrice;
-      const finalPrice = totalPrice - discount;
-      
       newItems[index].totalPrice = totalPrice;
-      newItems[index].finalPrice = finalPrice;
+      newItems[index].finalPrice = totalPrice;
+      newItems[index].discount = 0;
     }
     
     setItems(newItems);
   };
 
   const addItem = () => {
+    const nextId = items.length ? Math.max(...items.map(i => i.id)) + 1 : 1;
     const newItem: QuotationItem = {
-      id: Math.max(...items.map(i => i.id)) + 1,
+      id: nextId,
       productName: '',
       description: '',
       quantity: 1,
@@ -699,28 +746,68 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
     setItems([...items, newItem]);
   };
 
+  const addItemAndFocus = () => {
+    setItems(prev => {
+      const nextId = prev.length ? Math.max(...prev.map(i => i.id)) + 1 : 1;
+      const newItem: QuotationItem = {
+        id: nextId,
+        productName: '',
+        description: '',
+        quantity: 1,
+        unitPrice: 0,
+        totalPrice: 0,
+        discount: 0,
+        finalPrice: 0
+      };
+      setPendingFocusIndex(prev.length);
+      return [...prev, newItem];
+    });
+  };
+
   const removeItem = (index: number) => {
     if (items.length > 1) {
       setItems(items.filter((_, i) => i !== index));
     }
   };
 
+  useEffect(() => {
+    if (pendingFocusIndex === null) return;
+    const target = productNameRefs.current[pendingFocusIndex];
+    if (target) {
+      target.focus();
+    }
+    setPendingFocusIndex(null);
+  }, [items.length, pendingFocusIndex]);
+
   const calculateTotals = () => {
     const subtotal = items.reduce((sum, item) => sum + item.finalPrice, 0);
-    const taxAmount = (subtotal * formData.taxRate) / 100;
+    const cgstRate = formData.taxType === 'cgst_sgst' ? formData.cgstRate : 0;
+    const sgstRate = formData.taxType === 'cgst_sgst' ? formData.sgstRate : 0;
+    const igstRate = formData.taxType === 'igst' ? formData.igstRate : 0;
+    const taxAmount = (subtotal * (cgstRate + sgstRate + igstRate)) / 100;
     const totalAmount = subtotal + taxAmount - formData.discount;
     
-    return { subtotal, taxAmount, totalAmount };
+    return { subtotal, taxAmount, totalAmount, cgstRate, sgstRate, igstRate };
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const { subtotal, taxAmount, totalAmount } = calculateTotals();
+    const { subtotal, taxAmount, totalAmount, cgstRate, sgstRate, igstRate } = calculateTotals();
+    const fallbackValidUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0];
     
     onSave({
       ...formData,
+      customerName: formData.customerName || selectedCustomer?.name || '',
+      customerEmail: formData.customerEmail || selectedCustomer?.email || '',
+      customerPhone: formData.customerPhone || selectedCustomer?.phone || '',
+      customerAddress: formData.customerAddress || selectedCustomer?.address || '',
+      validUntil: formData.validUntil || fallbackValidUntil,
+      notes: formData.notes || '견적 기본 사항 자동 입력',
       subtotal,
       taxAmount,
+      taxRate: cgstRate + sgstRate + igstRate,
       totalAmount,
       items,
       issueDate: new Date().toISOString().split('T')[0],
@@ -729,215 +816,420 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
     });
   };
 
-  const { subtotal, taxAmount, totalAmount } = calculateTotals();
+  const handleEmailSend = () => {
+    // TODO: 실제 PDF 생성 + 이메일 전송 API 연동 필요
+    handleSubmit({ preventDefault: () => {} } as React.FormEvent);
+    alert('견적서가 PDF로 이메일 전송됩니다. (API 연동 필요)');
+  };
+
+  const { subtotal, totalAmount, cgstRate, sgstRate, igstRate } = calculateTotals();
+  const selectedCustomer = customers.find(customer => customer.name === formData.customerName);
+  const quoteNumber = quotation?.quotationNumber || nextQuotationNumber;
+
+  const handleCustomerSelect = (name: string) => {
+    const selected = customers.find(customer => customer.name === name);
+    if (!selected) {
+      setFormData(prev => ({
+        ...prev,
+        customerName: '',
+        customerEmail: '',
+        customerPhone: '',
+        customerAddress: '',
+      }));
+      return;
+    }
+    setFormData(prev => ({
+      ...prev,
+      customerName: selected.name,
+      customerEmail: selected.email,
+      customerPhone: selected.phone,
+      customerAddress: selected.address,
+    }));
+  };
 
   return (
     <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
-      <Stepper activeStep={activeStep} orientation="vertical">
-        <Step>
-          <StepLabel>고객 정보</StepLabel>
-          <StepContent>
-            <Box sx={{ 
-              display: 'grid', 
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-              gap: 2 
-            }}>
+      <Box sx={{ border: '1px solid #cfcfcf', borderRadius: 2, bgcolor: '#fff', p: { xs: 2, md: 3 } }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mb: 3 }}>
+          <Box sx={{ minWidth: 220 }}>
+            <Typography variant="caption" color="text.secondary">Company Name</Typography>
+            <Typography variant="subtitle2" sx={{ mt: 0.5, mb: 1 }}>
+              {issuingCompany?.name || '-'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block">
+              {issuingCompany?.address || '-'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block">
+              Phone: {issuingCompany?.phone || '-'}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block">
+              E-mail: {issuingCompany?.email || '-'}
+            </Typography>
+          </Box>
+          <Box sx={{ textAlign: 'right' }}>
+            <Typography sx={{ letterSpacing: 1, fontWeight: 700, fontSize: '22px' }}>QUOTATION</Typography>
+            <Box sx={{ mt: 1, border: '1px solid #cfcfcf', borderRadius: 1, overflow: 'hidden', minWidth: 220 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', bgcolor: '#f5f5f5' }}>
+                <Box sx={{ p: 1, borderRight: '1px solid #cfcfcf' }}><Typography variant="caption">QUOTE #</Typography></Box>
+                <Box sx={{ p: 1 }}><Typography variant="caption">DATE</Typography></Box>
+              </Box>
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: '1px solid #cfcfcf' }}>
+                <Box sx={{ p: 1, borderRight: '1px solid #cfcfcf' }}>
+                  <Typography variant="body2">{quoteNumber}</Typography>
+                </Box>
+                <Box sx={{ p: 1 }}>
+                  <Typography variant="body2">{new Date().toISOString().split('T')[0]}</Typography>
+                </Box>
+              </Box>
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: '1px solid #cfcfcf', bgcolor: '#f5f5f5' }}>
+                <Box sx={{ p: 1, borderRight: '1px solid #cfcfcf' }}><Typography variant="caption">CUSTOMER</Typography></Box>
+                <Box sx={{ p: 1 }}><Typography variant="caption">VALID UNTIL</Typography></Box>
+              </Box>
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: '1px solid #cfcfcf' }}>
+                <Box sx={{ p: 1, borderRight: '1px solid #cfcfcf' }}>
+                  <Typography variant="body2">{selectedCustomer?.name || '-'}</Typography>
+                </Box>
+                <Box sx={{ p: 1 }}>
+                  <Typography variant="body2">{formData.validUntil || '-'}</Typography>
+                </Box>
+              </Box>
+            </Box>
+          </Box>
+        </Box>
+
+        <Box sx={{ border: '1px solid #cfcfcf', borderRadius: 1, mb: 3 }}>
+          <Box sx={{ bgcolor: '#f0f0f0', px: 2, py: 1 }}>
+            <Typography variant="subtitle2">CUSTOMER INFO</Typography>
+          </Box>
+          <Box sx={{ p: 2, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+            <Box>
+              <Typography variant="caption" color="text.secondary">Name *</Typography>
+              <FormControl fullWidth size="small">
+                <Select
+                  displayEmpty
+                  value={formData.customerName}
+                  onChange={(e) => handleCustomerSelect(e.target.value)}
+                  renderValue={(selected) => selected || '고객 회사 선택'}
+                >
+                  <MenuItem value="">
+                    <Typography color="text.secondary">고객 회사 선택</Typography>
+                  </MenuItem>
+                  {customers.map(customer => (
+                    <MenuItem key={customer.name} value={customer.name}>
+                      {customer.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">Email *</Typography>
               <TextField
                 fullWidth
-                label="고객명"
-                value={formData.customerName}
-                onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
-                required
-              />
-              <TextField
-                fullWidth
-                label="이메일"
+                size="small"
                 type="email"
                 value={formData.customerEmail}
                 onChange={(e) => setFormData({ ...formData, customerEmail: e.target.value })}
                 required
               />
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">Phone</Typography>
               <TextField
                 fullWidth
-                label="전화번호"
+                size="small"
                 value={formData.customerPhone}
                 onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })}
               />
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">Valid Until *</Typography>
               <TextField
                 fullWidth
-                label="유효기간"
+                size="small"
                 type="date"
                 value={formData.validUntil}
                 onChange={(e) => setFormData({ ...formData, validUntil: e.target.value })}
-                InputLabelProps={{ shrink: true }}
                 required
               />
+            </Box>
+            <Box sx={{ gridColumn: { xs: '1', md: '1 / -1' } }}>
+              <Typography variant="caption" color="text.secondary">Address</Typography>
               <TextField
                 fullWidth
-                label="주소"
+                size="small"
                 value={formData.customerAddress}
                 onChange={(e) => setFormData({ ...formData, customerAddress: e.target.value })}
-                sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}
               />
             </Box>
-            <Box sx={{ mt: 2 }}>
-              <Button onClick={handleNext} variant="contained">
-                다음
-              </Button>
-            </Box>
-          </StepContent>
-        </Step>
+          </Box>
+        </Box>
 
-        <Step>
-          <StepLabel>상품 정보</StepLabel>
-          <StepContent>
-            <Box sx={{ mb: 2 }}>
-              <Button startIcon={<AddIcon />} onClick={addItem} variant="outlined">
-                상품 추가
-              </Button>
-            </Box>
-            
-            {items.map((item, index) => (
-              <Card key={item.id} sx={{ mb: 2 }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6">상품 {index + 1}</Typography>
-                    {items.length > 1 && (
-                      <IconButton onClick={() => removeItem(index)} color="error">
-                        <DeleteIcon />
-                      </IconButton>
-                    )}
-                  </Box>
-                  
-                  <Box sx={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 2 
-                  }}>
+        <Box sx={{ border: '1px solid #cfcfcf', borderRadius: 1, mb: 3 }}>
+          <Box sx={{ bgcolor: '#f0f0f0', px: 2, py: 1 }}>
+            <Typography variant="subtitle2">DESCRIPTION OF WORK</Typography>
+          </Box>
+          <Box sx={{ p: 2 }}>
+            <TextField
+              fullWidth
+              multiline
+              rows={4}
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              sx={{ '& textarea': { resize: 'vertical' } }}
+            />
+          </Box>
+        </Box>
+
+        <Box sx={{ border: '1px solid #cfcfcf', borderRadius: 1, mb: 3 }}>
+          <Box sx={{ bgcolor: '#f0f0f0', px: 2, py: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="subtitle2">ITEMIZED COSTS</Typography>
+            <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={addItem}>
+              상품 추가
+            </Button>
+          </Box>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>DESCRIPTION</TableCell>
+                <TableCell align="right">QTY</TableCell>
+                <TableCell align="right">UNIT PRICE</TableCell>
+                <TableCell align="right">AMOUNT</TableCell>
+                <TableCell align="center">-</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {items.map((item, index) => (
+                <TableRow key={item.id}>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
                     <TextField
-                      fullWidth
-                      label="상품명"
-                      value={item.productName}
-                      onChange={(e) => handleItemChange(index, 'productName', e.target.value)}
-                      required
-                    />
+                        fullWidth
+                        size="small"
+                        placeholder="상품명"
+                        value={item.productName}
+                        onChange={(e) => handleItemChange(index, 'productName', e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addItemAndFocus();
+                        }
+                      }}
+                      inputRef={(el) => { productNameRefs.current[index] = el; }}
+                        required
+                      />
+                      <TextField
+                        fullWidth
+                        size="small"
+                        placeholder="설명"
+                        value={item.description}
+                        onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addItemAndFocus();
+                        }
+                      }}
+                      />
+                    </Box>
+                  </TableCell>
+                  <TableCell align="right">
                     <TextField
-                      fullWidth
-                      label="수량"
+                      size="small"
                       type="number"
                       value={item.quantity}
                       onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value) || 0)}
-                      required
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addItemAndFocus();
+                        }
+                      }}
+                      inputProps={{ min: 0 }}
                     />
+                  </TableCell>
+                  <TableCell align="right">
                     <TextField
-                      fullWidth
-                      label="단가"
+                      size="small"
                       type="number"
                       value={item.unitPrice}
                       onChange={(e) => handleItemChange(index, 'unitPrice', parseInt(e.target.value) || 0)}
-                      required
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addItemAndFocus();
+                        }
+                      }}
+                      inputProps={{ min: 0 }}
                     />
-                    <TextField
-                      fullWidth
-                      label="할인"
-                      type="number"
-                      value={item.discount}
-                      onChange={(e) => handleItemChange(index, 'discount', parseInt(e.target.value) || 0)}
-                    />
-                    <TextField
-                      fullWidth
-                      label="상품 설명"
-                      value={item.description}
-                      onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                      multiline
-                      rows={2}
-                      sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}
-                    />
-                    <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
-                      <Typography variant="body2" color="text.secondary">
-                        소계: ₩{item.finalPrice.toLocaleString()}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </CardContent>
-              </Card>
-            ))}
-            
-            <Box sx={{ mt: 2 }}>
-              <Button onClick={handleBack} sx={{ mr: 1 }}>
-                이전
-              </Button>
-              <Button onClick={handleNext} variant="contained">
-                다음
-              </Button>
-            </Box>
-          </StepContent>
-        </Step>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Typography variant="body2">Rs. {item.finalPrice.toLocaleString()}</Typography>
+                  </TableCell>
+                  <TableCell align="center">
+                    {items.length > 1 && (
+                      <IconButton onClick={() => removeItem(index)} color="error" size="small">
+                        <DeleteIcon />
+                      </IconButton>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Box>
 
-        <Step>
-          <StepLabel>견적 요약</StepLabel>
-          <StepContent>
-            <Box sx={{ 
-              display: 'grid', 
-              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-              gap: 2 
-            }}>
+        <Box sx={{ border: '1px solid #cfcfcf', borderRadius: 1, p: 2, mb: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(5, 1fr)' }, gap: 2 }}>
+            <Box>
+              <Typography variant="caption" color="text.secondary">TAX TYPE</Typography>
+              <FormControl fullWidth size="small" sx={{ mt: 0.5 }}>
+                <Select
+                  value={formData.taxType}
+                  onChange={(e) => {
+                    const nextType = e.target.value;
+                    if (nextType === 'igst') {
+                      setFormData(prev => ({
+                        ...prev,
+                        taxType: 'igst',
+                        cgstRate: 0,
+                        sgstRate: 0,
+                      }));
+                    } else {
+                      setFormData(prev => ({
+                        ...prev,
+                        taxType: 'cgst_sgst',
+                        igstRate: 0,
+                        cgstRate: prev.cgstRate || 9,
+                        sgstRate: prev.sgstRate || 9,
+                      }));
+                    }
+                  }}
+                >
+                  <MenuItem value="cgst_sgst">CGST + SGST</MenuItem>
+                  <MenuItem value="igst">IGST</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">CGST (%)</Typography>
               <TextField
                 fullWidth
-                label="세율 (%)"
+                size="small"
                 type="number"
-                value={formData.taxRate}
-                onChange={(e) => setFormData({ ...formData, taxRate: parseInt(e.target.value) || 0 })}
+                value={formData.cgstRate}
+                disabled={formData.taxType === 'igst'}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  cgstRate: parseInt(e.target.value) || 0,
+                  igstRate: 0
+                })}
               />
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">SGST (%)</Typography>
               <TextField
                 fullWidth
-                label="전체 할인"
+                size="small"
+                type="number"
+                value={formData.sgstRate}
+                disabled={formData.taxType === 'igst'}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  sgstRate: parseInt(e.target.value) || 0,
+                  igstRate: 0
+                })}
+              />
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">IGST (%)</Typography>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                value={formData.igstRate}
+                disabled={formData.taxType !== 'igst'}
+                onChange={(e) => setFormData({
+                  ...formData,
+                  igstRate: parseInt(e.target.value) || 0,
+                  cgstRate: 0,
+                  sgstRate: 0
+                })}
+              />
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">DISCOUNT</Typography>
+              <TextField
+                fullWidth
+                size="small"
                 type="number"
                 value={formData.discount}
                 onChange={(e) => setFormData({ ...formData, discount: parseInt(e.target.value) || 0 })}
               />
-              <TextField
-                fullWidth
-                label="메모"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                multiline
-                rows={3}
-                sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}
-              />
             </Box>
+          </Box>
+        </Box>
 
-            <Divider sx={{ my: 2 }} />
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+          <Box sx={{ width: 260, border: '1px solid #cfcfcf', borderRadius: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #cfcfcf' }}>
+              <Typography variant="body2">SUBTOTAL</Typography>
+              <Typography variant="body2">Rs. {subtotal.toLocaleString()}</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #cfcfcf' }}>
+              <Typography variant="body2">CGST ({cgstRate}%)</Typography>
+              <Typography variant="body2">Rs. {(subtotal * (cgstRate / 100)).toLocaleString()}</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #cfcfcf' }}>
+              <Typography variant="body2">SGST ({sgstRate}%)</Typography>
+              <Typography variant="body2">Rs. {(subtotal * (sgstRate / 100)).toLocaleString()}</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #cfcfcf' }}>
+              <Typography variant="body2">IGST ({igstRate}%)</Typography>
+              <Typography variant="body2">Rs. {(subtotal * (igstRate / 100)).toLocaleString()}</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #cfcfcf' }}>
+              <Typography variant="body2">DISCOUNT</Typography>
+              <Typography variant="body2">-Rs. {formData.discount.toLocaleString()}</Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1 }}>
+              <Typography variant="subtitle2">TOTAL QUOTE</Typography>
+              <Typography variant="subtitle2">Rs. {totalAmount.toLocaleString()}</Typography>
+            </Box>
+          </Box>
+        </Box>
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography>소계:</Typography>
-              <Typography>₩{subtotal.toLocaleString()}</Typography>
+        <Box sx={{ border: '1px solid #cfcfcf', borderRadius: 1, mb: 2 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', borderBottom: '1px solid #cfcfcf' }}>
+            <Box sx={{ p: 1 }}>
+              <Typography variant="caption" color="text.secondary">Customer Acceptance</Typography>
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography>세금 ({formData.taxRate}%):</Typography>
-              <Typography>₩{taxAmount.toLocaleString()}</Typography>
+            <Box sx={{ p: 1, borderLeft: '1px solid #cfcfcf' }}>
+              <Typography variant="caption" color="text.secondary">Printed Name</Typography>
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography>할인:</Typography>
-              <Typography>-₩{formData.discount.toLocaleString()}</Typography>
+            <Box sx={{ p: 1, borderLeft: '1px solid #cfcfcf' }}>
+              <Typography variant="caption" color="text.secondary">Date</Typography>
             </Box>
-            <Divider sx={{ my: 1 }} />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-              <Typography variant="h6" fontWeight="bold">총 금액:</Typography>
-              <Typography variant="h6" fontWeight="bold">₩{totalAmount.toLocaleString()}</Typography>
-            </Box>
+          </Box>
+          <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', height: 48 }}>
+            <Box sx={{ borderRight: '1px solid #cfcfcf' }} />
+            <Box sx={{ borderRight: '1px solid #cfcfcf' }} />
+            <Box />
+          </Box>
+        </Box>
 
-            <Box sx={{ mt: 2 }}>
-              <Button onClick={handleBack} sx={{ mr: 1 }}>
-                이전
-              </Button>
-              <Button type="submit" variant="contained">
-                {quotation ? '수정' : '저장'}
-              </Button>
-            </Box>
-          </StepContent>
-        </Step>
-      </Stepper>
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+          <Button onClick={onCancel} variant="outlined">
+            취소
+          </Button>
+        <Button variant="outlined" onClick={handleEmailSend}>
+          이메일 전송
+        </Button>
+          <Button type="submit" variant="contained">
+            {quotation ? '수정' : '저장'}
+          </Button>
+        </Box>
+      </Box>
     </Box>
   );
 };

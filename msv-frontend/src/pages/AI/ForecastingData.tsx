@@ -364,8 +364,8 @@ const ForecastingData: React.FC = () => {
                     {forecastingData?.salesForecast?.map((forecast, index) => (
                       <TableRow key={index}>
                         <TableCell>{forecast.period}</TableCell>
-                        <TableCell align="right">₩{forecast.actual.toLocaleString()}</TableCell>
-                        <TableCell align="right">₩{forecast.predicted.toLocaleString()}</TableCell>
+                        <TableCell align="right">Rs. {forecast.actual.toLocaleString()}</TableCell>
+                        <TableCell align="right">Rs. {forecast.predicted.toLocaleString()}</TableCell>
                         <TableCell align="right">
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             <LinearProgress 
@@ -513,8 +513,8 @@ const ForecastingData: React.FC = () => {
                     {forecastingData?.costForecast?.map((cost, index) => (
                       <TableRow key={index}>
                         <TableCell>{cost.category}</TableCell>
-                        <TableCell align="right">₩{cost.current.toLocaleString()}</TableCell>
-                        <TableCell align="right">₩{cost.predicted.toLocaleString()}</TableCell>
+                        <TableCell align="right">Rs. {cost.current.toLocaleString()}</TableCell>
+                        <TableCell align="right">Rs. {cost.predicted.toLocaleString()}</TableCell>
                         <TableCell align="right">
                           <Chip
                             label={`${cost.inflation > 0 ? '+' : ''}${cost.inflation.toFixed(1)}%`}

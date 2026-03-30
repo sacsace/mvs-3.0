@@ -1,10 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
   Card,
   CardContent,
-  Grid,
   Table,
   TableBody,
   TableCell,
@@ -19,62 +18,353 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  IconButton
+  Alert,
+  CircularProgress
 } from '@mui/material';
 import {
   Schedule as ScheduleIcon,
   Login as CheckInIcon,
   Logout as CheckOutIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  AccessTime as AccessTimeIcon
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
+import { attendanceService, officeLocationService } from '../../services/api';
+import { useStore } from '../../store';
+import { api } from '../../services/api';
+
+interface Attendance {
+  id: number;
+  user_id: number;
+  date: string;
+  check_in?: string;
+  check_out?: string;
+  check_in_local?: string;
+  check_out_local?: string;
+  check_in_display?: string;
+  check_out_display?: string;
+  check_in_client_time?: string;
+  check_out_client_time?: string;
+  work_hours?: number;
+  status: 'normal' | 'late' | 'early' | 'overtime' | 'absent';
+  notes?: string;
+  user?: {
+    id: number;
+    username: string;
+    email: string;
+    department?: string;
+    position?: string;
+    employee_number?: string;
+  };
+}
 
 const AttendanceManagement: React.FC = () => {
-  const [attendanceData, setAttendanceData] = useState([
-    {
-      id: 1,
-      employee: '홍길동',
-      department: '개발팀',
-      date: '2024-01-15',
-      checkIn: '09:00',
-      checkOut: '18:00',
-      workHours: 9,
-      status: 'normal'
-    },
-    {
-      id: 2,
-      employee: '김철수',
-      department: '마케팅팀',
-      date: '2024-01-15',
-      checkIn: '09:15',
-      checkOut: '18:30',
-      workHours: 9.25,
-      status: 'overtime'
-    },
-    {
-      id: 3,
-      employee: '이영희',
-      department: '영업팀',
-      date: '2024-01-15',
-      checkIn: '08:45',
-      checkOut: '17:45',
-      workHours: 9,
-      status: 'early'
-    }
-  ]);
-
+  const { user } = useStore();
+  const { t } = useTranslation();
+  const [attendances, setAttendances] = useState<Attendance[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [todayAttendance, setTodayAttendance] = useState<Attendance | null>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
   const [filter, setFilter] = useState({
     department: 'all',
     status: 'all',
-    date: ''
+    date: '',
+    start_date: '',
+    end_date: ''
   });
+  const [checkInLoading, setCheckInLoading] = useState(false);
+  const [checkOutLoading, setCheckOutLoading] = useState(false);
+  const [officeLocation, setOfficeLocation] = useState<{ latitude: number; longitude: number; radiusMeters?: number } | null>(null);
+  const TIME_ZONE = 'Asia/Kolkata';
+  const IST_OFFSET_MINUTES = 330;
+  const pad2 = (value: number) => value.toString().padStart(2, '0');
+  const parseUtcDate = (value: string) => {
+    const hasTimeZone = /[zZ]|[+-]\d{2}:\d{2}$/.test(value);
+    return new Date(hasTimeZone ? value : `${value}Z`);
+  };
+  const getClientTimeParts = () => {
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: TIME_ZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+    const parts = formatter.formatToParts(now);
+    const lookup = (type: string) => parts.find((part) => part.type === type)?.value || '';
+    return {
+      year: lookup('year'),
+      month: lookup('month'),
+      day: lookup('day'),
+      hour: lookup('hour'),
+      minute: lookup('minute'),
+      second: lookup('second')
+    };
+  };
+  const getClientDate = () => {
+    const { year, month, day } = getClientTimeParts();
+    return `${year}-${month}-${day}`;
+  };
+  const getClientTimeISO = () => {
+    const { year, month, day, hour, minute, second } = getClientTimeParts();
+    return `${year}-${month}-${day}T${hour}:${minute}:${second}+05:30`;
+  };
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const calculateDistanceMeters = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+    const earthRadiusMeters = 6371000;
+    const dLat = toRadians(lat2 - lat1);
+    const dLng = toRadians(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2)
+      + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2))
+      * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return earthRadiusMeters * c;
+  };
+
+  // 사용자 목록 및 부서 목록 로드
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const response = await api.get('/users');
+        if (response.data.success) {
+          const usersData = response.data.data || [];
+          setUsers(usersData);
+          
+          // 부서 목록 추출
+          const deptSet = new Set<string>();
+          usersData.forEach((u: any) => {
+            if (u.department) {
+              deptSet.add(u.department);
+            }
+          });
+          setDepartments(Array.from(deptSet).sort());
+        }
+      } catch (error) {
+        console.error('사용자 목록 로드 오류:', error);
+      }
+    };
+
+    fetchUsers();
+  }, []);
+
+  useEffect(() => {
+    const fetchOfficeLocation = async () => {
+      try {
+        const response = await officeLocationService.getOfficeLocation();
+        if (response.success) {
+          const location = response.data?.officeLocation;
+          if (location?.latitude && location?.longitude) {
+            setOfficeLocation({
+              latitude: typeof location.latitude === 'string' ? parseFloat(location.latitude) : location.latitude,
+              longitude: typeof location.longitude === 'string' ? parseFloat(location.longitude) : location.longitude,
+              radiusMeters: location.radiusMeters
+            });
+          } else {
+            setOfficeLocation(null);
+          }
+        }
+      } catch (locationError) {
+        console.error('사무실 위치 로드 오류:', locationError);
+      }
+    };
+
+    fetchOfficeLocation();
+  }, []);
+
+  const getCurrentPosition = () =>
+    new Promise<GeolocationPosition>((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('이 브라우저에서는 위치 정보를 사용할 수 없습니다.'));
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      });
+    });
+
+  // 오늘의 근태 조회
+  useEffect(() => {
+    const fetchTodayAttendance = async () => {
+      try {
+      const response = await attendanceService.getTodayAttendance(getClientDate());
+        if (response.success) {
+          setTodayAttendance(response.data);
+        }
+      } catch (error) {
+        console.error('오늘의 근태 조회 오류:', error);
+      }
+    };
+
+    if (user) {
+      fetchTodayAttendance();
+    }
+  }, [user]);
+
+  // 근태 목록 조회
+  const fetchAttendances = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params: any = {};
+      if (filter.department !== 'all') {
+        params.department = filter.department;
+      }
+      if (filter.status !== 'all') {
+        params.status = filter.status;
+      }
+      if (filter.date) {
+        params.date = filter.date;
+      } else if (filter.start_date && filter.end_date) {
+        params.start_date = filter.start_date;
+        params.end_date = filter.end_date;
+      }
+
+      const response = await attendanceService.getAttendances(params);
+      if (response.success) {
+        setAttendances(response.data || []);
+      } else {
+        setError(response.message || t('attendanceManagement.loadListFailed'));
+      }
+    } catch (error: any) {
+      console.error('근태 목록 조회 오류:', error);
+      setError(error.response?.data?.message || t('attendanceManagement.loadListError'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAttendances();
+  }, [filter.department, filter.status, filter.date, filter.start_date, filter.end_date]);
+
+  // 출근 처리
+  const handleCheckIn = async () => {
+    if (todayAttendance?.check_in) {
+      setError(t('attendanceManagement.alreadyCheckedIn'));
+      return;
+    }
+    setCheckInLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const client_time = getClientTimeISO();
+      const client_date = getClientDate();
+      const requiresSecureContext = typeof window !== 'undefined' && !window.isSecureContext;
+      const canUseGeo = !!navigator.geolocation && !requiresSecureContext;
+      let skipGeo = !canUseGeo;
+      let latitude: number | undefined;
+      let longitude: number | undefined;
+      let accuracy: number | undefined;
+
+      if (canUseGeo) {
+        try {
+          const position = await getCurrentPosition();
+          latitude = position.coords.latitude;
+          longitude = position.coords.longitude;
+          accuracy = position.coords.accuracy;
+        } catch (geoError) {
+          skipGeo = true;
+        }
+      }
+
+      if (officeLocation && !skipGeo && latitude !== undefined && longitude !== undefined) {
+        const radiusMeters = officeLocation.radiusMeters ?? 200;
+        const distance = calculateDistanceMeters(
+          latitude,
+          longitude,
+          officeLocation.latitude,
+          officeLocation.longitude
+        );
+        if (distance > radiusMeters) {
+          setError(t('attendanceManagement.officeOnly'));
+          return;
+        }
+      }
+      console.log('[Attendance] check-in payload', {
+        client_time,
+        client_date,
+        browser_now: new Date().toString()
+      });
+      const response = await attendanceService.checkIn({
+        latitude,
+        longitude,
+        accuracy,
+        client_time,
+        client_date,
+        use_server_time: skipGeo,
+        skip_geo: skipGeo
+      });
+      if (response.success) {
+        setSuccess(response.message || t('attendanceManagement.checkInSuccess'));
+        setTodayAttendance(response.data);
+        fetchAttendances();
+      } else {
+        setError(response.message || t('attendanceManagement.checkInFailed'));
+      }
+    } catch (error: any) {
+      console.error('출근 처리 오류:', error);
+      if (error.code === 1 || error.message?.includes('Geolocation')) {
+        setError(t('attendanceManagement.locationRequired'));
+      } else {
+        setError(error.response?.data?.message || t('attendanceManagement.checkInError'));
+      }
+    } finally {
+      setCheckInLoading(false);
+    }
+  };
+
+  // 퇴근 처리
+  const handleCheckOut = async () => {
+    setCheckOutLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const client_time = getClientTimeISO();
+      const client_date = getClientDate();
+      console.log('[Attendance] check-out payload', {
+        client_time,
+        client_date,
+        browser_now: new Date().toString()
+      });
+      const response = await attendanceService.checkOut({
+        client_time,
+        client_date,
+        use_server_time: true,
+        skip_geo: true
+      });
+      if (response.success) {
+        // 성공 메시지는 선택 언어(i18n) 기준으로 고정 표시
+        setSuccess(t('attendanceManagement.checkOutSuccess'));
+        setTodayAttendance(response.data);
+        fetchAttendances();
+      } else {
+        setError(response.message || t('attendanceManagement.checkOutFailed'));
+      }
+    } catch (error: any) {
+      console.error('퇴근 처리 오류:', error);
+        setError(error.response?.data?.message || t('attendanceManagement.checkOutError'));
+    } finally {
+      setCheckOutLoading(false);
+    }
+  };
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'normal': return '정상';
-      case 'late': return '지각';
-      case 'early': return '조기퇴근';
-      case 'overtime': return '야근';
-      case 'absent': return '결근';
+      case 'normal': return t('attendanceManagement.statusNormal');
+      case 'late': return t('attendanceManagement.statusLate');
+      case 'early': return t('attendanceManagement.statusEarly');
+      case 'overtime': return t('attendanceManagement.statusOvertime');
+      case 'absent': return t('attendanceManagement.statusAbsent');
       default: return status;
     }
   };
@@ -90,30 +380,73 @@ const AttendanceManagement: React.FC = () => {
     }
   };
 
-  const handleCheckIn = (employeeId: number) => {
-    const now = new Date();
-    const timeString = now.toTimeString().slice(0, 5);
-    
-    setAttendanceData(attendanceData.map(attendance => 
-      attendance.id === employeeId 
-        ? { ...attendance, checkIn: timeString, status: 'normal' }
-        : attendance
-    ));
+  const formatTime = (dateString?: string) => {
+    if (!dateString) return '-';
+    try {
+      const date = parseUtcDate(dateString);
+      if (Number.isNaN(date.getTime())) return dateString;
+      const istMs = date.getTime() + IST_OFFSET_MINUTES * 60 * 1000;
+      const istDate = new Date(istMs);
+      const hours = istDate.getUTCHours();
+      const minutes = istDate.getUTCMinutes();
+      const period = hours >= 12 ? '오후' : '오전';
+      const displayHour = hours % 12 === 0 ? 12 : hours % 12;
+      return `${period} ${pad2(displayHour)}:${pad2(minutes)}`;
+    } catch (error) {
+      console.error('시간 포맷팅 오류:', error, dateString);
+      return dateString;
+    }
   };
 
-  const handleCheckOut = (employeeId: number) => {
-    const now = new Date();
-    const timeString = now.toTimeString().slice(0, 5);
-    
-    setAttendanceData(attendanceData.map(attendance => 
-      attendance.id === employeeId 
-        ? { ...attendance, checkOut: timeString }
-        : attendance
-    ));
+  const formatClientTimeString = (value?: string) => {
+    if (!value) return null;
+    const match = value.match(/T(\d{2}):(\d{2})/);
+    if (!match) return null;
+    const hours = Number(match[1]);
+    const minutes = match[2];
+    const period = hours >= 12 ? '오후' : '오전';
+    const displayHour = hours % 12 === 0 ? 12 : hours % 12;
+    return `${period} ${pad2(displayHour)}:${minutes}`;
   };
 
-  const filteredData = attendanceData.filter(attendance => {
-    if (filter.department !== 'all' && attendance.department !== filter.department) return false;
+  const displayTime = (
+    rawTime?: string,
+    localTime?: string,
+    displayTimeValue?: string,
+    clientTimeValue?: string
+  ) => {
+    const clientDisplay = formatClientTimeString(clientTimeValue);
+    if (clientDisplay) {
+      return clientDisplay;
+    }
+    if (displayTimeValue) {
+      return displayTimeValue;
+    }
+    if (rawTime) {
+      return formatTime(rawTime);
+    }
+    if (localTime) {
+      return localTime;
+    }
+    return '-';
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        timeZone: TIME_ZONE
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  const filteredAttendances = attendances.filter(attendance => {
+    if (filter.department !== 'all' && attendance.user?.department !== filter.department) return false;
     if (filter.status !== 'all' && attendance.status !== filter.status) return false;
     if (filter.date && attendance.date !== filter.date) return false;
     return true;
@@ -121,143 +454,271 @@ const AttendanceManagement: React.FC = () => {
 
   return (
     <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <ScheduleIcon sx={{ mr: 2, fontSize: '2rem', color: 'primary.main' }} />
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
-          근태 관리
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+        <ScheduleIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
+        <Typography component="h1" sx={{ 
+          fontSize: '16px !important',
+          fontWeight: 600,
+          color: 'text.primary',
+          lineHeight: 1.5
+        }}>
+          {t('attendanceManagement.pageTitle')}
         </Typography>
       </Box>
 
-      <Box>
-        <Box>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">근태 현황</Typography>
-                <Button
-                  variant="outlined"
-                  startIcon={<RefreshIcon />}
-                  size="small"
-                >
-                  새로고침
-                </Button>
-              </Box>
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
 
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2, mb: 3 }}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>부서</InputLabel>
-                  <Select
-                    value={filter.department}
-                    onChange={(e) => setFilter({...filter, department: e.target.value})}
-                  >
-                    <MenuItem value="all">전체</MenuItem>
-                    <MenuItem value="개발팀">개발팀</MenuItem>
-                    <MenuItem value="마케팅팀">마케팅팀</MenuItem>
-                    <MenuItem value="영업팀">영업팀</MenuItem>
-                  </Select>
-                </FormControl>
-                <FormControl fullWidth size="small">
-                  <InputLabel>상태</InputLabel>
-                  <Select
-                    value={filter.status}
-                    onChange={(e) => setFilter({...filter, status: e.target.value})}
-                  >
-                    <MenuItem value="all">전체</MenuItem>
-                    <MenuItem value="normal">정상</MenuItem>
-                    <MenuItem value="late">지각</MenuItem>
-                    <MenuItem value="early">조기퇴근</MenuItem>
-                    <MenuItem value="overtime">야근</MenuItem>
-                    <MenuItem value="absent">결근</MenuItem>
-                  </Select>
-                </FormControl>
-                <TextField
-                  fullWidth
-                  type="date"
-                  label="날짜"
-                  value={filter.date}
-                  onChange={(e) => setFilter({...filter, date: e.target.value})}
+      {success && (
+        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
+          {success}
+        </Alert>
+      )}
+
+      {/* 오늘의 근태 카드 */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <AccessTimeIcon color="primary" />
+              {t('attendanceManagement.todayAttendance')}
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<CheckInIcon />}
+                onClick={handleCheckIn}
+                disabled={checkInLoading || !!todayAttendance?.check_in}
+                size="small"
+              >
+                {checkInLoading ? <CircularProgress size={16} /> : t('attendanceManagement.checkIn')}
+              </Button>
+              <Button
+                variant="contained"
+                color="secondary"
+                startIcon={<CheckOutIcon />}
+                onClick={handleCheckOut}
+                disabled={checkOutLoading || !todayAttendance?.check_in || !!todayAttendance?.check_out}
+                size="small"
+              >
+                {checkOutLoading ? <CircularProgress size={16} /> : t('attendanceManagement.checkOut')}
+              </Button>
+            </Box>
+          </Box>
+          
+          {todayAttendance ? (
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(4, 1fr)' }, gap: 2 }}>
+              <Box>
+                <Typography variant="caption" color="text.secondary">{t('attendanceManagement.checkInTime')}</Typography>
+                <Typography variant="body1" fontWeight="bold">
+                  {displayTime(
+                    todayAttendance.check_in,
+                    todayAttendance.check_in_local,
+                    todayAttendance.check_in_display,
+                    todayAttendance.check_in_client_time
+                  )}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">{t('attendanceManagement.checkOutTime')}</Typography>
+                <Typography variant="body1" fontWeight="bold">
+                  {displayTime(
+                    todayAttendance.check_out,
+                    todayAttendance.check_out_local,
+                    todayAttendance.check_out_display,
+                    todayAttendance.check_out_client_time
+                  )}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">{t('attendanceManagement.workHours')}</Typography>
+                <Typography variant="body1" fontWeight="bold">
+                  {todayAttendance.work_hours != null ? `${todayAttendance.work_hours}${t('attendanceManagement.hoursUnit')}` : '-'}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" color="text.secondary">{t('attendanceManagement.status')}</Typography>
+                <Chip
+                  label={getStatusLabel(todayAttendance.status)}
+                  color={getStatusColor(todayAttendance.status) as any}
                   size="small"
-                  InputLabelProps={{ shrink: true }}
+                  sx={{ mt: 0.5 }}
                 />
-                <Box sx={{ display: 'flex', gap: 1, height: '100%', alignItems: 'center' }}>
-                  <Button
-                    variant="contained"
-                    startIcon={<CheckInIcon />}
-                    size="small"
-                  >
-                    출근
-                  </Button>
-                  <Button
-                    variant="contained"
-                    startIcon={<CheckOutIcon />}
-                    size="small"
-                  >
-                    퇴근
-                  </Button>
-                </Box>
               </Box>
+            </Box>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              {t('attendanceManagement.noTodayAttendance')}
+            </Typography>
+          )}
+        </CardContent>
+      </Card>
 
-              <TableContainer component={Paper}>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>직원명</TableCell>
-                      <TableCell>부서</TableCell>
-                      <TableCell>날짜</TableCell>
-                      <TableCell>출근시간</TableCell>
-                      <TableCell>퇴근시간</TableCell>
-                      <TableCell>근무시간</TableCell>
-                      <TableCell>상태</TableCell>
-                      <TableCell>작업</TableCell>
+      {/* 근태 현황 */}
+      <Card>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6">{t('attendanceManagement.attendanceStatus')}</Typography>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              size="small"
+              onClick={fetchAttendances}
+              disabled={loading}
+            >
+              {t('attendanceManagement.refresh')}
+            </Button>
+          </Box>
+
+          {/* 필터 */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2, mb: 3, alignItems: 'flex-end' }}>
+            <FormControl fullWidth size="small">
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {t('attendanceManagement.department')}
+              </Typography>
+              <Select
+                value={filter.department}
+                onChange={(e) => setFilter({...filter, department: e.target.value})}
+                displayEmpty
+                sx={{ height: '40px' }}
+              >
+                <MenuItem value="all">{t('attendanceManagement.all')}</MenuItem>
+                {departments.map((dept) => (
+                  <MenuItem key={dept} value={dept}>{dept}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth size="small">
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {t('attendanceManagement.status')}
+              </Typography>
+              <Select
+                value={filter.status}
+                onChange={(e) => setFilter({...filter, status: e.target.value})}
+                displayEmpty
+                sx={{ height: '40px' }}
+              >
+                <MenuItem value="all">{t('attendanceManagement.all')}</MenuItem>
+                <MenuItem value="normal">{t('attendanceManagement.statusNormal')}</MenuItem>
+                <MenuItem value="late">{t('attendanceManagement.statusLate')}</MenuItem>
+                <MenuItem value="early">{t('attendanceManagement.statusEarly')}</MenuItem>
+                <MenuItem value="overtime">{t('attendanceManagement.statusOvertime')}</MenuItem>
+                <MenuItem value="absent">{t('attendanceManagement.statusAbsent')}</MenuItem>
+              </Select>
+            </FormControl>
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {t('attendanceManagement.date')}
+              </Typography>
+              <TextField
+                fullWidth
+                type="date"
+                value={filter.date}
+                onChange={(e) => setFilter({...filter, date: e.target.value, start_date: '', end_date: ''})}
+                size="small"
+                InputLabelProps={{ shrink: true }}
+                sx={{ '& .MuiInputBase-root': { height: '40px' } }}
+              />
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {t('attendanceManagement.endDate')}
+              </Typography>
+              <TextField
+                fullWidth
+                type="date"
+                value={filter.end_date}
+                onChange={(e) => setFilter({...filter, end_date: e.target.value, date: ''})}
+                size="small"
+                InputLabelProps={{ shrink: true }}
+                disabled={!filter.start_date}
+                sx={{ '& .MuiInputBase-root': { height: '40px' } }}
+              />
+            </Box>
+          </Box>
+          {filter.end_date && !filter.date && (
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                {t('attendanceManagement.startDate')}
+              </Typography>
+              <TextField
+                fullWidth
+                type="date"
+                value={filter.start_date}
+                onChange={(e) => setFilter({...filter, start_date: e.target.value, date: ''})}
+                size="small"
+                InputLabelProps={{ shrink: true }}
+                sx={{ '& .MuiInputBase-root': { height: '40px' } }}
+              />
+            </Box>
+          )}
+
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : filteredAttendances.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <Typography variant="body2" color="text.secondary">
+                {t('attendanceManagement.noRecords')}
+              </Typography>
+            </Box>
+          ) : (
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>{t('attendanceManagement.employeeId')}</TableCell>
+                    <TableCell>{t('attendanceManagement.employeeName')}</TableCell>
+                    <TableCell>{t('attendanceManagement.department')}</TableCell>
+                    <TableCell>{t('attendanceManagement.date')}</TableCell>
+                    <TableCell>{t('attendanceManagement.checkInTimeShort')}</TableCell>
+                    <TableCell>{t('attendanceManagement.checkOutTimeShort')}</TableCell>
+                    <TableCell>{t('attendanceManagement.workHoursShort')}</TableCell>
+                    <TableCell>{t('attendanceManagement.status')}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredAttendances.map((attendance) => (
+                    <TableRow key={attendance.id} hover>
+                      <TableCell>{attendance.user?.employee_number || '-'}</TableCell>
+                      <TableCell>{attendance.user?.username || '-'}</TableCell>
+                      <TableCell>{attendance.user?.department || '-'}</TableCell>
+                      <TableCell>{formatDate(attendance.date)}</TableCell>
+                      <TableCell>{displayTime(
+                        attendance.check_in,
+                        attendance.check_in_local,
+                        attendance.check_in_display,
+                        attendance.check_in_client_time
+                      )}</TableCell>
+                      <TableCell>{displayTime(
+                        attendance.check_out,
+                        attendance.check_out_local,
+                        attendance.check_out_display,
+                        attendance.check_out_client_time
+                      )}</TableCell>
+                      <TableCell>
+                        {attendance.work_hours != null ? `${attendance.work_hours}${t('attendanceManagement.hoursUnit')}` : '-'}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={getStatusLabel(attendance.status)}
+                          color={getStatusColor(attendance.status) as any}
+                          size="small"
+                        />
+                      </TableCell>
                     </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {filteredData.map((attendance) => (
-                      <TableRow key={attendance.id}>
-                        <TableCell>{attendance.employee}</TableCell>
-                        <TableCell>{attendance.department}</TableCell>
-                        <TableCell>{attendance.date}</TableCell>
-                        <TableCell>
-                          {attendance.checkIn || '-'}
-                        </TableCell>
-                        <TableCell>
-                          {attendance.checkOut || '-'}
-                        </TableCell>
-                        <TableCell>
-                          {attendance.workHours}시간
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={getStatusLabel(attendance.status)}
-                            color={getStatusColor(attendance.status) as any}
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleCheckIn(attendance.id)}
-                            disabled={!!attendance.checkIn}
-                          >
-                            <CheckInIcon />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleCheckOut(attendance.id)}
-                            disabled={!!attendance.checkOut}
-                          >
-                            <CheckOutIcon />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </CardContent>
-          </Card>
-        </Box>
-      </Box>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </CardContent>
+      </Card>
     </Box>
   );
 };

@@ -1,4 +1,4 @@
-# MVS 3.0 Frontend - Nixpacks 설정 파일
+# MVS Frontend - Nixpacks 설정 파일
 # 프론트엔드 전용 Railway 배포 설정
 
 [phases.setup]
@@ -6,22 +6,33 @@
 nixPkgs = ["nodejs", "npm"]
 
 [phases.install]
-# 의존성 설치
-cmds = ["npm ci --only=production"]
+# 의존성 설치 (빌드를 위해 모든 의존성 필요)
+cmds = ["npm ci"]
 
 [phases.build]
-# React 앱 빌드
-cmds = ["npm run build"]
+# React 앱 빌드 (CI=false로 설정하여 경고를 오류로 처리하지 않음)
+# Railway가 자동으로 CI=true를 설정하므로, 빌드 전에 제거하고 false로 설정
+# REACT_APP_API_URL은 Railway 환경 변수에서 가져오거나 기본값 사용
+# 주의: Railway 대시보드에서 REACT_APP_API_URL 환경 변수를 설정해야 함
+cmds = [
+  "unset CI",
+  "export CI=false",
+  "export GENERATE_SOURCEMAP=false",
+  "export REACT_APP_API_URL=${REACT_APP_API_URL:-https://mvs-backend-production.up.railway.app/api}",
+  "npm run build"
+]
 
 [start]
-# 정적 파일 서빙 (Nginx 사용)
-cmd = "npx serve -s build -l 3000"
+# 정적 파일 서빙 (Railway PORT 환경 변수 사용)
+# serve는 PORT 환경 변수를 자동으로 읽거나 -l 옵션으로 포트 지정
+cmd = "npx serve -s build -l $PORT"
 
 # 환경 변수 설정
 [env]
 NODE_ENV = "production"
-PORT = "3000"
-REACT_APP_API_URL = "https://mvs30.railway.com/api"
+PORT = "$PORT"
+CI = "false"
+REACT_APP_API_URL = "https://api.mvsystem.in/api"
 
 # 변수 설정
 [variables]

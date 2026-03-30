@@ -1,4 +1,4 @@
-// MVS 3.0 Frontend 공통 상수 정의
+// MVS Frontend 공통 상수 정의
 export const APP_CONSTANTS = {
   // API 관련
   API_TIMEOUT: 10000,
@@ -138,7 +138,7 @@ export const SAMPLE_DATA = {
     ABC: 'ABC 회사',
     XYZ: 'XYZ 기업',
     DEF: 'DEF 주식회사',
-    MVS: 'MVS 3.0 Solutions'
+    MVS: 'MVS Solutions'
   },
   
   DEPARTMENTS: {
@@ -208,14 +208,9 @@ export const MESSAGES = {
 
 // 유틸리티 함수들
 export const UTILS = {
-  // 숫자 포맷팅
-  formatCurrency: (amount: number, currency: string = APP_CONSTANTS.CURRENCIES.KRW): string => {
-    return new Intl.NumberFormat('ko-KR', {
-      style: 'currency',
-      currency: currency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount);
+  // 숫자 포맷팅 (INR 형식)
+  formatCurrency: (amount: number, currency: string = APP_CONSTANTS.CURRENCIES.INR): string => {
+    return `Rs. ${amount.toLocaleString('en-IN')}`;
   },
   
   // 날짜 포맷팅

@@ -1,10 +1,132 @@
 import express from 'express';
-import { User } from '../models';
+import { Op } from 'sequelize';
+import bcrypt from 'bcrypt';
+import { User, Company } from '../models';
 import { authenticateToken, requireRole } from '../middleware/auth';
+import { validateBody } from '../middleware/validate';
+import multer from 'multer';
+import * as XLSX from 'xlsx';
+import path from 'path';
 
-// 간단한 비밀번호 해싱 함수 (개발용)
+// bcrypt를 사용한 비밀번호 해싱 함수 (authController와 동일)
 const hashPassword = async (password: string): Promise<string> => {
-  return Buffer.from(password).toString('base64');
+  return await bcrypt.hash(password, 10);
+};
+
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Multer 설정 (메모리 스토리지)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+      'application/vnd.ms-excel', // .xls
+      'text/csv' // .csv
+    ];
+    const allowedExtensions = ['.xlsx', '.xls', '.csv'];
+    const extension = path.extname(file.originalname || '').toLowerCase();
+    if (allowedMimes.includes(file.mimetype) && allowedExtensions.includes(extension)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Excel 파일(.xlsx, .xls) 또는 CSV 파일만 업로드 가능합니다.'));
+    }
+  }
+});
+
+// 회사명에서 약자 추출 함수
+const getCompanyAbbreviation = (companyName: string): string => {
+  if (!companyName) return 'COMP';
+  
+  // 공백 제거
+  const cleaned = companyName.trim();
+  
+  // 한글과 영문이 혼합된 경우 처리
+  const koreanRegex = /[가-힣]/g;
+  const englishRegex = /[A-Za-z]/g;
+  
+  const koreanChars = cleaned.match(koreanRegex) || [];
+  const englishChars = cleaned.match(englishRegex) || [];
+  
+  let abbreviation = '';
+  
+  // 한글이 있으면 각 단어의 첫 글자 추출
+  if (koreanChars.length > 0) {
+    // 공백이나 특수문자로 구분된 단어 추출
+    const words = cleaned.split(/[\s_.-]+/).filter(w => w.length > 0);
+    
+    for (const word of words) {
+      const firstChar = word.match(/[가-힣]/)?.[0] || word.match(/[A-Za-z]/)?.[0];
+      if (firstChar) {
+        abbreviation += firstChar.toUpperCase();
+      }
+    }
+    
+    // 최대 4글자로 제한
+    if (abbreviation.length > 4) {
+      abbreviation = abbreviation.substring(0, 4);
+    }
+  } else if (englishChars.length > 0) {
+    // 영문만 있는 경우 대문자만 추출하거나 앞 3-4글자
+    const upperChars = cleaned.match(/[A-Z]/g) || [];
+    if (upperChars.length >= 2) {
+      abbreviation = upperChars.join('').substring(0, 4);
+    } else {
+      // 대문자가 적으면 앞 3-4글자를 대문자로
+      abbreviation = cleaned.substring(0, 4).toUpperCase().replace(/[^A-Z]/g, '');
+    }
+  }
+  
+  // 약자가 없으면 기본값
+  if (!abbreviation || abbreviation.length === 0) {
+    abbreviation = 'COMP';
+  }
+  
+  return abbreviation;
+};
+
+// 사원번호 자동 생성 함수
+const generateEmployeeNumber = async (companyId: number, companyName: string): Promise<string> => {
+  try {
+    // 회사 약자 추출
+    const abbreviation = getCompanyAbbreviation(companyName);
+    
+    // 해당 회사의 기존 사원번호 중 가장 큰 번호 찾기
+    const existingUsers = await (User as any).findAll({
+      where: {
+        company_id: companyId,
+        employee_number: {
+          [Op.like]: `${abbreviation}-%`
+        }
+      },
+      attributes: ['employee_number'],
+      order: [['employee_number', 'DESC']],
+      limit: 1
+    });
+    
+    let nextNumber = 1;
+    
+    if (existingUsers.length > 0 && existingUsers[0].employee_number) {
+      // 기존 사원번호에서 숫자 부분 추출
+      const lastNumber = existingUsers[0].employee_number.match(/\d+$/);
+      if (lastNumber) {
+        nextNumber = parseInt(lastNumber[0], 10) + 1;
+      }
+    }
+    
+    // 3자리 숫자로 포맷팅 (001, 002, ...)
+    const formattedNumber = nextNumber.toString().padStart(3, '0');
+    
+    return `${abbreviation}-${formattedNumber}`;
+  } catch (error: any) {
+    console.error('사원번호 생성 오류:', error);
+    // 오류 발생 시 기본값 반환
+    const abbreviation = getCompanyAbbreviation(companyName);
+    return `${abbreviation}-001`;
+  }
 };
 
 const router = express.Router();
@@ -15,21 +137,163 @@ router.use(authenticateToken);
 // 사용자 목록 조회
 router.get('/', async (req, res) => {
   try {
-    const users = await (User as any).findAll({
-      where: { 
-        tenant_id: (req as any).user.tenant_id,
-        company_id: (req as any).user.company_id 
-      },
-      attributes: ['id', 'userid', 'username', 'email', 'role', 'department', 'position', 'status', 'last_login'],
-      order: [['created_at', 'DESC']]
+    const tenantId = (req as any).user.tenant_id;
+    const companyId = (req as any).user.company_id;
+    const userRole = (req as any).user.role;
+    const { search, company_id } = req.query;
+    
+    console.log('🔍 사용자 목록 조회 시작:', {
+      tenantId,
+      companyId,
+      userRole,
+      search,
+      company_id
     });
+    
+    // root나 audit 권한이면 모든 사용자 조회 가능, 아니면 자신의 회사 사용자만
+    const whereClause: any = {};
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = companyId;
+    } else if (userRole === 'root' && company_id) {
+      // root가 특정 회사 필터링
+      whereClause.company_id = parseInt(company_id as string);
+    }
+    
+    // 검색 기능 (이름, 사용자 ID, 회사명으로 검색)
+    const includeOptions: any[] = [];
+    let companyIdsForSearch: number[] = [];
+    
+    if (search) {
+      // 회사명으로 검색하여 회사 ID 찾기
+      const matchingCompanies = await (Company as any).findAll({
+        where: {
+          name: { [Op.like]: `%${search}%` }
+        },
+        attributes: ['id']
+      });
+      companyIdsForSearch = matchingCompanies.map((c: any) => c.id);
+      
+      // 사용자 이름, 사용자 ID, 또는 회사 ID로 검색
+      const searchConditions: any[] = [
+        { username: { [Op.like]: `%${search}%` } },
+        { userid: { [Op.like]: `%${search}%` } }
+      ];
+      
+      // 회사명으로 검색된 회사 ID가 있으면 추가
+      if (companyIdsForSearch.length > 0) {
+        searchConditions.push({ company_id: { [Op.in]: companyIdsForSearch } });
+      }
+      
+      whereClause[Op.or] = searchConditions;
+    }
+    
+    // 회사 정보를 항상 포함 (검색 결과에 회사명 표시용)
+    includeOptions.push({
+      model: Company,
+      as: 'company',
+      attributes: ['id', 'name'],
+      required: false
+    });
+    
+    console.log('🔍 WHERE 절:', whereClause);
+    
+    // 디버깅: WHERE 절 없이 전체 조회해서 개수 확인
+    const allUsersCount = await (User as any).count();
+    console.log('🔍 전체 사용자 개수 (WHERE 절 없이):', allUsersCount);
+    
+    // 먼저 기본 컬럼만 조회 (HR 필드 제외)
+    let users: any[];
+    const baseAttributes = [
+      'id', 'userid', 'username', 'email', 'role', 'department', 'position', 'status', 'last_login', 'created_at',
+      'tenant_id', 'company_id', 'is_payment_officer'
+    ];
+    
+    try {
+      const findOptions: any = {
+        where: whereClause,
+        attributes: baseAttributes,
+        order: [['created_at', 'DESC']]
+      };
+      
+      // 회사 정보 포함
+      if (includeOptions.length > 0) {
+        findOptions.include = includeOptions;
+      }
+      
+      users = await (User as any).findAll(findOptions);
+      
+      // HR 필드가 있는지 확인하고 추가 조회 시도
+      try {
+        const hrFindOptions: any = {
+          where: whereClause,
+          attributes: [
+            ...baseAttributes,
+            'employee_number', 'birth_date', 'gender', 'phone', 'address', 
+            'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary'
+          ],
+          order: [['created_at', 'DESC']],
+          include: includeOptions
+        };
+        
+        users = await (User as any).findAll(hrFindOptions);
+        // HR 필드 조회 성공 (조용히 처리)
+      } catch (hrError: any) {
+        // HR 필드가 없으면 기본 필드만 사용 (첫 실행 시에만 발생할 수 있음)
+        if (hrError.name === 'SequelizeDatabaseError' && 
+            (hrError.message?.includes('칼럼') || hrError.message?.includes('column'))) {
+          // HR 필드가 아직 추가되지 않은 경우 기본 필드만 사용
+          // 경고 메시지는 제거 (스크립트로 필드 추가 후에는 발생하지 않음)
+        } else {
+          throw hrError;
+        }
+      }
+    } catch (error: any) {
+      // 기본 컬럼 조회 실패 시 최소한의 컬럼만 조회
+      console.warn('⚠️ 기본 컬럼 조회 실패, 최소 컬럼만 조회:', error.message);
+      try {
+        users = await (User as any).findAll({
+          where: whereClause,
+          attributes: ['id', 'userid', 'username', 'email', 'role', 'status', 'created_at'],
+          order: [['created_at', 'DESC']]
+        });
+      } catch (minError: any) {
+        console.error('❌ 최소 컬럼 조회도 실패:', minError.message);
+        throw minError;
+      }
+    }
+
+    // Sequelize 모델 인스턴스를 JSON으로 변환
+    const usersData = users.map((user: any) => user.toJSON ? user.toJSON() : user);
+    
+    console.log('✅ 사용자 목록 조회 완료, 반환할 사용자 개수:', usersData.length);
+    if (usersData.length === 0) {
+      console.log('⚠️ 사용자 목록이 비어있습니다. WHERE 절:', whereClause);
+      console.log('⚠️ 요청한 tenant_id:', tenantId, 'company_id:', companyId);
+      
+      // WHERE 절 없이 조회해서 실제 데이터 확인
+      const allUsers = await (User as any).findAll({
+        attributes: ['id', 'userid', 'username', 'tenant_id', 'company_id', 'role'],
+        limit: 5
+      });
+      const allUsersData = allUsers.map((u: any) => u.toJSON ? u.toJSON() : u);
+      console.log('🔍 데이터베이스의 실제 사용자 샘플 (최대 5개):', allUsersData);
+    } else {
+      console.log('✅ 조회된 사용자 목록:', usersData.slice(0, 3).map((u: any) => ({
+        id: u.id,
+        userid: u.userid,
+        username: u.username,
+        tenant_id: u.tenant_id,
+        company_id: u.company_id
+      })));
+    }
 
     res.json({
       success: true,
-      data: users
+      data: usersData
     });
   } catch (error) {
-    console.error('사용자 목록 조회 오류:', error);
+    console.error('❌ 사용자 목록 조회 오류:', error);
     res.status(500).json({
       success: false,
       message: '서버 오류가 발생했습니다.'
@@ -41,14 +305,65 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const user = await (User as any).findOne({
-      where: { 
-        id,
-        tenant_id: (req as any).user.tenant_id,
-        company_id: (req as any).user.company_id 
-      },
-      attributes: ['id', 'userid', 'username', 'email', 'role', 'department', 'position', 'status', 'last_login', 'created_at']
-    });
+    const userRole = (req as any).user.role;
+    const tenantId = (req as any).user.tenant_id;
+    const companyId = (req as any).user.company_id;
+    const baseAttributes = [
+      'id', 'userid', 'username', 'email', 'role', 'department', 'position', 'status', 'last_login', 'created_at',
+      'is_payment_officer'
+    ];
+    
+    // root나 audit 권한이면 모든 사용자 조회 가능, 아니면 자신의 회사 사용자만
+    const whereClause: any = { id };
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = companyId;
+    }
+    
+    let user: any;
+    try {
+      // 먼저 기본 필드만 조회
+      user = await (User as any).findOne({
+        where: whereClause,
+        attributes: baseAttributes
+      });
+      
+      // HR 필드가 있는지 확인하고 추가 조회 시도
+      try {
+        const userWithHrFields = await (User as any).findOne({
+          where: whereClause,
+          attributes: [
+            ...baseAttributes,
+            'employee_number', 'birth_date', 'gender', 'phone', 'address', 
+            'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary'
+          ]
+        });
+        if (userWithHrFields) {
+          user = userWithHrFields;
+        }
+      } catch (hrError: any) {
+        // HR 필드가 없으면 기본 필드만 사용
+        if (hrError.name === 'SequelizeDatabaseError' && 
+            (hrError.message?.includes('칼럼') || hrError.message?.includes('column'))) {
+          // HR 필드가 아직 추가되지 않은 경우 기본 필드만 사용
+          // 경고 메시지는 제거 (스크립트로 필드 추가 후에는 발생하지 않음)
+        } else {
+          throw hrError;
+        }
+      }
+    } catch (error: any) {
+      // 기본 필드 조회 실패 시 최소 필드만 조회
+      if (error.name === 'SequelizeDatabaseError' && 
+          (error.message?.includes('칼럼') || error.message?.includes('column'))) {
+        console.warn('⚠️ 기본 필드 조회 실패, 최소 필드만 조회:', error.message);
+        user = await (User as any).findOne({
+          where: whereClause,
+          attributes: ['id', 'userid', 'username', 'email', 'role', 'status']
+        });
+      } else {
+        throw error;
+      }
+    }
 
     if (!user) {
       return res.status(404).json({
@@ -57,28 +372,59 @@ router.get('/:id', async (req, res) => {
       });
     }
 
+    const userData = user.toJSON ? user.toJSON() : user;
     res.json({
       success: true,
-      data: user
+      data: userData
     });
-  } catch (error) {
-    console.error('사용자 상세 조회 오류:', error);
+  } catch (error: any) {
+    console.error('❌ 사용자 상세 조회 오류:', error);
     res.status(500).json({
       success: false,
-      message: '서버 오류가 발생했습니다.'
+      message: '서버 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
 
 // 사용자 생성 (관리자만)
-router.post('/', requireRole(['admin', 'root']), async (req, res) => {
+router.post(
+  '/',
+  requireRole(['admin', 'root']),
+  validateBody({
+    userid: { required: true, type: 'string', minLength: 2, maxLength: 50 },
+    username: { required: true, type: 'string', minLength: 1, maxLength: 100 },
+    email: { required: true, type: 'string', maxLength: 255, pattern: emailPattern },
+    password: { required: true, type: 'string', minLength: 8, maxLength: 128 },
+    role: { type: 'string', maxLength: 50 },
+    department: { type: 'string', maxLength: 100 },
+    position: { type: 'string', maxLength: 100 },
+    status: { type: 'string', maxLength: 50 },
+    is_payment_officer: { type: 'boolean' }
+  }),
+  async (req, res) => {
   try {
-    const { userid, username, email, password, role, department, position } = req.body;
+    const {
+      userid, username, email, password, role, department, position, status,
+      employee_number, birth_date, gender, phone, address,
+      emergency_contact, emergency_phone, hire_date, employment_type, salary,
+      is_payment_officer
+    } = req.body;
 
+    // 필수 필드 검증
     if (!userid || !username || !email || !password) {
       return res.status(400).json({
         success: false,
-        message: '필수 필드를 입력해주세요.'
+        message: '필수 필드(사용자 ID, 이름, 이메일, 비밀번호)를 입력해주세요.'
+      });
+    }
+
+    // root 역할 부여 권한 체크 (root만 root 역할을 부여할 수 있음)
+    const currentUserRole = (req as any).user.role;
+    if (role === 'root' && currentUserRole !== 'root') {
+      return res.status(403).json({
+        success: false,
+        message: 'root 역할은 root 권한을 가진 사용자만 부여할 수 있습니다.'
       });
     }
 
@@ -94,41 +440,795 @@ router.post('/', requireRole(['admin', 'root']), async (req, res) => {
       });
     }
 
-    // 비밀번호 해싱 (개발용)
+    // 이메일 중복 확인
+    const existingEmail = await (User as any).findOne({
+      where: { email }
+    });
+
+    if (existingEmail) {
+      return res.status(409).json({
+        success: false,
+        message: '이미 사용 중인 이메일입니다.'
+      });
+    }
+
+    // root는 다른 회사에 사용자를 등록할 수 있음
+    let targetCompanyId = (req as any).user.company_id;
+    let targetTenantId = (req as any).user.tenant_id;
+    
+    if ((req as any).user.role === 'root' && req.body.company_id) {
+      // root가 다른 회사 선택 시
+      targetCompanyId = parseInt(req.body.company_id);
+      const selectedCompany = await (Company as any).findOne({
+        where: { id: targetCompanyId },
+        attributes: ['id', 'name', 'tenant_id']
+      });
+      
+      if (!selectedCompany) {
+        return res.status(404).json({
+          success: false,
+          message: '선택한 회사를 찾을 수 없습니다.'
+        });
+      }
+      
+      targetTenantId = selectedCompany.tenant_id;
+    }
+
+    // 비밀번호 검증
+    const { validatePassword } = await import('../utils/passwordValidator');
+    const passwordValidation = await validatePassword(password, targetTenantId, targetCompanyId);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: passwordValidation.message || '비밀번호가 정책에 맞지 않습니다.'
+      });
+    }
+
+    // 비밀번호 해싱
     const password_hash = await hashPassword(password);
 
-    const user = await (User as any).create({
-      tenant_id: (req as any).user.tenant_id,
-      company_id: (req as any).user.company_id,
+    // 회사 정보 조회 (사원번호 자동 생성용)
+    const company = await (Company as any).findOne({
+      where: {
+        id: targetCompanyId,
+        tenant_id: targetTenantId
+      },
+      attributes: ['id', 'name']
+    });
+
+    // 사원번호 자동 생성 (employee_number가 없거나 빈 문자열인 경우)
+    let finalEmployeeNumber = employee_number;
+    if (!finalEmployeeNumber || finalEmployeeNumber.trim() === '') {
+      if (company) {
+        finalEmployeeNumber = await generateEmployeeNumber(company.id, company.name);
+      } else {
+        // 회사 정보를 찾을 수 없는 경우 기본값
+        finalEmployeeNumber = await generateEmployeeNumber(targetCompanyId, 'Company');
+      }
+    }
+
+    // 날짜 필드 처리
+    const userData: any = {
+      tenant_id: targetTenantId,
+      company_id: targetCompanyId,
       userid,
       username,
       email,
       password_hash,
       role: role || 'user',
-      department,
-      position,
-      status: 'active'
-    });
+      status: status || 'active',
+      employee_number: finalEmployeeNumber
+    };
+
+    // 선택 필드 추가 (빈 문자열은 null로 변환)
+    if (department !== undefined) userData.department = department || null;
+    if (position !== undefined) userData.position = position || null;
+    if (birth_date) userData.birth_date = birth_date;
+    if (gender) userData.gender = gender;
+    if (phone !== undefined) userData.phone = phone || null;
+    if (address !== undefined) userData.address = address || null;
+    if (emergency_contact !== undefined) userData.emergency_contact = emergency_contact || null;
+    if (emergency_phone !== undefined) userData.emergency_phone = emergency_phone || null;
+    if (hire_date) userData.hire_date = hire_date;
+    if (employment_type) userData.employment_type = employment_type;
+    if (salary !== undefined && salary !== '') {
+      userData.salary = parseFloat(salary) || null;
+    }
+    if (is_payment_officer !== undefined) {
+      userData.is_payment_officer = Boolean(is_payment_officer);
+    }
+    if (is_payment_officer !== undefined) {
+      userData.is_payment_officer = Boolean(is_payment_officer);
+    }
+
+    const user = await (User as any).create(userData);
+
+    // 비밀번호 해시 제외하고 응답
+    const responseData = user.toJSON();
+    delete responseData.password_hash;
 
     res.status(201).json({
       success: true,
-      data: {
-        id: user.id,
-        userid: user.userid,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        department: user.department,
-        position: user.position,
-        status: user.status
-      },
+      data: responseData,
       message: '사용자가 생성되었습니다.'
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('사용자 생성 오류:', error);
     res.status(500).json({
       success: false,
-      message: '서버 오류가 발생했습니다.'
+      message: '서버 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// 사용자 수정 (관리자만)
+router.put(
+  '/:id',
+  requireRole(['admin', 'root']),
+  validateBody({
+    username: { type: 'string', minLength: 1, maxLength: 100 },
+    email: { type: 'string', maxLength: 255, pattern: emailPattern },
+    password: { type: 'string', minLength: 8, maxLength: 128 },
+    role: { type: 'string', maxLength: 50 },
+    department: { type: 'string', maxLength: 100 },
+    position: { type: 'string', maxLength: 100 },
+    status: { type: 'string', maxLength: 50 },
+    is_payment_officer: { type: 'boolean' }
+  }),
+  async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userRole = (req as any).user.role;
+    const tenantId = (req as any).user.tenant_id;
+    const companyId = (req as any).user.company_id;
+    const {
+      username, email, password, role, department, position, status,
+      employee_number, birth_date, gender, phone, address,
+      emergency_contact, emergency_phone, hire_date, employment_type, salary,
+      is_payment_officer
+    } = req.body;
+
+    // root나 audit 권한이면 모든 사용자 조회 가능, 아니면 자신의 회사 사용자만
+    const whereClause: any = { id };
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = companyId;
+    }
+
+    // 사용자 존재 확인 - 기본 필드만 먼저 조회
+    const baseAttributes = [
+      'id', 'userid', 'username', 'email', 'role', 'department', 'position', 'status', 'last_login', 'created_at',
+      'tenant_id', 'company_id'
+    ];
+    
+    let user: any;
+    try {
+      user = await (User as any).findOne({
+        where: whereClause,
+        attributes: baseAttributes
+      });
+      
+      // HR 필드가 있는지 확인하고 추가 조회 시도
+      if (user) {
+        try {
+          const userWithHrFields = await (User as any).findOne({
+            where: whereClause,
+            attributes: [
+              ...baseAttributes,
+              'employee_number', 'birth_date', 'gender', 'phone', 'address', 
+              'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary'
+            ]
+          });
+          if (userWithHrFields) {
+            user = userWithHrFields;
+          }
+        } catch (hrError: any) {
+          // HR 필드가 없으면 기본 필드만 사용
+          if (hrError.name === 'SequelizeDatabaseError' && 
+              (hrError.message?.includes('칼럼') || hrError.message?.includes('column'))) {
+            // HR 필드가 아직 추가되지 않은 경우 기본 필드만 사용
+            // 경고 메시지는 제거 (스크립트로 필드 추가 후에는 발생하지 않음)
+          } else {
+            throw hrError;
+          }
+        }
+      }
+    } catch (error: any) {
+      // 기본 필드 조회 실패 시 최소 필드만 조회
+      if (error.name === 'SequelizeDatabaseError' && 
+          (error.message?.includes('칼럼') || error.message?.includes('column'))) {
+        console.warn('⚠️ 기본 필드 조회 실패, 최소 필드만 조회:', error.message);
+        user = await (User as any).findOne({
+          where: whereClause,
+          attributes: ['id', 'userid', 'username', 'email', 'role', 'status']
+        });
+      } else {
+        throw error;
+      }
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: '사용자를 찾을 수 없습니다.'
+      });
+    }
+
+    // root 역할 부여 권한 체크 (root만 root 역할을 부여할 수 있음)
+    const currentUserRole = (req as any).user.role;
+    if (role !== undefined && role === 'root' && currentUserRole !== 'root') {
+      return res.status(403).json({
+        success: false,
+        message: 'root 역할은 root 권한을 가진 사용자만 부여할 수 있습니다.'
+      });
+    }
+
+    // 이메일 중복 확인 (다른 사용자가 사용 중인지)
+    if (email && email !== user.email) {
+      const existingEmail = await (User as any).findOne({
+        where: { 
+          email,
+          id: { [Op.ne]: id }
+        },
+        attributes: ['id', 'email']
+      });
+
+      if (existingEmail) {
+        return res.status(409).json({
+          success: false,
+          message: '이미 사용 중인 이메일입니다.'
+        });
+      }
+    }
+
+    // 업데이트 데이터 구성
+    const updateData: any = {};
+
+    if (username !== undefined) updateData.username = username;
+    if (email !== undefined) updateData.email = email;
+    if (role !== undefined) updateData.role = role;
+    if (status !== undefined) updateData.status = status;
+    if (department !== undefined) updateData.department = department || null;
+    if (position !== undefined) updateData.position = position || null;
+    if (employee_number !== undefined) updateData.employee_number = employee_number || null;
+    if (birth_date !== undefined) updateData.birth_date = birth_date || null;
+    if (gender !== undefined) updateData.gender = gender || null;
+    if (phone !== undefined) updateData.phone = phone || null;
+    if (address !== undefined) updateData.address = address || null;
+    if (emergency_contact !== undefined) updateData.emergency_contact = emergency_contact || null;
+    if (emergency_phone !== undefined) updateData.emergency_phone = emergency_phone || null;
+    if (hire_date !== undefined) updateData.hire_date = hire_date || null;
+    if (employment_type !== undefined) updateData.employment_type = employment_type || null;
+    if (salary !== undefined && salary !== '') {
+      updateData.salary = parseFloat(salary) || null;
+    } else if (salary === '') {
+      updateData.salary = null;
+    }
+    if (is_payment_officer !== undefined) {
+      updateData.is_payment_officer = Boolean(is_payment_officer);
+    }
+    if (is_payment_officer !== undefined) {
+      updateData.is_payment_officer = Boolean(is_payment_officer);
+    }
+
+    // 비밀번호 변경 (있는 경우만)
+    if (password) {
+      // 비밀번호 검증
+      const { validatePassword } = await import('../utils/passwordValidator');
+      const tenantId = (req as any).user.tenant_id;
+      const companyId = user.company_id || (req as any).user.company_id;
+      const passwordValidation = await validatePassword(password, tenantId, companyId);
+      if (!passwordValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: passwordValidation.message || '비밀번호가 정책에 맞지 않습니다.'
+        });
+      }
+      updateData.password_hash = await hashPassword(password);
+    }
+
+    await user.update(updateData);
+
+    // 업데이트된 사용자 정보 조회 - 기본 필드만 먼저 조회
+    const responseBaseAttributes = [
+      'id', 'userid', 'username', 'email', 'role', 'department', 'position', 'status', 'last_login', 'created_at',
+      'is_payment_officer'
+    ];
+    
+    let updatedUser: any;
+    try {
+      updatedUser = await (User as any).findByPk(id, {
+        attributes: responseBaseAttributes
+      });
+      
+      // HR 필드가 있는지 확인하고 추가 조회 시도
+      try {
+        const userWithHrFields = await (User as any).findByPk(id, {
+          attributes: [
+            ...responseBaseAttributes,
+            'employee_number', 'birth_date', 'gender', 'phone', 'address', 
+            'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary'
+          ]
+        });
+        if (userWithHrFields) {
+          updatedUser = userWithHrFields;
+        }
+      } catch (hrError: any) {
+        // HR 필드가 없으면 기본 필드만 사용
+        if (hrError.name === 'SequelizeDatabaseError' && 
+            (hrError.message?.includes('칼럼') || hrError.message?.includes('column'))) {
+          // HR 필드가 아직 추가되지 않은 경우 기본 필드만 사용
+          // 경고 메시지는 제거 (스크립트로 필드 추가 후에는 발생하지 않음)
+        } else {
+          throw hrError;
+        }
+      }
+    } catch (error: any) {
+      // 기본 필드 조회 실패 시 최소 필드만 조회
+      if (error.name === 'SequelizeDatabaseError' && 
+          (error.message?.includes('칼럼') || error.message?.includes('column'))) {
+        console.warn('⚠️ 기본 필드 조회 실패, 최소 필드만 조회:', error.message);
+        updatedUser = await (User as any).findByPk(id, {
+          attributes: ['id', 'userid', 'username', 'email', 'role', 'status']
+        });
+      } else {
+        throw error;
+      }
+    }
+
+    const userData = updatedUser.toJSON ? updatedUser.toJSON() : updatedUser;
+    res.json({
+      success: true,
+      data: userData,
+      message: '사용자 정보가 업데이트되었습니다.'
+    });
+  } catch (error: any) {
+    console.error('사용자 수정 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// 사용자 삭제 (관리자만)
+router.delete('/:id', requireRole(['admin', 'root']), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const userRole = (req as any).user.role;
+    const tenantId = (req as any).user.tenant_id;
+    const companyId = (req as any).user.company_id;
+
+    // root나 audit 권한이면 모든 사용자 조회 가능, 아니면 자신의 회사 사용자만
+    const whereClause: any = { id };
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = companyId;
+    }
+
+    const user = await (User as any).findOne({
+      where: whereClause
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: '사용자를 찾을 수 없습니다.'
+      });
+    }
+
+    // 소프트 삭제: status를 'inactive'로 변경 (User 모델에는 is_active가 없고 status를 사용)
+    await user.update({ status: 'inactive' });
+
+    res.json({
+      success: true,
+      message: '사용자가 비활성화되었습니다.'
+    });
+  } catch (error: any) {
+    console.error('사용자 삭제 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '서버 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Excel 샘플 파일 다운로드
+router.get('/excel/sample', authenticateToken, async (req, res) => {
+  try {
+    // 샘플 데이터 생성
+    const sampleData = [
+      {
+        '사원번호': 'COMP-001',
+        '사용자ID': 'user001',
+        '이름': '홍길동',
+        '이메일': 'hong@example.com',
+        '비밀번호': 'password123',
+        '역할 (root/admin/user/audit)': 'user',
+        '부서': '개발팀',
+        '직책': '개발자',
+        '생년월일 (YYYY-MM-DD)': '1990-01-15',
+        '성별 (male/female/other)': 'male',
+        '전화번호': '010-1234-5678',
+        '주소': '서울시 강남구 테헤란로 123',
+        '비상연락처': '홍부모',
+        '비상연락처 전화번호': '010-9876-5432',
+        '입사일 (YYYY-MM-DD)': '2020-01-01',
+        '고용형태 (fulltime/contract/parttime/intern)': 'fulltime',
+        '급여': '5000000',
+        '상태 (active/inactive/suspended)': 'active'
+      },
+      {
+        '사원번호': 'COMP-002',
+        '사용자ID': 'user002',
+        '이름': '김영희',
+        '이메일': 'kim@example.com',
+        '비밀번호': 'password123',
+        '역할 (root/admin/user/audit)': 'admin',
+        '부서': '인사팀',
+        '직책': '인사담당자',
+        '생년월일 (YYYY-MM-DD)': '1992-05-20',
+        '성별 (male/female/other)': 'female',
+        '전화번호': '010-2345-6789',
+        '주소': '부산시 해운대구 센텀중앙로 456',
+        '비상연락처': '김부모',
+        '비상연락처 전화번호': '010-8765-4321',
+        '입사일 (YYYY-MM-DD)': '2019-06-01',
+        '고용형태 (fulltime/contract/parttime/intern)': 'fulltime',
+        '급여': '6000000',
+        '상태 (active/inactive/suspended)': 'active'
+      }
+    ];
+
+    // Excel 워크북 생성
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(sampleData);
+    
+    // 컬럼 너비 설정
+    const columnWidths = [
+      { wch: 12 }, // 사원번호
+      { wch: 12 }, // 사용자ID
+      { wch: 12 }, // 이름
+      { wch: 25 }, // 이메일
+      { wch: 15 }, // 비밀번호
+      { wch: 20 }, // 역할
+      { wch: 12 }, // 부서
+      { wch: 12 }, // 직책
+      { wch: 18 }, // 생년월일
+      { wch: 15 }, // 성별
+      { wch: 15 }, // 전화번호
+      { wch: 30 }, // 주소
+      { wch: 15 }, // 비상연락처
+      { wch: 20 }, // 비상연락처 전화번호
+      { wch: 18 }, // 입사일
+      { wch: 25 }, // 고용형태
+      { wch: 12 }, // 급여
+      { wch: 20 }  // 상태
+    ];
+    worksheet['!cols'] = columnWidths;
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, '사용자');
+
+    // Excel 파일 버퍼 생성
+    const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    // 파일명 설정
+    const fileName = `사용자_입력_샘플_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+    res.send(excelBuffer);
+  } catch (error: any) {
+    console.error('Excel 샘플 파일 생성 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Excel 샘플 파일 생성 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Excel 파일 내보내기
+router.get('/excel/export', authenticateToken, async (req, res) => {
+  try {
+    const tenantId = (req as any).user.tenant_id;
+    const companyId = (req as any).user.company_id;
+    const userRole = (req as any).user.role;
+    const { search, company_id } = req.query;
+
+    // 사용자 목록 조회 (목록 조회와 동일한 로직)
+    const whereClause: any = {};
+    
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = companyId;
+    } else if (userRole === 'root' && company_id) {
+      whereClause.company_id = parseInt(company_id as string);
+    }
+
+    if (search) {
+      whereClause[Op.or] = [
+        { username: { [Op.like]: `%${search}%` } },
+        { email: { [Op.like]: `%${search}%` } },
+        { userid: { [Op.like]: `%${search}%` } }
+      ];
+    }
+
+    whereClause.status = { [Op.ne]: 'inactive' };
+
+    const users = await (User as any).findAll({
+      where: whereClause,
+      include: [{
+        model: Company,
+        as: 'company',
+        attributes: ['id', 'name']
+      }],
+      order: [['created_at', 'DESC']]
+    });
+
+    // Excel 데이터 형식으로 변환
+    const excelData = users.map((user: any) => {
+      const userData = user.toJSON ? user.toJSON() : user;
+      
+      return {
+        '사원번호': userData.employee_number || '',
+        '사용자ID': userData.userid || '',
+        '이름': userData.username || '',
+        '이메일': userData.email || '',
+        '비밀번호': '', // 보안상 비밀번호는 내보내지 않음
+        '역할 (root/admin/user/audit)': userData.role || 'user',
+        '부서': userData.department || '',
+        '직책': userData.position || '',
+        '생년월일 (YYYY-MM-DD)': userData.birth_date 
+          ? new Date(userData.birth_date).toISOString().split('T')[0] 
+          : '',
+        '성별 (male/female/other)': userData.gender || '',
+        '전화번호': userData.phone || '',
+        '주소': userData.address || '',
+        '비상연락처': userData.emergency_contact || '',
+        '비상연락처 전화번호': userData.emergency_phone || '',
+        '입사일 (YYYY-MM-DD)': userData.hire_date 
+          ? new Date(userData.hire_date).toISOString().split('T')[0] 
+          : '',
+        '고용형태 (fulltime/contract/parttime/intern)': userData.employment_type || '',
+        '급여': userData.salary || '',
+        '상태 (active/inactive/suspended)': userData.status || 'active'
+      };
+    });
+
+    // Excel 워크북 생성
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(excelData);
+    
+    // 컬럼 너비 설정
+    const columnWidths = [
+      { wch: 12 }, // 사원번호
+      { wch: 12 }, // 사용자ID
+      { wch: 12 }, // 이름
+      { wch: 25 }, // 이메일
+      { wch: 15 }, // 비밀번호
+      { wch: 20 }, // 역할
+      { wch: 12 }, // 부서
+      { wch: 12 }, // 직책
+      { wch: 18 }, // 생년월일
+      { wch: 15 }, // 성별
+      { wch: 15 }, // 전화번호
+      { wch: 30 }, // 주소
+      { wch: 15 }, // 비상연락처
+      { wch: 20 }, // 비상연락처 전화번호
+      { wch: 18 }, // 입사일
+      { wch: 25 }, // 고용형태
+      { wch: 12 }, // 급여
+      { wch: 20 }  // 상태
+    ];
+    worksheet['!cols'] = columnWidths;
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, '사용자');
+
+    // Excel 파일 버퍼 생성
+    const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    // 파일명 설정
+    const fileName = `사용자_목록_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+    res.send(excelBuffer);
+  } catch (error: any) {
+    console.error('Excel 파일 내보내기 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Excel 파일 내보내기 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// Excel 파일 업로드 및 사용자 일괄 등록
+router.post('/excel/import', authenticateToken, requireRole(['admin', 'root']), upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Excel 파일을 업로드해주세요.'
+      });
+    }
+
+    const tenantId = (req as any).user.tenant_id;
+    const companyId = (req as any).user.company_id;
+    const userRole = (req as any).user.role;
+
+    // Excel 파일 파싱
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const data = XLSX.utils.sheet_to_json(worksheet);
+
+    if (!data || data.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Excel 파일에 데이터가 없습니다.'
+      });
+    }
+
+    const results = {
+      success: [] as any[],
+      failed: [] as any[],
+      total: data.length
+    };
+
+    // 각 행 처리
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i] as any;
+      try {
+        // 필수 필드 검증
+        if (!row['사용자ID'] || !row['이름'] || !row['이메일'] || !row['비밀번호']) {
+          results.failed.push({
+            row: i + 2, // Excel 행 번호 (헤더 제외)
+            data: row,
+            error: '필수 필드(사용자ID, 이름, 이메일, 비밀번호)가 누락되었습니다.'
+          });
+          continue;
+        }
+
+        // 중복 사용자ID 확인
+        const existingUser = await (User as any).findOne({
+          where: {
+            userid: row['사용자ID'].toString().trim()
+          }
+        });
+
+        if (existingUser) {
+          results.failed.push({
+            row: i + 2,
+            data: row,
+            error: '이미 등록된 사용자ID입니다.'
+          });
+          continue;
+        }
+
+        // 중복 이메일 확인
+        const existingEmail = await (User as any).findOne({
+          where: {
+            email: row['이메일'].toString().trim()
+          }
+        });
+
+        if (existingEmail) {
+          results.failed.push({
+            row: i + 2,
+            data: row,
+            error: '이미 등록된 이메일입니다.'
+          });
+          continue;
+        }
+
+        // 회사 ID 결정 (root는 company_id를 선택할 수 있음)
+        let finalCompanyId = companyId;
+        if (userRole === 'root' && row['회사ID']) {
+          finalCompanyId = parseInt(row['회사ID'].toString());
+        }
+
+        // 사원번호 자동 생성 (없는 경우)
+        let employeeNumber = row['사원번호']?.toString().trim() || '';
+        if (!employeeNumber && finalCompanyId) {
+          const company = await (Company as any).findByPk(finalCompanyId);
+          if (company) {
+            const abbreviation = getCompanyAbbreviation(company.name);
+            const lastUser = await (User as any).findOne({
+              where: {
+                company_id: finalCompanyId,
+                employee_number: { [Op.like]: `${abbreviation}-%` }
+              },
+              order: [['employee_number', 'DESC']]
+            });
+
+            let sequence = 1;
+            if (lastUser && lastUser.employee_number) {
+              const match = lastUser.employee_number.match(/-(\d+)$/);
+              if (match) {
+                sequence = parseInt(match[1]) + 1;
+              }
+            }
+            employeeNumber = `${abbreviation}-${sequence.toString().padStart(3, '0')}`;
+          }
+        }
+
+        // 비밀번호 검증 및 해싱
+        const password = row['비밀번호'].toString().trim();
+        const { validatePassword } = await import('../utils/passwordValidator');
+        const passwordValidation = await validatePassword(password, tenantId, finalCompanyId);
+        if (!passwordValidation.valid) {
+          results.failed.push({
+            row: i + 2,
+            data: row,
+            error: passwordValidation.message || '비밀번호가 정책에 맞지 않습니다.'
+          });
+          continue;
+        }
+        const passwordHash = await hashPassword(password);
+
+        // 사용자 생성
+        const user = await (User as any).create({
+          tenant_id: tenantId,
+          company_id: finalCompanyId,
+          userid: row['사용자ID'].toString().trim(),
+          username: row['이름'].toString().trim(),
+          email: row['이메일'].toString().trim(),
+          password_hash: passwordHash,
+          role: (row['역할 (root/admin/user/audit)'] && ['root', 'admin', 'user', 'audit'].includes(row['역할 (root/admin/user/audit)'].toString().toLowerCase()))
+            ? row['역할 (root/admin/user/audit)'].toString().toLowerCase()
+            : 'user',
+          department: row['부서'] ? row['부서'].toString().trim() : null,
+          position: row['직책'] ? row['직책'].toString().trim() : null,
+          employee_number: employeeNumber || null,
+          birth_date: row['생년월일 (YYYY-MM-DD)'] ? new Date(row['생년월일 (YYYY-MM-DD)'].toString()) : null,
+          gender: (row['성별 (male/female/other)'] && ['male', 'female', 'other'].includes(row['성별 (male/female/other)'].toString().toLowerCase()))
+            ? row['성별 (male/female/other)'].toString().toLowerCase()
+            : null,
+          phone: row['전화번호'] ? row['전화번호'].toString().trim() : null,
+          address: row['주소'] ? row['주소'].toString().trim() : null,
+          emergency_contact: row['비상연락처'] ? row['비상연락처'].toString().trim() : null,
+          emergency_phone: row['비상연락처 전화번호'] ? row['비상연락처 전화번호'].toString().trim() : null,
+          hire_date: row['입사일 (YYYY-MM-DD)'] ? new Date(row['입사일 (YYYY-MM-DD)'].toString()) : null,
+          employment_type: (row['고용형태 (fulltime/contract/parttime/intern)'] && ['fulltime', 'contract', 'parttime', 'intern'].includes(row['고용형태 (fulltime/contract/parttime/intern)'].toString().toLowerCase()))
+            ? row['고용형태 (fulltime/contract/parttime/intern)'].toString().toLowerCase()
+            : null,
+          salary: row['급여'] ? parseFloat(row['급여'].toString().replace(/,/g, '')) : null,
+          status: (row['상태 (active/inactive/suspended)'] && ['active', 'inactive', 'suspended'].includes(row['상태 (active/inactive/suspended)'].toString().toLowerCase()))
+            ? row['상태 (active/inactive/suspended)'].toString().toLowerCase()
+            : 'active'
+        });
+
+        results.success.push({
+          row: i + 2,
+          userid: row['사용자ID'],
+          username: row['이름']
+        });
+      } catch (error: any) {
+        results.failed.push({
+          row: i + 2,
+          data: row,
+          error: error.message || '알 수 없는 오류가 발생했습니다.'
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `총 ${results.total}건 중 ${results.success.length}건이 성공적으로 등록되었습니다.`,
+      data: results
+    });
+  } catch (error: any) {
+    console.error('Excel 파일 업로드 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Excel 파일 업로드 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

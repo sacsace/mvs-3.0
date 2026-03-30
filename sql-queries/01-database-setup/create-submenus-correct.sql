@@ -1,4 +1,4 @@
--- MVS 3.0 하위 메뉴 생성 (올바른 ID 사용)
+-- MVS 하위 메뉴 생성 (올바른 ID 사용)
 
 -- 대시보드 하위 메뉴 (parent_id = 36)
 INSERT INTO menus (tenant_id, parent_id, name_ko, name_en, route, icon, "order", level, is_active, description, created_at, updated_at) VALUES 

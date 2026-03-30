@@ -15,13 +15,19 @@ interface CompanyAttributes {
   employee_count: number;
   subscription_plan: string;
   subscription_status: string;
+  status: 'active' | 'inactive' | 'suspended';
   company_logo?: Buffer;
   company_seal?: Buffer;
   ceo_signature?: Buffer;
   account_holder_name?: string;
   bank_name?: string;
+  bank_address?: string;
   account_number?: string;
   ifsc_code?: string;
+  swift_code?: string;
+  msme_number?: string;
+  iec_number?: string;
+  pan_number?: string;
   login_period_start?: Date;
   login_period_end?: Date;
   login_time_start: string;
@@ -48,13 +54,19 @@ class Company extends Model<CompanyAttributes, CompanyCreationAttributes> implem
   public employee_count!: number;
   public subscription_plan!: string;
   public subscription_status!: string;
+  public status!: 'active' | 'inactive' | 'suspended';
   public company_logo?: Buffer;
   public company_seal?: Buffer;
   public ceo_signature?: Buffer;
   public account_holder_name?: string;
   public bank_name?: string;
+  public bank_address?: string;
   public account_number?: string;
   public ifsc_code?: string;
+  public swift_code?: string;
+  public msme_number?: string;
+  public iec_number?: string;
+  public pan_number?: string;
   public login_period_start?: Date;
   public login_period_end?: Date;
   public login_time_start!: string;
@@ -94,7 +106,7 @@ Company.init(
       allowNull: true
     },
     phone: {
-      type: DataTypes.STRING(20),
+      type: DataTypes.STRING(50),
       allowNull: true
     },
     email: {
@@ -120,20 +132,25 @@ Company.init(
       defaultValue: 'basic'
     },
     subscription_status: {
-      type: DataTypes.STRING(20),
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      defaultValue: 'active'
+    },
+    status: {
+      type: DataTypes.ENUM('active', 'inactive', 'suspended'),
       allowNull: false,
       defaultValue: 'active'
     },
     company_logo: {
-      type: DataTypes.BLOB,
+      type: DataTypes.BLOB('long'),
       allowNull: true
     },
     company_seal: {
-      type: DataTypes.BLOB,
+      type: DataTypes.BLOB('long'),
       allowNull: true
     },
     ceo_signature: {
-      type: DataTypes.BLOB,
+      type: DataTypes.BLOB('long'),
       allowNull: true
     },
     account_holder_name: {
@@ -144,12 +161,32 @@ Company.init(
       type: DataTypes.STRING(100),
       allowNull: true
     },
+    bank_address: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
     account_number: {
       type: DataTypes.STRING(50),
       allowNull: true
     },
     ifsc_code: {
       type: DataTypes.STRING(11),
+      allowNull: true
+    },
+    swift_code: {
+      type: DataTypes.STRING(11),
+      allowNull: true
+    },
+    msme_number: {
+      type: DataTypes.STRING(50),
+      allowNull: true
+    },
+    iec_number: {
+      type: DataTypes.STRING(50),
+      allowNull: true
+    },
+    pan_number: {
+      type: DataTypes.STRING(50),
       allowNull: true
     },
     login_period_start: {
@@ -161,12 +198,12 @@ Company.init(
       allowNull: true
     },
     login_time_start: {
-      type: DataTypes.TIME,
+      type: DataTypes.STRING(8),
       allowNull: false,
       defaultValue: '09:00:00'
     },
     login_time_end: {
-      type: DataTypes.TIME,
+      type: DataTypes.STRING(8),
       allowNull: false,
       defaultValue: '18:00:00'
     },
@@ -176,9 +213,9 @@ Company.init(
       defaultValue: 'Asia/Seoul'
     },
     settings: {
-      type: DataTypes.JSONB,
+      type: DataTypes.JSON,
       allowNull: false,
-      defaultValue: '{}'
+      defaultValue: {}
     }
   },
   {

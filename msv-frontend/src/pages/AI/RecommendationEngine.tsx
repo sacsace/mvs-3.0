@@ -367,7 +367,7 @@ const RecommendationEngine: React.FC = () => {
                         <TableCell>{perf.month}</TableCell>
                         <TableCell align="right">{perf.clicks.toLocaleString()}</TableCell>
                         <TableCell align="right">{perf.conversions.toLocaleString()}</TableCell>
-                        <TableCell align="right">{perf.revenue.toLocaleString()}원</TableCell>
+                        <TableCell align="right">Rs. {perf.revenue.toLocaleString()}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

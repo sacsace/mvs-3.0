@@ -1,44 +1,36 @@
 {
   "name": "mvs-3.0",
   "version": "3.0.0",
-  "description": "MVS 3.0 - 차세대 기업용 통합 업무 관리 시스템",
+  "description": "MVS - 차세대 기업용 통합 업무 관리 시스템",
   "main": "index.js",
   "scripts": {
-    "start": "cd msv-server && npx ts-node --transpile-only src/index.ts",
-    "stop": "docker-compose down",
-    "restart": "docker-compose restart",
-    "build": "cd msv-server && npm run build",
-    "logs": "docker-compose logs -f",
-    "status": "docker-compose ps",
-    "clean": "docker-compose down -v && docker system prune -f",
-    "test": "docker-compose exec backend npm test",
-    "test:all": "docker-compose exec backend npm run test:all",
-    "test:unit": "cd msv-server && npm test && cd ../msv-frontend && npm test -- --watchAll=false",
-    "test:integration": "cd msv-server && npm run test:integration",
-    "test:e2e": "npx playwright test",
-    "test:performance": "artillery run tests/performance/load-test.yml",
-    "test:load": "artillery run tests/performance/load-test.yml",
-    "test:coverage": "cd msv-server && npm run test:coverage && cd ../msv-frontend && npm run test:coverage",
-    "test:watch": "cd msv-server && npm run test:watch",
-    "test:clean": "cd msv-server && npm run test:clean && cd ../msv-frontend && npm run test:clean",
-    "test:db:setup": "cd msv-server && npm run test:db:setup",
-    "test:db:reset": "cd msv-server && npm run test:db:reset",
-    "test:db:cleanup": "cd msv-server && npm run test:db:cleanup",
-    "test:run": "bash scripts/run-tests.sh",
-    "test:run:win": "powershell -ExecutionPolicy Bypass -File scripts/run-tests.ps1",
-    "db:migrate": "docker-compose exec backend npm run db:migrate",
-    "db:seed": "docker-compose exec backend npm run db:seed",
-    "health": "cd msv-server && npm run health",
-    "backup": "docker-compose exec postgres pg_dump -U mvs_user mvs_db > backup.sql"
+    "dev": "powershell -ExecutionPolicy Bypass -File ./scripts/server/start-server.ps1",
+    "dev:backend": "powershell -Command \"cd 'msv-server'; npm run dev\"",
+    "dev:frontend": "powershell -Command \"cd 'msv-frontend'; npm start\"",
+    "db:upload:railway": "powershell -ExecutionPolicy Bypass -File ./scripts/upload-local-db-to-railway.ps1",
+    "start": "powershell -ExecutionPolicy Bypass -File ./scripts/server/start-server.ps1",
+    "start:railway": "echo 'This is a monorepo root. Please deploy msv-server or msv-frontend services separately.' && exit 1",
+    "stop": "powershell -Command \"Get-Process -Name node -ErrorAction SilentlyContinue | Stop-Process -Force; netstat -ano | Select-String ':3000.*LISTENING|:5000.*LISTENING' | ForEach-Object { ($_.Line -split '\\s+')[-1] } | Select-Object -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Write-Host 'All servers stopped' -ForegroundColor Green\"",
+    "build": "cd msv-server && npm install && npm run build && cd ../msv-frontend && npm install && npm run build",
+    "build:ci": "cd msv-server && npm install && npm run build && cd ../msv-frontend && npm install && npm run build:ci",
+    "lint": "cd msv-server && npm run lint && cd ../msv-frontend && npm run lint",
+    "lint:fix": "cd msv-server && npm run lint:fix && cd ../msv-frontend && npm run lint:fix",
+    "db:migrate": "cd msv-server && npm run db:migrate",
+    "db:seed": "cd msv-server && npm run db:seed",
+    "db:reset": "cd msv-server && npm run db:reset",
+    "test": "cd msv-server && npm test",
+    "test:frontend": "cd msv-frontend && npm test -- --watchAll=false",
+    "clean": "powershell -Command \"Remove-Item -Recurse -Force node_modules, msv-server/node_modules, msv-frontend/node_modules -ErrorAction SilentlyContinue; Write-Host 'Cleaned' -ForegroundColor Green\""
   },
   "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "artillery": "^2.0.0",
     "axios": "^1.7.2",
     "chai": "^4.3.10",
-    "mocha": "^10.2.0",
-    "artillery": "^2.0.0",
     "k6": "^0.0.0",
-    "@playwright/test": "^1.40.0",
-    "supertest": "^6.3.3"
+    "mocha": "^10.2.0",
+    "supertest": "^6.3.3",
+    "typescript": "^4.9.5"
   },
   "keywords": [
     "enterprise",
@@ -50,5 +42,11 @@
     "kubernetes"
   ],
   "author": "MVS Team",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "react-scripts": "^5.0.1"
+  }
 }

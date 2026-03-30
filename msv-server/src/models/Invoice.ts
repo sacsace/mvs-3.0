@@ -6,6 +6,7 @@ interface InvoiceAttributes {
   tenant_id: number;
   company_id: number;
   customer_id: number;
+  is_active: boolean;
   invoice_number: string;
   invoice_date: string;
   due_date: string;
@@ -17,6 +18,7 @@ interface InvoiceAttributes {
   payment_method?: string;
   payment_date?: string;
   notes?: string;
+  invoice_category?: string;
   created_by: number;
   created_at: Date;
   updated_at: Date;
@@ -29,6 +31,7 @@ class Invoice extends Model<InvoiceAttributes, InvoiceCreationAttributes> implem
   public tenant_id!: number;
   public company_id!: number;
   public customer_id!: number;
+  public is_active!: boolean;
   public invoice_number!: string;
   public invoice_date!: string;
   public due_date!: string;
@@ -40,6 +43,7 @@ class Invoice extends Model<InvoiceAttributes, InvoiceCreationAttributes> implem
   public payment_method?: string;
   public payment_date?: string;
   public notes?: string;
+  public invoice_category?: string;
   public created_by!: number;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
@@ -75,6 +79,11 @@ Invoice.init(
         model: 'customers',
         key: 'id',
       },
+    },
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
     },
     invoice_number: {
       type: DataTypes.STRING(50),
@@ -125,6 +134,11 @@ Invoice.init(
     notes: {
       type: DataTypes.TEXT,
       allowNull: true,
+    },
+    invoice_category: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+      defaultValue: 'regular',
     },
     created_by: {
       type: DataTypes.INTEGER,

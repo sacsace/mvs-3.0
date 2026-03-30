@@ -399,7 +399,7 @@ const AdminDashboard: React.FC = () => {
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography variant="body2">총 지출</Typography>
-                <Typography variant="h6">₩{(businessMetrics?.totalExpenses || 0).toLocaleString()}</Typography>
+                <Typography variant="h6">Rs. {(businessMetrics?.totalExpenses || 0).toLocaleString()}</Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography variant="body2">승인 대기</Typography>

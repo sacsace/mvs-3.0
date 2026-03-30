@@ -1,5 +1,8 @@
 import { createTheme } from '@mui/material/styles';
 import './types';
+import { injectStitchesGlobalStyles } from '../styles/stitches';
+
+injectStitchesGlobalStyles();
 
 // Fanruan 스타일 컬러 팔레트
 const theme = createTheme({
@@ -127,7 +130,7 @@ const theme = createTheme({
       letterSpacing: '-0.025em',
     },
     body1: {
-      fontSize: '0.875rem', // 14px - 축소
+      fontSize: '0.75rem', // 12px - 메뉴 폰트 사이즈와 동일
       lineHeight: 1.6,
       letterSpacing: '0.01em',
     },
@@ -238,6 +241,22 @@ const theme = createTheme({
           borderRadius: 12,
         },
       },
+    },
+    /** 다이얼로그 내부에서 폼 라벨이 잘리지 않도록 기본 글자 크기·overflow 보정 (body 전역 font-size 등과 분리) */
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          fontSize: '1rem',
+          lineHeight: 1.5
+        }
+      }
+    },
+    MuiDialogContent: {
+      styleOverrides: {
+        root: {
+          overflow: 'visible'
+        }
+      }
     },
     MuiTextField: {
       styleOverrides: {

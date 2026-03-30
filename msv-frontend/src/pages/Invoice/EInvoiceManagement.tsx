@@ -35,6 +35,7 @@ import {
   Tab,
   Grid,
   Avatar,
+  InputAdornment,
 } from '@mui/material';
 import {
   ReceiptLong as ReceiptLongIcon,
@@ -75,6 +76,8 @@ import {
 } from '@mui/icons-material';
 import { useStore } from '../../store';
 import { api } from '../../services/api';
+import { AxiosResponse } from 'axios';
+import { useTranslation } from 'react-i18next';
 
 // TabPanel 컴포넌트 정의
 interface TabPanelProps {
@@ -159,34 +162,123 @@ interface EInvoice {
 interface ProformaInvoice {
   id: string;
   invoiceNumber: string;
-  customer: {
+  customer?: {
     name: string;
-    gstin: string;
-    address: string;
+    gstin?: string;
+    address?: string;
   };
+  customer_name?: string;
   totalAmount: number;
   status: string;
 }
 
 const EInvoiceManagement: React.FC = () => {
+  const { t, i18n } = useTranslation();
   const { user } = useStore();
   const [einvoices, setEinvoices] = useState<EInvoice[]>([]);
   const [proformaInvoices, setProformaInvoices] = useState<ProformaInvoice[]>([]);
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState(0);
-  const [openDialog, setOpenDialog] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const [openViewDialog, setOpenViewDialog] = useState(false);
   const [selectedEInvoice, setSelectedEInvoice] = useState<EInvoice | null>(null);
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>('');
+
+  const normalizeParty = (party: any, fallbackName: string) => ({
+    id: String(party?.id ?? ''),
+    name: String(party?.name ?? party?.customer_name ?? party?.customerName ?? fallbackName),
+    gstin: String(party?.gstin ?? ''),
+    address: String(party?.address ?? ''),
+    phone: String(party?.phone ?? ''),
+    email: String(party?.email ?? '')
+  });
+
+  const normalizeInvoiceItems = (items: any[] = []) =>
+    items.map((item, index) => ({
+      id: String(item?.id ?? `item-${index}`),
+      description: String(item?.description ?? item?.item_name ?? t('eInvoiceManagement.defaults.item')),
+      hsnCode: String(item?.hsnCode ?? ''),
+      quantity: Number(item?.quantity ?? 1),
+      unit: String(item?.unit ?? ''),
+      unitPrice: Number(item?.unit_price ?? item?.unitPrice ?? 0),
+      total: Number(item?.total_price ?? item?.total ?? 0),
+      cgstRate: Number(item?.cgstRate ?? 0),
+      cgstAmount: Number(item?.cgstAmount ?? 0),
+      sgstRate: Number(item?.sgstRate ?? 0),
+      sgstAmount: Number(item?.sgstAmount ?? 0),
+      igstRate: Number(item?.igstRate ?? 0),
+      igstAmount: Number(item?.igstAmount ?? 0),
+      cessRate: Number(item?.cessRate ?? 0),
+      cessAmount: Number(item?.cessAmount ?? 0)
+    }));
+
+  const normalizeEInvoice = (raw: any): EInvoice => {
+    const customer = raw?.customer ?? null;
+    const buyer = normalizeParty(customer, t('eInvoiceManagement.defaults.unspecified'));
+    const seller = normalizeParty(
+      companies.find((company) => company.id === raw?.company_id),
+      t('eInvoiceManagement.defaults.company')
+    );
+    return {
+      id: String(raw?.id ?? ''),
+      invoiceNumber: String(raw?.invoice_number ?? raw?.invoiceNumber ?? ''),
+      irn: String(raw?.irn ?? raw?.invoice_number ?? ''),
+      qrCode: String(raw?.qr_code ?? ''),
+      seller,
+      buyer,
+      items: normalizeInvoiceItems(raw?.items ?? []),
+      subtotal: Number(raw?.subtotal ?? 0),
+      cgstTotal: Number(raw?.cgst_total ?? 0),
+      sgstTotal: Number(raw?.sgst_total ?? 0),
+      igstTotal: Number(raw?.igst_total ?? 0),
+      cessTotal: Number(raw?.cess_total ?? 0),
+      totalAmount: Number(raw?.total_amount ?? 0),
+      transactionType: (raw?.transaction_type ?? 'B2B') as EInvoice['transactionType'],
+      status: (raw?.status ?? 'draft') as EInvoice['status'],
+      issueDate: String(raw?.invoice_date ?? raw?.issueDate ?? raw?.created_at ?? ''),
+      dueDate: String(raw?.due_date ?? raw?.dueDate ?? ''),
+      notes: String(raw?.notes ?? ''),
+      terms: String(raw?.terms ?? ''),
+      proformaInvoiceId: raw?.proforma_invoice_id ? String(raw?.proforma_invoice_id) : undefined,
+      ewayBillId: raw?.eway_bill_id ? String(raw?.eway_bill_id) : undefined,
+      createdBy: String(raw?.created_by ?? ''),
+      createdAt: String(raw?.created_at ?? ''),
+      updatedAt: String(raw?.updated_at ?? '')
+    };
+  };
+
+  const normalizeProformaInvoice = (raw: any): ProformaInvoice => {
+    const customer = raw?.customer ?? null;
+    const customerName = customer?.name ?? raw?.customer_name ?? t('eInvoiceManagement.defaults.unspecified');
+    return {
+      id: String(raw?.id ?? ''),
+      invoiceNumber: String(raw?.invoice_number ?? raw?.invoiceNumber ?? ''),
+      customer: {
+        name: String(customerName),
+        gstin: String(customer?.gstin ?? ''),
+        address: String(customer?.address ?? '')
+      },
+      customer_name: raw?.customer_name,
+      totalAmount: Number(raw?.total_amount ?? raw?.totalAmount ?? 0),
+      status: String(raw?.status ?? 'draft')
+    };
+  };
 
   // 폼 상태
   const [formData, setFormData] = useState({
     proformaInvoiceId: '',
+    customerId: '',
+    invoiceNumber: '',
     transactionType: 'B2B' as 'B2B' | 'B2C' | 'Export' | 'SEZ',
     issueDate: new Date().toISOString().split('T')[0],
     dueDate: '',
+    subtotal: 0,
+    taxAmount: 0,
     notes: '',
     terms: 'Payment due within 30 days of invoice date.'
   });
@@ -196,27 +288,52 @@ const EInvoiceManagement: React.FC = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [einvoicesResponse, proformaInvoicesResponse] = await Promise.all([
-          api.get('/e-invoices'),
-          api.get('/proforma-invoices?status=accepted')
+        const params: any = {};
+        if ((user?.role === 'root' || user?.role === 'audit') && selectedCompanyId) {
+          params.company_id = selectedCompanyId;
+        }
+        
+        const [einvoicesResponse, proformaInvoicesResponse, customersResponse] = await Promise.all([
+          api.get('/accounting/e-invoices', { params }),
+          api.get('/accounting/proforma-invoices?status=accepted'),
+          api.get('/customers')
         ]);
 
         if (einvoicesResponse.data.success) {
-          setEinvoices(einvoicesResponse.data.data);
+          const normalized = (einvoicesResponse.data.data || []).map((item: any) => normalizeEInvoice(item));
+          setEinvoices(normalized);
         }
         if (proformaInvoicesResponse.data.success) {
-          setProformaInvoices(proformaInvoicesResponse.data.data);
+          const normalized = (proformaInvoicesResponse.data.data || []).map((item: any) => normalizeProformaInvoice(item));
+          setProformaInvoices(normalized);
+        }
+        if (customersResponse.data.success) {
+          setCustomers(customersResponse.data.data || []);
         }
       } catch (error) {
         console.error('데이터 로드 오류:', error);
-        setError('데이터를 불러오는데 실패했습니다.');
+        setError(t('eInvoiceManagement.errors.loadData'));
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, []);
+    if (user?.role === 'root' || user?.role === 'audit') {
+      loadCompanies();
+    }
+  }, [selectedCompanyId]);
+
+  const loadCompanies = async () => {
+    try {
+      const response = await api.get('/companies');
+      if (response.data.success) {
+        setCompanies(response.data.data || []);
+      }
+    } catch (error) {
+      console.error('회사 목록 로드 오류:', error);
+    }
+  };
 
   // 탭 변경
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -226,43 +343,106 @@ const EInvoiceManagement: React.FC = () => {
   // E-Invoice 생성
   const handleCreate = async () => {
     try {
-      const response = await api.post('/e-invoices', formData);
+      let response: AxiosResponse<any>;
+      if (formData.proformaInvoiceId) {
+        response = await api.post(
+          `/accounting/proforma-invoices/${formData.proformaInvoiceId}/create-e-invoice`,
+          {
+            issueDate: formData.issueDate,
+            dueDate: formData.dueDate,
+            notes: formData.notes,
+            terms: formData.terms,
+            transactionType: formData.transactionType
+          }
+        );
+      } else {
+        if (!formData.customerId) {
+          setError(t('eInvoiceManagement.errors.selectProformaOrCustomer'));
+          return;
+        }
+        const subtotal = Number(formData.subtotal || 0);
+        const taxAmount = Number(formData.taxAmount || 0);
+        const totalAmount = subtotal + taxAmount;
+        response = await api.post('/accounting/e-invoices', {
+          customer_id: Number(formData.customerId),
+          invoice_number: formData.invoiceNumber?.trim() || undefined,
+          invoice_date: formData.issueDate,
+          due_date: formData.dueDate || formData.issueDate,
+          subtotal,
+          tax_amount: taxAmount,
+          total_amount: totalAmount,
+          notes: formData.notes,
+          status: 'draft',
+          items: []
+        });
+      }
       if (response.data.success) {
-        setEinvoices(prev => [response.data.data, ...prev]);
-        setOpenDialog(false);
+        setEinvoices(prev => [normalizeEInvoice(response.data.data), ...prev]);
+        setIsCreating(false);
         setFormData({
           proformaInvoiceId: '',
+          customerId: '',
+          invoiceNumber: '',
           transactionType: 'B2B',
           issueDate: new Date().toISOString().split('T')[0],
           dueDate: '',
+          subtotal: 0,
+          taxAmount: 0,
           notes: '',
           terms: 'Payment due within 30 days of invoice date.'
         });
+        // 데이터 새로고침
+        const params: any = {};
+        if ((user?.role === 'root' || user?.role === 'audit') && selectedCompanyId) {
+          params.company_id = selectedCompanyId;
+        }
+        const einvoicesResponse = await api.get('/accounting/e-invoices', { params });
+        if (einvoicesResponse.data.success) {
+          const normalized = (einvoicesResponse.data.data || []).map((item: any) => normalizeEInvoice(item));
+          setEinvoices(normalized);
+        }
       }
     } catch (error) {
       console.error('E-Invoice 생성 오류:', error);
-      setError('E-Invoice를 생성하는데 실패했습니다.');
+      setError(t('eInvoiceManagement.errors.createEInvoice'));
     }
+  };
+
+  // 작성 취소
+  const handleCancelCreate = () => {
+    setIsCreating(false);
+    setFormData({
+      proformaInvoiceId: '',
+      customerId: '',
+      invoiceNumber: '',
+      transactionType: 'B2B',
+      issueDate: new Date().toISOString().split('T')[0],
+      dueDate: '',
+      subtotal: 0,
+      taxAmount: 0,
+      notes: '',
+      terms: 'Payment due within 30 days of invoice date.'
+    });
   };
 
   // 프로포마 인보이스에서 E-Invoice 생성
   const handleCreateFromProforma = async (proformaInvoiceId: string) => {
     try {
-      const response = await api.post(`/proforma-invoices/${proformaInvoiceId}/create-e-invoice`);
+      const response = await api.post(`/accounting/proforma-invoices/${proformaInvoiceId}/create-e-invoice`);
       if (response.data.success) {
-        setEinvoices(prev => [response.data.data, ...prev]);
+        setEinvoices(prev => [normalizeEInvoice(response.data.data), ...prev]);
         setError('');
       }
     } catch (error) {
       console.error('프로포마 인보이스에서 E-Invoice 생성 오류:', error);
-      setError('E-Invoice를 생성하는데 실패했습니다.');
+      setError(t('eInvoiceManagement.errors.createEInvoice'));
     }
   };
 
   // 상태 업데이트
   const handleStatusUpdate = async (id: string, status: string) => {
     try {
-      const response = await api.put(`/e-invoices/${id}/status`, { status });
+      const response = await api.put(`/accounting/e-invoices/${id}/status`, { status });
       if (response.data.success) {
         setEinvoices(prev => prev.map(einvoice => 
           einvoice.id === id ? { ...einvoice, status: status as any } : einvoice
@@ -270,14 +450,14 @@ const EInvoiceManagement: React.FC = () => {
       }
     } catch (error) {
       console.error('상태 업데이트 오류:', error);
-      setError('상태를 업데이트하는데 실패했습니다.');
+      setError(t('eInvoiceManagement.errors.updateStatus'));
     }
   };
 
   // E-Way Bill 생성
   const handleCreateEWayBill = async (eInvoiceId: string) => {
     try {
-      const response = await api.post(`/e-invoices/${eInvoiceId}/create-eway-bill`);
+      const response = await api.post(`/accounting/e-invoices/${eInvoiceId}/create-eway-bill`);
       if (response.data.success) {
         setEinvoices(prev => prev.map(einvoice => 
           einvoice.id === eInvoiceId 
@@ -288,7 +468,7 @@ const EInvoiceManagement: React.FC = () => {
       }
     } catch (error) {
       console.error('E-Way Bill 생성 오류:', error);
-      setError('E-Way Bill을 생성하는데 실패했습니다.');
+      setError(t('eInvoiceManagement.errors.createEWayBill'));
     }
   };
 
@@ -312,10 +492,10 @@ const EInvoiceManagement: React.FC = () => {
   // 상태 라벨 반환
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'draft': return '초안';
-      case 'generated': return 'IRN 생성됨';
-      case 'uploaded': return '업로드됨';
-      case 'cancelled': return '취소됨';
+      case 'draft': return t('eInvoiceManagement.status.draft');
+      case 'generated': return t('eInvoiceManagement.status.generated');
+      case 'uploaded': return t('eInvoiceManagement.status.uploaded');
+      case 'cancelled': return t('eInvoiceManagement.status.cancelled');
       default: return status;
     }
   };
@@ -334,21 +514,33 @@ const EInvoiceManagement: React.FC = () => {
   // 필터링된 데이터
   const filteredEInvoices = einvoices.filter(einvoice => {
     const matchesStatus = filterStatus === 'all' || einvoice.status === filterStatus;
+    const search = searchTerm.toLowerCase();
     const matchesSearch = searchTerm === '' || 
-      einvoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      einvoice.buyer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      einvoice.irn.toLowerCase().includes(searchTerm.toLowerCase());
+      String(einvoice.invoiceNumber || '').toLowerCase().includes(search) ||
+      String(einvoice.buyer?.name || '').toLowerCase().includes(search) ||
+      String(einvoice.buyer?.gstin || '').toLowerCase().includes(search) ||
+      String(einvoice.seller?.name || '').toLowerCase().includes(search) ||
+      String(einvoice.seller?.gstin || '').toLowerCase().includes(search) ||
+      String(einvoice.irn || '').toLowerCase().includes(search) ||
+      String(einvoice.transactionType || '').toLowerCase().includes(search);
     return matchesStatus && matchesSearch;
   });
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <ReceiptLongIcon color="primary" />
-        E-Invoice 관리 (GST 규정 준수)
-      </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+        <ReceiptLongIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
+        <Typography component="h1" sx={{
+          fontSize: '16px !important',
+          fontWeight: 600,
+          color: 'text.primary',
+          lineHeight: 1.5
+        }}>
+          {t('eInvoiceManagement.title')}
+        </Typography>
+      </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        인도 GST 규정을 준수하는 전자 인보이스를 생성하고 관리하세요.
+        {t('eInvoiceManagement.description')}
       </Typography>
 
       {error && (
@@ -361,190 +553,435 @@ const EInvoiceManagement: React.FC = () => {
         <CardContent>
           <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
             <Tabs value={activeTab} onChange={handleTabChange}>
-              <Tab label="E-Invoice 목록" />
-              <Tab label="프로포마에서 생성" />
-              <Tab label="GST 규정 준수" />
-              <Tab label="통계 및 분석" />
+              <Tab label={t('eInvoiceManagement.tabs.list')} />
+              <Tab label={t('eInvoiceManagement.tabs.fromProforma')} />
+              <Tab label={t('eInvoiceManagement.tabs.gstCompliance')} />
+              <Tab label={t('eInvoiceManagement.tabs.analytics')} />
             </Tabs>
           </Box>
 
           {/* E-Invoice 목록 */}
           <TabPanel value={activeTab} index={0}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                <TextField
-                  size="small"
-                  placeholder="검색..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  InputProps={{
-                    startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                  }}
-                />
-                <FormControl size="small" sx={{ minWidth: 120 }}>
-                  <InputLabel>상태</InputLabel>
-                  <Select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                  >
-                    <MenuItem value="all">전체</MenuItem>
-                    <MenuItem value="draft">초안</MenuItem>
-                    <MenuItem value="generated">IRN 생성됨</MenuItem>
-                    <MenuItem value="uploaded">업로드됨</MenuItem>
-                    <MenuItem value="cancelled">취소됨</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={() => setOpenDialog(true)}
-              >
-                새 E-Invoice
-              </Button>
-            </Box>
+            {isCreating ? (
+              <Card>
+                <CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                    <Typography variant="h6">{t('eInvoiceManagement.create.title')}</Typography>
+                    <Button
+                      variant="outlined"
+                      onClick={handleCancelCreate}
+                    >
+                      {t('common.cancel')}
+                    </Button>
+                  </Box>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <FormControl fullWidth>
+                      <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                        {t('eInvoiceManagement.create.selectProforma')}
+                      </Typography>
+                      <Select
+                        value={formData.proformaInvoiceId}
+                        onChange={(e) => setFormData(prev => ({ ...prev, proformaInvoiceId: e.target.value }))}
+                        displayEmpty
+                        renderValue={(value) => {
+                          if (!value) return t('eInvoiceManagement.create.selectProforma');
+                          const selected = proformaInvoices.find((item) => item.id === value);
+                          const customerName = selected?.customer?.name || selected?.customer_name || t('eInvoiceManagement.defaults.unspecified');
+                          return selected ? `${selected.invoiceNumber} - ${customerName}` : String(value);
+                        }}
+                      >
+                        <MenuItem value="">{t('eInvoiceManagement.create.none')}</MenuItem>
+                        {proformaInvoices.map((proformaInvoice) => (
+                          <MenuItem key={proformaInvoice.id} value={proformaInvoice.id}>
+                            {proformaInvoice.invoiceNumber} - {(proformaInvoice.customer?.name || proformaInvoice.customer_name || t('eInvoiceManagement.defaults.unspecified'))}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
 
-            <TableContainer component={Paper}>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>인보이스 번호</TableCell>
-                    <TableCell>IRN</TableCell>
-                    <TableCell>구매자</TableCell>
-                    <TableCell>거래 유형</TableCell>
-                    <TableCell>금액</TableCell>
-                    <TableCell>상태</TableCell>
-                    <TableCell>발행일</TableCell>
-                    <TableCell>E-Way Bill</TableCell>
-                    <TableCell>작업</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredEInvoices.map((einvoice) => (
-                    <TableRow key={einvoice.id}>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight="bold">
-                          {einvoice.invoiceNumber}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <VerifiedIcon fontSize="small" color="success" />
-                          <Typography variant="body2" color="primary">
-                            {einvoice.irn}
+                    <FormControl fullWidth>
+                      <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                        {t('eInvoiceManagement.create.selectCustomer')}
+                      </Typography>
+                      <Select
+                        value={formData.customerId}
+                        onChange={(e) => setFormData(prev => ({ ...prev, customerId: e.target.value }))}
+                        displayEmpty
+                        renderValue={(value) => {
+                          if (!value) return t('eInvoiceManagement.create.selectCustomer');
+                          const selected = customers.find((item) => String(item.id) === String(value));
+                          return selected ? selected.name : String(value);
+                        }}
+                      >
+                        <MenuItem value="">{t('eInvoiceManagement.create.none')}</MenuItem>
+                        {customers.map((customer) => (
+                          <MenuItem key={customer.id} value={String(customer.id)}>
+                            {customer.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+
+                    <Box>
+                      <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                        {t('eInvoiceManagement.create.invoiceNumberOptional')}
+                      </Typography>
+                      <TextField
+                        fullWidth
+                        placeholder={t('eInvoiceManagement.create.invoiceNumberPlaceholder')}
+                        value={formData.invoiceNumber}
+                        onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumber: e.target.value }))}
+                      />
+                    </Box>
+                    
+                    <FormControl fullWidth>
+                      <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                        {t('eInvoiceManagement.create.transactionType')}
+                      </Typography>
+                      <Select
+                        value={formData.transactionType}
+                        onChange={(e) => setFormData(prev => ({ ...prev, transactionType: e.target.value as any }))}
+                        displayEmpty
+                      >
+                        <MenuItem value="B2B">{t('eInvoiceManagement.transactionType.b2b')}</MenuItem>
+                        <MenuItem value="B2C">{t('eInvoiceManagement.transactionType.b2c')}</MenuItem>
+                        <MenuItem value="Export">{t('eInvoiceManagement.transactionType.export')}</MenuItem>
+                        <MenuItem value="SEZ">{t('eInvoiceManagement.transactionType.sez')}</MenuItem>
+                      </Select>
+                    </FormControl>
+                    
+                    <Box>
+                      <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                        {t('eInvoiceManagement.create.issueDate')}
+                      </Typography>
+                      <TextField
+                        fullWidth
+                        type="date"
+                        value={formData.issueDate}
+                        onChange={(e) => setFormData(prev => ({ ...prev, issueDate: e.target.value }))}
+                      />
+                    </Box>
+                    
+                    <Box>
+                      <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                        {t('eInvoiceManagement.create.dueDate')}
+                      </Typography>
+                      <TextField
+                        fullWidth
+                        type="date"
+                        value={formData.dueDate}
+                        onChange={(e) => setFormData(prev => ({ ...prev, dueDate: e.target.value }))}
+                      />
+                    </Box>
+
+                    <Box>
+                      <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                        {t('eInvoiceManagement.create.subtotal')}
+                      </Typography>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        value={formData.subtotal}
+                        onChange={(e) => setFormData(prev => ({ ...prev, subtotal: Number(e.target.value || 0) }))}
+                      />
+                    </Box>
+
+                    <Box>
+                      <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                        {t('eInvoiceManagement.create.taxAmount')}
+                      </Typography>
+                      <TextField
+                        fullWidth
+                        type="number"
+                        value={formData.taxAmount}
+                        onChange={(e) => setFormData(prev => ({ ...prev, taxAmount: Number(e.target.value || 0) }))}
+                      />
+                    </Box>
+                    
+                    <Box>
+                      <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                        {t('eInvoiceManagement.create.notes')}
+                      </Typography>
+                      <TextField
+                        fullWidth
+                        multiline
+                        rows={3}
+                        value={formData.notes}
+                        onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                      />
+                    </Box>
+                    
+                    <Box>
+                      <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                        {t('eInvoiceManagement.create.terms')}
+                      </Typography>
+                      <TextField
+                        fullWidth
+                        multiline
+                        rows={2}
+                        value={formData.terms}
+                        onChange={(e) => setFormData(prev => ({ ...prev, terms: e.target.value }))}
+                      />
+                    </Box>
+                    
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 2 }}>
+                      <Button variant="outlined" onClick={handleCancelCreate}>
+                        {t('common.cancel')}
+                      </Button>
+                      <Button variant="contained" onClick={handleCreate}>
+                        {t('common.create')}
+                      </Button>
+                    </Box>
+                  </Box>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {/* 검색 및 필터 */}
+                <Card sx={{ mb: 3 }}>
+                  <CardContent>
+                    <Box sx={{ 
+                      display: 'grid', 
+                      gridTemplateColumns: { xs: '1fr', sm: (user?.role === 'root' || user?.role === 'audit') ? '2fr 1fr 1fr 1fr' : '2fr 1fr 1fr' },
+                      gap: 2, 
+                      alignItems: 'flex-end' 
+                    }}>
+                      <TextField
+                        fullWidth
+                        placeholder={t('eInvoiceManagement.filters.searchPlaceholder')}
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <SearchIcon />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                      {(user?.role === 'root' || user?.role === 'audit') && (
+                        <FormControl fullWidth>
+                          <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                            {t('eInvoiceManagement.filters.company')}
                           </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box>
-                          <Typography variant="body2" fontWeight="bold">
-                            {einvoice.buyer.name}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            GSTIN: {einvoice.buyer.gstin}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={einvoice.transactionType}
-                          size="small"
-                          color={getTransactionTypeColor(einvoice.transactionType) as any}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight="bold">
-                          ₩{einvoice.totalAmount.toLocaleString()}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={getStatusLabel(einvoice.status)}
-                          size="small"
-                          color={getStatusColor(einvoice.status) as any}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {new Date(einvoice.issueDate).toLocaleDateString()}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        {einvoice.ewayBillId ? (
-                          <Chip
-                            label="생성됨"
-                            size="small"
-                            color="success"
-                            icon={<LocalShippingIcon />}
-                          />
-                        ) : einvoice.status === 'generated' ? (
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            startIcon={<LocalShippingIcon />}
-                            onClick={() => handleCreateEWayBill(einvoice.id)}
+                          <Select
+                            value={selectedCompanyId}
+                            onChange={(e) => {
+                              const value = String(e.target.value);
+                              if (value === '') {
+                                setSelectedCompanyId('');
+                              } else {
+                                const num = Number(value);
+                                setSelectedCompanyId(isNaN(num) ? '' : num);
+                              }
+                            }}
+                            displayEmpty
+                            sx={{ height: '40px' }}
                           >
-                            생성
-                          </Button>
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            대기 중
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Tooltip title="보기">
-                            <IconButton size="small" onClick={() => handleView(einvoice)}>
-                              <ViewIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="QR 코드">
-                            <IconButton size="small">
-                              <QrCodeIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="업로드">
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleStatusUpdate(einvoice.id, 'uploaded')}
-                              disabled={einvoice.status !== 'generated'}
-                            >
-                              <SendIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="취소">
-                            <IconButton 
-                              size="small" 
-                              onClick={() => handleStatusUpdate(einvoice.id, 'cancelled')}
-                              disabled={einvoice.status === 'cancelled'}
-                            >
-                              <CancelIcon />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                            <MenuItem value="">{t('eInvoiceManagement.filters.allCompanies')}</MenuItem>
+                            {companies.map((company) => (
+                              <MenuItem key={company.id} value={company.id}>
+                                {company.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      )}
+                      <FormControl fullWidth>
+                        <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                          {t('eInvoiceManagement.filters.status')}
+                        </Typography>
+                        <Select
+                          value={filterStatus}
+                          onChange={(e) => setFilterStatus(e.target.value)}
+                          displayEmpty
+                          sx={{ height: '40px' }}
+                        >
+                          <MenuItem value="all">{t('eInvoiceManagement.filters.allStatus')}</MenuItem>
+                          <MenuItem value="draft">{t('eInvoiceManagement.status.draft')}</MenuItem>
+                          <MenuItem value="generated">{t('eInvoiceManagement.status.generated')}</MenuItem>
+                          <MenuItem value="uploaded">{t('eInvoiceManagement.status.uploaded')}</MenuItem>
+                          <MenuItem value="cancelled">{t('eInvoiceManagement.status.cancelled')}</MenuItem>
+                        </Select>
+                      </FormControl>
+                      <Button
+                        variant="outlined"
+                        startIcon={<FilterListIcon />}
+                        onClick={() => {
+                          setSearchTerm('');
+                          setFilterStatus('all');
+                          setSelectedCompanyId('');
+                        }}
+                        sx={{ height: '40px' }}
+                      >
+                        {t('eInvoiceManagement.actions.reset')}
+                      </Button>
+                    </Box>
+                  </CardContent>
+                </Card>
+
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                  <Typography variant="h6">{t('eInvoiceManagement.list.title', { count: filteredEInvoices.length })}</Typography>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => setIsCreating(true)}
+                  >
+                    {t('eInvoiceManagement.actions.newEInvoice')}
+                  </Button>
+                </Box>
+
+                {filteredEInvoices.length === 0 ? (
+                  <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {einvoices.length === 0 ? t('eInvoiceManagement.empty.noInvoices') : t('eInvoiceManagement.empty.noSearchResults')}
+                    </Typography>
+                  </Box>
+                ) : (
+                  <TableContainer component={Paper}>
+                    <Table>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>{t('eInvoiceManagement.columns.invoiceNumber')}</TableCell>
+                          <TableCell>IRN</TableCell>
+                          <TableCell>{t('eInvoiceManagement.columns.buyer')}</TableCell>
+                          <TableCell>{t('eInvoiceManagement.columns.transactionType')}</TableCell>
+                          <TableCell>{t('eInvoiceManagement.columns.amount')}</TableCell>
+                          <TableCell>{t('eInvoiceManagement.columns.status')}</TableCell>
+                          <TableCell>{t('eInvoiceManagement.columns.issueDate')}</TableCell>
+                          <TableCell>E-Way Bill</TableCell>
+                          <TableCell>{t('eInvoiceManagement.columns.actions')}</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {filteredEInvoices.map((einvoice) => (
+                        <TableRow key={einvoice.id}>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight="bold">
+                              {einvoice.invoiceNumber}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <VerifiedIcon fontSize="small" color="success" />
+                              <Typography variant="body2" color="primary">
+                                {einvoice.irn}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Box>
+                              <Typography variant="body2" fontWeight="bold">
+                                {einvoice.buyer.name}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                GSTIN: {einvoice.buyer.gstin}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={einvoice.transactionType}
+                              size="small"
+                              color={getTransactionTypeColor(einvoice.transactionType) as any}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" fontWeight="bold">
+                              Rs. {einvoice.totalAmount.toLocaleString()}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={getStatusLabel(einvoice.status)}
+                              size="small"
+                              color={getStatusColor(einvoice.status) as any}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2">
+                              {new Date(einvoice.issueDate).toLocaleDateString()}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            {einvoice.ewayBillId ? (
+                              <Chip
+                                label={t('eInvoiceManagement.eway.generated')}
+                                size="small"
+                                color="success"
+                                icon={<LocalShippingIcon />}
+                              />
+                            ) : einvoice.status === 'generated' ? (
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                startIcon={<LocalShippingIcon />}
+                                onClick={() => handleCreateEWayBill(einvoice.id)}
+                              >
+                                {t('common.create')}
+                              </Button>
+                            ) : (
+                              <Typography variant="body2" color="text.secondary">
+                                {t('eInvoiceManagement.eway.pending')}
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', gap: 1 }}>
+                              <Tooltip title={t('eInvoiceManagement.actions.view')}>
+                                <IconButton size="small" onClick={() => handleView(einvoice)}>
+                                  <ViewIcon />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title={t('eInvoiceManagement.actions.qrCode')}>
+                                <IconButton size="small">
+                                  <QrCodeIcon />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title={t('eInvoiceManagement.actions.upload')}>
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => handleStatusUpdate(einvoice.id, 'uploaded')}
+                                  disabled={einvoice.status !== 'generated'}
+                                >
+                                  <SendIcon />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title={t('common.cancel')}>
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => handleStatusUpdate(einvoice.id, 'cancelled')}
+                                  disabled={einvoice.status === 'cancelled'}
+                                >
+                                  <CancelIcon />
+                                </IconButton>
+                              </Tooltip>
+                            </Box>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+                )}
+              </>
+            )}
           </TabPanel>
 
           {/* 프로포마에서 생성 */}
           <TabPanel value={activeTab} index={1}>
             <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-              승인된 프로포마 인보이스에서 E-Invoice 생성
+              {t('eInvoiceManagement.proforma.description')}
             </Typography>
             <TableContainer component={Paper}>
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>프로포마 인보이스 번호</TableCell>
-                    <TableCell>고객</TableCell>
-                    <TableCell>금액</TableCell>
-                    <TableCell>상태</TableCell>
-                    <TableCell>작업</TableCell>
+                    <TableCell>{t('eInvoiceManagement.proforma.columns.proformaInvoiceNumber')}</TableCell>
+                    <TableCell>{t('eInvoiceManagement.proforma.columns.customer')}</TableCell>
+                    <TableCell>{t('eInvoiceManagement.proforma.columns.amount')}</TableCell>
+                    <TableCell>{t('eInvoiceManagement.proforma.columns.status')}</TableCell>
+                    <TableCell>{t('eInvoiceManagement.proforma.columns.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -558,21 +995,21 @@ const EInvoiceManagement: React.FC = () => {
                       <TableCell>
                         <Box>
                           <Typography variant="body2" fontWeight="bold">
-                            {proformaInvoice.customer.name}
+                            {proformaInvoice.customer?.name || proformaInvoice.customer_name || t('eInvoiceManagement.defaults.unspecified')}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            GSTIN: {proformaInvoice.customer.gstin}
+                            GSTIN: {proformaInvoice.customer?.gstin || '-'}
                           </Typography>
                         </Box>
                       </TableCell>
                       <TableCell>
                         <Typography variant="body2" fontWeight="bold">
-                          ₩{proformaInvoice.totalAmount.toLocaleString()}
+                          Rs. {proformaInvoice.totalAmount.toLocaleString()}
                         </Typography>
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label="승인됨"
+                          label={t('eInvoiceManagement.proforma.approved')}
                           size="small"
                           color="success"
                         />
@@ -584,7 +1021,7 @@ const EInvoiceManagement: React.FC = () => {
                           startIcon={<ReceiptLongIcon />}
                           onClick={() => handleCreateFromProforma(proformaInvoice.id)}
                         >
-                          E-Invoice 생성
+                          {t('eInvoiceManagement.actions.createEInvoice')}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -597,48 +1034,48 @@ const EInvoiceManagement: React.FC = () => {
           {/* GST 규정 준수 */}
           <TabPanel value={activeTab} index={2}>
             <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-              GST 규정 준수 현황
+              {t('eInvoiceManagement.gst.title')}
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 3 }}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <SecurityIcon color="primary" />
-                    GST 규정 준수 체크리스트
+                    {t('eInvoiceManagement.gst.checklist.title')}
                   </Typography>
                   <List>
                     <ListItem>
                       <ListItemText
-                        primary="GSTIN 유효성 검증"
-                        secondary="판매자 및 구매자 GSTIN 검증 완료"
+                        primary={t('eInvoiceManagement.gst.checklist.gstinValidationPrimary')}
+                        secondary={t('eInvoiceManagement.gst.checklist.gstinValidationSecondary')}
                       />
                       <CheckCircleIcon color="success" />
                     </ListItem>
                     <ListItem>
                       <ListItemText
-                        primary="HSN/SAC 코드 적용"
-                        secondary="모든 상품에 올바른 HSN/SAC 코드 적용"
+                        primary={t('eInvoiceManagement.gst.checklist.hsnSacPrimary')}
+                        secondary={t('eInvoiceManagement.gst.checklist.hsnSacSecondary')}
                       />
                       <CheckCircleIcon color="success" />
                     </ListItem>
                     <ListItem>
                       <ListItemText
-                        primary="IRN 생성"
-                        secondary="GST 포털에서 IRN 자동 생성"
+                        primary={t('eInvoiceManagement.gst.checklist.irnPrimary')}
+                        secondary={t('eInvoiceManagement.gst.checklist.irnSecondary')}
                       />
                       <CheckCircleIcon color="success" />
                     </ListItem>
                     <ListItem>
                       <ListItemText
-                        primary="QR 코드 생성"
-                        secondary="GST 포털 요구사항에 따른 QR 코드 생성"
+                        primary={t('eInvoiceManagement.gst.checklist.qrPrimary')}
+                        secondary={t('eInvoiceManagement.gst.checklist.qrSecondary')}
                       />
                       <CheckCircleIcon color="success" />
                     </ListItem>
                     <ListItem>
                       <ListItemText
-                        primary="세금 계산"
-                        secondary="CGST, SGST, IGST, Cess 정확한 계산"
+                        primary={t('eInvoiceManagement.gst.checklist.taxCalculationPrimary')}
+                        secondary={t('eInvoiceManagement.gst.checklist.taxCalculationSecondary')}
                       />
                       <CheckCircleIcon color="success" />
                     </ListItem>
@@ -649,34 +1086,34 @@ const EInvoiceManagement: React.FC = () => {
                 <CardContent>
                   <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <GavelIcon color="primary" />
-                    거래 유형별 규정
+                    {t('eInvoiceManagement.gst.regulations.title')}
                   </Typography>
                   <List>
                     <ListItem>
                       <ListItemText
-                        primary="B2B 거래"
-                        secondary="사업자 간 거래 (GSTIN 필수)"
+                        primary={t('eInvoiceManagement.gst.regulations.b2bPrimary')}
+                        secondary={t('eInvoiceManagement.gst.regulations.b2bSecondary')}
                       />
                       <Chip label="B2B" size="small" color="primary" />
                     </ListItem>
                     <ListItem>
                       <ListItemText
-                        primary="B2C 거래"
-                        secondary="사업자-소비자 거래"
+                        primary={t('eInvoiceManagement.gst.regulations.b2cPrimary')}
+                        secondary={t('eInvoiceManagement.gst.regulations.b2cSecondary')}
                       />
                       <Chip label="B2C" size="small" color="secondary" />
                     </ListItem>
                     <ListItem>
                       <ListItemText
-                        primary="수출 거래"
-                        secondary="Export 거래 처리"
+                        primary={t('eInvoiceManagement.gst.regulations.exportPrimary')}
+                        secondary={t('eInvoiceManagement.gst.regulations.exportSecondary')}
                       />
                       <Chip label="Export" size="small" color="success" />
                     </ListItem>
                     <ListItem>
                       <ListItemText
-                        primary="SEZ 거래"
-                        secondary="Special Economic Zone 거래"
+                        primary={t('eInvoiceManagement.gst.regulations.sezPrimary')}
+                        secondary={t('eInvoiceManagement.gst.regulations.sezSecondary')}
                       />
                       <Chip label="SEZ" size="small" color="warning" />
                     </ListItem>
@@ -689,7 +1126,7 @@ const EInvoiceManagement: React.FC = () => {
           {/* 통계 및 분석 */}
           <TabPanel value={activeTab} index={3}>
             <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-              E-Invoice 통계
+              {t('eInvoiceManagement.analytics.title')}
             </Typography>
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 3 }}>
               <Card>
@@ -697,7 +1134,7 @@ const EInvoiceManagement: React.FC = () => {
                   <Typography variant="h6" color="primary">
                     {einvoices.length}
                   </Typography>
-                  <Typography variant="body2">총 E-Invoice</Typography>
+                  <Typography variant="body2">{t('eInvoiceManagement.analytics.totalEInvoices')}</Typography>
                 </CardContent>
               </Card>
               <Card>
@@ -705,7 +1142,7 @@ const EInvoiceManagement: React.FC = () => {
                   <Typography variant="h6" color="success">
                     {einvoices.filter(ei => ei.status === 'uploaded').length}
                   </Typography>
-                  <Typography variant="body2">업로드된 E-Invoice</Typography>
+                  <Typography variant="body2">{t('eInvoiceManagement.analytics.uploadedEInvoices')}</Typography>
                 </CardContent>
               </Card>
               <Card>
@@ -713,15 +1150,15 @@ const EInvoiceManagement: React.FC = () => {
                   <Typography variant="h6" color="info">
                     {einvoices.filter(ei => ei.ewayBillId).length}
                   </Typography>
-                  <Typography variant="body2">E-Way Bill 생성</Typography>
+                  <Typography variant="body2">{t('eInvoiceManagement.analytics.eWayGenerated')}</Typography>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent>
                   <Typography variant="h6" color="warning">
-                    ₩{einvoices.reduce((sum, ei) => sum + ei.totalAmount, 0).toLocaleString()}
+                    Rs. {einvoices.reduce((sum, ei) => sum + ei.totalAmount, 0).toLocaleString()}
                   </Typography>
-                  <Typography variant="body2">총 금액</Typography>
+                  <Typography variant="body2">{t('eInvoiceManagement.analytics.totalAmount')}</Typography>
                 </CardContent>
               </Card>
             </Box>
@@ -729,89 +1166,13 @@ const EInvoiceManagement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* E-Invoice 생성 다이얼로그 */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>새 E-Invoice 생성</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-            <FormControl fullWidth>
-              <InputLabel>프로포마 인보이스 선택</InputLabel>
-              <Select
-                value={formData.proformaInvoiceId}
-                onChange={(e) => setFormData(prev => ({ ...prev, proformaInvoiceId: e.target.value }))}
-              >
-                {proformaInvoices.map((proformaInvoice) => (
-                  <MenuItem key={proformaInvoice.id} value={proformaInvoice.id}>
-                    {proformaInvoice.invoiceNumber} - {proformaInvoice.customer.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            
-            <FormControl fullWidth>
-              <InputLabel>거래 유형</InputLabel>
-              <Select
-                value={formData.transactionType}
-                onChange={(e) => setFormData(prev => ({ ...prev, transactionType: e.target.value as any }))}
-              >
-                <MenuItem value="B2B">B2B (사업자 간 거래)</MenuItem>
-                <MenuItem value="B2C">B2C (사업자-소비자 거래)</MenuItem>
-                <MenuItem value="Export">Export (수출 거래)</MenuItem>
-                <MenuItem value="SEZ">SEZ (특별경제구역 거래)</MenuItem>
-              </Select>
-            </FormControl>
-            
-            <TextField
-              fullWidth
-              label="발행일"
-              type="date"
-              value={formData.issueDate}
-              onChange={(e) => setFormData(prev => ({ ...prev, issueDate: e.target.value }))}
-              InputLabelProps={{ shrink: true }}
-            />
-            
-            <TextField
-              fullWidth
-              label="유효기간"
-              type="date"
-              value={formData.dueDate}
-              onChange={(e) => setFormData(prev => ({ ...prev, dueDate: e.target.value }))}
-              InputLabelProps={{ shrink: true }}
-            />
-            
-            <TextField
-              fullWidth
-              label="메모"
-              multiline
-              rows={3}
-              value={formData.notes}
-              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-            />
-            
-            <TextField
-              fullWidth
-              label="결제 조건"
-              multiline
-              rows={2}
-              value={formData.terms}
-              onChange={(e) => setFormData(prev => ({ ...prev, terms: e.target.value }))}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>취소</Button>
-          <Button variant="contained" onClick={handleCreate}>
-            생성
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* E-Invoice 상세 보기 다이얼로그 */}
       <Dialog open={openViewDialog} onClose={() => setOpenViewDialog(false)} maxWidth="lg" fullWidth>
         <DialogTitle>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <ReceiptLongIcon color="primary" />
-            E-Invoice 상세 (GST 규정 준수)
+            {t('eInvoiceManagement.detail.title')}
           </Box>
         </DialogTitle>
         <DialogContent>
@@ -831,7 +1192,7 @@ const EInvoiceManagement: React.FC = () => {
                     color={getStatusColor(selectedEInvoice.status) as any}
                   />
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    발행일: {new Date(selectedEInvoice.issueDate).toLocaleDateString()}
+                    {t('eInvoiceManagement.detail.issueDate')}: {new Date(selectedEInvoice.issueDate).toLocaleDateString(i18n.language.startsWith('en') ? 'en-US' : 'ko-KR')}
                   </Typography>
                 </Box>
               </Box>
@@ -840,10 +1201,10 @@ const EInvoiceManagement: React.FC = () => {
 
               {/* 판매자 정보 */}
               <Box sx={{ mb: 3 }}>
-                <Typography variant="h6" gutterBottom>판매자 정보</Typography>
+                <Typography variant="h6" gutterBottom>{t('eInvoiceManagement.detail.sellerInfo')}</Typography>
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">회사명</Typography>
+                    <Typography variant="body2" color="text.secondary">{t('eInvoiceManagement.detail.companyName')}</Typography>
                     <Typography variant="body1">{selectedEInvoice.seller.name}</Typography>
                   </Box>
                   <Box>
@@ -851,11 +1212,11 @@ const EInvoiceManagement: React.FC = () => {
                     <Typography variant="body1">{selectedEInvoice.seller.gstin}</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">주소</Typography>
+                    <Typography variant="body2" color="text.secondary">{t('eInvoiceManagement.detail.address')}</Typography>
                     <Typography variant="body1">{selectedEInvoice.seller.address}</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">연락처</Typography>
+                    <Typography variant="body2" color="text.secondary">{t('eInvoiceManagement.detail.contact')}</Typography>
                     <Typography variant="body1">{selectedEInvoice.seller.phone}</Typography>
                   </Box>
                 </Box>
@@ -863,10 +1224,10 @@ const EInvoiceManagement: React.FC = () => {
 
               {/* 구매자 정보 */}
               <Box sx={{ mb: 3 }}>
-                <Typography variant="h6" gutterBottom>구매자 정보</Typography>
+                <Typography variant="h6" gutterBottom>{t('eInvoiceManagement.detail.buyerInfo')}</Typography>
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">회사명</Typography>
+                    <Typography variant="body2" color="text.secondary">{t('eInvoiceManagement.detail.companyName')}</Typography>
                     <Typography variant="body1">{selectedEInvoice.buyer.name}</Typography>
                   </Box>
                   <Box>
@@ -874,11 +1235,11 @@ const EInvoiceManagement: React.FC = () => {
                     <Typography variant="body1">{selectedEInvoice.buyer.gstin}</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">주소</Typography>
+                    <Typography variant="body2" color="text.secondary">{t('eInvoiceManagement.detail.address')}</Typography>
                     <Typography variant="body1">{selectedEInvoice.buyer.address}</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="body2" color="text.secondary">연락처</Typography>
+                    <Typography variant="body2" color="text.secondary">{t('eInvoiceManagement.detail.contact')}</Typography>
                     <Typography variant="body1">{selectedEInvoice.buyer.phone}</Typography>
                   </Box>
                 </Box>
@@ -886,21 +1247,21 @@ const EInvoiceManagement: React.FC = () => {
 
               {/* 상품 목록 */}
               <Box sx={{ mb: 3 }}>
-                <Typography variant="h6" gutterBottom>상품 목록</Typography>
+                <Typography variant="h6" gutterBottom>{t('eInvoiceManagement.detail.itemList')}</Typography>
                 <TableContainer component={Paper}>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell>설명</TableCell>
-                        <TableCell align="right">HSN 코드</TableCell>
-                        <TableCell align="right">수량</TableCell>
-                        <TableCell align="right">단가</TableCell>
-                        <TableCell align="right">소계</TableCell>
+                        <TableCell>{t('eInvoiceManagement.detail.columns.description')}</TableCell>
+                        <TableCell align="right">{t('eInvoiceManagement.detail.columns.hsnCode')}</TableCell>
+                        <TableCell align="right">{t('eInvoiceManagement.detail.columns.quantity')}</TableCell>
+                        <TableCell align="right">{t('eInvoiceManagement.detail.columns.unitPrice')}</TableCell>
+                        <TableCell align="right">{t('eInvoiceManagement.detail.columns.subtotal')}</TableCell>
                         <TableCell align="right">CGST</TableCell>
                         <TableCell align="right">SGST</TableCell>
                         <TableCell align="right">IGST</TableCell>
                         <TableCell align="right">Cess</TableCell>
-                        <TableCell align="right">총액</TableCell>
+                        <TableCell align="right">{t('eInvoiceManagement.detail.columns.total')}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -909,13 +1270,13 @@ const EInvoiceManagement: React.FC = () => {
                           <TableCell>{item.description}</TableCell>
                           <TableCell align="right">{item.hsnCode}</TableCell>
                           <TableCell align="right">{item.quantity}</TableCell>
-                          <TableCell align="right">₩{item.unitPrice.toLocaleString()}</TableCell>
-                          <TableCell align="right">₩{item.total.toLocaleString()}</TableCell>
-                          <TableCell align="right">₩{item.cgstAmount.toLocaleString()}</TableCell>
-                          <TableCell align="right">₩{item.sgstAmount.toLocaleString()}</TableCell>
-                          <TableCell align="right">₩{item.igstAmount.toLocaleString()}</TableCell>
-                          <TableCell align="right">₩{item.cessAmount.toLocaleString()}</TableCell>
-                          <TableCell align="right">₩{(item.total + item.cgstAmount + item.sgstAmount + item.igstAmount + item.cessAmount).toLocaleString()}</TableCell>
+                          <TableCell align="right">Rs. {item.unitPrice.toLocaleString()}</TableCell>
+                          <TableCell align="right">Rs. {item.total.toLocaleString()}</TableCell>
+                          <TableCell align="right">Rs. {item.cgstAmount.toLocaleString()}</TableCell>
+                          <TableCell align="right">Rs. {item.sgstAmount.toLocaleString()}</TableCell>
+                          <TableCell align="right">Rs. {item.igstAmount.toLocaleString()}</TableCell>
+                          <TableCell align="right">Rs. {item.cessAmount.toLocaleString()}</TableCell>
+                          <TableCell align="right">Rs. {(item.total + item.cgstAmount + item.sgstAmount + item.igstAmount + item.cessAmount).toLocaleString()}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -927,36 +1288,36 @@ const EInvoiceManagement: React.FC = () => {
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 3 }}>
                 <Box sx={{ minWidth: 400 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="body2">소계:</Typography>
-                    <Typography variant="body2">₩{selectedEInvoice.subtotal.toLocaleString()}</Typography>
+                    <Typography variant="body2">{t('eInvoiceManagement.detail.summary.subtotal')}:</Typography>
+                    <Typography variant="body2">Rs. {selectedEInvoice.subtotal.toLocaleString()}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2">CGST:</Typography>
-                    <Typography variant="body2">₩{selectedEInvoice.cgstTotal.toLocaleString()}</Typography>
+                    <Typography variant="body2">Rs. {selectedEInvoice.cgstTotal.toLocaleString()}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2">SGST:</Typography>
-                    <Typography variant="body2">₩{selectedEInvoice.sgstTotal.toLocaleString()}</Typography>
+                    <Typography variant="body2">Rs. {selectedEInvoice.sgstTotal.toLocaleString()}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2">IGST:</Typography>
-                    <Typography variant="body2">₩{selectedEInvoice.igstTotal.toLocaleString()}</Typography>
+                    <Typography variant="body2">Rs. {selectedEInvoice.igstTotal.toLocaleString()}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body2">Cess:</Typography>
-                    <Typography variant="body2">₩{selectedEInvoice.cessTotal.toLocaleString()}</Typography>
+                    <Typography variant="body2">Rs. {selectedEInvoice.cessTotal.toLocaleString()}</Typography>
                   </Box>
                   <Divider sx={{ my: 1 }} />
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="h6">총액:</Typography>
-                    <Typography variant="h6">₩{selectedEInvoice.totalAmount.toLocaleString()}</Typography>
+                    <Typography variant="h6">{t('eInvoiceManagement.detail.summary.total')}:</Typography>
+                    <Typography variant="h6">Rs. {selectedEInvoice.totalAmount.toLocaleString()}</Typography>
                   </Box>
                 </Box>
               </Box>
 
               {/* QR 코드 */}
               <Box sx={{ textAlign: 'center', mb: 3 }}>
-                <Typography variant="h6" gutterBottom>E-Invoice QR 코드</Typography>
+                <Typography variant="h6" gutterBottom>{t('eInvoiceManagement.detail.qrTitle')}</Typography>
                 <Box sx={{ 
                   display: 'flex', 
                   justifyContent: 'center',
@@ -966,7 +1327,7 @@ const EInvoiceManagement: React.FC = () => {
                   bgcolor: '#f5f5f5'
                 }}>
                   <Typography variant="body2" color="text.secondary">
-                    QR 코드: {selectedEInvoice.qrCode}
+                    {t('eInvoiceManagement.detail.qrCode')}: {selectedEInvoice.qrCode}
                   </Typography>
                 </Box>
               </Box>
@@ -976,13 +1337,13 @@ const EInvoiceManagement: React.FC = () => {
                 <Box>
                   {selectedEInvoice.notes && (
                     <Box sx={{ mb: 2 }}>
-                      <Typography variant="h6" gutterBottom>메모</Typography>
+                      <Typography variant="h6" gutterBottom>{t('eInvoiceManagement.create.notes')}</Typography>
                       <Typography variant="body2">{selectedEInvoice.notes}</Typography>
                     </Box>
                   )}
                   {selectedEInvoice.terms && (
                     <Box>
-                      <Typography variant="h6" gutterBottom>결제 조건</Typography>
+                      <Typography variant="h6" gutterBottom>{t('eInvoiceManagement.create.terms')}</Typography>
                       <Typography variant="body2">{selectedEInvoice.terms}</Typography>
                     </Box>
                   )}
@@ -992,15 +1353,15 @@ const EInvoiceManagement: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenViewDialog(false)}>닫기</Button>
+          <Button onClick={() => setOpenViewDialog(false)}>{t('common.close')}</Button>
           <Button variant="outlined" startIcon={<PrintIcon />}>
-            인쇄
+            {t('common.print')}
           </Button>
           <Button variant="outlined" startIcon={<DownloadIcon />}>
-            다운로드
+            {t('common.download')}
           </Button>
           <Button variant="contained" startIcon={<SendIcon />}>
-            업로드
+            {t('eInvoiceManagement.actions.upload')}
           </Button>
         </DialogActions>
       </Dialog>

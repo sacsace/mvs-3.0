@@ -1,4 +1,4 @@
-# MVS 3.0 성능 테스트 설정 (Artillery)
+# MVS 성능 테스트 설정 (Artillery)
 
 config:
   target: 'http://localhost:5000'
