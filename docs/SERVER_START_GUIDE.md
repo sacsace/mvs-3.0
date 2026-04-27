@@ -7,21 +7,24 @@ MVS 프로젝트의 서버를 쉽게 시작하고 관리할 수 있는 스크립
 ## 🚀 빠른 시작
 
 ### Windows (PowerShell)
+저장소 루트(`MVS/`)에서 실행합니다.
+
 ```powershell
 # 모든 서버 시작 (백엔드 + 프론트엔드)
-.\start-server.ps1
+.\server\start-server.ps1
+# 또는: npm run dev
 
 # 백엔드만 시작
-.\start-server.ps1 -BackendOnly
+.\server\start-server.ps1 -BackendOnly
 
 # 프론트엔드만 시작
-.\start-server.ps1 -FrontendOnly
+.\server\start-server.ps1 -FrontendOnly
 ```
 
 ### Windows (배치 파일)
 ```cmd
-# 더블클릭 또는 명령 프롬프트에서 실행
-start-server.bat
+# 저장소 루트에서 실행 또는 server 폴더의 start-server.bat 더블클릭
+server\start-server.bat
 ```
 
 ## 🛑 서버 중지
@@ -29,22 +32,20 @@ start-server.bat
 ### Windows (PowerShell)
 ```powershell
 # 모든 서버 중지
-.\stop-server.ps1
+.\server\stop-server.ps1
 
 # 백엔드만 중지
-.\stop-server.ps1 -BackendOnly
+.\server\stop-server.ps1 -BackendOnly
 
 # 프론트엔드만 중지
-.\stop-server.ps1 -FrontendOnly
+.\server\stop-server.ps1 -FrontendOnly
 
 # 모든 Node.js 프로세스 중지
-.\stop-server.ps1 -All
+.\server\stop-server.ps1 -All
 ```
 
 ### Windows (배치 파일)
-```cmd
-stop-server.bat
-```
+`server` 폴더에 `stop-server.bat`이 있으면 동일한 방식으로 실행합니다.
 
 ## 📝 스크립트 옵션
 
@@ -161,28 +162,28 @@ Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 ### 개발 환경에서 시작
 ```powershell
 # 모든 서버 시작
-.\start-server.ps1
+.\server\start-server.ps1
 
 # 검사 건너뛰고 빠르게 시작
-.\start-server.ps1 -SkipChecks
+.\server\start-server.ps1 -SkipChecks
 ```
 
 ### 백엔드 API만 테스트
 ```powershell
 # 백엔드만 시작
-.\start-server.ps1 -BackendOnly
+.\server\start-server.ps1 -BackendOnly
 
 # 테스트 후 중지
-.\stop-server.ps1 -BackendOnly
+.\server\stop-server.ps1 -BackendOnly
 ```
 
 ### 프론트엔드만 개발
 ```powershell
 # 프론트엔드만 시작
-.\start-server.ps1 -FrontendOnly
+.\server\start-server.ps1 -FrontendOnly
 
 # 개발 완료 후 중지
-.\stop-server.ps1 -FrontendOnly
+.\server\stop-server.ps1 -FrontendOnly
 ```
 
 ## 📝 참고사항

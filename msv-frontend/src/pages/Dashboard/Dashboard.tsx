@@ -34,8 +34,14 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  Snackbar
+  Snackbar,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
+import type { SxProps, Theme } from '@mui/material/styles';
 import {
   Dashboard as DashboardIcon,
   TrendingUp,
@@ -76,9 +82,19 @@ import {
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, ComposedChart } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { useStore, useMenuStore } from '../../store';
-import { api, noticeService, approvalService, vacationService, projectService, workBoardService } from '../../services/api';
+import {
+  api,
+  noticeService,
+  approvalService,
+  vacationService,
+  projectService,
+  workBoardService,
+  userUiPreferencesService,
+  departmentService
+} from '../../services/api';
 import { showErrorPopup } from '../../utils/errorHandler';
 import { useTranslation } from 'react-i18next';
+import DepartmentLeaveCalendar, { CALENDAR_DEPARTMENT_ALL_VALUE } from '../HR/DepartmentLeaveCalendar';
 
 // TabPanel 컴포넌트 정의
 interface TabPanelProps {
@@ -143,25 +159,56 @@ const DEFAULT_QUICK_ACTION_ROUTES = [
 ];
 const DASHBOARD_CARD_DEFAULT_IDS = [
   'approval',
-  'inventory',
   'projects',
   'lowStock',
   'recentTransactions',
-  'calendar'
+  'calendar',
+  'vacationCalendar',
+  'notice'
 ];
+
+/** 하단 대시보드 카드 밀도 (기존 대비 약 30% 축소) */
+const DASHBOARD_CARD_PAD = 1.1;
+const DASHBOARD_CARD_SPACING = 1.1;
+const DASHBOARD_CARD_CHART_MIN = 168;
+
+type DashboardCardTitleAccent = 'primary' | 'error';
+
+/** 하단 대시보드 카드 제목 하이라이트 (직각 + 좌측 액센트 — 사이드바 선택 메뉴와 동일 톤) */
+const dashboardCardTitleBar = (
+  accent: DashboardCardTitleAccent,
+  opts?: { noFlex?: boolean }
+): SxProps<Theme> => (theme) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: 1,
+  ...(opts?.noFlex ? { flex: 'none' as const } : { flex: 1, minWidth: 0 }),
+  px: 1.25,
+  py: 0.85,
+  borderRadius: 0,
+  border: '1px solid',
+  borderColor: alpha(theme.palette[accent].main, 0.28),
+  borderLeft: `3px solid ${theme.palette[accent].main}`,
+  bgcolor: alpha(theme.palette[accent].main, 0.13),
+  boxShadow: `inset 0 -1px 0 ${alpha(theme.palette[accent].main, 0.12)}`
+});
+
+/** 카드·섹션 소제목 (대시보드 카드 헤더 공통) */
+const DASHBOARD_CARD_TITLE_TYPO: SxProps<Theme> = {
+  fontWeight: 600,
+  fontSize: '0.875rem',
+  lineHeight: 1.42,
+  color: 'text.primary',
+  letterSpacing: '-0.015em'
+};
 
 const Dashboard: React.FC = () => {
   const { user } = useStore();
   const { menus, hasMenuPermission, language } = useMenuStore();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const quickActionStorageKey = user?.id ? `mvs-quick-actions:${user.id}` : null;
-  const dashboardCardStorageKey = user?.id ? `mvs-dashboard-cards:${user.id}` : null;
-  const calendarScheduleStorageKey = user?.id ? `mvs-notice-schedules:${user.id}` : null;
-  const legacyCalendarScheduleStorageKey = user?.id ? `mvs-calendar-schedules:${user.id}` : null;
-  const quickActionsInitRef = useRef<string | null>(null);
-  const dashboardCardsInitRef = useRef<string | null>(null);
-  const calendarSchedulesInitRef = useRef<string | null>(null);
+  const skipUiPrefsPersistRef = useRef(true);
+  const [uiPrefsReady, setUiPrefsReady] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
   const [stats, setStats] = useState({
     totalSales: 0,
@@ -225,6 +272,11 @@ const Dashboard: React.FC = () => {
   const [dashboardCardSearchTerm, setDashboardCardSearchTerm] = useState('');
   const [draggingDashboardCardId, setDraggingDashboardCardId] = useState<string | null>(null);
   const [customCalendarSchedules, setCustomCalendarSchedules] = useState<Record<string, CalendarScheduleItem[]>>({});
+  const [dashboardLeaveMonth, setDashboardLeaveMonth] = useState(() => new Date());
+  const [dashboardLeaveRaw, setDashboardLeaveRaw] = useState<any[]>([]);
+  /** 휴가 달력 부서 필터 — 부서 관리 API 마스터 기준 */
+  const [dashboardHrDepartmentNames, setDashboardHrDepartmentNames] = useState<string[]>([]);
+  const [dashboardLeaveDept, setDashboardLeaveDept] = useState<string>('');
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [scheduleDialogDate, setScheduleDialogDate] = useState<Date | null>(null);
   const [newScheduleTitle, setNewScheduleTitle] = useState('');
@@ -392,12 +444,98 @@ const Dashboard: React.FC = () => {
 
   const dashboardCardOptions = useMemo(() => ([
     { id: 'approval', label: language === 'en' ? 'Electronic Approval' : '전자결재' },
-    { id: 'inventory', label: language === 'en' ? 'Inventory Status' : '재고 현황' },
     { id: 'projects', label: language === 'en' ? 'My Assigned Work' : '내 담당 업무' },
     { id: 'lowStock', label: language === 'en' ? 'Low Stock Alerts' : '재고 부족 알림' },
     { id: 'recentTransactions', label: language === 'en' ? 'Recent Transactions' : '최근 거래' },
-    { id: 'calendar', label: language === 'en' ? 'Weekly Schedule' : '주간 스케줄' }
+    { id: 'calendar', label: language === 'en' ? 'Weekly Schedule' : '주간 스케줄' },
+    { id: 'vacationCalendar', label: language === 'en' ? 'Leave calendar' : '휴가 달력' },
+    { id: 'notice', label: language === 'en' ? 'Notices' : '공지사항' }
   ]), [language]);
+
+  const dashboardLeaveMapped = useMemo(() => {
+    return dashboardLeaveRaw.map((v: any) => ({
+      id: v.id,
+      employeeName: v.user?.username || '—',
+      department: (v.user?.department || '').trim() || '-',
+      vacationType: v.vacation_type,
+      startDate: v.start_date,
+      endDate: v.end_date,
+      status: v.status as 'pending' | 'approved' | 'rejected' | 'cancelled',
+      days: Number(v.days) || 0,
+    }));
+  }, [dashboardLeaveRaw]);
+
+  const dashboardLeaveDeptOptions = useMemo(() => {
+    if (!(user?.role === 'admin' || user?.role === 'root')) return [];
+    return [...dashboardHrDepartmentNames];
+  }, [dashboardHrDepartmentNames, user?.role]);
+
+  useEffect(() => {
+    if (!(user?.role === 'admin' || user?.role === 'root')) {
+      setDashboardHrDepartmentNames([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await departmentService.list(false);
+        if (cancelled) return;
+        const rows = res?.success && Array.isArray(res.data) ? res.data : [];
+        const names = rows
+          .map((d: { name?: string }) => String(d?.name ?? '').trim())
+          .filter(Boolean)
+          .sort((a: string, b: string) => a.localeCompare(b, 'ko'));
+        setDashboardHrDepartmentNames(names);
+      } catch {
+        if (!cancelled) setDashboardHrDepartmentNames([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.role]);
+
+  const dashboardLeaveForCalendar = useMemo(() => {
+    if (user?.role === 'admin' || user?.role === 'root') {
+      if (!dashboardLeaveDept) return [];
+      if (dashboardLeaveDept === CALENDAR_DEPARTMENT_ALL_VALUE) return dashboardLeaveMapped;
+      return dashboardLeaveMapped.filter((r) => r.department === dashboardLeaveDept);
+    }
+    return dashboardLeaveMapped;
+  }, [dashboardLeaveMapped, dashboardLeaveDept, user?.role]);
+
+  const dashboardLeaveCalendarItems = useMemo(
+    () =>
+      dashboardLeaveForCalendar.map(({ id, employeeName, vacationType, startDate, endDate, status, days }) => ({
+        id,
+        employeeName,
+        vacationType,
+        startDate,
+        endDate,
+        status,
+        days,
+      })),
+    [dashboardLeaveForCalendar]
+  );
+
+  useEffect(() => {
+    if (!(user?.role === 'admin' || user?.role === 'root')) return;
+    if (dashboardLeaveDeptOptions.length === 0) {
+      if (dashboardLeaveMapped.length > 0) {
+        setDashboardLeaveDept(CALENDAR_DEPARTMENT_ALL_VALUE);
+      } else {
+        setDashboardLeaveDept('');
+      }
+      return;
+    }
+    setDashboardLeaveDept((prev) => {
+      if (prev === CALENDAR_DEPARTMENT_ALL_VALUE) return CALENDAR_DEPARTMENT_ALL_VALUE;
+      if (prev && dashboardLeaveDeptOptions.includes(prev)) return prev;
+      const u = user?.department?.trim();
+      if (u && dashboardLeaveDeptOptions.includes(u)) return u;
+      return dashboardLeaveDeptOptions[0];
+    });
+  }, [dashboardLeaveDeptOptions, dashboardLeaveMapped.length, user?.department, user?.role]);
 
   const filteredDashboardCardOptions = useMemo(() => {
     const keyword = dashboardCardSearchTerm.trim().toLowerCase();
@@ -405,128 +543,131 @@ const Dashboard: React.FC = () => {
     return dashboardCardOptions.filter((card) => card.label.toLowerCase().includes(keyword));
   }, [dashboardCardOptions, dashboardCardSearchTerm]);
 
+  /** DB(users.settings.ui)에서 대시보드 UI 상태 로드 */
   useEffect(() => {
-    if (!quickActionStorageKey || quickActionCandidates.length === 0) return;
-
-    const defaultRoutes = DEFAULT_QUICK_ACTION_ROUTES.filter((route) => quickActionRouteSet.has(route));
-    const fallbackRoutes = defaultRoutes.length > 0
-      ? defaultRoutes
-      : quickActionCandidates.slice(0, 4).map((item) => item.route);
-
-    if (quickActionsInitRef.current !== quickActionStorageKey) {
-      quickActionsInitRef.current = quickActionStorageKey;
-      let initialRoutes = fallbackRoutes;
-      try {
-        const raw = localStorage.getItem(quickActionStorageKey);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            const validParsed = parsed
-              .filter((value) => typeof value === 'string')
-              .filter((route) => quickActionRouteSet.has(route))
-              .slice(0, QUICK_ACTION_MAX_COUNT);
-            if (validParsed.length > 0) {
-              initialRoutes = validParsed;
-            }
-          }
-        }
-      } catch (error) {
-        console.warn('빠른 액션 설정 파싱 오류:', error);
-      }
-      setSelectedQuickActionRoutes(initialRoutes);
+    if (!user?.id) {
+      setUiPrefsReady(false);
+      setCustomCalendarSchedules({});
+      setSelectedDashboardCards(DASHBOARD_CARD_DEFAULT_IDS);
+      setSelectedQuickActionRoutes([]);
       return;
     }
+
+    let cancelled = false;
+    setUiPrefsReady(false);
+    skipUiPrefsPersistRef.current = true;
+
+    (async () => {
+      try {
+        const data = await userUiPreferencesService.get();
+        if (cancelled) return;
+
+        const validCardSet = new Set(DASHBOARD_CARD_DEFAULT_IDS);
+        if (Array.isArray(data.dashboardCards) && data.dashboardCards.length > 0) {
+          const sanitized = data.dashboardCards.filter((id: string) => validCardSet.has(id));
+          setSelectedDashboardCards(sanitized.length > 0 ? sanitized : DASHBOARD_CARD_DEFAULT_IDS);
+        } else {
+          setSelectedDashboardCards(DASHBOARD_CARD_DEFAULT_IDS);
+        }
+
+        const rawCal = data.calendarSchedules || {};
+        const sanitizedCal: Record<string, CalendarScheduleItem[]> = {};
+        Object.entries(rawCal).forEach(([dateKey, value]) => {
+          if (!Array.isArray(value)) return;
+          const items: CalendarScheduleItem[] = value
+            .filter((item: any) => item && typeof item.title === 'string')
+            .map((item: any) => ({
+              id: String(item.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+              title: String(item.title).trim(),
+              type: (item.type === 'company_holiday' ? 'company_holiday' : 'normal') as 'normal' | 'company_holiday'
+            }))
+            .filter((item) => item.title.length > 0);
+          if (items.length > 0) sanitizedCal[dateKey] = items;
+        });
+        setCustomCalendarSchedules(sanitizedCal);
+
+        if (quickActionCandidates.length > 0) {
+          const routeSet = new Set(quickActionCandidates.map((item) => item.route));
+          const defaultRoutes = DEFAULT_QUICK_ACTION_ROUTES.filter((route) => routeSet.has(route));
+          const fallbackRoutes =
+            defaultRoutes.length > 0
+              ? defaultRoutes
+              : quickActionCandidates.slice(0, 4).map((item) => item.route);
+
+          let initialQuick = fallbackRoutes;
+          if (Array.isArray(data.quickActionRoutes) && data.quickActionRoutes.length > 0) {
+            const validParsed = data.quickActionRoutes
+              .filter((value) => typeof value === 'string')
+              .filter((route) => routeSet.has(route))
+              .slice(0, QUICK_ACTION_MAX_COUNT);
+            if (validParsed.length > 0) initialQuick = validParsed;
+          }
+          setSelectedQuickActionRoutes(initialQuick);
+        }
+
+        requestAnimationFrame(() => {
+          setUiPrefsReady(true);
+          setTimeout(() => {
+            skipUiPrefsPersistRef.current = false;
+          }, 400);
+        });
+      } catch {
+        if (!cancelled) {
+          setSelectedDashboardCards(DASHBOARD_CARD_DEFAULT_IDS);
+          setCustomCalendarSchedules({});
+          requestAnimationFrame(() => {
+            setUiPrefsReady(true);
+            setTimeout(() => {
+              skipUiPrefsPersistRef.current = false;
+            }, 400);
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, quickActionCandidates]);
+
+  /** 메뉴 권한 로딩 후 빠른 액션 경로 보정 */
+  useEffect(() => {
+    if (!uiPrefsReady || quickActionCandidates.length === 0) return;
+
+    const defaultRoutes = DEFAULT_QUICK_ACTION_ROUTES.filter((route) => quickActionRouteSet.has(route));
+    const fallbackRoutes =
+      defaultRoutes.length > 0 ? defaultRoutes : quickActionCandidates.slice(0, 4).map((item) => item.route);
 
     setSelectedQuickActionRoutes((prev) => {
       const filtered = prev.filter((route) => quickActionRouteSet.has(route)).slice(0, QUICK_ACTION_MAX_COUNT);
       if (filtered.length === 0) return fallbackRoutes;
       return filtered;
     });
-  }, [quickActionStorageKey, quickActionCandidates, quickActionRouteSet]);
+  }, [uiPrefsReady, quickActionCandidates, quickActionRouteSet]);
 
   useEffect(() => {
-    if (!quickActionStorageKey || quickActionsInitRef.current !== quickActionStorageKey) return;
-    localStorage.setItem(quickActionStorageKey, JSON.stringify(selectedQuickActionRoutes));
-  }, [quickActionStorageKey, selectedQuickActionRoutes]);
+    if (!uiPrefsReady || !user?.id || skipUiPrefsPersistRef.current) return;
+    const t = window.setTimeout(() => {
+      userUiPreferencesService.patch({ quickActionRoutes: selectedQuickActionRoutes }).catch(() => {});
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [selectedQuickActionRoutes, uiPrefsReady, user?.id]);
 
   useEffect(() => {
-    if (!dashboardCardStorageKey) return;
-    const validSet = new Set(DASHBOARD_CARD_DEFAULT_IDS);
-
-    if (dashboardCardsInitRef.current !== dashboardCardStorageKey) {
-      dashboardCardsInitRef.current = dashboardCardStorageKey;
-      try {
-        const raw = localStorage.getItem(dashboardCardStorageKey);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            const sanitized = parsed.filter((id: string) => validSet.has(id));
-            setSelectedDashboardCards(sanitized.length > 0 ? sanitized : DASHBOARD_CARD_DEFAULT_IDS);
-            return;
-          }
-        }
-      } catch {
-        // ignore invalid localStorage data
-      }
-      setSelectedDashboardCards(DASHBOARD_CARD_DEFAULT_IDS);
-      return;
-    }
-
-    setSelectedDashboardCards((prev) => {
-      const sanitized = prev.filter((id) => validSet.has(id));
-      return sanitized.length > 0 ? sanitized : DASHBOARD_CARD_DEFAULT_IDS;
-    });
-  }, [dashboardCardStorageKey]);
+    if (!uiPrefsReady || !user?.id || skipUiPrefsPersistRef.current) return;
+    const t = window.setTimeout(() => {
+      userUiPreferencesService.patch({ dashboardCards: selectedDashboardCards }).catch(() => {});
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [selectedDashboardCards, uiPrefsReady, user?.id]);
 
   useEffect(() => {
-    if (!dashboardCardStorageKey || dashboardCardsInitRef.current !== dashboardCardStorageKey) return;
-    localStorage.setItem(dashboardCardStorageKey, JSON.stringify(selectedDashboardCards));
-  }, [dashboardCardStorageKey, selectedDashboardCards]);
-
-  useEffect(() => {
-    if (!calendarScheduleStorageKey) return;
-
-    if (calendarSchedulesInitRef.current !== calendarScheduleStorageKey) {
-      calendarSchedulesInitRef.current = calendarScheduleStorageKey;
-      try {
-        const primaryRaw = localStorage.getItem(calendarScheduleStorageKey);
-        const legacyRaw = legacyCalendarScheduleStorageKey
-          ? localStorage.getItem(legacyCalendarScheduleStorageKey)
-          : null;
-        const raw = primaryRaw || legacyRaw;
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed && typeof parsed === 'object') {
-            const sanitized: Record<string, CalendarScheduleItem[]> = {};
-            Object.entries(parsed).forEach(([dateKey, value]) => {
-              if (!Array.isArray(value)) return;
-              const items: CalendarScheduleItem[] = value
-                .filter((item: any) => item && typeof item.title === 'string')
-                .map((item: any) => ({
-                  id: String(item.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
-                  title: String(item.title).trim(),
-                  type: (item.type === 'company_holiday' ? 'company_holiday' : 'normal') as 'normal' | 'company_holiday'
-                }))
-                .filter((item) => item.title.length > 0);
-              if (items.length > 0) {
-                sanitized[dateKey] = items;
-              }
-            });
-            setCustomCalendarSchedules(sanitized);
-            return;
-          }
-        }
-      } catch {
-        // ignore invalid localStorage data
-      }
-      setCustomCalendarSchedules({});
-    }
-  }, [calendarScheduleStorageKey, legacyCalendarScheduleStorageKey]);
-
-  useEffect(() => {
-    if (!calendarScheduleStorageKey || calendarSchedulesInitRef.current !== calendarScheduleStorageKey) return;
-    localStorage.setItem(calendarScheduleStorageKey, JSON.stringify(customCalendarSchedules));
-  }, [calendarScheduleStorageKey, customCalendarSchedules]);
+    if (!uiPrefsReady || !user?.id || skipUiPrefsPersistRef.current) return;
+    const t = window.setTimeout(() => {
+      userUiPreferencesService.patch({ calendarSchedules: customCalendarSchedules }).catch(() => {});
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [customCalendarSchedules, uiPrefsReady, user?.id]);
 
   const formatDateKey = (date: Date) => {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -1138,6 +1279,23 @@ const Dashboard: React.FC = () => {
         console.error('휴가 승인 대기 로드 오류:', error);
       }
 
+      // 대시보드 휴가 달력 (관리자: 전체 후 부서 필터, 일반: 동일 부서)
+      try {
+        let leaveCalRes;
+        if (user?.role === 'admin' || user?.role === 'root') {
+          leaveCalRes = await vacationService.getVacations();
+        } else {
+          leaveCalRes = await vacationService.getVacations({ same_department: true });
+        }
+        if (leaveCalRes.success) {
+          setDashboardLeaveRaw(Array.isArray(leaveCalRes.data) ? leaveCalRes.data : []);
+        } else {
+          setDashboardLeaveRaw([]);
+        }
+      } catch {
+        setDashboardLeaveRaw([]);
+      }
+
       // 내 담당 업무 로드 (업무관리 보드 기준)
       try {
         if (user?.id) {
@@ -1480,7 +1638,7 @@ const Dashboard: React.FC = () => {
           {React.cloneElement(icon, { sx: { fontSize: '1rem' } })}
         </Avatar>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="subtitle1" sx={{ fontSize: '0.875rem', fontWeight: 600, mb: 0.25, lineHeight: 1.2 }}>
+          <Typography variant="subtitle1" sx={{ fontSize: '0.8125rem', fontWeight: 600, mb: 0.25, lineHeight: 1.25 }}>
             {title}
           </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', lineHeight: 1.2, display: 'block' }}>
@@ -2036,13 +2194,57 @@ const Dashboard: React.FC = () => {
                     <Chip label={t('dashboard.pinned')} color="warning" size="small" />
                   )}
                 </Box>
-                <Typography variant="body2" color="text.secondary">
-                  {t('dashboard.targetLabel')}: {selectedNotice.targetAudience === 'all' ? t('dashboard.targetAll') : 
-                         selectedNotice.targetAudience === 'employees' ? t('dashboard.targetEmployees') : 
-                         selectedNotice.targetAudience === 'managers' ? t('dashboard.targetManagers') : t('dashboard.targetSpecific')} • 
-                  {t('dashboard.author')}: {selectedNotice.author} • 
-                  {t('dashboard.writtenDate')}: {new Date(selectedNotice.createdAt).toLocaleDateString()}
-                  {selectedNotice.publishedAt && ` • ${t('dashboard.publishedDate')}: ${new Date(selectedNotice.publishedAt).toLocaleDateString()}`}
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  component="div"
+                  sx={{ display: 'flex', flexWrap: 'wrap', columnGap: 1.5, rowGap: 0.5, alignItems: 'baseline' }}
+                >
+                  {(() => {
+                    const dateLocale = language === 'en' ? 'en-US' : 'ko-KR';
+                    const targetLabel =
+                      selectedNotice.targetAudience === 'all'
+                        ? t('dashboard.targetAll')
+                        : selectedNotice.targetAudience === 'employees'
+                          ? t('dashboard.targetEmployees')
+                          : selectedNotice.targetAudience === 'managers'
+                            ? t('dashboard.targetManagers')
+                            : t('dashboard.targetSpecific');
+                    const sep = (key: string) => (
+                      <Box
+                        key={key}
+                        component="span"
+                        sx={{ color: 'text.disabled', userSelect: 'none' }}
+                        aria-hidden
+                      >
+                        ·
+                      </Box>
+                    );
+                    const written = new Date(selectedNotice.createdAt).toLocaleDateString(dateLocale);
+                    const nodes: React.ReactNode[] = [
+                      <span key="author">
+                        {t('dashboard.author')}: {selectedNotice.author}
+                      </span>,
+                      sep('sep-a'),
+                      <span key="written">
+                        {t('dashboard.writtenDate')}: {written}
+                      </span>,
+                      sep('sep-b'),
+                      <span key="target">
+                        {t('dashboard.targetLabel')}: {targetLabel}
+                      </span>,
+                    ];
+                    if (selectedNotice.publishedAt) {
+                      const published = new Date(selectedNotice.publishedAt).toLocaleDateString(dateLocale);
+                      nodes.push(
+                        sep('sep-c'),
+                        <span key="published">
+                          {t('dashboard.publishedDate')}: {published}
+                        </span>
+                      );
+                    }
+                    return nodes;
+                  })()}
                 </Typography>
               </Box>
 
@@ -2134,7 +2336,7 @@ const Dashboard: React.FC = () => {
               navigate('/communication/notice');
             }}
           >
-            전체 보기
+            {language === 'en' ? 'View all' : '전체 보기'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2291,12 +2493,18 @@ const Dashboard: React.FC = () => {
           md: 'repeat(3, 1fr)',
           lg: 'repeat(3, 1fr)'
         },
-        gap: 2, // 간격을 3에서 2로 줄임
-        px: 0, // 패딩을 0으로 설정하여 카드들이 완전히 정렬되도록 함
-        pb: 2, // 패딩을 3에서 2로 줄임
-        gridAutoRows: '1fr' // 모든 행의 높이를 동일하게 설정
+        gap: 1.5,
+        px: 0,
+        pb: 2,
+        gridAutoRows: 'minmax(0, auto)',
+        alignItems: 'stretch',
+        '& > .MuiCard-root': {
+          minHeight: 0,
+          height: '100%',
+          alignSelf: 'stretch'
+        }
       }}>
-        {/* 전자결제 */}
+        {/* 전자결재 */}
         {selectedDashboardCards.includes('approval') && (
         <Card
           onClick={() => navigate('/work/approval')}
@@ -2311,12 +2519,14 @@ const Dashboard: React.FC = () => {
             }
           }}
         >
-          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 1.6 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.6 }}>
-              <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <AssignmentIcon color="primary" />
-                전자결제
-              </Typography>
+          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>
+              <Box sx={dashboardCardTitleBar('primary')}>
+                <AssignmentIcon color="primary" fontSize="small" />
+                <Typography component="div" variant="subtitle1" sx={DASHBOARD_CARD_TITLE_TYPO}>
+                  {language === 'en' ? 'Electronic Approval' : '전자결재'}
+                </Typography>
+              </Box>
               <Button
                 size="small"
                 variant="text"
@@ -2325,16 +2535,18 @@ const Dashboard: React.FC = () => {
                   navigate('/work/approval?tab=0');
                 }}
               >
-                모두 보기
+                {language === 'en' ? 'View all' : '모두 보기'}
               </Button>
             </Box>
             <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             {myReceivedApprovals.length > 0 || myRequestedApprovals.length > 0 ? (
               <Box sx={{ flex: 1 }}>
                 {myReceivedApprovals.length > 0 && (
-                  <Box sx={{ mb: 1.6 }}>
+                  <Box sx={{ mb: DASHBOARD_CARD_SPACING }}>
                     <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.8 }}>
-                      받은 결재 ({myReceivedApprovals.length}건)
+                      {language === 'en'
+                        ? `Received (${myReceivedApprovals.length})`
+                        : `받은 결재 (${myReceivedApprovals.length}건)`}
                     </Typography>
                     <List sx={{ p: 0 }}>
                       {myReceivedApprovals.slice(0, 3).map((approval: any) => (
@@ -2359,7 +2571,10 @@ const Dashboard: React.FC = () => {
                             }
                             secondary={
                               <Typography variant="caption" color="text.secondary">
-                                {approval.requesterName} • {new Date(approval.createdAt).toLocaleDateString('ko-KR')}
+                                {approval.requesterName} •{' '}
+                                {new Date(approval.createdAt).toLocaleDateString(
+                                  language === 'en' ? 'en-US' : 'ko-KR'
+                                )}
                               </Typography>
                             }
                           />
@@ -2371,7 +2586,9 @@ const Dashboard: React.FC = () => {
                 {myRequestedApprovals.length > 0 && (
                   <Box>
                     <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.8 }}>
-                      내가 요청한 결재 ({myRequestedApprovals.length}건)
+                      {language === 'en'
+                        ? `My requests (${myRequestedApprovals.length})`
+                        : `내가 요청한 결재 (${myRequestedApprovals.length}건)`}
                     </Typography>
                     <List sx={{ p: 0 }}>
                       {myRequestedApprovals.slice(0, 3).map((approval: any) => (
@@ -2414,69 +2631,27 @@ const Dashboard: React.FC = () => {
                 justifyContent: 'center',
                 color: 'text.secondary'
               }}>
-                <Typography variant="body2">결재 문서가 없습니다</Typography>
+                <Typography variant="body2">
+                  {language === 'en' ? 'No approval documents.' : '결재 문서가 없습니다'}
+                </Typography>
               </Box>
             )}
             </Box>
           </CardContent>
         </Card>
         )}
-
-        {/* 재고 현황 */}
-        {selectedDashboardCards.includes('inventory') && (
-        <Card sx={{ order: selectedDashboardCards.indexOf('inventory'), height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 1.6 }}>
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.6 }}>
-              <Inventory color="primary" />
-              재고 현황
-            </Typography>
-            <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {inventoryData.every((item: { name: string; value: number; color: string }) => item.value === 0) ? (
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                width: '100%',
-                height: '100%',
-                minHeight: 240,
-                color: 'text.secondary'
-              }}>
-                <Typography variant="body1">{t('dashboard.noData')}</Typography>
-              </Box>
-            ) : (
-            <ResponsiveContainer width="100%" height="100%" minHeight={240}>
-              <PieChart>
-                <Pie
-                  data={inventoryData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  dataKey="value"
-                  label={({ name, value }: { name: string; value: number }) => `${name}: ${value}`}
-                >
-                  {inventoryData.map((entry: { name: string; value: number; color: string }, index: number) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <RechartsTooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            )}
-            </Box>
-          </CardContent>
-        </Card>
-        )}
-
 
         {/* 내 담당 업무 */}
         {selectedDashboardCards.includes('projects') && (
         <Card sx={{ order: selectedDashboardCards.indexOf('projects'), height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 1.6 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.6 }}>
-              <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <WorkIcon color="primary" />
-                {language === 'en' ? 'My Assigned Work' : '내 담당 업무'}
-              </Typography>
+          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>
+              <Box sx={dashboardCardTitleBar('primary')}>
+                <WorkIcon color="primary" fontSize="small" />
+                <Typography component="div" variant="subtitle1" sx={DASHBOARD_CARD_TITLE_TYPO}>
+                  {language === 'en' ? 'My Assigned Work' : '내 담당 업무'}
+                </Typography>
+              </Box>
               <Button
                 size="small"
                 variant="text"
@@ -2555,22 +2730,24 @@ const Dashboard: React.FC = () => {
         {/* 재고 부족 알림 */}
         {selectedDashboardCards.includes('lowStock') && (
         <Card sx={{ order: selectedDashboardCards.indexOf('lowStock'), height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 1.6 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.6 }}>
-              <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <WarningIcon color="error" />
-                재고 부족 알림
-              </Typography>
+          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'hidden', minHeight: 0 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1, flexShrink: 0 }}>
+              <Box sx={dashboardCardTitleBar('error')}>
+                <WarningIcon color="error" fontSize="small" />
+                <Typography component="div" variant="subtitle1" sx={DASHBOARD_CARD_TITLE_TYPO}>
+                  {language === 'en' ? 'Low Stock Alerts' : '재고 부족 알림'}
+                </Typography>
+              </Box>
               <Button
                 size="small"
                 variant="text"
                 onClick={() => navigate('/inventory')}
               >
-                모두 보기
+                {language === 'en' ? 'View all' : '모두 보기'}
               </Button>
             </Box>
             {lowStockItems.length > 0 ? (
-              <Box sx={{ flex: 1, overflow: 'auto' }}>
+              <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
                 <List sx={{ p: 0 }}>
                   {lowStockItems.slice(0, 5).map((item: any) => (
                     <ListItem
@@ -2596,7 +2773,9 @@ const Dashboard: React.FC = () => {
                         }
                         secondary={
                           <Typography variant="caption" color="error.main">
-                            재고: {item.stock_quantity || 0}개 (부족)
+                            {language === 'en'
+                              ? `Stock: ${Number(item.stock_quantity ?? 0)} (min. ${Number(item.min_stock_level ?? 0)})`
+                              : `재고: ${Number(item.stock_quantity ?? 0)}개 · 최소 ${Number(item.min_stock_level ?? 0)}개 이하`}
                           </Typography>
                         }
                       />
@@ -2612,7 +2791,9 @@ const Dashboard: React.FC = () => {
                 justifyContent: 'center',
                 color: 'text.secondary'
               }}>
-                <Typography variant="body2">재고 부족 알림이 없습니다</Typography>
+                <Typography variant="body2">
+                  {language === 'en' ? 'No low stock alerts.' : '재고 부족 알림이 없습니다'}
+                </Typography>
               </Box>
             )}
           </CardContent>
@@ -2622,18 +2803,20 @@ const Dashboard: React.FC = () => {
         {/* 최근 거래 */}
         {selectedDashboardCards.includes('recentTransactions') && (
         <Card sx={{ order: selectedDashboardCards.indexOf('recentTransactions'), height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 1.6 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.6 }}>
-              <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Receipt color="primary" />
-                최근 거래
-              </Typography>
+          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>
+              <Box sx={dashboardCardTitleBar('primary')}>
+                <Receipt color="primary" fontSize="small" />
+                <Typography component="div" variant="subtitle1" sx={DASHBOARD_CARD_TITLE_TYPO}>
+                  {language === 'en' ? 'Recent transactions' : '최근 거래'}
+                </Typography>
+              </Box>
               <Button
                 size="small"
                 variant="text"
                 onClick={() => navigate('/accounting/invoices')}
               >
-                모두 보기
+                {language === 'en' ? 'View all' : '모두 보기'}
               </Button>
             </Box>
             {recentInvoices.length > 0 ? (
@@ -2681,7 +2864,9 @@ const Dashboard: React.FC = () => {
                 justifyContent: 'center',
                 color: 'text.secondary'
               }}>
-                <Typography variant="body2">최근 거래가 없습니다</Typography>
+                <Typography variant="body2">
+                  {language === 'en' ? 'No recent transactions.' : '최근 거래가 없습니다'}
+                </Typography>
               </Box>
             )}
           </CardContent>
@@ -2691,11 +2876,15 @@ const Dashboard: React.FC = () => {
         {/* 달력 */}
         {selectedDashboardCards.includes('calendar') && (
         <Card sx={{ order: selectedDashboardCards.indexOf('calendar'), height: '100%', display: 'flex', flexDirection: 'column' }}>
-          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: 1.6 }}>
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.6 }}>
-              <CalendarTodayIcon color="primary" />
-              {language === 'en' ? 'Weekly Schedule' : '주간 스케줄'}
-            </Typography>
+          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
+            <Box sx={{ mb: DASHBOARD_CARD_SPACING }}>
+              <Box sx={dashboardCardTitleBar('primary', { noFlex: true })}>
+                <CalendarTodayIcon color="primary" fontSize="small" />
+                <Typography component="div" variant="subtitle1" sx={DASHBOARD_CARD_TITLE_TYPO}>
+                  {language === 'en' ? 'Weekly Schedule' : '주간 스케줄'}
+                </Typography>
+              </Box>
+            </Box>
             {(() => {
               const weekDays = language === 'en'
                 ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -2721,7 +2910,7 @@ const Dashboard: React.FC = () => {
               return (
                 <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                   {/* 주차 네비게이션 */}
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.6 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING }}>
                     <IconButton
                       size="small"
                       onClick={() => setCurrentWeekStart((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 7))}
@@ -2882,6 +3071,160 @@ const Dashboard: React.FC = () => {
                 </Box>
               );
             })()}
+          </CardContent>
+        </Card>
+        )}
+
+        {/* 휴가 달력 (부서 일정) */}
+        {selectedDashboardCards.includes('vacationCalendar') && (
+        <Card
+          sx={{
+            order: selectedDashboardCards.indexOf('vacationCalendar'),
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'hidden', minHeight: 0 }}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: DASHBOARD_CARD_SPACING, flexShrink: 0 }}>
+              <Box sx={dashboardCardTitleBar('primary')}>
+                <WorkIcon color="primary" fontSize="small" />
+                <Typography component="div" variant="subtitle1" sx={DASHBOARD_CARD_TITLE_TYPO}>
+                  {t('dashboard.vacationLeaveCalendar')}
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                {(user?.role === 'admin' || user?.role === 'root') &&
+                (dashboardLeaveDeptOptions.length > 0 || dashboardLeaveMapped.length > 0) ? (
+                  <FormControl size="small" sx={{ minWidth: 140 }}>
+                    <InputLabel id="dash-vcal-dept">{t('vacationManagement.departmentFilter')}</InputLabel>
+                    <Select
+                      labelId="dash-vcal-dept"
+                      label={t('vacationManagement.departmentFilter')}
+                      value={dashboardLeaveDept}
+                      onChange={(e) => setDashboardLeaveDept(e.target.value as string)}
+                    >
+                      <MenuItem value={CALENDAR_DEPARTMENT_ALL_VALUE}>
+                        {t('vacationManagement.allDepartments')}
+                      </MenuItem>
+                      {dashboardLeaveDeptOptions.map((d) => (
+                        <MenuItem key={d} value={d}>
+                          {d}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                ) : null}
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => navigate('/hr/leave')}
+                >
+                  {language === 'en' ? 'Open HR' : '휴가 관리'}
+                </Button>
+              </Box>
+            </Box>
+            <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0, maxHeight: { xs: 360, sm: 420 } }}>
+              {(user?.role === 'admin' || user?.role === 'root') &&
+              dashboardLeaveDeptOptions.length === 0 &&
+              dashboardLeaveMapped.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  {t('dashboard.vacationLeaveCalendarEmpty')}
+                </Typography>
+              ) : (
+                <>
+                  <DepartmentLeaveCalendar
+                    vacations={dashboardLeaveCalendarItems}
+                    viewMonth={dashboardLeaveMonth}
+                    onMonthChange={setDashboardLeaveMonth}
+                    onSelectVacation={(v) => {
+                      const tab = user?.role === 'admin' || user?.role === 'root' ? '0' : '1';
+                      navigate(`/hr/leave?tab=${tab}&id=${v.id}`);
+                    }}
+                    language={i18n.language?.startsWith('en') ? 'en' : 'ko'}
+                  />
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+                    {t('vacationManagement.calendarStatusLegend')}
+                  </Typography>
+                </>
+              )}
+            </Box>
+          </CardContent>
+        </Card>
+        )}
+
+        {/* 공지사항 */}
+        {selectedDashboardCards.includes('notice') && (
+        <Card sx={{ order: selectedDashboardCards.indexOf('notice'), height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>
+              <Box sx={dashboardCardTitleBar('primary')}>
+                <AnnouncementIcon color="primary" fontSize="small" />
+                <Typography component="div" variant="subtitle1" sx={DASHBOARD_CARD_TITLE_TYPO}>
+                  {language === 'en' ? 'Notices' : '공지사항'}
+                </Typography>
+              </Box>
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => navigate('/communication/notice')}
+              >
+                {language === 'en' ? 'View all' : '모두 보기'}
+              </Button>
+            </Box>
+            {notices.length > 0 ? (
+              <Box sx={{ flex: 1, overflow: 'auto' }}>
+                <List sx={{ p: 0 }}>
+                  {notices.slice(0, 5).map((notice: any) => (
+                    <ListItem
+                      key={notice.id}
+                      sx={{
+                        px: 0,
+                        py: 0.45,
+                        cursor: 'pointer',
+                        '&:hover': { bgcolor: 'action.hover' }
+                      }}
+                      onClick={() => {
+                        setSelectedNotice(notice);
+                        setNoticeDialogOpen(true);
+                      }}
+                    >
+                      <ListItemText
+                        primary={
+                          <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                            {notice.title || '—'}
+                          </Typography>
+                        }
+                        secondary={
+                          <Typography variant="caption" color="text.secondary">
+                            {notice.published_at || notice.created_at || notice.createdAt
+                              ? new Date(
+                                  notice.published_at || notice.created_at || notice.createdAt
+                                ).toLocaleDateString(language === 'en' ? 'en-US' : 'ko-KR')
+                              : ''}
+                          </Typography>
+                        }
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
+            ) : (
+              <Box
+                sx={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'text.secondary',
+                  minHeight: 72
+                }}
+              >
+                <Typography variant="body2">
+                  {language === 'en' ? 'No notices.' : '등록된 공지가 없습니다.'}
+                </Typography>
+              </Box>
+            )}
           </CardContent>
         </Card>
         )}

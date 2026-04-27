@@ -721,7 +721,22 @@ const BudgetManagement: React.FC = () => {
             </Typography>
             <TableContainer>
               <Table>
-                <TableHead>
+                <TableHead
+                  sx={{
+                    bgcolor: 'background.paper',
+                    '& .MuiTableCell-head': {
+                      bgcolor: 'background.paper',
+                      color: 'text.primary',
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      textTransform: 'none',
+                      letterSpacing: 'normal',
+                      borderBottom: '2px solid',
+                      borderColor: 'primary.main',
+                      py: 1.25
+                    }
+                  }}
+                >
                   <TableRow>
                     <TableCell>카테고리</TableCell>
                     <TableCell>세부 항목</TableCell>
@@ -1068,7 +1083,25 @@ const BudgetManagement: React.FC = () => {
           ) : (
             <TableContainer>
               <Table>
-                <TableHead>
+                <TableHead
+                  sx={{
+                    bgcolor: 'background.paper',
+                    '& .MuiTableCell-head': {
+                      bgcolor: 'background.paper',
+                      color: 'text.primary',
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      textTransform: 'none',
+                      letterSpacing: 'normal',
+                      borderBottom: '2px solid',
+                      borderColor: 'primary.main',
+                      py: 1.25
+                    },
+                    '& .MuiTableCell-head:last-of-type': {
+                      textAlign: 'center'
+                    }
+                  }}
+                >
                   <TableRow>
                     <TableCell>예산 정보</TableCell>
                     <TableCell>유형</TableCell>
@@ -1490,7 +1523,22 @@ const BudgetManagement: React.FC = () => {
               </Typography>
               <TableContainer component={Paper} variant="outlined">
                 <Table size="small">
-                  <TableHead>
+                  <TableHead
+                    sx={{
+                      bgcolor: 'background.paper',
+                      '& .MuiTableCell-head': {
+                        bgcolor: 'background.paper',
+                        color: 'text.primary',
+                        fontWeight: 600,
+                        fontSize: '0.875rem',
+                        textTransform: 'none',
+                        letterSpacing: 'normal',
+                        borderBottom: '2px solid',
+                        borderColor: 'primary.main',
+                        py: 1.25
+                      }
+                    }}
+                  >
                     <TableRow>
                       <TableCell>카테고리</TableCell>
                       <TableCell>세부 항목</TableCell>

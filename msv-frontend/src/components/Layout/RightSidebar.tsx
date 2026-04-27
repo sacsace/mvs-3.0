@@ -58,6 +58,8 @@ const RightSidebar: React.FC = () => {
         ]
       };
     } else if (path.includes('/inventory')) {
+      const stockIn = path.includes('/stock-in');
+      const stockOut = path.includes('/stock-out');
       return {
         title: '재고관리',
         icon: <BusinessIcon />,
@@ -65,8 +67,8 @@ const RightSidebar: React.FC = () => {
         status: 'active',
         items: [
           { label: '재고 현황', status: 'completed' },
-          { label: '입고 관리', status: 'pending' },
-          { label: '출고 관리', status: 'pending' },
+          { label: '출고 관리', status: stockOut ? 'completed' : 'pending' },
+          { label: '입고(품목 등록)', status: stockIn ? 'completed' : 'pending' },
           { label: '재고 조정', status: 'pending' }
         ]
       };

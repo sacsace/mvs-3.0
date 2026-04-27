@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -23,17 +23,23 @@ import {
   Snackbar,
   Pagination,
   InputAdornment,
-  Divider,
+  Tabs,
+  Tab,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
+import type { SelectChangeEvent } from '@mui/material/Select';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
   Delete as DeleteIcon,
-  Visibility as ViewIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
   Description as QuotationIcon,
   Print as PrintIcon,
+  PictureAsPdf as PictureAsPdfIcon,
   Email as EmailIcon,
   CheckCircle as ApprovedIcon,
   Pending as PendingIcon,
@@ -43,7 +49,9 @@ import { useStore } from '../../store';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useTranslation } from 'react-i18next';
-import { companyService, partnerService, quotationService } from '../../services/api';
+import { companyService, partnerService, quotationService, userService } from '../../services/api';
+import { downloadQuotationPdf } from '../../utils/quotationPdf';
+import { parseEmailRecipientsList } from '../../utils/emailRecipients';
 
 interface QuotationItem {
   id: number;
@@ -65,7 +73,7 @@ interface Quotation {
   customerAddress: string;
   issueDate: string;
   validUntil: string;
-  status: 'draft' | 'sent' | 'approved' | 'rejected' | 'expired';
+  status: 'draft' | 'sent' | 'pending_approval' | 'approved' | 'rejected' | 'expired';
   subtotal: number;
   taxRate: number;
   taxAmount: number;
@@ -74,7 +82,101 @@ interface Quotation {
   notes: string;
   items: QuotationItem[];
   createdBy: string;
+  createdByUserId?: number;
   lastModified: string;
+  approverUserId?: number;
+  approverName?: string;
+  /** 승인자 반려 시 사유 */
+  rejectionReason?: string;
+}
+
+function normalizeItems(raw: unknown): QuotationItem[] {
+  let arr: any[] = [];
+  if (Array.isArray(raw)) arr = raw;
+  else if (typeof raw === 'string') {
+    try {
+      const p = JSON.parse(raw);
+      arr = Array.isArray(p) ? p : [];
+    } catch {
+      arr = [];
+    }
+  }
+  return arr.map((row, idx) => ({
+    id: Number(row.id) || idx + 1,
+    productName: String(row.productName ?? row.product_name ?? ''),
+    description: String(row.description ?? ''),
+    quantity: Number(row.quantity) || 0,
+    unitPrice: Number(row.unitPrice ?? row.unit_price) || 0,
+    totalPrice: Number(row.totalPrice ?? row.total_price) || 0,
+    discount: Number(row.discount) || 0,
+    finalPrice: Number(row.finalPrice ?? row.final_price ?? row.totalPrice ?? row.total_price) || 0
+  }));
+}
+
+function mapQuotationFromApi(row: any): Quotation {
+  const statusRaw = row.status as string;
+  const status: Quotation['status'] =
+    statusRaw === 'accepted'
+      ? 'approved'
+      : statusRaw === 'pending_approval'
+        ? 'pending_approval'
+        : (statusRaw as Quotation['status']);
+
+  const createdRaw = row.created_at ?? row.createdAt;
+  const updatedRaw = row.updated_at ?? row.updatedAt;
+  const created = createdRaw ? String(createdRaw).split('T')[0] : '';
+  const updated = updatedRaw ? String(updatedRaw).replace('T', ' ').substring(0, 19) : '';
+
+  return {
+    id: row.id,
+    quotationNumber: row.quotation_number || '',
+    customerName: row.customer_name || '',
+    customerEmail: row.customer_email || '',
+    customerPhone: row.customer_phone || '',
+    customerAddress: row.customer_address || '',
+    issueDate: created,
+    validUntil: row.valid_until ? String(row.valid_until).split('T')[0] : '',
+    status,
+    subtotal: Number(row.subtotal) || 0,
+    taxRate: Number(row.tax_rate) || 0,
+    taxAmount: Number(row.tax_amount) || 0,
+    discount: Number(row.discount) || 0,
+    totalAmount: Number(row.total_amount) || 0,
+    notes: row.notes || '',
+    items: normalizeItems(row.items),
+    createdBy: row.creator?.username || row.creator?.email || String(row.created_by ?? ''),
+    createdByUserId: row.created_by,
+    lastModified: updated,
+    approverUserId: row.approver_user_id,
+    approverName: row.approver?.username || row.approver?.email || '',
+    rejectionReason: row.rejection_reason ? String(row.rejection_reason) : ''
+  };
+}
+
+/** 승인 버튼 — 앱 Primary(틸) + 흰 글자로 대비 확보 (contained success 시 글자색 깨짐 방지) */
+const QUOTATION_APPROVE_BUTTON_SX = {
+  color: '#ffffff',
+  bgcolor: 'primary.main',
+  '&:hover': {
+    bgcolor: 'primary.dark',
+    color: '#ffffff'
+  },
+  '&:focus-visible': {
+    outline: '2px solid',
+    outlineColor: 'primary.light',
+    outlineOffset: 2
+  }
+} as const;
+
+/** 오늘(로컬) 기준 N일 후 YYYY-MM-DD — 견적 만료일 기본값 등 */
+function addDaysLocalIso(days: number): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 interface PartnerCustomer {
@@ -93,6 +195,8 @@ interface CompanyInfo {
   phone?: string;
   email?: string;
   business_number?: string;
+  /** 시스템 설정 등에서 등록한 로고(data URL 또는 URL) */
+  company_logo?: string;
 }
 
 const QuotationManagement: React.FC = () => {
@@ -103,7 +207,7 @@ const QuotationManagement: React.FC = () => {
   const [filteredQuotations, setFilteredQuotations] = useState<Quotation[]>([]);
   const [partners, setPartners] = useState<PartnerCustomer[]>([]);
   const [issuingCompany, setIssuingCompany] = useState<CompanyInfo | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);
@@ -114,6 +218,16 @@ const QuotationManagement: React.FC = () => {
   const [customerFilter, setCustomerFilter] = useState('');
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [listTab, setListTab] = useState<'requested' | 'pending'>('requested');
+  const [companyUsers, setCompanyUsers] = useState<Array<{ id: number; username: string; email: string }>>([]);
+  const [pdfSaving, setPdfSaving] = useState(false);
+  /** 신규 작성 시 API가 DB(숨김 건 포함) 기준으로 채번한 번호 */
+  const [suggestedQuotationNumber, setSuggestedQuotationNumber] = useState<string | null>(null);
+  const quotationPrintRef = useRef<HTMLDivElement | null>(null);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectTargetId, setRejectTargetId] = useState<number | null>(null);
+  const [rejectReasonInput, setRejectReasonInput] = useState('');
+  const [rejectSubmitting, setRejectSubmitting] = useState(false);
 
   const loadQuotationData = useCallback(async () => {
     setLoading(true);
@@ -121,7 +235,7 @@ const QuotationManagement: React.FC = () => {
       const response = await quotationService.getQuotations({});
       if (response?.success) {
         const list = Array.isArray(response.data) ? response.data : [];
-        setQuotations(list);
+        setQuotations(list.map(mapQuotationFromApi));
       } else {
         setQuotations([]);
       }
@@ -132,6 +246,29 @@ const QuotationManagement: React.FC = () => {
       setLoading(false);
     }
   }, [t]);
+
+  const loadCompanyUsers = useCallback(async () => {
+    try {
+      if (!user?.company_id) {
+        setCompanyUsers([]);
+        return;
+      }
+      const response = await userService.getUsers({ company_id: Number(user.company_id) });
+      if (response?.success && Array.isArray(response.data)) {
+        setCompanyUsers(
+          response.data
+            .filter((u: any) => u.status === 'active')
+            .map((u: any) => ({
+              id: u.id,
+              username: u.username || u.userid || '',
+              email: u.email || ''
+            }))
+        );
+      }
+    } catch (e) {
+      console.error('사용자 목록 로드 오류:', e);
+    }
+  }, [user?.company_id]);
 
   const loadPartners = useCallback(async () => {
     try {
@@ -170,7 +307,8 @@ const QuotationManagement: React.FC = () => {
           address: data.address || '',
           phone: data.phone || '',
           email: data.email || '',
-          business_number: data.business_number || ''
+          business_number: data.business_number || '',
+          company_logo: typeof data.company_logo === 'string' ? data.company_logo : ''
         });
       }
     } catch (error) {
@@ -206,11 +344,36 @@ const QuotationManagement: React.FC = () => {
     loadQuotationData();
     loadPartners();
     loadIssuingCompany();
-  }, [loadIssuingCompany, loadPartners, loadQuotationData]);
+    loadCompanyUsers();
+  }, [loadCompanyUsers, loadIssuingCompany, loadPartners, loadQuotationData]);
 
   useEffect(() => {
     filterQuotations();
   }, [filterQuotations]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [listTab, searchTerm, statusFilter, customerFilter]);
+
+  useEffect(() => {
+    if (!isCreating || selectedQuotation) {
+      setSuggestedQuotationNumber(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await quotationService.suggestNextQuotationNumber();
+        const num = (res as any)?.data?.quotation_number;
+        if (!cancelled && num) setSuggestedQuotationNumber(String(num));
+      } catch {
+        if (!cancelled) setSuggestedQuotationNumber(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isCreating, selectedQuotation]);
 
   const getNextQuotationNumber = () => {
     const year = new Date().getFullYear();
@@ -228,20 +391,43 @@ const QuotationManagement: React.FC = () => {
     return `QUO-${year}-${nextSeq}`;
   };
 
+  const chipCompactSx = {
+    maxWidth: '100%',
+    height: 'auto',
+    minHeight: 24,
+    '& .MuiChip-label': {
+      whiteSpace: 'normal',
+      textAlign: 'center',
+      display: 'block',
+      py: 0.25,
+      px: 0.5,
+      fontSize: { xs: '0.65rem', sm: '0.75rem' },
+      lineHeight: 1.2
+    }
+  } as const;
+
   const getStatusChip = (status: string) => {
     switch (status) {
       case 'draft':
-        return <Chip label={t('quotationManagement.statusDraft')} color="default" size="small" />;
+        return (
+          <Chip label={t('quotationManagement.statusDraft')} color="default" size="small" sx={chipCompactSx} />
+        );
       case 'sent':
-        return <Chip label={t('quotationManagement.statusSent')} color="info" size="small" />;
+        return <Chip label={t('quotationManagement.statusSent')} color="info" size="small" sx={chipCompactSx} />;
+      case 'pending_approval':
+        return (
+          <Chip label={t('quotationManagement.statusPendingApproval')} color="warning" size="small" sx={chipCompactSx} />
+        );
       case 'approved':
-        return <Chip label={t('quotationManagement.statusApproved')} color="success" size="small" />;
+        return (
+          <Chip label={t('quotationManagement.statusApproved')} color="success" size="small" sx={chipCompactSx} />
+        );
       case 'rejected':
-        return <Chip label={t('quotationManagement.statusRejected')} color="error" size="small" />;
+        return <Chip label={t('quotationManagement.statusRejected')} color="error" size="small" sx={chipCompactSx} />;
       case 'expired':
-        return <Chip label={t('quotationManagement.statusExpired')} color="warning" size="small" />;
+        return <Chip label={t('quotationManagement.statusExpired')} color="warning" size="small" sx={chipCompactSx} />;
       default:
-        return <Chip label={t('quotationManagement.statusUnknown')} color="default" size="small" />;
+        return <Chip label={t('quotationManagement.statusUnknown')} color="default" size="small" sx={chipCompactSx} />;
     }
   };
 
@@ -251,6 +437,8 @@ const QuotationManagement: React.FC = () => {
         return <PendingIcon color="action" />;
       case 'sent':
         return <EmailIcon color="info" />;
+      case 'pending_approval':
+        return <PendingIcon color="warning" />;
       case 'approved':
         return <ApprovedIcon color="success" />;
       case 'rejected':
@@ -262,13 +450,18 @@ const QuotationManagement: React.FC = () => {
     }
   };
 
+  /** 승인(accepted)·발송(sent)만 PDF 저장·브라우저 인쇄·메일 — draft·승인대기·반려 등은 불가 */
+  const canShareApprovedQuotation = (q: Quotation | null | undefined) =>
+    !!q && (q.status === 'approved' || q.status === 'sent');
+
   const handleAddQuotation = () => {
     setSelectedQuotation(null);
     setIsCreating(true);
     setIsEditing(false);
   };
 
-  const handleEditQuotation = (quotation: Quotation) => {
+  /** 목록 행 클릭 → 상세(보기). 수정 가능한 상태는 폼에서 편집 후 하단 저장 */
+  const handleOpenQuotationDetail = (quotation: Quotation) => {
     setSelectedQuotation(quotation);
     setIsEditing(true);
     setIsCreating(false);
@@ -279,8 +472,13 @@ const QuotationManagement: React.FC = () => {
       t('quotationManagement.confirmDelete'),
       async () => {
         try {
-          setQuotations(prev => prev.filter(quotation => quotation.id !== id));
-          setSuccess(t('quotationManagement.deleted'));
+          const res = await quotationService.deleteQuotation(id);
+          if ((res as any)?.success) {
+            await loadQuotationData();
+            setSuccess(t('quotationManagement.deleted'));
+          } else {
+            setError(t('quotationManagement.deleteFailed'));
+          }
         } catch (error) {
           console.error('삭제 오류:', error);
           setError(t('quotationManagement.deleteFailed'));
@@ -290,36 +488,179 @@ const QuotationManagement: React.FC = () => {
     );
   };
 
-  const handleSaveQuotation = async (quotationData: Partial<Quotation>) => {
+  const handleSaveQuotation = async (
+    quotationData: Partial<Quotation> & { quotationNumber?: string; approverUserId?: number }
+  ) => {
     try {
-      if (selectedQuotation) {
-        // 수정
-        setQuotations(prev =>
-          prev.map(quotation => quotation.id === selectedQuotation.id ? { 
-            ...quotation, 
-            ...quotationData,
-            quotationNumber: quotation.quotationNumber
-          } : quotation)
-        );
-        setSuccess(t('quotationManagement.updated'));
-      } else {
-        // 추가
-        const nextQuotationNumber = getNextQuotationNumber();
-        const newQuotation: Quotation = {
-          id: Math.max(...quotations.map(q => q.id)) + 1,
-          quotationNumber: nextQuotationNumber,
-          ...quotationData,
-          lastModified: new Date().toISOString().replace('T', ' ').substring(0, 19)
-        } as Quotation;
-        setQuotations(prev => [...prev, newQuotation]);
-        setSuccess(t('quotationManagement.created'));
+      if (
+        selectedQuotation &&
+        ['approved', 'sent', 'rejected', 'expired'].includes(selectedQuotation.status)
+      ) {
+        setError(t('quotationManagement.editLocked'));
+        return;
       }
+      setLoading(true);
+      const payload = {
+        customer_name: quotationData.customerName,
+        customer_email: quotationData.customerEmail,
+        customer_phone: quotationData.customerPhone,
+        customer_address: quotationData.customerAddress,
+        items: quotationData.items,
+        subtotal: quotationData.subtotal,
+        tax_rate: quotationData.taxRate,
+        tax_amount: quotationData.taxAmount,
+        discount: quotationData.discount,
+        total_amount: quotationData.totalAmount,
+        currency: 'INR',
+        valid_until: quotationData.validUntil,
+        notes: quotationData.notes,
+        approver_user_id: quotationData.approverUserId,
+        status: 'pending_approval' as const
+      };
+
+      if (selectedQuotation) {
+        const res = await quotationService.updateQuotation(selectedQuotation.id, {
+          customer_name: payload.customer_name,
+          customer_email: payload.customer_email,
+          customer_phone: payload.customer_phone,
+          customer_address: payload.customer_address,
+          items: payload.items,
+          subtotal: payload.subtotal,
+          tax_rate: payload.tax_rate,
+          tax_amount: payload.tax_amount,
+          discount: payload.discount,
+          total_amount: payload.total_amount,
+          currency: payload.currency,
+          valid_until: payload.valid_until,
+          notes: payload.notes,
+          approver_user_id: payload.approver_user_id,
+          status: payload.status
+        });
+        if ((res as any)?.success) {
+          setSuccess(t('quotationManagement.updated'));
+        } else {
+          setError(t('quotationManagement.saveFailed'));
+          return;
+        }
+      } else {
+        const year = new Date().getFullYear();
+        const fresh = await quotationService.suggestNextQuotationNumber({ year });
+        let qn =
+          (fresh as any)?.data?.quotation_number ||
+          quotationData.quotationNumber ||
+          suggestedQuotationNumber ||
+          getNextQuotationNumber();
+
+        const createOnce = async (num: string) =>
+          quotationService.createQuotation({
+            ...payload,
+            quotation_number: num
+          });
+
+        try {
+          const res = await createOnce(qn);
+          if ((res as any)?.success) {
+            setSuccess(t('quotationManagement.created'));
+          } else {
+            setError((res as any)?.message || t('quotationManagement.saveFailed'));
+            return;
+          }
+        } catch (firstErr: any) {
+          const msg = firstErr?.response?.data?.message;
+          const dup =
+            String(msg || '').includes('이미 존재') ||
+            firstErr?.response?.status === 400;
+          if (!dup) {
+            setError(msg || t('quotationManagement.saveFailed'));
+            return;
+          }
+          const fresh2 = await quotationService.suggestNextQuotationNumber({ year });
+          const qn2 = (fresh2 as any)?.data?.quotation_number;
+          if (!qn2 || qn2 === qn) {
+            setError(msg || t('quotationManagement.saveFailed'));
+            return;
+          }
+          setSuggestedQuotationNumber(qn2);
+          try {
+            const res2 = await createOnce(qn2);
+            if ((res2 as any)?.success) {
+              setSuccess(t('quotationManagement.created'));
+            } else {
+              setError((res2 as any)?.message || t('quotationManagement.saveFailed'));
+              return;
+            }
+          } catch (e2: any) {
+            setError(e2?.response?.data?.message || t('quotationManagement.saveFailed'));
+            return;
+          }
+        }
+      }
+      await loadQuotationData();
       setIsCreating(false);
       setIsEditing(false);
       setSelectedQuotation(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error('저장 오류:', error);
-      setError(t('quotationManagement.saveFailed'));
+      setError(error?.response?.data?.message || t('quotationManagement.saveFailed'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApproveQuotation = async (id: number) => {
+    try {
+      const res = await quotationService.approveQuotation(id);
+      if ((res as any)?.success) {
+        setSuccess(t('quotationManagement.approveSuccess'));
+        await loadQuotationData();
+        if (selectedQuotation?.id === id) {
+          handleCancelForm();
+        }
+      } else {
+        setError(t('quotationManagement.saveFailed'));
+      }
+    } catch (e: any) {
+      setError(e?.response?.data?.message || t('quotationManagement.saveFailed'));
+    }
+  };
+
+  const openRejectDialog = (id: number) => {
+    setRejectTargetId(id);
+    setRejectReasonInput('');
+    setRejectDialogOpen(true);
+  };
+
+  const closeRejectDialog = () => {
+    setRejectDialogOpen(false);
+    setRejectTargetId(null);
+    setRejectReasonInput('');
+  };
+
+  const handleConfirmReject = async () => {
+    const reason = rejectReasonInput.trim();
+    if (!reason) {
+      setError(t('quotationManagement.rejectionReasonRequired'));
+      return;
+    }
+    if (rejectTargetId == null) return;
+    const rejectedId = rejectTargetId;
+    try {
+      setRejectSubmitting(true);
+      const res = await quotationService.rejectQuotation(rejectedId, { reason });
+      if ((res as any)?.success) {
+        setSuccess(t('quotationManagement.rejectSuccess'));
+        closeRejectDialog();
+        await loadQuotationData();
+        if (selectedQuotation?.id === rejectedId) {
+          handleCancelForm();
+        }
+      } else {
+        setError(t('quotationManagement.saveFailed'));
+      }
+    } catch (e: any) {
+      setError(e?.response?.data?.message || t('quotationManagement.saveFailed'));
+    } finally {
+      setRejectSubmitting(false);
     }
   };
 
@@ -330,34 +671,126 @@ const QuotationManagement: React.FC = () => {
   };
 
   const handlePrintQuotation = (quotation: Quotation) => {
-    // 실제 구현에서는 PDF 생성 로직
-    console.log('견적서 인쇄:', quotation);
+    if (!canShareApprovedQuotation(quotation)) {
+      setError(t('quotationManagement.exportAfterApproval'));
+      return;
+    }
+    window.print();
     setSuccess(t('quotationManagement.printed'));
   };
 
-  const handleEmailQuotation = (quotation: Quotation) => {
-    // 실제 구현에서는 이메일 발송 로직
-    console.log('견적서 이메일 발송:', quotation);
-    setSuccess(t('quotationManagement.emailed'));
+  const handleSaveQuotationPdf = async (quotation: Quotation) => {
+    if (!canShareApprovedQuotation(quotation)) {
+      setError(t('quotationManagement.exportAfterApproval'));
+      return;
+    }
+    const el = quotationPrintRef.current;
+    if (!el) {
+      setError(t('quotationManagement.pdfSaveFailed'));
+      return;
+    }
+    try {
+      setPdfSaving(true);
+      const safe = String(quotation.quotationNumber || 'quotation').replace(/[\\/:*?"<>|]+/g, '_');
+      await downloadQuotationPdf(el, `${safe}.pdf`);
+      setSuccess(t('quotationManagement.pdfSaved'));
+    } catch {
+      setError(t('quotationManagement.pdfSaveFailed'));
+    } finally {
+      setPdfSaving(false);
+    }
   };
 
-  const totalAmount = quotations.reduce((sum, quotation) => sum + quotation.totalAmount, 0);
-  const approvedQuotations = quotations.filter(quotation => quotation.status === 'approved').length;
-  const pendingQuotations = quotations.filter(quotation => quotation.status === 'sent').length;
-  const draftQuotations = quotations.filter(quotation => quotation.status === 'draft').length;
+  const handleEmailQuotation = async (quotation: Quotation) => {
+    if (!canShareApprovedQuotation(quotation)) {
+      setError(t('quotationManagement.emailAfterApproval'));
+      return;
+    }
+    const el = quotationPrintRef.current;
+    if (!el) {
+      setError(t('quotationManagement.emailPdfNeedDetail'));
+      return;
+    }
+    try {
+      setPdfSaving(true);
+      const { quotationPdfToBase64 } = await import('../../utils/quotationPdf');
+      const pdfBase64 = await quotationPdfToBase64(el);
+      const res = await quotationService.sendQuotation(quotation.id, { pdfBase64 });
+      if ((res as any)?.success) {
+        setSuccess(t('quotationManagement.emailed'));
+        await loadQuotationData();
+      } else {
+        setError(t('quotationManagement.saveFailed'));
+      }
+    } catch (e: any) {
+      setError(e?.response?.data?.message || t('quotationManagement.pdfSaveFailed'));
+    } finally {
+      setPdfSaving(false);
+    }
+  };
 
-  const paginatedQuotations = filteredQuotations.slice(
+  const quotationFormReadOnly =
+    !!selectedQuotation &&
+    ['approved', 'sent', 'rejected', 'expired'].includes(selectedQuotation.status);
+
+  /**
+   * 통계 카드
+   * - 승인됨: API `accepted` → UI `approved`, 발송 후 `sent`도 승인 플로우를 통과한 건으로 동일 취급
+   * - 총액: 반려·만료는 집계에서 제외 (반려 금액이 합산되지 않도록)
+   */
+  const { totalAmountActive, approvedQuotations, myPendingApprovals } = useMemo(() => {
+    const pending = quotations.filter(
+      (q) => q.status === 'pending_approval' && Number(q.approverUserId) === Number(user?.id)
+    ).length;
+    const approvedOrSent = quotations.filter(
+      (q) => q.status === 'approved' || q.status === 'sent'
+    ).length;
+    const sumExcludingRejectedExpired = quotations
+      .filter((q) => q.status !== 'rejected' && q.status !== 'expired')
+      .reduce((sum, q) => sum + q.totalAmount, 0);
+    return {
+      totalAmountActive: sumExcludingRejectedExpired,
+      approvedQuotations: approvedOrSent,
+      myPendingApprovals: pending
+    };
+  }, [quotations, user?.id]);
+
+  const tabFilteredQuotations = useMemo(() => {
+    const uid = Number(user?.id);
+    if (listTab === 'pending') {
+      return filteredQuotations.filter(
+        (q) => q.status === 'pending_approval' && Number(q.approverUserId) === uid
+      );
+    }
+    return filteredQuotations.filter((q) => Number(q.createdByUserId) === uid);
+  }, [filteredQuotations, listTab, user?.id]);
+
+  const paginatedQuotations = tabFilteredQuotations.slice(
     (page - 1) * itemsPerPage,
     page * itemsPerPage
   );
 
+  /** 상세 화면 하단: 승인 대기이면서 지정 승인자 또는 root/admin */
+  const showDetailApproverToolbar = useMemo(() => {
+    if (!selectedQuotation || selectedQuotation.status !== 'pending_approval') return false;
+    const uid = Number(user?.id);
+    const approverId = Number(selectedQuotation.approverUserId);
+    const role = user?.role;
+    return approverId === uid || role === 'root' || role === 'admin';
+  }, [selectedQuotation, user?.id, user?.role]);
+
   return (
-    <Box sx={{ 
-      p: 3, 
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%'
-    }}>
+    <Box
+      sx={{
+        p: { xs: 1.5, sm: 3 },
+        backgroundColor: 'workArea.main',
+        borderRadius: 2,
+        minHeight: '100%',
+        maxWidth: '100%',
+        overflowX: 'hidden',
+        boxSizing: 'border-box'
+      }}
+    >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <QuotationIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
@@ -409,7 +842,7 @@ const QuotationManagement: React.FC = () => {
               {t('quotationManagement.totalAmount')}
             </Typography>
             <Typography variant="h4">
-              Rs. {totalAmount.toLocaleString()}
+              Rs. {totalAmountActive.toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
@@ -429,7 +862,7 @@ const QuotationManagement: React.FC = () => {
               {t('quotationManagement.pendingQuotations')}
             </Typography>
             <Typography variant="h4" color="warning.main">
-              {pendingQuotations}
+              {myPendingApprovals}
             </Typography>
           </CardContent>
         </Card>
@@ -439,12 +872,23 @@ const QuotationManagement: React.FC = () => {
         <Card>
           <CardContent>
             <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
-              {selectedQuotation ? t('quotationManagement.editTitle') : t('quotationManagement.create')}
+              {selectedQuotation ? t('quotationManagement.detailTitle') : t('quotationManagement.create')}
             </Typography>
             <QuotationForm
+              key={
+                selectedQuotation
+                  ? `q-${selectedQuotation.id}`
+                  : suggestedQuotationNumber
+                    ? `new-${suggestedQuotationNumber}`
+                    : 'new'
+              }
               quotation={selectedQuotation}
+              readOnly={quotationFormReadOnly}
+              formId={selectedQuotation ? 'quotation-detail-form' : undefined}
+              hideFooterButtons={!!selectedQuotation}
               onSave={handleSaveQuotation}
               onCancel={handleCancelForm}
+              companyUsers={companyUsers}
               customers={
                 partners.length
                   ? partners.filter(p => !p.status || p.status === 'active')
@@ -463,12 +907,97 @@ const QuotationManagement: React.FC = () => {
                     )
               }
               issuingCompany={issuingCompany}
-              nextQuotationNumber={getNextQuotationNumber()}
+              nextQuotationNumber={suggestedQuotationNumber ?? getNextQuotationNumber()}
+              printAreaRef={selectedQuotation ? quotationPrintRef : undefined}
+              onValidationMessage={setError}
             />
+            {selectedQuotation && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 2,
+                  mt: 2,
+                  pt: 2,
+                  borderTop: 1,
+                  borderColor: 'divider'
+                }}
+              >
+                <Button variant="outlined" onClick={handleCancelForm}>
+                  {t('quotationManagement.backToList')}
+                </Button>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'flex-end' }}>
+                  {showDetailApproverToolbar && (
+                    <>
+                      <Button
+                        variant="contained"
+                        disableElevation
+                        onClick={() => void handleApproveQuotation(selectedQuotation.id)}
+                        sx={QUOTATION_APPROVE_BUTTON_SX}
+                      >
+                        {t('quotationManagement.approve')}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        onClick={() => openRejectDialog(selectedQuotation.id)}
+                      >
+                        {t('quotationManagement.reject')}
+                      </Button>
+                    </>
+                  )}
+                  {canShareApprovedQuotation(selectedQuotation) && (
+                    <>
+                      <Button
+                        variant="outlined"
+                        startIcon={pdfSaving ? <CircularProgress size={16} color="inherit" /> : <EmailIcon />}
+                        disabled={pdfSaving}
+                        onClick={() => void handleEmailQuotation(selectedQuotation)}
+                      >
+                        {t('quotationManagement.sendEmail')}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        startIcon={<PrintIcon />}
+                        onClick={() => handlePrintQuotation(selectedQuotation)}
+                      >
+                        {t('quotationManagement.print')}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        startIcon={pdfSaving ? <CircularProgress size={16} color="inherit" /> : <PictureAsPdfIcon />}
+                        disabled={pdfSaving}
+                        onClick={() => void handleSaveQuotationPdf(selectedQuotation)}
+                      >
+                        {t('quotationManagement.savePdf')}
+                      </Button>
+                    </>
+                  )}
+                  {!quotationFormReadOnly && (
+                    <Button type="submit" form="quotation-detail-form" variant="contained" color="primary">
+                      {t('quotationManagement.save')}
+                    </Button>
+                  )}
+                </Box>
+              </Box>
+            )}
           </CardContent>
         </Card>
       ) : (
         <>
+          <Box sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
+            <Tabs
+              value={listTab}
+              onChange={(_, v) => setListTab(v)}
+              sx={{ minHeight: 40, '& .MuiTab-root': { minHeight: 40, textTransform: 'none' } }}
+            >
+              <Tab value="requested" label={t('quotationManagement.tabRequested')} />
+              <Tab value="pending" label={t('quotationManagement.tabPendingApproval')} />
+            </Tabs>
+          </Box>
+
           {/* 필터 및 검색 */}
           <Card sx={{ mb: 3 }}>
             <CardContent>
@@ -499,6 +1028,7 @@ const QuotationManagement: React.FC = () => {
                   >
                     <MenuItem value="">{t('menuPermissionManagement.all')}</MenuItem>
                     <MenuItem value="draft">{t('quotationManagement.statusDraft')}</MenuItem>
+                    <MenuItem value="pending_approval">{t('quotationManagement.statusPendingApproval')}</MenuItem>
                     <MenuItem value="sent">{t('quotationManagement.statusSent')}</MenuItem>
                     <MenuItem value="approved">{t('quotationManagement.statusApproved')}</MenuItem>
                     <MenuItem value="rejected">{t('quotationManagement.statusRejected')}</MenuItem>
@@ -527,79 +1057,242 @@ const QuotationManagement: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* 견적서 목록 테이블 */}
-          <Card>
-            <TableContainer>
-              <Table>
-                <TableHead>
+          {/* 견적서 목록 테이블 — minWidth 합으로 가로 스크롤 나지 않게 % + fixed 레이아웃만 사용 */}
+          <Card sx={{ maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box' }}>
+            <TableContainer
+              sx={{
+                width: '100%',
+                maxWidth: '100%',
+                overflowX: 'hidden',
+                boxSizing: 'border-box'
+              }}
+            >
+              <Table
+                size="small"
+                sx={{
+                  tableLayout: 'fixed',
+                  width: '100%',
+                  maxWidth: '100%'
+                }}
+              >
+                <TableHead
+                  sx={{
+                    bgcolor: 'background.paper',
+                    '& .MuiTableCell-head': {
+                      bgcolor: 'background.paper',
+                      color: 'text.primary',
+                      fontWeight: 600,
+                      fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                      textTransform: 'none',
+                      letterSpacing: 'normal',
+                      borderBottom: '2px solid',
+                      borderColor: 'primary.main',
+                      py: 1,
+                      px: { xs: 0.5, sm: 1 },
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    },
+                    '& .MuiTableCell-head:last-of-type': {
+                      textAlign: 'center'
+                    }
+                  }}
+                >
                   <TableRow>
-                    <TableCell>{t('quotationManagement.status')}</TableCell>
-                    <TableCell>{t('quotationManagement.quotationNumber')}</TableCell>
-                    <TableCell>{t('quotationManagement.customerName')}</TableCell>
-                    <TableCell>{t('quotationManagement.issueDate')}</TableCell>
-                    <TableCell>{t('quotationManagement.validUntil')}</TableCell>
-                    <TableCell>{t('quotationManagement.totalAmount')}</TableCell>
-                    <TableCell>{t('common.create')}</TableCell>
-                    <TableCell>{t('quotationManagement.actions')}</TableCell>
+                    <TableCell sx={{ width: '9%' }}>{t('quotationManagement.status')}</TableCell>
+                    <TableCell sx={{ width: '10%' }}>{t('quotationManagement.quotationNumber')}</TableCell>
+                    <TableCell sx={{ width: '26%' }}>{t('quotationManagement.customerName')}</TableCell>
+                    <TableCell sx={{ width: '9%' }}>{t('quotationManagement.issueDate')}</TableCell>
+                    <TableCell sx={{ width: '9%' }}>{t('quotationManagement.validUntil')}</TableCell>
+                    <TableCell sx={{ width: '11%' }}>{t('quotationManagement.totalAmount')}</TableCell>
+                    <TableCell sx={{ width: '10%' }}>{t('common.create')}</TableCell>
+                    <TableCell align="center" sx={{ width: '16%', py: 0.5 }}>
+                      {t('quotationManagement.actions')}
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {paginatedQuotations.map((quotation) => (
-                    <TableRow key={quotation.id} hover>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <TableRow
+                      key={quotation.id}
+                      hover
+                      onClick={() => handleOpenQuotationDetail(quotation)}
+                      sx={{ cursor: 'pointer' }}
+                    >
+                      <TableCell sx={{ py: 0.75, px: { xs: 0.5, sm: 1 }, verticalAlign: 'middle', minWidth: 0 }}>
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 0.35,
+                            flexWrap: 'wrap',
+                            minWidth: 0,
+                            '& svg': { fontSize: { xs: 18, sm: 20 } }
+                          }}
+                        >
                           {getStatusIcon(quotation.status)}
                           {getStatusChip(quotation.status)}
                         </Box>
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="subtitle2" fontWeight="bold">
+                      <TableCell
+                        sx={{
+                          py: 0.75,
+                          px: { xs: 0.5, sm: 1 },
+                          verticalAlign: 'middle',
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          wordBreak: 'break-word'
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: 500, fontSize: { xs: '0.75rem', sm: '0.8125rem' } }}>
                           {quotation.quotationNumber}
                         </Typography>
                       </TableCell>
-                      <TableCell>
-                        <Box>
-                          <Typography variant="subtitle2" fontWeight="bold">
+                      <TableCell
+                        sx={{
+                          py: 0.75,
+                          px: { xs: 0.5, sm: 1 },
+                          verticalAlign: 'middle',
+                          minWidth: 0,
+                          overflow: 'hidden'
+                        }}
+                      >
+                        <Box sx={{ minWidth: 0, maxWidth: '100%' }}>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontWeight: 400,
+                              fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                              lineHeight: 1.35,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              display: '-webkit-box',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              wordBreak: 'break-word'
+                            }}
+                          >
                             {quotation.customerName}
                           </Typography>
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{
+                              display: 'block',
+                              mt: 0.25,
+                              fontSize: { xs: '0.65rem', sm: '0.75rem' },
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              maxWidth: '100%'
+                            }}
+                          >
                             {quotation.customerEmail}
                           </Typography>
                         </Box>
                       </TableCell>
-                      <TableCell>{quotation.issueDate}</TableCell>
-                      <TableCell>{quotation.validUntil}</TableCell>
-                      <TableCell>
-                        <Typography variant="subtitle2" fontWeight="bold">
+                      <TableCell
+                        sx={{
+                          py: 0.75,
+                          px: { xs: 0.5, sm: 1 },
+                          fontSize: { xs: '0.7rem', sm: '0.8125rem' },
+                          verticalAlign: 'middle',
+                          minWidth: 0,
+                          wordBreak: 'break-all'
+                        }}
+                      >
+                        {quotation.issueDate}
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          py: 0.75,
+                          px: { xs: 0.5, sm: 1 },
+                          fontSize: { xs: '0.7rem', sm: '0.8125rem' },
+                          verticalAlign: 'middle',
+                          minWidth: 0,
+                          wordBreak: 'break-all'
+                        }}
+                      >
+                        {quotation.validUntil}
+                      </TableCell>
+                      <TableCell sx={{ py: 0.75, px: { xs: 0.5, sm: 1 }, verticalAlign: 'middle', minWidth: 0 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 500,
+                            fontSize: { xs: '0.7rem', sm: '0.8125rem' },
+                            wordBreak: 'break-word'
+                          }}
+                        >
                           Rs. {quotation.totalAmount.toLocaleString()}
                         </Typography>
                       </TableCell>
-                      <TableCell>{quotation.createdBy}</TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Tooltip title={t('quotationManagement.view')}>
-                            <IconButton size="small" onClick={() => handleEditQuotation(quotation)}>
-                              <ViewIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title={t('quotationManagement.edit')}>
-                            <IconButton size="small" onClick={() => handleEditQuotation(quotation)}>
-                              <EditIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title={t('quotationManagement.print')}>
-                            <IconButton size="small" onClick={() => handlePrintQuotation(quotation)}>
-                              <PrintIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title={t('quotationManagement.email')}>
-                            <IconButton size="small" onClick={() => handleEmailQuotation(quotation)}>
-                              <EmailIcon />
-                            </IconButton>
-                          </Tooltip>
+                      <TableCell
+                        sx={{
+                          py: 0.75,
+                          px: { xs: 0.5, sm: 1 },
+                          fontSize: { xs: '0.7rem', sm: '0.8125rem' },
+                          verticalAlign: 'middle',
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          wordBreak: 'break-word'
+                        }}
+                      >
+                        {quotation.createdBy}
+                      </TableCell>
+                      <TableCell
+                        onClick={(e) => e.stopPropagation()}
+                        align="center"
+                        sx={{
+                          py: 0.5,
+                          px: { xs: 0.25, sm: 0.5 },
+                          verticalAlign: 'middle',
+                          minWidth: 0,
+                          overflow: 'hidden'
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            flexDirection: 'row',
+                            flexWrap: 'nowrap',
+                            gap: 0.25,
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            maxWidth: '100%'
+                          }}
+                        >
+                          {listTab === 'pending' && quotation.status === 'pending_approval' && (
+                            <>
+                              <Tooltip title={t('quotationManagement.approve')}>
+                                <IconButton
+                                  size="small"
+                                  color="primary"
+                                  onClick={() => void handleApproveQuotation(quotation.id)}
+                                  sx={{
+                                    color: '#ffffff',
+                                    bgcolor: 'primary.main',
+                                    '&:hover': { bgcolor: 'primary.dark', color: '#ffffff' }
+                                  }}
+                                >
+                                  <ApprovedIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title={t('quotationManagement.reject')}>
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => openRejectDialog(quotation.id)}
+                                >
+                                  <RejectedIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </>
+                          )}
                           <Tooltip title={t('quotationManagement.delete')}>
                             <IconButton size="small" onClick={() => handleDeleteQuotation(quotation.id)}>
-                              <DeleteIcon />
+                              <DeleteIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                         </Box>
@@ -613,7 +1306,7 @@ const QuotationManagement: React.FC = () => {
             {/* 페이지네이션 */}
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
               <Pagination
-                count={Math.ceil(filteredQuotations.length / itemsPerPage)}
+                count={Math.max(1, Math.ceil(tabFilteredQuotations.length / itemsPerPage))}
                 page={page}
                 onChange={(_, value) => setPage(value)}
                 color="primary"
@@ -644,6 +1337,44 @@ const QuotationManagement: React.FC = () => {
         </Alert>
       </Snackbar>
 
+      <Dialog
+        open={rejectDialogOpen}
+        onClose={() => {
+          if (!rejectSubmitting) closeRejectDialog();
+        }}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>{t('quotationManagement.rejectDialogTitle')}</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label={t('quotationManagement.rejectionReason')}
+            placeholder={t('quotationManagement.rejectionReasonPlaceholder')}
+            fullWidth
+            multiline
+            minRows={3}
+            value={rejectReasonInput}
+            onChange={(e) => setRejectReasonInput(e.target.value)}
+            required
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeRejectDialog} disabled={rejectSubmitting}>
+            {t('quotationManagement.cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => void handleConfirmReject()}
+            disabled={rejectSubmitting || !rejectReasonInput.trim()}
+          >
+            {t('quotationManagement.reject')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* 확인 다이얼로그 */}
       <ConfirmDialog
         open={dialogState.open}
@@ -659,11 +1390,52 @@ const QuotationManagement: React.FC = () => {
   );
 };
 
+/** ITEMIZED 행 — QTY·UNIT PRICE·DESCRIPTION Outlined 입력 높이 통일 (MUI small ≈ 40px) */
+const ITEM_ROW_QTY_UNIT_SX = {
+  '& .MuiOutlinedInput-root': {
+    minHeight: 40,
+    maxHeight: 40,
+    boxSizing: 'border-box'
+  },
+  '& .MuiOutlinedInput-input': {
+    py: '8.5px',
+    px: '14px',
+    boxSizing: 'border-box'
+  }
+} as const;
+
+const ITEM_ROW_DESCRIPTION_SX = {
+  '& .MuiOutlinedInput-root': {
+    minHeight: 40,
+    boxSizing: 'border-box'
+  },
+  '& .MuiOutlinedInput-root.MuiInputBase-multiline': {
+    minHeight: 40,
+    padding: '8.5px 14px'
+  },
+  '& textarea.MuiOutlinedInput-input': {
+    resize: 'both',
+    minHeight: '23px',
+    lineHeight: '23px',
+    padding: 0,
+    overflow: 'auto',
+    boxSizing: 'border-box'
+  }
+} as const;
+
 // 견적서 폼 컴포넌트
 interface QuotationFormProps {
   quotation: Quotation | null;
-  onSave: (data: Partial<Quotation>) => void;
+  readOnly?: boolean;
+  /** 목록에서 연 상세에서 하단 툴바로 저장 시 외부 submit 버튼과 연결 */
+  formId?: string;
+  /** true면 폼 하단 취소/저장 버튼 숨김(상세 툴바 사용) */
+  hideFooterButtons?: boolean;
+  /** PDF 저장 시 캡처할 영역(견적 본문) */
+  printAreaRef?: React.RefObject<HTMLDivElement | null>;
+  onSave: (data: Partial<Quotation> & { quotationNumber?: string; approverUserId?: number }) => void;
   onCancel: () => void;
+  companyUsers: Array<{ id: number; username: string; email: string }>;
   customers: Array<{
     name: string;
     email: string;
@@ -672,16 +1444,25 @@ interface QuotationFormProps {
   }>;
   issuingCompany: CompanyInfo | null;
   nextQuotationNumber: string;
+  /** 폼 검증 메시지 — 상단 Snackbar(`error`)와 동일 스타일 */
+  onValidationMessage?: (message: string) => void;
 }
 
 const QuotationForm: React.FC<QuotationFormProps> = ({ 
   quotation, 
+  readOnly = false,
+  formId,
+  hideFooterButtons = false,
+  printAreaRef,
   onSave, 
   onCancel,
+  companyUsers,
   customers,
   issuingCompany,
-  nextQuotationNumber
+  nextQuotationNumber,
+  onValidationMessage
 }) => {
+  const { t } = useTranslation();
   const productNameRefs = useRef<Array<HTMLInputElement | null>>([]);
   const [pendingFocusIndex, setPendingFocusIndex] = useState<number | null>(null);
   const [formData, setFormData] = useState({
@@ -689,13 +1470,14 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
     customerEmail: quotation?.customerEmail || '',
     customerPhone: quotation?.customerPhone || '',
     customerAddress: quotation?.customerAddress || '',
-    validUntil: quotation?.validUntil || '',
+    validUntil: quotation?.validUntil || addDaysLocalIso(15),
     notes: quotation?.notes || '',
     taxType: 'cgst_sgst',
     cgstRate: 9,
     sgstRate: 9,
     igstRate: 0,
-    discount: quotation?.discount || 0
+    discount: quotation?.discount || 0,
+    approverUserId: quotation?.approverUserId != null ? quotation.approverUserId : ('' as const)
   });
 
   const [items, setItems] = useState<QuotationItem[]>(
@@ -729,6 +1511,15 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
     }
     
     setItems(newItems);
+  };
+
+  /** DESCRIPTION 단일 입력: 본문은 productName에 두고, 구버전 description은 표시만 병합 후 비움 */
+  const handleItemDescriptionCombinedChange = (index: number, value: string) => {
+    setItems((prev) => {
+      const newItems = [...prev];
+      newItems[index] = { ...newItems[index], productName: value, description: '' };
+      return newItems;
+    });
   };
 
   const addItem = () => {
@@ -790,12 +1581,44 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
     return { subtotal, taxAmount, totalAmount, cgstRate, sgstRate, igstRate };
   };
 
+  const selectedCustomer = customers.find(customer => customer.name === formData.customerName);
+  const quoteNumber = quotation?.quotationNumber || nextQuotationNumber;
+
+  /** 승인·발송 완료 견적은 고객에게 제출하므로 승인자(내부) 필드 미표시 */
+  const hideApproverForCustomerView =
+    !!quotation && readOnly && ['approved', 'sent'].includes(quotation.status);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (readOnly) return;
+    if (formData.approverUserId === '') {
+      onValidationMessage?.(t('quotationManagement.selectApprover'));
+      return;
+    }
+    const effectiveEmail = (formData.customerEmail || selectedCustomer?.email || '').trim();
+    if (effectiveEmail) {
+      const pr = parseEmailRecipientsList(effectiveEmail);
+      if (!pr.ok) {
+        onValidationMessage?.(t('quotationManagement.invalidEmailInList', { part: pr.message }));
+        return;
+      }
+    }
+    const invalidLine = items.find((it) => {
+      const qty = Number(it.quantity);
+      const price = Number(it.unitPrice);
+      return (
+        !Number.isFinite(qty) ||
+        qty < 1 ||
+        !Number.isFinite(price) ||
+        price <= 0
+      );
+    });
+    if (invalidLine) {
+      onValidationMessage?.(t('quotationManagement.itemQtyUnitRequired'));
+      return;
+    }
     const { subtotal, taxAmount, totalAmount, cgstRate, sgstRate, igstRate } = calculateTotals();
-    const fallbackValidUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split('T')[0];
+    const fallbackValidUntil = addDaysLocalIso(15);
     
     onSave({
       ...formData,
@@ -811,20 +1634,12 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
       totalAmount,
       items,
       issueDate: new Date().toISOString().split('T')[0],
-      status: 'draft',
-      createdBy: '현재 사용자'
+      quotationNumber: quoteNumber,
+      approverUserId: Number(formData.approverUserId)
     });
   };
 
-  const handleEmailSend = () => {
-    // TODO: 실제 PDF 생성 + 이메일 전송 API 연동 필요
-    handleSubmit({ preventDefault: () => {} } as React.FormEvent);
-    alert('견적서가 PDF로 이메일 전송됩니다. (API 연동 필요)');
-  };
-
   const { subtotal, totalAmount, cgstRate, sgstRate, igstRate } = calculateTotals();
-  const selectedCustomer = customers.find(customer => customer.name === formData.customerName);
-  const quoteNumber = quotation?.quotationNumber || nextQuotationNumber;
 
   const handleCustomerSelect = (name: string) => {
     const selected = customers.find(customer => customer.name === name);
@@ -848,10 +1663,42 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
   };
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
-      <Box sx={{ border: '1px solid #cfcfcf', borderRadius: 2, bgcolor: '#fff', p: { xs: 2, md: 3 } }}>
+    <Box component="form" id={formId} onSubmit={handleSubmit} sx={{ mt: 2 }}>
+      <Box
+        ref={printAreaRef}
+        className="quotation-print-area"
+        sx={{ bgcolor: '#fff', borderRadius: 2 }}
+      >
+      <Box
+        component="fieldset"
+        disabled={readOnly}
+        sx={{
+          border: '1px solid #cfcfcf',
+          borderRadius: 2,
+          bgcolor: '#fff',
+          p: { xs: 2, md: 3 },
+          m: 0,
+          minWidth: 0
+        }}
+      >
         <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mb: 3 }}>
           <Box sx={{ minWidth: 220 }}>
+            {issuingCompany?.company_logo ? (
+              <Box
+                component="img"
+                src={issuingCompany.company_logo}
+                alt={issuingCompany.name || ''}
+                sx={{
+                  display: 'block',
+                  maxHeight: 64,
+                  maxWidth: 260,
+                  width: 'auto',
+                  height: 'auto',
+                  objectFit: 'contain',
+                  mb: 1
+                }}
+              />
+            ) : null}
             <Typography variant="caption" color="text.secondary">Company Name</Typography>
             <Typography variant="subtitle2" sx={{ mt: 0.5, mb: 1 }}>
               {issuingCompany?.name || '-'}
@@ -928,9 +1775,11 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                 fullWidth
                 size="small"
                 type="email"
+                inputProps={{ multiple: true }}
                 value={formData.customerEmail}
                 onChange={(e) => setFormData({ ...formData, customerEmail: e.target.value })}
                 required
+                helperText={t('quotationManagement.customerEmailMultipleHint')}
               />
             </Box>
             <Box>
@@ -962,8 +1811,53 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                 onChange={(e) => setFormData({ ...formData, customerAddress: e.target.value })}
               />
             </Box>
+            {!hideApproverForCustomerView && (
+              <Box sx={{ gridColumn: { xs: '1', md: '1 / -1' } }}>
+                <Typography variant="caption" color="text.secondary">{t('quotationManagement.approver')} *</Typography>
+                <FormControl fullWidth size="small" required>
+                  <Select<number | ''>
+                    displayEmpty
+                    value={formData.approverUserId === '' ? '' : formData.approverUserId}
+                    onChange={(e: SelectChangeEvent<number | ''>) => {
+                      const raw = e.target.value as string | number | '';
+                      setFormData({
+                        ...formData,
+                        approverUserId: raw === '' ? '' : Number(raw)
+                      });
+                    }}
+                    renderValue={(selected: number | '' | undefined) => {
+                      if (selected === '' || selected === undefined) {
+                        return <Typography color="text.secondary">{t('quotationManagement.selectApprover')}</Typography>;
+                      }
+                      const u = companyUsers.find((x) => x.id === selected);
+                      return u ? `${u.username} (${u.email})` : String(selected);
+                    }}
+                  >
+                    <MenuItem value="">
+                      <Typography color="text.secondary">{t('quotationManagement.selectApprover')}</Typography>
+                    </MenuItem>
+                    {companyUsers.map((u) => (
+                      <MenuItem key={u.id} value={u.id}>
+                        {u.username} ({u.email})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+            )}
           </Box>
         </Box>
+
+        {readOnly && quotation?.status === 'rejected' && !!quotation.rejectionReason?.trim() && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              {t('quotationManagement.rejectionReason')}
+            </Typography>
+            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+              {quotation.rejectionReason}
+            </Typography>
+          </Alert>
+        )}
 
         <Box sx={{ border: '1px solid #cfcfcf', borderRadius: 1, mb: 3 }}>
           <Box sx={{ bgcolor: '#f0f0f0', px: 2, py: 1 }}>
@@ -988,53 +1882,86 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
               상품 추가
             </Button>
           </Box>
-          <Table size="small">
-            <TableHead>
+          <Box sx={{ overflow: 'auto', width: '100%' }}>
+          <Table
+            className="quotation-itemized-costs-table"
+            size="small"
+            sx={{
+              tableLayout: 'fixed',
+              width: '100%',
+              minWidth: 560
+            }}
+          >
+            <TableHead
+              sx={{
+                bgcolor: 'background.paper',
+                '& .MuiTableCell-head': {
+                  bgcolor: 'background.paper',
+                  color: 'text.primary',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  textTransform: 'none',
+                  letterSpacing: 'normal',
+                  borderBottom: '2px solid',
+                  borderColor: 'primary.main',
+                  py: 1.25
+                },
+                '& .MuiTableCell-head:last-of-type': {
+                  textAlign: 'center'
+                }
+              }}
+            >
               <TableRow>
-                <TableCell>DESCRIPTION</TableCell>
-                <TableCell align="right">QTY</TableCell>
-                <TableCell align="right">UNIT PRICE</TableCell>
-                <TableCell align="right">AMOUNT</TableCell>
-                <TableCell align="center">-</TableCell>
+                <TableCell sx={{ width: '60%' }}>DESCRIPTION</TableCell>
+                <TableCell align="right" sx={{ width: '13%' }}>
+                  QTY
+                </TableCell>
+                <TableCell align="right" sx={{ width: '13%' }}>
+                  UNIT PRICE
+                </TableCell>
+                <TableCell align="right" sx={{ width: '10%' }}>
+                  AMOUNT
+                </TableCell>
+                <TableCell align="center" sx={{ width: '4%', minWidth: 44 }}>
+                  -
+                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {items.map((item, index) => (
                 <TableRow key={item.id}>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                  <TableCell
+                    sx={{
+                      verticalAlign: 'middle',
+                      overflow: 'visible',
+                      width: '60%',
+                      minWidth: 0
+                    }}
+                  >
                     <TextField
-                        fullWidth
-                        size="small"
-                        placeholder="상품명"
-                        value={item.productName}
-                        onChange={(e) => handleItemChange(index, 'productName', e.target.value)}
+                      fullWidth
+                      size="small"
+                      multiline
+                      minRows={1}
+                      placeholder="품목 및 설명"
+                      value={[item.productName, item.description].filter((s) => String(s).trim()).join('\n')}
+                      onChange={(e) => handleItemDescriptionCombinedChange(index, e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
+                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                           e.preventDefault();
                           addItemAndFocus();
                         }
                       }}
-                      inputRef={(el) => { productNameRefs.current[index] = el; }}
-                        required
-                      />
-                      <TextField
-                        fullWidth
-                        size="small"
-                        placeholder="설명"
-                        value={item.description}
-                        onChange={(e) => handleItemChange(index, 'description', e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addItemAndFocus();
-                        }
+                      inputRef={(el) => {
+                        productNameRefs.current[index] = el;
                       }}
-                      />
-                    </Box>
+                      required
+                      sx={ITEM_ROW_DESCRIPTION_SX}
+                    />
                   </TableCell>
-                  <TableCell align="right">
+                  <TableCell align="right" sx={{ width: '13%', verticalAlign: 'middle' }}>
                     <TextField
+                      fullWidth
                       size="small"
                       type="number"
                       value={item.quantity}
@@ -1046,10 +1973,12 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                         }
                       }}
                       inputProps={{ min: 0 }}
+                      sx={ITEM_ROW_QTY_UNIT_SX}
                     />
                   </TableCell>
-                  <TableCell align="right">
+                  <TableCell align="right" sx={{ width: '13%', verticalAlign: 'middle' }}>
                     <TextField
+                      fullWidth
                       size="small"
                       type="number"
                       value={item.unitPrice}
@@ -1061,12 +1990,15 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                         }
                       }}
                       inputProps={{ min: 0 }}
+                      sx={ITEM_ROW_QTY_UNIT_SX}
                     />
                   </TableCell>
-                  <TableCell align="right">
-                    <Typography variant="body2">Rs. {item.finalPrice.toLocaleString()}</Typography>
+                  <TableCell align="right" sx={{ width: '10%', verticalAlign: 'middle' }}>
+                    <Typography variant="body2" sx={{ minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      Rs. {item.finalPrice.toLocaleString()}
+                    </Typography>
                   </TableCell>
-                  <TableCell align="center">
+                  <TableCell align="center" sx={{ width: '4%', minWidth: 44, verticalAlign: 'middle' }}>
                     {items.length > 1 && (
                       <IconButton onClick={() => removeItem(index)} color="error" size="small">
                         <DeleteIcon />
@@ -1077,6 +2009,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
               ))}
             </TableBody>
           </Table>
+          </Box>
         </Box>
 
         <Box sx={{ border: '1px solid #cfcfcf', borderRadius: 1, p: 2, mb: 2 }}>
@@ -1218,18 +2151,20 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
           </Box>
         </Box>
 
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-          <Button onClick={onCancel} variant="outlined">
-            취소
-          </Button>
-        <Button variant="outlined" onClick={handleEmailSend}>
-          이메일 전송
-        </Button>
-          <Button type="submit" variant="contained">
-            {quotation ? '수정' : '저장'}
-          </Button>
-        </Box>
       </Box>
+      </Box>
+        {!hideFooterButtons && (
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
+            <Button onClick={onCancel} variant="outlined">
+              {readOnly ? t('common.close') : t('quotationManagement.cancel')}
+            </Button>
+            {!readOnly && (
+              <Button type="submit" variant="contained">
+                {t('common.save')}
+              </Button>
+            )}
+          </Box>
+        )}
     </Box>
   );
 };

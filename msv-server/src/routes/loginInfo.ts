@@ -3,7 +3,7 @@ import multer from 'multer';
 import xlsx from 'xlsx';
 import path from 'path';
 import { DataTypes, Op } from 'sequelize';
-import { LoginInfo, LoginLog, Company, User } from '../models';
+import { LoginInfo, LoginInfoTab, LoginLog, Company, User } from '../models';
 import { authenticateToken, requireRootOrMinsubEmployee } from '../middleware/auth';
 import { AuthRequest } from '../types';
 import sequelize from '../config/database';
@@ -29,12 +29,242 @@ const upload = multer({
 router.use(authenticateToken);
 router.use(requireRootOrMinsubEmployee);
 
+/** 마이그레이션 미적용 DB용: login_info_tabs + login_infos.tab_id 자동 반영 */
+let loginInfoTabsSchemaEnsured = false;
+let loginInfoTabsSchemaLock: Promise<void> | null = null;
+
+const ensureLoginInfoTabsSchema = async (): Promise<void> => {
+  if (loginInfoTabsSchemaEnsured) return;
+  if (loginInfoTabsSchemaLock) {
+    await loginInfoTabsSchemaLock;
+    return;
+  }
+
+  loginInfoTabsSchemaLock = (async () => {
+    const qi = sequelize.getQueryInterface();
+    try {
+      const tabDesc = await qi.describeTable('login_info_tabs');
+      if (!tabDesc.column_headers) {
+        await qi.addColumn('login_info_tabs', 'column_headers', {
+          type: DataTypes.JSON,
+          allowNull: true
+        });
+      }
+      if (!tabDesc.column_hidden) {
+        await qi.addColumn('login_info_tabs', 'column_hidden', {
+          type: DataTypes.JSON,
+          allowNull: true
+        });
+      }
+      if (!tabDesc.column_schema) {
+        await qi.addColumn('login_info_tabs', 'column_schema', {
+          type: DataTypes.JSON,
+          allowNull: true
+        });
+      }
+      loginInfoTabsSchemaEnsured = true;
+      return;
+    } catch {
+      // 테이블 없음 → 마이그레이션과 동일 절차
+    }
+
+    try {
+      await qi.createTable('login_info_tabs', {
+        id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+        tenant_id: {
+          type: DataTypes.INTEGER,
+          allowNull: false,
+          references: { model: 'tenants', key: 'id' },
+          onUpdate: 'CASCADE',
+          onDelete: 'CASCADE'
+        },
+        company_id: {
+          type: DataTypes.INTEGER,
+          allowNull: false,
+          references: { model: 'companies', key: 'id' },
+          onUpdate: 'CASCADE',
+          onDelete: 'CASCADE'
+        },
+        name: { type: DataTypes.STRING(120), allowNull: false },
+        sort_order: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+        column_headers: { type: DataTypes.JSON, allowNull: true },
+        column_hidden: { type: DataTypes.JSON, allowNull: true },
+        column_schema: { type: DataTypes.JSON, allowNull: true },
+        created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+        updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
+      });
+    } catch (err: any) {
+      const msg = String(err?.message || err?.original?.message || '');
+      if (!/already exists|duplicate|이미 있습니다/i.test(msg)) {
+        throw err;
+      }
+    }
+
+    await qi.addIndex('login_info_tabs', ['company_id'], {
+      name: 'login_info_tabs_company_id_idx'
+    }).catch(() => {});
+    await qi.addIndex('login_info_tabs', ['tenant_id'], {
+      name: 'login_info_tabs_tenant_id_idx'
+    }).catch(() => {});
+
+    const liDesc = await qi.describeTable('login_infos');
+    if (!liDesc.tab_id) {
+      await qi.addColumn('login_infos', 'tab_id', {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: { model: 'login_info_tabs', key: 'id' },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
+      });
+    }
+
+    const [companies] = await sequelize.query(`SELECT id, tenant_id FROM companies ORDER BY id ASC`);
+    const rows: Record<string, unknown>[] = [];
+    const now = new Date();
+    for (const c of companies as { id: number; tenant_id: number }[]) {
+      rows.push({
+        tenant_id: c.tenant_id,
+        company_id: c.id,
+        name: '외부 사이트',
+        sort_order: 0,
+        created_at: now,
+        updated_at: now
+      });
+      rows.push({
+        tenant_id: c.tenant_id,
+        company_id: c.id,
+        name: 'MCA 로그인 정보',
+        sort_order: 1,
+        created_at: now,
+        updated_at: now
+      });
+    }
+
+    const [countRows] = await sequelize.query(`SELECT COUNT(*)::int AS c FROM login_info_tabs`);
+    const tabCount = Number((countRows as { c: string | number }[])?.[0]?.c ?? 0);
+    if (tabCount === 0 && rows.length) {
+      await qi.bulkInsert('login_info_tabs', rows);
+    }
+
+    const li = await qi.describeTable('login_infos');
+    const hasScope = !!li.scope;
+
+    if (hasScope) {
+      await sequelize.query(`
+        UPDATE login_infos li
+        SET tab_id = lit.id
+        FROM login_info_tabs lit
+        WHERE li.company_id = lit.company_id
+          AND lit.sort_order = 1
+          AND li.scope = 'mca'
+      `);
+      await sequelize.query(`
+        UPDATE login_infos li
+        SET tab_id = lit.id
+        FROM login_info_tabs lit
+        WHERE li.company_id = lit.company_id
+          AND lit.sort_order = 0
+          AND (li.scope IS NULL OR li.scope IS DISTINCT FROM 'mca')
+      `);
+    } else {
+      await sequelize.query(`
+        UPDATE login_infos li
+        SET tab_id = lit.id
+        FROM login_info_tabs lit
+        WHERE li.company_id = lit.company_id AND lit.sort_order = 0
+      `);
+    }
+
+    await sequelize.query(`
+      UPDATE login_infos li
+      SET tab_id = lit.id
+      FROM login_info_tabs lit
+      WHERE li.tab_id IS NULL AND li.company_id = lit.company_id AND lit.sort_order = 0
+    `);
+
+    await sequelize.query(`ALTER TABLE login_infos ALTER COLUMN tab_id SET NOT NULL`);
+
+    try {
+      await qi.removeIndex('login_infos', 'login_infos_company_id_scope_idx');
+    } catch {
+      // ignore
+    }
+    if (hasScope) {
+      try {
+        await qi.removeColumn('login_infos', 'scope');
+      } catch {
+        // 이미 제거됨
+      }
+    }
+
+    try {
+      await qi.addIndex('login_infos', ['tab_id'], { name: 'login_infos_tab_id_idx' });
+    } catch {
+      // ignore
+    }
+
+    loginInfoTabsSchemaEnsured = true;
+  })();
+
+  try {
+    await loginInfoTabsSchemaLock;
+  } finally {
+    loginInfoTabsSchemaLock = null;
+  }
+};
+
+let loginInfosExtraFieldsEnsured = false;
+const ensureLoginInfosExtraFieldsColumn = async (): Promise<void> => {
+  if (loginInfosExtraFieldsEnsured) return;
+  const qi = sequelize.getQueryInterface();
+  try {
+    const li = await qi.describeTable('login_infos');
+    if (!li.extra_fields) {
+      await qi.addColumn('login_infos', 'extra_fields', {
+        type: DataTypes.JSON,
+        allowNull: true
+      });
+    }
+    loginInfosExtraFieldsEnsured = true;
+  } catch {
+    loginInfosExtraFieldsEnsured = true;
+  }
+};
+
+router.use(async (_req, _res, next) => {
+  try {
+    await ensureLoginInfoTabsSchema();
+    await ensureLoginInfosExtraFieldsColumn();
+    next();
+  } catch (err) {
+    console.error('login_info_tabs 스키마 보장 실패:', err);
+    next(err);
+  }
+});
+
 const ensureCompanyInTenant = async (companyId: number, tenantId: number) => {
   const company = await (Company as any).findOne({
     where: { id: companyId, tenant_id: tenantId },
     attributes: ['id', 'tenant_id']
   });
   return !!company;
+};
+
+const ensureDefaultTabsForCompany = async (companyId: number, tenantId: number) => {
+  const n = await (LoginInfoTab as any).count({
+    where: { company_id: companyId, tenant_id: tenantId }
+  });
+  if (n > 0) return;
+  await (LoginInfoTab as any).bulkCreate([
+    { tenant_id: tenantId, company_id: companyId, name: '외부 사이트', sort_order: 0 },
+    { tenant_id: tenantId, company_id: companyId, name: 'MCA 로그인 정보', sort_order: 1 }
+  ]);
+};
+
+const assertTabForCompany = async (tabId: number, companyId: number, tenantId: number) => {
+  return (LoginInfoTab as any).findOne({
+    where: { id: tabId, company_id: companyId, tenant_id: tenantId }
+  });
 };
 
 const normalizeHeader = (value: unknown) =>
@@ -55,6 +285,247 @@ const getCellValue = (row: any[], index: number) =>
   index >= 0 && index < row.length ? String(row[index] ?? '').trim() : '';
 
 const trimString = (value: unknown) => String(value ?? '').trim();
+
+const COLUMN_HEADER_KEYS = [
+  'no',
+  'division',
+  'login_id',
+  'password',
+  'open_file_returns',
+  'url',
+  'actions'
+] as const;
+
+/** 화면에서 숨길 수 있는 데이터 열 (No·작업 열 제외) */
+const HIDABLE_COLUMN_FIELDS = ['division', 'login_id', 'password', 'open_file_returns', 'url'] as const;
+
+const normalizeColumnHidden = (
+  raw: unknown
+): { ok: true; value: string[] } | { ok: false; message: string } => {
+  if (raw === null || raw === undefined) {
+    return { ok: true, value: [] };
+  }
+  if (!Array.isArray(raw)) {
+    return { ok: false, message: 'column_hidden는 배열이어야 합니다.' };
+  }
+  const set = new Set<string>();
+  for (const item of raw) {
+    const s = trimString(item);
+    if (!s) continue;
+    if (!(HIDABLE_COLUMN_FIELDS as readonly string[]).includes(s)) {
+      return { ok: false, message: '허용되지 않은 열입니다.' };
+    }
+    set.add(s);
+  }
+  const arr = [...set];
+  const visible = HIDABLE_COLUMN_FIELDS.filter((f) => !arr.includes(f));
+  if (visible.length < 1) {
+    return { ok: false, message: '데이터 열은 최소 1개 이상 보이도록 해야 합니다.' };
+  }
+  return { ok: true, value: arr };
+};
+
+type NormalizeColumnHiddenResult = ReturnType<typeof normalizeColumnHidden>;
+const isColumnHiddenNormalizeError = (
+  r: NormalizeColumnHiddenResult
+): r is { ok: false; message: string } => r.ok === false;
+
+const BUILTIN_COLUMN_KEYS = ['division', 'login_id', 'password', 'open_file_returns', 'url'] as const;
+type BuiltinColumnKey = (typeof BUILTIN_COLUMN_KEYS)[number];
+
+const REQUIRED_BUILTIN_COLUMNS: BuiltinColumnKey[] = ['division', 'login_id', 'password'];
+
+type ColumnSchemaEntry =
+  | { kind: 'builtin'; key: BuiltinColumnKey }
+  | { kind: 'custom'; id: string; label: string };
+
+type ColumnSchema = { columns: ColumnSchemaEntry[] };
+
+const CUSTOM_COL_ID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function columnSchemaFromLegacyHidden(columnHidden: unknown): ColumnSchema {
+  const hidden = new Set(
+    Array.isArray(columnHidden) ? columnHidden.map((x) => trimString(x)).filter(Boolean) : []
+  );
+  return {
+    columns: BUILTIN_COLUMN_KEYS.filter((k) => !hidden.has(k)).map((key) => ({
+      kind: 'builtin' as const,
+      key
+    }))
+  };
+}
+
+function getEffectiveColumnSchema(tab: any): ColumnSchema {
+  const raw = tab?.column_schema;
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && Array.isArray((raw as any).columns)) {
+    const n = normalizeColumnSchema(raw);
+    if (n.ok) return n.value;
+  }
+  return columnSchemaFromLegacyHidden(tab?.column_hidden);
+}
+
+const normalizeColumnSchema = (
+  raw: unknown
+): { ok: true; value: ColumnSchema } | { ok: false; message: string } => {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ok: false, message: 'column_schema 형식이 올바르지 않습니다.' };
+  }
+  const cols = (raw as any).columns;
+  if (!Array.isArray(cols) || cols.length === 0) {
+    return { ok: false, message: '열이 하나 이상 필요합니다.' };
+  }
+  if (cols.length > 40) {
+    return { ok: false, message: '열 개수가 너무 많습니다.' };
+  }
+  const out: ColumnSchemaEntry[] = [];
+  const seenBuiltin = new Set<string>();
+  const seenCustom = new Set<string>();
+  let customCount = 0;
+
+  for (const item of cols) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return { ok: false, message: 'column_schema 항목 형식이 올바르지 않습니다.' };
+    }
+    const kind = trimString((item as any).kind);
+    if (kind === 'builtin') {
+      const key = trimString((item as any).key) as BuiltinColumnKey;
+      if (!(BUILTIN_COLUMN_KEYS as readonly string[]).includes(key)) {
+        return { ok: false, message: '허용되지 않은 내장 열입니다.' };
+      }
+      if (seenBuiltin.has(key)) {
+        return { ok: false, message: '중복된 열이 있습니다.' };
+      }
+      seenBuiltin.add(key);
+      out.push({ kind: 'builtin', key });
+    } else if (kind === 'custom') {
+      const id = trimString((item as any).id);
+      const label = trimString((item as any).label);
+      if (!CUSTOM_COL_ID_RE.test(id)) {
+        return { ok: false, message: '커스텀 열 id가 올바르지 않습니다.' };
+      }
+      if (!label || label.length > 80) {
+        return { ok: false, message: '커스텀 열 이름은 1~80자여야 합니다.' };
+      }
+      if (seenCustom.has(id)) {
+        return { ok: false, message: '중복된 커스텀 열이 있습니다.' };
+      }
+      seenCustom.add(id);
+      customCount += 1;
+      if (customCount > 25) {
+        return { ok: false, message: '커스텀 열은 최대 25개까지입니다.' };
+      }
+      out.push({ kind: 'custom', id, label });
+    } else {
+      return { ok: false, message: 'column_schema kind가 올바르지 않습니다.' };
+    }
+  }
+
+  for (const req of REQUIRED_BUILTIN_COLUMNS) {
+    if (!seenBuiltin.has(req)) {
+      return { ok: false, message: '구분·Login ID·Password 열은 제거할 수 없습니다.' };
+    }
+  }
+
+  return { ok: true, value: { columns: out } };
+};
+
+type NormalizeColumnSchemaResult = ReturnType<typeof normalizeColumnSchema>;
+const isColumnSchemaNormalizeError = (
+  r: NormalizeColumnSchemaResult
+): r is { ok: false; message: string } => r.ok === false;
+
+function columnSignature(entry: ColumnSchemaEntry): string {
+  if (entry.kind === 'builtin') return `builtin:${entry.key}`;
+  return `custom:${entry.id}`;
+}
+
+async function applyColumnSchemaRemovals(
+  tabId: number,
+  tenantId: number,
+  oldSchema: ColumnSchema,
+  newSchema: ColumnSchema
+) {
+  const oldS = new Set(oldSchema.columns.map(columnSignature));
+  const newS = new Set(newSchema.columns.map(columnSignature));
+  const removed = [...oldS].filter((x) => !newS.has(x));
+
+  for (const sig of removed) {
+    if (sig.startsWith('builtin:')) {
+      const key = sig.slice(8) as BuiltinColumnKey;
+      if (key === 'open_file_returns') {
+        await (LoginInfo as any).update(
+          { open_file_returns: null },
+          { where: { tab_id: tabId, tenant_id: tenantId } }
+        );
+      } else if (key === 'url') {
+        await (LoginInfo as any).update({ url: null }, { where: { tab_id: tabId, tenant_id: tenantId } });
+      }
+    } else if (sig.startsWith('custom:')) {
+      const id = sig.slice(7);
+      const rows = await (LoginInfo as any).findAll({
+        where: { tab_id: tabId, tenant_id: tenantId },
+        attributes: ['id', 'extra_fields']
+      });
+      for (const row of rows) {
+        const raw = row.extra_fields;
+        const ex =
+          raw && typeof raw === 'object' && !Array.isArray(raw) ? { ...(raw as Record<string, unknown>) } : {};
+        if (Object.prototype.hasOwnProperty.call(ex, id)) {
+          delete ex[id];
+          await row.update({ extra_fields: Object.keys(ex).length ? ex : null });
+        }
+      }
+    }
+  }
+}
+
+function normalizeExtraFieldsPayload(raw: unknown): Record<string, string> | null {
+  if (raw == null) return null;
+  if (typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (!CUSTOM_COL_ID_RE.test(k)) continue;
+    const s = trimString(v);
+    if (s.length > 500) {
+      continue;
+    }
+    out[k] = s;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+const mergeColumnHeaders = (
+  existing: unknown,
+  incoming: unknown
+): { ok: true; value: Record<string, string> } | { ok: false; message: string } => {
+  if (incoming == null || typeof incoming !== 'object' || Array.isArray(incoming)) {
+    return { ok: false, message: 'column_headers 형식이 올바르지 않습니다.' };
+  }
+  const prev =
+    existing && typeof existing === 'object' && !Array.isArray(existing)
+      ? { ...(existing as Record<string, string>) }
+      : {};
+  const out: Record<string, string> = { ...prev };
+  for (const key of COLUMN_HEADER_KEYS) {
+    if (!Object.prototype.hasOwnProperty.call(incoming, key)) continue;
+    const s = trimString((incoming as Record<string, unknown>)[key]);
+    if (!s) {
+      delete out[key];
+      continue;
+    }
+    if (s.length > 80) {
+      return { ok: false, message: '열 헤더는 80자 이하로 입력해주세요.' };
+    }
+    out[key] = s;
+  }
+  return { ok: true, value: out };
+};
+
+type MergeColumnHeadersResult = ReturnType<typeof mergeColumnHeaders>;
+const isColumnHeadersMergeError = (
+  r: MergeColumnHeadersResult
+): r is { ok: false; message: string } => r.ok === false;
 
 const isMissingLoginLogsTableError = (error: any) => {
   const message = String(error?.message || '');
@@ -158,8 +629,27 @@ const validateLoginInfoPayload = (payload: any, isUpdate = false) => {
     }
   }
 
-  if (url && !/^https?:\/\//i.test(url)) {
-    errors.push('url은 http 또는 https로 시작해야 합니다.');
+  let normalizedExtra: Record<string, string> | null | undefined;
+  if (hasField('extra_fields')) {
+    if (payload.extra_fields === null) {
+      normalizedExtra = null;
+    } else if (typeof payload.extra_fields !== 'object' || Array.isArray(payload.extra_fields)) {
+      errors.push('extra_fields 형식이 올바르지 않습니다.');
+    } else {
+      for (const [k, v] of Object.entries(payload.extra_fields as Record<string, unknown>)) {
+        if (!CUSTOM_COL_ID_RE.test(k)) {
+          errors.push('extra_fields 키 형식이 올바르지 않습니다.');
+          break;
+        }
+        if (trimString(v).length > 500) {
+          errors.push('커스텀 열 값은 500자 이하로 입력해주세요.');
+          break;
+        }
+      }
+      if (!errors.length) {
+        normalizedExtra = normalizeExtraFieldsPayload(payload.extra_fields);
+      }
+    }
   }
 
   return {
@@ -170,16 +660,223 @@ const validateLoginInfoPayload = (payload: any, isUpdate = false) => {
       login_id: loginId,
       password,
       open_file_returns: hasField('open_file_returns') ? trimString(payload.open_file_returns) : undefined,
-      url: url || undefined
+      url: url || undefined,
+      extra_fields: normalizedExtra
     }
   };
 };
 
-// 로그인 정보 목록 조회 (회사별 필터 가능)
+// 회사별 로그인 정보 탭 목록 (없으면 기본 탭 생성)
+router.get('/tabs', async (req: AuthRequest, res) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    const companyId = req.query.company_id ? Number(req.query.company_id) : NaN;
+
+    if (!companyId || Number.isNaN(companyId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'company_id가 필요합니다.'
+      });
+    }
+
+    const isValidCompany = await ensureCompanyInTenant(companyId, tenantId);
+    if (!isValidCompany) {
+      return res.status(403).json({
+        success: false,
+        message: '해당 회사에 대한 접근 권한이 없습니다.'
+      });
+    }
+
+    await ensureDefaultTabsForCompany(companyId, tenantId);
+
+    const tabs = await (LoginInfoTab as any).findAll({
+      where: { company_id: companyId, tenant_id: tenantId },
+      order: [
+        ['sort_order', 'ASC'],
+        ['id', 'ASC']
+      ]
+    });
+
+    res.json({ success: true, data: tabs });
+  } catch (error: any) {
+    console.error('로그인 정보 탭 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '탭 목록을 불러오지 못했습니다.'
+    });
+  }
+});
+
+router.post('/tabs', async (req: AuthRequest, res) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    const companyId = Number(req.body.company_id);
+    const name = trimString(req.body.name);
+
+    if (!companyId || Number.isNaN(companyId)) {
+      return res.status(400).json({ success: false, message: 'company_id가 올바르지 않습니다.' });
+    }
+    if (!name || name.length > 120) {
+      return res.status(400).json({ success: false, message: '탭 이름은 1~120자로 입력해주세요.' });
+    }
+
+    const isValidCompany = await ensureCompanyInTenant(companyId, tenantId);
+    if (!isValidCompany) {
+      return res.status(403).json({ success: false, message: '해당 회사에 대한 접근 권한이 없습니다.' });
+    }
+
+    const maxRow = await (LoginInfoTab as any).findOne({
+      where: { company_id: companyId, tenant_id: tenantId },
+      order: [['sort_order', 'DESC']],
+      attributes: ['sort_order']
+    });
+    const sortOrder = maxRow ? Number(maxRow.sort_order) + 1 : 0;
+
+    const created = await (LoginInfoTab as any).create({
+      tenant_id: tenantId,
+      company_id: companyId,
+      name,
+      sort_order: sortOrder
+    });
+
+    res.status(201).json({ success: true, message: '탭이 추가되었습니다.', data: created });
+  } catch (error: any) {
+    console.error('로그인 정보 탭 추가 오류:', error);
+    res.status(500).json({ success: false, message: '탭 추가 중 오류가 발생했습니다.' });
+  }
+});
+
+router.put('/tabs/:tabId', async (req: AuthRequest, res) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    const tabId = Number(req.params.tabId);
+    const hasName = Object.prototype.hasOwnProperty.call(req.body, 'name');
+    const hasColumnHeaders = Object.prototype.hasOwnProperty.call(req.body, 'column_headers');
+    const hasColumnHidden = Object.prototype.hasOwnProperty.call(req.body, 'column_hidden');
+    const hasColumnSchema = Object.prototype.hasOwnProperty.call(req.body, 'column_schema');
+
+    if (Number.isNaN(tabId)) {
+      return res.status(400).json({ success: false, message: 'tab_id가 올바르지 않습니다.' });
+    }
+    if (!hasName && !hasColumnHeaders && !hasColumnHidden && !hasColumnSchema) {
+      return res.status(400).json({
+        success: false,
+        message: 'name, column_headers, column_hidden, column_schema 중 하나 이상이 필요합니다.'
+      });
+    }
+
+    const tab = await (LoginInfoTab as any).findOne({
+      where: { id: tabId, tenant_id: tenantId }
+    });
+    if (!tab) {
+      return res.status(404).json({ success: false, message: '탭을 찾을 수 없습니다.' });
+    }
+
+    const updates: Record<string, unknown> = {};
+
+    if (hasName) {
+      const name = trimString(req.body.name);
+      if (!name || name.length > 120) {
+        return res.status(400).json({ success: false, message: '탭 이름은 1~120자로 입력해주세요.' });
+      }
+      updates.name = name;
+    }
+
+    if (hasColumnHeaders) {
+      if (req.body.column_headers === null) {
+        updates.column_headers = null;
+      } else {
+        const merged = mergeColumnHeaders(tab.column_headers, req.body.column_headers);
+        if (isColumnHeadersMergeError(merged)) {
+          return res.status(400).json({ success: false, message: merged.message });
+        }
+        updates.column_headers =
+          Object.keys(merged.value).length > 0 ? merged.value : null;
+      }
+    }
+
+    if (hasColumnHidden) {
+      if (req.body.column_hidden === null) {
+        updates.column_hidden = null;
+      } else {
+        const norm = normalizeColumnHidden(req.body.column_hidden);
+        if (isColumnHiddenNormalizeError(norm)) {
+          return res.status(400).json({ success: false, message: norm.message });
+        }
+        updates.column_hidden = norm.value.length > 0 ? norm.value : null;
+      }
+    }
+
+    if (hasColumnSchema) {
+      if (req.body.column_schema === null) {
+        updates.column_schema = null;
+        updates.column_hidden = null;
+      } else {
+        const norm = normalizeColumnSchema(req.body.column_schema);
+        if (isColumnSchemaNormalizeError(norm)) {
+          return res.status(400).json({ success: false, message: norm.message });
+        }
+        const oldSchema = getEffectiveColumnSchema(tab);
+        await applyColumnSchemaRemovals(tabId, tenantId, oldSchema, norm.value);
+        updates.column_schema = norm.value;
+        updates.column_hidden = null;
+      }
+    }
+
+    await tab.update(updates);
+    await tab.reload();
+    res.json({
+      success: true,
+      message: '저장되었습니다.',
+      data: tab
+    });
+  } catch (error: any) {
+    console.error('로그인 정보 탭 수정 오류:', error);
+    res.status(500).json({ success: false, message: '탭 수정 중 오류가 발생했습니다.' });
+  }
+});
+
+router.delete('/tabs/:tabId', async (req: AuthRequest, res) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    const tabId = Number(req.params.tabId);
+
+    if (Number.isNaN(tabId)) {
+      return res.status(400).json({ success: false, message: 'tab_id가 올바르지 않습니다.' });
+    }
+
+    const tab = await (LoginInfoTab as any).findOne({
+      where: { id: tabId, tenant_id: tenantId }
+    });
+    if (!tab) {
+      return res.status(404).json({ success: false, message: '탭을 찾을 수 없습니다.' });
+    }
+
+    const countTabs = await (LoginInfoTab as any).count({
+      where: { company_id: tab.company_id, tenant_id: tenantId }
+    });
+    if (countTabs <= 1) {
+      return res.status(400).json({
+        success: false,
+        message: '마지막 탭은 삭제할 수 없습니다.'
+      });
+    }
+
+    await tab.destroy();
+
+    res.json({ success: true, message: '탭이 삭제되었습니다.' });
+  } catch (error: any) {
+    console.error('로그인 정보 탭 삭제 오류:', error);
+    res.status(500).json({ success: false, message: '탭 삭제 중 오류가 발생했습니다.' });
+  }
+});
+
+// 로그인 정보 목록 조회 (회사 + 탭 필수)
 router.get('/', async (req: AuthRequest, res) => {
   try {
     const tenantId = req.user.tenant_id;
     const companyId = req.query.company_id ? Number(req.query.company_id) : null;
+    const tabId = req.query.tab_id ? Number(req.query.tab_id) : null;
 
     if (companyId && Number.isNaN(companyId)) {
       return res.status(400).json({
@@ -188,7 +885,15 @@ router.get('/', async (req: AuthRequest, res) => {
       });
     }
 
+    if (companyId && (!tabId || Number.isNaN(tabId))) {
+      return res.status(400).json({
+        success: false,
+        message: 'tab_id가 필요합니다.'
+      });
+    }
+
     const whereClause: any = { tenant_id: tenantId };
+
     if (companyId) {
       const isValidCompany = await ensureCompanyInTenant(companyId, tenantId);
       if (!isValidCompany) {
@@ -197,7 +902,20 @@ router.get('/', async (req: AuthRequest, res) => {
           message: '해당 회사에 대한 접근 권한이 없습니다.'
         });
       }
+      const tab = await assertTabForCompany(tabId!, companyId, tenantId);
+      if (!tab) {
+        return res.status(403).json({
+          success: false,
+          message: '해당 탭에 대한 접근 권한이 없습니다.'
+        });
+      }
       whereClause.company_id = companyId;
+      whereClause.tab_id = tabId;
+    } else if (tabId) {
+      return res.status(400).json({
+        success: false,
+        message: 'company_id와 함께 tab_id를 지정해주세요.'
+      });
     }
 
     const loginInfos = await (LoginInfo as any).findAll({
@@ -263,7 +981,7 @@ router.get('/logs', async (req: AuthRequest, res) => {
     }
 
     if (userid) {
-      whereClause.userid = { [Op.like]: `%${userid}%` };
+      whereClause.userid = { [Op.iLike]: `%${userid}%` };
     }
 
     if (startDate || endDate) {
@@ -336,11 +1054,18 @@ router.post('/import', upload.single('file'), async (req: AuthRequest, res) => {
     const tenantId = req.user.tenant_id;
     const userId = req.user.id;
     const companyId = Number(req.body.company_id);
+    const tabId = Number(req.body.tab_id);
 
     if (!companyId || Number.isNaN(companyId)) {
       return res.status(400).json({
         success: false,
         message: 'company_id가 올바르지 않습니다.'
+      });
+    }
+    if (!tabId || Number.isNaN(tabId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'tab_id가 올바르지 않습니다.'
       });
     }
 
@@ -349,6 +1074,14 @@ router.post('/import', upload.single('file'), async (req: AuthRequest, res) => {
       return res.status(403).json({
         success: false,
         message: '해당 회사에 대한 접근 권한이 없습니다.'
+      });
+    }
+
+    const tab = await assertTabForCompany(tabId, companyId, tenantId);
+    if (!tab) {
+      return res.status(403).json({
+        success: false,
+        message: '해당 탭에 대한 접근 권한이 없습니다.'
       });
     }
 
@@ -398,6 +1131,7 @@ router.post('/import', upload.single('file'), async (req: AuthRequest, res) => {
       entries.push({
         tenant_id: tenantId,
         company_id: companyId,
+        tab_id: tabId,
         division,
         login_id,
         password,
@@ -440,12 +1174,20 @@ router.post('/', async (req: AuthRequest, res) => {
     const tenantId = req.user.tenant_id;
     const userId = req.user.id;
     const { company_id } = req.body;
+    const tabId = Number(req.body.tab_id);
     const validation = validateLoginInfoPayload(req.body);
 
     if (!validation.isValid) {
       return res.status(400).json({
         success: false,
         message: validation.errors[0]
+      });
+    }
+
+    if (!tabId || Number.isNaN(tabId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'tab_id가 올바르지 않습니다.'
       });
     }
 
@@ -457,14 +1199,24 @@ router.post('/', async (req: AuthRequest, res) => {
       });
     }
 
+    const tab = await assertTabForCompany(tabId, Number(company_id), tenantId);
+    if (!tab) {
+      return res.status(403).json({
+        success: false,
+        message: '해당 탭에 대한 접근 권한이 없습니다.'
+      });
+    }
+
     const created = await (LoginInfo as any).create({
       tenant_id: tenantId,
       company_id,
+      tab_id: tabId,
       division: validation.normalized.division,
       login_id: validation.normalized.login_id,
       password: validation.normalized.password,
       open_file_returns: validation.normalized.open_file_returns || null,
       url: validation.normalized.url || null,
+      extra_fields: validation.normalized.extra_fields ?? null,
       created_by: userId,
       updated_by: userId
     });
@@ -536,6 +1288,9 @@ router.put('/:id', async (req: AuthRequest, res) => {
     }
     if (Object.prototype.hasOwnProperty.call(req.body, 'url')) {
       updates.url = validation.normalized.url || null;
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'extra_fields')) {
+      updates.extra_fields = validation.normalized.extra_fields ?? null;
     }
     if (Object.prototype.hasOwnProperty.call(req.body, 'company_id')) {
       updates.company_id = Number(req.body.company_id);

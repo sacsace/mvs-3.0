@@ -1,23 +1,41 @@
 import express from 'express';
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { Customer, RoomBooking } from '../models';
 import { validateBody } from '../middleware/validate';
+import { authenticateToken } from '../middleware/auth';
+import { requireAdminRootOrMenuPermissionAnyOf } from '../middleware/menuPermission';
+import { AuthRequest } from '../types';
 
 const router = express.Router();
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** 프론트 `App.tsx` 고객 정보 경로 및 DB `menus.route` 후보 */
+const CUSTOMER_MENU_ROUTES = ['/customers/info', '/customers'];
+/** 예약에서 합성한 숙박손님 행 id (`1000000000 + booking.id`) */
+const GUEST_CUSTOMER_ID_BASE = 1000000000;
+
+const permRead = requireAdminRootOrMenuPermissionAnyOf(CUSTOMER_MENU_ROUTES, ['can_view', 'can_create']);
+const permCreate = requireAdminRootOrMenuPermissionAnyOf(CUSTOMER_MENU_ROUTES, ['can_create']);
+const permEdit = requireAdminRootOrMenuPermissionAnyOf(CUSTOMER_MENU_ROUTES, ['can_edit']);
+const permDelete = requireAdminRootOrMenuPermissionAnyOf(CUSTOMER_MENU_ROUTES, ['can_delete']);
+
+router.use(authenticateToken);
+
 // 고객 목록 조회
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', permRead, async (req: AuthRequest, res: Response) => {
   try {
+    const tenantId = req.user.tenant_id;
+    const companyId = req.user.company_id;
+
     const customers = await (Customer as any).findAll({
-      where: { tenant_id: 1 },
+      where: { tenant_id: tenantId, company_id: companyId },
       order: [['created_at', 'DESC']]
     });
 
     const roomGuests = await (RoomBooking as any).findAll({
       where: {
-        tenant_id: 1,
-        company_id: 1,
+        tenant_id: tenantId,
+        company_id: companyId,
         is_active: true
       },
       attributes: [
@@ -48,9 +66,9 @@ router.get('/', async (req: Request, res: Response) => {
       if (guestMap.has(dedupeKey)) continue;
 
       guestMap.set(dedupeKey, {
-        id: 1000000000 + Number(booking.id || 0),
-        tenant_id: 1,
-        company_id: 1,
+        id: GUEST_CUSTOMER_ID_BASE + Number(booking.id || 0),
+        tenant_id: tenantId,
+        company_id: companyId,
         name: guestName,
         business_number: null,
         ceo_name: booking.company_name || '숙박손님',
@@ -87,11 +105,25 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 // 특정 고객 조회
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', permRead, async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const numericId = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(numericId)) {
+      return res.status(400).json({ success: false, message: '잘못된 고객 ID입니다.' });
+    }
+    if (numericId >= GUEST_CUSTOMER_ID_BASE) {
+      return res.status(404).json({
+        success: false,
+        message: '고객을 찾을 수 없습니다.'
+      });
+    }
+
     const customer = await (Customer as any).findOne({
-      where: { id, tenant_id: 1 }
+      where: {
+        id: numericId,
+        tenant_id: req.user.tenant_id,
+        company_id: req.user.company_id
+      }
     });
 
     if (!customer) {
@@ -117,81 +149,113 @@ router.get('/:id', async (req: Request, res: Response) => {
 // 고객 생성
 router.post(
   '/',
+  permCreate,
   validateBody({
     name: { required: true, type: 'string', minLength: 1, maxLength: 200 },
     email: { type: 'string', maxLength: 255, pattern: emailPattern },
     business_number: { type: 'string', maxLength: 50 },
     status: { type: 'string', maxLength: 20 }
   }),
-  async (req: Request, res: Response) => {
-  try {
-    const customerData = {
-      ...req.body,
-      tenant_id: 1,
-      company_id: 1
-    };
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const customerData = {
+        ...req.body,
+        tenant_id: req.user.tenant_id,
+        company_id: req.user.company_id
+      };
 
-    const customer = await (Customer as any).create(customerData);
+      const customer = await (Customer as any).create(customerData);
 
-    res.status(201).json({
-      success: true,
-      message: '고객이 성공적으로 등록되었습니다.',
-      data: customer
-    });
-  } catch (error: any) {
-    console.error('고객 생성 오류:', error);
-    res.status(500).json({
-      success: false,
-      message: '고객 생성 중 오류가 발생했습니다.'
-    });
+      res.status(201).json({
+        success: true,
+        message: '고객이 성공적으로 등록되었습니다.',
+        data: customer
+      });
+    } catch (error: any) {
+      console.error('고객 생성 오류:', error);
+      res.status(500).json({
+        success: false,
+        message: '고객 생성 중 오류가 발생했습니다.'
+      });
+    }
   }
-});
+);
 
 // 고객 수정
 router.put(
   '/:id',
+  permEdit,
   validateBody({
     name: { type: 'string', minLength: 1, maxLength: 200 },
     email: { type: 'string', maxLength: 255, pattern: emailPattern },
     business_number: { type: 'string', maxLength: 50 },
     status: { type: 'string', maxLength: 20 }
   }),
-  async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const customer = await (Customer as any).findOne({
-      where: { id, tenant_id: 1 }
-    });
+  async (req: AuthRequest, res: Response) => {
+    try {
+      const numericId = Number.parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(numericId)) {
+        return res.status(400).json({ success: false, message: '잘못된 고객 ID입니다.' });
+      }
+      if (numericId >= GUEST_CUSTOMER_ID_BASE) {
+        return res.status(400).json({
+          success: false,
+          message: '숙박 연동 고객은 이 API로 수정할 수 없습니다.'
+        });
+      }
 
-    if (!customer) {
-      return res.status(404).json({
+      const customer = await (Customer as any).findOne({
+        where: {
+          id: numericId,
+          tenant_id: req.user.tenant_id,
+          company_id: req.user.company_id
+        }
+      });
+
+      if (!customer) {
+        return res.status(404).json({
+          success: false,
+          message: '고객을 찾을 수 없습니다.'
+        });
+      }
+
+      await customer.update(req.body);
+
+      res.json({
+        success: true,
+        message: '고객 정보가 성공적으로 수정되었습니다.',
+        data: customer
+      });
+    } catch (error: any) {
+      console.error('고객 수정 오류:', error);
+      res.status(500).json({
         success: false,
-        message: '고객을 찾을 수 없습니다.'
+        message: '고객 수정 중 오류가 발생했습니다.'
+      });
+    }
+  }
+);
+
+// 고객 삭제
+router.delete('/:id', permDelete, async (req: AuthRequest, res: Response) => {
+  try {
+    const numericId = Number.parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(numericId)) {
+      return res.status(400).json({ success: false, message: '잘못된 고객 ID입니다.' });
+    }
+    if (numericId >= GUEST_CUSTOMER_ID_BASE) {
+      return res.status(400).json({
+        success: false,
+        message: '숙박 연동 고객은 이 API로 삭제할 수 없습니다.'
       });
     }
 
-    await customer.update(req.body);
-
-    res.json({
-      success: true,
-      message: '고객 정보가 성공적으로 수정되었습니다.',
-      data: customer
-    });
-  } catch (error: any) {
-    console.error('고객 수정 오류:', error);
-    res.status(500).json({
-      success: false,
-      message: '고객 수정 중 오류가 발생했습니다.'
-    });
-  }
-});
-
-// 고객 삭제
-router.delete('/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
     const customer = await (Customer as any).findOne({
-      where: { id, tenant_id: 1 }
+      where: {
+        id: numericId,
+        tenant_id: req.user.tenant_id,
+        company_id: req.user.company_id
+      }
     });
 
     if (!customer) {

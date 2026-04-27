@@ -1,5 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
+/**
+ * 확인 모달 상태 훅. UI는 반드시 `components/Common/ConfirmDialog` 를 렌더링하고
+ * 스타일은 `mvsDialogShell.ts` 기본값을 따릅니다.
+ */
 interface ConfirmDialogOptions {
   title?: string;
   message: string;
@@ -8,43 +12,48 @@ interface ConfirmDialogOptions {
   confirmColor?: 'primary' | 'error' | 'warning';
 }
 
-interface ConfirmDialogState extends ConfirmDialogOptions {
+export interface ConfirmDialogState {
   open: boolean;
-  onConfirm: (() => void) | null;
+  message: string;
+  title?: string;
+  confirmText?: string;
+  cancelText?: string;
+  confirmColor?: 'primary' | 'error' | 'warning';
 }
 
-export const useConfirmDialog = () => {
-  const [dialogState, setDialogState] = useState<ConfirmDialogState>({
-    open: false,
-    message: '',
-    onConfirm: null
-  });
+const closedState: ConfirmDialogState = {
+  open: false,
+  message: ''
+};
 
-  const showConfirm = useCallback((
-    message: string,
-    onConfirm: () => void,
-    options?: Omit<ConfirmDialogOptions, 'message'>
-  ) => {
-    setDialogState({
-      open: true,
-      message,
-      onConfirm,
-      title: options?.title,
-      confirmText: options?.confirmText,
-      cancelText: options?.cancelText,
-      confirmColor: options?.confirmColor
-    });
-  }, []);
+export const useConfirmDialog = () => {
+  const [dialogState, setDialogState] = useState<ConfirmDialogState>(closedState);
+  const onConfirmRef = useRef<(() => void) | null>(null);
+
+  const showConfirm = useCallback(
+    (message: string, onConfirm: () => void, options?: Omit<ConfirmDialogOptions, 'message'>) => {
+      onConfirmRef.current = onConfirm;
+      setDialogState({
+        open: true,
+        message,
+        title: options?.title,
+        confirmText: options?.confirmText,
+        cancelText: options?.cancelText,
+        confirmColor: options?.confirmColor
+      });
+    },
+    []
+  );
 
   const handleConfirm = useCallback(() => {
-    if (dialogState.onConfirm) {
-      dialogState.onConfirm();
-    }
-    setDialogState(prev => ({ ...prev, open: false, onConfirm: null }));
-  }, [dialogState.onConfirm]);
+    onConfirmRef.current?.();
+    onConfirmRef.current = null;
+    setDialogState(closedState);
+  }, []);
 
   const handleCancel = useCallback(() => {
-    setDialogState(prev => ({ ...prev, open: false, onConfirm: null }));
+    onConfirmRef.current = null;
+    setDialogState(closedState);
   }, []);
 
   return {

@@ -2,11 +2,41 @@ import express from 'express';
 import { Op } from 'sequelize';
 import bcrypt from 'bcrypt';
 import { User, Company } from '../models';
-import { authenticateToken, requireRole } from '../middleware/auth';
+import { resolveDepartmentFieldsForUser } from '../controllers/departmentController';
+import { authenticateToken } from '../middleware/auth';
+import { requireAdminRootOrUserMenuPermission } from '../middleware/menuPermission';
+import { getUserUiPreferences, patchUserUiPreferences } from '../controllers/userUiPreferencesController';
 import { validateBody } from '../middleware/validate';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import path from 'path';
+
+/** 사용자 Excel 내보내기 컬럼 순서 (json_to_sheet와 동일) */
+const USER_EXCEL_EXPORT_COLUMNS = [
+  '사원번호',
+  '사용자ID',
+  '이름',
+  '이메일',
+  '비밀번호',
+  '역할 (root/admin/user/audit)',
+  '부서',
+  '직책',
+  '생년월일 (YYYY-MM-DD)',
+  '성별 (male/female/other)',
+  '전화번호',
+  '주소',
+  '비상연락처',
+  '비상연락처 전화번호',
+  '입사일 (YYYY-MM-DD)',
+  '고용형태 (fulltime/contract/parttime/intern/daily)',
+  '급여',
+  '상태 (active/inactive/suspended)'
+] as const;
+
+const USER_EXCEL_EXPORT_COL_WIDTHS = [
+  12, 12, 12, 25, 15, 20, 12, 12, 18, 15, 15, 30, 15, 20, 18, 25, 12, 20
+];
 
 // bcrypt를 사용한 비밀번호 해싱 함수 (authController와 동일)
 const hashPassword = async (password: string): Promise<string> => {
@@ -142,14 +172,7 @@ router.get('/', async (req, res) => {
     const userRole = (req as any).user.role;
     const { search, company_id } = req.query;
     
-    console.log('🔍 사용자 목록 조회 시작:', {
-      tenantId,
-      companyId,
-      userRole,
-      search,
-      company_id
-    });
-    
+        
     // root나 audit 권한이면 모든 사용자 조회 가능, 아니면 자신의 회사 사용자만
     const whereClause: any = {};
     if (userRole !== 'root' && userRole !== 'audit') {
@@ -157,7 +180,10 @@ router.get('/', async (req, res) => {
       whereClause.company_id = companyId;
     } else if (userRole === 'root' && company_id) {
       // root가 특정 회사 필터링
-      whereClause.company_id = parseInt(company_id as string);
+      whereClause.company_id = parseInt(company_id as string, 10);
+    } else if (userRole === 'audit' && company_id) {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = parseInt(String(company_id), 10);
     }
     
     // 검색 기능 (이름, 사용자 ID, 회사명으로 검색)
@@ -196,16 +222,14 @@ router.get('/', async (req, res) => {
       required: false
     });
     
-    console.log('🔍 WHERE 절:', whereClause);
-    
+        
     // 디버깅: WHERE 절 없이 전체 조회해서 개수 확인
     const allUsersCount = await (User as any).count();
-    console.log('🔍 전체 사용자 개수 (WHERE 절 없이):', allUsersCount);
-    
+        
     // 먼저 기본 컬럼만 조회 (HR 필드 제외)
     let users: any[];
     const baseAttributes = [
-      'id', 'userid', 'username', 'email', 'role', 'department', 'position', 'status', 'last_login', 'created_at',
+      'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'status', 'last_login', 'created_at',
       'tenant_id', 'company_id', 'is_payment_officer'
     ];
     
@@ -229,8 +253,9 @@ router.get('/', async (req, res) => {
           where: whereClause,
           attributes: [
             ...baseAttributes,
-            'employee_number', 'birth_date', 'gender', 'phone', 'address', 
-            'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary'
+            'employee_number', 'birth_date', 'gender', 'phone', 'address',
+            'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
+            'bank_name', 'bank_account', 'bank_ifsc'
           ],
           order: [['created_at', 'DESC']],
           include: includeOptions
@@ -266,27 +291,16 @@ router.get('/', async (req, res) => {
     // Sequelize 모델 인스턴스를 JSON으로 변환
     const usersData = users.map((user: any) => user.toJSON ? user.toJSON() : user);
     
-    console.log('✅ 사용자 목록 조회 완료, 반환할 사용자 개수:', usersData.length);
-    if (usersData.length === 0) {
-      console.log('⚠️ 사용자 목록이 비어있습니다. WHERE 절:', whereClause);
-      console.log('⚠️ 요청한 tenant_id:', tenantId, 'company_id:', companyId);
-      
+        if (usersData.length === 0) {
+                  
       // WHERE 절 없이 조회해서 실제 데이터 확인
       const allUsers = await (User as any).findAll({
         attributes: ['id', 'userid', 'username', 'tenant_id', 'company_id', 'role'],
         limit: 5
       });
       const allUsersData = allUsers.map((u: any) => u.toJSON ? u.toJSON() : u);
-      console.log('🔍 데이터베이스의 실제 사용자 샘플 (최대 5개):', allUsersData);
-    } else {
-      console.log('✅ 조회된 사용자 목록:', usersData.slice(0, 3).map((u: any) => ({
-        id: u.id,
-        userid: u.userid,
-        username: u.username,
-        tenant_id: u.tenant_id,
-        company_id: u.company_id
-      })));
-    }
+          } else {
+          }
 
     res.json({
       success: true,
@@ -309,7 +323,7 @@ router.get('/:id', async (req, res) => {
     const tenantId = (req as any).user.tenant_id;
     const companyId = (req as any).user.company_id;
     const baseAttributes = [
-      'id', 'userid', 'username', 'email', 'role', 'department', 'position', 'status', 'last_login', 'created_at',
+      'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'status', 'last_login', 'created_at',
       'is_payment_officer'
     ];
     
@@ -335,7 +349,8 @@ router.get('/:id', async (req, res) => {
           attributes: [
             ...baseAttributes,
             'employee_number', 'birth_date', 'gender', 'phone', 'address', 
-            'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary'
+            'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
+            'bank_name', 'bank_account', 'bank_ifsc'
           ]
         });
         if (userWithHrFields) {
@@ -387,10 +402,10 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// 사용자 생성 (관리자만)
+// 사용자 생성 (admin/root 또는 사용자관리 메뉴 can_create)
 router.post(
   '/',
-  requireRole(['admin', 'root']),
+  requireAdminRootOrUserMenuPermission('can_create'),
   validateBody({
     userid: { required: true, type: 'string', minLength: 2, maxLength: 50 },
     username: { required: true, type: 'string', minLength: 1, maxLength: 100 },
@@ -408,6 +423,7 @@ router.post(
       userid, username, email, password, role, department, position, status,
       employee_number, birth_date, gender, phone, address,
       emergency_contact, emergency_phone, hire_date, employment_type, salary,
+      bank_name, bank_account, bank_ifsc,
       is_payment_officer
     } = req.body;
 
@@ -520,8 +536,17 @@ router.post(
       employee_number: finalEmployeeNumber
     };
 
-    // 선택 필드 추가 (빈 문자열은 null로 변환)
-    if (department !== undefined) userData.department = department || null;
+    // 부서: department_id 우선, 없으면 기존 department 문자열
+    const createDeptRes = await resolveDepartmentFieldsForUser(targetTenantId, (req.body as any).department_id);
+    if (createDeptRes.kind === 'err') {
+      return res.status(400).json({ success: false, message: createDeptRes.message });
+    }
+    if (createDeptRes.kind === 'ok') {
+      userData.department_id = createDeptRes.department_id;
+      userData.department = createDeptRes.department;
+    } else if (department !== undefined) {
+      userData.department = department || null;
+    }
     if (position !== undefined) userData.position = position || null;
     if (birth_date) userData.birth_date = birth_date;
     if (gender) userData.gender = gender;
@@ -534,9 +559,9 @@ router.post(
     if (salary !== undefined && salary !== '') {
       userData.salary = parseFloat(salary) || null;
     }
-    if (is_payment_officer !== undefined) {
-      userData.is_payment_officer = Boolean(is_payment_officer);
-    }
+    if (bank_name !== undefined) userData.bank_name = bank_name || null;
+    if (bank_account !== undefined) userData.bank_account = bank_account || null;
+    if (bank_ifsc !== undefined) userData.bank_ifsc = bank_ifsc || null;
     if (is_payment_officer !== undefined) {
       userData.is_payment_officer = Boolean(is_payment_officer);
     }
@@ -562,10 +587,10 @@ router.post(
   }
 });
 
-// 사용자 수정 (관리자만)
+// 사용자 수정 (admin/root 또는 사용자관리 메뉴 can_edit)
 router.put(
   '/:id',
-  requireRole(['admin', 'root']),
+  requireAdminRootOrUserMenuPermission('can_edit'),
   validateBody({
     username: { type: 'string', minLength: 1, maxLength: 100 },
     email: { type: 'string', maxLength: 255, pattern: emailPattern },
@@ -586,6 +611,7 @@ router.put(
       username, email, password, role, department, position, status,
       employee_number, birth_date, gender, phone, address,
       emergency_contact, emergency_phone, hire_date, employment_type, salary,
+      bank_name, bank_account, bank_ifsc,
       is_payment_officer
     } = req.body;
 
@@ -598,7 +624,7 @@ router.put(
 
     // 사용자 존재 확인 - 기본 필드만 먼저 조회
     const baseAttributes = [
-      'id', 'userid', 'username', 'email', 'role', 'department', 'position', 'status', 'last_login', 'created_at',
+      'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'status', 'last_login', 'created_at',
       'tenant_id', 'company_id'
     ];
     
@@ -617,7 +643,8 @@ router.put(
             attributes: [
               ...baseAttributes,
               'employee_number', 'birth_date', 'gender', 'phone', 'address', 
-              'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary'
+              'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
+              'bank_name', 'bank_account', 'bank_ifsc'
             ]
           });
           if (userWithHrFields) {
@@ -689,7 +716,18 @@ router.put(
     if (email !== undefined) updateData.email = email;
     if (role !== undefined) updateData.role = role;
     if (status !== undefined) updateData.status = status;
-    if (department !== undefined) updateData.department = department || null;
+
+    const deptRes = await resolveDepartmentFieldsForUser(tenantId, (req.body as any).department_id);
+    if (deptRes.kind === 'err') {
+      return res.status(400).json({ success: false, message: deptRes.message });
+    }
+    if (deptRes.kind === 'ok') {
+      updateData.department_id = deptRes.department_id;
+      updateData.department = deptRes.department;
+    } else if (department !== undefined) {
+      updateData.department = department || null;
+    }
+
     if (position !== undefined) updateData.position = position || null;
     if (employee_number !== undefined) updateData.employee_number = employee_number || null;
     if (birth_date !== undefined) updateData.birth_date = birth_date || null;
@@ -705,9 +743,9 @@ router.put(
     } else if (salary === '') {
       updateData.salary = null;
     }
-    if (is_payment_officer !== undefined) {
-      updateData.is_payment_officer = Boolean(is_payment_officer);
-    }
+    if (bank_name !== undefined) updateData.bank_name = bank_name || null;
+    if (bank_account !== undefined) updateData.bank_account = bank_account || null;
+    if (bank_ifsc !== undefined) updateData.bank_ifsc = bank_ifsc || null;
     if (is_payment_officer !== undefined) {
       updateData.is_payment_officer = Boolean(is_payment_officer);
     }
@@ -732,7 +770,7 @@ router.put(
 
     // 업데이트된 사용자 정보 조회 - 기본 필드만 먼저 조회
     const responseBaseAttributes = [
-      'id', 'userid', 'username', 'email', 'role', 'department', 'position', 'status', 'last_login', 'created_at',
+      'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'status', 'last_login', 'created_at',
       'is_payment_officer'
     ];
     
@@ -748,7 +786,8 @@ router.put(
           attributes: [
             ...responseBaseAttributes,
             'employee_number', 'birth_date', 'gender', 'phone', 'address', 
-            'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary'
+            'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
+            'bank_name', 'bank_account', 'bank_ifsc'
           ]
         });
         if (userWithHrFields) {
@@ -793,8 +832,8 @@ router.put(
   }
 });
 
-// 사용자 삭제 (관리자만)
-router.delete('/:id', requireRole(['admin', 'root']), async (req, res) => {
+// 사용자 삭제 (admin/root 또는 사용자관리 메뉴 can_delete)
+router.delete('/:id', requireAdminRootOrUserMenuPermission('can_delete'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -847,7 +886,7 @@ router.get('/excel/sample', authenticateToken, async (req, res) => {
         '사용자ID': 'user001',
         '이름': '홍길동',
         '이메일': 'hong@example.com',
-        '비밀번호': 'password123',
+        '비밀번호': 'SampleOnly!1Aa_ChangeAfterImport',
         '역할 (root/admin/user/audit)': 'user',
         '부서': '개발팀',
         '직책': '개발자',
@@ -858,7 +897,7 @@ router.get('/excel/sample', authenticateToken, async (req, res) => {
         '비상연락처': '홍부모',
         '비상연락처 전화번호': '010-9876-5432',
         '입사일 (YYYY-MM-DD)': '2020-01-01',
-        '고용형태 (fulltime/contract/parttime/intern)': 'fulltime',
+        '고용형태 (fulltime/contract/parttime/intern/daily)': 'fulltime',
         '급여': '5000000',
         '상태 (active/inactive/suspended)': 'active'
       },
@@ -867,7 +906,7 @@ router.get('/excel/sample', authenticateToken, async (req, res) => {
         '사용자ID': 'user002',
         '이름': '김영희',
         '이메일': 'kim@example.com',
-        '비밀번호': 'password123',
+        '비밀번호': 'SampleOnly!1Aa_ChangeAfterImport',
         '역할 (root/admin/user/audit)': 'admin',
         '부서': '인사팀',
         '직책': '인사담당자',
@@ -878,7 +917,7 @@ router.get('/excel/sample', authenticateToken, async (req, res) => {
         '비상연락처': '김부모',
         '비상연락처 전화번호': '010-8765-4321',
         '입사일 (YYYY-MM-DD)': '2019-06-01',
-        '고용형태 (fulltime/contract/parttime/intern)': 'fulltime',
+        '고용형태 (fulltime/contract/parttime/intern/daily)': 'fulltime',
         '급여': '6000000',
         '상태 (active/inactive/suspended)': 'active'
       }
@@ -994,43 +1033,32 @@ router.get('/excel/export', authenticateToken, async (req, res) => {
         '입사일 (YYYY-MM-DD)': userData.hire_date 
           ? new Date(userData.hire_date).toISOString().split('T')[0] 
           : '',
-        '고용형태 (fulltime/contract/parttime/intern)': userData.employment_type || '',
+        '고용형태 (fulltime/contract/parttime/intern/daily)': userData.employment_type || '',
         '급여': userData.salary || '',
         '상태 (active/inactive/suspended)': userData.status || 'active'
       };
     });
 
-    // Excel 워크북 생성
-    const workbook = XLSX.utils.book_new();
-    const worksheet = XLSX.utils.json_to_sheet(excelData);
-    
-    // 컬럼 너비 설정
-    const columnWidths = [
-      { wch: 12 }, // 사원번호
-      { wch: 12 }, // 사용자ID
-      { wch: 12 }, // 이름
-      { wch: 25 }, // 이메일
-      { wch: 15 }, // 비밀번호
-      { wch: 20 }, // 역할
-      { wch: 12 }, // 부서
-      { wch: 12 }, // 직책
-      { wch: 18 }, // 생년월일
-      { wch: 15 }, // 성별
-      { wch: 15 }, // 전화번호
-      { wch: 30 }, // 주소
-      { wch: 15 }, // 비상연락처
-      { wch: 20 }, // 비상연락처 전화번호
-      { wch: 18 }, // 입사일
-      { wch: 25 }, // 고용형태
-      { wch: 12 }, // 급여
-      { wch: 20 }  // 상태
-    ];
-    worksheet['!cols'] = columnWidths;
+    // Excel 워크북 생성 (폰트 9pt — SheetJS community는 스타일 미지원으로 ExcelJS 사용)
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('사용자');
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, '사용자');
+    worksheet.addRow([...USER_EXCEL_EXPORT_COLUMNS]);
+    excelData.forEach((rowObj: Record<string, unknown>) => {
+      worksheet.addRow(
+        USER_EXCEL_EXPORT_COLUMNS.map((key) => rowObj[key] ?? '')
+      );
+    });
 
-    // Excel 파일 버퍼 생성
-    const excelBuffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    USER_EXCEL_EXPORT_COL_WIDTHS.forEach((wch, i) => {
+      worksheet.getColumn(i + 1).width = wch;
+    });
+
+    worksheet.eachRow((row) => {
+      row.font = { size: 9 };
+    });
+
+    const excelBuffer = Buffer.from(await workbook.xlsx.writeBuffer());
 
     // 파일명 설정
     const fileName = `사용자_목록_${new Date().toISOString().split('T')[0]}.xlsx`;
@@ -1049,7 +1077,12 @@ router.get('/excel/export', authenticateToken, async (req, res) => {
 });
 
 // Excel 파일 업로드 및 사용자 일괄 등록
-router.post('/excel/import', authenticateToken, requireRole(['admin', 'root']), upload.single('file'), async (req, res) => {
+router.post(
+  '/excel/import',
+  authenticateToken,
+  requireAdminRootOrUserMenuPermission('can_edit'),
+  upload.single('file'),
+  async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -1195,8 +1228,8 @@ router.post('/excel/import', authenticateToken, requireRole(['admin', 'root']), 
           emergency_contact: row['비상연락처'] ? row['비상연락처'].toString().trim() : null,
           emergency_phone: row['비상연락처 전화번호'] ? row['비상연락처 전화번호'].toString().trim() : null,
           hire_date: row['입사일 (YYYY-MM-DD)'] ? new Date(row['입사일 (YYYY-MM-DD)'].toString()) : null,
-          employment_type: (row['고용형태 (fulltime/contract/parttime/intern)'] && ['fulltime', 'contract', 'parttime', 'intern'].includes(row['고용형태 (fulltime/contract/parttime/intern)'].toString().toLowerCase()))
-            ? row['고용형태 (fulltime/contract/parttime/intern)'].toString().toLowerCase()
+          employment_type: (row['고용형태 (fulltime/contract/parttime/intern/daily)'] && ['fulltime', 'contract', 'parttime', 'intern', 'daily'].includes(row['고용형태 (fulltime/contract/parttime/intern/daily)'].toString().toLowerCase()))
+            ? row['고용형태 (fulltime/contract/parttime/intern/daily)'].toString().toLowerCase()
             : null,
           salary: row['급여'] ? parseFloat(row['급여'].toString().replace(/,/g, '')) : null,
           status: (row['상태 (active/inactive/suspended)'] && ['active', 'inactive', 'suspended'].includes(row['상태 (active/inactive/suspended)'].toString().toLowerCase()))
@@ -1232,5 +1265,9 @@ router.post('/excel/import', authenticateToken, requireRole(['admin', 'root']), 
     });
   }
 });
+
+// 로그인 사용자 UI 설정 (users.settings.ui JSON)
+router.get('/me/ui-preferences', authenticateToken, getUserUiPreferences);
+router.patch('/me/ui-preferences', authenticateToken, patchUserUiPreferences);
 
 export default router;

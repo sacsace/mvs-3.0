@@ -1,23 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
   Card,
   CardContent,
-  Grid,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
   Paper,
-  Button,
-  Chip,
   TextField,
-  IconButton,
+  Chip,
   Alert,
-  LinearProgress
+  LinearProgress,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button
 } from '@mui/material';
 import {
   Inventory as InventoryIcon,
@@ -26,129 +30,311 @@ import {
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
+import { inventoryService } from '../../services/api';
+import { UTILS } from '../../constants';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+
+const INVENTORY_STATUS_MENU_ROUTES = ['/inventory/status', '/inventory'] as const;
+
+type StatusRow = {
+  id: number;
+  productCode: string;
+  productName: string;
+  category: string;
+  currentStock: number;
+  minStock: number;
+  maxStock: number;
+  unitPrice: number;
+  totalValue: number;
+  lastUpdated: string;
+};
+
+type TxRow = {
+  id: number;
+  transaction_type?: string;
+  quantity?: number | string;
+  unit_price?: number | string;
+  total_amount?: number | string;
+  notes?: string | null;
+  created_at?: string;
+  created_by?: number;
+  creator?: { username?: string; email?: string } | null;
+  product?: { name?: string; product_code?: string };
+};
+
+function formatTransactionCreator(tx: TxRow): string {
+  const u = tx.creator;
+  if (u?.username?.trim()) return u.username.trim();
+  if (u?.email?.trim()) return u.email.trim();
+  if (tx.created_by != null) return `#${tx.created_by}`;
+  return '—';
+}
+
+/** 재고율(%) = (현재재고 ÷ 최대재고) × 100 — 최대재고를 100% 기준. 최대재고 미설정(≤0)이면 null */
+function stockRatePercentVsMax(current: number, max: number): number | null {
+  if (!(max > 0) || !Number.isFinite(max)) return null;
+  const c = Number(current);
+  if (!Number.isFinite(c)) return null;
+  return (c / max) * 100;
+}
+
+type StatusSortKey =
+  | 'productCode'
+  | 'productName'
+  | 'category'
+  | 'currentStock'
+  | 'minStock'
+  | 'maxStock'
+  | 'stockRate'
+  | 'unitPrice'
+  | 'totalValue'
+  | 'status';
+
+function getStatusSortRank(item: StatusRow): number {
+  if (item.currentStock === 0) return 0;
+  if (item.minStock > 0 && item.currentStock <= item.minStock) return 1;
+  if (item.maxStock > 0 && item.currentStock >= item.maxStock * 0.9) return 2;
+  return 3;
+}
+
+function compareStatusRows(a: StatusRow, b: StatusRow, orderBy: StatusSortKey): number {
+  switch (orderBy) {
+    case 'productCode':
+      return a.productCode.localeCompare(b.productCode, undefined, { sensitivity: 'base' });
+    case 'productName':
+      return a.productName.localeCompare(b.productName, undefined, { sensitivity: 'base' });
+    case 'category':
+      return a.category.localeCompare(b.category, undefined, { sensitivity: 'base' });
+    case 'currentStock':
+      return a.currentStock - b.currentStock;
+    case 'minStock':
+      return a.minStock - b.minStock;
+    case 'maxStock':
+      return a.maxStock - b.maxStock;
+    case 'stockRate': {
+      const ra = stockRatePercentVsMax(a.currentStock, a.maxStock);
+      const rb = stockRatePercentVsMax(b.currentStock, b.maxStock);
+      const na = ra == null ? Number.NEGATIVE_INFINITY : ra;
+      const nb = rb == null ? Number.NEGATIVE_INFINITY : rb;
+      return na - nb;
+    }
+    case 'unitPrice':
+      return a.unitPrice - b.unitPrice;
+    case 'totalValue':
+      return a.totalValue - b.totalValue;
+    case 'status':
+      return getStatusSortRank(a) - getStatusSortRank(b);
+    default:
+      return 0;
+  }
+}
 
 const InventoryStatus: React.FC = () => {
-  const [inventoryItems, setInventoryItems] = useState([
-    {
-      id: 1,
-      productCode: 'PROD-001',
-      productName: '노트북 컴퓨터',
-      category: '전자제품',
-      currentStock: 15,
-      minStock: 10,
-      maxStock: 100,
-      unitPrice: 1200000,
-      totalValue: 18000000,
-      status: 'normal',
-      lastUpdated: '2024-01-15'
-    },
-    {
-      id: 2,
-      productCode: 'PROD-002',
-      productName: '무선 마우스',
-      category: '전자제품',
-      currentStock: 5,
-      minStock: 20,
-      maxStock: 200,
-      unitPrice: 25000,
-      totalValue: 125000,
-      status: 'low',
-      lastUpdated: '2024-01-14'
-    },
-    {
-      id: 3,
-      productCode: 'PROD-003',
-      productName: '키보드',
-      category: '전자제품',
-      currentStock: 0,
-      minStock: 15,
-      maxStock: 150,
-      unitPrice: 80000,
-      totalValue: 0,
-      status: 'out',
-      lastUpdated: '2024-01-13'
-    },
-    {
-      id: 4,
-      productCode: 'PROD-004',
-      productName: '모니터',
-      category: '전자제품',
-      currentStock: 25,
-      minStock: 5,
-      maxStock: 50,
-      unitPrice: 300000,
-      totalValue: 7500000,
-      status: 'normal',
-      lastUpdated: '2024-01-15'
-    }
-  ]);
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language?.startsWith('en') ? 'en-US' : 'ko-KR';
+  const menuFlags = useMenuRoutePermissionFlags(INVENTORY_STATUS_MENU_ROUTES);
+
+  const [inventoryItems, setInventoryItems] = useState<StatusRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [stats, setStats] = useState({
+    totalProducts: 0,
+    totalValue: 0,
+    lowStockItems: 0,
+    outOfStockItems: 0
+  });
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [orderBy, setOrderBy] = useState<StatusSortKey>('productCode');
+  const [order, setOrder] = useState<'asc' | 'desc'>('asc');
 
-  const getStatusInfo = (item: any) => {
+  const [txDialogOpen, setTxDialogOpen] = useState(false);
+  const [selectedRow, setSelectedRow] = useState<StatusRow | null>(null);
+  const [txRows, setTxRows] = useState<TxRow[]>([]);
+  const [txLoading, setTxLoading] = useState(false);
+  const [txError, setTxError] = useState('');
+  const [txTotal, setTxTotal] = useState(0);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setLoadError('');
+    try {
+      const [productsRes, reportRes] = await Promise.all([
+        inventoryService.getProducts({ page: 1, limit: 2000, search: '', category: '' }),
+        inventoryService.getInventoryReport()
+      ]);
+
+      if (!productsRes?.success || !Array.isArray(productsRes.data)) {
+        setInventoryItems([]);
+        setLoadError(t('inventoryStatus.errors.loadListFailed'));
+        return;
+      }
+
+      const rows: StatusRow[] = productsRes.data.map((product: Record<string, unknown>) => {
+        const currentStock = Number(product.stock_quantity ?? product.current_stock ?? 0);
+        const minStock = Number(product.min_stock_level ?? product.min_stock ?? 0);
+        const maxStock = Number(product.max_stock_level ?? product.max_stock ?? 0);
+        const unitPrice = parseFloat(String(product.unit_price ?? 0));
+        return {
+          id: Number(product.id),
+          productCode: String(product.product_code ?? product.sku ?? ''),
+          productName: String(product.name ?? ''),
+          category: String(product.category ?? ''),
+          currentStock,
+          minStock,
+          maxStock,
+          unitPrice,
+          totalValue: currentStock * unitPrice,
+          lastUpdated: product.updated_at
+            ? new Date(String(product.updated_at)).toISOString().split('T')[0]
+            : ''
+        };
+      });
+      setInventoryItems(rows);
+
+      if (reportRes?.success && reportRes.data?.stats) {
+        const s = reportRes.data.stats;
+        setStats({
+          totalProducts: Number(s.totalProducts ?? rows.length),
+          totalValue: Number(s.totalValue ?? 0),
+          lowStockItems: Number(s.lowStockItems ?? 0),
+          outOfStockItems: Number(s.outOfStockItems ?? 0)
+        });
+      } else {
+        let totalValue = 0;
+        let low = 0;
+        let out = 0;
+        rows.forEach((r) => {
+          totalValue += r.totalValue;
+          if (r.currentStock === 0) out++;
+          else if (r.minStock > 0 && r.currentStock <= r.minStock) low++;
+        });
+        setStats({
+          totalProducts: rows.length,
+          totalValue,
+          lowStockItems: low,
+          outOfStockItems: out
+        });
+      }
+    } catch (e: unknown) {
+      console.error(e);
+      setLoadError(t('inventoryStatus.errors.loadDataError'));
+      setInventoryItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) return;
+    loadData();
+  }, [loadData, menuFlags.menusLoading, menuFlags.canRead]);
+
+  const formatTxTypeChip = useCallback(
+    (txType?: string) => {
+      if (!txType) return { label: '—', color: 'default' as const };
+      const map: Record<string, { key: 'in' | 'out' | 'adjustment' | 'transfer'; color: 'success' | 'error' | 'warning' | 'info' }> = {
+        in: { key: 'in', color: 'success' },
+        out: { key: 'out', color: 'error' },
+        adjustment: { key: 'adjustment', color: 'warning' },
+        transfer: { key: 'transfer', color: 'info' }
+      };
+      const m = map[txType];
+      if (m) return { label: t(`inventoryStatus.txType.${m.key}`), color: m.color };
+      return { label: txType, color: 'default' as const };
+    },
+    [t]
+  );
+
+  const getStatusInfo = (item: StatusRow) => {
     if (item.currentStock === 0) {
       return {
-        label: '재고없음',
+        label: t('inventoryStatus.rowStatus.outOfStock'),
         color: 'error' as const,
         icon: <ErrorIcon />
       };
-    } else if (item.currentStock <= item.minStock) {
+    }
+    if (item.minStock > 0 && item.currentStock <= item.minStock) {
       return {
-        label: '재고부족',
+        label: t('inventoryStatus.rowStatus.lowStock'),
         color: 'warning' as const,
         icon: <WarningIcon />
       };
-    } else if (item.currentStock >= item.maxStock * 0.9) {
+    }
+    if (item.maxStock > 0 && item.currentStock >= item.maxStock * 0.9) {
       return {
-        label: '재고과다',
+        label: t('inventoryStatus.rowStatus.overstock'),
         color: 'info' as const,
         icon: <WarningIcon />
       };
-    } else {
-      return {
-        label: '정상',
-        color: 'success' as const,
-        icon: <CheckCircleIcon />
-      };
     }
+    return {
+      label: t('inventoryStatus.rowStatus.normal'),
+      color: 'success' as const,
+      icon: <CheckCircleIcon />
+    };
   };
 
-  const getStockLevel = (item: any) => {
-    const percentage = (item.currentStock / item.maxStock) * 100;
-    return Math.min(percentage, 100);
-  };
+  const filteredItems = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return inventoryItems;
+    return inventoryItems.filter(
+      (item) =>
+        item.productName.toLowerCase().includes(q) || item.productCode.toLowerCase().includes(q)
+    );
+  }, [inventoryItems, searchTerm]);
 
-  const filteredItems = inventoryItems.filter(item => {
-    const matchesSearch = item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.productCode.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    if (filterStatus === 'all') return matchesSearch;
-    if (filterStatus === 'low') return matchesSearch && item.currentStock <= item.minStock && item.currentStock > 0;
-    if (filterStatus === 'out') return matchesSearch && item.currentStock === 0;
-    if (filterStatus === 'normal') return matchesSearch && item.currentStock > item.minStock;
-    
-    return matchesSearch;
-  });
+  const sortedItems = useMemo(() => {
+    const copy = [...filteredItems];
+    copy.sort((a, b) => {
+      const c = compareStatusRows(a, b, orderBy);
+      return order === 'asc' ? c : -c;
+    });
+    return copy;
+  }, [filteredItems, orderBy, order]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ko-KR', {
-      style: 'currency',
-      currency: 'KRW'
-    }).format(amount);
-  };
+  const handleRequestSort = useCallback((property: StatusSortKey) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
+  }, [orderBy, order]);
 
-  const getTotalValue = () => {
-    return inventoryItems.reduce((sum, item) => sum + item.totalValue, 0);
-  };
+  const formatCurrency = (amount: number) => UTILS.formatCurrency(amount);
 
-  const getLowStockCount = () => {
-    return inventoryItems.filter(item => item.currentStock <= item.minStock && item.currentStock > 0).length;
-  };
+  const openTxDialog = useCallback(async (row: StatusRow) => {
+    if (!menuFlags.canRead) return;
+    setSelectedRow(row);
+    setTxDialogOpen(true);
+    setTxRows([]);
+    setTxError('');
+    setTxLoading(true);
+    setTxTotal(0);
+    try {
+      const res = await inventoryService.getInventoryTransactions({
+        product_id: row.id,
+        page: 1,
+        limit: 1000
+      });
+      if (res?.success && Array.isArray(res.data)) {
+        setTxRows(res.data as TxRow[]);
+        setTxTotal(Number((res as { pagination?: { total?: number } }).pagination?.total ?? res.data.length));
+      } else {
+        setTxError(t('inventoryStatus.errors.txLoadFailed'));
+      }
+    } catch {
+      setTxError(t('inventoryStatus.errors.txLoadError'));
+    } finally {
+      setTxLoading(false);
+    }
+  }, [t, menuFlags.canRead]);
 
-  const getOutOfStockCount = () => {
-    return inventoryItems.filter(item => item.currentStock === 0).length;
-  };
+  const closeTxDialog = useCallback(() => {
+    setTxDialogOpen(false);
+    setSelectedRow(null);
+    setTxRows([]);
+    setTxError('');
+  }, []);
 
   return (
     <Box sx={{ p: 3 }}>
@@ -156,171 +342,390 @@ const InventoryStatus: React.FC = () => {
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
             <InventoryIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-            <Typography component="h1" sx={{
-              fontSize: '16px !important',
-              fontWeight: 600,
-              color: 'red',
-              lineHeight: 1.5
-            }}>
-              재고 현황 조회
+            <Typography
+              component="h1"
+              sx={{
+                fontSize: '16px !important',
+                fontWeight: 600,
+                color: 'text.primary',
+                lineHeight: 1.5
+              }}
+            >
+              {t('inventoryStatus.pageTitle')}
             </Typography>
           </Box>
           <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-            재고 현황을 조회하는 페이지입니다.
+            {t('inventoryStatus.pageSubtitle')}
           </Typography>
         </Box>
       </Box>
 
-      {/* 요약 카드 */}
+      {loadError ? (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {loadError}
+        </Alert>
+      ) : null}
+
+      {!menuFlags.menusLoading && !menuFlags.canRead ? (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      ) : null}
+
+      {/* 요약 카드 — 재고 보고서 API 통계 */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
         <Card>
           <CardContent>
             <Typography variant="h6" color="primary">
-              총 재고 가치
+              {t('inventoryStatus.stats.totalValue')}
             </Typography>
             <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-              {formatCurrency(getTotalValue())}
+              {loading ? '…' : formatCurrency(stats.totalValue)}
             </Typography>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
             <Typography variant="h6" color="warning.main">
-              재고 부족
+              {t('inventoryStatus.stats.lowStock')}
             </Typography>
             <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-              {getLowStockCount()}개
+              {loading ? '…' : t('inventoryStatus.statsCountSuffix', { count: stats.lowStockItems })}
             </Typography>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
             <Typography variant="h6" color="error.main">
-              재고 없음
+              {t('inventoryStatus.stats.outOfStock')}
             </Typography>
             <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-              {getOutOfStockCount()}개
+              {loading ? '…' : t('inventoryStatus.statsCountSuffix', { count: stats.outOfStockItems })}
             </Typography>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
             <Typography variant="h6" color="text.secondary">
-              총 상품 수
+              {t('inventoryStatus.stats.totalProducts')}
             </Typography>
             <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-              {inventoryItems.length}개
+              {loading ? '…' : t('inventoryStatus.statsCountSuffix', { count: stats.totalProducts })}
             </Typography>
           </CardContent>
         </Card>
       </Box>
 
-      {/* 알림 */}
-      {(getLowStockCount() > 0 || getOutOfStockCount() > 0) && (
+      {!loading && (stats.lowStockItems > 0 || stats.outOfStockItems > 0) ? (
         <Alert severity="warning" sx={{ mb: 3 }}>
-          재고 부족 상품 {getLowStockCount()}개, 재고 없음 상품 {getOutOfStockCount()}개가 있습니다.
+          {t('inventoryStatus.alertLowOut', { low: stats.lowStockItems, out: stats.outOfStockItems })}
         </Alert>
-      )}
+      ) : null}
 
-      <Box>
-        <Box>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">재고 현황</Typography>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <TextField
-                    size="small"
-                    placeholder="상품명 또는 코드 검색"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    InputProps={{
-                      startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                    }}
-                  />
-                </Box>
-              </Box>
+      <Card>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+            <Typography variant="h6">{t('inventoryStatus.tableTitle')}</Typography>
+            <TextField
+              size="small"
+              placeholder={t('inventoryStatus.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              InputProps={{
+                startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
+              }}
+              sx={{ minWidth: 260 }}
+            />
+          </Box>
 
-              <TableContainer component={Paper}>
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress />
+            </Box>
+          ) : filteredItems.length === 0 ? (
+            <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+              {t('inventoryStatus.emptyTable')}
+            </Typography>
+          ) : (
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead
+                  sx={{
+                    bgcolor: 'background.paper',
+                    '& .MuiTableCell-head': {
+                      bgcolor: 'background.paper',
+                      color: 'text.primary',
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      textTransform: 'none',
+                      letterSpacing: 'normal',
+                      borderBottom: '2px solid',
+                      borderColor: 'primary.main',
+                      py: 1.25
+                    }
+                  }}
+                >
+                  <TableRow>
+                    <TableCell sortDirection={orderBy === 'productCode' ? order : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={orderBy === 'productCode'}
+                        direction={orderBy === 'productCode' ? order : 'asc'}
+                        onClick={() => handleRequestSort('productCode')}
+                      >
+                        {t('inventoryStatus.columns.productCode')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sortDirection={orderBy === 'productName' ? order : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={orderBy === 'productName'}
+                        direction={orderBy === 'productName' ? order : 'asc'}
+                        onClick={() => handleRequestSort('productName')}
+                      >
+                        {t('inventoryStatus.columns.productName')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sortDirection={orderBy === 'category' ? order : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={orderBy === 'category'}
+                        direction={orderBy === 'category' ? order : 'asc'}
+                        onClick={() => handleRequestSort('category')}
+                      >
+                        {t('inventoryStatus.columns.category')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell align="right" sortDirection={orderBy === 'currentStock' ? order : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={orderBy === 'currentStock'}
+                        direction={orderBy === 'currentStock' ? order : 'asc'}
+                        onClick={() => handleRequestSort('currentStock')}
+                      >
+                        {t('inventoryStatus.columns.currentStock')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell align="right" sortDirection={orderBy === 'minStock' ? order : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={orderBy === 'minStock'}
+                        direction={orderBy === 'minStock' ? order : 'asc'}
+                        onClick={() => handleRequestSort('minStock')}
+                      >
+                        {t('inventoryStatus.columns.minStock')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell align="right" sortDirection={orderBy === 'maxStock' ? order : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={orderBy === 'maxStock'}
+                        direction={orderBy === 'maxStock' ? order : 'asc'}
+                        onClick={() => handleRequestSort('maxStock')}
+                      >
+                        {t('inventoryStatus.columns.maxStock')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell align="right" sortDirection={orderBy === 'stockRate' ? order : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={orderBy === 'stockRate'}
+                        direction={orderBy === 'stockRate' ? order : 'asc'}
+                        onClick={() => handleRequestSort('stockRate')}
+                      >
+                        {t('inventoryStatus.columns.stockRate')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell align="right" sortDirection={orderBy === 'unitPrice' ? order : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={orderBy === 'unitPrice'}
+                        direction={orderBy === 'unitPrice' ? order : 'asc'}
+                        onClick={() => handleRequestSort('unitPrice')}
+                      >
+                        {t('inventoryStatus.columns.unitPrice')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell align="right" sortDirection={orderBy === 'totalValue' ? order : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={orderBy === 'totalValue'}
+                        direction={orderBy === 'totalValue' ? order : 'asc'}
+                        onClick={() => handleRequestSort('totalValue')}
+                      >
+                        {t('inventoryStatus.columns.totalValue')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sortDirection={orderBy === 'status' ? order : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={orderBy === 'status'}
+                        direction={orderBy === 'status' ? order : 'asc'}
+                        onClick={() => handleRequestSort('status')}
+                      >
+                        {t('inventoryStatus.columns.status')}
+                      </TableSortLabel>
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {sortedItems.map((item) => {
+                    const statusInfo = getStatusInfo(item);
+                    const ratePct = stockRatePercentVsMax(item.currentStock, item.maxStock);
+                    const barFill = ratePct == null ? 0 : Math.min(ratePct, 100);
+                    const lowOrOut = item.currentStock === 0 || (item.minStock > 0 && item.currentStock <= item.minStock);
+
+                    return (
+                      <TableRow
+                        key={item.id}
+                        hover
+                        onClick={menuFlags.canRead ? () => void openTxDialog(item) : undefined}
+                        sx={{
+                          cursor: menuFlags.canRead ? 'pointer' : 'default',
+                          '&:active': { bgcolor: menuFlags.canRead ? 'action.selected' : undefined }
+                        }}
+                      >
+                        <TableCell>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                            {item.productCode}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{item.productName}</TableCell>
+                        <TableCell>{item.category}</TableCell>
+                        <TableCell>
+                          <Typography
+                            variant="subtitle2"
+                            sx={{
+                              fontWeight: 'bold',
+                              color: lowOrOut ? 'error.main' : 'text.primary'
+                            }}
+                          >
+                            {t('inventoryStatus.pieces', { n: item.currentStock })}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{t('inventoryStatus.pieces', { n: item.minStock })}</TableCell>
+                        <TableCell>{t('inventoryStatus.pieces', { n: item.maxStock })}</TableCell>
+                        <TableCell>
+                          <Box sx={{ width: 100 }}>
+                            <LinearProgress
+                              variant="determinate"
+                              value={barFill}
+                              color={lowOrOut ? 'error' : 'primary'}
+                              sx={{ mb: 0.5 }}
+                            />
+                            <Typography variant="caption">
+                              {ratePct == null ? '—' : `${ratePct.toFixed(1)}%`}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
+                        <TableCell>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                            {formatCurrency(item.totalValue)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip icon={statusInfo.icon} label={statusInfo.label} color={statusInfo.color} size="small" />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={txDialogOpen} onClose={closeTxDialog} maxWidth="md" fullWidth scroll="paper">
+        <DialogTitle sx={{ pr: 6 }}>
+          {t('inventoryStatus.txDialog.title')}
+          {selectedRow ? (
+            <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block', mt: 0.5, fontWeight: 400 }}>
+              {selectedRow.productName} · {selectedRow.productCode}
+            </Typography>
+          ) : null}
+        </DialogTitle>
+        <DialogContent dividers>
+          {txLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress size={32} />
+            </Box>
+          ) : txError ? (
+            <Alert severity="error">{txError}</Alert>
+          ) : txRows.length === 0 ? (
+            <Typography color="text.secondary" sx={{ py: 2 }}>
+              {t('inventoryStatus.txDialog.noRecords')}
+            </Typography>
+          ) : (
+            <>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                {t('inventoryStatus.txDialog.totalShown', { total: txTotal })}
+              </Typography>
+              <TableContainer component={Paper} variant="outlined">
                 <Table size="small">
-                  <TableHead>
+                  <TableHead
+                    sx={{
+                      bgcolor: 'background.paper',
+                      '& .MuiTableCell-head': {
+                        bgcolor: 'background.paper',
+                        color: 'text.primary',
+                        fontWeight: 600,
+                        fontSize: '0.875rem',
+                        textTransform: 'none',
+                        letterSpacing: 'normal',
+                        borderBottom: '2px solid',
+                        borderColor: 'primary.main',
+                        py: 1.25
+                      }
+                    }}
+                  >
                     <TableRow>
-                      <TableCell>상품코드</TableCell>
-                      <TableCell>상품명</TableCell>
-                      <TableCell>카테고리</TableCell>
-                      <TableCell>현재재고</TableCell>
-                      <TableCell>최소재고</TableCell>
-                      <TableCell>최대재고</TableCell>
-                      <TableCell>재고율</TableCell>
-                      <TableCell>단가</TableCell>
-                      <TableCell>총가치</TableCell>
-                      <TableCell>상태</TableCell>
+                      <TableCell width={160}>{t('inventoryStatus.txColumns.datetime')}</TableCell>
+                      <TableCell width={100}>{t('inventoryStatus.txColumns.type')}</TableCell>
+                      <TableCell width={120}>{t('inventoryStatus.txColumns.handler')}</TableCell>
+                      <TableCell align="right">{t('inventoryStatus.txColumns.quantity')}</TableCell>
+                      <TableCell align="right">{t('inventoryStatus.txColumns.unitPrice')}</TableCell>
+                      <TableCell align="right">{t('inventoryStatus.txColumns.amount')}</TableCell>
+                      <TableCell>{t('inventoryStatus.txColumns.notes')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {filteredItems.map((item) => {
-                      const statusInfo = getStatusInfo(item);
-                      const stockLevel = getStockLevel(item);
-                      
+                    {txRows.map((tx) => {
+                      const tinfo = formatTxTypeChip(tx.transaction_type);
+                      const qty = Number(tx.quantity ?? 0);
+                      const at = tx.created_at ? new Date(tx.created_at) : null;
                       return (
-                        <TableRow key={item.id}>
-                          <TableCell>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                              {item.productCode}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>{item.productName}</TableCell>
-                          <TableCell>{item.category}</TableCell>
-                          <TableCell>
-                            <Typography 
-                              variant="subtitle2" 
-                              sx={{ 
-                                fontWeight: 'bold',
-                                color: item.currentStock <= item.minStock ? 'error.main' : 'text.primary'
-                              }}
-                            >
-                              {item.currentStock}개
-                            </Typography>
-                          </TableCell>
-                          <TableCell>{item.minStock}개</TableCell>
-                          <TableCell>{item.maxStock}개</TableCell>
-                          <TableCell>
-                            <Box sx={{ width: '100px' }}>
-                              <LinearProgress 
-                                variant="determinate" 
-                                value={stockLevel} 
-                                color={item.currentStock <= item.minStock ? 'error' : 'primary'}
-                                sx={{ mb: 0.5 }}
-                              />
-                              <Typography variant="caption">
-                                {stockLevel.toFixed(1)}%
-                              </Typography>
-                            </Box>
-                          </TableCell>
-                          <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
-                          <TableCell>
-                            <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                              {formatCurrency(item.totalValue)}
-                            </Typography>
+                        <TableRow key={tx.id}>
+                          <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                            {at && !Number.isNaN(at.getTime())
+                              ? at.toLocaleString(locale, { dateStyle: 'short', timeStyle: 'medium' })
+                              : '—'}
                           </TableCell>
                           <TableCell>
-                            <Chip
-                              icon={statusInfo.icon}
-                              label={statusInfo.label}
-                              color={statusInfo.color}
-                              size="small"
-                            />
+                            <Chip size="small" label={tinfo.label} color={tinfo.color} variant="outlined" />
                           </TableCell>
+                          <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTransactionCreator(tx)}</TableCell>
+                          <TableCell align="right">{qty.toLocaleString(locale)}</TableCell>
+                          <TableCell align="right">{formatCurrency(Number(tx.unit_price ?? 0))}</TableCell>
+                          <TableCell align="right">{formatCurrency(Number(tx.total_amount ?? 0))}</TableCell>
+                          <TableCell sx={{ maxWidth: 220, wordBreak: 'break-word' }}>{tx.notes?.trim() || '—'}</TableCell>
                         </TableRow>
                       );
                     })}
                   </TableBody>
                 </Table>
               </TableContainer>
-            </CardContent>
-          </Card>
-        </Box>
-      </Box>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={closeTxDialog} variant="contained">
+            {t('inventoryStatus.txDialog.close')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

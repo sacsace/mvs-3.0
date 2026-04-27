@@ -40,32 +40,29 @@ import UnderDevelopment from './components/Common/UnderDevelopment';
 import ComingSoon from './components/Common/ComingSoon';
 
 // 새로 생성된 페이지들
-import StockInManagement from './pages/Inventory/StockInManagement';
-import StockOutManagement from './pages/Inventory/StockOutManagement';
+import StockInSimple from './pages/Inventory/StockInSimple';
+import StockOutBarcode from './pages/Inventory/StockOutBarcode';
 import QuotationList from './pages/Invoice/QuotationList';
-import CustomerList from './pages/Customers/CustomerList';
 import OrganizationChart from './pages/Organization/OrganizationChart';
 import MenuPermissionManagement from './pages/System/MenuPermissionManagement';
-import EmployeeManagement from './pages/HR/EmployeeManagement';
 import VacationManagement from './pages/HR/VacationManagement';
 import VacationRequest from './pages/HR/VacationRequest';
-import TaskManagement from './pages/Tasks/TaskManagement';
 import SystemSettings from './pages/System/SystemSettings';
+import MailSendTest from './pages/System/MailSendTest';
 import LoginInfoManagement from './pages/System/LoginInfoManagement';
 // import CodeManagement from './pages/System/CodeManagement'; // 시스템관리 메뉴 제거로 인해 주석 처리
 
 // Communication 페이지들
-import NoticeBoard from './pages/Communication/NoticeBoard';
 import NoticeManagement from './pages/Communication/NoticeManagement';
 import EmailManagement from './pages/Communication/EmailManagement';
 import SMSManagement from './pages/Communication/SMSManagement';
 
 // 새로 추가된 페이지들
 import PayrollManagement from './pages/HR/PayrollManagement';
-import PerformanceManagement from './pages/HR/PerformanceManagement';
+import EmploymentContractManagement from './pages/HR/EmploymentContractManagement';
+import AttendanceStatistics from './pages/HR/AttendanceStatistics';
 import WorkStatistics from './pages/Work/WorkStatistics';
 import ElectronicApproval from './pages/Work/ElectronicApproval';
-import MeetingRoomBooking from './pages/Work/MeetingRoomBooking';
 import RoomBookingManagement from './pages/Work/RoomBookingManagement';
 import WorkReport from './pages/Work/WorkReport';
 import FrontDesk from './pages/Hotel/FrontDesk';
@@ -83,33 +80,12 @@ import AccountingBasicInfo from './pages/Accounting/AccountingBasicInfo';
 import ExpenseReceiptUpload from './pages/Accounting/ExpenseReceiptUpload';
 
 // 고객관리 관련 페이지들
-import SalesOpportunityManagement from './pages/Sales/SalesOpportunityManagement';
 import ContractManagement from './pages/Sales/ContractManagement';
-import CustomerSupport from './pages/Sales/CustomerSupport';
 import CustomerInformation from './pages/Sales/CustomerInformation';
 
 // Invoice 페이지들
 import RegularInvoice from './pages/Invoice/RegularInvoice';
 import EWayBill from './pages/Invoice/EWayBill';
-
-const Accounting = () => {
-  const { t } = useTranslation();
-  return (
-    <UnderDevelopment 
-      pageName={t('app.accountingTitle')}
-      description={t('app.accountingDesc')}
-      estimatedCompletion={t('app.estimatedCompletion')}
-      features={[
-        t('app.accountingFeature1'),
-        t('app.accountingFeature2'),
-        t('app.accountingFeature3'),
-        t('app.accountingFeature4'),
-        t('app.accountingFeature5')
-      ]}
-      status="planning"
-    />
-  );
-};
 
 const Reports = () => {
   const { t } = useTranslation();
@@ -147,21 +123,6 @@ const Notifications = () => (
   />
 );
 
-const AIAnalytics = () => (
-  <UnderDevelopment 
-    pageName="AI 분석"
-    description="인공지능 기반 데이터 분석 및 인사이트를 제공하는 페이지입니다."
-    estimatedCompletion="2025년 2월"
-    features={[
-      "머신러닝 분석",
-      "예측 모델링",
-      "자동 인사이트 생성",
-      "패턴 분석",
-      "추천 시스템"
-    ]}
-    status="planning"
-  />
-);
 const Chat = () => (
   <UnderDevelopment 
     pageName="채팅 시스템"
@@ -263,16 +224,22 @@ function App() {
             <Route path="basic-info/menu-permissions" element={<MenuPermissionManagement />} />
             <Route path="basic-info/login-info" element={<LoginInfoManagement />} />
             <Route path="basic-info/system-settings" element={<SystemSettings />} />
+            <Route path="basic-info/mail-send-test" element={<MailSendTest />} />
             
             {/* 인사관리 */}
             <Route path="hr" element={<Navigate to="/hr/users" replace />} />
             <Route path="hr/users" element={<UserManagement />} />
+            <Route
+              path="hr/departments"
+              element={<Navigate replace to={`/hr/users?tab=departments`} />}
+            />
+            <Route path="hr/attendance/statistics" element={<AttendanceStatistics />} />
             <Route path="hr/attendance" element={<AttendanceManagement />} />
             <Route path="hr/payroll" element={<PayrollManagement />} />
             <Route path="hr/leave" element={<VacationManagement />} />
             <Route path="hr/leave/request" element={<VacationRequest />} />
             <Route path="hr/leave/request/:id" element={<VacationRequest />} />
-            <Route path="hr/performance" element={<PerformanceManagement />} />
+            <Route path="hr/employment-contracts" element={<EmploymentContractManagement />} />
             
             {/* 업무관리 */}
             <Route path="work" element={<Navigate to="/work/projects" replace />} />
@@ -281,7 +248,6 @@ function App() {
             <Route path="work/statistics" element={<WorkStatistics />} />
             <Route path="work/approval" element={<ElectronicApproval />} />
             <Route path="work/quotation" element={<QuotationManagement />} />
-            <Route path="work/meeting-room" element={<MeetingRoomBooking />} />
             <Route path="work/room-reservation" element={<RoomBookingManagement />} />
             <Route path="work/reports" element={<WorkReport />} />
             
@@ -298,8 +264,10 @@ function App() {
             <Route path="inventory" element={<Navigate to="/inventory/basic" replace />} />
             <Route path="inventory/basic" element={<InventoryManagement />} />
             <Route path="inventory/status" element={<InventoryStatus />} />
-            <Route path="inventory/transaction" element={<StockInManagement />} />
-            <Route path="inventory/movement" element={<StockOutManagement />} />
+            <Route path="inventory/transaction" element={<Navigate to="/inventory/stock-in" replace />} />
+            <Route path="inventory/movement" element={<Navigate to="/inventory/stock-out" replace />} />
+            <Route path="inventory/stock-in" element={<StockInSimple />} />
+            <Route path="inventory/stock-out" element={<StockOutBarcode />} />
             <Route path="inventory/report" element={<InventoryReport />} />
             
             {/* 견적서 관리 */}
@@ -340,9 +308,7 @@ function App() {
             {/* 고객관리 */}
             <Route path="customers" element={<Navigate to="/customers/info" replace />} />
             <Route path="customers/info" element={<CustomerInformation />} />
-            <Route path="customers/sales" element={<SalesOpportunityManagement />} />
             <Route path="customers/contracts" element={<ContractManagement />} />
-            <Route path="customers/support" element={<CustomerSupport />} />
             
             {/* 회계관리 */}
             <Route path="accounting" element={<Navigate to="/accounting/e-invoice" replace />} />

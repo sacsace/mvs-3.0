@@ -24,7 +24,7 @@ if (!hasDatabaseUrl) {
     process.exit(1);
   }
 } else {
-  console.log('✅ DATABASE_URL이 설정되어 있습니다. Railway 환경으로 감지되었습니다.');
+  // Railway: DATABASE_URL 사용
 }
 
 // 환경별 설정 가져오기
@@ -69,9 +69,9 @@ export const env = {
   // CORS 설정
   CORS_ORIGIN: process.env.CORS_ORIGIN || envConfig.CORS_ORIGIN,
   
-  // 보안 설정
-  JWT_SECRET: process.env.JWT_SECRET || SYSTEM_CONSTANTS.JWT.SECRET,
-  SESSION_SECRET: process.env.SESSION_SECRET || SYSTEM_CONSTANTS.SESSION.SECRET,
+  // 보안 설정 — 시크릿은 코드 기본값 없음 (.env / 호스팅 환경 변수 필수)
+  JWT_SECRET: process.env.JWT_SECRET || '',
+  SESSION_SECRET: process.env.SESSION_SECRET || '',
   
   // 외부 서비스
   REDIS_HOST: redisHost || 'localhost',
@@ -106,6 +106,20 @@ export const env = {
   KOTAK_API_KEY: process.env.KOTAK_API_KEY,
   KOTAK_TRANSFER_PATH: process.env.KOTAK_TRANSFER_PATH || '/transfers',
   DEFAULT_BANK_PROVIDER: process.env.DEFAULT_BANK_PROVIDER,
+
+  /** 인도 GST e-invoice IRP — mock | live (GSP URL 설정 시) */
+  GST_IRP_MODE: process.env.GST_IRP_MODE || 'mock',
+  GST_GSP_BASE_URL: process.env.GST_GSP_BASE_URL || '',
+  GST_GSP_IRP_PATH: process.env.GST_GSP_IRP_PATH || '/einvoice/generate',
+  GST_GSP_AUTH_HEADER: process.env.GST_GSP_AUTH_HEADER || '',
+  GST_GSP_AUTH_VALUE: process.env.GST_GSP_AUTH_VALUE || '',
+  GST_GSP_TIMEOUT_MS: parseInt(process.env.GST_GSP_TIMEOUT_MS || '60000', 10),
+
+  /** 인도 GST E-Way Bill — mock | live (GSP가 NIC E-Way API와 연동된 엔드포인트) */
+  GST_EWAY_MODE: process.env.GST_EWAY_MODE || 'mock',
+  /** 비어 있으면 GST_GSP_BASE_URL 사용 */
+  GST_GSP_EWAY_BASE_URL: process.env.GST_GSP_EWAY_BASE_URL || '',
+  GST_GSP_EWAY_PATH: process.env.GST_GSP_EWAY_PATH || '/ewaybill/generate',
   
   // 모니터링
   HEALTH_CHECK_INTERVAL: parseInt(process.env.HEALTH_CHECK_INTERVAL || '30000'),
@@ -126,21 +140,17 @@ export const validateEnv = () => {
     errors.push('DB_PORT는 1-65535 범위여야 합니다.');
   }
   
-  // JWT 시크릿 검증
-  if (env.JWT_SECRET.length < 32) {
-    errors.push('JWT_SECRET은 최소 32자 이상이어야 합니다.');
+  // JWT 시크릿 검증 (Railway·로컬 모두 동일 기준)
+  if (!process.env.JWT_SECRET || env.JWT_SECRET.length < 32) {
+    errors.push('JWT_SECRET 환경 변수를 32자 이상으로 설정하세요. (Railway Variables / .env)');
   }
-  
-  // 프로덕션 환경에서 추가 검증 (Railway 환경에서는 경고만)
+
   if (env.NODE_ENV === 'production') {
     if (!env.CORS_ORIGIN) {
       errors.push('프로덕션 환경에서는 CORS_ORIGIN을 반드시 설정해야 합니다.');
     }
     if (env.CORS_ORIGIN === 'http://localhost:3000') {
       errors.push('프로덕션 환경에서는 CORS_ORIGIN을 localhost로 설정하면 안됩니다.');
-    }
-    if (!process.env.JWT_SECRET || env.JWT_SECRET === SYSTEM_CONSTANTS.JWT.SECRET) {
-      errors.push('프로덕션 환경에서는 JWT_SECRET을 반드시 설정해야 합니다.');
     }
   }
   
@@ -149,8 +159,6 @@ export const validateEnv = () => {
     errors.forEach(error => console.error(`  - ${error}`));
     process.exit(1);
   }
-  
-  console.log('✅ 환경 변수 검증 완료');
 };
 
 // 환경 정보 출력

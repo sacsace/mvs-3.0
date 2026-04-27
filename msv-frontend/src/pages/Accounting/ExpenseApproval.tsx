@@ -1198,7 +1198,22 @@ const ExpenseApproval: React.FC = () => {
               </Box>
               <TableContainer component={Paper} sx={{ mb: 1.5 }}>
               <Table size="small">
-                <TableHead>
+                <TableHead
+                  sx={{
+                    bgcolor: 'background.paper',
+                    '& .MuiTableCell-head': {
+                      bgcolor: 'background.paper',
+                      color: 'text.primary',
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      textTransform: 'none',
+                      letterSpacing: 'normal',
+                      borderBottom: '2px solid',
+                      borderColor: 'primary.main',
+                      py: 1.25
+                    }
+                  }}
+                >
                   <TableRow>
                     <TableCell>No.</TableCell>
                     <TableCell>Invoice Date</TableCell>
@@ -1596,7 +1611,22 @@ const ExpenseApproval: React.FC = () => {
               <Typography variant="h6" gutterBottom>{t('expenseApproval.detail.items')}</Typography>
               <TableContainer>
                 <Table>
-                  <TableHead>
+                  <TableHead
+                    sx={{
+                      bgcolor: 'background.paper',
+                      '& .MuiTableCell-head': {
+                        bgcolor: 'background.paper',
+                        color: 'text.primary',
+                        fontWeight: 600,
+                        fontSize: '0.875rem',
+                        textTransform: 'none',
+                        letterSpacing: 'normal',
+                        borderBottom: '2px solid',
+                        borderColor: 'primary.main',
+                        py: 1.25
+                      }
+                    }}
+                  >
                     <TableRow>
                       <TableCell>Invoice Date</TableCell>
                       <TableCell>{t('expenseApproval.detail.columns.description')}</TableCell>
@@ -2067,7 +2097,25 @@ const ExpenseApproval: React.FC = () => {
       <Card>
         <TableContainer>
           <Table>
-            <TableHead>
+            <TableHead
+              sx={{
+                bgcolor: 'background.paper',
+                '& .MuiTableCell-head': {
+                  bgcolor: 'background.paper',
+                  color: 'text.primary',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  textTransform: 'none',
+                  letterSpacing: 'normal',
+                  borderBottom: '2px solid',
+                  borderColor: 'primary.main',
+                  py: 1.25
+                },
+                '& .MuiTableCell-head:last-of-type': {
+                  textAlign: 'center'
+                }
+              }}
+            >
               <TableRow>
                 <TableCell>{t('expenseApproval.columns.expenseInfo')}</TableCell>
                 <TableCell>{t('expenseApproval.columns.requester')}</TableCell>

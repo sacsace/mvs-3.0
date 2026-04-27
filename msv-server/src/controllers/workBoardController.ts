@@ -21,6 +21,7 @@ const DEFAULT_LISTS = [
 
 let workBoardSchemaEnsured = false;
 let workBoardCardSchemaEnsured = false;
+let workBoardCardCommentSchemaEnsured = false;
 
 const ensureWorkBoardSchema = async () => {
   if (workBoardSchemaEnsured) return;
@@ -31,6 +32,13 @@ const ensureWorkBoardSchema = async () => {
       type: DataTypes.STRING(7),
       allowNull: true,
       defaultValue: null
+    });
+  }
+  if (!table.position) {
+    await queryInterface.addColumn('work_boards', 'position', {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0
     });
   }
   workBoardSchemaEnsured = true;
@@ -48,6 +56,29 @@ const ensureWorkBoardCardSchema = async () => {
     });
   }
   workBoardCardSchemaEnsured = true;
+};
+
+const ensureWorkBoardCardCommentSchema = async () => {
+  if (workBoardCardCommentSchemaEnsured) return;
+  try {
+    const queryInterface = sequelize.getQueryInterface();
+    const table = await queryInterface.describeTable('work_board_card_comments');
+    if (!table.parent_id) {
+      await queryInterface.addColumn('work_board_card_comments', 'parent_id', {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: { model: 'work_board_card_comments', key: 'id' },
+        onUpdate: 'CASCADE',
+        onDelete: 'CASCADE'
+      });
+      await queryInterface.addIndex('work_board_card_comments', ['parent_id'], {
+        name: 'work_board_card_comments_parent_id_idx'
+      });
+    }
+    workBoardCardCommentSchemaEnsured = true;
+  } catch (e) {
+    console.warn('ensureWorkBoardCardCommentSchema:', e);
+  }
 };
 
 const isMissingCommentsTableError = (error: unknown): boolean => {
@@ -97,6 +128,23 @@ const normalizeCardDescription = (value: unknown): string | null | undefined => 
   if (value === undefined) return undefined;
   if (value === null || value === '') return null;
   return String(value);
+};
+
+const COMPLETED_LIST_KEYWORDS = ['완료', '종료', 'done', 'completed', 'closed'];
+
+const isCompletedListTitle = (title?: string): boolean => {
+  const normalized = String(title || '').trim().toLowerCase();
+  if (!normalized) return false;
+  return COMPLETED_LIST_KEYWORDS.some((keyword) => normalized.includes(keyword));
+};
+
+/** 프론트 WorkBoardDetailPage 의 resolveCompletedList 와 동일 규칙 */
+const resolveCompletedListId = (lists: { id: number; title: string; position: number }[]): number | null => {
+  const sorted = [...lists].sort((a, b) => a.position - b.position);
+  const byTitle = sorted.find((l) => isCompletedListTitle(l.title));
+  if (byTitle) return byTitle.id;
+  if (sorted.length >= 2) return sorted[sorted.length - 1].id;
+  return null;
 };
 
 const sendCardAssignmentNotification = (
@@ -152,6 +200,7 @@ async function userCanAccessBoard(
 async function findBoardForUser(boardId: number, user: RequestWithUser['user']) {
   await ensureWorkBoardSchema();
   await ensureWorkBoardCardSchema();
+  await ensureWorkBoardCardCommentSchema();
   const board = await WorkBoard.findByPk(boardId);
   if (!board) return { board: null, member: null };
   const member = await WorkBoardMember.findOne({
@@ -185,7 +234,10 @@ export const getWorkBoards = async (req: RequestWithUser, res: Response) => {
             include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email'] }]
           }
         ],
-        order: [['updated_at', 'DESC']]
+        order: [
+          ['position', 'ASC'],
+          ['id', 'ASC']
+        ]
       });
     } else {
       const myMemberships = await WorkBoardMember.findAll({
@@ -210,7 +262,10 @@ export const getWorkBoards = async (req: RequestWithUser, res: Response) => {
               include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email'] }]
             }
           ],
-          order: [['updated_at', 'DESC']]
+          order: [
+            ['position', 'ASC'],
+            ['id', 'ASC']
+          ]
         });
       }
     }
@@ -242,6 +297,11 @@ export const createWorkBoard = async (req: RequestWithUser, res: Response) => {
     }
 
     const board = await sequelize.transaction(async (t) => {
+      await WorkBoard.increment('position', {
+        by: 1,
+        where: { tenant_id: user.tenant_id, company_id: user.company_id },
+        transaction: t
+      });
       const b = await WorkBoard.create(
         {
           tenant_id: user.tenant_id,
@@ -249,6 +309,7 @@ export const createWorkBoard = async (req: RequestWithUser, res: Response) => {
           name: String(name).trim().slice(0, 200),
           description: description ? String(description).slice(0, 5000) : undefined,
           board_color: parsedBoardColor.value ?? null,
+          position: 0,
           created_by: user.id
         },
         { transaction: t }
@@ -432,6 +493,7 @@ export const updateWorkBoard = async (req: RequestWithUser, res: Response) => {
     }
 
     await board.update(patch);
+    await board.reload();
     res.json({ success: true, data: board });
   } catch (error: any) {
     console.error('updateWorkBoard:', error);
@@ -451,6 +513,9 @@ export const deleteWorkBoard = async (req: RequestWithUser, res: Response) => {
       return res.status(403).json({ success: false, message: '보드 소유자만 삭제할 수 있습니다.' });
     }
 
+    const tenantId = board.tenant_id;
+    const companyId = board.company_id;
+
     await sequelize.transaction(async (t) => {
       const lists = await WorkBoardList.findAll({ where: { board_id: board.id }, transaction: t });
       const listIds = lists.map((l) => l.id);
@@ -460,6 +525,20 @@ export const deleteWorkBoard = async (req: RequestWithUser, res: Response) => {
       await WorkBoardList.destroy({ where: { board_id: board.id }, transaction: t });
       await WorkBoardMember.destroy({ where: { board_id: board.id }, transaction: t });
       await board.destroy({ transaction: t });
+
+      const remaining = await WorkBoard.findAll({
+        where: { tenant_id: tenantId, company_id: companyId },
+        order: [
+          ['position', 'ASC'],
+          ['id', 'ASC']
+        ],
+        transaction: t
+      });
+      for (let i = 0; i < remaining.length; i++) {
+        if (remaining[i].position !== i) {
+          await remaining[i].update({ position: i }, { transaction: t });
+        }
+      }
     });
 
     res.json({ success: true, message: '삭제되었습니다.' });
@@ -584,6 +663,52 @@ export const moveWorkBoardList = async (req: RequestWithUser, res: Response) => 
     }
     console.error('moveWorkBoardList:', error);
     return res.status(500).json({ success: false, message: '목록 이동에 실패했습니다.' });
+  }
+};
+
+export const moveWorkBoard = async (req: RequestWithUser, res: Response) => {
+  try {
+    await ensureWorkBoardSchema();
+    const user = req.user!;
+    const boardId = parseInt(req.params.boardId, 10);
+    const { index } = req.body;
+
+    if (index === undefined || index < 0) {
+      return res.status(400).json({ success: false, message: 'index(0부터)가 필요합니다.' });
+    }
+
+    const { board, member } = await findBoardForUser(boardId, user);
+    if (!board || (!member && user.role !== 'root')) {
+      return res.status(404).json({ success: false, message: '권한이 없습니다.' });
+    }
+
+    await sequelize.transaction(async (transaction) => {
+      const others = await WorkBoard.findAll({
+        where: {
+          tenant_id: board.tenant_id,
+          company_id: board.company_id,
+          id: { [Op.ne]: boardId }
+        },
+        order: [
+          ['position', 'ASC'],
+          ['id', 'ASC']
+        ],
+        transaction
+      });
+
+      const orderedIds = others.map((b) => b.id);
+      const insertAt = Math.min(parseInt(String(index), 10), orderedIds.length);
+      orderedIds.splice(insertAt, 0, boardId);
+
+      for (let i = 0; i < orderedIds.length; i++) {
+        await WorkBoard.update({ position: i }, { where: { id: orderedIds[i] }, transaction });
+      }
+    });
+
+    return res.json({ success: true, message: '보드 순서가 변경되었습니다.' });
+  } catch (error: any) {
+    console.error('moveWorkBoard:', error);
+    return res.status(500).json({ success: false, message: '보드 이동에 실패했습니다.' });
   }
 };
 
@@ -857,6 +982,31 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
       }
 
       const oldListId = card.list_id;
+
+      const boardLists = await WorkBoardList.findAll({
+        where: { board_id: board!.id },
+        attributes: ['id', 'title', 'position'],
+        order: [['position', 'ASC']],
+        transaction
+      });
+      const completedListId = resolveCompletedListId(
+        boardLists.map((l) => l.get({ plain: true }) as { id: number; title: string; position: number })
+      );
+      const assigneeUserId =
+        (card as any).assignee_user_id != null ? Number((card as any).assignee_user_id) : null;
+      const uid = Number(user.id);
+      const isBoardOwner = member && (member as any).role === 'owner';
+      const isAssignee = assigneeUserId != null && assigneeUserId === uid;
+      const canMoveToCompleted =
+        user.role === 'root' || isBoardOwner || assigneeUserId == null || isAssignee;
+      const isMovingIntoCompleted =
+        oldListId !== newList.id &&
+        completedListId != null &&
+        newList.id === completedListId;
+      if (isMovingIntoCompleted && !canMoveToCompleted) {
+        throw new Error('FORBIDDEN_COMPLETE');
+      }
+
       const oldId = card.id;
 
       const others = await WorkBoardCard.findAll({
@@ -893,6 +1043,12 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
     }
     if (error?.message === 'BAD_LIST') {
       return res.status(400).json({ success: false, message: '대상 목록이 없습니다.' });
+    }
+    if (error?.message === 'FORBIDDEN_COMPLETE') {
+      return res.status(403).json({
+        success: false,
+        message: '완료 처리는 담당자 또는 보드 소유자만 할 수 있습니다.'
+      });
     }
     console.error('moveWorkBoardCard:', error);
     res.status(500).json({ success: false, message: '카드 이동에 실패했습니다.' });
@@ -963,7 +1119,7 @@ export const createWorkBoardCardComment = async (req: RequestWithUser, res: Resp
     const user = req.user!;
     const boardId = parseInt(req.params.boardId, 10);
     const cardId = parseInt(req.params.cardId, 10);
-    const { content, mention_user_ids } = req.body;
+    const { content, mention_user_ids, parent_id: parentIdBody } = req.body;
     const { board, member } = await findBoardForUser(boardId, user);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
@@ -977,6 +1133,27 @@ export const createWorkBoardCardComment = async (req: RequestWithUser, res: Resp
     });
     if (!card || (card as any).list.board_id !== board.id) {
       return res.status(404).json({ success: false, message: '카드를 찾을 수 없습니다.' });
+    }
+
+    let parentId: number | null = null;
+    if (parentIdBody !== undefined && parentIdBody !== null && parentIdBody !== '') {
+      const parsed = parseInt(String(parentIdBody), 10);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        return res.status(400).json({ success: false, message: '유효하지 않은 답글 대상입니다.' });
+      }
+      const parentComment = await WorkBoardCardComment.findOne({
+        where: { id: parsed, card_id: card.id }
+      });
+      if (!parentComment) {
+        return res.status(404).json({ success: false, message: '답글 대상 댓글을 찾을 수 없습니다.' });
+      }
+      if ((parentComment as any).parent_id) {
+        return res.status(400).json({
+          success: false,
+          message: '대댓글에는 답글을 달 수 없습니다. 상위 댓글에만 답글을 달 수 있습니다.'
+        });
+      }
+      parentId = parsed;
     }
 
     const boardMembers = await WorkBoardMember.findAll({
@@ -1029,6 +1206,7 @@ export const createWorkBoardCardComment = async (req: RequestWithUser, res: Resp
     const comment = await WorkBoardCardComment.create({
       card_id: card.id,
       user_id: user.id,
+      parent_id: parentId,
       content: String(content).trim().slice(0, 5000)
     });
     const full = await WorkBoardCardComment.findByPk(comment.id, {

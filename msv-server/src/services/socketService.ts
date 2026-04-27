@@ -77,8 +77,6 @@ class SocketService {
     });
 
     this.io.on('connection', (socket: AuthenticatedSocket) => {
-      console.log(`사용자 연결: ${socket.user?.userid}`);
-
       if (socket.user) {
         this.connectedUsers.set(socket.user.id, socket.id);
       }
@@ -118,7 +116,6 @@ class SocketService {
       socket.on('disconnect', () => {
         if (socket.user) {
           this.connectedUsers.delete(socket.user.id);
-          console.log(`사용자 연결 해제: ${socket.user.userid}`);
         }
       });
     });

@@ -8,10 +8,13 @@ interface WorkReportAttributes {
   report_id: string;
   title: string;
   type: 'daily' | 'weekly' | 'monthly' | 'project' | 'incident' | 'other';
-  category: string;
+  category?: string | null;
   author_id: number;
+  recipient_id?: number | null;
+  /** 참조(CC): 같은 회사 사용자 id 배열 — 열람·피드백만, 정식 수신자와 달리 승인 불가 */
+  cc_user_ids?: number[] | null;
   content: string;
-  summary: string;
+  summary?: string | null;
   achievements?: any; // JSON array
   challenges?: any; // JSON array
   next_steps?: any; // JSON array
@@ -30,7 +33,22 @@ interface WorkReportAttributes {
   updated_at?: Date;
 }
 
-interface WorkReportCreationAttributes extends Optional<WorkReportAttributes, 'id' | 'achievements' | 'challenges' | 'next_steps' | 'attachments' | 'tags' | 'created_at' | 'updated_at'> {}
+interface WorkReportCreationAttributes
+  extends Optional<
+    WorkReportAttributes,
+    | 'id'
+    | 'category'
+    | 'summary'
+    | 'recipient_id'
+    | 'cc_user_ids'
+    | 'achievements'
+    | 'challenges'
+    | 'next_steps'
+    | 'attachments'
+    | 'tags'
+    | 'created_at'
+    | 'updated_at'
+  > {}
 
 class WorkReport extends Model<WorkReportAttributes, WorkReportCreationAttributes> implements WorkReportAttributes {
   public id!: number;
@@ -39,10 +57,12 @@ class WorkReport extends Model<WorkReportAttributes, WorkReportCreationAttribute
   public report_id!: string;
   public title!: string;
   public type!: 'daily' | 'weekly' | 'monthly' | 'project' | 'incident' | 'other';
-  public category!: string;
+  public category?: string | null;
   public author_id!: number;
+  public recipient_id?: number | null;
+  public cc_user_ids?: number[] | null;
   public content!: string;
-  public summary!: string;
+  public summary?: string | null;
   public achievements?: any;
   public challenges?: any;
   public next_steps?: any;
@@ -91,11 +111,21 @@ WorkReport.init(
     },
     category: {
       type: DataTypes.STRING(100),
-      allowNull: false
+      allowNull: true,
+      defaultValue: ''
     },
     author_id: {
       type: DataTypes.INTEGER,
       allowNull: false
+    },
+    recipient_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    cc_user_ids: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: []
     },
     content: {
       type: DataTypes.TEXT,
@@ -103,7 +133,8 @@ WorkReport.init(
     },
     summary: {
       type: DataTypes.TEXT,
-      allowNull: false
+      allowNull: true,
+      defaultValue: ''
     },
     achievements: {
       type: DataTypes.JSONB,

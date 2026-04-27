@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -30,6 +30,7 @@ import {
   Alert,
   TextField,
   FormControl,
+  InputLabel,
   Select,
   MenuItem,
   Checkbox,
@@ -64,9 +65,15 @@ import {
   Event as EventIcon,
   Schedule as ScheduleIcon
 } from '@mui/icons-material';
-import { useStore } from '../../store';
+import { useStore, useMenuStore } from '../../store';
+import { findMenuIdByPath } from '../../utils/findMenuByPath';
 import { vacationService } from '../../services/api';
 import { useTranslation } from 'react-i18next';
+import DepartmentLeaveCalendar, { CALENDAR_DEPARTMENT_ALL_VALUE } from './DepartmentLeaveCalendar';
+import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import PromptDialog from '../../components/Common/PromptDialog';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import { usePromptDialog } from '../../hooks/usePromptDialog';
 
 interface VacationRequest {
   id: number;
@@ -88,9 +95,39 @@ interface VacationRequest {
   attachments?: string[];
 }
 
+const VACATION_MENU_ROUTES = ['/hr/leave'];
+
 const VacationManagement: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useStore();
+  const { menus, hasMenuPermission, loading: menusLoading } = useMenuStore();
+  const { dialogState: confirmDialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
+  const {
+    dialogState: promptDialogState,
+    showPrompt,
+    handleConfirm: handlePromptConfirm,
+    handleCancel: handlePromptCancel
+  } = usePromptDialog();
+
+  const hrElevated = user?.role === 'root' || user?.role === 'admin';
+  const vacationMenuFlags = useMemo(() => {
+    const check = (action: 'view' | 'create' | 'edit' | 'delete') => {
+      if (hrElevated) return true;
+      for (const route of VACATION_MENU_ROUTES) {
+        const mid = findMenuIdByPath(menus, route);
+        if (mid != null && hasMenuPermission(mid, action)) return true;
+      }
+      return false;
+    };
+    return {
+      canView: check('view'),
+      canCreate: check('create'),
+      canEdit: check('edit'),
+      canDelete: check('delete')
+    };
+  }, [menus, hasMenuPermission, user?.role]);
+
+  const canExportVacations = hrElevated || vacationMenuFlags.canView || vacationMenuFlags.canEdit;
   const [searchParams, setSearchParams] = useSearchParams();
   
   // URL 파라미터에서 탭 인덱스 가져오기
@@ -125,6 +162,8 @@ const VacationManagement: React.FC = () => {
   const [rejectReason, setRejectReason] = useState('');
   const [orderBy, setOrderBy] = useState<string>('');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+  const [calendarDept, setCalendarDept] = useState<string>('');
   const canEditPolicy = user?.role === 'admin' || user?.role === 'root';
 
   useEffect(() => {
@@ -338,11 +377,18 @@ const VacationManagement: React.FC = () => {
   };
 
   const handleAdd = () => {
-    // 페이지 이동으로 변경
+    if (!hrElevated && !vacationMenuFlags.canCreate) {
+      setError(t('vacationManagement.noPermissionCreate'));
+      return;
+    }
     window.location.href = '/hr/leave/request';
   };
 
   const handleExportExcel = async () => {
+    if (!canExportVacations) {
+      setError(t('vacationManagement.noPermissionExport'));
+      return;
+    }
     try {
       // 현재 탭과 필터에 맞는 파라미터 구성
       const adjustedTab = (user?.role === 'admin' || user?.role === 'root') ? activeTab : activeTab + 1;
@@ -408,39 +454,62 @@ const VacationManagement: React.FC = () => {
     }
   };
 
-  const handleReject = async (id: number) => {
-    const reason = window.prompt('거부 사유를 입력하세요:');
-    if (reason !== null) {
-      try {
-        const response = await vacationService.rejectVacation(id, reason);
-        if (response.success) {
-          setSuccess('휴가가 거부되었습니다.');
-          loadVacations();
-        } else {
-          setError(response.message || '휴가 거부에 실패했습니다.');
-        }
-      } catch (error: any) {
-        console.error('휴가 거부 오류:', error);
-        setError(error.response?.data?.message || '휴가 거부 중 오류가 발생했습니다.');
+  const handleReject = (id: number) => {
+    showPrompt(
+      t('vacationManagement.rejectReasonPlaceholder', { defaultValue: '거부 사유를 입력하세요.' }),
+      (reason) => {
+        void (async () => {
+          try {
+            const response = await vacationService.rejectVacation(id, reason);
+            if (response.success) {
+              setSuccess('휴가가 거부되었습니다.');
+              loadVacations();
+            } else {
+              setError(response.message || '휴가 거부에 실패했습니다.');
+            }
+          } catch (error: any) {
+            console.error('휴가 거부 오류:', error);
+            setError(error.response?.data?.message || '휴가 거부 중 오류가 발생했습니다.');
+          }
+        })();
+      },
+      {
+        title: t('vacationManagement.reject'),
+        label: t('vacationManagement.rejectReason', { defaultValue: '거부 사유' }),
+        multiline: true,
+        minRows: 3,
+        confirmText: t('vacationManagement.reject'),
+        cancelText: t('common.cancel')
       }
-    }
+    );
   };
 
-  const handleDelete = async (id: number) => {
-    if (window.confirm('정말 이 휴가 신청을 삭제하시겠습니까?')) {
-      try {
-        const response = await vacationService.deleteVacation(id);
-        if (response.success) {
-          setSuccess('휴가 신청이 삭제되었습니다.');
-          loadVacations();
-        } else {
-          setError(response.message || '휴가 삭제에 실패했습니다.');
-        }
-      } catch (error: any) {
-        console.error('휴가 삭제 오류:', error);
-        setError(error.response?.data?.message || '휴가 삭제 중 오류가 발생했습니다.');
+  const handleDelete = (id: number) => {
+    showConfirm(
+      t('vacationManagement.deleteConfirm', { defaultValue: '정말 이 휴가 신청을 삭제하시겠습니까?' }),
+      () => {
+        void (async () => {
+          try {
+            const response = await vacationService.deleteVacation(id);
+            if (response.success) {
+              setSuccess('휴가 신청이 삭제되었습니다.');
+              loadVacations();
+            } else {
+              setError(response.message || '휴가 삭제에 실패했습니다.');
+            }
+          } catch (error: any) {
+            console.error('휴가 삭제 오류:', error);
+            setError(error.response?.data?.message || '휴가 삭제 중 오류가 발생했습니다.');
+          }
+        })();
+      },
+      {
+        title: t('common.confirm'),
+        confirmColor: 'error',
+        confirmText: t('common.delete'),
+        cancelText: t('common.cancel')
       }
-    }
+    );
   };
 
 
@@ -579,6 +648,41 @@ const VacationManagement: React.FC = () => {
     return filtered;
   }, [vacationRequests, searchTerm, statusFilter, typeFilter, orderBy, order]);
 
+  const deptOptionsForCalendar = React.useMemo(() => {
+    if ((user?.role !== 'admin' && user?.role !== 'root') || activeTab !== 0) return [];
+    const s = new Set<string>();
+    vacationRequests.forEach((r) => {
+      const d = r.department?.trim();
+      if (d && d !== '-') s.add(d);
+    });
+    return Array.from(s).sort((a, b) => a.localeCompare(b, 'ko'));
+  }, [vacationRequests, user?.role, activeTab]);
+
+  const calendarVacationsFiltered = React.useMemo(() => {
+    if ((user?.role !== 'admin' && user?.role !== 'root') || activeTab !== 0 || !calendarDept) return [];
+    if (calendarDept === CALENDAR_DEPARTMENT_ALL_VALUE) return vacationRequests;
+    return vacationRequests.filter((r) => r.department === calendarDept);
+  }, [vacationRequests, user?.role, activeTab, calendarDept]);
+
+  useEffect(() => {
+    if ((user?.role !== 'admin' && user?.role !== 'root') || activeTab !== 0) return;
+    if (deptOptionsForCalendar.length === 0) {
+      if (vacationRequests.length > 0) {
+        setCalendarDept(CALENDAR_DEPARTMENT_ALL_VALUE);
+      } else {
+        setCalendarDept('');
+      }
+      return;
+    }
+    setCalendarDept((prev) => {
+      if (prev === CALENDAR_DEPARTMENT_ALL_VALUE) return CALENDAR_DEPARTMENT_ALL_VALUE;
+      if (prev && deptOptionsForCalendar.includes(prev)) return prev;
+      const u = user?.department?.trim();
+      if (u && deptOptionsForCalendar.includes(u)) return u;
+      return deptOptionsForCalendar[0];
+    });
+  }, [activeTab, user?.role, user?.department, deptOptionsForCalendar, vacationRequests.length]);
+
   const handleSort = (property: string) => {
     const isAsc = orderBy === property && order === 'asc';
     setOrder(isAsc ? 'desc' : 'asc');
@@ -666,6 +770,71 @@ const VacationManagement: React.FC = () => {
                 </Card>
               </Grid>
             </Grid>
+
+            {/* 부서별 휴가 달력 (휴가 현황) */}
+            <Card sx={{ mb: 2 }}>
+              <CardContent>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 2,
+                    mb: 2,
+                  }}
+                >
+                  <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}
+                  >
+                    <CalendarIcon color="primary" />
+                    {t('vacationManagement.departmentLeaveCalendar')}
+                  </Typography>
+                  {vacationRequests.length > 0 ? (
+                    <FormControl size="small" sx={{ minWidth: 200 }}>
+                      <InputLabel id="vacation-cal-dept-label">{t('vacationManagement.departmentFilter')}</InputLabel>
+                      <Select
+                        labelId="vacation-cal-dept-label"
+                        label={t('vacationManagement.departmentFilter')}
+                        value={calendarDept}
+                        onChange={(e) => setCalendarDept(e.target.value as string)}
+                      >
+                        <MenuItem value={CALENDAR_DEPARTMENT_ALL_VALUE}>
+                          {t('vacationManagement.allDepartments')}
+                        </MenuItem>
+                        {deptOptionsForCalendar.map((d) => (
+                          <MenuItem key={d} value={d}>
+                            {d}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  ) : null}
+                </Box>
+                {vacationRequests.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    {t('vacationManagement.departmentLeaveCalendarEmpty')}
+                  </Typography>
+                ) : (
+                  <>
+                    <DepartmentLeaveCalendar
+                      vacations={calendarVacationsFiltered}
+                      viewMonth={calendarMonth}
+                      onMonthChange={setCalendarMonth}
+                      onSelectVacation={(v) => {
+                        const full = vacationRequests.find((r) => r.id === v.id);
+                        if (full) handleRowClick(full);
+                      }}
+                      language={i18n.language?.startsWith('en') ? 'en' : 'ko'}
+                    />
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5 }}>
+                      {t('vacationManagement.calendarStatusLegend')}
+                    </Typography>
+                  </>
+                )}
+              </CardContent>
+            </Card>
 
             {/* 상태별 통계 - 심플한 파이 차트 */}
             <Card sx={{ mb: 2 }}>
@@ -889,7 +1058,7 @@ const VacationManagement: React.FC = () => {
                           </Typography>
                         </TableCell>
                         <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                          {request.status === 'pending' && (
+                          {request.status === 'pending' && vacationMenuFlags.canDelete && (
                             <Tooltip title={t('vacationManagement.delete')}>
                               <IconButton size="small" onClick={() => handleDelete(request.id)} color="error">
                                 <DeleteIcon />
@@ -1591,14 +1760,25 @@ const VacationManagement: React.FC = () => {
               />
             )}
           </Tabs>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleAdd}
-            sx={{ ml: 2 }}
+          <Tooltip
+            title={
+              !hrElevated && !vacationMenuFlags.canCreate
+                ? t('vacationManagement.noPermissionCreate')
+                : ''
+            }
           >
-            {t('vacationManagement.applyLeave')}
-          </Button>
+            <span>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleAdd}
+                sx={{ ml: 2 }}
+                disabled={!menusLoading && !hrElevated && !vacationMenuFlags.canCreate}
+              >
+                {t('vacationManagement.applyLeave')}
+              </Button>
+            </span>
+          </Tooltip>
         </Box>
       </Card>
 
@@ -1675,13 +1855,15 @@ const VacationManagement: React.FC = () => {
                   </Select>
                 </FormControl>
                 <Box sx={{ flexGrow: 1 }} />
-                <Button
-                  variant="outlined"
-                  startIcon={<DownloadIcon />}
-                  onClick={handleExportExcel}
-                >
-                  {t('vacationManagement.export')}
-                </Button>
+                {canExportVacations && (
+                  <Button
+                    variant="outlined"
+                    startIcon={<DownloadIcon />}
+                    onClick={handleExportExcel}
+                  >
+                    {t('vacationManagement.export')}
+                  </Button>
+                )}
               </Box>
             </CardContent>
           </Card>
@@ -1852,6 +2034,32 @@ const VacationManagement: React.FC = () => {
         </DialogActions>
       </Dialog>
 
+      <ConfirmDialog
+        open={confirmDialogState.open}
+        title={confirmDialogState.title}
+        message={confirmDialogState.message}
+        confirmText={confirmDialogState.confirmText}
+        cancelText={confirmDialogState.cancelText}
+        confirmColor={confirmDialogState.confirmColor}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
+
+      <PromptDialog
+        open={promptDialogState.open}
+        title={promptDialogState.title}
+        message={promptDialogState.message}
+        label={promptDialogState.label}
+        defaultValue={promptDialogState.defaultValue}
+        placeholder={promptDialogState.placeholder}
+        multiline={promptDialogState.multiline}
+        minRows={promptDialogState.minRows}
+        confirmText={promptDialogState.confirmText}
+        cancelText={promptDialogState.cancelText}
+        required={promptDialogState.required}
+        onConfirm={handlePromptConfirm}
+        onCancel={handlePromptCancel}
+      />
     </Box>
   );
 };

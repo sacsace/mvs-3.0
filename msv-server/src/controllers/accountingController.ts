@@ -7,15 +7,40 @@ import { Op, Sequelize, QueryTypes } from 'sequelize';
 import sequelize from '../config/database';
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
+import { buildNodemailerTransportOptions, getResolvedMailTransportOptions } from '../utils/mailConfig';
 import { transferToBank } from '../services/banking';
+import {
+  buildBuyerPartyFromCustomer,
+  buildNicEInvoicePayload,
+  buildSellerPartyFromCompany,
+  gstinStateCode,
+  isPlausibleGstin,
+  linesFromInvoiceRows,
+  normalizeTransactionType,
+  submitPayloadToIrp,
+  type GstTransactionType
+} from '../services/gstEInvoiceService';
 import { pushNotification } from './notificationController';
+import { buildRegularInvoicePdfBuffer } from '../utils/regularInvoiceMailPdf';
 
 const ensureInvoiceColumns = async () => {
   try {
     await sequelize.query(`
       ALTER TABLE "invoices"
       ADD COLUMN IF NOT EXISTS "is_active" BOOLEAN NOT NULL DEFAULT true,
-      ADD COLUMN IF NOT EXISTS "invoice_category" VARCHAR(30) NOT NULL DEFAULT 'regular';
+      ADD COLUMN IF NOT EXISTS "invoice_category" VARCHAR(30) NOT NULL DEFAULT 'regular',
+      ADD COLUMN IF NOT EXISTS "gst_irn" VARCHAR(64),
+      ADD COLUMN IF NOT EXISTS "gst_ack_no" VARCHAR(50),
+      ADD COLUMN IF NOT EXISTS "gst_ack_date" VARCHAR(32),
+      ADD COLUMN IF NOT EXISTS "signed_qr_code" TEXT,
+      ADD COLUMN IF NOT EXISTS "irp_status" VARCHAR(32) NOT NULL DEFAULT 'draft',
+      ADD COLUMN IF NOT EXISTS "irp_last_error" TEXT,
+      ADD COLUMN IF NOT EXISTS "irp_submitted_at" TIMESTAMP WITH TIME ZONE,
+      ADD COLUMN IF NOT EXISTS "transaction_type" VARCHAR(20) NOT NULL DEFAULT 'B2B',
+      ADD COLUMN IF NOT EXISTS "gst_einvoice_payload" JSONB,
+      ADD COLUMN IF NOT EXISTS "approver_user_id" INTEGER,
+      ADD COLUMN IF NOT EXISTS "approved_at" TIMESTAMP WITH TIME ZONE,
+      ADD COLUMN IF NOT EXISTS "approval_status" VARCHAR(32);
     `);
   } catch (error) {
     // Runtime 권한(ALTER TABLE) 제약으로 실패해도
@@ -28,7 +53,12 @@ const ensureInvoiceItemColumns = async () => {
   try {
     await sequelize.query(`
       ALTER TABLE "invoice_items"
-      ADD COLUMN IF NOT EXISTS "is_active" BOOLEAN NOT NULL DEFAULT true;
+      ADD COLUMN IF NOT EXISTS "is_active" BOOLEAN NOT NULL DEFAULT true,
+      ADD COLUMN IF NOT EXISTS "hsn_sac" VARCHAR(20),
+      ADD COLUMN IF NOT EXISTS "cgst_rate" DECIMAL(7, 2) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS "sgst_rate" DECIMAL(7, 2) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS "igst_rate" DECIMAL(7, 2) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS "cess_rate" DECIMAL(7, 2) NOT NULL DEFAULT 0;
     `);
   } catch (error) {
     console.warn('[accounting] ensureInvoiceItemColumns skipped:', error);
@@ -45,6 +75,24 @@ const ensureCustomerColumns = async () => {
     console.warn('[accounting] ensureCustomerColumns skipped:', error);
   }
 };
+
+async function assertUserInCompany(
+  userId: number,
+  tenantId: number | undefined,
+  companyId: number | undefined
+): Promise<boolean> {
+  const u = await (User as any).findOne({
+    where: { id: userId, tenant_id: tenantId, company_id: companyId },
+    attributes: ['id']
+  });
+  return !!u;
+}
+
+/** 이메일·IRN 등: 승인 없이 저장된 구 데이터(null) 또는 승인 완료만 허용 */
+function isInvoiceApprovalAllowedForActions(inv: { approval_status?: string | null }) {
+  const s = inv?.approval_status;
+  return s == null || s === '' || s === 'approved';
+}
 
 const getIndianFiscalYearSuffix = (date = new Date()) => {
   const year = date.getFullYear();
@@ -217,6 +265,12 @@ export const getInvoices = async (req: RequestWithUser, res: Response) => {
           model: Customer,
           as: 'customer',
           attributes: ['name', 'email']
+        },
+        {
+          model: User,
+          as: 'approver',
+          attributes: ['id', 'username', 'email'],
+          required: false
         }
       ],
       limit: Number(limit),
@@ -270,6 +324,12 @@ export const getInvoice = async (req: RequestWithUser, res: Response) => {
             required: false
           },
           {
+            model: User,
+            as: 'approver',
+            attributes: ['id', 'username', 'email'],
+            required: false
+          },
+          {
             model: InvoiceItem,
             as: 'items',
             attributes: ['id', 'item_name', 'description', 'quantity', 'unit_price', 'total_price', 'tax_rate', 'tax_amount'],
@@ -312,52 +372,187 @@ export const getInvoice = async (req: RequestWithUser, res: Response) => {
   }
 };
 
-// 인보이스 이메일 전송
+function pickInvoiceCurrencyForMailPdf(inv: any): string {
+  const p = inv?.gst_einvoice_payload;
+  if (p && typeof p === 'object' && typeof (p as { currency?: string }).currency === 'string') {
+    const c = String((p as { currency?: string }).currency).trim();
+    if (c) return c;
+  }
+  return 'INR';
+}
+
+// 인보이스 이메일 전송 (PDF는 서버에서 pdfkit으로 생성 — 텍스트·벡터 기반)
 export const sendInvoiceEmail = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { to, subject, message, pdf_base64, filename } = req.body;
+    const { to, subject, message, filename } = req.body;
 
-    if (!to || !pdf_base64) {
-      return res.status(400).json({ success: false, message: '이메일과 PDF 데이터가 필요합니다.' });
+    if (!to) {
+      return res.status(400).json({ success: false, message: '수신 이메일 주소가 필요합니다.' });
     }
 
-    if (!env.EMAIL_HOST || !env.EMAIL_USER || !env.EMAIL_PASS) {
-      return res.status(500).json({ success: false, message: '메일 서버 설정이 없습니다.' });
+    const { tenant_id, company_id, id: userId } = req.user;
+    const companyRow = await Company.findOne({
+      where: { id: company_id, tenant_id }
+    });
+    const senderRow = await User.findOne({
+      where: { id: userId, tenant_id, company_id },
+      attributes: ['id', 'settings']
+    });
+    const mailOpts = getResolvedMailTransportOptions(companyRow, senderRow);
+    if (!mailOpts) {
+      return res.status(503).json({
+        success: false,
+        message:
+          '메일 서버가 설정되지 않았습니다. 시스템 설정의 보내는 메일 서버를 입력하거나 환경변수(EMAIL_*)를 설정하세요.'
+      });
     }
 
-    const invoice = await (Invoice as any).findOne({ where: { id } });
+    await ensureInvoiceColumns();
+    await ensureInvoiceItemColumns();
+    await ensureCustomerColumns();
+
+    const whereClause: any = { id: Number(id), tenant_id, company_id, is_active: true };
+
+    let invoice: any = null;
+    try {
+      invoice = await (Invoice as any).findOne({
+        where: whereClause,
+        include: [
+          {
+            model: Customer,
+            as: 'customer',
+            attributes: ['name', 'email', 'phone', 'address', 'business_number'],
+            required: false
+          },
+          {
+            model: InvoiceItem,
+            as: 'items',
+            attributes: [
+              'id',
+              'item_name',
+              'description',
+              'quantity',
+              'unit_price',
+              'total_price',
+              'tax_rate',
+              'tax_amount',
+              'is_active'
+            ],
+            required: false
+          }
+        ]
+      });
+    } catch (queryError: any) {
+      console.warn('[accounting] sendInvoiceEmail include query fallback:', queryError?.message);
+      const basic = await (Invoice as any).findOne({ where: whereClause });
+      if (basic) {
+        const plain = basic.toJSON ? basic.toJSON() : basic;
+        let customer: any = null;
+        if (plain?.customer_id) {
+          customer = await (Customer as any).findOne({
+            where: { id: plain.customer_id },
+            attributes: ['name', 'email', 'phone', 'address', 'business_number']
+          });
+        }
+        const items = await (InvoiceItem as any).findAll({
+          where: { invoice_id: plain.id },
+          attributes: [
+            'id',
+            'item_name',
+            'description',
+            'quantity',
+            'unit_price',
+            'total_price',
+            'tax_rate',
+            'tax_amount',
+            'is_active'
+          ]
+        });
+        invoice = {
+          ...plain,
+          customer: customer ? (customer.toJSON ? customer.toJSON() : customer) : null,
+          items: items || []
+        };
+      }
+    }
+
     if (!invoice) {
       return res.status(404).json({ success: false, message: '인보이스를 찾을 수 없습니다.' });
     }
 
-    if (invoice.payment_status === 'paid') {
-      return res.status(400).json({ success: false, message: '정산 완료된 인보이스는 삭제 요청할 수 없습니다.' });
+    const invPlain = invoice.toJSON ? invoice.toJSON() : invoice;
+
+    if (!isInvoiceApprovalAllowedForActions(invPlain)) {
+      return res.status(403).json({
+        success: false,
+        message: '승인된 인보이스만 이메일로 PDF를 보낼 수 있습니다.'
+      });
     }
 
-    const base64Data = String(pdf_base64).includes(',')
-      ? String(pdf_base64).split(',')[1]
-      : String(pdf_base64);
-    const pdfBuffer = Buffer.from(base64Data, 'base64');
+    const cust = invPlain.customer || {};
+    const customerName = String(cust.name || '').trim() || '—';
+    const rawItems = Array.isArray(invPlain.items) ? invPlain.items : [];
+    const mailItems = rawItems
+      .filter((row: { is_active?: boolean }) => row?.is_active !== false)
+      .map((row: any) => ({
+        item_name: String(row.item_name ?? ''),
+        description: row.description,
+        quantity: Number(row.quantity) || 0,
+        unit_price: Number(row.unit_price) || 0,
+        total_price: Number(row.total_price) || 0,
+        tax_rate: row.tax_rate != null ? Number(row.tax_rate) : undefined,
+        tax_amount: row.tax_amount != null ? Number(row.tax_amount) : undefined
+      }));
+
+    type CompanyRowPlain = { name?: string; address?: string; business_number?: string };
+    const compRaw = companyRow ? (companyRow.toJSON ? companyRow.toJSON() : companyRow) : {};
+    const comp = compRaw as CompanyRowPlain;
+    const pdfBuffer = await buildRegularInvoicePdfBuffer({
+      companyName: String(comp.name ?? 'Company'),
+      companyAddress: comp.address || undefined,
+      companyGstin: comp.business_number || undefined,
+      invoice: {
+        invoice_number: String(invPlain.invoice_number || ''),
+        invoice_date: invPlain.invoice_date,
+        due_date: invPlain.due_date,
+        subtotal: Number(invPlain.subtotal) || 0,
+        tax_amount: Number(invPlain.tax_amount) || 0,
+        total_amount: Number(invPlain.total_amount) || 0,
+        notes: invPlain.notes || null
+      },
+      customerName,
+      customerEmail: cust.email || undefined,
+      customerPhone: cust.phone || undefined,
+      customerAddress: cust.address || undefined,
+      customerGstin: cust.business_number || undefined,
+      items: mailItems,
+      currency: pickInvoiceCurrencyForMailPdf(invPlain)
+    });
+
+    const MAX_PDF_BYTES = 5 * 1024 * 1024;
+    if (pdfBuffer.length > MAX_PDF_BYTES) {
+      return res.status(413).json({
+        success: false,
+        message: `첨부 PDF는 5MB 이하여야 합니다. (현재 약 ${(pdfBuffer.length / (1024 * 1024)).toFixed(2)}MB)`
+      });
+    }
 
     const transporter = nodemailer.createTransport({
-      host: env.EMAIL_HOST,
-      port: env.EMAIL_PORT,
-      secure: env.EMAIL_PORT === 465,
-      auth: {
-        user: env.EMAIL_USER,
-        pass: env.EMAIL_PASS
-      }
+      ...buildNodemailerTransportOptions(mailOpts),
+      connectionTimeout: 120000,
+      greetingTimeout: 60000,
+      socketTimeout: 120000
     });
 
     await transporter.sendMail({
-      from: env.EMAIL_USER,
+      from: mailOpts.from,
       to,
-      subject: subject || `Invoice ${invoice.invoice_number}`,
-      text: message || `Invoice ${invoice.invoice_number} PDF를 첨부합니다.`,
+      subject: subject || `Invoice ${invPlain.invoice_number}`,
+      text: message || `Invoice ${invPlain.invoice_number} PDF를 첨부합니다.`,
       attachments: [
         {
-          filename: filename || `${invoice.invoice_number}.pdf`,
+          filename: (filename || `${invPlain.invoice_number}.pdf`).replace(/[^\w.\-]+/g, '_'),
           content: pdfBuffer,
           contentType: 'application/pdf'
         }
@@ -375,10 +570,18 @@ export const sendInvoiceEmail = async (req: RequestWithUser, res: Response) => {
 export const createInvoice = async (req: RequestWithUser, res: Response) => {
   try {
     const { tenant_id, company_id, id: user_id } = req.user;
-    const { items, ...invoiceData } = req.body;
+    const { items, approver_user_id, ...invoiceData } = req.body;
 
     await ensureInvoiceColumns();
     await ensureInvoiceItemColumns();
+
+    if (!approver_user_id) {
+      return res.status(400).json({ success: false, message: '승인자를 지정해야 합니다.' });
+    }
+    const okApprover = await assertUserInCompany(Number(approver_user_id), tenant_id, company_id);
+    if (!okApprover) {
+      return res.status(400).json({ success: false, message: '승인자를 찾을 수 없거나 같은 회사 소속이 아닙니다.' });
+    }
 
     const resolvedCustomerId = await resolveCustomerId(invoiceData, tenant_id, company_id);
     if (!resolvedCustomerId) {
@@ -394,7 +597,10 @@ export const createInvoice = async (req: RequestWithUser, res: Response) => {
       tenant_id,
       company_id,
       created_by: user_id,
-      is_active: true
+      is_active: true,
+      approver_user_id: Number(approver_user_id),
+      approval_status: 'pending_approval',
+      approved_at: null
     });
 
     // 인보이스 아이템들 생성
@@ -431,9 +637,22 @@ export const updateInvoice = async (req: RequestWithUser, res: Response) => {
     const { id } = req.params;
     const { tenant_id, company_id } = req.user;
     const { items, ...invoiceData } = req.body;
+    delete (invoiceData as any).approval_status;
+    delete (invoiceData as any).approved_at;
 
     await ensureInvoiceColumns();
     await ensureInvoiceItemColumns();
+
+    if ((invoiceData as any).approver_user_id != null) {
+      const ok = await assertUserInCompany(
+        Number((invoiceData as any).approver_user_id),
+        tenant_id,
+        company_id
+      );
+      if (!ok) {
+        return res.status(400).json({ success: false, message: '승인자를 찾을 수 없거나 같은 회사 소속이 아닙니다.' });
+      }
+    }
 
     const resolvedCustomerId = await resolveCustomerId(invoiceData, tenant_id, company_id);
     if (!resolvedCustomerId) {
@@ -482,17 +701,32 @@ export const updateInvoice = async (req: RequestWithUser, res: Response) => {
   }
 };
 
-// 인보이스 삭제
+// 인보이스 삭제 → 실제 삭제 없이 승인 요청만 등록 (본문: approver_user_id, memo)
 export const deleteInvoice = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
     const { tenant_id, company_id, id: user_id, username } = req.user;
+    const { approver_user_id: approverRaw, memo } = req.body || {};
+    const approver_user_id =
+      approverRaw != null && approverRaw !== '' ? Number(approverRaw) : NaN;
+
+    if (!Number.isFinite(approver_user_id) || approver_user_id < 1) {
+      return res.status(400).json({ success: false, message: '승인 대상을 선택해주세요.' });
+    }
+
+    const okApprover = await assertUserInCompany(approver_user_id, tenant_id, company_id);
+    if (!okApprover) {
+      return res.status(400).json({
+        success: false,
+        message: '승인자를 찾을 수 없거나 같은 회사 소속이 아닙니다.'
+      });
+    }
 
     await ensureInvoiceColumns();
     await ensureInvoiceItemColumns();
 
     const invoice = await (Invoice as any).findOne({
-      where: { id, tenant_id, company_id }
+      where: { id: Number(id), tenant_id, company_id }
     });
 
     if (!invoice) {
@@ -517,14 +751,26 @@ export const deleteInvoice = async (req: RequestWithUser, res: Response) => {
     }
 
     const requestedAt = new Date().toISOString();
+    const memoTrim = typeof memo === 'string' ? memo.trim() : '';
     const requestLog = [
       {
         action: 'invoice_delete_request_submitted',
         actor_id: user_id,
         actor_name: username || `user-${user_id}`,
-        timestamp: requestedAt
+        timestamp: requestedAt,
+        approver_user_id,
+        memo: memoTrim || undefined
       }
     ];
+
+    const baseDesc = `인보이스 ${invoice.invoice_number} 삭제 요청 (승인자 ID: ${approver_user_id})`;
+    const description = memoTrim ? `${baseDesc}\n메모: ${memoTrim}` : baseDesc;
+
+    const approvalFlowStep = {
+      approverId: approver_user_id,
+      status: 'pending',
+      order: 1
+    };
 
     await (Approval as any).create({
       tenant_id,
@@ -536,19 +782,21 @@ export const deleteInvoice = async (req: RequestWithUser, res: Response) => {
       category: 'invoice_delete',
       amount: Number(invoice.total_amount || 0),
       requester_id: user_id,
-      description: `인보이스 ${invoice.invoice_number} 삭제 요청`,
+      description,
       attachments: null,
-      status: 'submitted',
+      status: 'in_review',
       priority: 'medium',
-      current_approver_id: null,
-      approval_flow: JSON.stringify([]),
+      current_approver_id: approver_user_id,
+      approval_flow: JSON.stringify([approvalFlowStep]),
       due_date: null,
       comments: JSON.stringify(requestLog)
     });
 
+    const noteLine = memoTrim
+      ? `[DELETE_REQUEST] ${requestedAt} by ${username || `user-${user_id}`} → approver ${approver_user_id}: ${memoTrim}`
+      : `[DELETE_REQUEST] ${requestedAt} by ${username || `user-${user_id}`} → approver ${approver_user_id}`;
     await invoice.update({
-      notes: `${invoice.notes || ''}\n[DELETE_REQUEST] ${requestedAt} by ${username || `user-${user_id}`}`
-        .trim()
+      notes: `${invoice.notes || ''}\n${noteLine}`.trim()
     });
 
     pushNotification({
@@ -747,14 +995,24 @@ export const updateProformaInvoiceStatus = async (req: RequestWithUser, res: Res
 export const createEInvoiceFromProforma = async (req: RequestWithUser, res: Response) => {
   try {
     await ensureInvoiceColumns();
+    await ensureInvoiceItemColumns();
     const { id } = req.params;
     const { tenant_id, company_id, id: user_id } = req.user;
     const userRole = req.user?.role;
     const {
       issueDate,
       dueDate,
-      notes
+      notes,
+      approver_user_id
     } = req.body || {};
+
+    if (!approver_user_id) {
+      return res.status(400).json({ success: false, message: '승인자를 지정해야 합니다.' });
+    }
+    const okApprover = await assertUserInCompany(Number(approver_user_id), tenant_id, company_id);
+    if (!okApprover) {
+      return res.status(400).json({ success: false, message: '승인자를 찾을 수 없거나 같은 회사 소속이 아닙니다.' });
+    }
 
     const whereClause: any = { id, invoice_category: 'proforma' };
     
@@ -798,6 +1056,8 @@ export const createEInvoiceFromProforma = async (req: RequestWithUser, res: Resp
     const dueDateValue = dueDate || proformaInvoice.due_date || invoiceDate;
     const notesValue = typeof notes === 'string' ? notes : undefined;
 
+    const txnType = (req.body?.transactionType || req.body?.transaction_type || 'B2B') as string;
+
     const eInvoice = await (Invoice as any).create({
       tenant_id: proformaInvoice.tenant_id,
       company_id: proformaInvoice.company_id,
@@ -813,7 +1073,12 @@ export const createEInvoiceFromProforma = async (req: RequestWithUser, res: Resp
       payment_status: 'pending',
       notes: notesValue || proformaInvoice.notes || `프로포마 인보이스 ${proformaInvoice.invoice_number}에서 생성됨`,
       created_by: user_id,
-      is_active: true
+      is_active: true,
+      transaction_type: txnType,
+      irp_status: 'draft',
+      approver_user_id: Number(approver_user_id),
+      approval_status: 'pending_approval',
+      approved_at: null
     });
 
     // 인보이스 아이템들 복사
@@ -826,9 +1091,15 @@ export const createEInvoiceFromProforma = async (req: RequestWithUser, res: Resp
         unit_price: item.unit_price,
         total_price: item.total_price,
         tax_rate: item.tax_rate,
-        tax_amount: item.tax_amount
+        tax_amount: item.tax_amount,
+        hsn_sac: item.hsn_sac ?? null,
+        cgst_rate: item.cgst_rate ?? 0,
+        sgst_rate: item.sgst_rate ?? 0,
+        igst_rate: item.igst_rate ?? 0,
+        cess_rate: item.cess_rate ?? 0,
+        is_active: true
       }));
-      
+
       await (InvoiceItem as any).bulkCreate(invoiceItems);
     }
 
@@ -862,6 +1133,7 @@ export const createEInvoiceFromProforma = async (req: RequestWithUser, res: Resp
 export const getEInvoices = async (req: RequestWithUser, res: Response) => {
   try {
     await ensureInvoiceColumns();
+    await ensureInvoiceItemColumns();
     const { tenant_id, company_id } = req.user;
     const userRole = req.user?.role;
     const { status = '', customer_id = '', company_id: queryCompanyId } = req.query;
@@ -900,9 +1172,35 @@ export const getEInvoices = async (req: RequestWithUser, res: Response) => {
           attributes: ['id', 'name', 'email', 'phone', 'address']
         },
         {
+          model: User,
+          as: 'approver',
+          attributes: ['id', 'username', 'email'],
+          required: false
+        },
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'username', 'email'],
+          required: false
+        },
+        {
           model: InvoiceItem,
           as: 'items',
-          attributes: ['id', 'item_name', 'description', 'quantity', 'unit_price', 'total_price', 'tax_rate', 'tax_amount']
+          attributes: [
+            'id',
+            'item_name',
+            'description',
+            'quantity',
+            'unit_price',
+            'total_price',
+            'tax_rate',
+            'tax_amount',
+            'hsn_sac',
+            'cgst_rate',
+            'sgst_rate',
+            'igst_rate',
+            'cess_rate'
+          ]
         }
       ],
       order: [['invoice_date', 'DESC']]
@@ -922,50 +1220,91 @@ export const getEInvoices = async (req: RequestWithUser, res: Response) => {
 export const createEInvoice = async (req: RequestWithUser, res: Response) => {
   try {
     await ensureInvoiceColumns();
+    await ensureInvoiceItemColumns();
     const { tenant_id, company_id, id: user_id } = req.user;
-    const { items, ...invoiceData } = req.body;
-    const invoiceNumber = isStandardInvoiceNumber(invoiceData.invoice_number)
-      ? invoiceData.invoice_number
+    const body = req.body || {};
+    const {
+      items,
+      transaction_type,
+      customer_id,
+      invoice_number,
+      invoice_date,
+      due_date,
+      subtotal,
+      tax_amount,
+      total_amount,
+      notes,
+      status,
+      approver_user_id
+    } = body;
+    const invoiceNumber = isStandardInvoiceNumber(invoice_number)
+      ? invoice_number
       : await generateInvoiceNumber(company_id);
-    const invoiceDate = invoiceData.invoice_date || new Date().toISOString().split('T')[0];
-    const dueDate = invoiceData.due_date || invoiceDate;
+    const invDate = invoice_date || new Date().toISOString().split('T')[0];
+    const due = due_date || invDate;
 
-    if (!invoiceData.customer_id) {
+    if (!customer_id) {
       return res.status(400).json({ success: false, message: '고객을 선택해주세요.' });
     }
 
-    // E-Invoice 생성
+    if (!approver_user_id) {
+      return res.status(400).json({ success: false, message: '승인자를 지정해야 합니다.' });
+    }
+    const okApprover = await assertUserInCompany(Number(approver_user_id), tenant_id, company_id);
+    if (!okApprover) {
+      return res.status(400).json({ success: false, message: '승인자를 찾을 수 없거나 같은 회사 소속이 아닙니다.' });
+    }
+
     const invoice = await (Invoice as any).create({
-      ...invoiceData,
+      customer_id,
+      subtotal: subtotal ?? 0,
+      tax_amount: tax_amount ?? 0,
+      total_amount: total_amount ?? 0,
+      notes: notes ?? null,
       invoice_number: invoiceNumber,
       invoice_category: 'e_invoice',
-      invoice_date: invoiceDate,
-      due_date: dueDate,
+      invoice_date: invDate,
+      due_date: due,
       tenant_id,
       company_id,
       created_by: user_id,
-      status: invoiceData.status || 'draft',
-      is_active: true
+      status: status || 'draft',
+      is_active: true,
+      transaction_type: transaction_type || 'B2B',
+      irp_status: 'draft',
+      approver_user_id: Number(approver_user_id),
+      approval_status: 'pending_approval',
+      approved_at: null
     });
 
-    // 인보이스 아이템들 생성
     if (items && items.length > 0) {
       const invoiceItems = items.map((item: any) => ({
-        ...item,
-        invoice_id: invoice.id
+        invoice_id: invoice.id,
+        item_name: item.item_name || item.name || 'Item',
+        description: item.description ?? null,
+        quantity: item.quantity ?? 1,
+        unit_price: item.unit_price ?? 0,
+        total_price: item.total_price ?? 0,
+        tax_rate: item.tax_rate ?? 0,
+        tax_amount: item.tax_amount ?? 0,
+        hsn_sac: item.hsn_sac ?? item.hsnCode ?? null,
+        cgst_rate: item.cgst_rate ?? 0,
+        sgst_rate: item.sgst_rate ?? 0,
+        igst_rate: item.igst_rate ?? 0,
+        cess_rate: item.cess_rate ?? 0,
+        is_active: true
       }));
-      
+
       await (InvoiceItem as any).bulkCreate(invoiceItems);
     }
 
-    // 생성된 E-Invoice와 아이템들을 함께 반환
     const createdInvoice = await (Invoice as any).findOne({
       where: { id: invoice.id },
       include: [
         {
           model: Customer,
           as: 'customer',
-          attributes: ['id', 'name', 'email', 'phone', 'address']
+          attributes: ['id', 'name', 'email', 'phone', 'address', 'business_number']
         },
         {
           model: InvoiceItem,
@@ -1014,6 +1353,156 @@ export const updateEInvoiceStatus = async (req: RequestWithUser, res: Response) 
   }
 };
 
+/** NIC IRP에 e-invoice JSON 제출 — GST_IRP_MODE=live 시 GSP HTTP, 아니면 NIC 형식 mock IRN */
+export const generateEInvoiceIrn = async (req: RequestWithUser, res: Response) => {
+  try {
+    await ensureInvoiceColumns();
+    await ensureInvoiceItemColumns();
+    const { id } = req.params;
+    const { tenant_id, company_id } = req.user;
+    const userRole = req.user?.role;
+
+    const whereClause: any = { id, invoice_category: 'e_invoice', is_active: true };
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenant_id;
+      whereClause.company_id = company_id;
+    }
+
+    const invoice = await (Invoice as any).findOne({
+      where: whereClause,
+      include: [
+        {
+          model: Customer,
+          as: 'customer',
+          attributes: ['id', 'name', 'email', 'phone', 'address', 'business_number']
+        },
+        {
+          model: InvoiceItem,
+          as: 'items',
+          required: false
+        }
+      ]
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: 'E-Invoice를 찾을 수 없습니다.' });
+    }
+
+    if (!isInvoiceApprovalAllowedForActions(invoice)) {
+      return res.status(403).json({
+        success: false,
+        message: '내부 승인이 완료된 전자세금계산서만 IRN을 발급할 수 있습니다.'
+      });
+    }
+
+    if (invoice.gst_irn) {
+      return res.status(400).json({ success: false, message: '이미 IRN이 발급된 인보이스입니다.' });
+    }
+
+    const company = await (Company as any).findByPk(invoice.company_id);
+    if (!company) {
+      return res.status(400).json({ success: false, message: '회사 정보를 찾을 수 없습니다.' });
+    }
+
+    const seller = buildSellerPartyFromCompany(company);
+    const buyer = buildBuyerPartyFromCustomer(invoice.customer);
+    if (!isPlausibleGstin(seller.gstin)) {
+      return res.status(400).json({
+        success: false,
+        message: '공급자 GSTIN(회사 business_number)이 유효한 15자 형식이 아닙니다.'
+      });
+    }
+    if (!isPlausibleGstin(buyer.gstin)) {
+      return res.status(400).json({
+        success: false,
+        message: '수취인 GSTIN(고객 business_number)이 유효한 15자 형식이 아닙니다.'
+      });
+    }
+
+    const plainItems = (invoice.items || [])
+      .map((row: any) => (row.get ? row.get({ plain: true }) : row))
+      .filter((p: any) => p.is_active !== false);
+    const intra = gstinStateCode(seller.gstin) === gstinStateCode(buyer.gstin);
+
+    const itemRows =
+      plainItems.length > 0
+        ? plainItems
+        : [
+            {
+              item_name: 'Taxable supply',
+              description: 'Aggregate line (add line items for accurate HSN)',
+              quantity: 1,
+              unit_price: Number(invoice.subtotal),
+              total_price: Number(invoice.subtotal),
+              tax_rate:
+                Number(invoice.subtotal) > 0
+                  ? (Number(invoice.tax_amount) / Number(invoice.subtotal)) * 100
+                  : 0,
+              tax_amount: Number(invoice.tax_amount),
+              hsn_sac: null
+            }
+          ];
+
+    const lines = linesFromInvoiceRows({ items: itemRows as any, intraState: intra });
+    const txn = normalizeTransactionType(invoice.transaction_type);
+
+    const payload = buildNicEInvoicePayload({
+      seller,
+      buyer,
+      invoiceNumber: invoice.invoice_number,
+      invoiceDateIso: String(invoice.invoice_date),
+      transactionType: txn,
+      items: lines,
+      totals: {
+        subtotal: Number(invoice.subtotal),
+        taxAmount: Number(invoice.tax_amount),
+        totalAmount: Number(invoice.total_amount)
+      }
+    });
+
+    await invoice.update({
+      irp_status: 'submitted',
+      irp_submitted_at: new Date(),
+      irp_last_error: null
+    });
+
+    try {
+      const irp = await submitPayloadToIrp(payload);
+      await invoice.update({
+        gst_irn: irp.Irn,
+        gst_ack_no: irp.AckNo,
+        gst_ack_date: irp.AckDt,
+        signed_qr_code: irp.SignedQRCode,
+        irp_status: 'irn_generated',
+        status: 'generated',
+        gst_einvoice_payload: payload as any,
+        irp_last_error: null
+      });
+
+      const refreshed = await (Invoice as any).findOne({
+        where: { id: invoice.id },
+        include: [
+          {
+            model: Customer,
+            as: 'customer',
+            attributes: ['id', 'name', 'email', 'phone', 'address', 'business_number']
+          },
+          { model: InvoiceItem, as: 'items' }
+        ]
+      });
+
+      res.json({ success: true, data: refreshed });
+    } catch (err: any) {
+      const msg = err?.message || 'IRP 처리 실패';
+      await invoice.update({ irp_status: 'failed', irp_last_error: msg });
+      res.status(502).json({ success: false, message: msg });
+    }
+  } catch (error) {
+    console.error('IRN 생성 오류:', error);
+    res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+};
+
 // E-Invoice에서 E-Way Bill 생성
 export const createEWayBillFromEInvoice = async (req: RequestWithUser, res: Response) => {
   try {
@@ -1050,11 +1539,11 @@ export const createEWayBillFromEInvoice = async (req: RequestWithUser, res: Resp
       return res.status(404).json({ success: false, message: 'E-Invoice를 찾을 수 없습니다.' });
     }
 
-    // E-Invoice가 'generated' 상태인지 확인
-    if (eInvoice.status !== 'generated') {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'E-Invoice가 생성된 상태가 아닙니다. E-Way Bill을 생성하려면 E-Invoice가 생성되어야 합니다.' 
+    if (!eInvoice.gst_irn || eInvoice.irp_status !== 'irn_generated') {
+      return res.status(400).json({
+        success: false,
+        message:
+          'E-Way Bill을 생성하려면 먼저 NIC IRP에서 IRN을 발급받아야 합니다. (E-Invoice에서 IRN 생성)'
       });
     }
 
@@ -2341,6 +2830,101 @@ export const deleteAsset = async (req: RequestWithUser, res: Response) => {
   } catch (error: any) {
     console.error('자산 삭제 오류:', error);
     res.status(500).json({ success: false, message: '자산 삭제에 실패했습니다.' });
+  }
+};
+
+/** 일반·전자 세금계산서 공통: 내부 승인 */
+export const approveInvoice = async (req: RequestWithUser, res: Response) => {
+  try {
+    await ensureInvoiceColumns();
+    const { id } = req.params;
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+
+    const whereClause: any = { id, is_active: true };
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = companyId;
+    }
+
+    const invoice = await (Invoice as any).findOne({ where: whereClause });
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: '인보이스를 찾을 수 없습니다.' });
+    }
+    if (invoice.approval_status !== 'pending_approval') {
+      return res.status(400).json({ success: false, message: '승인 대기 상태의 인보이스만 승인할 수 있습니다.' });
+    }
+    const isApprover = Number(invoice.approver_user_id) === Number(userId);
+    const isAdmin = userRole === 'root' || userRole === 'admin';
+    if (!isApprover && !isAdmin) {
+      return res.status(403).json({ success: false, message: '지정된 승인자만 승인할 수 있습니다.' });
+    }
+
+    await invoice.update({
+      approval_status: 'approved',
+      approved_at: new Date()
+    });
+
+    const fresh = await (Invoice as any).findByPk(invoice.id, {
+      include: [
+        { model: Customer, as: 'customer', required: false },
+        { model: User, as: 'approver', attributes: ['id', 'username', 'email'], required: false },
+        { model: User, as: 'creator', attributes: ['id', 'username', 'email'], required: false }
+      ]
+    });
+    res.json({ success: true, data: fresh });
+  } catch (error: any) {
+    console.error('인보이스 승인 오류:', error);
+    res.status(500).json({ success: false, message: '인보이스 승인 중 오류가 발생했습니다.' });
+  }
+};
+
+export const rejectInvoice = async (req: RequestWithUser, res: Response) => {
+  try {
+    await ensureInvoiceColumns();
+    const { id } = req.params;
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
+    const userId = req.user?.id;
+    const userRole = req.user?.role;
+
+    const whereClause: any = { id, is_active: true };
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = companyId;
+    }
+
+    const invoice = await (Invoice as any).findOne({ where: whereClause });
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: '인보이스를 찾을 수 없습니다.' });
+    }
+    if (invoice.approval_status !== 'pending_approval') {
+      return res.status(400).json({ success: false, message: '승인 대기 상태의 인보이스만 반려할 수 있습니다.' });
+    }
+    const isApprover = Number(invoice.approver_user_id) === Number(userId);
+    const isAdmin = userRole === 'root' || userRole === 'admin';
+    if (!isApprover && !isAdmin) {
+      return res.status(403).json({ success: false, message: '지정된 승인자만 반려할 수 있습니다.' });
+    }
+
+    await invoice.update({
+      approval_status: 'rejected',
+      approved_at: null
+    });
+
+    const fresh = await (Invoice as any).findByPk(invoice.id, {
+      include: [
+        { model: Customer, as: 'customer', required: false },
+        { model: User, as: 'approver', attributes: ['id', 'username', 'email'], required: false },
+        { model: User, as: 'creator', attributes: ['id', 'username', 'email'], required: false }
+      ]
+    });
+    res.json({ success: true, data: fresh });
+  } catch (error: any) {
+    console.error('인보이스 반려 오류:', error);
+    res.status(500).json({ success: false, message: '인보이스 반려 중 오류가 발생했습니다.' });
   }
 };
 

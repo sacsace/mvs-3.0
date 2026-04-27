@@ -12,7 +12,13 @@ export const getVacations = async (req: AuthRequest, res: Response) => {
     const companyId = req.user?.company_id;
     const userRole = req.user?.role;
     const userId = req.user?.id;
-    const { user_id, status, vacation_type, start_date, end_date, company_id, approved_by } = req.query;
+    const { user_id, status, vacation_type, start_date, end_date, company_id, approved_by, same_department } = req.query;
+
+    const sameDept = same_department === 'true' || same_department === '1';
+    const approvedByParam =
+      approved_by !== undefined && approved_by !== null && String(approved_by).trim() !== ''
+        ? parseInt(String(approved_by), 10)
+        : undefined;
 
     const whereClause: any = {};
     
@@ -21,8 +27,8 @@ export const getVacations = async (req: AuthRequest, res: Response) => {
       whereClause.tenant_id = tenantId;
       whereClause.company_id = companyId;
       
-      // 일반 사용자는 자신의 휴가만 조회
-      if (userRole === 'user') {
+      // 일반 사용자: 기본은 본인만. same_department 시 동일 부서 / 결재함(approved_by) 조회 시에는 신청자 제한 제외
+      if (userRole === 'user' && !sameDept && approvedByParam === undefined) {
         whereClause.user_id = userId;
       }
     } else {
@@ -38,12 +44,12 @@ export const getVacations = async (req: AuthRequest, res: Response) => {
       }
     }
 
-    if (user_id) {
+    if (user_id && !sameDept) {
       whereClause.user_id = user_id;
     }
 
-    if (approved_by) {
-      whereClause.approved_by = parseInt(approved_by as string);
+    if (approvedByParam !== undefined && Number.isFinite(approvedByParam)) {
+      whereClause.approved_by = approvedByParam;
     }
 
     if (status) {
@@ -72,14 +78,28 @@ export const getVacations = async (req: AuthRequest, res: Response) => {
     // 활성화된 휴가만 조회
     whereClause.is_active = true;
 
+    const userDepartment = (req.user as any)?.department;
+    const userInclude: any = {
+      model: User,
+      as: 'user',
+      attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number'],
+      required: true,
+    };
+
+    if (sameDept) {
+      if (!userDepartment || !String(userDepartment).trim()) {
+        return res.status(400).json({
+          success: false,
+          message: '부서 정보가 없어 동일 부서 휴가를 조회할 수 없습니다.',
+        });
+      }
+      userInclude.where = { department: userDepartment };
+    }
+
     const vacations = await (Vacation as any).findAll({
       where: whereClause,
       include: [
-        {
-          model: User,
-          as: 'user',
-          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
-        },
+        userInclude,
         {
           model: User,
           as: 'approver',
@@ -450,14 +470,6 @@ export const approveVacation = async (req: AuthRequest, res: Response) => {
     const userRole = req.user?.role;
     const userId = req.user?.id;
 
-    // 관리자만 승인 가능
-    if (userRole !== 'admin' && userRole !== 'root') {
-      return res.status(403).json({ 
-        success: false, 
-        message: '승인 권한이 없습니다.' 
-      });
-    }
-
     const vacation = await (Vacation as any).findOne({
       where: {
         id,
@@ -471,6 +483,16 @@ export const approveVacation = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ 
         success: false, 
         message: '휴가 정보를 찾을 수 없습니다.' 
+      });
+    }
+
+    const isAdmin = userRole === 'admin' || userRole === 'root';
+    const approverId = vacation.approved_by != null ? Number(vacation.approved_by) : NaN;
+    const isDesignatedApprover = Number.isFinite(approverId) && approverId === Number(userId);
+    if (!isAdmin && !isDesignatedApprover) {
+      return res.status(403).json({
+        success: false,
+        message: '승인 권한이 없습니다. (관리자 또는 지정된 결재자만 승인할 수 있습니다.)'
       });
     }
 
@@ -521,14 +543,6 @@ export const rejectVacation = async (req: AuthRequest, res: Response) => {
     const userRole = req.user?.role;
     const userId = req.user?.id;
 
-    // 관리자만 거부 가능
-    if (userRole !== 'admin' && userRole !== 'root') {
-      return res.status(403).json({ 
-        success: false, 
-        message: '거부 권한이 없습니다.' 
-      });
-    }
-
     const vacation = await (Vacation as any).findOne({
       where: {
         id,
@@ -542,6 +556,16 @@ export const rejectVacation = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ 
         success: false, 
         message: '휴가 정보를 찾을 수 없습니다.' 
+      });
+    }
+
+    const isAdmin = userRole === 'admin' || userRole === 'root';
+    const approverId = vacation.approved_by != null ? Number(vacation.approved_by) : NaN;
+    const isDesignatedApprover = Number.isFinite(approverId) && approverId === Number(userId);
+    if (!isAdmin && !isDesignatedApprover) {
+      return res.status(403).json({
+        success: false,
+        message: '거부 권한이 없습니다. (관리자 또는 지정된 결재자만 거부할 수 있습니다.)'
       });
     }
 

@@ -3,13 +3,19 @@ import {
   getPayrolls,
   getPayroll,
   createPayroll,
+  bulkGeneratePayrolls,
+  previewBulkPayrollGeneration,
   updatePayroll,
   deletePayroll,
   approvePayroll,
   payPayroll,
+  sendPayrollPayslip,
+  getPayrollPeriodLocks,
+  completePayrollPeriod,
 } from '../controllers/hrController';
 import {
   getAttendances,
+  getCompanyAttendances,
   getAttendance,
   checkIn,
   checkOut,
@@ -38,7 +44,28 @@ import {
   updatePerformance,
   deletePerformance,
 } from '../controllers/performanceController';
-import { authenticateToken, restrictAuditToReadOnly } from '../middleware/auth';
+import {
+  getEmploymentContractTemplates,
+  createEmploymentContractTemplate,
+  updateEmploymentContractTemplate,
+  deleteEmploymentContractTemplate,
+  getEmploymentContracts,
+  getEmploymentContract,
+  createEmploymentContract,
+  updateEmploymentContract,
+  deleteEmploymentContract,
+  signEmploymentContract,
+  getMyEmploymentContracts,
+  getEmploymentContractAuditLogs
+} from '../controllers/employmentContractController';
+import {
+  listDepartments,
+  createDepartment,
+  updateDepartment,
+  deleteDepartment
+} from '../controllers/departmentController';
+import { authenticateToken, restrictAuditToReadOnly, requireRole } from '../middleware/auth';
+import { requireAdminRootOrMenuPermissionAnyOf, VACATION_MENU_ROUTES } from '../middleware/menuPermission';
 import { validateBody } from '../middleware/validate';
 
 const router = Router();
@@ -47,9 +74,62 @@ const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 // 모든 라우트에 인증 미들웨어 적용
 router.use(authenticateToken);
 
+// 부서 관리
+router.get('/departments', listDepartments);
+router.post(
+  '/departments',
+  restrictAuditToReadOnly,
+  requireRole(['admin', 'root']),
+  validateBody({
+    name: { required: true, type: 'string', minLength: 1, maxLength: 200 }
+  }),
+  createDepartment
+);
+router.put('/departments/:id', restrictAuditToReadOnly, requireRole(['admin', 'root']), updateDepartment);
+router.delete(
+  '/departments/:id',
+  restrictAuditToReadOnly,
+  requireRole(['admin', 'root']),
+  deleteDepartment
+);
+
+router.get('/payroll-period-locks', getPayrollPeriodLocks);
+router.post(
+  '/payroll-periods/complete',
+  restrictAuditToReadOnly,
+  validateBody({
+    payroll_period: { required: true, type: 'string', minLength: 7, maxLength: 20 }
+  }),
+  completePayrollPeriod
+);
+
 // 급여 관련 라우트
 router.get('/payrolls', getPayrolls);
+router.post(
+  '/payrolls/bulk-generate/preview',
+  restrictAuditToReadOnly,
+  validateBody({
+    payroll_period: { required: true, type: 'string', minLength: 1, maxLength: 20 }
+  }),
+  previewBulkPayrollGeneration
+);
+router.post(
+  '/payrolls/bulk-generate',
+  restrictAuditToReadOnly,
+  validateBody({
+    payroll_period: { required: true, type: 'string', minLength: 1, maxLength: 20 }
+  }),
+  bulkGeneratePayrolls
+);
 router.get('/payrolls/:id', getPayroll);
+router.post(
+  '/payrolls/:id/send-payslip',
+  restrictAuditToReadOnly,
+  validateBody({
+    pdf_base64: { required: true, type: 'string', minLength: 20 }
+  }),
+  sendPayrollPayslip
+);
 router.post(
   '/payrolls',
   restrictAuditToReadOnly,
@@ -92,7 +172,8 @@ router.delete('/payrolls/:id', restrictAuditToReadOnly, deletePayroll);
 router.post('/payrolls/:id/approve', restrictAuditToReadOnly, approvePayroll);
 router.post('/payrolls/:id/pay', restrictAuditToReadOnly, payPayroll);
 
-// 근태 관련 라우트
+// 근태 관련 라우트 (`/company`는 `:id`보다 먼저 등록)
+router.get('/attendances/company', getCompanyAttendances);
 router.get('/attendances', getAttendances);
 router.get('/attendances/today', getTodayAttendance);
 router.get('/attendances/:id', getAttendance);
@@ -122,24 +203,30 @@ router.put(
 );
 router.delete('/attendances/:id', restrictAuditToReadOnly, deleteAttendance);
 
-// 휴가 관련 라우트
-router.get('/vacations', getVacations);
-router.get('/vacations/excel/export', exportVacationsToExcel);
-router.get('/vacations/annual-leave', getAnnualLeaveInfo);
-router.get('/vacations/policy', getVacationPolicy);
+// 휴가 관련 라우트 — 메뉴 `/hr/leave` 권한과 정합 (조회/등록/수정/삭제)
+const vacationMenuPerm = (flags: ('can_view' | 'can_create' | 'can_edit' | 'can_delete')[]) =>
+  requireAdminRootOrMenuPermissionAnyOf(VACATION_MENU_ROUTES, flags);
+
+router.get('/vacations', vacationMenuPerm(['can_view', 'can_create']), getVacations);
+router.get('/vacations/excel/export', vacationMenuPerm(['can_view', 'can_edit']), exportVacationsToExcel);
+router.get('/vacations/annual-leave', vacationMenuPerm(['can_view', 'can_create']), getAnnualLeaveInfo);
+router.get('/vacations/policy', vacationMenuPerm(['can_view', 'can_create']), getVacationPolicy);
 router.put(
   '/vacations/policy',
   restrictAuditToReadOnly,
+  vacationMenuPerm(['can_edit']),
   validateBody({
     annualLeaveStartDays: { required: true },
     annualLeaveEarnDays: { required: false }
   }),
   updateVacationPolicy
 );
-router.get('/vacations/:id', getVacation);
+// 상세는 목록(조회) + 신청 폼(등록) + 수정 화면(수정) 모두 사용
+router.get('/vacations/:id', vacationMenuPerm(['can_view', 'can_create', 'can_edit']), getVacation);
 router.post(
   '/vacations',
   restrictAuditToReadOnly,
+  vacationMenuPerm(['can_create']),
   validateBody({
     user_id: { required: false, type: 'number' }, // 미제공 시 본인(req.user.id)으로 처리
     vacation_type: { required: true, type: 'string', oneOf: ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'] },
@@ -156,6 +243,7 @@ router.post(
 router.put(
   '/vacations/:id',
   restrictAuditToReadOnly,
+  vacationMenuPerm(['can_edit']),
   validateBody({
     user_id: { type: 'number' },
     vacation_type: { type: 'string', oneOf: ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'] },
@@ -169,7 +257,7 @@ router.put(
   }),
   updateVacation
 );
-router.delete('/vacations/:id', restrictAuditToReadOnly, deleteVacation);
+router.delete('/vacations/:id', restrictAuditToReadOnly, vacationMenuPerm(['can_delete']), deleteVacation);
 router.post('/vacations/:id/approve', restrictAuditToReadOnly, approveVacation);
 router.post('/vacations/:id/reject', restrictAuditToReadOnly, rejectVacation);
 
@@ -205,5 +293,118 @@ router.put(
   updatePerformance
 );
 router.delete('/performances/:id', restrictAuditToReadOnly, deletePerformance);
+
+// 전자근로계약 템플릿
+router.get('/employment-contract-templates', getEmploymentContractTemplates);
+router.post(
+  '/employment-contract-templates',
+  restrictAuditToReadOnly,
+  validateBody({
+    company_id: { type: 'number' }, // root 전용
+    name: { required: true, type: 'string', minLength: 1, maxLength: 150 },
+    contract_type: { type: 'string', maxLength: 50 },
+    language: { type: 'string', oneOf: ['ko', 'en'] },
+    content_html: { required: true, type: 'string', minLength: 1 }
+  }),
+  createEmploymentContractTemplate
+);
+router.put(
+  '/employment-contract-templates/:id',
+  restrictAuditToReadOnly,
+  validateBody({
+    name: { type: 'string', minLength: 1, maxLength: 150 },
+    contract_type: { type: 'string', maxLength: 50 },
+    language: { type: 'string', oneOf: ['ko', 'en'] },
+    content_html: { type: 'string', minLength: 1 },
+    is_active: { type: 'boolean' }
+  }),
+  updateEmploymentContractTemplate
+);
+router.delete(
+  '/employment-contract-templates/:id',
+  restrictAuditToReadOnly,
+  deleteEmploymentContractTemplate
+);
+
+// 전자근로계약
+router.get('/employment-contracts', getEmploymentContracts);
+router.get('/my/employment-contracts', getMyEmploymentContracts);
+router.get('/employment-contracts/:id', getEmploymentContract);
+router.get('/employment-contracts/:id/audit-logs', getEmploymentContractAuditLogs);
+router.post(
+  '/employment-contracts',
+  restrictAuditToReadOnly,
+  validateBody({
+    company_id: { type: 'number' }, // root 전용
+    employee_id: { required: true, type: 'number' },
+    template_id: { type: 'number' },
+    title: { required: true, type: 'string', minLength: 1, maxLength: 200 },
+    contract_type: { type: 'string', maxLength: 50 },
+    start_date: { required: true, type: 'string', pattern: datePattern },
+    end_date: { required: true, type: 'string', pattern: datePattern },
+    salary: { type: 'number' },
+    bonus_type: { type: 'string', oneOf: ['percent', 'fixed'] },
+    bonus_value: { type: 'number' },
+    work_location: { type: 'string', maxLength: 200 },
+    working_days: { type: 'string', maxLength: 120 },
+    working_hours: { type: 'string', maxLength: 100 },
+    probation_months: { type: 'number' },
+    pdf_url: { type: 'string' },
+    hash_sha256: { type: 'string', maxLength: 128 }
+  }),
+  createEmploymentContract
+);
+router.put(
+  '/employment-contracts/:id',
+  restrictAuditToReadOnly,
+  validateBody({
+    template_id: { type: 'number' },
+    title: { type: 'string', minLength: 1, maxLength: 200 },
+    contract_type: { type: 'string', maxLength: 50 },
+    status: {
+      type: 'string',
+      oneOf: [
+        'draft',
+        'in_review',
+        'awaiting_company_sign',
+        'awaiting_employee_sign',
+        'signed',
+        'active',
+        'expired',
+        'terminated'
+      ]
+    },
+    start_date: { type: 'string', pattern: datePattern },
+    end_date: { type: 'string', pattern: datePattern },
+    salary: { type: 'number' },
+    bonus_type: { type: 'string', oneOf: ['percent', 'fixed'] },
+    bonus_value: { type: 'number' },
+    work_location: { type: 'string', maxLength: 200 },
+    working_days: { type: 'string', maxLength: 120 },
+    working_hours: { type: 'string', maxLength: 100 },
+    probation_months: { type: 'number' },
+    pdf_url: { type: 'string' },
+    hash_sha256: { type: 'string', maxLength: 128 }
+  }),
+  updateEmploymentContract
+);
+router.delete(
+  '/employment-contracts/:id',
+  restrictAuditToReadOnly,
+  deleteEmploymentContract
+);
+router.post(
+  '/employment-contracts/:id/sign',
+  restrictAuditToReadOnly,
+  validateBody({
+    signer_type: { type: 'string', oneOf: ['company', 'employee'] },
+    sign_method: { type: 'string', oneOf: ['internal_ack', 'aadhaar_esign'] },
+    signature_data: { type: 'string' },
+    aadhaar_consent: { type: 'boolean' },
+    aadhaar_last4: { type: 'string', minLength: 4, maxLength: 4 },
+    aadhaar_auth_ref: { type: 'string', maxLength: 100 }
+  }),
+  signEmploymentContract
+);
 
 export default router;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   Drawer,
   List,
@@ -9,7 +9,6 @@ import {
   Collapse,
   Box,
   Typography,
-  Divider,
   IconButton,
   Tooltip
 } from '@mui/material';
@@ -35,11 +34,18 @@ import {
   EventAvailable,
   Category,
   ViewKanban,
-  TrendingUp
+  TrendingUp,
+  MoveToInbox,
+  PostAdd,
+  QrCodeScanner,
+  Business,
+  Email
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { alpha } from '@mui/material/styles';
 import { useStore, useMenuStore } from '../../store';
-import menuService from '../../services/menuService';
+import menuService, { type Menu } from '../../services/menuService';
+import { isRemovedNavMenuRoute } from '../../utils/isRemovedNavMenuRoute';
 
 interface SidebarProps {
   open: boolean;
@@ -53,9 +59,48 @@ interface SidebarProps {
   onCollapseChange?: (collapsed: boolean) => void;
 }
 
+/** AppBar Toolbar 높이와 동일 */
+const HEADER_HEIGHT_PX = 52;
+/** 헤더 하단과 좌측 메뉴 패널 사이 여백 */
+const HEADER_MENU_GAP_PX = 8;
+const SIDEBAR_TOP_PX = HEADER_HEIGHT_PX + HEADER_MENU_GAP_PX;
+/** 메뉴 패널 하단과 화면 맨 아래 사이 여백 */
+const SIDEBAR_BOTTOM_GAP_PX = 12;
+const SIDEBAR_HEIGHT_CALC = `calc(100vh - ${SIDEBAR_TOP_PX + SIDEBAR_BOTTOM_GAP_PX}px)`;
+/** 선택 영역·좌측 강조선 모서리 직각 */
+const MENU_ITEM_RADIUS_PX = 0;
+
+const normalizeMenuPath = (path: string) => {
+  const [pathname] = String(path || '').trim().split(/[?#]/);
+  if (!pathname) return '';
+  if (pathname === '/') return '/';
+  return pathname.replace(/\/+$/, '');
+};
+
+const isMenuRouteActive = (currentPath: string, route?: string) => {
+  const normalizedCurrentPath = normalizeMenuPath(currentPath);
+  const normalizedRoute = normalizeMenuPath(route || '');
+  if (!normalizedCurrentPath || !normalizedRoute) return false;
+
+  const routeCandidates = new Set<string>([normalizedRoute]);
+  if (normalizedRoute === '/communication/notice') routeCandidates.add('/communication/notices');
+  if (normalizedRoute === '/communication/notices') routeCandidates.add('/communication/notice');
+
+  return Array.from(routeCandidates).some((candidate) => {
+    if (!candidate) return false;
+    return (
+      normalizedCurrentPath === candidate ||
+      normalizedCurrentPath.startsWith(`${candidate}/`)
+    );
+  });
+};
+
+const routeMatchesMenuPath = (currentPath: string, route?: string) =>
+  isMenuRouteActive(currentPath, route);
+
 const Sidebar: React.FC<SidebarProps> = ({
   open,
-  onClose,
+  onClose: _onClose,
   width = 280,
   onWidthChange,
   autoCollapseEnabled = false,
@@ -154,27 +199,109 @@ const Sidebar: React.FC<SidebarProps> = ({
       }
     };
   }, []);
-  // 사이드바 닫기 기능 비활성화
-  const handleClose = () => {
-    // 사이드바가 닫히지 않도록 빈 함수로 설정
-  };
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useStore();
-  const { 
-    menus, 
-    userPermissions, 
-    loading, 
-    error, 
+  const {
+    menus,
+    loading,
+    error,
     language,
-    setMenus, 
-    setUserPermissions, 
-    setLoading, 
-    setError,
-    hasMenuPermission 
+    setMenus,
+    setUserPermissions,
+    setLoading,
+    setError
   } = useMenuStore();
   
   const [expandedMenus, setExpandedMenus] = useState<Set<number>>(new Set());
+
+  /** 공지사항·AI 분석은 헤더에서만 진입 — 사이드바 메뉴 트리에서만 제외 */
+  const menusWithoutNotice = useMemo((): Menu[] => {
+    const isNoticeMenu = (m: Menu) =>
+      String(m.route || '').startsWith('/communication/notice') ||
+      m.name_ko === '공지사항' ||
+      /^notices?$/i.test(String(m.name_en || '').trim());
+
+    const isAiMenu = (m: Menu) => {
+      const route = String(m.route || '');
+      if (route.startsWith('/ai')) return true;
+      if (/^\/(cost-analysis|efficiency|forecasting|recommendations)(\/|$)/.test(route)) return true;
+      if (m.name_ko === 'AI 분석') return true;
+      if (/^ai\s*analysis$/i.test(String(m.name_en || '').trim())) return true;
+      return false;
+    };
+
+    const filterRec = (items: Menu[]): Menu[] =>
+      items
+        .filter((x) => !isNoticeMenu(x) && !isAiMenu(x) && !isRemovedNavMenuRoute(x.route))
+        .map((x) => {
+          if (x.children?.length) {
+            const children = filterRec(x.children);
+            return children.length ? { ...x, children } : null;
+          }
+          return x;
+        })
+        .filter((x): x is Menu => x != null);
+
+    return filterRec(menus || []);
+  }, [menus]);
+
+  const allMenuRoutes = useMemo(() => {
+    const out: string[] = [];
+    const walk = (items: Menu[]) => {
+      for (const m of items) {
+        if (m.route) out.push(String(m.route));
+        if (m.children?.length) walk(m.children);
+      }
+    };
+    walk(menusWithoutNotice || []);
+    return out;
+  }, [menusWithoutNotice]);
+
+  const getLongestMatchingMenuRoute = (currentPath: string): string | null => {
+    if (!normalizeMenuPath(currentPath)) return null;
+    const matches = allMenuRoutes
+      .map((r) => normalizeMenuPath(r))
+      .filter((r) => r && routeMatchesMenuPath(currentPath, r));
+    if (matches.length === 0) return null;
+    return matches.reduce((a, b) => (a.length >= b.length ? a : b));
+  };
+
+  const isRouteExactMatch = (currentPath: string, route?: string) => {
+    const normalizedCurrentPath = normalizeMenuPath(currentPath);
+    const normalizedRoute = normalizeMenuPath(route || '');
+    if (!normalizedCurrentPath || !normalizedRoute) return false;
+    return normalizedCurrentPath === normalizedRoute;
+  };
+
+  /** 현재 URL에 해당하는 하위 메뉴가 있으면 그 경로까지의 부모 메뉴 id — 항상 펼침 */
+  const ancestorIdsToKeepOpen = useMemo(() => {
+    const currentPath = location.pathname;
+    if (!normalizeMenuPath(currentPath) || !menusWithoutNotice?.length) return new Set<number>();
+
+    const matches = allMenuRoutes
+      .map((r) => normalizeMenuPath(r))
+      .filter((r) => r && routeMatchesMenuPath(currentPath, r));
+    if (matches.length === 0) return new Set<number>();
+    const best = matches.reduce((a, b) => (a.length >= b.length ? a : b));
+
+    const findChainToRoute = (items: Menu[], acc: Menu[]): Menu[] | null => {
+      for (const m of items) {
+        const nr = normalizeMenuPath(m.route || '');
+        if (nr && nr === best) return [...acc, m];
+        if (m.children?.length) {
+          const found = findChainToRoute(m.children, [...acc, m]);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+
+    const chain = findChainToRoute(menusWithoutNotice, []);
+    if (!chain?.length) return new Set<number>();
+
+    return new Set(chain.slice(0, -1).map((m) => m.id));
+  }, [location.pathname, menusWithoutNotice, allMenuRoutes]);
 
   // 아이콘 매핑
   const getIcon = (iconName: string) => {
@@ -196,7 +323,10 @@ const Sidebar: React.FC<SidebarProps> = ({
       attach_money: <AttachMoney />,
       event_available: <EventAvailable />,
       category: <Category />,
-      view_kanban: <ViewKanban />
+      view_kanban: <ViewKanban />,
+      move_to_inbox: <MoveToInbox />,
+      post_add: <PostAdd />,
+      qr_code_scanner: <QrCodeScanner />
     };
     return iconMap[iconName] || <MenuIcon />;
   };
@@ -209,17 +339,19 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (normalized.includes('/basic-info/menu-permissions')) return <Settings />;
     if (normalized.includes('/basic-info/login-info')) return <Person />;
     if (normalized.includes('/basic-info/system-settings')) return <Settings />;
+    if (normalized.includes('/basic-info/mail-send-test')) return <Email />;
 
     if (normalized.includes('/hr/users')) return <Person />;
+    if (normalized.includes('/hr/departments')) return <Business />;
+    if (normalized.includes('/hr/attendance/statistics')) return <Assessment />;
     if (normalized.includes('/hr/attendance')) return <EventAvailable />;
     if (normalized.includes('/hr/payroll')) return <AttachMoney />;
     if (normalized.includes('/hr/leave')) return <EventAvailable />;
-    if (normalized.includes('/hr/performance')) return <Assessment />;
+    if (normalized.includes('/hr/employment-contracts')) return <Description />;
 
     if (normalized.includes('/work/projects')) return <ViewKanban />;
     if (normalized.includes('/work/statistics')) return <Assessment />;
     if (normalized.includes('/work/approval')) return <Description />;
-    if (normalized.includes('/work/meeting-room')) return <EventAvailable />;
     if (normalized.includes('/work/room-reservation')) return <LocalShipping />;
     if (normalized.includes('/work/reports')) return <ReceiptLong />;
 
@@ -229,10 +361,11 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (normalized.includes('/hotel/reservations')) return <EventAvailable />;
     if (normalized.includes('/hotel/room-types')) return <Inventory />;
 
+    if (normalized.includes('/inventory/stock-in')) return <PostAdd />;
+    if (normalized.includes('/inventory/stock-out')) return <QrCodeScanner />;
     if (normalized.includes('/inventory/basic')) return <Inventory />;
     if (normalized.includes('/inventory/status')) return <Assessment />;
     if (normalized.includes('/inventory/transaction')) return <AttachMoney />;
-    if (normalized.includes('/inventory/movement')) return <LocalShipping />;
     if (normalized.includes('/inventory/report')) return <ReceiptLong />;
 
     if (normalized.includes('/accounting/e-invoice')) return <ReceiptLong />;
@@ -243,9 +376,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (normalized.includes('/accounting/statistics')) return <Assessment />;
     if (normalized.includes('/accounting/basic-info')) return <Settings />;
 
-    if (normalized.includes('/customers/sales')) return <TrendingUp />;
     if (normalized.includes('/customers/contracts')) return <Description />;
-    if (normalized.includes('/customers/support')) return <Chat />;
 
     if (normalized.includes('/communication/notice')) return <Notifications />;
     if (normalized.includes('/communication/email')) return <Chat />;
@@ -297,8 +428,13 @@ const Sidebar: React.FC<SidebarProps> = ({
   // 메뉴 데이터 로드 (재시도 로직 포함)
   useEffect(() => {
     const loadMenus = async (retryCount = 0) => {
-      if (!user) return;
-      
+      if (!user) {
+        setLoading(false);
+        setMenus([]);
+        setUserPermissions([]);
+        return;
+      }
+
       setLoading(true);
       try {
         const [menusResponse, permissionsResponse] = await Promise.all([
@@ -321,7 +457,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         
         // 429 오류인 경우 재시도
         if (error.response?.status === 429 && retryCount < 3) {
-          console.log(`Rate limit 오류, ${(retryCount + 1) * 2}초 후 재시도...`);
           setTimeout(() => {
             loadMenus(retryCount + 1);
           }, (retryCount + 1) * 2000); // 2초, 4초, 6초 후 재시도
@@ -337,13 +472,11 @@ const Sidebar: React.FC<SidebarProps> = ({
     loadMenus();
   }, [user, language, setMenus, setUserPermissions, setLoading, setError]);
 
-  // 언어 변경 감지
-  useEffect(() => {
-    console.log('언어 변경됨:', language);
-  }, [language]);
-
-  // 메뉴 확장/축소 토글
+  // 메뉴 확장/축소 토글 (현재 페이지가 속한 섹션은 접지 않음)
   const handleMenuToggle = (menuId: number) => {
+    if (ancestorIdsToKeepOpen.has(menuId)) {
+      return;
+    }
     const newExpanded = new Set(expandedMenus);
     if (newExpanded.has(menuId)) {
       newExpanded.delete(menuId);
@@ -363,46 +496,18 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
-  const normalizePath = (path: string) => {
-    const [pathname] = String(path || '').trim().split(/[?#]/);
-    if (!pathname) return '';
-    if (pathname === '/') return '/';
-    return pathname.replace(/\/+$/, '');
-  };
-
-  const isRouteActive = (currentPath: string, route?: string) => {
-    const normalizedCurrentPath = normalizePath(currentPath);
-    const normalizedRoute = normalizePath(route || '');
-    if (!normalizedCurrentPath || !normalizedRoute) return false;
-
-    const routeCandidates = new Set<string>([normalizedRoute]);
-    if (normalizedRoute === '/communication/notice') routeCandidates.add('/communication/notices');
-    if (normalizedRoute === '/communication/notices') routeCandidates.add('/communication/notice');
-
-    return Array.from(routeCandidates).some((candidate) => {
-      if (!candidate) return false;
-      return (
-        normalizedCurrentPath === candidate ||
-        normalizedCurrentPath.startsWith(`${candidate}/`)
-      );
-    });
-  };
-
-  const isRouteExactMatch = (currentPath: string, route?: string) => {
-    const normalizedCurrentPath = normalizePath(currentPath);
-    const normalizedRoute = normalizePath(route || '');
-    if (!normalizedCurrentPath || !normalizedRoute) return false;
-    return normalizedCurrentPath === normalizedRoute;
-  };
-
   // 메뉴 렌더링
   const renderMenuItem = (menu: any, level: number = 0) => {
     const hasChildren = menu.children && menu.children.length > 0;
-    const isExpanded = expandedMenus.has(menu.id);
+    const isExpanded = ancestorIdsToKeepOpen.has(menu.id) || expandedMenus.has(menu.id);
     // 하위 메뉴 선택 시 상위 메뉴가 함께 활성화되지 않도록 분리 처리
     const isActive = hasChildren
       ? isRouteExactMatch(location.pathname, menu.route)
-      : isRouteActive(location.pathname, menu.route);
+      : (() => {
+          const best = getLongestMatchingMenuRoute(location.pathname);
+          const nr = normalizeMenuPath(menu.route || '');
+          return !!nr && best === nr;
+        })();
     const isCompact = autoCollapseEnabled && isCollapsed;
     const isEnglish = language === 'en';
     const itemPaddingY = level === 0 ? (isEnglish ? 0.33 : 0.18) : (isEnglish ? 0.66 : 0.5);
@@ -412,7 +517,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     const labelText =
       language === 'ko' && menu.name_ko === '지출보고서'
         ? '지출결의서'
-        : (language === 'ko' ? menu.name_ko : menu.name_en);
+        : language === 'ko'
+          ? menu.name_ko
+          : String(menu.name_en ?? '').trim() || menu.name_ko;
     const hideSecondaryDescription =
       menu.route === '/hotel' ||
       String(menu.route || '').startsWith('/ai') ||
@@ -426,19 +533,22 @@ const Sidebar: React.FC<SidebarProps> = ({
             <Tooltip title={labelText} placement="right">
               <ListItemButton
                 onClick={() => handleMenuClick(menu)}
-                sx={{
+                sx={(theme) => ({
                   pl: 1,
                   py: isActive ? activePaddingY : itemPaddingY,
                   justifyContent: 'center',
-                  backgroundColor: isActive ? 'primary.main' : 'transparent',
-                  color: isActive ? 'primary.contrastText' : 'text.primary',
+                  borderRadius: MENU_ITEM_RADIUS_PX,
+                  borderLeft: '3px solid',
+                  borderColor: isActive ? 'primary.main' : 'transparent',
+                  backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
+                  color: isActive ? 'primary.dark' : 'text.primary',
                   '&:hover': {
-                    backgroundColor: isActive ? 'primary.dark' : 'action.hover'
-                  }
-                }}
+                    backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.14) : 'action.hover',
+                  },
+                })}
               >
                 <ListItemIcon sx={{ 
-                  color: isActive ? 'primary.contrastText' : 'inherit',
+                  color: isActive ? 'primary.main' : 'inherit',
                   minWidth: '24px',
                   '& .MuiSvgIcon-root': {
                     fontSize: '1.1rem'
@@ -451,19 +561,22 @@ const Sidebar: React.FC<SidebarProps> = ({
           ) : (
             <ListItemButton
               onClick={() => handleMenuClick(menu)}
-              sx={{
+              sx={(theme) => ({
                 pl: 2 + level * 2,
                 py: isActive ? activePaddingY : itemPaddingY,
                 minHeight: level === 0 ? topLevelMinHeight : 'auto',
-                backgroundColor: isActive ? 'primary.main' : 'transparent',
-                color: isActive ? 'primary.contrastText' : 'text.primary',
+                borderRadius: MENU_ITEM_RADIUS_PX,
+                borderLeft: '3px solid',
+                borderColor: isActive ? 'primary.main' : 'transparent',
+                backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
+                color: isActive ? 'primary.dark' : 'text.primary',
                 '&:hover': {
-                  backgroundColor: isActive ? 'primary.dark' : 'action.hover'
-                }
-              }}
+                  backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.14) : 'action.hover',
+                },
+              })}
             >
               <ListItemIcon sx={{ 
-                color: isActive ? 'primary.contrastText' : 'inherit',
+                color: isActive ? 'primary.main' : 'inherit',
                 minWidth: '36px', // 아이콘 영역 축소
                 '& .MuiSvgIcon-root': {
                   fontSize: '1.1rem' // 아이콘 크기 축소
@@ -525,11 +638,12 @@ const Sidebar: React.FC<SidebarProps> = ({
               width: effectiveWidth,
               boxSizing: 'border-box',
               position: 'fixed',
-              top: '56px',
+              top: `${SIDEBAR_TOP_PX}px`,
               left: 0,
-              height: 'calc(100vh - 56px)',
-              backgroundColor: 'background.paper',
-              borderRight: 'none',
+              height: SIDEBAR_HEIGHT_CALC,
+              backgroundColor: 'grey.50',
+              borderRight: '1px solid',
+              borderColor: 'divider',
               transition: 'none',
             }
           }}
@@ -555,11 +669,12 @@ const Sidebar: React.FC<SidebarProps> = ({
               width: effectiveWidth,
               boxSizing: 'border-box',
               position: 'fixed',
-              top: '56px',
+              top: `${SIDEBAR_TOP_PX}px`,
               left: 0,
-              height: 'calc(100vh - 56px)',
-              backgroundColor: 'background.paper',
-              borderRight: 'none',
+              height: SIDEBAR_HEIGHT_CALC,
+              backgroundColor: 'grey.50',
+              borderRight: '1px solid',
+              borderColor: 'divider',
               transition: 'none',
             }
           }}
@@ -614,14 +729,15 @@ const Sidebar: React.FC<SidebarProps> = ({
             display: 'flex',
             flexDirection: 'column',
             position: 'fixed', // 고정 위치로 변경하여 동적 높이 조정
-            top: '56px', // 헤더 아래에서 시작
+            top: `${SIDEBAR_TOP_PX}px`, // 헤더 + 소간격 아래에서 시작
             left: 0,
-            height: 'calc(100vh - 56px)', // 헤더 높이 제외한 나머지 높이
-            minHeight: 'calc(100vh - 56px)', // 최소 높이 보장
-            backgroundColor: 'background.paper',
-            borderRight: 'none',
-            boxShadow: 'none',
-            zIndex: 1200, // 헤더보다 낮은 z-index
+            height: SIDEBAR_HEIGHT_CALC,
+            minHeight: SIDEBAR_HEIGHT_CALC,
+            backgroundColor: 'grey.50',
+              borderRight: '1px solid',
+              borderColor: 'divider',
+              boxShadow: 'none',
+              zIndex: 1200, // 헤더보다 낮은 z-index
             willChange: 'width',
             transition: isResizing ? 'none' : 'width 260ms cubic-bezier(0.22, 1, 0.36, 1)',
           }
@@ -631,20 +747,20 @@ const Sidebar: React.FC<SidebarProps> = ({
       <Box sx={{ 
         flexGrow: 1, 
         overflow: 'auto',
-        backgroundColor: 'background.paper',
+        backgroundColor: 'grey.50',
         pt: 1,
         height: '100%',
         display: 'flex',
         flexDirection: 'column'
       }}>
         <List sx={{ flexGrow: 1, px: 1 }}>
-          {menus
-            .filter((menu) => {
+          {menusWithoutNotice
+            .filter((menu: Menu) => {
               // 시스템관리 메뉴 제외 (기본정보관리의 시스템 설정과 동일한 기능)
               const menuName = language === 'ko' ? menu.name_ko : menu.name_en;
               return menuName !== '시스템관리' && menuName !== 'System Management';
             })
-            .map((menu) => renderMenuItem(menu))}
+            .map((menu: Menu) => renderMenuItem(menu))}
         </List>
         
         {/* 저작권 정보 - 메뉴 영역 내부 하단 고정 */}
@@ -652,7 +768,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           mt: 'auto', 
           p: 2, 
           textAlign: 'center',
-          backgroundColor: 'background.paper',
+          backgroundColor: 'grey.50',
           flexShrink: 0,
           position: 'relative'
         }}>
@@ -675,10 +791,10 @@ const Sidebar: React.FC<SidebarProps> = ({
         onMouseDown={handleMouseDown}
         sx={{
           position: 'fixed',
-          top: '56px',
+          top: `${SIDEBAR_TOP_PX}px`,
           left: effectiveWidth - 4,
           width: '8px',
-          height: 'calc(100vh - 56px)',
+          height: SIDEBAR_HEIGHT_CALC,
           cursor: autoCollapseEnabled && isCollapsed ? 'default' : 'col-resize',
           zIndex: 1201,
           backgroundColor: 'transparent',

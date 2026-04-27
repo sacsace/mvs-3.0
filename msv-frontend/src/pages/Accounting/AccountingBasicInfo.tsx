@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Box,
   Card,
@@ -29,6 +30,7 @@ const emptyState: BasicInfoState = {
 };
 
 const AccountingBasicInfo: React.FC = () => {
+  const { t } = useTranslation();
   const { user } = useStore();
   const [data, setData] = useState<BasicInfoState>(emptyState);
   const [loading, setLoading] = useState(false);
@@ -54,16 +56,16 @@ const AccountingBasicInfo: React.FC = () => {
         if (response.success) {
           setData(response.data || emptyState);
         } else {
-          setError(response.message || '회계 기본정보를 불러올 수 없습니다.');
+          setError(response.message || t('accountingBasicInfo.errors.loadFailed'));
         }
       } catch (err: any) {
-        setError(err?.response?.data?.message || '회계 기본정보를 불러오는 중 오류가 발생했습니다.');
+        setError(err?.response?.data?.message || t('accountingBasicInfo.errors.loadError'));
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, []);
+  }, [t]);
 
   const updateList = (key: keyof BasicInfoState, value: string) => {
     if (!value.trim()) return;
@@ -88,13 +90,13 @@ const AccountingBasicInfo: React.FC = () => {
     try {
       const response = await accountingBasicInfoService.updateBasicInfo(data);
       if (response.success) {
-        setSuccess(response.message || '저장되었습니다.');
+        setSuccess(response.message || t('accountingBasicInfo.successSaved'));
         setData(response.data || data);
       } else {
-        setError(response.message || '저장에 실패했습니다.');
+        setError(response.message || t('accountingBasicInfo.errors.saveFailed'));
       }
     } catch (err: any) {
-      setError(err?.response?.data?.message || '저장 중 오류가 발생했습니다.');
+      setError(err?.response?.data?.message || t('accountingBasicInfo.errors.saveError'));
     } finally {
       setSaving(false);
     }
@@ -131,13 +133,13 @@ const AccountingBasicInfo: React.FC = () => {
             onClick={() => updateList(key, inputs[key])}
             disabled={!canEdit || !inputs[key].trim()}
           >
-            추가
+            {t('accountingBasicInfo.add')}
           </Button>
         </Box>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           {data[key].length === 0 ? (
             <Typography variant="body2" color="text.secondary">
-              등록된 항목이 없습니다.
+              {t('accountingBasicInfo.emptyList')}
             </Typography>
           ) : (
             data[key].map((item, idx) => (
@@ -174,10 +176,10 @@ const AccountingBasicInfo: React.FC = () => {
     <Box sx={{ p: 3 }}>
       <Box sx={{ mb: 3 }}>
         <Typography variant="h6" sx={{ fontWeight: 600 }}>
-          회계 기본정보 관리
+          {t('accountingBasicInfo.title')}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          회사별로 자주 쓰는 회계 기본정보를 간단히 등록하세요.
+          {t('accountingBasicInfo.description')}
         </Typography>
       </Box>
 
@@ -194,29 +196,45 @@ const AccountingBasicInfo: React.FC = () => {
 
       {!canEdit && (
         <Alert severity="info" sx={{ mb: 2 }}>
-          관리 권한이 있는 사용자만 수정할 수 있습니다.
+          {t('accountingBasicInfo.readOnlyHint')}
         </Alert>
       )}
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
-        {renderSection('계정과목', 'accountCategories', '예: 매출, 매입, 인건비')}
-        {renderSection('비용항목', 'expenseCategories', '예: 출장비, 교통비')}
-        {renderSection('세금코드', 'taxCodes', '예: VAT 10%, 면세')}
-        {renderSection('결제수단', 'paymentMethods', '예: 계좌이체, 카드')}
+        {renderSection(
+          t('accountingBasicInfo.sections.accountCategories'),
+          'accountCategories',
+          t('accountingBasicInfo.placeholders.accountCategories')
+        )}
+        {renderSection(
+          t('accountingBasicInfo.sections.expenseCategories'),
+          'expenseCategories',
+          t('accountingBasicInfo.placeholders.expenseCategories')
+        )}
+        {renderSection(
+          t('accountingBasicInfo.sections.taxCodes'),
+          'taxCodes',
+          t('accountingBasicInfo.placeholders.taxCodes')
+        )}
+        {renderSection(
+          t('accountingBasicInfo.sections.paymentMethods'),
+          'paymentMethods',
+          t('accountingBasicInfo.placeholders.paymentMethods')
+        )}
       </Box>
 
       <Divider sx={{ my: 3 }} />
 
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
         <Button variant="outlined" onClick={() => setData(emptyState)} disabled={!canEdit || loading}>
-          초기화
+          {t('common.reset')}
         </Button>
         <Button
           variant="contained"
           onClick={handleSave}
           disabled={!canEdit || saving || loading}
         >
-          {saving ? '저장 중...' : '저장'}
+          {saving ? t('accountingBasicInfo.saving') : t('common.save')}
         </Button>
       </Box>
     </Box>

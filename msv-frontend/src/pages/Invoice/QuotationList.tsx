@@ -258,7 +258,25 @@ const QuotationList: React.FC = () => {
               
               <TableContainer component={Paper}>
                 <Table>
-                  <TableHead>
+                  <TableHead
+                    sx={{
+                      bgcolor: 'background.paper',
+                      '& .MuiTableCell-head': {
+                        bgcolor: 'background.paper',
+                        color: 'text.primary',
+                        fontWeight: 600,
+                        fontSize: '0.875rem',
+                        textTransform: 'none',
+                        letterSpacing: 'normal',
+                        borderBottom: '2px solid',
+                        borderColor: 'primary.main',
+                        py: 1.25
+                      },
+                      '& .MuiTableCell-head:last-of-type': {
+                        textAlign: 'center'
+                      }
+                    }}
+                  >
                     <TableRow>
                       <TableCell>견적서 번호</TableCell>
                       <TableCell>고객명</TableCell>

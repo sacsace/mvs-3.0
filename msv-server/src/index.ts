@@ -14,7 +14,6 @@ import menuRoutes from './routes/menuRoutes';
 import notificationRoutes from './routes/notifications';
 import companyRoutes from './routes/companies';
 import customerRoutes from './routes/customers';
-import salesOpportunityRoutes from './routes/salesOpportunities';
 import contractRoutes from './routes/contracts';
 import supportTicketRoutes from './routes/supportTickets';
 import accountingRoutes from './routes/accounting';
@@ -28,6 +27,7 @@ import quotationRoutes from './routes/quotations';
 import communicationRoutes from './routes/communication';
 import aiRoutes from './routes/ai';
 import loginInfoRoutes from './routes/loginInfo';
+import { startAttendanceAutoCheckoutScheduler } from './controllers/attendanceController';
 import SocketService from './services/socketService';
 import aiService from './services/aiService';
 import { createServer } from 'http';
@@ -43,6 +43,10 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 const app = express();
+/** Railway 등 리버스 프록시 뒤에서 클라이언트 IP·Rate limit이 올바르게 동작하도록 */
+if (process.env.NODE_ENV === 'production' || process.env.TRUST_PROXY === '1') {
+  app.set('trust proxy', 1);
+}
 app.disable('x-powered-by');
 
 const sanitizeLogPayload = (payload: any) => {
@@ -66,31 +70,19 @@ const parsedPort = Number.parseInt(process.env.PORT || '', 10);
 const PORT = Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : 5000;
 const HOST = process.env.HOST || '0.0.0.0';
 
-// Debug: Environment variables (only in development)
-if (process.env.NODE_ENV === 'development') {
-  console.log('Environment PORT:', process.env.PORT);
-  console.log('Final PORT:', PORT);
-  console.log('Host:', HOST);
-}
-
 // Railway handles SSL automatically, so we only use HTTP server
 // SSL termination is handled by Railway's load balancer
 const server = createServer(app);
 
-// Log server configuration
-if (process.env.RAILWAY_ENVIRONMENT) {
-  console.log('🚂 Railway deployment detected - SSL handled by Railway');
-} else if (process.env.HTTPS === 'true') {
-  console.log('🔒 Local HTTPS mode enabled');
-} else {
-  console.log('🌐 HTTP server mode');
-}
-
 // 데이터베이스 연결
-connectDB().catch((error) => {
-  console.error('Database connection error:', error);
-  console.error('Server will continue but database operations may fail.');
-});
+connectDB()
+  .then(() => {
+    startAttendanceAutoCheckoutScheduler();
+  })
+  .catch((error) => {
+    console.error('Database connection error:', error);
+    console.error('Server will continue but database operations may fail.');
+  });
 
 // Socket.IO 서비스 초기화
 const socketService = new SocketService(server);
@@ -242,6 +234,7 @@ app.use('/api/work/approvals/upload', uploadLimiter);
 app.use('/api/users/excel/import', uploadLimiter);
 app.use('/api/partners/excel/import', uploadLimiter);
 app.use('/api/login-info/import', uploadLimiter);
+app.use('/api/inventory/products/excel/bulk-update', uploadLimiter);
 
 // 실제 API 라우트
 app.use('/api/auth', authLimiter, authRoutes);
@@ -251,7 +244,6 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/company', companyRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/customers', customerRoutes);
-app.use('/api/sales-opportunities', salesOpportunityRoutes);
 app.use('/api/contracts', contractRoutes);
 app.use('/api/support-tickets', supportTicketRoutes);
 app.use('/api/accounting', accountingRoutes);
@@ -439,7 +431,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
       if (invoiceError.name === 'SequelizeDatabaseError' && 
           invoiceError.message?.includes('릴레이션') || 
           invoiceError.message?.includes('relation')) {
-        console.log('⚠️ invoices 테이블이 없습니다. 기본값 0 사용');
+        console.warn('⚠️ invoices 테이블이 없습니다. 기본값 0 사용');
         totalRevenue = 0;
       } else {
         throw invoiceError;
@@ -458,7 +450,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
       if (bookingError.name === 'SequelizeDatabaseError' &&
           (bookingError.message?.includes('릴레이션') ||
            bookingError.message?.includes('relation'))) {
-        console.log('⚠️ room_bookings 테이블이 없습니다. 기본값 0 사용');
+        console.warn('⚠️ room_bookings 테이블이 없습니다. 기본값 0 사용');
         roomBookingRevenue = 0;
       } else {
         throw bookingError;
@@ -475,7 +467,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
       if (customerError.name === 'SequelizeDatabaseError' && 
           (customerError.message?.includes('릴레이션') || 
            customerError.message?.includes('relation'))) {
-        console.log('⚠️ customers 테이블이 없습니다. 기본값 0 사용');
+        console.warn('⚠️ customers 테이블이 없습니다. 기본값 0 사용');
         customerCount = 0;
       } else {
         throw customerError;
@@ -492,7 +484,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
       if (invoiceError.name === 'SequelizeDatabaseError' && 
           (invoiceError.message?.includes('릴레이션') || 
            invoiceError.message?.includes('relation'))) {
-        console.log('⚠️ invoices 테이블이 없습니다. 기본값 0 사용');
+        console.warn('⚠️ invoices 테이블이 없습니다. 기본값 0 사용');
         invoiceCount = 0;
       } else {
         throw invoiceError;
@@ -509,7 +501,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
       if (productError.name === 'SequelizeDatabaseError' && 
           (productError.message?.includes('릴레이션') || 
            productError.message?.includes('relation'))) {
-        console.log('⚠️ products 테이블이 없습니다. 기본값 0 사용');
+        console.warn('⚠️ products 테이블이 없습니다. 기본값 0 사용');
         inventoryCount = 0;
       } else {
         throw productError;
@@ -584,7 +576,7 @@ app.get('/api/dashboard/revenue-trend', async (req, res) => {
       if (invoiceError.name === 'SequelizeDatabaseError' && 
           (invoiceError.message?.includes('릴레이션') || 
            invoiceError.message?.includes('relation'))) {
-        console.log('⚠️ invoices 테이블이 없습니다. 빈 배열 반환');
+        console.warn('⚠️ invoices 테이블이 없습니다. 빈 배열 반환');
         revenueData = [];
       } else {
         throw invoiceError;
@@ -612,7 +604,7 @@ app.get('/api/dashboard/revenue-trend', async (req, res) => {
       if (bookingError.name === 'SequelizeDatabaseError' &&
           (bookingError.message?.includes('릴레이션') ||
            bookingError.message?.includes('relation'))) {
-        console.log('⚠️ room_bookings 테이블이 없습니다. 빈 배열 반환');
+        console.warn('⚠️ room_bookings 테이블이 없습니다. 빈 배열 반환');
         bookingRevenueData = [];
       } else {
         throw bookingError;
@@ -693,7 +685,7 @@ app.get('/api/dashboard/inventory-status', async (req, res) => {
       if (productError.name === 'SequelizeDatabaseError' && 
           (productError.message?.includes('릴레이션') || 
            productError.message?.includes('relation'))) {
-        console.log('⚠️ products 테이블이 없습니다. 기본값 0 사용');
+        console.warn('⚠️ products 테이블이 없습니다. 기본값 0 사용');
         lowStock = 0;
         normalStock = 0;
         overStock = 0;

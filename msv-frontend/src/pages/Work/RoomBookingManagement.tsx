@@ -53,7 +53,16 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
-import { API_BASE_URL, accountingService, companyService, roomBookingService, roomTypeRoomService, roomTypeService } from '../../services/api';
+import {
+  API_BASE_URL,
+  accountingService,
+  companyService,
+  roomBookingService,
+  roomTypeRoomService,
+  roomTypeService,
+  userUiPreferencesService
+} from '../../services/api';
+import { generateRoomBookingId } from '../../utils/bookingId';
 
 interface Room {
   id: number;
@@ -157,13 +166,13 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(25);
   const [saving, setSaving] = useState(false);
-  const [sortKey, setSortKey] = useState<string>('bookingId');
+  const [sortKey, setSortKey] = useState<string>('guestName');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [shouldAutoPrint, setShouldAutoPrint] = useState(false);
   const [settling, setSettling] = useState(false);
   const [cgstRate, setCgstRate] = useState(2.5);
   const [sgstRate, setSgstRate] = useState(2.5);
-  const invoiceTaxStorageKey = 'roomBookingInvoiceTaxRates:v1';
+  const [invoiceTaxSnapshot, setInvoiceTaxSnapshot] = useState<Record<string, StoredInvoiceTaxRate>>({});
   const handleCgstChange = (value: number) => {
     setCgstRate(value);
     setSgstRate(value);
@@ -304,25 +313,30 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     specialRequests: ''
   });
 
-  const readStoredInvoiceTaxRates = (): Record<string, StoredInvoiceTaxRate> => {
-    try {
-      const raw = localStorage.getItem(invoiceTaxStorageKey);
-      if (!raw) return {};
-      const parsed = JSON.parse(raw) as Record<string, StoredInvoiceTaxRate>;
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch {
-      return {};
+  useEffect(() => {
+    if (!user?.id) {
+      setInvoiceTaxSnapshot({});
+      return;
     }
-  };
+    userUiPreferencesService
+      .get()
+      .then((p) => {
+        const raw = p.roomInvoiceTaxSnapshot;
+        if (raw && typeof raw === 'object') {
+          setInvoiceTaxSnapshot(raw as Record<string, StoredInvoiceTaxRate>);
+        }
+      })
+      .catch(() => {});
+  }, [user?.id]);
+
+  const readStoredInvoiceTaxRates = (): Record<string, StoredInvoiceTaxRate> => invoiceTaxSnapshot;
 
   const persistInvoiceTaxRate = (bookingId: number, next: StoredInvoiceTaxRate) => {
-    try {
-      const snapshot = readStoredInvoiceTaxRates();
-      snapshot[String(bookingId)] = next;
-      localStorage.setItem(invoiceTaxStorageKey, JSON.stringify(snapshot));
-    } catch {
-      // ignore localStorage failures silently
-    }
+    setInvoiceTaxSnapshot((prev) => {
+      const snapshot = { ...prev, [String(bookingId)]: next };
+      userUiPreferencesService.patch({ roomInvoiceTaxSnapshot: snapshot }).catch(() => {});
+      return snapshot;
+    });
   };
 
   useEffect(() => {
@@ -336,7 +350,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     setSelectedBooking(null);
     setFormState((prev) => ({
       ...prev,
-      bookingId: initialFormState.bookingId || prev.bookingId || generateBookingId(),
+      bookingId: initialFormState.bookingId || prev.bookingId || generateRoomBookingId(),
       checkInTime: initialFormState.checkInTime || prev.checkInTime || '15:00',
       checkOutTime: initialFormState.checkOutTime || prev.checkOutTime || '17:00',
       ...initialFormState
@@ -366,7 +380,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     }
     setCgstRate(autoRate);
     setSgstRate(autoRate);
-  }, [selectedBooking]);
+  }, [selectedBooking, invoiceTaxSnapshot]);
 
   useEffect(() => {
     const loadIssuerCompany = async () => {
@@ -561,7 +575,9 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
         });
       }
     }
-    return available;
+    return [...available].sort((a, b) =>
+      String(a.roomNumber).localeCompare(String(b.roomNumber), undefined, { numeric: true })
+    );
   }, [
     bookings,
     formState.checkInDate,
@@ -657,13 +673,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     return Array.from(map.values());
   }, [bookings]);
   const parseCurrencyInput = (value: string) => value.replace(/[^\d]/g, '');
-
-  const generateBookingId = () => {
-    const now = new Date();
-    const datePart = now.toISOString().slice(0, 10).replace(/-/g, '');
-    const timePart = now.toTimeString().slice(0, 8).replace(/:/g, '');
-    return `RB-${datePart}-${timePart}`;
-  };
 
   const updateTotalFromNightly = (nextNightlyRate: string, nextCheckIn?: string, nextCheckOut?: string) => {
     const normalized = parseCurrencyInput(nextNightlyRate);
@@ -875,7 +884,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   const handleOpenCreate = () => {
     setSelectedBooking(null);
     setFormState({
-      bookingId: generateBookingId(),
+      bookingId: generateRoomBookingId(),
       roomId: '',
       roomNumber: '',
       roomType: '',
@@ -970,7 +979,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
           setError(response.message || t('roomBookingManagement.errors.updateFailed'));
         }
       } else {
-        const bookingId = formState.bookingId.trim() || generateBookingId();
+        const bookingId = formState.bookingId.trim() || generateRoomBookingId();
         const response = await roomBookingService.createRoomBooking({
           booking_id: bookingId,
           room_id: resolvedRoomId,
@@ -1942,7 +1951,22 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
 
             <TableContainer component={Paper} variant="outlined" sx={{ mb: 2, fontSize: '0.75rem' }}>
               <Table size="small" sx={invoiceTableFontSx}>
-                <TableHead>
+                <TableHead
+                  sx={{
+                    bgcolor: 'background.paper',
+                    '& .MuiTableCell-head': {
+                      bgcolor: 'background.paper',
+                      color: 'text.primary',
+                      fontWeight: 600,
+                      fontSize: '0.75rem',
+                      textTransform: 'none',
+                      letterSpacing: 'normal',
+                      borderBottom: '2px solid',
+                      borderColor: 'primary.main',
+                      py: 1.25
+                    }
+                  }}
+                >
                   <TableRow>
                   <TableCell sx={{ fontSize: '0.75rem' }}>Description</TableCell>
                   <TableCell sx={{ fontSize: '0.75rem' }}>Check-in</TableCell>
@@ -2374,13 +2398,30 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
               borderSpacing: 0
             }}
           >
-            <TableHead>
+            <TableHead
+              sx={{
+                bgcolor: 'background.paper',
+                '& .MuiTableCell-head': {
+                  bgcolor: 'background.paper',
+                  color: 'text.primary',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  textTransform: 'none',
+                  letterSpacing: 'normal',
+                  borderBottom: '2px solid',
+                  borderColor: 'primary.main',
+                  py: 1.25,
+                  '& .MuiTableSortLabel-root': { color: 'inherit' }
+                },
+                '& .MuiTableCell-head:last-of-type': {
+                  textAlign: 'center'
+                }
+              }}
+            >
               <TableRow>
                 {[
-                  { label: t('roomBookingManagement.columns.bookingId'), key: 'bookingId' },
                   { label: t('roomBookingManagement.columns.guestName'), key: 'guestName' },
                   { label: t('roomBookingManagement.columns.companyName'), key: 'companyName' },
-                  { label: t('roomBookingManagement.columns.email'), key: 'guestEmail' },
                   { label: t('roomBookingManagement.columns.roomNo'), key: 'roomNumber' },
                   { label: t('roomBookingManagement.columns.roomType'), key: 'roomType' },
                   { label: t('roomBookingManagement.columns.checkIn'), key: 'checkInDate' },
@@ -2397,10 +2438,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     key={col.label}
                     sx={{
                       fontSize: 12,
-                      fontWeight: 700,
-                      color: '#ffffff',
-                      backgroundColor: 'primary.main',
-                      borderBottom: '1px solid #e0e0e0',
                       whiteSpace: 'nowrap',
                       lineHeight: 1.2,
                       cursor: col.key ? 'pointer' : 'default'
@@ -2412,10 +2449,8 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                         active={sortKey === col.key}
                         direction={sortKey === col.key ? sortDirection : 'asc'}
                         sx={{
-                          color: '#ffffff !important',
-                          '& .MuiTableSortLabel-icon': {
-                            color: '#ffffff !important'
-                          }
+                          color: 'inherit',
+                          '& .MuiTableSortLabel-icon': { color: 'inherit' }
                         }}
                       >
                         {col.label}
@@ -2436,10 +2471,8 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                   sx={{ cursor: 'pointer' }}
                 >
                   {[
-                    booking.bookingId,
                     booking.guestName,
                     booking.companyName || '-',
-                    booking.guestEmail || '-',
                     getRoomDisplayLabel(booking),
                     getRoomTypeLabel(booking.roomType),
                     booking.checkInDate,

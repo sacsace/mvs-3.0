@@ -11,6 +11,7 @@ interface UserAttributes {
   password_hash: string;
   role: 'root' | 'audit' | 'admin' | 'user';
   department?: string;
+  department_id?: number | null;
   position?: string;
   status: 'active' | 'inactive' | 'suspended';
   last_login?: Date;
@@ -23,8 +24,11 @@ interface UserAttributes {
   emergency_contact?: string;
   emergency_phone?: string;
   hire_date?: Date;
-  employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern';
+  employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern' | 'daily';
   salary?: number;
+  bank_name?: string;
+  bank_account?: string;
+  bank_ifsc?: string;
   is_payment_officer?: boolean;
   settings?: any;
   created_at?: Date;
@@ -43,6 +47,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   public password_hash!: string;
   public role!: 'root' | 'audit' | 'admin' | 'user';
   public department?: string;
+  public department_id?: number | null;
   public position?: string;
   public status!: 'active' | 'inactive' | 'suspended';
   public last_login?: Date;
@@ -55,8 +60,11 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   public emergency_contact?: string;
   public emergency_phone?: string;
   public hire_date?: Date;
-  public employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern';
+  public employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern' | 'daily';
   public salary?: number;
+  public bank_name?: string;
+  public bank_account?: string;
+  public bank_ifsc?: string;
   public is_payment_officer?: boolean;
   public settings?: any;
   public readonly created_at!: Date;
@@ -108,6 +116,10 @@ User.init(
       type: DataTypes.STRING(100),
       allowNull: true
     },
+    department_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
     position: {
       type: DataTypes.STRING(100),
       allowNull: true
@@ -155,11 +167,23 @@ User.init(
       allowNull: true
     },
     employment_type: {
-      type: DataTypes.ENUM('fulltime', 'contract', 'parttime', 'intern'),
+      type: DataTypes.ENUM('fulltime', 'contract', 'parttime', 'intern', 'daily'),
       allowNull: true
     },
     salary: {
       type: DataTypes.DECIMAL(15, 2),
+      allowNull: true
+    },
+    bank_name: {
+      type: DataTypes.STRING(200),
+      allowNull: true
+    },
+    bank_account: {
+      type: DataTypes.STRING(64),
+      allowNull: true
+    },
+    bank_ifsc: {
+      type: DataTypes.STRING(20),
       allowNull: true
     },
     is_payment_officer: {

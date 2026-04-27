@@ -27,7 +27,9 @@ import {
   Snackbar,
   Pagination,
   InputAdornment,
-  Divider
+  Divider,
+  Stack,
+  CircularProgress
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -42,7 +44,10 @@ import {
   Print as PrintIcon,
   Download as DownloadIcon
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import { ewayBillService } from '../../services/api';
+import PromptDialog from '../../components/Common/PromptDialog';
+import { usePromptDialog } from '../../hooks/usePromptDialog';
 
 interface EWayBillItem {
   id: number;
@@ -59,6 +64,27 @@ interface EWayBillItem {
   igstAmount: number;
   totalTaxAmount: number;
   totalAmount: number;
+}
+
+function toCamelCaseKey(key: string): string {
+  return key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+}
+
+function deepCamelCase(input: unknown): unknown {
+  if (input === null || input === undefined) return input;
+  if (input instanceof Date) return input;
+  if (Array.isArray(input)) {
+    return input.map((el) => deepCamelCase(el));
+  }
+  if (typeof input === 'object' && input !== null && input.constructor === Object) {
+    const obj = input as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const k of Object.keys(obj)) {
+      out[toCamelCaseKey(k)] = deepCamelCase(obj[k]);
+    }
+    return out;
+  }
+  return input;
 }
 
 interface EWayBill {
@@ -100,13 +126,175 @@ interface EWayBill {
   createdAt: string;
   updatedAt: string;
   notes?: string;
+  /** API 응답 매핑용 (선택) */
+  fromStateCode?: number;
+  toStateCode?: number;
+  /** 인도 GSTN 공식 E-Way Bill 번호(GST_EWAY_MODE=live 발급 성공 시) */
+  gstnEwayBillNo?: string;
+  gstnValidUpto?: string;
+  gstnLastError?: string;
+}
+
+type EWayBillFormValues = {
+  invoice_number: string;
+  invoice_date: string;
+  supply_type: 'outward' | 'inward';
+  sub_supply_type: string;
+  document_type: 'invoice' | 'credit_note' | 'debit_note' | 'bill_of_supply';
+  from_gstin: string;
+  from_name: string;
+  from_address: string;
+  from_pincode: string;
+  from_state: string;
+  from_state_code: string;
+  to_gstin: string;
+  to_name: string;
+  to_address: string;
+  to_pincode: string;
+  to_state: string;
+  to_state_code: string;
+  transport_mode: 'road' | 'rail' | 'air' | 'ship';
+  vehicle_number: string;
+  distance: string;
+  notes: string;
+  item_name: string;
+  hsn_code: string;
+  quantity: string;
+  unit_price: string;
+};
+
+function getInitialFormValues(): EWayBillFormValues {
+  const today = new Date().toISOString().split('T')[0];
+  return {
+    invoice_number: '',
+    invoice_date: today,
+    supply_type: 'outward',
+    sub_supply_type: 'supply',
+    document_type: 'invoice',
+    from_gstin: '',
+    from_name: '',
+    from_address: '',
+    from_pincode: '',
+    from_state: '',
+    from_state_code: '29',
+    to_gstin: '',
+    to_name: '',
+    to_address: '',
+    to_pincode: '',
+    to_state: '',
+    to_state_code: '29',
+    transport_mode: 'road',
+    vehicle_number: '',
+    distance: '0',
+    notes: '',
+    item_name: '',
+    hsn_code: '998314',
+    quantity: '1',
+    unit_price: '0'
+  };
+}
+
+function mapBillToForm(b: EWayBill): EWayBillFormValues {
+  const first = b.items?.[0];
+  const invDate = (b.invoiceDate || '').slice(0, 10);
+  return {
+    invoice_number: b.invoiceNumber || '',
+    invoice_date: invDate || new Date().toISOString().split('T')[0],
+    supply_type: b.supplyType,
+    sub_supply_type: b.subSupplyType || 'supply',
+    document_type: b.documentType || 'invoice',
+    from_gstin: b.fromGstin || '',
+    from_name: b.fromName || '',
+    from_address: b.fromAddress || '',
+    from_pincode: b.fromPincode || '',
+    from_state: b.fromState || '',
+    from_state_code: String(b.fromStateCode ?? 29),
+    to_gstin: b.toGstin || '',
+    to_name: b.toName || '',
+    to_address: b.toAddress || '',
+    to_pincode: b.toPincode || '',
+    to_state: b.toState || '',
+    to_state_code: String(b.toStateCode ?? 29),
+    transport_mode: b.transportMode || 'road',
+    vehicle_number: b.vehicleNumber || '',
+    distance: String(b.distance ?? 0),
+    notes: b.notes || '',
+    item_name: first?.itemName || '',
+    hsn_code: first?.hsnCode || '998314',
+    quantity: String(first?.quantity ?? 1),
+    unit_price: String(first?.unitPrice ?? 0)
+  };
+}
+
+function buildEWayBillApiPayload(form: EWayBillFormValues): Record<string, unknown> {
+  const qty = Math.max(0.0001, parseFloat(form.quantity) || 1);
+  const unitPrice = parseFloat(form.unit_price) || 0;
+  const inv = form.invoice_number.trim();
+  const docDate = form.invoice_date;
+  return {
+    invoice_number: inv,
+    invoice_date: docDate,
+    supply_type: form.supply_type,
+    sub_supply_type: form.sub_supply_type || 'supply',
+    document_type: form.document_type,
+    document_number: inv,
+    document_date: docDate,
+    from_gstin: form.from_gstin.trim(),
+    from_name: form.from_name.trim(),
+    from_address: form.from_address.trim(),
+    from_pincode: form.from_pincode.trim(),
+    from_state: form.from_state.trim(),
+    from_state_code: parseInt(form.from_state_code, 10) || 0,
+    to_gstin: form.to_gstin.trim() || undefined,
+    to_name: form.to_name.trim(),
+    to_address: form.to_address.trim(),
+    to_pincode: form.to_pincode.trim(),
+    to_state: form.to_state.trim(),
+    to_state_code: parseInt(form.to_state_code, 10) || 0,
+    transport_mode: form.transport_mode,
+    vehicle_number: form.vehicle_number.trim() || undefined,
+    distance: parseFloat(form.distance) || 0,
+    notes: form.notes.trim() || undefined,
+    items: [
+      {
+        item_name: form.item_name.trim() || 'Goods',
+        hsn_code: form.hsn_code.trim() || '998314',
+        quantity: qty,
+        unit: 'PCS',
+        unit_price: unitPrice,
+        cgst_rate: 0,
+        cgst_amount: 0,
+        sgst_rate: 0,
+        sgst_amount: 0,
+        igst_rate: 0,
+        igst_amount: 0
+      }
+    ]
+  };
+}
+
+function validateEWayBillForm(form: EWayBillFormValues): boolean {
+  if (!form.invoice_number.trim()) return false;
+  if (!form.from_gstin.trim() || form.from_gstin.trim().length < 15) return false;
+  if (!form.from_name.trim() || !form.from_address.trim() || !form.from_pincode.trim() || !form.from_state.trim()) return false;
+  if (!form.to_name.trim() || !form.to_address.trim() || !form.to_pincode.trim() || !form.to_state.trim()) return false;
+  return true;
 }
 
 const EWayBillComponent: React.FC = () => {
+  const { t } = useTranslation();
+  const {
+    dialogState: promptDialogState,
+    showPrompt,
+    handleConfirm: handlePromptConfirm,
+    handleCancel: handlePromptCancel
+  } = usePromptDialog();
   const [filteredEwayBills, setFilteredEwayBills] = useState<EWayBill[]>([]);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
+  const [dialogSubmitting, setDialogSubmitting] = useState(false);
+  const [dialogForm, setDialogForm] = useState<EWayBillFormValues>(() => getInitialFormValues());
   const [selectedEwayBill, setSelectedEwayBill] = useState<EWayBill | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'view'>('list');
   const [searchTerm, setSearchTerm] = useState('');
@@ -115,6 +303,9 @@ const EWayBillComponent: React.FC = () => {
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [allEwayBills, setAllEwayBills] = useState<EWayBill[]>([]);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
 
   // 샘플 데이터
   const sampleData = useMemo<EWayBill[]>(() => [
@@ -239,7 +430,9 @@ const EWayBillComponent: React.FC = () => {
       const response = await ewayBillService.getEWayBills({ page, limit: itemsPerPage });
       if (response.success && response.data) {
         const bills = Array.isArray(response.data) ? response.data : response.data.items || [];
-        setAllEwayBills(bills);
+        setAllEwayBills(
+          bills.map((b: unknown) => deepCamelCase(b) as EWayBill)
+        );
       } else {
         // API 실패 시 샘플 데이터 사용
         setAllEwayBills(sampleData);
@@ -256,7 +449,8 @@ const EWayBillComponent: React.FC = () => {
 
     if (searchTerm) {
       filtered = filtered.filter(ewayBill =>
-        ewayBill.ewayBillNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (ewayBill.ewayBillNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (ewayBill.gstnEwayBillNo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         ewayBill.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
         ewayBill.fromName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         ewayBill.toName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -338,19 +532,99 @@ const EWayBillComponent: React.FC = () => {
     setOpenDialog(true);
   };
 
-  const handleDeleteEwayBill = async (id: number) => {
-    if (window.confirm('정말로 이 E-Way Bill을 삭제하시겠습니까?')) {
-      try {
-        await ewayBillService.deleteEWayBill(id);
-        setSuccess('E-Way Bill이 성공적으로 삭제되었습니다.');
-        setAllEwayBills(prev => prev.filter(bill => bill.id !== id));
-        loadEwayBillData();
-      } catch (error: any) {
-        console.error('삭제 오류:', error);
-        setError(error.response?.data?.message || '삭제 중 오류가 발생했습니다.');
+  const handleOpenCreate = () => {
+    setSelectedEwayBill(null);
+    setOpenDialog(true);
+  };
+
+  useEffect(() => {
+    if (!openDialog) return;
+    if (selectedEwayBill) {
+      setDialogForm(mapBillToForm(selectedEwayBill));
+    } else {
+      setDialogForm(getInitialFormValues());
+    }
+  }, [openDialog, selectedEwayBill]);
+
+  const handleCloseDialog = useCallback(() => {
+    if (dialogSubmitting) return;
+    setOpenDialog(false);
+    setSelectedEwayBill(null);
+    setDialogForm(getInitialFormValues());
+  }, [dialogSubmitting]);
+
+  const handleSubmitDialog = async () => {
+    if (!validateEWayBillForm(dialogForm)) {
+      setError(t('eWayBillManagement.dialog.validationRequired'));
+      return;
+    }
+    setDialogSubmitting(true);
+    setError('');
+    try {
+      const payload = buildEWayBillApiPayload(dialogForm);
+      if (selectedEwayBill) {
+        const res = await ewayBillService.updateEWayBill(selectedEwayBill.id, payload);
+        if (res.success) {
+          setSuccess(t('eWayBillManagement.dialog.updateSuccess'));
+          setOpenDialog(false);
+          setSelectedEwayBill(null);
+          setDialogForm(getInitialFormValues());
+          await loadEwayBillData();
+        } else {
+          setError((res as { message?: string }).message || t('eWayBillManagement.errors.createEWayBill'));
+        }
+      } else {
+        const res = await ewayBillService.createEWayBill(payload);
+        if (res.success) {
+          setSuccess(t('eWayBillManagement.dialog.createSuccess'));
+          setOpenDialog(false);
+          setSelectedEwayBill(null);
+          setDialogForm(getInitialFormValues());
+          await loadEwayBillData();
+        } else {
+          setError((res as { message?: string }).message || t('eWayBillManagement.errors.createEWayBill'));
+        }
       }
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { message?: string } } };
+      setError(err.response?.data?.message || t('eWayBillManagement.errors.createEWayBill'));
+    } finally {
+      setDialogSubmitting(false);
     }
   };
+
+  const openDeleteDialog = (id: number) => {
+    setDeleteTargetId(id);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleCloseDeleteDialog = () => {
+    if (deleteSubmitting) return;
+    setDeleteConfirmOpen(false);
+    setDeleteTargetId(null);
+  };
+
+  const confirmDeleteEwayBill = async () => {
+    if (deleteTargetId == null) return;
+    setDeleteSubmitting(true);
+    try {
+      await ewayBillService.deleteEWayBill(deleteTargetId);
+      setSuccess('E-Way Bill이 성공적으로 삭제되었습니다.');
+      setAllEwayBills((prev) => prev.filter((bill) => bill.id !== deleteTargetId));
+      setDeleteConfirmOpen(false);
+      setDeleteTargetId(null);
+      await loadEwayBillData();
+    } catch (error: unknown) {
+      console.error('삭제 오류:', error);
+      const err = error as { response?: { data?: { message?: string } } };
+      setError(err.response?.data?.message || '삭제 중 오류가 발생했습니다.');
+    } finally {
+      setDeleteSubmitting(false);
+    }
+  };
+
+  const deleteTargetBill =
+    deleteTargetId != null ? allEwayBills.find((b) => b.id === deleteTargetId) : undefined;
 
   const handleGenerateEwayBill = async (id: number) => {
     try {
@@ -358,6 +632,8 @@ const EWayBillComponent: React.FC = () => {
       if (response.success) {
         setSuccess('E-Way Bill이 성공적으로 생성되었습니다.');
         loadEwayBillData();
+      } else {
+        setError((response as { message?: string }).message || 'E-Way Bill 생성에 실패했습니다.');
       }
     } catch (error: any) {
       console.error('생성 오류:', error);
@@ -365,20 +641,32 @@ const EWayBillComponent: React.FC = () => {
     }
   };
 
-  const handleCancelEwayBill = async (id: number) => {
-    const reason = window.prompt('취소 사유를 입력하세요:');
-    if (reason !== null) {
-      try {
-        const response = await ewayBillService.cancelEWayBill(id, reason);
-        if (response.success) {
-          setSuccess('E-Way Bill이 취소되었습니다.');
-          loadEwayBillData();
-        }
-      } catch (error: any) {
-        console.error('취소 오류:', error);
-        setError(error.response?.data?.message || 'E-Way Bill 취소 중 오류가 발생했습니다.');
+  const handleCancelEwayBill = (id: number) => {
+    showPrompt(
+      '취소 사유를 입력하세요.',
+      (reason) => {
+        void (async () => {
+          try {
+            const response = await ewayBillService.cancelEWayBill(id, reason);
+            if (response.success) {
+              setSuccess('E-Way Bill이 취소되었습니다.');
+              loadEwayBillData();
+            }
+          } catch (error: any) {
+            console.error('취소 오류:', error);
+            setError(error.response?.data?.message || 'E-Way Bill 취소 중 오류가 발생했습니다.');
+          }
+        })();
+      },
+      {
+        title: 'E-Way Bill 취소',
+        label: '취소 사유',
+        multiline: true,
+        minRows: 2,
+        confirmText: t('common.confirm'),
+        cancelText: t('common.cancel')
       }
-    }
+    );
   };
 
   const totalBills = allEwayBills.length;
@@ -393,6 +681,7 @@ const EWayBillComponent: React.FC = () => {
 
   if (viewMode === 'view' && selectedEwayBill) {
     return (
+      <>
       <Box sx={{ 
         p: 3, 
         backgroundColor: 'workArea.main',
@@ -419,6 +708,11 @@ const EWayBillComponent: React.FC = () => {
                 <Typography variant="h5" fontWeight="bold" gutterBottom>
                   E-Way Bill #{selectedEwayBill.ewayBillNumber}
                 </Typography>
+                {selectedEwayBill.gstnEwayBillNo && (
+                  <Typography variant="body2" color="success.main" fontWeight="600" gutterBottom>
+                    GSTN E-Way Bill No. {selectedEwayBill.gstnEwayBillNo}
+                  </Typography>
+                )}
                 <Typography variant="body1" color="text.secondary" gutterBottom>
                   인보이스: {selectedEwayBill.invoiceNumber} | 날짜: {selectedEwayBill.invoiceDate}
                 </Typography>
@@ -535,7 +829,22 @@ const EWayBillComponent: React.FC = () => {
               <Typography variant="h6" gutterBottom>상품 정보</Typography>
               <TableContainer>
                 <Table>
-                  <TableHead>
+                  <TableHead
+                    sx={{
+                      bgcolor: 'background.paper',
+                      '& .MuiTableCell-head': {
+                        bgcolor: 'background.paper',
+                        color: 'text.primary',
+                        fontWeight: 600,
+                        fontSize: '0.875rem',
+                        textTransform: 'none',
+                        letterSpacing: 'normal',
+                        borderBottom: '2px solid',
+                        borderColor: 'primary.main',
+                        py: 1.25
+                      }
+                    }}
+                  >
                     <TableRow>
                       <TableCell>상품명</TableCell>
                       <TableCell>HSN 코드</TableCell>
@@ -650,10 +959,27 @@ const EWayBillComponent: React.FC = () => {
           </CardContent>
         </Card>
       </Box>
+      <PromptDialog
+        open={promptDialogState.open}
+        title={promptDialogState.title}
+        message={promptDialogState.message}
+        label={promptDialogState.label}
+        defaultValue={promptDialogState.defaultValue}
+        placeholder={promptDialogState.placeholder}
+        multiline={promptDialogState.multiline}
+        minRows={promptDialogState.minRows}
+        confirmText={promptDialogState.confirmText}
+        cancelText={promptDialogState.cancelText}
+        required={promptDialogState.required}
+        onConfirm={handlePromptConfirm}
+        onCancel={handlePromptCancel}
+      />
+      </>
     );
   }
 
   return (
+    <>
     <Box sx={{ 
       p: 3, 
       backgroundColor: 'workArea.main',
@@ -663,15 +989,15 @@ const EWayBillComponent: React.FC = () => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <LocalShippingIcon />
-          E-Way Bill
+          {t('eWayBillManagement.title')}
         </Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
-          onClick={() => setOpenDialog(true)}
+          onClick={handleOpenCreate}
           sx={{ borderRadius: 2 }}
         >
-          E-Way Bill 생성
+          {t('eWayBillManagement.actions.createEWayBill')}
         </Button>
       </Box>
 
@@ -790,9 +1116,32 @@ const EWayBillComponent: React.FC = () => {
 
       {/* E-Way Bill 목록 테이블 */}
       <Card>
+        <Box sx={{ px: 2, pt: 2, pb: 0.5 }}>
+          <Typography variant="h6" component="h2">
+            {t('eWayBillManagement.tabs.list')}
+          </Typography>
+        </Box>
         <TableContainer>
           <Table>
-            <TableHead>
+            <TableHead
+              sx={{
+                bgcolor: 'background.paper',
+                '& .MuiTableCell-head': {
+                  bgcolor: 'background.paper',
+                  color: 'text.primary',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  textTransform: 'none',
+                  letterSpacing: 'normal',
+                  borderBottom: '2px solid',
+                  borderColor: 'primary.main',
+                  py: 1.25
+                },
+                '& .MuiTableCell-head:last-of-type': {
+                  textAlign: 'center'
+                }
+              }}
+            >
               <TableRow>
                 <TableCell>E-Way Bill 정보</TableCell>
                 <TableCell>송장/입장</TableCell>
@@ -812,6 +1161,11 @@ const EWayBillComponent: React.FC = () => {
                       <Typography variant="subtitle2" fontWeight="bold">
                         {ewayBill.ewayBillNumber}
                       </Typography>
+                      {ewayBill.gstnEwayBillNo && (
+                        <Typography variant="caption" color="success.main" display="block">
+                          GSTN: {ewayBill.gstnEwayBillNo}
+                        </Typography>
+                      )}
                       <Typography variant="body2" color="text.secondary">
                         {ewayBill.invoiceNumber}
                       </Typography>
@@ -893,7 +1247,7 @@ const EWayBillComponent: React.FC = () => {
                         </Tooltip>
                       )}
                       <Tooltip title="삭제">
-                        <IconButton size="small" onClick={() => handleDeleteEwayBill(ewayBill.id)}>
+                        <IconButton size="small" onClick={() => openDeleteDialog(ewayBill.id)}>
                           <DeleteIcon />
                         </IconButton>
                       </Tooltip>
@@ -916,25 +1270,355 @@ const EWayBillComponent: React.FC = () => {
         </Box>
       </Card>
 
-      {/* E-Way Bill 생성/수정 다이얼로그 */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {selectedEwayBill ? 'E-Way Bill 수정' : 'E-Way Bill 생성'}
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ mt: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              E-Way Bill 정보를 입력해주세요.
-            </Typography>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              E-Way Bill 생성 기능은 개발 중입니다.
-            </Typography>
+      {/* 삭제 확인 */}
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={handleCloseDeleteDialog}
+        aria-labelledby="delete-eway-dialog-title"
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            border: '1px solid',
+            borderColor: 'divider'
+          }
+        }}
+      >
+        <DialogTitle
+          id="delete-eway-dialog-title"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            pb: 1,
+            fontWeight: 600
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 40,
+              height: 40,
+              borderRadius: 1,
+              bgcolor: 'error.main',
+              color: 'error.contrastText',
+              opacity: 0.95
+            }}
+          >
+            <DeleteIcon fontSize="small" />
           </Box>
+          E-Way Bill 삭제
+        </DialogTitle>
+        <DialogContent sx={{ pt: 0 }}>
+          <Typography variant="body1" color="text.primary">
+            이 E-Way Bill을 삭제하시겠습니까? 삭제 후에는 복구할 수 없습니다.
+          </Typography>
+          {deleteTargetBill && (
+            <Box
+              sx={{
+                mt: 2,
+                p: 1.5,
+                borderRadius: 1,
+                bgcolor: 'action.hover',
+                border: '1px solid',
+                borderColor: 'divider'
+              }}
+            >
+              <Typography variant="caption" color="text.secondary" display="block">
+                문서 번호
+              </Typography>
+              <Typography variant="body2" fontWeight={600}>
+                {deleteTargetBill.ewayBillNumber}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                인보이스
+              </Typography>
+              <Typography variant="body2">{deleteTargetBill.invoiceNumber}</Typography>
+            </Box>
+          )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>취소</Button>
-          <Button variant="contained">
-            {selectedEwayBill ? '수정' : '생성'}
+        <DialogActions sx={{ px: 3, pb: 2.5, pt: 0, gap: 1 }}>
+          <Button
+            variant="outlined"
+            color="inherit"
+            onClick={handleCloseDeleteDialog}
+            disabled={deleteSubmitting}
+            sx={{ minWidth: 88 }}
+          >
+            취소
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => void confirmDeleteEwayBill()}
+            disabled={deleteSubmitting}
+            disableElevation
+            sx={{ minWidth: 88 }}
+          >
+            {deleteSubmitting ? <CircularProgress size={22} color="inherit" /> : '삭제'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* E-Way Bill 생성/수정 다이얼로그 */}
+      <Dialog
+        open={openDialog}
+        onClose={() => {
+          if (dialogSubmitting) return;
+          handleCloseDialog();
+        }}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {selectedEwayBill ? t('eWayBillManagement.dialog.editTitle') : t('eWayBillManagement.dialog.createTitle')}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t('eWayBillManagement.dialog.hintRequired')}
+          </Typography>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                required
+                fullWidth
+                size="small"
+                label={t('eWayBillManagement.dialog.invoiceNumber')}
+                value={dialogForm.invoice_number}
+                onChange={(e) => setDialogForm((f) => ({ ...f, invoice_number: e.target.value }))}
+              />
+              <TextField
+                required
+                fullWidth
+                size="small"
+                type="date"
+                label={t('eWayBillManagement.dialog.invoiceDate')}
+                value={dialogForm.invoice_date}
+                onChange={(e) => setDialogForm((f) => ({ ...f, invoice_date: e.target.value }))}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Stack>
+            <FormControl fullWidth size="small">
+              <InputLabel>{t('eWayBillManagement.dialog.supplyType')}</InputLabel>
+              <Select
+                label={t('eWayBillManagement.dialog.supplyType')}
+                value={dialogForm.supply_type}
+                onChange={(e) =>
+                  setDialogForm((f) => ({ ...f, supply_type: e.target.value as 'outward' | 'inward' }))
+                }
+              >
+                <MenuItem value="outward">Outward</MenuItem>
+                <MenuItem value="inward">Inward</MenuItem>
+              </Select>
+            </FormControl>
+            <Typography variant="subtitle2" color="primary">
+              {t('eWayBillManagement.detail.fromAddress', '출발지')} / Supplier
+            </Typography>
+            <TextField
+              required
+              fullWidth
+              size="small"
+              label={t('eWayBillManagement.dialog.fromGstin')}
+              value={dialogForm.from_gstin}
+              onChange={(e) => setDialogForm((f) => ({ ...f, from_gstin: e.target.value }))}
+              helperText="15 chars (India GSTIN)"
+            />
+            <TextField
+              required
+              fullWidth
+              size="small"
+              label={t('eWayBillManagement.dialog.fromName')}
+              value={dialogForm.from_name}
+              onChange={(e) => setDialogForm((f) => ({ ...f, from_name: e.target.value }))}
+            />
+            <TextField
+              required
+              fullWidth
+              size="small"
+              multiline
+              minRows={2}
+              label={t('eWayBillManagement.dialog.supplierAddress')}
+              value={dialogForm.from_address}
+              onChange={(e) => setDialogForm((f) => ({ ...f, from_address: e.target.value }))}
+            />
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                required
+                fullWidth
+                size="small"
+                label={t('eWayBillManagement.dialog.fromPincode')}
+                value={dialogForm.from_pincode}
+                onChange={(e) => setDialogForm((f) => ({ ...f, from_pincode: e.target.value }))}
+              />
+              <TextField
+                required
+                fullWidth
+                size="small"
+                label={t('eWayBillManagement.dialog.fromState')}
+                value={dialogForm.from_state}
+                onChange={(e) => setDialogForm((f) => ({ ...f, from_state: e.target.value }))}
+              />
+              <TextField
+                required
+                fullWidth
+                size="small"
+                type="number"
+                label={t('eWayBillManagement.dialog.fromStateCode')}
+                value={dialogForm.from_state_code}
+                onChange={(e) => setDialogForm((f) => ({ ...f, from_state_code: e.target.value }))}
+              />
+            </Stack>
+            <Typography variant="subtitle2" color="primary">
+              {t('eWayBillManagement.detail.toAddress', '도착지')} / Recipient
+            </Typography>
+            <TextField
+              fullWidth
+              size="small"
+              label={t('eWayBillManagement.dialog.toGstin')}
+              value={dialogForm.to_gstin}
+              onChange={(e) => setDialogForm((f) => ({ ...f, to_gstin: e.target.value }))}
+            />
+            <TextField
+              required
+              fullWidth
+              size="small"
+              label={t('eWayBillManagement.dialog.toName')}
+              value={dialogForm.to_name}
+              onChange={(e) => setDialogForm((f) => ({ ...f, to_name: e.target.value }))}
+            />
+            <TextField
+              required
+              fullWidth
+              size="small"
+              multiline
+              minRows={2}
+              label={t('eWayBillManagement.dialog.recipientAddress')}
+              value={dialogForm.to_address}
+              onChange={(e) => setDialogForm((f) => ({ ...f, to_address: e.target.value }))}
+            />
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                required
+                fullWidth
+                size="small"
+                label={t('eWayBillManagement.dialog.toPincode')}
+                value={dialogForm.to_pincode}
+                onChange={(e) => setDialogForm((f) => ({ ...f, to_pincode: e.target.value }))}
+              />
+              <TextField
+                required
+                fullWidth
+                size="small"
+                label={t('eWayBillManagement.dialog.toState')}
+                value={dialogForm.to_state}
+                onChange={(e) => setDialogForm((f) => ({ ...f, to_state: e.target.value }))}
+              />
+              <TextField
+                required
+                fullWidth
+                size="small"
+                type="number"
+                label={t('eWayBillManagement.dialog.toStateCode')}
+                value={dialogForm.to_state_code}
+                onChange={(e) => setDialogForm((f) => ({ ...f, to_state_code: e.target.value }))}
+              />
+            </Stack>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Transport</InputLabel>
+                <Select
+                  label="Transport"
+                  value={dialogForm.transport_mode}
+                  onChange={(e) =>
+                    setDialogForm((f) => ({
+                      ...f,
+                      transport_mode: e.target.value as EWayBillFormValues['transport_mode']
+                    }))
+                  }
+                >
+                  <MenuItem value="road">Road</MenuItem>
+                  <MenuItem value="rail">Rail</MenuItem>
+                  <MenuItem value="air">Air</MenuItem>
+                  <MenuItem value="ship">Ship</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                fullWidth
+                size="small"
+                label={t('eWayBillManagement.dialog.vehicleNumber')}
+                value={dialogForm.vehicle_number}
+                onChange={(e) => setDialogForm((f) => ({ ...f, vehicle_number: e.target.value }))}
+              />
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label={t('eWayBillManagement.dialog.distanceKm')}
+                value={dialogForm.distance}
+                onChange={(e) => setDialogForm((f) => ({ ...f, distance: e.target.value }))}
+              />
+            </Stack>
+            <Typography variant="subtitle2" color="primary">
+              {t('eWayBillManagement.detail.goodsList', '품목')}
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                fullWidth
+                size="small"
+                label={t('eWayBillManagement.dialog.itemName')}
+                value={dialogForm.item_name}
+                onChange={(e) => setDialogForm((f) => ({ ...f, item_name: e.target.value }))}
+              />
+              <TextField
+                fullWidth
+                size="small"
+                label={t('eWayBillManagement.dialog.hsnCode')}
+                value={dialogForm.hsn_code}
+                onChange={(e) => setDialogForm((f) => ({ ...f, hsn_code: e.target.value }))}
+              />
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label={t('eWayBillManagement.dialog.quantity')}
+                value={dialogForm.quantity}
+                onChange={(e) => setDialogForm((f) => ({ ...f, quantity: e.target.value }))}
+              />
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label={t('eWayBillManagement.dialog.unitPrice')}
+                value={dialogForm.unit_price}
+                onChange={(e) => setDialogForm((f) => ({ ...f, unit_price: e.target.value }))}
+              />
+            </Stack>
+            <TextField
+              fullWidth
+              size="small"
+              multiline
+              minRows={2}
+              label={t('eWayBillManagement.dialog.notes')}
+              value={dialogForm.notes}
+              onChange={(e) => setDialogForm((f) => ({ ...f, notes: e.target.value }))}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={handleCloseDialog} disabled={dialogSubmitting}>
+            {t('eWayBillManagement.dialog.cancelButton')}
+          </Button>
+          <Button variant="contained" onClick={() => void handleSubmitDialog()} disabled={dialogSubmitting}>
+            {dialogSubmitting ? (
+              <CircularProgress size={22} color="inherit" />
+            ) : selectedEwayBill ? (
+              t('eWayBillManagement.dialog.submitUpdate')
+            ) : (
+              t('eWayBillManagement.dialog.submitCreate')
+            )}
           </Button>
         </DialogActions>
       </Dialog>
@@ -960,6 +1644,22 @@ const EWayBillComponent: React.FC = () => {
         </Alert>
       </Snackbar>
     </Box>
+    <PromptDialog
+      open={promptDialogState.open}
+      title={promptDialogState.title}
+      message={promptDialogState.message}
+      label={promptDialogState.label}
+      defaultValue={promptDialogState.defaultValue}
+      placeholder={promptDialogState.placeholder}
+      multiline={promptDialogState.multiline}
+      minRows={promptDialogState.minRows}
+      confirmText={promptDialogState.confirmText}
+      cancelText={promptDialogState.cancelText}
+      required={promptDialogState.required}
+      onConfirm={handlePromptConfirm}
+      onCancel={handlePromptCancel}
+    />
+    </>
   );
 };
 

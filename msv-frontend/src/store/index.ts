@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { Menu, UserPermission } from '../services/menuService';
+import i18n from '../locales/i18n';
 
 export interface User {
   id: number;
@@ -10,6 +11,8 @@ export interface User {
   role: string;
   tenant_id: number;
   company_id: number;
+  department?: string;
+  position?: string;
   is_payment_officer?: boolean;
 }
 
@@ -69,6 +72,7 @@ export const useStore = create<AuthState>()(
     }),
     {
       name: 'mvs-auth-storage',
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         isAuthenticated: state.isAuthenticated,
         token: state.token,
@@ -78,66 +82,83 @@ export const useStore = create<AuthState>()(
   )
 );
 
-export const useMenuStore = create<MenuState>()((set, get) => ({
-  menus: [],
-  userPermissions: [],
-  loading: false,
-  error: null,
-  language: 'ko',
-  
-  setMenus: (menus: Menu[]) => set({ menus }),
-  setUserPermissions: (permissions: UserPermission[]) => set({ userPermissions: permissions }),
-  setLoading: (loading: boolean) => set({ loading }),
-  setError: (error: string | null) => set({ error }),
-  setLanguage: (language: 'ko' | 'en') => set({ language }),
-  
-  hasMenuPermission: (menuId: number, action: 'view' | 'create' | 'edit' | 'delete') => {
-    const { userPermissions } = get();
-    const permission = userPermissions.find(p => p.menu_id === menuId);
-    if (!permission) return false;
-    
-    switch (action) {
-      case 'view':
-        return permission.can_view;
-      case 'create':
-        return permission.can_create;
-      case 'edit':
-        return permission.can_edit;
-      case 'delete':
-        return permission.can_delete;
-      default:
-        return false;
-    }
-  },
-  
-  getMenuByRoute: (route: string) => {
-    const { menus } = get();
-    const findMenuByRoute = (menuList: Menu[]): Menu | undefined => {
-      for (const menu of menuList) {
-        if (menu.route === route) return menu;
-        if (menu.children) {
-          const found = findMenuByRoute(menu.children);
-          if (found) return found;
+export const useMenuStore = create<MenuState>()(
+  persist(
+    (set, get) => ({
+      menus: [],
+      userPermissions: [],
+      /** Sidebar 첫 fetch 전까지 true — AppLayout이 “권한 없음”을 잠깐 띄우지 않도록 */
+      loading: true,
+      error: null,
+      language: 'ko',
+
+      setMenus: (menus: Menu[]) => set({ menus }),
+      setUserPermissions: (permissions: UserPermission[]) => set({ userPermissions: permissions }),
+      setLoading: (loading: boolean) => set({ loading }),
+      setError: (error: string | null) => set({ error }),
+      setLanguage: (language: 'ko' | 'en') => set({ language }),
+
+      hasMenuPermission: (menuId: number, action: 'view' | 'create' | 'edit' | 'delete') => {
+        const { userPermissions } = get();
+        const mid = Number(menuId);
+        if (!Number.isFinite(mid)) return false;
+        const permission = userPermissions.find((p) => Number(p.menu_id) === mid);
+        if (!permission) return false;
+
+        switch (action) {
+          case 'view':
+            return Boolean(permission.can_view);
+          case 'create':
+            return Boolean(permission.can_create);
+          case 'edit':
+            return Boolean(permission.can_edit);
+          case 'delete':
+            return Boolean(permission.can_delete);
+          default:
+            return false;
+        }
+      },
+
+      getMenuByRoute: (route: string) => {
+        const { menus } = get();
+        const findMenuByRoute = (menuList: Menu[]): Menu | undefined => {
+          for (const menu of menuList) {
+            if (menu.route === route) return menu;
+            if (menu.children) {
+              const found = findMenuByRoute(menu.children);
+              if (found) return found;
+            }
+          }
+          return undefined;
+        };
+        return findMenuByRoute(menus);
+      },
+
+      getMenusByLevel: (level: number) => {
+        const { menus } = get();
+        const getMenusAtLevel = (menuList: Menu[], currentLevel: number = 0): Menu[] => {
+          if (currentLevel === level) return menuList;
+
+          const result: Menu[] = [];
+          menuList.forEach((menu) => {
+            if (menu.children) {
+              result.push(...getMenusAtLevel(menu.children, currentLevel + 1));
+            }
+          });
+          return result;
+        };
+        return getMenusAtLevel(menus);
+      }
+    }),
+    {
+      name: 'mvs-menu-ui',
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: (state) => ({ language: state.language }),
+      onRehydrateStorage: () => (state) => {
+        if (state?.language === 'ko' || state?.language === 'en') {
+          void i18n.changeLanguage(state.language);
         }
       }
-      return undefined;
-    };
-    return findMenuByRoute(menus);
-  },
-  
-  getMenusByLevel: (level: number) => {
-    const { menus } = get();
-    const getMenusAtLevel = (menuList: Menu[], currentLevel: number = 0): Menu[] => {
-      if (currentLevel === level) return menuList;
-      
-      const result: Menu[] = [];
-      menuList.forEach(menu => {
-        if (menu.children) {
-          result.push(...getMenusAtLevel(menu.children, currentLevel + 1));
-        }
-      });
-      return result;
-    };
-    return getMenusAtLevel(menus);
-  }
-}));
+    }
+  )
+);

@@ -55,6 +55,7 @@ import {
   getWorkBoardDetail,
   updateWorkBoard,
   deleteWorkBoard,
+  moveWorkBoard,
   createWorkBoardList,
   updateWorkBoardList,
   moveWorkBoardList,
@@ -72,33 +73,132 @@ import {
   updateWorkBoardMember,
 } from '../controllers/workBoardController';
 import { authenticateToken, restrictAuditToReadOnly } from '../middleware/auth';
+import { requireMenuPermission, requireMenuPermissionAny } from '../middleware/menuPermission';
+
+/** DB `menus.route` 값과 동일 (프론트 App 라우트 기준) */
+const MENU_WORK_PROJECTS = '/work/projects';
+const MENU_WORK_STATISTICS = '/work/statistics';
+const MENU_WORK_APPROVAL = '/work/approval';
+/** 객실 예약·호실: 업무 메뉴와 호텔 메뉴에 동일 화면이 두 줄로 존재할 수 있음 → API는 둘 중 하나 권한으로 허용 */
+const MENU_ROOM_RESERVATION_ROUTES = ['/work/room-reservation', '/hotel/room-reservation'];
+const MENU_WORK_REPORTS = '/work/reports';
 
 const router = Router();
 
 // 모든 라우트에 인증 미들웨어 적용
 router.use(authenticateToken);
 
-// 작업 보드 (칸반 / 트렐로형)
-router.get('/boards', getWorkBoards);
-router.post('/boards', restrictAuditToReadOnly, createWorkBoard);
-router.get('/boards/:boardId', getWorkBoardDetail);
-router.put('/boards/:boardId', restrictAuditToReadOnly, updateWorkBoard);
-router.delete('/boards/:boardId', restrictAuditToReadOnly, deleteWorkBoard);
-router.post('/boards/:boardId/lists', restrictAuditToReadOnly, createWorkBoardList);
-router.put('/boards/:boardId/lists/:listId', restrictAuditToReadOnly, updateWorkBoardList);
-router.post('/boards/:boardId/lists/:listId/move', restrictAuditToReadOnly, moveWorkBoardList);
-router.delete('/boards/:boardId/lists/:listId', restrictAuditToReadOnly, deleteWorkBoardList);
-router.post('/boards/:boardId/lists/:listId/cards', restrictAuditToReadOnly, createWorkBoardCard);
-router.put('/boards/:boardId/cards/:cardId', restrictAuditToReadOnly, updateWorkBoardCard);
-router.post('/boards/:boardId/cards/:cardId/move', restrictAuditToReadOnly, moveWorkBoardCard);
-router.delete('/boards/:boardId/cards/:cardId', restrictAuditToReadOnly, deleteWorkBoardCard);
-router.get('/boards/:boardId/cards/:cardId/comments', getWorkBoardCardComments);
-router.post('/boards/:boardId/cards/:cardId/comments', restrictAuditToReadOnly, createWorkBoardCardComment);
-router.delete('/boards/:boardId/cards/:cardId/comments/:commentId', restrictAuditToReadOnly, deleteWorkBoardCardComment);
-router.get('/boards/:boardId/members', getWorkBoardMembers);
-router.post('/boards/:boardId/members', restrictAuditToReadOnly, inviteWorkBoardMember);
-router.put('/boards/:boardId/members/:userId', restrictAuditToReadOnly, updateWorkBoardMember);
-router.delete('/boards/:boardId/members/:userId', restrictAuditToReadOnly, removeWorkBoardMember);
+// 작업 보드 (칸반 / 트렐로형) — 메뉴 권한과 동일하게 API에서 강제
+router.get('/boards', requireMenuPermission(MENU_WORK_PROJECTS, 'can_view'), getWorkBoards);
+router.post(
+  '/boards',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_create'),
+  createWorkBoard
+);
+router.get('/boards/:boardId', requireMenuPermission(MENU_WORK_PROJECTS, 'can_view'), getWorkBoardDetail);
+router.put(
+  '/boards/:boardId',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  updateWorkBoard
+);
+router.delete(
+  '/boards/:boardId',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_delete'),
+  deleteWorkBoard
+);
+router.post(
+  '/boards/:boardId/move',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  moveWorkBoard
+);
+router.post(
+  '/boards/:boardId/lists',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_create'),
+  createWorkBoardList
+);
+router.put(
+  '/boards/:boardId/lists/:listId',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  updateWorkBoardList
+);
+router.post(
+  '/boards/:boardId/lists/:listId/move',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  moveWorkBoardList
+);
+router.delete(
+  '/boards/:boardId/lists/:listId',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_delete'),
+  deleteWorkBoardList
+);
+router.post(
+  '/boards/:boardId/lists/:listId/cards',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_create'),
+  createWorkBoardCard
+);
+router.put(
+  '/boards/:boardId/cards/:cardId',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  updateWorkBoardCard
+);
+router.post(
+  '/boards/:boardId/cards/:cardId/move',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  moveWorkBoardCard
+);
+router.delete(
+  '/boards/:boardId/cards/:cardId',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_delete'),
+  deleteWorkBoardCard
+);
+router.get(
+  '/boards/:boardId/cards/:cardId/comments',
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_view'),
+  getWorkBoardCardComments
+);
+router.post(
+  '/boards/:boardId/cards/:cardId/comments',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  createWorkBoardCardComment
+);
+router.delete(
+  '/boards/:boardId/cards/:cardId/comments/:commentId',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  deleteWorkBoardCardComment
+);
+router.get('/boards/:boardId/members', requireMenuPermission(MENU_WORK_PROJECTS, 'can_view'), getWorkBoardMembers);
+router.post(
+  '/boards/:boardId/members',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  inviteWorkBoardMember
+);
+router.put(
+  '/boards/:boardId/members/:userId',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  updateWorkBoardMember
+);
+router.delete(
+  '/boards/:boardId/members/:userId',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_PROJECTS, 'can_edit'),
+  removeWorkBoardMember
+);
 
 // 첨부 파일 업로드 설정
 const uploadPath = process.env.UPLOAD_PATH || './uploads';
@@ -155,59 +255,190 @@ const upload = multer({
 });
 
 // 업무 통계 관련 라우트
-router.get('/statistics', getWorkStatistics);
-router.get('/statistics/:id', getWorkStatistic);
-router.post('/statistics', restrictAuditToReadOnly, createWorkStatistic);
-router.put('/statistics/:id', restrictAuditToReadOnly, updateWorkStatistic);
-router.delete('/statistics/:id', restrictAuditToReadOnly, deleteWorkStatistic);
+router.get('/statistics', requireMenuPermission(MENU_WORK_STATISTICS, 'can_view'), getWorkStatistics);
+router.get('/statistics/:id', requireMenuPermission(MENU_WORK_STATISTICS, 'can_view'), getWorkStatistic);
+router.post(
+  '/statistics',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_STATISTICS, 'can_create'),
+  createWorkStatistic
+);
+router.put(
+  '/statistics/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_STATISTICS, 'can_edit'),
+  updateWorkStatistic
+);
+router.delete(
+  '/statistics/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_STATISTICS, 'can_delete'),
+  deleteWorkStatistic
+);
 
 // 전자 결제 관련 라우트
-router.get('/approvals', getApprovals);
-router.get('/approvals/:id', getApproval);
-router.post('/approvals/upload', restrictAuditToReadOnly, upload.array('files'), (req, res) => {
-  const files = (req.files || []) as Express.Multer.File[];
-  const result = files.map((file) => ({
-    originalName: file.originalname,
-    storedName: file.filename
-  }));
-  res.json({ success: true, data: { files: result } });
-});
-router.post('/approvals', restrictAuditToReadOnly, createApproval);
-router.put('/approvals/:id', restrictAuditToReadOnly, updateApproval);
-router.delete('/approvals/:id', restrictAuditToReadOnly, deleteApproval);
-router.post('/approvals/:id/submit', restrictAuditToReadOnly, submitApproval);
-router.post('/approvals/:id/approve', restrictAuditToReadOnly, approveApproval);
-router.post('/approvals/:id/reject', restrictAuditToReadOnly, rejectApproval);
-router.post('/approvals/:id/escalate', restrictAuditToReadOnly, escalateApproval);
-router.post('/approvals/:id/comments', addComment);
+router.get('/approvals', requireMenuPermission(MENU_WORK_APPROVAL, 'can_view'), getApprovals);
+router.get('/approvals/:id', requireMenuPermission(MENU_WORK_APPROVAL, 'can_view'), getApproval);
+router.post(
+  '/approvals/upload',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_APPROVAL, 'can_edit'),
+  upload.array('files'),
+  (req, res) => {
+    const files = (req.files || []) as Express.Multer.File[];
+    const result = files.map((file) => ({
+      originalName: file.originalname,
+      storedName: file.filename
+    }));
+    res.json({ success: true, data: { files: result } });
+  }
+);
+router.post(
+  '/approvals',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_APPROVAL, 'can_create'),
+  createApproval
+);
+router.put(
+  '/approvals/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_APPROVAL, 'can_edit'),
+  updateApproval
+);
+router.delete(
+  '/approvals/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_APPROVAL, 'can_delete'),
+  deleteApproval
+);
+router.post(
+  '/approvals/:id/submit',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_APPROVAL, 'can_edit'),
+  submitApproval
+);
+router.post(
+  '/approvals/:id/approve',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_APPROVAL, 'can_edit'),
+  approveApproval
+);
+router.post(
+  '/approvals/:id/reject',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_APPROVAL, 'can_edit'),
+  rejectApproval
+);
+router.post(
+  '/approvals/:id/escalate',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_APPROVAL, 'can_edit'),
+  escalateApproval
+);
+router.post(
+  '/approvals/:id/comments',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_APPROVAL, 'can_edit'),
+  addComment
+);
 
 // 회의실 예약 관련 라우트
-router.get('/room-bookings', getRoomBookings);
-router.get('/room-bookings/:id', getRoomBooking);
-router.post('/room-bookings', restrictAuditToReadOnly, createRoomBooking);
-router.put('/room-bookings/:id', restrictAuditToReadOnly, updateRoomBooking);
-router.delete('/room-bookings/:id', restrictAuditToReadOnly, deleteRoomBooking);
-router.post('/room-bookings/:id/confirm', restrictAuditToReadOnly, confirmRoomBooking);
-router.post('/room-bookings/:id/cancel', restrictAuditToReadOnly, cancelRoomBooking);
+router.get('/room-bookings', requireMenuPermissionAny(MENU_ROOM_RESERVATION_ROUTES, 'can_view'), getRoomBookings);
+router.get('/room-bookings/:id', requireMenuPermissionAny(MENU_ROOM_RESERVATION_ROUTES, 'can_view'), getRoomBooking);
+router.post(
+  '/room-bookings',
+  restrictAuditToReadOnly,
+  requireMenuPermissionAny(MENU_ROOM_RESERVATION_ROUTES, 'can_create'),
+  createRoomBooking
+);
+router.put(
+  '/room-bookings/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermissionAny(MENU_ROOM_RESERVATION_ROUTES, 'can_edit'),
+  updateRoomBooking
+);
+router.delete(
+  '/room-bookings/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermissionAny(MENU_ROOM_RESERVATION_ROUTES, 'can_delete'),
+  deleteRoomBooking
+);
+router.post(
+  '/room-bookings/:id/confirm',
+  restrictAuditToReadOnly,
+  requireMenuPermissionAny(MENU_ROOM_RESERVATION_ROUTES, 'can_edit'),
+  confirmRoomBooking
+);
+router.post(
+  '/room-bookings/:id/cancel',
+  restrictAuditToReadOnly,
+  requireMenuPermissionAny(MENU_ROOM_RESERVATION_ROUTES, 'can_edit'),
+  cancelRoomBooking
+);
 
 // 객실 유형 관련 라우트
-router.get('/room-types', getRoomTypes);
-router.post('/room-types', restrictAuditToReadOnly, createRoomType);
-router.put('/room-types/:id', restrictAuditToReadOnly, updateRoomType);
-router.delete('/room-types/:id', restrictAuditToReadOnly, deleteRoomType);
+router.get('/room-types', requireMenuPermissionAny(MENU_ROOM_RESERVATION_ROUTES, 'can_view'), getRoomTypes);
+router.post(
+  '/room-types',
+  restrictAuditToReadOnly,
+  requireMenuPermissionAny(MENU_ROOM_RESERVATION_ROUTES, 'can_create'),
+  createRoomType
+);
+router.put(
+  '/room-types/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermissionAny(MENU_ROOM_RESERVATION_ROUTES, 'can_edit'),
+  updateRoomType
+);
+router.delete(
+  '/room-types/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermissionAny(MENU_ROOM_RESERVATION_ROUTES, 'can_delete'),
+  deleteRoomType
+);
 
 // 객실 호실명 관련 라우트
-router.get('/room-type-rooms', getRoomTypeRooms);
-router.put('/room-type-rooms', restrictAuditToReadOnly, upsertRoomTypeRoom);
+router.get('/room-type-rooms', requireMenuPermissionAny(MENU_ROOM_RESERVATION_ROUTES, 'can_view'), getRoomTypeRooms);
+router.put(
+  '/room-type-rooms',
+  restrictAuditToReadOnly,
+  requireMenuPermissionAny(MENU_ROOM_RESERVATION_ROUTES, 'can_edit'),
+  upsertRoomTypeRoom
+);
 
 // 업무 보고서 관련 라우트
-router.get('/reports', getWorkReports);
-router.get('/reports/:id', getWorkReport);
-router.post('/reports', restrictAuditToReadOnly, createWorkReport);
-router.put('/reports/:id', restrictAuditToReadOnly, updateWorkReport);
-router.delete('/reports/:id', restrictAuditToReadOnly, deleteWorkReport);
-router.post('/reports/:id/submit', restrictAuditToReadOnly, submitWorkReport);
-router.post('/reports/:id/review', restrictAuditToReadOnly, reviewWorkReport);
+router.get('/reports', requireMenuPermission(MENU_WORK_REPORTS, 'can_view'), getWorkReports);
+router.get('/reports/:id', requireMenuPermission(MENU_WORK_REPORTS, 'can_view'), getWorkReport);
+router.post(
+  '/reports',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_REPORTS, 'can_create'),
+  createWorkReport
+);
+router.put(
+  '/reports/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_REPORTS, 'can_edit'),
+  updateWorkReport
+);
+router.delete(
+  '/reports/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_REPORTS, 'can_delete'),
+  deleteWorkReport
+);
+router.post(
+  '/reports/:id/submit',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_REPORTS, 'can_edit'),
+  submitWorkReport
+);
+router.post(
+  '/reports/:id/review',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_REPORTS, 'can_edit'),
+  reviewWorkReport
+);
 
 export default router;
 

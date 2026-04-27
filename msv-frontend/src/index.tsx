@@ -11,11 +11,7 @@ if ('serviceWorker' in navigator) {
   // Unregister all existing service workers
   navigator.serviceWorker.getRegistrations().then((registrations) => {
     for (const registration of registrations) {
-      registration.unregister().then((success) => {
-        if (success) {
-          console.log('Service Worker unregistered');
-        }
-      });
+      registration.unregister();
     }
   });
   

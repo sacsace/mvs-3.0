@@ -451,7 +451,25 @@ const EWayBillManagement: React.FC = () => {
             ) : (
               <TableContainer component={Paper}>
               <Table>
-                <TableHead>
+                <TableHead
+                  sx={{
+                    bgcolor: 'background.paper',
+                    '& .MuiTableCell-head': {
+                      bgcolor: 'background.paper',
+                      color: 'text.primary',
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      textTransform: 'none',
+                      letterSpacing: 'normal',
+                      borderBottom: '2px solid',
+                      borderColor: 'primary.main',
+                      py: 1.25
+                    },
+                    '& .MuiTableCell-head:last-of-type': {
+                      textAlign: 'center'
+                    }
+                  }}
+                >
                   <TableRow>
                     <TableCell>{t('eWayBillManagement.columns.eWayBillNo')}</TableCell>
                     <TableCell>{t('eWayBillManagement.columns.eInvoiceNo')}</TableCell>
@@ -567,7 +585,25 @@ const EWayBillManagement: React.FC = () => {
             </Typography>
             <TableContainer component={Paper}>
               <Table>
-                <TableHead>
+                <TableHead
+                  sx={{
+                    bgcolor: 'background.paper',
+                    '& .MuiTableCell-head': {
+                      bgcolor: 'background.paper',
+                      color: 'text.primary',
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      textTransform: 'none',
+                      letterSpacing: 'normal',
+                      borderBottom: '2px solid',
+                      borderColor: 'primary.main',
+                      py: 1.25
+                    },
+                    '& .MuiTableCell-head:last-of-type': {
+                      textAlign: 'center'
+                    }
+                  }}
+                >
                   <TableRow>
                     <TableCell>{t('eWayBillManagement.fromInvoice.columns.eInvoiceNo')}</TableCell>
                     <TableCell>{t('eWayBillManagement.fromInvoice.columns.customer')}</TableCell>
@@ -947,7 +983,22 @@ const EWayBillManagement: React.FC = () => {
                 <Typography variant="h6" gutterBottom>{t('eWayBillManagement.detail.goodsList')}</Typography>
                 <TableContainer component={Paper}>
                   <Table size="small">
-                    <TableHead>
+                    <TableHead
+                      sx={{
+                        bgcolor: 'background.paper',
+                        '& .MuiTableCell-head': {
+                          bgcolor: 'background.paper',
+                          color: 'text.primary',
+                          fontWeight: 600,
+                          fontSize: '0.875rem',
+                          textTransform: 'none',
+                          letterSpacing: 'normal',
+                          borderBottom: '2px solid',
+                          borderColor: 'primary.main',
+                          py: 1.25
+                        }
+                      }}
+                    >
                       <TableRow>
                         <TableCell>{t('eWayBillManagement.detail.columns.description')}</TableCell>
                         <TableCell align="right">{t('eWayBillManagement.detail.columns.hsnCode')}</TableCell>

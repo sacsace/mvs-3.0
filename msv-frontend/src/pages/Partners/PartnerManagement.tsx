@@ -17,14 +17,15 @@ import {
   Avatar,
   InputAdornment,
   FormControl,
-  InputLabel,
   Select,
   MenuItem,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Tooltip
+  Tooltip,
+  Snackbar,
+  Alert
 } from '@mui/material';
 import {
   Handshake as HandshakeIcon,
@@ -33,7 +34,6 @@ import {
   Add as AddIcon,
   Search as SearchIcon,
   Person as PersonIcon,
-  Phone as PhoneIcon,
   Email as EmailIcon,
   Download as DownloadIcon,
   Upload as UploadIcon,
@@ -44,6 +44,9 @@ import { useTranslation } from 'react-i18next';
 import { partnerService } from '../../services/api';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+
+const PARTNER_MENU_ROUTES = ['/basic-info/partners', '/basic-info'] as const;
 
 interface Partner {
   id: number;
@@ -71,6 +74,7 @@ interface Partner {
 
 const PartnerManagement: React.FC = () => {
   const { t } = useTranslation();
+  const menuFlags = useMenuRoutePermissionFlags(PARTNER_MENU_ROUTES);
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,24 +89,25 @@ const PartnerManagement: React.FC = () => {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
+  const [notify, setNotify] = useState<{
+    message: string;
+    severity: 'error' | 'success' | 'info' | 'warning';
+  } | null>(null);
 
   // 파트너 목록 불러오기
   const loadPartners = useCallback(async () => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) {
+      setPartners([]);
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
-      console.log('🔍 [파트너 관리] 파트너 목록 조회 시작');
-      const response = await partnerService.getPartners();
-      console.log('🔍 [파트너 관리] API 응답:', {
-        success: response.success,
-        dataType: Array.isArray(response.data) ? 'array' : typeof response.data,
-        dataLength: Array.isArray(response.data) ? response.data.length : (response.data ? 1 : 0),
-        fullResponse: response
-      });
-      
+            const response = await partnerService.getPartners();
+            
       if (response && response.success) {
         const partnersData = Array.isArray(response.data) ? response.data : (response.data ? [response.data] : []);
-        console.log('🔍 [파트너 관리] 변환 전 데이터 개수:', partnersData.length);
-        
+                
         // API 응답을 프론트엔드 형식으로 변환
         const formattedPartners: Partner[] = partnersData.map((p: any) => ({
           id: p.id,
@@ -127,13 +132,7 @@ const PartnerManagement: React.FC = () => {
           notes: p.notes || ''
         }));
         
-        console.log('🔍 [파트너 관리] 변환 후 데이터 개수:', formattedPartners.length);
-        console.log('🔍 [파트너 관리] 파트너 데이터 샘플:', formattedPartners.slice(0, 3).map((p: Partner) => ({
-          id: p.id,
-          companyName: p.companyName,
-          email: p.email
-        })));
-        setPartners(formattedPartners);
+                        setPartners(formattedPartners);
       } else {
         console.error('❌ [파트너 관리] API 응답 실패:', response);
         setPartners([]);
@@ -148,12 +147,11 @@ const PartnerManagement: React.FC = () => {
       setPartners([]);
     } finally {
       setLoading(false);
-      console.log('🔍 [파트너 관리] 로딩 완료');
-    }
-  }, []);
+          }
+  }, [menuFlags.menusLoading, menuFlags.canRead]);
 
   useEffect(() => {
-    loadPartners();
+    void loadPartners();
   }, [loadPartners]);
   const [formData, setFormData] = useState<Omit<Partner, 'id'>>({
     companyName: '',
@@ -234,7 +232,7 @@ const PartnerManagement: React.FC = () => {
     // GST 번호 검증: 최소 1개 이상, 빈 값 제거
     const validGstNumbers = formData.gstNumbers.filter(gst => gst.trim() !== '');
     if (validGstNumbers.length === 0) {
-      alert(t('partnerManagement.gstMinOneRequired'));
+      setNotify({ message: t('partnerManagement.gstMinOneRequired'), severity: 'warning' });
       return;
     }
     
@@ -257,7 +255,7 @@ const PartnerManagement: React.FC = () => {
     } catch (error: any) {
       console.error('파트너 저장 오류:', error);
       const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || t('partnerManagement.saveError');
-      alert(errorMessage);
+      setNotify({ message: errorMessage, severity: 'error' });
     }
   };
 
@@ -269,7 +267,7 @@ const PartnerManagement: React.FC = () => {
 
   const handleAddGstNumber = () => {
     if (formData.gstNumbers.length >= 10) {
-      alert(t('partnerManagement.gstMaxTen'));
+      setNotify({ message: t('partnerManagement.gstMaxTen'), severity: 'warning' });
       return;
     }
     setFormData({ ...formData, gstNumbers: [...formData.gstNumbers, ''] });
@@ -277,7 +275,7 @@ const PartnerManagement: React.FC = () => {
 
   const handleRemoveGstNumber = (index: number) => {
     if (formData.gstNumbers.length <= 1) {
-      alert(t('partnerManagement.gstMinOneNeeded'));
+      setNotify({ message: t('partnerManagement.gstMinOneNeeded'), severity: 'warning' });
       return;
     }
     const newGstNumbers = formData.gstNumbers.filter((_, i) => i !== index);
@@ -293,7 +291,10 @@ const PartnerManagement: React.FC = () => {
           // 목록 다시 불러오기
           loadPartners();
         } catch (error: any) {
-          alert(error.response?.data?.message || t('partnerManagement.deleteError'));
+          setNotify({
+            message: error.response?.data?.message || t('partnerManagement.deleteError'),
+            severity: 'error'
+          });
         }
       },
       { confirmColor: 'error' }
@@ -305,7 +306,7 @@ const PartnerManagement: React.FC = () => {
     try {
       await partnerService.downloadExcelSample();
     } catch (error: any) {
-      alert(t('partnerManagement.excelSampleDownloadError'));
+      setNotify({ message: t('partnerManagement.excelSampleDownloadError'), severity: 'error' });
       console.error('Excel sample download error:', error);
     }
   };
@@ -315,7 +316,7 @@ const PartnerManagement: React.FC = () => {
     try {
       await partnerService.exportExcel();
     } catch (error: any) {
-      alert(t('partnerManagement.excelExportError'));
+      setNotify({ message: t('partnerManagement.excelExportError'), severity: 'error' });
       console.error('Excel export error:', error);
     }
   };
@@ -331,7 +332,7 @@ const PartnerManagement: React.FC = () => {
   // Excel 파일 가져오기
   const handleImportExcel = async () => {
     if (!importFile) {
-      alert(t('partnerManagement.selectExcelFilePlease'));
+      setNotify({ message: t('partnerManagement.selectExcelFilePlease'), severity: 'warning' });
       return;
     }
 
@@ -346,7 +347,7 @@ const PartnerManagement: React.FC = () => {
         const { success, failed, total } = result.data;
         const msg = t('partnerManagement.importSuccessMessage', { total, success: success.length })
           + (failed.length > 0 ? '\n' + t('partnerManagement.importFailedPart', { count: failed.length }) : '');
-        alert(msg);
+        setNotify({ message: msg, severity: failed.length > 0 ? 'warning' : 'success' });
         
         // 성공한 경우 목록 새로고침
         if (success.length > 0) {
@@ -359,7 +360,10 @@ const PartnerManagement: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Excel import error:', error);
-      alert(error.response?.data?.message || t('partnerManagement.importError'));
+      setNotify({
+        message: error.response?.data?.message || t('partnerManagement.importError'),
+        severity: 'error'
+      });
     } finally {
       setImportLoading(false);
     }
@@ -427,7 +431,7 @@ const PartnerManagement: React.FC = () => {
             <Typography component="h1" sx={{ 
               fontSize: '16px !important',
               fontWeight: 600,
-              color: 'red',
+              color: 'text.primary',
               lineHeight: 1.5
             }}>
               {t('partnerManagement.pageTitle')}
@@ -437,41 +441,67 @@ const PartnerManagement: React.FC = () => {
             {t('partnerManagement.description')}
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={handleDownloadSample}
-            sx={{ borderRadius: 2 }}
-          >
-            {t('partnerManagement.excelSampleDownload')}
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<FileDownloadIcon />}
-            onClick={handleExportExcel}
-            sx={{ borderRadius: 2 }}
-          >
-            {t('partnerManagement.excelExport')}
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<UploadIcon />}
-            onClick={() => setImportDialogOpen(true)}
-            sx={{ borderRadius: 2 }}
-          >
-            {t('partnerManagement.excelImport')}
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleAdd}
-            sx={{ borderRadius: 2 }}
-          >
-            {t('partnerManagement.addPartner')}
-          </Button>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
+            <span style={{ display: 'inline-flex' }}>
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                onClick={handleDownloadSample}
+                sx={{ borderRadius: 2 }}
+              >
+                {t('partnerManagement.excelSampleDownload')}
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
+            <span style={{ display: 'inline-flex' }}>
+              <Button
+                variant="outlined"
+                startIcon={<FileDownloadIcon />}
+                disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                onClick={handleExportExcel}
+                sx={{ borderRadius: 2 }}
+              >
+                {t('partnerManagement.excelExport')}
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canMutate}>
+            <span style={{ display: 'inline-flex' }}>
+              <Button
+                variant="outlined"
+                startIcon={<UploadIcon />}
+                disabled={menuFlags.menusLoading || !menuFlags.canMutate}
+                onClick={() => setImportDialogOpen(true)}
+                sx={{ borderRadius: 2 }}
+              >
+                {t('partnerManagement.excelImport')}
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
+            <span style={{ display: 'inline-flex' }}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                disabled={menuFlags.menusLoading || !menuFlags.canCreate}
+                onClick={handleAdd}
+                sx={{ borderRadius: 2 }}
+              >
+                {t('partnerManagement.addPartner')}
+              </Button>
+            </span>
+          </Tooltip>
         </Box>
       </Box>
+
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
 
       {/* 검색 및 필터 */}
       <Card sx={{ mb: 3 }}>
@@ -487,6 +517,7 @@ const PartnerManagement: React.FC = () => {
               placeholder={t('partnerManagement.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -503,7 +534,7 @@ const PartnerManagement: React.FC = () => {
               <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary', fontWeight: 500 }}>
                 {t('partnerManagement.status')}
               </Typography>
-              <FormControl sx={{ minWidth: { xs: '100%', sm: 120 }, width: { xs: '100%', sm: 'auto' } }}>
+              <FormControl sx={{ minWidth: { xs: '100%', sm: 120 }, width: { xs: '100%', sm: 'auto' } }} disabled={menuFlags.menusLoading || !menuFlags.canRead}>
                 <Select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
@@ -521,8 +552,8 @@ const PartnerManagement: React.FC = () => {
               <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary', fontWeight: 500 }}>
                 {t('partnerManagement.companyType')}
               </Typography>
-              <FormControl sx={{ minWidth: { xs: '100%', sm: 120 }, width: { xs: '100%', sm: 'auto' } }}>
-                  <Select
+              <FormControl sx={{ minWidth: { xs: '100%', sm: 120 }, width: { xs: '100%', sm: 'auto' } }} disabled={menuFlags.menusLoading || !menuFlags.canRead}>
+                <Select
                     value={typeFilter}
                     onChange={(e) => setTypeFilter(e.target.value)}
                     displayEmpty
@@ -543,18 +574,38 @@ const PartnerManagement: React.FC = () => {
       {/* 파트너 목록 테이블 - 데이터가 있을 때만 표시 */}
       {!loading && filteredPartners.length > 0 && (
         <Card>
-          <TableContainer>
-            <Table>
+          <TableContainer
+            sx={{
+              borderTopLeftRadius: 8,
+              borderTopRightRadius: 8,
+              overflow: 'hidden'
+            }}
+          >
+            <Table sx={{ borderCollapse: 'collapse' }}>
               <TableHead>
-                <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                  <TableCell sx={{ fontWeight: 'bold' }}>{t('partnerManagement.companyInfo')}</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>{t('partnerManagement.representative')}</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>{t('partnerManagement.companyType')}</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>{t('partnerManagement.industry')}</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>{t('partnerManagement.contact')}</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>{t('partnerManagement.contractPeriod')}</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold' }}>{t('partnerManagement.status')}</TableCell>
-                  <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>{t('partnerManagement.actions')}</TableCell>
+                <TableRow
+                  sx={{
+                    '& .MuiTableCell-head': {
+                      backgroundColor: '#F5F6F8',
+                      color: '#64748B',
+                      fontWeight: 700,
+                      fontSize: '0.8125rem',
+                      py: 1.25,
+                      borderBottom: '1px solid #E2E8F0',
+                      borderRight: 'none',
+                      borderLeft: 'none',
+                      borderTop: 'none'
+                    }
+                  }}
+                >
+                  <TableCell>{t('partnerManagement.companyInfo')}</TableCell>
+                  <TableCell>{t('partnerManagement.representative')}</TableCell>
+                  <TableCell>{t('partnerManagement.companyType')}</TableCell>
+                  <TableCell>{t('partnerManagement.industry')}</TableCell>
+                  <TableCell>{t('partnerManagement.contact')}</TableCell>
+                  <TableCell>{t('partnerManagement.contractPeriod')}</TableCell>
+                  <TableCell>{t('partnerManagement.status')}</TableCell>
+                  <TableCell sx={{ textAlign: 'center' }}>{t('partnerManagement.actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -569,9 +620,12 @@ const PartnerManagement: React.FC = () => {
                             : t('partnerManagement.noPartners')}
                         </Typography>
                         {!searchTerm && statusFilter === 'all' && typeFilter === 'all' && (
+                          <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
+                            <span style={{ display: 'inline-flex' }}>
                           <Button
                             variant="outlined"
                             startIcon={<AddIcon />}
+                            disabled={menuFlags.menusLoading || !menuFlags.canCreate}
                             onClick={() => {
                               setDialogMode('add');
                               setSelectedPartner(null);
@@ -601,6 +655,8 @@ const PartnerManagement: React.FC = () => {
                           >
                             {t('partnerManagement.firstPartnerAdd')}
                           </Button>
+                            </span>
+                          </Tooltip>
                         )}
                       </Box>
                     </TableCell>
@@ -610,11 +666,13 @@ const PartnerManagement: React.FC = () => {
                   <TableRow 
                     key={partner.id} 
                     hover
-                    onClick={() => handleView(partner)}
+                    onClick={() => {
+                      if (!menuFlags.menusLoading && menuFlags.canRead) handleView(partner);
+                    }}
                     sx={{ 
-                      cursor: 'pointer',
+                      cursor: menuFlags.menusLoading || !menuFlags.canRead ? 'default' : 'pointer',
                       '&:hover': {
-                        backgroundColor: '#f5f5f5'
+                        backgroundColor: menuFlags.menusLoading || !menuFlags.canRead ? undefined : '#f5f5f5'
                       }
                     }}
                   >
@@ -652,15 +710,9 @@ const PartnerManagement: React.FC = () => {
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <PhoneIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary' }} />
-                          <Typography variant="body2">{partner.phone}</Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <EmailIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary' }} />
-                          <Typography variant="body2">{partner.email}</Typography>
-                        </Box>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <EmailIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary' }} />
+                        <Typography variant="body2">{partner.email || '-'}</Typography>
                       </Box>
                     </TableCell>
                     <TableCell>
@@ -673,10 +725,17 @@ const PartnerManagement: React.FC = () => {
                     </TableCell>
                     <TableCell align="center" onClick={(e) => e.stopPropagation()}>
                       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                        <Tooltip title={t('partnerManagement.delete')}>
-                          <IconButton size="small" onClick={() => handleDelete(partner.id)} color="error">
-                            <DeleteIcon />
-                          </IconButton>
+                        <Tooltip title={menuFlags.menusLoading || !menuFlags.canDelete ? t('common.menuNoDelete') : t('partnerManagement.delete')}>
+                          <span style={{ display: 'inline-flex' }}>
+                            <IconButton
+                              size="small"
+                              disabled={menuFlags.menusLoading || !menuFlags.canDelete}
+                              onClick={() => handleDelete(partner.id)}
+                              color="error"
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          </span>
                         </Tooltip>
                       </Box>
                     </TableCell>
@@ -994,20 +1053,48 @@ const PartnerManagement: React.FC = () => {
           {dialogMode === 'view' ? (
             <>
               <Button onClick={() => setOpenDialog(false)}>{t('partnerManagement.close')}</Button>
-              <Button 
-                onClick={() => {
-                  setDialogMode('edit');
-                }} 
-                variant="contained"
-                startIcon={<EditIcon />}
-              >
-                {t('partnerManagement.edit')}
-              </Button>
+              <Tooltip title={t('common.menuNoEdit')} disableHoverListener={menuFlags.menusLoading || menuFlags.canEdit}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button 
+                    onClick={() => {
+                      setDialogMode('edit');
+                    }} 
+                    variant="contained"
+                    startIcon={<EditIcon />}
+                    disabled={menuFlags.menusLoading || !menuFlags.canEdit}
+                  >
+                    {t('partnerManagement.edit')}
+                  </Button>
+                </span>
+              </Tooltip>
             </>
           ) : (
             <>
               <Button onClick={() => setOpenDialog(false)}>{t('partnerManagement.cancel')}</Button>
-              <Button onClick={handleSave} variant="contained">{t('partnerManagement.save')}</Button>
+              <Tooltip
+                title={
+                  dialogMode === 'add'
+                    ? t('common.menuNoCreate')
+                    : t('common.menuNoEdit')
+                }
+                disableHoverListener={
+                  menuFlags.menusLoading ||
+                  (dialogMode === 'add' ? menuFlags.canCreate : menuFlags.canEdit)
+                }
+              >
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    onClick={handleSave}
+                    variant="contained"
+                    disabled={
+                      menuFlags.menusLoading ||
+                      (dialogMode === 'add' ? !menuFlags.canCreate : !menuFlags.canEdit)
+                    }
+                  >
+                    {t('partnerManagement.save')}
+                  </Button>
+                </span>
+              </Tooltip>
             </>
           )}
         </DialogActions>
@@ -1091,12 +1178,28 @@ const PartnerManagement: React.FC = () => {
           <Button 
             onClick={handleImportExcel} 
             variant="contained" 
-            disabled={!importFile || importLoading}
+            disabled={menuFlags.menusLoading || !menuFlags.canMutate || !importFile || importLoading}
           >
             {importLoading ? t('partnerManagement.importLoading') : t('partnerManagement.importButton')}
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={notify !== null}
+        autoHideDuration={8000}
+        onClose={() => setNotify(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setNotify(null)}
+          severity={notify?.severity ?? 'error'}
+          variant="filled"
+          sx={{ width: '100%', maxWidth: 560, whiteSpace: 'pre-line' }}
+        >
+          {notify?.message}
+        </Alert>
+      </Snackbar>
 
       {/* 확인 다이얼로그 */}
       <ConfirmDialog

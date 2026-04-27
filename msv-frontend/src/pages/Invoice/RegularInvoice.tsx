@@ -30,8 +30,16 @@ import {
   InputAdornment,
   Grid,
   Divider,
-  Stack
+  Stack,
+  Tabs,
+  Tab,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress
 } from '@mui/material';
+import type { SelectChangeEvent } from '@mui/material/Select';
 import {
   Receipt as ReceiptIcon,
   Add as AddIcon,
@@ -43,12 +51,13 @@ import {
   Send as SendIcon,
   Download as DownloadIcon,
   Search as SearchIcon,
-  FilterList as FilterIcon
+  FilterList as FilterIcon,
+  ThumbUp as ThumbUpIcon,
+  ThumbDown as ThumbDownIcon
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../../store';
-import { accountingService, partnerService, companyService } from '../../services/api';
-import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import { accountingService, partnerService, companyService, userService } from '../../services/api';
 
 interface InvoiceItem {
   id?: number;
@@ -79,6 +88,72 @@ interface Invoice {
   currency: string;
   notes?: string;
   items: InvoiceItem[];
+  approval_status?: string | null;
+  approver_user_id?: number | null;
+  created_by?: number | null;
+}
+
+/** 일반 세금계산서 메일 제목용 회사 약자 — 예: Minsub Ventures → MSV */
+function buildInvoiceEmailCompanyAbbr(companyName: string): string {
+  const n = (companyName || '').trim();
+  const lower = n.toLowerCase();
+  if (lower.includes('minsub') && lower.includes('venture')) return 'MSV';
+  const cleaned = n.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  if (!cleaned) return 'CMP';
+  return cleaned.slice(0, 3).padEnd(3, 'X');
+}
+
+/** 메일 제목용 고객사명 — 제목만 짧게: Private Limited / Pvt. Ltd. 등 법인 접미사 제거 */
+function stripLegalSuffixForInvoiceEmailSubject(raw: string): string {
+  let s = raw.replace(/\r|\n|\[|\]/g, ' ').replace(/\s+/g, ' ').trim();
+  s = s.replace(/\bprivate\s+limited\b/gi, ' ');
+  s = s.replace(/\bpvt\.?\s*ltd\.?\b/gi, ' ');
+  s = s.replace(/\s+/g, ' ').replace(/^\s*,\s*|\s*,\s*$/g, '').trim();
+  return s || 'Customer';
+}
+
+function buildInvoiceLineSummaryForEmail(items: InvoiceItem[], maxLines = 2): string {
+  if (!items?.length) return 'No line items.';
+  const parts = items.slice(0, maxLines).map((it) => {
+    const name = (it.item_name || it.description || 'Item').trim();
+    return name.length > 100 ? `${name.slice(0, 97)}...` : name;
+  });
+  const more = items.length > maxLines ? ` (+${items.length - maxLines} more)` : '';
+  return parts.join('; ') + more;
+}
+
+function buildRegularInvoiceEmailEnglish(params: {
+  abbr: string;
+  customerName: string;
+  invoiceNumber: string;
+  issuerLegalName: string;
+  totalAmount: number;
+  currency: string;
+  summary: string;
+}): { subject: string; message: string } {
+  const customerForSubject = stripLegalSuffixForInvoiceEmailSubject(
+    params.customerName.replace(/\r|\n|\[|\]/g, ' ').replace(/\s+/g, ' ').trim() || 'Customer'
+  );
+  const subject = `[${params.abbr}] Tax Invoice attached (${customerForSubject.slice(0, 200)})`;
+  const amt = Number(params.totalAmount) || 0;
+  const cur = (params.currency || 'INR').trim() || 'INR';
+  const totalStr = amt.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const message = `Hello,
+
+Please find attached our tax invoice in PDF format for your records.
+
+Invoice number: ${params.invoiceNumber}
+Total amount: ${cur} ${totalStr}
+Summary: ${params.summary}
+
+Thank you for your business.
+
+Kind regards,
+${params.issuerLegalName || 'Accounts'}
+
+---
+This message was sent automatically from the MSV system.`;
+  return { subject, message };
 }
 
 interface CompanyInfo {
@@ -108,7 +183,10 @@ const RegularInvoice: React.FC = () => {
   const isEnglish = i18n.language === 'en';
   const allowedGstRates = [0, 2.5, 6, 9, 20];
   const allowedIgstRates = [0, 5, 12, 18, 40];
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [allInvoices, setAllInvoices] = useState<Invoice[]>([]);
+  const [listSubTab, setListSubTab] = useState<'requested' | 'pending'>('requested');
+  const [companyUsers, setCompanyUsers] = useState<Array<{ id: number; username: string; email: string }>>([]);
+  const [approverUserId, setApproverUserId] = useState<number | ''>('');
   const [loading, setLoading] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -169,10 +247,18 @@ const RegularInvoice: React.FC = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
-  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: number | null; invoiceNumber?: string }>({
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    id: number | null;
+    invoiceNumber?: string;
+    approverUserId: number | '';
+    memo: string;
+  }>({
     open: false,
     id: null,
-    invoiceNumber: ''
+    invoiceNumber: '',
+    approverUserId: '',
+    memo: ''
   });
   const itemNameRefs = useRef<Array<HTMLInputElement | null>>([]);
   const descriptionRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -319,23 +405,9 @@ const RegularInvoice: React.FC = () => {
     });
   }, [selectedInvoice?.items, uniformGstRate]);
 
-  const summaryGridColumns = useMemo(() => {
-    if (hasGstInItems) {
-      return hasIgstInItems
-        ? '6% 50% 10% 6% 10% 6% 6% 6% 10%'
-        : '6% 50% 10% 6% 10% 6% 6% 10%';
-    }
-    return '6% 50% 10% 6% 10% 10%';
-  }, [hasGstInItems, hasIgstInItems]);
-
   const summaryAmountColumn = useMemo(
     () => (hasGstInItems ? (hasIgstInItems ? 9 : 8) : 6),
     [hasGstInItems, hasIgstInItems]
-  );
-
-  const summaryLabelColumn = useMemo(
-    () => summaryAmountColumn - 1,
-    [summaryAmountColumn]
   );
 
   const summaryColumnSx = useMemo(() => {
@@ -355,50 +427,6 @@ const RegularInvoice: React.FC = () => {
     columns.push({ width: '10%' });
     return columns;
   }, [hasGstInItems, hasIgstInItems]);
-
-  const numberToWordsInr = useCallback((value: number): string => {
-    const num = Math.round(Math.abs(value));
-    if (num === 0) return 'Zero';
-
-    const ones = [
-      '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine',
-      'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen',
-      'Seventeen', 'Eighteen', 'Nineteen'
-    ];
-    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-
-    const twoDigits = (n: number) => {
-      if (n < 20) return ones[n];
-      const t = Math.floor(n / 10);
-      const o = n % 10;
-      return `${tens[t]}${o ? ' ' + ones[o] : ''}`.trim();
-    };
-
-    const threeDigits = (n: number) => {
-      const h = Math.floor(n / 100);
-      const r = n % 100;
-      const head = h ? `${ones[h]} Hundred` : '';
-      const tail = r ? `${head ? ' ' : ''}${twoDigits(r)}` : head;
-      return tail.trim();
-    };
-
-    const parts: string[] = [];
-    const crore = Math.floor(num / 10000000);
-    const lakh = Math.floor((num % 10000000) / 100000);
-    const thousand = Math.floor((num % 100000) / 1000);
-    const hundred = num % 1000;
-
-    if (crore) parts.push(`${threeDigits(crore)} Crore`);
-    if (lakh) parts.push(`${threeDigits(lakh)} Lakh`);
-    if (thousand) parts.push(`${threeDigits(thousand)} Thousand`);
-    if (hundred) parts.push(threeDigits(hundred));
-
-    return parts.join(' ').trim();
-  }, []);
-
-  const formatInrWords = useCallback((amount: number) => {
-    return `INR ${numberToWordsInr(amount)} Only`;
-  }, [numberToWordsInr]);
 
   const normalizeGstNumbers = useCallback((value: any): string[] => {
     if (!value) return [];
@@ -509,6 +537,32 @@ const RegularInvoice: React.FC = () => {
     }));
   }, [formData.taxMode, formData.overallCgstRate, formData.overallSgstRate, formData.overallIgstRate, updateItemTaxAmount]);
 
+  useEffect(() => {
+    const loadUsers = async () => {
+      if (!user?.company_id) {
+        setCompanyUsers([]);
+        return;
+      }
+      try {
+        const res = await userService.getUsers({ company_id: Number(user.company_id) });
+        if (res?.success && Array.isArray(res.data)) {
+          setCompanyUsers(
+            res.data
+              .filter((u: { status?: string }) => u.status === 'active')
+              .map((u: { id: number; username?: string; userid?: string; email?: string }) => ({
+                id: u.id,
+                username: u.username || u.userid || '',
+                email: u.email || ''
+              }))
+          );
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    void loadUsers();
+  }, [user?.company_id]);
+
   const loadCompanies = useCallback(async () => {
     try {
       // ??? ?? ? ???? ??
@@ -576,21 +630,56 @@ const RegularInvoice: React.FC = () => {
         status: inv.status || 'draft',
         payment_status: inv.payment_status || 'pending',
         currency: 'INR',
-        items: []
+        items: [],
+        approval_status: inv.approval_status ?? null,
+        approver_user_id: inv.approver_user_id != null ? Number(inv.approver_user_id) : null,
+        created_by: inv.created_by != null ? Number(inv.created_by) : null,
+        notes: inv.notes ?? ''
       }));
-      const filteredInvoices = applyFilters(list);
-      setInvoices(filteredInvoices);
-      setTotalPages(Math.ceil(filteredInvoices.length / 10));
+      setAllInvoices(list);
     } catch (error) {
-      showSnackbar(tr('인보이스 목록을 불러오지 못했습니다.', 'Failed to load invoices.'), 'error');
+      setSnackbar({
+        open: true,
+        message: tr('인보이스 목록을 불러오지 못했습니다.', 'Failed to load invoices.'),
+        severity: 'error'
+      });
     } finally {
       setLoading(false);
     }
-  }, [applyFilters]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 마운트 시 1회 로드; tr 변경마다 재요청 불필요
+  }, []);
+
+  const filteredInvoices = useMemo(() => applyFilters(allInvoices), [allInvoices, applyFilters]);
+
+  const displayInvoices = useMemo(() => {
+    const uid = Number(user?.id);
+    return filteredInvoices.filter((inv) => {
+      if (listSubTab === 'pending') {
+        return inv.approval_status === 'pending_approval' && Number(inv.approver_user_id) === uid;
+      }
+      if (inv.created_by == null || Number.isNaN(Number(inv.created_by))) {
+        return true;
+      }
+      return Number(inv.created_by) === uid;
+    });
+  }, [filteredInvoices, listSubTab, user?.id]);
+
+  const pagedInvoices = useMemo(() => {
+    const perPage = 10;
+    return displayInvoices.slice((page - 1) * perPage, page * perPage);
+  }, [displayInvoices, page]);
 
   useEffect(() => {
-    loadInvoices();
-  }, [loadInvoices, page, filters]);
+    setTotalPages(Math.max(1, Math.ceil(displayInvoices.length / 10)));
+  }, [displayInvoices.length]);
+
+  useEffect(() => {
+    void loadInvoices();
+  }, [loadInvoices]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filters.payment_status, filters.search, listSubTab]);
 
   useEffect(() => {
     loadCompanies();
@@ -598,6 +687,12 @@ const RegularInvoice: React.FC = () => {
 
   const showSnackbar = (message: string, severity: 'success' | 'error') => {
     setSnackbar({ open: true, message, severity });
+  };
+
+  const isRegularInvoiceExportAllowed = (inv: Invoice | null) => {
+    if (!inv) return false;
+    const s = inv.approval_status;
+    return s == null || s === '' || s === 'approved';
   };
 
   const handleCreateInvoice = () => {
@@ -623,6 +718,7 @@ const RegularInvoice: React.FC = () => {
       overallIgstRate: 0,
       items: [createEmptyItem()]
     });
+    setApproverUserId('');
     setIsCreating(true);
   };
 
@@ -671,9 +767,11 @@ const RegularInvoice: React.FC = () => {
     const marginBottom = 6;
     const contentWidth = pdfWidth - marginLeft - marginRight;
     const contentHeight = pdfHeight - marginTop - marginBottom;
+    /** PNG 무손실 + scale 2 는 A4 한 장이 수~십 MB로 불어남 → 메일 5MB 한도 초과. JPEG·적정 해상도로 압축 */
     const canvas = await html2canvas(target, {
-      scale: 2,
+      scale: 1.5,
       useCORS: true,
+      logging: false,
       onclone: (clonedDoc: Document) => {
         // 실제 화면은 건드리지 않고, 복제 DOM에서만 출력용 스타일 적용
         const style = clonedDoc.createElement('style');
@@ -699,7 +797,8 @@ const RegularInvoice: React.FC = () => {
         clonedDoc.head.appendChild(style);
       }
     });
-    const imgData = canvas.toDataURL('image/png');
+    const JPEG_QUALITY = 0.88;
+    const imgData = canvas.toDataURL('image/jpeg', JPEG_QUALITY);
     const imgProps = pdf.getImageProperties(imgData);
     const widthRatio = contentWidth / imgProps.width;
     const heightRatio = contentHeight / imgProps.height;
@@ -708,12 +807,19 @@ const RegularInvoice: React.FC = () => {
     const renderHeight = imgProps.height * ratio;
     const offsetX = marginLeft;
     const offsetY = marginTop;
-    // 단일 페이지 강제 렌더링
-    pdf.addImage(imgData, 'PNG', offsetX, offsetY, renderWidth, renderHeight);
+    // 단일 페이지 강제 렌더링 (JPEG로 PDF 용량 절감)
+    pdf.addImage(imgData, 'JPEG', offsetX, offsetY, renderWidth, renderHeight);
     return pdf;
   };
 
   const handlePrintInvoice = async () => {
+    if (!isRegularInvoiceExportAllowed(selectedInvoice)) {
+      showSnackbar(
+        tr('승인 완료 후에만 인쇄할 수 있습니다.', 'Printing is only available after approval.'),
+        'error'
+      );
+      return;
+    }
     try {
       const pdf = await generateInvoicePdf(1);
       const blob = pdf.output('blob');
@@ -746,6 +852,13 @@ const RegularInvoice: React.FC = () => {
 
   const handleDownloadPdf = async () => {
     if (!selectedInvoice) return;
+    if (!isRegularInvoiceExportAllowed(selectedInvoice)) {
+      showSnackbar(
+        tr('승인 완료 후에만 PDF를 저장할 수 있습니다.', 'PDF download is only available after approval.'),
+        'error'
+      );
+      return;
+    }
     try {
       const pdf = await generateInvoicePdf();
       pdf.save(`${selectedInvoice.invoice_number}.pdf`);
@@ -755,36 +868,62 @@ const RegularInvoice: React.FC = () => {
     }
   };
 
-  const blobToBase64 = (blob: Blob) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(String(reader.result || ''));
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-
   const handleSendEmail = async () => {
     if (!selectedInvoice) return;
-    if (!selectedInvoice.customer_email) {
+    if (!isRegularInvoiceExportAllowed(selectedInvoice)) {
+      showSnackbar(
+        tr('승인 완료 후에만 이메일을 보낼 수 있습니다.', 'Email sending is only available after approval.'),
+        'error'
+      );
+      return;
+    }
+    const toEmail = (selectedInvoice.customer_email || viewCustomer.email || '').trim();
+    if (!toEmail) {
       showSnackbar(tr('고객 이메일이 없습니다.', 'Customer email is missing.'), 'error');
       return;
     }
     try {
-      const pdf = await generateInvoicePdf();
-      const blob = pdf.output('blob');
-      const base64 = await blobToBase64(blob);
-      const pdfBase64 = base64.includes(',') ? base64.split(',')[1] : base64;
-      await accountingService.sendInvoiceEmail(selectedInvoice.id, {
-        to: selectedInvoice.customer_email,
-        subject: `Invoice ${selectedInvoice.invoice_number}`,
-        message: `Please find attached the PDF for Invoice ${selectedInvoice.invoice_number}.`,
-        pdf_base64: pdfBase64,
-        filename: `${selectedInvoice.invoice_number}.pdf`
+      const abbr = buildInvoiceEmailCompanyAbbr(issuerCompany?.name || '');
+      const customerName = (selectedInvoice.customer_name || viewCustomer.name || '').trim();
+      const summary = buildInvoiceLineSummaryForEmail(selectedInvoice.items || []);
+      const { subject: emailSubject, message: emailBody } = buildRegularInvoiceEmailEnglish({
+        abbr,
+        customerName,
+        invoiceNumber: selectedInvoice.invoice_number,
+        issuerLegalName: (issuerCompany?.name || '').trim(),
+        totalAmount: selectedInvoice.total_amount,
+        currency: selectedInvoice.currency || 'INR',
+        summary
       });
+      const res = await accountingService.sendInvoiceEmail(selectedInvoice.id, {
+        to: toEmail,
+        subject: emailSubject,
+        message: emailBody,
+        filename: `${selectedInvoice.invoice_number.replace(/[^\w.\-]+/g, '_')}.pdf`
+      });
+      if (res?.success === false && res?.message) {
+        showSnackbar(res.message, 'error');
+        return;
+      }
       showSnackbar(tr('이메일을 전송했습니다.', 'Email sent.'), 'success');
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Email send failed:', error);
-      showSnackbar(tr('이메일 전송에 실패했습니다.', 'Failed to send email.'), 'error');
+      const err = error as {
+        code?: string;
+        message?: string;
+        response?: { data?: { message?: string } };
+      };
+      const isTimeout =
+        err.code === 'ECONNABORTED' ||
+        (typeof err.message === 'string' && err.message.toLowerCase().includes('timeout'));
+      const msg = isTimeout
+        ? tr(
+            '메일 전송이 시간 내에 완료되지 않았습니다. 네트워크·메일 서버를 확인한 뒤 다시 시도해주세요.',
+            'The email request timed out. Check your network and mail server, then try again.'
+          )
+        : err.response?.data?.message ||
+          tr('이메일 전송에 실패했습니다.', 'Failed to send email.');
+      showSnackbar(msg, 'error');
     }
   };
 
@@ -881,6 +1020,10 @@ const RegularInvoice: React.FC = () => {
         total_amount: Number(inv.total_amount || invoice.total_amount),
         tax_amount: Number(inv.tax_amount || invoice.tax_amount),
         sub_total: Number(inv.subtotal || invoice.sub_total),
+        approval_status: inv.approval_status ?? invoice.approval_status ?? null,
+        approver_user_id:
+          inv.approver_user_id != null ? Number(inv.approver_user_id) : invoice.approver_user_id ?? null,
+        created_by: inv.created_by != null ? Number(inv.created_by) : invoice.created_by ?? null,
         items: derivedItems
       });
 
@@ -923,6 +1066,10 @@ const RegularInvoice: React.FC = () => {
     }
     if (!formData.customer_gst) {
       showSnackbar(tr('GSTIN이 없는 고객은 인보이스를 등록할 수 없습니다.', 'Customers without GSTIN cannot register invoices.'), 'error');
+      return;
+    }
+    if (!isEditing && approverUserId === '') {
+      showSnackbar(tr('승인자를 선택해주세요.', 'Please select an approver.'), 'error');
       return;
     }
 
@@ -1020,7 +1167,10 @@ const RegularInvoice: React.FC = () => {
       if (isEditing && selectedInvoice) {
         await accountingService.updateInvoice(selectedInvoice.id, payload);
       } else {
-        await accountingService.createInvoice(payload);
+        await accountingService.createInvoice({
+          ...payload,
+          approver_user_id: Number(approverUserId)
+        });
       }
 
       showSnackbar(tr('인보이스가 저장되었습니다.', 'Invoice saved.'), 'success');
@@ -1043,6 +1193,7 @@ const RegularInvoice: React.FC = () => {
     setIsEditing(false);
     setIsViewing(false);
     setSelectedInvoice(null);
+    setApproverUserId('');
     setRecipientCompanyId('');
     setFormData({
       customer_name: '',
@@ -1067,12 +1218,25 @@ const RegularInvoice: React.FC = () => {
       showSnackbar(tr('정산 완료된 인보이스는 삭제 요청할 수 없습니다.', 'Paid invoices cannot be requested for deletion.'), 'error');
       return;
     }
-    setDeleteDialog({ open: true, id, invoiceNumber: invoiceNumber || '' });
+    setDeleteDialog({
+      open: true,
+      id,
+      invoiceNumber: invoiceNumber || '',
+      approverUserId: '',
+      memo: ''
+    });
   };
 
   const settleInvoice = async (targetInvoice: Invoice) => {
     if (targetInvoice.payment_status === 'paid') {
       showSnackbar(tr('이미 정산 완료된 인보이스입니다.', 'This invoice is already settled.'), 'error');
+      return;
+    }
+    if (!isRegularInvoiceExportAllowed(targetInvoice)) {
+      showSnackbar(
+        tr('승인 완료 후 정산할 수 있습니다.', 'Settlement is available after approval.'),
+        'error'
+      );
       return;
     }
 
@@ -1099,7 +1263,7 @@ const RegularInvoice: React.FC = () => {
             }
           : prev
       ));
-      setInvoices((prev) =>
+      setAllInvoices((prev) =>
         prev.map((invoice) =>
           invoice.id === targetInvoice.id
             ? { ...invoice, status: 'paid', payment_status: 'paid' }
@@ -1120,17 +1284,62 @@ const RegularInvoice: React.FC = () => {
 
   const handleConfirmDeleteInvoice = async () => {
     if (!deleteDialog.id) return;
+    if (deleteDialog.approverUserId === '') {
+      showSnackbar(tr('승인 대상을 선택해주세요.', 'Please select an approver.'), 'error');
+      return;
+    }
     try {
       setLoading(true);
-      await accountingService.deleteInvoice(deleteDialog.id);
+      await accountingService.deleteInvoice(deleteDialog.id, {
+        approver_user_id: Number(deleteDialog.approverUserId),
+        memo: deleteDialog.memo.trim() || undefined
+      });
       showSnackbar(tr('삭제 승인 요청이 등록되었습니다.', 'Delete approval request has been submitted.'), 'success');
-      setDeleteDialog({ open: false, id: null, invoiceNumber: '' });
+      setDeleteDialog({
+        open: false,
+        id: null,
+        invoiceNumber: '',
+        approverUserId: '',
+        memo: ''
+      });
       setIsViewing(false);
       setSelectedInvoice(null);
       await loadInvoices();
     } catch (error: any) {
       console.error('Invoice delete failed:', error);
       showSnackbar(error?.response?.data?.message || tr('삭제 승인 요청 등록에 실패했습니다.', 'Failed to submit delete approval request.'), 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApproveRegularInvoice = async (id: number, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    try {
+      setLoading(true);
+      const res = await accountingService.approveInvoice(id);
+      if (res?.success) {
+        showSnackbar(tr('승인되었습니다.', 'Approved.'), 'success');
+        await loadInvoices();
+      }
+    } catch (err: any) {
+      showSnackbar(err?.response?.data?.message || tr('승인에 실패했습니다.', 'Approval failed.'), 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRejectRegularInvoice = async (id: number, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    try {
+      setLoading(true);
+      const res = await accountingService.rejectInvoice(id);
+      if (res?.success) {
+        showSnackbar(tr('반려되었습니다.', 'Rejected.'), 'success');
+        await loadInvoices();
+      }
+    } catch (err: any) {
+      showSnackbar(err?.response?.data?.message || tr('반려에 실패했습니다.', 'Rejection failed.'), 'error');
     } finally {
       setLoading(false);
     }
@@ -1152,6 +1361,9 @@ const RegularInvoice: React.FC = () => {
       tax_amount: Number(invoice.tax_amount || 0),
       sub_total: Number(invoice.sub_total || 0),
       notes: invoice.notes ?? '',
+      approval_status: invoice.approval_status ?? null,
+      approver_user_id: invoice.approver_user_id ?? null,
+      created_by: invoice.created_by ?? null,
       items: (invoice.items || []).map((it: any) => ({
         id: it.id,
         item_name: it.item_name || '',
@@ -1194,6 +1406,10 @@ const RegularInvoice: React.FC = () => {
         tax_amount: Number(inv.tax_amount || invoice.tax_amount),
         sub_total: Number(inv.subtotal || invoice.sub_total),
         notes: inv.notes ?? invoice.notes ?? '',
+        approval_status: inv.approval_status ?? invoice.approval_status ?? null,
+        approver_user_id:
+          inv.approver_user_id != null ? Number(inv.approver_user_id) : invoice.approver_user_id ?? null,
+        created_by: inv.created_by != null ? Number(inv.created_by) : invoice.created_by ?? null,
         items: (inv.items || []).map((it: any) => ({
           id: it.id,
           item_name: it.item_name || '',
@@ -1217,11 +1433,20 @@ const RegularInvoice: React.FC = () => {
     if (!pendingPrintInvoiceId) return;
     if (!isViewing || !selectedInvoice) return;
     if (selectedInvoice.id !== pendingPrintInvoiceId) return;
+    if (!isRegularInvoiceExportAllowed(selectedInvoice)) {
+      showSnackbar(
+        tr('승인 완료 후에만 인쇄할 수 있습니다.', 'Printing is only available after approval.'),
+        'error'
+      );
+      setPendingPrintInvoiceId(null);
+      return;
+    }
 
     setTimeout(() => {
       void handlePrintInvoice();
     }, 0);
     setPendingPrintInvoiceId(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- 인쇄 1회 트리거: handlePrintInvoice/tr 안정화 불필요
   }, [isViewing, pendingPrintInvoiceId, selectedInvoice]);
 
   const getPaymentStatusColor = (status: string) => {
@@ -1244,6 +1469,27 @@ const RegularInvoice: React.FC = () => {
     }
   };
 
+  const renderApprovalCell = (inv: Invoice) => {
+    const s = inv.approval_status;
+    if (s == null || s === '') {
+      return (
+        <Typography variant="caption" color="text.secondary">
+          —
+        </Typography>
+      );
+    }
+    if (s === 'pending_approval') {
+      return <Chip size="small" label={tr('승인 대기', 'Pending')} color="warning" />;
+    }
+    if (s === 'approved') {
+      return <Chip size="small" label={tr('승인됨', 'Approved')} color="success" />;
+    }
+    if (s === 'rejected') {
+      return <Chip size="small" label={tr('반려', 'Rejected')} color="error" />;
+    }
+    return <Typography variant="caption">{s}</Typography>;
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       {/* ?? */}
@@ -1263,6 +1509,21 @@ const RegularInvoice: React.FC = () => {
           {tr('일반 세금계산서를 생성하고 관리합니다.', 'Create and manage regular invoices.')}
         </Typography>
       </Box>
+
+      {!isInvoicePageMode && (
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+          <Tabs
+            value={listSubTab}
+            onChange={(_, v) => {
+              setListSubTab(v);
+              setPage(1);
+            }}
+          >
+            <Tab value="requested" label={tr('내가 요청한 인보이스', 'Invoices I requested')} />
+            <Tab value="pending" label={tr('승인 대기 인보이스', 'Pending my approval')} />
+          </Tabs>
+        </Box>
+      )}
 
       {/* ?? ? ?? */}
       <Card sx={{ mb: 3 }}>
@@ -1445,7 +1706,22 @@ const RegularInvoice: React.FC = () => {
 
                   <TableContainer component={Paper} variant="outlined" sx={{ mb: 2, borderColor: 'grey.300' }}>
                     <Table size="small">
-                      <TableHead>
+                      <TableHead
+                        sx={{
+                          bgcolor: 'background.paper',
+                          '& .MuiTableCell-head': {
+                            bgcolor: 'background.paper',
+                            color: 'text.primary',
+                            fontWeight: 600,
+                            fontSize: '0.875rem',
+                            textTransform: 'none',
+                            letterSpacing: 'normal',
+                            borderBottom: '2px solid',
+                            borderColor: 'primary.main',
+                            py: 1.25
+                          }
+                        }}
+                      >
                         <TableRow>
                           <TableCell align="center" sx={{ width: '6%' }}>No</TableCell>
                           <TableCell align="left" sx={{ width: '50%' }}>Item</TableCell>
@@ -1598,8 +1874,11 @@ const RegularInvoice: React.FC = () => {
                         </CardContent>
                       </Card>
 
-                      <Box sx={{ mt: 1.5, display: 'grid', gap: 0.8 }}>
-                        {(issuerCompany?.bank_name || issuerCompany?.account_number || issuerCompany?.ifsc_code || issuerCompany?.account_holder_name) && (
+                      {(issuerCompany?.bank_name ||
+                        issuerCompany?.account_number ||
+                        issuerCompany?.ifsc_code ||
+                        issuerCompany?.account_holder_name) && (
+                        <Box sx={{ mt: 1.5, display: 'grid', gap: 0.8 }}>
                           <Paper variant="outlined" sx={{ p: 1.2, borderColor: 'grey.400' }}>
                             <Typography variant="body2" fontWeight={600}>
                               {tr('계좌 정보', 'Bank Details')}
@@ -1632,29 +1911,13 @@ const RegularInvoice: React.FC = () => {
                               )}
                             </Stack>
                           </Paper>
-                        )}
-                        <Paper variant="outlined" sx={{ p: 1.2, borderColor: 'grey.400' }}>
-                          <Typography variant="body2" fontWeight={600}>
-                            {tr('총합계 금액(문자)', 'Grand Total Amount (in words)')}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.4 }}>
-                            {formatInrWords(Math.floor(displayGrandTotal))}
-                          </Typography>
-                        </Paper>
-                        <Paper variant="outlined" sx={{ p: 1.2, borderColor: 'grey.400' }}>
-                          <Typography variant="body2" fontWeight={600}>
-                            {tr('확인 문구', 'Declaration')}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.4 }}>
-                            We declare that this invoice shows the actual price of the goods described and that all particulars are true and correct.
-                          </Typography>
-                        </Paper>
-                      </Box>
+                        </Box>
+                      )}
 
                       {(issuerCompany?.company_seal || issuerCompany?.ceo_signature) && (
                         <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
                           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 0.6 }}>
-                            <Typography variant="body2" fontWeight={600}>
+                            <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }}>
                               For {issuerCompany?.name || 'Company'}
                             </Typography>
                             <Box sx={{ position: 'relative', width: '7cm', height: '3cm' }}>
@@ -1682,22 +1945,12 @@ const RegularInvoice: React.FC = () => {
                               />
                             )}
                             </Box>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
                               {tr('승인 서명', 'Authorised Signatory')}
                             </Typography>
                           </Box>
                         </Box>
                       )}
-                      <Box sx={{ mt: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 0.2, color: 'text.secondary', fontSize: '0.875rem' }}>
-                          {tr('메모', 'Memo')}
-                        </Typography>
-                        <Paper variant="outlined" sx={{ p: 1.5, minHeight: 64, borderColor: 'grey.300' }}>
-                          <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap' }}>
-                            {selectedInvoice.notes && selectedInvoice.notes.trim() ? selectedInvoice.notes : '-'}
-                          </Typography>
-                        </Paper>
-                      </Box>
                     </>
                   )}
                 </Box>
@@ -1714,20 +1967,71 @@ const RegularInvoice: React.FC = () => {
                   {tr('수정', 'Edit')}
                 </Button>
               )}
-              <Button variant="outlined" startIcon={<PrintIcon />} onClick={handlePrintInvoice}>
-                {tr('인쇄', 'Print')}
-              </Button>
-              <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleDownloadPdf}>
-                {tr('PDF 다운로드', 'Download PDF')}
-              </Button>
+              <Tooltip
+                disableHoverListener={isRegularInvoiceExportAllowed(selectedInvoice)}
+                title={tr('승인 완료 후 인쇄할 수 있습니다.', 'Printing is available after approval.')}
+              >
+                <span>
+                  <Button
+                    variant="outlined"
+                    startIcon={<PrintIcon />}
+                    onClick={handlePrintInvoice}
+                    disabled={!isRegularInvoiceExportAllowed(selectedInvoice)}
+                  >
+                    {tr('인쇄', 'Print')}
+                  </Button>
+                </span>
+              </Tooltip>
+              <Tooltip
+                disableHoverListener={isRegularInvoiceExportAllowed(selectedInvoice)}
+                title={tr('승인 완료 후 PDF를 저장할 수 있습니다.', 'PDF download is available after approval.')}
+              >
+                <span>
+                  <Button
+                    variant="outlined"
+                    startIcon={<DownloadIcon />}
+                    onClick={handleDownloadPdf}
+                    disabled={!isRegularInvoiceExportAllowed(selectedInvoice)}
+                  >
+                    {tr('PDF 다운로드', 'Download PDF')}
+                  </Button>
+                </span>
+              </Tooltip>
               {selectedInvoice.payment_status !== 'paid' && (
-                <Button variant="contained" color="success" onClick={handleSettlementComplete}>
-                  {tr('정산완료', 'Settlement Complete')}
-                </Button>
+                <Tooltip
+                  disableHoverListener={isRegularInvoiceExportAllowed(selectedInvoice)}
+                  title={tr(
+                    '승인 완료 후 정산할 수 있습니다.',
+                    'Settlement is available after approval.'
+                  )}
+                >
+                  <span>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      onClick={handleSettlementComplete}
+                      disabled={!isRegularInvoiceExportAllowed(selectedInvoice)}
+                    >
+                      {tr('정산완료', 'Settlement Complete')}
+                    </Button>
+                  </span>
+                </Tooltip>
               )}
-              <Button variant="outlined" startIcon={<SendIcon />} onClick={handleSendEmail}>
-                {tr('이메일 전송', 'Send Email')}
-              </Button>
+              <Tooltip
+                disableHoverListener={isRegularInvoiceExportAllowed(selectedInvoice)}
+                title={tr('승인 완료 후 이메일을 보낼 수 있습니다.', 'Email is available after approval.')}
+              >
+                <span>
+                  <Button
+                    variant="outlined"
+                    startIcon={<SendIcon />}
+                    onClick={handleSendEmail}
+                    disabled={!isRegularInvoiceExportAllowed(selectedInvoice)}
+                  >
+                    {tr('이메일 전송', 'Send Email')}
+                  </Button>
+                </span>
+              </Tooltip>
               {selectedInvoice.payment_status !== 'paid' && (
                 <Button
                   variant="outlined"
@@ -2399,21 +2703,48 @@ const RegularInvoice: React.FC = () => {
                 </Box>
               </Grid>
 
-              <Grid size={{ xs: 12 }}>
-                <Box sx={{ mt: 1 }}>
-                  <Typography variant="body2" sx={{ mb: 0.2, color: 'text.secondary', fontSize: '0.875rem' }}>
-                    Memo
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    multiline
-                    minRows={3}
-                    maxRows={8}
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  />
-                </Box>
-              </Grid>
+              {isCreating && (
+                <Grid size={{ xs: 12 }}>
+                  <FormControl fullWidth size="small">
+                    <Typography
+                      variant="body2"
+                      sx={{ mb: 0.5, color: 'text.primary', fontWeight: 600, fontSize: '0.875rem' }}
+                    >
+                      {tr('승인자', 'Approver')} *
+                    </Typography>
+                    <Select<number | ''>
+                      displayEmpty
+                      value={approverUserId === '' ? '' : approverUserId}
+                      onChange={(e: SelectChangeEvent<number | ''>) => {
+                        const raw = e.target.value as string | number | '';
+                        setApproverUserId(raw === '' ? '' : Number(raw));
+                      }}
+                      renderValue={(selected: number | '' | undefined) => {
+                        if (selected === '' || selected === undefined) {
+                          return (
+                            <Typography sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                              {tr('승인자를 선택하세요', 'Select an approver')}
+                            </Typography>
+                          );
+                        }
+                        const u = companyUsers.find((x) => x.id === selected);
+                        return u ? `${u.username} (${u.email})` : String(selected);
+                      }}
+                    >
+                      <MenuItem value="">
+                        <Typography sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                          {tr('승인자를 선택하세요', 'Select an approver')}
+                        </Typography>
+                      </MenuItem>
+                      {companyUsers.map((u) => (
+                        <MenuItem key={u.id} value={u.id}>
+                          {u.username} ({u.email})
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
 
               {(issuerCompany?.company_seal || issuerCompany?.ceo_signature) && (
                 <Grid size={{ xs: 12 }}>
@@ -2467,19 +2798,38 @@ const RegularInvoice: React.FC = () => {
             <CardContent>
               <TableContainer>
                 <Table>
-                  <TableHead>
+                  <TableHead
+                    sx={{
+                      bgcolor: 'background.paper',
+                      '& .MuiTableCell-head': {
+                        bgcolor: 'background.paper',
+                        color: 'text.primary',
+                        fontWeight: 600,
+                        fontSize: '0.875rem',
+                        textTransform: 'none',
+                        letterSpacing: 'normal',
+                        borderBottom: '2px solid',
+                        borderColor: 'primary.main',
+                        py: 1.25
+                      },
+                      '& .MuiTableCell-head:last-of-type': {
+                        textAlign: 'center'
+                      }
+                    }}
+                  >
                     <TableRow>
                       <TableCell>{tr('인보이스 번호', 'Invoice No.')}</TableCell>
                       <TableCell>{tr('고객', 'Customer')}</TableCell>
                       <TableCell>{tr('발행일', 'Issue Date')}</TableCell>
                       <TableCell>{tr('만기일', 'Due Date')}</TableCell>
                       <TableCell>{tr('금액', 'Amount')}</TableCell>
+                      <TableCell>{tr('승인', 'Approval')}</TableCell>
                       <TableCell>{tr('결제 상태', 'Payment Status')}</TableCell>
                       <TableCell align="center">{tr('작업', 'Actions')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {invoices.map((invoice) => (
+                    {pagedInvoices.map((invoice) => (
                       <TableRow
                         key={invoice.id}
                         hover
@@ -2513,6 +2863,7 @@ const RegularInvoice: React.FC = () => {
                             {invoice.total_amount.toLocaleString()} {invoice.currency}
                           </Typography>
                         </TableCell>
+                        <TableCell>{renderApprovalCell(invoice)}</TableCell>
                         <TableCell>
                           <Chip
                             label={getPaymentStatusText(invoice.payment_status)}
@@ -2534,31 +2885,72 @@ const RegularInvoice: React.FC = () => {
                               </IconButton>
                             </Tooltip>
                             {invoice.payment_status !== 'paid' && (
-                              <Tooltip title={tr('정산완료', 'Settlement Complete')}>
-                                <IconButton
-                                  size="small"
-                                  color="success"
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    await settleInvoice(invoice);
-                                  }}
-                                >
-                                  <TaskAltIcon />
-                                </IconButton>
+                              <Tooltip
+                                disableHoverListener={isRegularInvoiceExportAllowed(invoice)}
+                                title={tr(
+                                  '승인 완료 후 정산할 수 있습니다.',
+                                  'Settlement is available after approval.'
+                                )}
+                              >
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    color="success"
+                                    disabled={!isRegularInvoiceExportAllowed(invoice)}
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      await settleInvoice(invoice);
+                                    }}
+                                  >
+                                    <TaskAltIcon />
+                                  </IconButton>
+                                </span>
                               </Tooltip>
                             )}
-                            <Tooltip title={tr('인쇄', 'Print')}>
-                              <IconButton
-                                size="small"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setPendingPrintInvoiceId(invoice.id);
-                                  void handleViewInvoice(invoice);
-                                }}
-                              >
-                                <PrintIcon />
-                              </IconButton>
+                            <Tooltip
+                              title={
+                                isRegularInvoiceExportAllowed(invoice)
+                                  ? tr('인쇄', 'Print')
+                                  : tr('승인 완료 후 인쇄할 수 있습니다.', 'Printing is available after approval.')
+                              }
+                            >
+                              <span>
+                                <IconButton
+                                  size="small"
+                                  disabled={!isRegularInvoiceExportAllowed(invoice)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!isRegularInvoiceExportAllowed(invoice)) return;
+                                    setPendingPrintInvoiceId(invoice.id);
+                                    void handleViewInvoice(invoice);
+                                  }}
+                                >
+                                  <PrintIcon />
+                                </IconButton>
+                              </span>
                             </Tooltip>
+                            {listSubTab === 'pending' && invoice.approval_status === 'pending_approval' && (
+                              <>
+                                <Tooltip title={tr('승인', 'Approve')}>
+                                  <IconButton
+                                    size="small"
+                                    color="success"
+                                    onClick={(e) => void handleApproveRegularInvoice(invoice.id, e)}
+                                  >
+                                    <ThumbUpIcon />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title={tr('반려', 'Reject')}>
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={(e) => void handleRejectRegularInvoice(invoice.id, e)}
+                                  >
+                                    <ThumbDownIcon />
+                                  </IconButton>
+                                </Tooltip>
+                              </>
+                            )}
                             {invoice.payment_status !== 'paid' && (
                               <Tooltip title={tr('삭제요청', 'Request Delete')}>
                                 <IconButton
@@ -2608,16 +3000,98 @@ const RegularInvoice: React.FC = () => {
         </Alert>
       </Snackbar>
 
-      <ConfirmDialog
+      <Dialog
         open={deleteDialog.open}
-        title={tr('삭제 승인 요청', 'Delete Approval Request')}
-        message={deleteDialog.invoiceNumber ? tr(`인보이스 ${deleteDialog.invoiceNumber} 삭제 승인 요청을 등록할까요?`, `Submit delete approval request for invoice ${deleteDialog.invoiceNumber}?`) : tr('이 인보이스 삭제 승인 요청을 등록할까요?', 'Submit delete approval request for this invoice?')}
-        confirmText={tr('요청', 'Request')}
-        cancelText={tr('취소', 'Cancel')}
-        confirmColor="error"
-        onConfirm={handleConfirmDeleteInvoice}
-        onCancel={() => setDeleteDialog({ open: false, id: null, invoiceNumber: '' })}
-      />
+        onClose={() => {
+          if (loading) return;
+          setDeleteDialog({
+            open: false,
+            id: null,
+            invoiceNumber: '',
+            approverUserId: '',
+            memo: ''
+          });
+        }}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          {tr('삭제 승인 요청', 'Delete approval request')}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {deleteDialog.invoiceNumber
+              ? tr(
+                  `인보이스 «${deleteDialog.invoiceNumber}» 삭제는 바로 되지 않습니다. 승인자가 승인하면 처리됩니다.`,
+                  `Invoice «${deleteDialog.invoiceNumber}» cannot be removed immediately. It will be processed after the approver approves.`
+                )
+              : tr(
+                  '인보이스 삭제는 바로 되지 않습니다. 승인자가 승인하면 처리됩니다.',
+                  'Deletion is not immediate. It will be processed after the approver approves.'
+                )}
+          </Typography>
+          <FormControl fullWidth size="small" sx={{ mb: 2 }} required>
+            <InputLabel id="delete-approver-label">{tr('승인 대상', 'Approver')}</InputLabel>
+            <Select
+              labelId="delete-approver-label"
+              label={tr('승인 대상', 'Approver')}
+              value={deleteDialog.approverUserId === '' ? '' : deleteDialog.approverUserId}
+              onChange={(e: SelectChangeEvent<number | ''>) =>
+                setDeleteDialog((d) => ({ ...d, approverUserId: e.target.value as number | '' }))
+              }
+            >
+              <MenuItem value="">
+                <em>{tr('승인자를 선택하세요', 'Select approver')}</em>
+              </MenuItem>
+              {companyUsers.map((u) => (
+                <MenuItem key={u.id} value={u.id}>
+                  {u.username}
+                  {u.email ? ` (${u.email})` : ''}
+                </MenuItem>
+              ))}
+            </Select>
+            <FormHelperText>
+              {tr('이 요청을 검토·승인할 사용자를 선택하세요.', 'Choose who will review and approve this request.')}
+            </FormHelperText>
+          </FormControl>
+          <TextField
+            fullWidth
+            multiline
+            minRows={3}
+            size="small"
+            label={tr('메모', 'Memo')}
+            placeholder={tr('삭제 사유 등을 입력하세요.', 'Enter reason for deletion, etc.')}
+            value={deleteDialog.memo}
+            onChange={(e) => setDeleteDialog((d) => ({ ...d, memo: e.target.value }))}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() =>
+              setDeleteDialog({
+                open: false,
+                id: null,
+                invoiceNumber: '',
+                approverUserId: '',
+                memo: ''
+              })
+            }
+            disabled={loading}
+          >
+            {tr('취소', 'Cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => void handleConfirmDeleteInvoice()}
+            disabled={loading || companyUsers.length === 0}
+            startIcon={loading ? <CircularProgress size={18} color="inherit" /> : undefined}
+          >
+            {tr('삭제 요청', 'Submit request')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

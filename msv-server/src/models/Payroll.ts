@@ -18,6 +18,8 @@ interface PayrollAttributes {
   status: string;
   payment_date?: string;
   created_by: number;
+  is_active?: boolean;
+  extra_fields?: Record<string, unknown> | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -41,6 +43,8 @@ class Payroll extends Model<PayrollAttributes, PayrollCreationAttributes> implem
   public status!: string;
   public payment_date?: string;
   public created_by!: number;
+  public is_active!: boolean;
+  public extra_fields?: Record<string, unknown> | null;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
 }
@@ -136,6 +140,16 @@ Payroll.init(
         model: 'users',
         key: 'id',
       },
+    },
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
+    extra_fields: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: {},
     },
     created_at: {
       type: DataTypes.DATE,

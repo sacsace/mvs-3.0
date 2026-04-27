@@ -2,6 +2,140 @@ import { Response } from 'express';
 import { RequestWithUser } from '../types';
 import { WorkReport, User } from '../models';
 import { Op } from 'sequelize';
+import sequelize from '../config/database';
+import { pushNotification } from './notificationController';
+
+function normalizeCcUserIdsRaw(raw: unknown): number[] {
+  if (raw == null) return [];
+  if (Array.isArray(raw)) {
+    return [...new Set(raw.map((x) => Number(x)).filter((n) => Number.isInteger(n) && n > 0))];
+  }
+  if (typeof raw === 'string') {
+    try {
+      const v = JSON.parse(raw);
+      if (Array.isArray(v)) return normalizeCcUserIdsRaw(v);
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/** Sequelize는 FROM "work_reports" AS "WorkReport" 이므로 별칭으로 컬럼 참조 */
+function ccJsonContainsUser(userId: number) {
+  const uid = Number(userId);
+  return sequelize.where(
+    sequelize.literal(
+      `(COALESCE("WorkReport"."cc_user_ids", '[]'::jsonb))::jsonb @> '${JSON.stringify([uid])}'::jsonb`
+    ),
+    true
+  );
+}
+
+async function validateAndNormalizeCcUserIds(
+  raw: unknown,
+  tenantId: number | undefined,
+  companyId: number | undefined,
+  recipientId: number,
+  authorId: number
+): Promise<{ ok: true; ids: number[] } | { ok: false; message: string }> {
+  let ids = normalizeCcUserIdsRaw(raw);
+  ids = ids.filter((id) => id !== recipientId && id !== authorId);
+  if (ids.length > 30) {
+    return { ok: false, message: '참조 인원은 최대 30명까지 지정할 수 있습니다.' };
+  }
+  if (tenantId == null || companyId == null) {
+    return { ok: true, ids: [] };
+  }
+  for (const id of ids) {
+    const u = await User.findOne({
+      where: { id, tenant_id: tenantId, company_id: companyId, status: 'active' }
+    });
+    if (!u) {
+      return { ok: false, message: '참조 인원은 같은 회사의 활성 사용자만 지정할 수 있습니다.' };
+    }
+  }
+  return { ok: true, ids };
+}
+
+async function batchAttachCcUsers(rows: any[]) {
+  const all = new Set<number>();
+  for (const r of rows) {
+    normalizeCcUserIdsRaw(r.cc_user_ids).forEach((id) => all.add(id));
+  }
+  if (!all.size) {
+    for (const r of rows) {
+      r.cc_users = [];
+    }
+    return;
+  }
+  const users = await User.findAll({
+    where: { id: [...all] },
+    attributes: ['id', 'username']
+  });
+  const map = new Map<number, string>(users.map((u: any) => [Number(u.id), String(u.username || '')]));
+  for (const r of rows) {
+    const ids = normalizeCcUserIdsRaw(r.cc_user_ids);
+    r.cc_users = ids.map((id) => ({ id, username: map.get(id) || '' }));
+  }
+}
+
+/** 제출 알림: 같은 회사 root·admin·audit 사본(작성자·수신자 제외, 수신자 단독 알림과 중복 없음) */
+async function notifyElevatedUsersWorkReportSubmitted(
+  req: RequestWithUser,
+  params: {
+    tenantId?: number;
+    companyId?: number;
+    reportDbId: number;
+    reportIdStr: string;
+    recipientUserId: number | null;
+    authorUserId: number;
+    title: string;
+    authorName: string;
+  }
+): Promise<void> {
+  const { tenantId, companyId, reportDbId, reportIdStr, recipientUserId, authorUserId, title, authorName } = params;
+  if (tenantId == null || companyId == null) return;
+  try {
+    const elevated = await User.findAll({
+      where: {
+        tenant_id: tenantId,
+        company_id: companyId,
+        role: { [Op.in]: ['root', 'admin', 'audit'] },
+        status: 'active'
+      },
+      attributes: ['id']
+    });
+    const titleShort = String(title || '').slice(0, 120);
+    const msg = `${authorName}님이 "${titleShort}" 보고서를 제출했습니다. 확인해 주세요.`;
+    for (const row of elevated) {
+      const rid = Number((row as any).id);
+      if (!Number.isInteger(rid) || rid <= 0) continue;
+      if (rid === authorUserId) continue;
+      if (recipientUserId != null && Number.isInteger(recipientUserId) && rid === recipientUserId) continue;
+      pushNotification(
+        {
+          title: '업무 보고서 제출',
+          message: msg,
+          type: 'info',
+          target_type: 'user',
+          target_id: rid,
+          tenant_id: tenantId,
+          data: {
+            feature: 'work_report',
+            id: reportDbId,
+            report_id: reportIdStr,
+            submitted: true,
+            list: 'received'
+          }
+        },
+        (req as any).socketService
+      );
+    }
+  } catch {
+    /* 알림 보조 경로 실패 시 제출 본편은 유지 */
+  }
+}
 
 // 업무 보고서 목록 조회
 export const getWorkReports = async (req: RequestWithUser, res: Response) => {
@@ -10,37 +144,44 @@ export const getWorkReports = async (req: RequestWithUser, res: Response) => {
     const companyId = req.user?.company_id;
     const userRole = req.user?.role;
     const userId = req.user?.id;
-    const { author_id, status, type, priority, start_date, end_date, company_id } = req.query;
+    const { author_id, status, type, priority, start_date, end_date, company_id, scope } = req.query;
+    /** 받은 보고서: 정식 수신자 + 참조(CC) 동일 목록 */
+    const listScope =
+      scope === 'received' || scope === 'cc' || scope === 'referenced'
+        ? 'received'
+        : 'authored';
 
     const whereClause: any = {};
-    
-    // root나 audit 권한이면 모든 보고서 조회 가능, 아니면 자신의 회사 보고서만
+
+    // 회사/테넌트 범위: 일반 계정은 본인 회사만, root는 선택적 company_id, audit는 소속 범위
     if (userRole !== 'root' && userRole !== 'audit') {
       whereClause.tenant_id = tenantId;
       whereClause.company_id = companyId;
-      
-      // 일반 사용자는 자신이 작성한 보고서만 조회 (또는 공개된 보고서)
-      if (userRole === 'user') {
-        whereClause[Op.or] = [
-          { author_id: userId },
-          { is_public: true }
-        ];
-      }
     } else {
-      // root는 company_id 쿼리 파라미터로 회사별 필터링 가능
       if (userRole === 'root' && company_id) {
-        whereClause.company_id = parseInt(company_id as string);
+        whereClause.company_id = parseInt(company_id as string, 10);
       } else if (userRole === 'root') {
-        // root가 company_id를 지정하지 않으면 모든 회사 조회
+        // company_id 없으면 전 회사(테넌트 필터 없음)
       } else {
-        // audit는 모든 회사 조회 가능
         if (tenantId) whereClause.tenant_id = tenantId;
         if (companyId) whereClause.company_id = companyId;
       }
     }
 
-    if (author_id) {
-      whereClause.author_id = author_id;
+    // 탭: 작성한 보고서 / 받은 보고서(정식 수신자 또는 참조 CC)
+    if (userId != null) {
+      if (listScope === 'received') {
+        whereClause[Op.or] = [{ recipient_id: userId }, ccJsonContainsUser(Number(userId))];
+      } else {
+        whereClause.author_id = userId;
+      }
+    }
+
+    if (author_id && (userRole === 'root' || userRole === 'audit')) {
+      const aid = parseInt(author_id as string, 10);
+      if (!Number.isNaN(aid)) {
+        whereClause.author_id = aid;
+      }
     }
 
     if (status) {
@@ -77,14 +218,23 @@ export const getWorkReports = async (req: RequestWithUser, res: Response) => {
           as: 'reviewer',
           attributes: ['id', 'username'],
           required: false
+        },
+        {
+          model: User,
+          as: 'recipient',
+          attributes: ['id', 'username', 'email', 'department', 'position'],
+          required: false
         }
       ],
       order: [['report_date', 'DESC'], ['created_at', 'DESC']]
     });
 
+    const plain = reports.map((r: any) => r.get({ plain: true }));
+    await batchAttachCcUsers(plain);
+
     res.json({
       success: true,
-      data: reports
+      data: plain
     });
   } catch (error: any) {
     console.error('업무 보고서 목록 조회 오류:', error);
@@ -111,11 +261,14 @@ export const getWorkReport = async (req: RequestWithUser, res: Response) => {
       whereClause.tenant_id = tenantId;
       whereClause.company_id = companyId;
       
-      // 일반 사용자는 자신이 작성한 보고서 또는 공개된 보고서만 조회
+      // 일반 사용자: 작성자·수신자·참조(CC)·공개 보고서 중 하나면 조회 가능
       if (userRole === 'user') {
+        const uid = Number(userId);
         whereClause[Op.or] = [
           { author_id: userId },
-          { is_public: true }
+          { recipient_id: userId },
+          { is_public: true },
+          ccJsonContainsUser(uid)
         ];
       }
     }
@@ -136,6 +289,12 @@ export const getWorkReport = async (req: RequestWithUser, res: Response) => {
           as: 'reviewer',
           attributes: ['id', 'username'],
           required: false
+        },
+        {
+          model: User,
+          as: 'recipient',
+          attributes: ['id', 'username', 'email', 'department', 'position'],
+          required: false
         }
       ]
     });
@@ -147,7 +306,10 @@ export const getWorkReport = async (req: RequestWithUser, res: Response) => {
       });
     }
 
-    res.json({ success: true, data: report });
+    const plain = report.get({ plain: true });
+    await batchAttachCcUsers([plain]);
+
+    res.json({ success: true, data: plain });
   } catch (error: any) {
     console.error('업무 보고서 상세 조회 오류:', error);
     res.status(500).json({ 
@@ -165,19 +327,58 @@ export const createWorkReport = async (req: RequestWithUser, res: Response) => {
     const companyId = req.user?.company_id;
     const userId = req.user?.id;
     const { report_id, title, type, category, content, summary, achievements, challenges,
-            next_steps, attachments, priority, report_date, due_date, tags, is_public } = req.body;
+            next_steps, attachments, priority, report_date, due_date, tags, is_public, recipient_id,
+            status: statusFromBody } = req.body;
 
-    if (!report_id || !title || !type || !category || !content || !summary || !report_date) {
+    if (!title || !content || !report_date || !type) {
       return res.status(400).json({ 
         success: false, 
-        message: '필수 필드가 누락되었습니다.' 
+        message: '제목, 유형, 내용, 작성일은 필수입니다.' 
       });
     }
+
+    if (!recipient_id || !Number.isInteger(Number(recipient_id)) || Number(recipient_id) <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: '보고서를 받는 사람을 선택해주세요.'
+      });
+    }
+
+    const recipientUser = await User.findOne({
+      where: {
+        id: Number(recipient_id),
+        tenant_id: tenantId,
+        company_id: companyId
+      }
+    });
+    if (!recipientUser) {
+      return res.status(400).json({
+        success: false,
+        message: '수신자는 같은 회사의 활성 사용자만 지정할 수 있습니다.'
+      });
+    }
+
+    const ccCheck = await validateAndNormalizeCcUserIds(
+      req.body.cc_user_ids,
+      tenantId,
+      companyId,
+      Number(recipient_id),
+      Number(userId)
+    );
+    if (ccCheck.ok === false) {
+      return res.status(400).json({ success: false, message: ccCheck.message });
+    }
+    const ccIdsFinal = ccCheck.ids;
+
+    const reportIdFinal =
+      report_id && String(report_id).trim()
+        ? String(report_id).trim()
+        : `WR-${Date.now()}-${userId}-${Math.floor(Math.random() * 9000 + 1000)}`;
 
     // report_id 중복 확인
     const existing = await (WorkReport as any).findOne({
       where: {
-        report_id,
+        report_id: reportIdFinal,
         tenant_id: tenantId,
         company_id: companyId
       }
@@ -190,27 +391,34 @@ export const createWorkReport = async (req: RequestWithUser, res: Response) => {
       });
     }
 
+    const categoryVal = category != null && String(category).trim() ? String(category).trim() : '';
+    const summaryVal = summary != null && String(summary).trim() ? String(summary).trim() : '';
+
+    const initialStatus = statusFromBody === 'submitted' ? 'submitted' : 'draft';
+
     const report = await (WorkReport as any).create({
       tenant_id: tenantId,
       company_id: companyId,
-      report_id,
+      report_id: reportIdFinal,
       title,
       is_active: true,
       type,
-      category,
+      category: categoryVal,
       author_id: userId,
+      recipient_id: Number(recipient_id),
       content,
-      summary,
+      summary: summaryVal,
       achievements: achievements ? JSON.stringify(achievements) : '[]',
       challenges: challenges ? JSON.stringify(challenges) : '[]',
       next_steps: next_steps ? JSON.stringify(next_steps) : '[]',
       attachments: attachments ? JSON.stringify(attachments) : '[]',
-      status: 'draft',
+      status: initialStatus,
       priority: priority || 'medium',
       report_date,
       due_date: due_date || null,
       tags: tags ? JSON.stringify(tags) : '[]',
-      is_public: is_public !== undefined ? is_public : false
+      is_public: is_public !== undefined ? is_public : false,
+      cc_user_ids: ccIdsFinal
     });
 
     // 사용자 정보 포함하여 반환
@@ -220,13 +428,112 @@ export const createWorkReport = async (req: RequestWithUser, res: Response) => {
           model: User,
           as: 'author',
           attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
+        },
+        {
+          model: User,
+          as: 'recipient',
+          attributes: ['id', 'username', 'email', 'department', 'position'],
+          required: false
         }
       ]
     });
 
+    const recipientNum = Number(recipient_id);
+    if (Number.isInteger(recipientNum) && recipientNum > 0 && recipientNum !== Number(userId)) {
+      const authorName =
+        (reportWithUser as any)?.author?.username ||
+        (reportWithUser as any)?.author?.userid ||
+        req.user?.username ||
+        '작성자';
+      if (initialStatus === 'submitted') {
+        pushNotification(
+          {
+            title: '업무 보고서 제출',
+            message: `${authorName}님이 "${String(title).slice(0, 120)}" 보고서를 제출했습니다. 확인해 주세요.`,
+            type: 'info',
+            target_type: 'user',
+            target_id: recipientNum,
+            tenant_id: tenantId,
+            data: {
+              feature: 'work_report',
+              id: report.id,
+              report_id: reportIdFinal,
+              submitted: true,
+              list: 'received'
+            }
+          },
+          (req as any).socketService
+        );
+      } else {
+        pushNotification(
+          {
+            title: '업무 보고서',
+            message: `${authorName}님이 "${String(title).slice(0, 120)}" 보고서를 등록하고 수신자로 지정했습니다.`,
+            type: 'info',
+            target_type: 'user',
+            target_id: recipientNum,
+            tenant_id: tenantId,
+            data: {
+              feature: 'work_report',
+              id: report.id,
+              report_id: reportIdFinal,
+              list: 'received'
+            }
+          },
+          (req as any).socketService
+        );
+      }
+    }
+
+    if (initialStatus === 'submitted') {
+      const authorNameElevated =
+        (reportWithUser as any)?.author?.username ||
+        (reportWithUser as any)?.author?.userid ||
+        req.user?.username ||
+        '작성자';
+      const recipElevated =
+        Number.isInteger(recipientNum) && recipientNum > 0 ? recipientNum : null;
+      await notifyElevatedUsersWorkReportSubmitted(req, {
+        tenantId,
+        companyId,
+        reportDbId: report.id,
+        reportIdStr: reportIdFinal,
+        recipientUserId: recipElevated,
+        authorUserId: Number(userId),
+        title: String(title),
+        authorName: authorNameElevated
+      });
+      const msgCc = `${authorNameElevated}님이 "${String(title).slice(0, 120)}" 보고서를 제출했습니다. 확인해 주세요.`;
+      for (const ccUid of ccIdsFinal) {
+        if (!Number.isInteger(ccUid) || ccUid <= 0 || ccUid === Number(userId)) continue;
+        if (ccUid === recipientNum) continue;
+        pushNotification(
+          {
+            title: '업무 보고서 제출',
+            message: msgCc,
+            type: 'info',
+            target_type: 'user',
+            target_id: ccUid,
+            tenant_id: tenantId,
+            data: {
+              feature: 'work_report',
+              id: report.id,
+              report_id: reportIdFinal,
+              submitted: true,
+              list: 'cc'
+            }
+          },
+          (req as any).socketService
+        );
+      }
+    }
+
+    const plainCreate = reportWithUser.get({ plain: true });
+    await batchAttachCcUsers([plainCreate]);
+
     res.status(201).json({ 
       success: true, 
-      data: reportWithUser 
+      data: plainCreate 
     });
   } catch (error: any) {
     console.error('업무 보고서 생성 오류:', error);
@@ -247,7 +554,8 @@ export const updateWorkReport = async (req: RequestWithUser, res: Response) => {
     const userRole = req.user?.role;
     const userId = req.user?.id;
     const { title, type, category, content, summary, achievements, challenges, next_steps,
-            attachments, priority, report_date, due_date, tags, is_public, status } = req.body;
+            attachments, priority, report_date, due_date, tags, is_public, status, recipient_id,
+            cc_user_ids } = req.body;
 
     const whereClause: any = { id, is_active: true };
     
@@ -282,12 +590,57 @@ export const updateWorkReport = async (req: RequestWithUser, res: Response) => {
       });
     }
 
+    let nextRecipientId = report.recipient_id;
+    if (recipient_id !== undefined) {
+      if (recipient_id === null || recipient_id === '') {
+        nextRecipientId = null;
+      } else {
+        const rid = Number(recipient_id);
+        if (!Number.isInteger(rid) || rid <= 0) {
+          return res.status(400).json({ success: false, message: '유효하지 않은 수신자입니다.' });
+        }
+        const recipientUser = await User.findOne({
+          where: { id: rid, tenant_id: tenantId, company_id: companyId }
+        });
+        if (!recipientUser) {
+          return res.status(400).json({
+            success: false,
+            message: '수신자는 같은 회사의 사용자만 지정할 수 있습니다.'
+          });
+        }
+        nextRecipientId = rid;
+      }
+    }
+
+    let ccIdsNext: number[] | undefined;
+    if (cc_user_ids !== undefined) {
+      const recipForCc =
+        recipient_id !== undefined ? nextRecipientId : (report as any).recipient_id;
+      const ccRes = await validateAndNormalizeCcUserIds(
+        cc_user_ids,
+        tenantId,
+        companyId,
+        Number(recipForCc),
+        Number((report as any).author_id)
+      );
+      if (ccRes.ok === false) {
+        return res.status(400).json({ success: false, message: ccRes.message });
+      }
+      ccIdsNext = ccRes.ids;
+    }
+
+    const categoryVal =
+      category !== undefined ? (category != null && String(category).trim() ? String(category).trim() : '') : undefined;
+    const summaryVal =
+      summary !== undefined ? (summary != null && String(summary).trim() ? String(summary).trim() : '') : undefined;
+
     await report.update({
       title: title !== undefined ? title : report.title,
       type: type !== undefined ? type : report.type,
-      category: category !== undefined ? category : report.category,
+      category: categoryVal !== undefined ? categoryVal : report.category,
       content: content !== undefined ? content : report.content,
-      summary: summary !== undefined ? summary : report.summary,
+      summary: summaryVal !== undefined ? summaryVal : report.summary,
+      recipient_id: recipient_id !== undefined ? nextRecipientId : report.recipient_id,
       achievements: achievements !== undefined ? JSON.stringify(achievements) : report.achievements,
       challenges: challenges !== undefined ? JSON.stringify(challenges) : report.challenges,
       next_steps: next_steps !== undefined ? JSON.stringify(next_steps) : report.next_steps,
@@ -297,7 +650,8 @@ export const updateWorkReport = async (req: RequestWithUser, res: Response) => {
       due_date: due_date !== undefined ? due_date : report.due_date,
       tags: tags !== undefined ? JSON.stringify(tags) : report.tags,
       is_public: is_public !== undefined ? is_public : report.is_public,
-      status: status !== undefined ? status : report.status
+      status: status !== undefined ? status : report.status,
+      cc_user_ids: ccIdsNext !== undefined ? ccIdsNext : (report as any).cc_user_ids
     });
 
     // 사용자 정보 포함하여 반환
@@ -313,13 +667,22 @@ export const updateWorkReport = async (req: RequestWithUser, res: Response) => {
           as: 'reviewer',
           attributes: ['id', 'username'],
           required: false
+        },
+        {
+          model: User,
+          as: 'recipient',
+          attributes: ['id', 'username', 'email', 'department', 'position'],
+          required: false
         }
       ]
     });
 
+    const plainUp = reportWithUser.get({ plain: true });
+    await batchAttachCcUsers([plainUp]);
+
     res.json({ 
       success: true, 
-      data: reportWithUser 
+      data: plainUp 
     });
   } catch (error: any) {
     console.error('업무 보고서 수정 오류:', error);
@@ -417,13 +780,91 @@ export const submitWorkReport = async (req: RequestWithUser, res: Response) => {
           model: User,
           as: 'author',
           attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
+        },
+        {
+          model: User,
+          as: 'recipient',
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
         }
       ]
     });
 
+    const recipientIdNum = report.recipient_id != null ? Number(report.recipient_id) : NaN;
+    const authorIdNum = report.author_id != null ? Number(report.author_id) : NaN;
+    const authorName =
+      (reportWithUser as any)?.author?.username ||
+      (reportWithUser as any)?.author?.userid ||
+      '작성자';
+    if (
+      Number.isInteger(recipientIdNum) &&
+      recipientIdNum > 0 &&
+      recipientIdNum !== authorIdNum
+    ) {
+      pushNotification(
+        {
+          title: '업무 보고서 제출',
+          message: `${authorName}님이 "${String(report.title).slice(0, 120)}" 보고서를 제출했습니다. 확인해 주세요.`,
+          type: 'info',
+          target_type: 'user',
+          target_id: recipientIdNum,
+          tenant_id: tenantId,
+          data: {
+            feature: 'work_report',
+            id: report.id,
+            report_id: report.report_id,
+            submitted: true,
+            list: 'received'
+          }
+        },
+        (req as any).socketService
+      );
+    }
+
+    await notifyElevatedUsersWorkReportSubmitted(req, {
+      tenantId,
+      companyId,
+      reportDbId: report.id,
+      reportIdStr: String(report.report_id || ''),
+      recipientUserId:
+        Number.isInteger(recipientIdNum) && recipientIdNum > 0 ? recipientIdNum : null,
+      authorUserId: Number.isInteger(authorIdNum) ? authorIdNum : Number(userId),
+      title: String(report.title || ''),
+      authorName
+    });
+
+    const ccListSubmit = normalizeCcUserIdsRaw(
+      (reportWithUser as any)?.cc_user_ids ?? (report as any).cc_user_ids
+    );
+    const msgCcSubmit = `${authorName}님이 "${String(report.title).slice(0, 120)}" 보고서를 제출했습니다. 확인해 주세요.`;
+    for (const ccUid of ccListSubmit) {
+      if (!Number.isInteger(ccUid) || ccUid <= 0 || ccUid === authorIdNum) continue;
+      if (ccUid === recipientIdNum) continue;
+      pushNotification(
+        {
+          title: '업무 보고서 제출',
+          message: msgCcSubmit,
+          type: 'info',
+          target_type: 'user',
+          target_id: ccUid,
+          tenant_id: tenantId,
+          data: {
+            feature: 'work_report',
+            id: report.id,
+            report_id: report.report_id,
+            submitted: true,
+            list: 'cc'
+          }
+        },
+        (req as any).socketService
+      );
+    }
+
+    const plainSub = reportWithUser.get({ plain: true });
+    await batchAttachCcUsers([plainSub]);
+
     res.json({ 
       success: true, 
-      data: reportWithUser 
+      data: plainSub 
     });
   } catch (error: any) {
     console.error('업무 보고서 제출 오류:', error);
@@ -435,7 +876,7 @@ export const submitWorkReport = async (req: RequestWithUser, res: Response) => {
   }
 };
 
-// 업무 보고서 승인/거부
+// 업무 보고서 승인·피드백(상태 rejected)
 export const reviewWorkReport = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
@@ -444,14 +885,6 @@ export const reviewWorkReport = async (req: RequestWithUser, res: Response) => {
     const companyId = req.user?.company_id;
     const userId = req.user?.id;
     const userRole = req.user?.role;
-
-    // 관리자만 승인/거부 가능
-    if (userRole !== 'admin' && userRole !== 'root') {
-      return res.status(403).json({ 
-        success: false, 
-        message: '승인/거부 권한이 없습니다.' 
-      });
-    }
 
     if (status !== 'approved' && status !== 'rejected') {
       return res.status(400).json({ 
@@ -474,6 +907,52 @@ export const reviewWorkReport = async (req: RequestWithUser, res: Response) => {
         success: false, 
         message: '업무 보고서를 찾을 수 없거나 검토할 수 없습니다.' 
       });
+    }
+
+    const recipientId = report.recipient_id != null ? Number(report.recipient_id) : null;
+    const uid = userId != null ? Number(userId) : NaN;
+    const isRecipient = Number.isInteger(recipientId) && recipientId > 0 && recipientId === uid;
+    const isElevatedReviewer =
+      userRole === 'root' || userRole === 'admin' || userRole === 'audit';
+    const ccIdsReview = normalizeCcUserIdsRaw((report as any).cc_user_ids);
+    const inCcList =
+      Number.isInteger(uid) && uid > 0 && ccIdsReview.includes(uid);
+    const isAuthorReview = Number(report.author_id) === uid;
+
+    if (status === 'approved') {
+      if (isAuthorReview) {
+        return res.status(403).json({
+          success: false,
+          message: '작성자는 승인할 수 없습니다.'
+        });
+      }
+      if (inCcList && !isRecipient) {
+        return res.status(403).json({
+          success: false,
+          message: '참조 인원은 승인할 수 없습니다. 피드백만 가능합니다.'
+        });
+      }
+      if (!isRecipient && !isElevatedReviewer) {
+        return res.status(403).json({
+          success: false,
+          message: '승인은 보고서 수신자 또는 관리자만 할 수 있습니다.'
+        });
+      }
+    }
+
+    if (status === 'rejected') {
+      if (isAuthorReview) {
+        return res.status(403).json({
+          success: false,
+          message: '작성자는 피드백을 보낼 수 없습니다.'
+        });
+      }
+      if (!isRecipient && !isElevatedReviewer && !inCcList) {
+        return res.status(403).json({
+          success: false,
+          message: '피드백은 수신자·참조 인원·관리자만 할 수 있습니다.'
+        });
+      }
     }
 
     await report.update({
@@ -500,9 +979,63 @@ export const reviewWorkReport = async (req: RequestWithUser, res: Response) => {
       ]
     });
 
+    const authorNotifyId = report.author_id != null ? Number(report.author_id) : NaN;
+    if (Number.isInteger(authorNotifyId) && authorNotifyId > 0 && authorNotifyId !== uid) {
+      const reviewerName =
+        (reportWithUser as any)?.reviewer?.username ||
+        (reportWithUser as any)?.reviewer?.userid ||
+        req.user?.username ||
+        '검토자';
+      const titleShort = String(report.title || '').slice(0, 120);
+      if (status === 'approved') {
+        pushNotification(
+          {
+            title: '업무 보고서 승인',
+            message: `${reviewerName}님이 "${titleShort}" 보고서를 승인했습니다.`,
+            type: 'success',
+            target_type: 'user',
+            target_id: authorNotifyId,
+            tenant_id: tenantId,
+            data: {
+              feature: 'work_report',
+              id: report.id,
+              report_id: report.report_id,
+              list: 'authored',
+              reviewed: true,
+              status: 'approved'
+            }
+          },
+          (req as any).socketService
+        );
+      } else {
+        pushNotification(
+          {
+            title: '업무 보고서 피드백',
+            message: `${reviewerName}님이 "${titleShort}" 보고서에 피드백을 남겼습니다.`,
+            type: 'warning',
+            target_type: 'user',
+            target_id: authorNotifyId,
+            tenant_id: tenantId,
+            data: {
+              feature: 'work_report',
+              id: report.id,
+              report_id: report.report_id,
+              list: 'authored',
+              reviewed: true,
+              status: 'rejected'
+            }
+          },
+          (req as any).socketService
+        );
+      }
+    }
+
+    const plainRv = reportWithUser.get({ plain: true });
+    await batchAttachCcUsers([plainRv]);
+
     res.json({ 
       success: true, 
-      data: reportWithUser 
+      data: plainRv 
     });
   } catch (error: any) {
     console.error('업무 보고서 검토 오류:', error);

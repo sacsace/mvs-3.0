@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Card,
@@ -44,6 +44,10 @@ import {
   FileCopy as FileCopyIcon
 } from '@mui/icons-material';
 import { api } from '../../services/api';
+import { useMenuStore, useStore } from '../../store';
+import { findMenuIdByPath } from '../../utils/findMenuByPath';
+import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 interface Contract {
   id: number;
@@ -72,7 +76,15 @@ interface Customer {
   industry?: string;
 }
 
+/** DB `menus.route` — `App.tsx`의 `/customers/contracts` */
+const CONTRACT_MENU_ROUTES = ['/customers/contracts', '/customers'];
+
 const ContractManagement: React.FC = () => {
+  const { user } = useStore();
+  const { language, menus, hasMenuPermission, loading: menusLoading } = useMenuStore();
+  const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
+  const txt = useCallback((ko: string, en: string) => (language === 'en' ? en : ko), [language]);
+  const dateLocale = language === 'en' ? 'en-US' : 'ko-KR';
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -100,6 +112,24 @@ const ContractManagement: React.FC = () => {
   });
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
+  const elevated = user?.role === 'root' || user?.role === 'admin';
+  const contractMenuFlags = useMemo(() => {
+    const check = (action: 'view' | 'create' | 'edit' | 'delete') => {
+      if (elevated) return true;
+      for (const route of CONTRACT_MENU_ROUTES) {
+        const mid = findMenuIdByPath(menus, route);
+        if (mid != null && hasMenuPermission(mid, action)) return true;
+      }
+      return false;
+    };
+    return {
+      canRead: check('view') || check('create'),
+      canCreate: check('create'),
+      canEdit: check('edit'),
+      canDelete: check('delete')
+    };
+  }, [menus, hasMenuPermission, elevated]);
+
   const loadContracts = useCallback(async () => {
     try {
       setLoading(true);
@@ -113,11 +143,11 @@ const ContractManagement: React.FC = () => {
       setContracts(rows);
     } catch (error) {
       console.error('계약 목록 로드 오류:', error);
-      showSnackbar('계약 목록을 불러오는 중 오류가 발생했습니다.', 'error');
+      showSnackbar(txt('계약 목록을 불러오는 중 오류가 발생했습니다.', 'Failed to load contracts.'), 'error');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [txt]);
 
   const loadCustomers = useCallback(async () => {
     try {
@@ -134,9 +164,10 @@ const ContractManagement: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    loadContracts();
-    loadCustomers();
-  }, [loadContracts, loadCustomers]);
+    if (menusLoading) return;
+    void loadContracts();
+    void loadCustomers();
+  }, [menusLoading, loadContracts, loadCustomers]);
 
   const showSnackbar = (message: string, severity: 'success' | 'error') => {
     setSnackbar({ open: true, message, severity });
@@ -193,6 +224,13 @@ const ContractManagement: React.FC = () => {
   });
 
   const handleCreateContract = () => {
+    if (!contractMenuFlags.canCreate) {
+      showSnackbar(
+        txt('계약을 등록할 권한이 없습니다.', 'You do not have permission to register contracts.'),
+        'error'
+      );
+      return;
+    }
     setFormData({
       customer_id: '',
       contract_number: '',
@@ -211,6 +249,10 @@ const ContractManagement: React.FC = () => {
   };
 
   const handleEditContract = (contract: Contract) => {
+    if (!contractMenuFlags.canEdit) {
+      showSnackbar(txt('계약을 수정할 권한이 없습니다.', 'You do not have permission to edit contracts.'), 'error');
+      return;
+    }
     setFormData({
       customer_id: contract.customer_id ? contract.customer_id.toString() : '',
       contract_number: contract.contract_number,
@@ -230,6 +272,10 @@ const ContractManagement: React.FC = () => {
   };
 
   const handleViewContract = (contract: Contract) => {
+    if (!contractMenuFlags.canRead) {
+      showSnackbar(txt('계약을 조회할 권한이 없습니다.', 'You do not have permission to view contracts.'), 'error');
+      return;
+    }
     setFormData({
       customer_id: contract.customer_id ? contract.customer_id.toString() : '',
       contract_number: contract.contract_number,
@@ -249,6 +295,17 @@ const ContractManagement: React.FC = () => {
   };
 
   const handleSaveContract = async () => {
+    if (dialogMode === 'create' && !contractMenuFlags.canCreate) {
+      showSnackbar(
+        txt('계약을 등록할 권한이 없습니다.', 'You do not have permission to register contracts.'),
+        'error'
+      );
+      return;
+    }
+    if (dialogMode === 'edit' && !contractMenuFlags.canEdit) {
+      showSnackbar(txt('계약을 수정할 권한이 없습니다.', 'You do not have permission to edit contracts.'), 'error');
+      return;
+    }
     try {
       const data = {
         ...formData,
@@ -267,7 +324,7 @@ const ContractManagement: React.FC = () => {
             headers: { 'Content-Type': 'multipart/form-data' }
           });
         }
-        showSnackbar('계약이 성공적으로 등록되었습니다.', 'success');
+        showSnackbar(txt('계약이 성공적으로 등록되었습니다.', 'Contract created.'), 'success');
       } else if (dialogMode === 'edit' && selectedContract) {
         await api.put(`/contracts/${selectedContract.id}`, data);
         if (selectedFiles.length > 0) {
@@ -277,7 +334,7 @@ const ContractManagement: React.FC = () => {
             headers: { 'Content-Type': 'multipart/form-data' }
           });
         }
-        showSnackbar('계약이 성공적으로 수정되었습니다.', 'success');
+        showSnackbar(txt('계약이 성공적으로 수정되었습니다.', 'Contract updated.'), 'success');
       }
       
       setDialogOpen(false);
@@ -285,21 +342,36 @@ const ContractManagement: React.FC = () => {
       loadContracts();
     } catch (error) {
       console.error('계약 저장 오류:', error);
-      showSnackbar('계약 저장 중 오류가 발생했습니다.', 'error');
+      showSnackbar(txt('계약 저장 중 오류가 발생했습니다.', 'Failed to save contract.'), 'error');
     }
   };
 
-  const handleDeleteContract = async (contract: Contract) => {
-    if (window.confirm(`'${contract.title}' 계약을 삭제하시겠습니까?`)) {
-      try {
-        await api.delete(`/contracts/${contract.id}`);
-        showSnackbar('계약이 성공적으로 삭제되었습니다.', 'success');
-        loadContracts();
-      } catch (error) {
-        console.error('계약 삭제 오류:', error);
-        showSnackbar('계약 삭제 중 오류가 발생했습니다.', 'error');
-      }
+  const handleDeleteContract = (contract: Contract) => {
+    if (!contractMenuFlags.canDelete) {
+      showSnackbar(txt('계약을 삭제할 권한이 없습니다.', 'You do not have permission to delete contracts.'), 'error');
+      return;
     }
+    showConfirm(
+      txt(`'${contract.title}' 계약을 삭제하시겠습니까?`, `Delete contract '${contract.title}'?`),
+      () => {
+        void (async () => {
+          try {
+            await api.delete(`/contracts/${contract.id}`);
+            showSnackbar(txt('계약이 성공적으로 삭제되었습니다.', 'Contract deleted.'), 'success');
+            loadContracts();
+          } catch (error) {
+            console.error('계약 삭제 오류:', error);
+            showSnackbar(txt('계약 삭제 중 오류가 발생했습니다.', 'Failed to delete contract.'), 'error');
+          }
+        })();
+      },
+      {
+        title: txt('삭제 확인', 'Confirm delete'),
+        confirmColor: 'error',
+        confirmText: txt('삭제', 'Delete'),
+        cancelText: txt('취소', 'Cancel')
+      }
+    );
   };
 
   const getStatusColor = (status: string) => {
@@ -314,11 +386,16 @@ const ContractManagement: React.FC = () => {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'active': return '활성';
-      case 'inactive': return '비활성';
-      case 'expired': return '만료';
-      case 'suspended': return '정지';
-      default: return status;
+      case 'active':
+        return txt('활성', 'Active');
+      case 'inactive':
+        return txt('비활성', 'Inactive');
+      case 'expired':
+        return txt('만료', 'Expired');
+      case 'suspended':
+        return txt('정지', 'Suspended');
+      default:
+        return status;
     }
   };
 
@@ -326,15 +403,21 @@ const ContractManagement: React.FC = () => {
     const now = new Date();
     const startDate = new Date(contract.start_date);
     const endDate = new Date(contract.end_date);
-    
-    if (endDate < now) return { status: 'expired', text: '만료됨', color: 'error' };
-    if (startDate > now) return { status: 'upcoming', text: '시작 예정', color: 'info' };
-    
+
+    if (endDate < now) return { status: 'expired', text: txt('만료됨', 'Expired'), color: 'error' };
+    if (startDate > now) return { status: 'upcoming', text: txt('시작 예정', 'Upcoming'), color: 'info' };
+
     const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-    if (endDate <= thirtyDaysFromNow) return { status: 'expiring_soon', text: '만료 임박', color: 'warning' };
-    
-    return { status: 'active', text: '진행중', color: 'success' };
+    if (endDate <= thirtyDaysFromNow)
+      return { status: 'expiring_soon', text: txt('만료 임박', 'Expiring soon'), color: 'warning' };
+
+    return { status: 'active', text: txt('진행중', 'In progress'), color: 'success' };
   };
+
+  const contractTypeLabel = (type?: string) =>
+    (type || 'sales') === 'sales'
+      ? txt('매출 계약', 'Sales contract')
+      : txt('매입(구매/임대)', 'Purchase / lease');
 
   const getTotalValue = () => {
     return contracts
@@ -378,25 +461,36 @@ const ContractManagement: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <DescriptionIcon sx={{ fontSize: '2rem', color: 'primary.main' }} />
           <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
-            계약 관리
+            {txt('계약 관리', 'Contract management')}
           </Typography>
         </Box>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}
-            onClick={loadContracts}
-            disabled={loading}
+            onClick={() => void loadContracts()}
+            disabled={loading || menusLoading || !contractMenuFlags.canRead}
           >
-            새로고침
+            {txt('새로고침', 'Refresh')}
           </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleCreateContract}
+          <Tooltip
+            title={
+              !contractMenuFlags.canCreate && !menusLoading
+                ? txt('등록 권한이 없습니다.', 'No permission to create.')
+                : ''
+            }
           >
-            계약 등록
-          </Button>
+            <span>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleCreateContract}
+                disabled={menusLoading || !contractMenuFlags.canCreate}
+              >
+                {txt('계약 등록', 'Register contract')}
+              </Button>
+            </span>
+          </Tooltip>
         </Box>
       </Box>
 
@@ -408,7 +502,7 @@ const ContractManagement: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography color="text.secondary" gutterBottom>
-                    총 계약 수
+                    {txt('총 계약 수', 'Total contracts')}
                   </Typography>
                   <Typography variant="h4" sx={{ fontWeight: 700 }}>
                     {contracts.length}
@@ -427,7 +521,7 @@ const ContractManagement: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography color="text.secondary" gutterBottom>
-                    진행중 계약
+                    {txt('진행중 계약', 'In progress')}
                   </Typography>
                   <Typography variant="h4" sx={{ fontWeight: 700 }}>
                     {getActiveContracts()}
@@ -446,7 +540,7 @@ const ContractManagement: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography color="text.secondary" gutterBottom>
-                    만료 임박
+                    {txt('만료 임박', 'Expiring soon')}
                   </Typography>
                   <Typography variant="h4" sx={{ fontWeight: 700 }}>
                     {getExpiringSoonContracts()}
@@ -465,7 +559,7 @@ const ContractManagement: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography color="text.secondary" gutterBottom>
-                    총 계약 가치
+                    {txt('총 계약 가치', 'Total contract value')}
                   </Typography>
                   <Typography variant="h4" sx={{ fontWeight: 700 }}>
                     Rs. {getTotalValue().toLocaleString()}
@@ -487,7 +581,10 @@ const ContractManagement: React.FC = () => {
             <Grid size={{ xs: 12, md: 4 }}>
               <TextField
                 fullWidth
-                placeholder="계약명, 계약번호, 고객명으로 검색..."
+                placeholder={txt(
+                  '계약명, 계약번호, 고객명으로 검색...',
+                  'Search by title, number, customer…'
+                )}
                 value={searchTerm}
                 onChange={handleSearch}
                 InputProps={{
@@ -501,47 +598,47 @@ const ContractManagement: React.FC = () => {
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
               <FormControl fullWidth>
-                <InputLabel>상태</InputLabel>
+                <InputLabel>{txt('상태', 'Status')}</InputLabel>
                 <Select
                   value={statusFilter}
                   onChange={handleStatusFilter}
-                  label="상태"
+                  label={txt('상태', 'Status')}
                 >
-                  <MenuItem value="all">전체</MenuItem>
-                  <MenuItem value="active">활성</MenuItem>
-                  <MenuItem value="inactive">비활성</MenuItem>
-                  <MenuItem value="expired">만료</MenuItem>
-                  <MenuItem value="suspended">정지</MenuItem>
+                  <MenuItem value="all">{txt('전체', 'All')}</MenuItem>
+                  <MenuItem value="active">{txt('활성', 'Active')}</MenuItem>
+                  <MenuItem value="inactive">{txt('비활성', 'Inactive')}</MenuItem>
+                  <MenuItem value="expired">{txt('만료', 'Expired')}</MenuItem>
+                  <MenuItem value="suspended">{txt('정지', 'Suspended')}</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
             <Grid size={{ xs: 12, md: 2 }}>
               <FormControl fullWidth>
-                <InputLabel>계약 구분</InputLabel>
+                <InputLabel>{txt('계약 구분', 'Contract type')}</InputLabel>
                 <Select
                   value={contractTypeFilter}
                   onChange={handleContractTypeFilter}
-                  label="계약 구분"
+                  label={txt('계약 구분', 'Contract type')}
                 >
-                  <MenuItem value="all">전체</MenuItem>
-                  <MenuItem value="sales">매출 계약</MenuItem>
-                  <MenuItem value="purchase_lease">매입(구매/임대)</MenuItem>
+                  <MenuItem value="all">{txt('전체', 'All')}</MenuItem>
+                  <MenuItem value="sales">{txt('매출 계약', 'Sales contract')}</MenuItem>
+                  <MenuItem value="purchase_lease">{txt('매입(구매/임대)', 'Purchase / lease')}</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
             <Grid size={{ xs: 12, md: 2 }}>
               <FormControl fullWidth>
-                <InputLabel>기간</InputLabel>
+                <InputLabel>{txt('기간', 'Period')}</InputLabel>
                 <Select
                   value={dateFilter}
                   onChange={handleDateFilter}
-                  label="기간"
+                  label={txt('기간', 'Period')}
                 >
-                  <MenuItem value="all">전체</MenuItem>
-                  <MenuItem value="active">진행중</MenuItem>
-                  <MenuItem value="expired">만료됨</MenuItem>
-                  <MenuItem value="upcoming">시작 예정</MenuItem>
-                  <MenuItem value="expiring_soon">만료 임박</MenuItem>
+                  <MenuItem value="all">{txt('전체', 'All')}</MenuItem>
+                  <MenuItem value="active">{txt('진행중', 'In progress')}</MenuItem>
+                  <MenuItem value="expired">{txt('만료됨', 'Ended')}</MenuItem>
+                  <MenuItem value="upcoming">{txt('시작 예정', 'Upcoming')}</MenuItem>
+                  <MenuItem value="expiring_soon">{txt('만료 임박', 'Expiring soon')}</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -554,18 +651,36 @@ const ContractManagement: React.FC = () => {
         <CardContent>
           <TableContainer>
             <Table>
-              <TableHead>
+              <TableHead
+                sx={{
+                  bgcolor: 'background.paper',
+                  '& .MuiTableCell-head': {
+                    bgcolor: 'background.paper',
+                    color: 'text.primary',
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                    textTransform: 'none',
+                    letterSpacing: 'normal',
+                    borderBottom: '2px solid',
+                    borderColor: 'primary.main',
+                    py: 1.25
+                  },
+                  '& .MuiTableCell-head:last-of-type': {
+                    textAlign: 'center'
+                  }
+                }}
+              >
                 <TableRow>
-                  <TableCell>계약명</TableCell>
-                  <TableCell>계약번호</TableCell>
-                  <TableCell>고객</TableCell>
-                  <TableCell>계약 구분</TableCell>
-                  <TableCell>계약 가치</TableCell>
-                  <TableCell>계약 기간</TableCell>
-                  <TableCell>계약 상태</TableCell>
-                  <TableCell>상태</TableCell>
-                  <TableCell>등록일</TableCell>
-                  <TableCell align="center">작업</TableCell>
+                  <TableCell>{txt('계약명', 'Title')}</TableCell>
+                  <TableCell>{txt('계약번호', 'Contract no.')}</TableCell>
+                  <TableCell>{txt('고객', 'Customer')}</TableCell>
+                  <TableCell>{txt('계약 구분', 'Type')}</TableCell>
+                  <TableCell>{txt('계약 가치', 'Value')}</TableCell>
+                  <TableCell>{txt('계약 기간', 'Period')}</TableCell>
+                  <TableCell>{txt('계약 상태', 'Lifecycle')}</TableCell>
+                  <TableCell>{txt('상태', 'Status')}</TableCell>
+                  <TableCell>{txt('등록일', 'Created')}</TableCell>
+                  <TableCell>{txt('작업', 'Actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -575,8 +690,8 @@ const ContractManagement: React.FC = () => {
                     <TableRow
                       key={contract.id}
                       hover
-                      onClick={() => handleViewContract(contract)}
-                      sx={{ cursor: 'pointer' }}
+                      onClick={contractMenuFlags.canRead ? () => handleViewContract(contract) : undefined}
+                      sx={{ cursor: contractMenuFlags.canRead ? 'pointer' : 'default' }}
                     >
                       <TableCell>
                         <Box>
@@ -606,7 +721,7 @@ const ContractManagement: React.FC = () => {
                             {contract.customer_name?.charAt(0) || 'C'}
                           </Avatar>
                           <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {contract.customer_name || '고객 정보 없음'}
+                            {contract.customer_name || txt('고객 정보 없음', 'No customer')}
                           </Typography>
                         </Box>
                       </TableCell>
@@ -614,7 +729,7 @@ const ContractManagement: React.FC = () => {
                         <Chip
                           size="small"
                           color={(contract.contract_type || 'sales') === 'sales' ? 'primary' : 'secondary'}
-                          label={(contract.contract_type || 'sales') === 'sales' ? '매출 계약' : '매입(구매/임대)'}
+                          label={contractTypeLabel(contract.contract_type)}
                         />
                       </TableCell>
                       <TableCell>
@@ -627,13 +742,13 @@ const ContractManagement: React.FC = () => {
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <CalendarIcon sx={{ fontSize: '1rem', color: 'text.secondary' }} />
                             <Typography variant="caption">
-                              {new Date(contract.start_date).toLocaleDateString()}
+                              {new Date(contract.start_date).toLocaleDateString(dateLocale)}
                             </Typography>
                           </Box>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <ScheduleIcon sx={{ fontSize: '1rem', color: 'text.secondary' }} />
                             <Typography variant="caption">
-                              {new Date(contract.end_date).toLocaleDateString()}
+                              {new Date(contract.end_date).toLocaleDateString(dateLocale)}
                             </Typography>
                           </Box>
                         </Box>
@@ -654,33 +769,53 @@ const ContractManagement: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Typography variant="caption" color="text.secondary">
-                          {new Date(contract.created_at).toLocaleDateString()}
+                          {new Date(contract.created_at).toLocaleDateString(dateLocale)}
                         </Typography>
                       </TableCell>
                       <TableCell align="center">
-                        <Box sx={{ display: 'flex', gap: 0.5 }}>
-                          <Tooltip title="수정">
-                            <IconButton
-                              size="small"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleEditContract(contract);
-                              }}
-                            >
-                              <EditIcon />
-                            </IconButton>
+                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                          <Tooltip
+                            title={
+                              !contractMenuFlags.canEdit && !menusLoading
+                                ? txt('계약을 수정할 권한이 없습니다.', 'No permission to edit contracts.')
+                                : txt('수정', 'Edit')
+                            }
+                            disableHoverListener={menusLoading || contractMenuFlags.canEdit}
+                          >
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={menusLoading || !contractMenuFlags.canEdit}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleEditContract(contract);
+                                }}
+                              >
+                                <EditIcon />
+                              </IconButton>
+                            </span>
                           </Tooltip>
-                          <Tooltip title="삭제">
-                            <IconButton
-                              size="small"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleDeleteContract(contract);
-                              }}
-                              color="error"
-                            >
-                              <DeleteIcon />
-                            </IconButton>
+                          <Tooltip
+                            title={
+                              !contractMenuFlags.canDelete && !menusLoading
+                                ? txt('계약을 삭제할 권한이 없습니다.', 'No permission to delete contracts.')
+                                : txt('삭제', 'Delete')
+                            }
+                            disableHoverListener={menusLoading || contractMenuFlags.canDelete}
+                          >
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={menusLoading || !contractMenuFlags.canDelete}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleDeleteContract(contract);
+                                }}
+                                color="error"
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </span>
                           </Tooltip>
                         </Box>
                       </TableCell>
@@ -696,22 +831,24 @@ const ContractManagement: React.FC = () => {
       {/* 계약 등록/수정 다이얼로그 */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>
-          {dialogMode === 'create' && '새 계약 등록'}
-          {dialogMode === 'edit' && '계약 수정'}
-          {dialogMode === 'view' && '계약 보기'}
+          {dialogMode === 'create' && txt('새 계약 등록', 'New contract')}
+          {dialogMode === 'edit' && txt('계약 수정', 'Edit contract')}
+          {dialogMode === 'view' && txt('계약 보기', 'View contract')}
         </DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl fullWidth>
-                <InputLabel>고객(선택)</InputLabel>
+                <InputLabel>{txt('고객(선택)', 'Customer (optional)')}</InputLabel>
                 <Select
                   value={formData.customer_id}
                   onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })}
-                  label="고객(선택)"
+                  label={txt('고객(선택)', 'Customer (optional)')}
                   disabled={dialogMode === 'view'}
                 >
-                  <MenuItem value="">일반 임대 계약(고객 없음)</MenuItem>
+                  <MenuItem value="">
+                    {txt('일반 임대 계약(고객 없음)', 'Lease without linked customer')}
+                  </MenuItem>
                   {customers.map((customer) => (
                     <MenuItem key={customer.id} value={customer.id.toString()}>
                       {customer.name}
@@ -724,15 +861,18 @@ const ContractManagement: React.FC = () => {
               {dialogMode === 'create' ? (
                 <TextField
                   fullWidth
-                  label="계약번호"
-                  value="자동 생성"
+                  label={txt('계약번호', 'Contract number')}
+                  value={txt('자동 생성', 'Auto-generated')}
                   disabled
-                  helperText="등록 시 계약번호가 자동으로 생성됩니다."
+                  helperText={txt(
+                    '등록 시 계약번호가 자동으로 생성됩니다.',
+                    'A contract number will be assigned when you save.'
+                  )}
                 />
               ) : (
                 <TextField
                   fullWidth
-                  label="계약번호"
+                  label={txt('계약번호', 'Contract number')}
                   value={formData.contract_number}
                   disabled
                 />
@@ -741,7 +881,7 @@ const ContractManagement: React.FC = () => {
             <Grid size={{ xs: 12 }}>
               <TextField
                 fullWidth
-                label="계약명"
+                label={txt('계약명', 'Title')}
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 disabled={dialogMode === 'view'}
@@ -751,7 +891,7 @@ const ContractManagement: React.FC = () => {
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
-                label="계약 가치 (INR)"
+                label={txt('계약 가치 (INR)', 'Contract value (INR)')}
                 type="number"
                 value={formData.contract_value}
                 onChange={(e) => setFormData({ ...formData, contract_value: e.target.value })}
@@ -761,22 +901,22 @@ const ContractManagement: React.FC = () => {
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl fullWidth>
-                <InputLabel>계약 구분</InputLabel>
+                <InputLabel>{txt('계약 구분', 'Contract type')}</InputLabel>
                 <Select
                   value={formData.contract_type}
                   onChange={(e) => setFormData({ ...formData, contract_type: e.target.value })}
-                  label="계약 구분"
+                  label={txt('계약 구분', 'Contract type')}
                   disabled={dialogMode === 'view'}
                 >
-                  <MenuItem value="sales">매출 계약</MenuItem>
-                  <MenuItem value="purchase_lease">매입(구매/임대)</MenuItem>
+                  <MenuItem value="sales">{txt('매출 계약', 'Sales contract')}</MenuItem>
+                  <MenuItem value="purchase_lease">{txt('매입(구매/임대)', 'Purchase / lease')}</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
-                label="계약 시작일"
+                label={txt('계약 시작일', 'Start date')}
                 type="date"
                 value={formData.start_date}
                 onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
@@ -788,7 +928,7 @@ const ContractManagement: React.FC = () => {
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
-                label="계약 종료일"
+                label={txt('계약 종료일', 'End date')}
                 type="date"
                 value={formData.end_date}
                 onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
@@ -799,24 +939,24 @@ const ContractManagement: React.FC = () => {
             </Grid>
             <Grid size={{ xs: 12 }}>
               <FormControl fullWidth>
-                <InputLabel>상태</InputLabel>
+                <InputLabel>{txt('상태', 'Status')}</InputLabel>
                 <Select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                  label="상태"
+                  label={txt('상태', 'Status')}
                   disabled={dialogMode === 'view'}
                 >
-                  <MenuItem value="active">활성</MenuItem>
-                  <MenuItem value="inactive">비활성</MenuItem>
-                  <MenuItem value="expired">만료</MenuItem>
-                  <MenuItem value="suspended">정지</MenuItem>
+                  <MenuItem value="active">{txt('활성', 'Active')}</MenuItem>
+                  <MenuItem value="inactive">{txt('비활성', 'Inactive')}</MenuItem>
+                  <MenuItem value="expired">{txt('만료', 'Expired')}</MenuItem>
+                  <MenuItem value="suspended">{txt('정지', 'Suspended')}</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
             <Grid size={{ xs: 12 }}>
               <TextField
                 fullWidth
-                label="계약 설명"
+                label={txt('계약 설명', 'Description')}
                 multiline
                 rows={3}
                 value={formData.description}
@@ -828,9 +968,13 @@ const ContractManagement: React.FC = () => {
               <Button
                 variant="outlined"
                 component="label"
-                disabled={dialogMode === 'view'}
+                disabled={
+                  dialogMode === 'view' ||
+                  (dialogMode === 'create' && !contractMenuFlags.canCreate) ||
+                  (dialogMode === 'edit' && !contractMenuFlags.canEdit)
+                }
               >
-                계약서 파일 첨부
+                {txt('계약서 파일 첨부', 'Attach files')}
                 <input
                   hidden
                   type="file"
@@ -843,12 +987,14 @@ const ContractManagement: React.FC = () => {
               </Button>
               {selectedFiles.length > 0 && (
                 <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
-                  선택 파일: {selectedFiles.map((file) => file.name).join(', ')}
+                  {txt('선택 파일:', 'Selected:')} {selectedFiles.map((file) => file.name).join(', ')}
                 </Typography>
               )}
               {Array.isArray(formData.attachments) && formData.attachments.length > 0 && (
                 <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                  <Typography variant="caption" color="text.secondary">기존 첨부파일</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {txt('기존 첨부파일', 'Existing attachments')}
+                  </Typography>
                   {formData.attachments.map((filePath) => (
                     <a
                       key={filePath}
@@ -867,15 +1013,28 @@ const ContractManagement: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>
-            {dialogMode === 'view' ? '닫기' : '취소'}
+            {dialogMode === 'view' ? txt('닫기', 'Close') : txt('취소', 'Cancel')}
           </Button>
-          {dialogMode !== 'view' && (
-            <Button onClick={handleSaveContract} variant="contained">
-              {dialogMode === 'create' ? '등록' : '수정'}
-            </Button>
-          )}
+          {dialogMode !== 'view' &&
+            ((dialogMode === 'create' && contractMenuFlags.canCreate) ||
+              (dialogMode === 'edit' && contractMenuFlags.canEdit)) && (
+              <Button onClick={() => void handleSaveContract()} variant="contained">
+                {dialogMode === 'create' ? txt('등록', 'Register') : txt('수정', 'Update')}
+              </Button>
+            )}
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={dialogState.open}
+        title={dialogState.title}
+        message={dialogState.message}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+        confirmColor={dialogState.confirmColor}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
 
       {/* 스낵바 */}
       <Snackbar

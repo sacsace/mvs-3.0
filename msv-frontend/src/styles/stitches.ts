@@ -26,7 +26,7 @@ const { globalCss } = createStitches({
       cardHover: '0 3px 10px rgba(15, 23, 42, 0.12)',
     },
     fonts: {
-      body: '"Inter", "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      body: '"Lato", "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
       mono: '"JetBrains Mono", "Fira Code", monospace',
     },
   },

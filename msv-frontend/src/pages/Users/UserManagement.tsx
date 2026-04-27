@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Typography,
   Box,
@@ -11,7 +11,6 @@ import {
   TableRow,
   Paper,
   Chip,
-  Avatar,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -45,13 +44,21 @@ import {
   Security as SecurityIcon,
   Download as DownloadIcon,
   FileDownload as FileDownloadIcon,
-  Upload as UploadIcon
+  Upload as UploadIcon,
+  AccountBalance as AccountBalanceIcon
 } from '@mui/icons-material';
-import { useStore } from '../../store';
-import { api } from '../../services/api';
+import { useSearchParams } from 'react-router-dom';
+import { useStore, useMenuStore } from '../../store';
+import { findMenuIdByPath } from '../../utils/findMenuByPath';
+import { api, departmentService } from '../../services/api';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useTranslation } from 'react-i18next';
+import { alpha, useTheme } from '@mui/material/styles';
+import type { Theme } from '@mui/material/styles';
+import { DepartmentManagementPanel } from '../HR/DepartmentManagement';
+
+const USER_MGMT_MENU_ROUTES = ['/hr/users', '/users'];
 
 interface User {
   id: number;
@@ -60,6 +67,7 @@ interface User {
   email: string;
   role: string;
   department?: string;
+  department_id?: number | null;
   position?: string;
   status: string;
   created_at: string;
@@ -74,8 +82,11 @@ interface User {
   emergency_contact?: string;
   emergency_phone?: string;
   hire_date?: string;
-  employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern';
+  employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern' | 'daily';
   salary?: number;
+  bank_name?: string;
+  bank_account?: string;
+  bank_ifsc?: string;
 }
 
 interface Company {
@@ -83,9 +94,160 @@ interface Company {
   name: string;
 }
 
+/** 급여(INR): 소수 미표시, 천 단위 콤마 (예: ₹100,000) */
+function formatSalaryInr(value: unknown): string {
+  const n = typeof value === 'number' ? value : parseFloat(String(value ?? '').replace(/,/g, ''));
+  if (!Number.isFinite(n)) return '—';
+  return `₹${Math.round(n).toLocaleString('en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 })}`;
+}
+
+/** 계좌번호 저장값: 공백 제거 후 숫자만 */
+function normalizeBankAccountDigits(raw: string): string {
+  return String(raw ?? '')
+    .replace(/\s/g, '')
+    .replace(/\D/g, '');
+}
+
+/** 계좌번호 표시: 숫자 4자리마다 공백 */
+function formatBankAccountDisplay(digitsOnly: string): string {
+  const d = normalizeBankAccountDigits(digitsOnly);
+  if (!d) return '';
+  const parts: string[] = [];
+  for (let i = 0; i < d.length; i += 4) {
+    parts.push(d.slice(i, i + 4));
+  }
+  return parts.join(' ');
+}
+
+/** IFSC 저장값: 공백·특수문자 제거, 영숫자만, 대문자, 최대 11자(인도 표준) */
+function normalizeIfsc(raw: string): string {
+  return String(raw ?? '')
+    .replace(/\s/g, '')
+    .replace(/[^A-Za-z0-9]/g, '')
+    .toUpperCase()
+    .slice(0, 11);
+}
+
+/** IFSC 표시: 4자리마다 공백 */
+function formatIfscDisplay(stored: string): string {
+  const s = normalizeIfsc(stored);
+  if (!s) return '';
+  const parts: string[] = [];
+  for (let i = 0; i < s.length; i += 4) {
+    parts.push(s.slice(i, i + 4));
+  }
+  return parts.join(' ');
+}
+
+/** 생성/수정 폼 아코디언 — 줄 간격·테두리 정리 */
+const accordionDenseSx = {
+  '&:before': { display: 'none' },
+  boxShadow: 'none',
+  border: '1px solid',
+  borderColor: 'divider',
+  borderRadius: 1,
+  mb: 1,
+  '& .MuiAccordionSummary-root': { minHeight: 44, py: 0.5 },
+  '& .MuiAccordionDetails-root': { pt: 1, pb: 1.25, px: 2 }
+} as const;
+
+const highlightPayrollFieldsSx = {
+  p: 1,
+  borderRadius: 1,
+  border: '1px solid',
+  borderColor: 'divider',
+  bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, 0.04),
+  borderLeft: '3px solid',
+  borderLeftColor: 'primary.main'
+} as const;
+
+/** 부서·직책 행 강조 */
+const highlightDeptPositionRowSx = {
+  p: { xs: 0.875, sm: 1 },
+  borderRadius: 1,
+  bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, 0.09),
+  border: '1px solid',
+  borderColor: (theme: Theme) => alpha(theme.palette.divider, 0.85),
+  borderLeft: '3px solid',
+  borderLeftColor: 'primary.main',
+  boxSizing: 'border-box' as const
+};
+
+/** 인사 정보 필드 라벨 — 한 단계 작게 */
+const hrFieldLabelSx = {
+  fontSize: '0.8125rem',
+  fontWeight: 600,
+  lineHeight: 1.25,
+  mb: 0.375,
+  color: 'text.primary'
+} as const;
+
+const hrHintSx = {
+  fontSize: '0.7rem',
+  lineHeight: 1.35,
+  display: 'block',
+  mt: 0.375
+} as const;
+
+const highlightBankFieldsSx = {
+  p: 1,
+  borderRadius: 1,
+  border: '1px solid',
+  borderColor: 'divider',
+  bgcolor: 'grey.50',
+  borderLeft: '3px solid',
+  borderLeftColor: 'success.main'
+} as const;
+
 const UserManagement: React.FC = () => {
+  const theme = useTheme();
+  /** 사용자 상세 다이얼로그 — 필드 라벨·값 가독성 */
+  const userDetailLabelSx = useMemo(
+    () => ({
+      mb: 0.5,
+      fontWeight: 500 as const,
+      color: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.85) : theme.palette.grey[800],
+      fontSize: '0.8125rem'
+    }),
+    [theme]
+  );
+  const userDetailValueSx = useMemo(
+    () => ({
+      color: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.95) : alpha(theme.palette.text.primary, 0.92)
+    }),
+    [theme]
+  );
+  const userDetailSectionTitleSx = useMemo(
+    () => ({
+      fontWeight: 600 as const,
+      fontSize: '1rem',
+      color: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.92) : theme.palette.grey[900]
+    }),
+    [theme]
+  );
   const { user } = useStore();
-  const { t } = useTranslation();
+  const { menus, hasMenuPermission, loading: menusLoading } = useMenuStore();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const hrElevated = user?.role === 'root' || user?.role === 'admin';
+  const userMgmtMenuFlags = useMemo(() => {
+    const check = (action: 'view' | 'create' | 'edit' | 'delete') => {
+      if (hrElevated) return true;
+      for (const route of USER_MGMT_MENU_ROUTES) {
+        const mid = findMenuIdByPath(menus, route);
+        if (mid != null && hasMenuPermission(mid, action)) return true;
+      }
+      return false;
+    };
+    return {
+      canView: check('view'),
+      canCreate: check('create'),
+      canEdit: check('edit'),
+      canDelete: check('delete')
+    };
+  }, [menus, hasMenuPermission, user?.role]);
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language?.startsWith('en') ? 'en-US' : 'ko-KR';
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [users, setUsers] = useState<User[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -104,6 +266,9 @@ const UserManagement: React.FC = () => {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
+  const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
+  /** 0: 사용자 목록, 1: 사용자 추가/수정 폼, 2: 부서 관리 */
+  const [pageTab, setPageTab] = useState<0 | 1 | 2>(0);
   const [formData, setFormData] = useState({
     // 기본 정보
     employee_number: '',
@@ -118,9 +283,13 @@ const UserManagement: React.FC = () => {
     // 인사 정보
     hire_date: '',
     department: '',
+    department_id: '' as number | '',
     position: '',
     employment_type: 'fulltime',
     salary: '',
+    bank_name: '',
+    bank_account: '',
+    bank_ifsc: '',
     // 계정 정보
     userid: '',
     password: '',
@@ -140,9 +309,13 @@ const UserManagement: React.FC = () => {
     emergency_phone: string;
     hire_date: string;
     department: string;
+    department_id: number | '';
     position: string;
     employment_type: string;
     salary: string;
+    bank_name: string;
+    bank_account: string;
+    bank_ifsc: string;
     userid: string;
     password: string;
     role: string;
@@ -171,8 +344,7 @@ const UserManagement: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-      console.log('🔍 [사용자 관리] 사용자 목록 조회 시작');
-      
+            
       const params: any = {};
       if (searchTerm) {
         params.search = searchTerm;
@@ -182,24 +354,10 @@ const UserManagement: React.FC = () => {
       }
       
       const response = await api.get('/users', { params });
-      console.log('🔍 [사용자 관리] API 응답:', {
-        status: response.status,
-        success: response.data?.success,
-        dataType: Array.isArray(response.data?.data) ? 'array' : typeof response.data?.data,
-        dataLength: Array.isArray(response.data?.data) ? response.data.data.length : (response.data?.data ? 1 : 0),
-        fullResponse: response.data
-      });
-      
+            
       if (response.data && response.data.success) {
         const usersData = Array.isArray(response.data.data) ? response.data.data : (response.data.data ? [response.data.data] : []);
-        console.log('🔍 [사용자 관리] 설정할 사용자 개수:', usersData.length);
-        console.log('🔍 [사용자 관리] 사용자 데이터 샘플:', usersData.slice(0, 3).map((u: any) => ({
-          id: u.id,
-          userid: u.userid,
-          username: u.username,
-          email: u.email
-        })));
-        setUsers(usersData);
+                        setUsers(usersData);
       } else {
         console.error('❌ [사용자 관리] API 응답 실패:', response.data);
         setError(response.data?.message || t('userManagement.loadFailed'));
@@ -217,9 +375,21 @@ const UserManagement: React.FC = () => {
       setUsers([]);
     } finally {
       setLoading(false);
-      console.log('🔍 [사용자 관리] 로딩 완료');
-    }
+          }
   }, [searchTerm, selectedCompanyId, user?.role]);
+
+  const loadDepartments = useCallback(async () => {
+    try {
+      const res = await departmentService.list(false);
+      if (res.success && Array.isArray(res.data)) {
+        setDepartments(
+          (res.data as { id: number; name: string }[]).map((d) => ({ id: d.id, name: d.name }))
+        );
+      }
+    } catch (e) {
+      console.error('부서 목록:', e);
+    }
+  }, []);
 
   useEffect(() => {
     fetchUsers();
@@ -227,6 +397,51 @@ const UserManagement: React.FC = () => {
       fetchCompanies();
     }
   }, [fetchCompanies, fetchUsers, user?.role]);
+
+  useEffect(() => {
+    if (viewMode === 'create' || viewMode === 'edit') {
+      void loadDepartments();
+    }
+  }, [viewMode, loadDepartments]);
+
+  useEffect(() => {
+    if (searchParams.get('tab') !== 'departments') return;
+    if (menusLoading) return;
+    if (!hrElevated && !userMgmtMenuFlags.canCreate) {
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('tab');
+        return next;
+      }, { replace: true });
+      return;
+    }
+    setPageTab(2);
+    setViewMode('list');
+    setEditingUser(null);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('tab');
+      return next;
+    }, { replace: true });
+  }, [searchParams, setSearchParams, menusLoading, hrElevated, userMgmtMenuFlags.canCreate]);
+
+  /** 메뉴 로드 후 권한 없는 탭에 머물러 있으면 목록으로 */
+  useEffect(() => {
+    if (menusLoading) return;
+    if (pageTab === 1 && viewMode === 'create' && !hrElevated && !userMgmtMenuFlags.canCreate) {
+      setPageTab(0);
+      setViewMode('list');
+      setEditingUser(null);
+    }
+    if (pageTab === 2 && !hrElevated && !userMgmtMenuFlags.canCreate) {
+      setPageTab(0);
+      setViewMode('list');
+      setEditingUser(null);
+    }
+    if (pageTab === 0 && !hrElevated && !userMgmtMenuFlags.canView) {
+      /* 목록 탭도 못 보면 API가 막히므로 안내만 — 다른 탭으로 보내지 않음 */
+    }
+  }, [menusLoading, pageTab, viewMode, hrElevated, userMgmtMenuFlags.canCreate, userMgmtMenuFlags.canView]);
 
   useEffect(() => {
     // 검색어나 회사 필터가 변경되면 사용자 목록 다시 조회
@@ -238,6 +453,10 @@ const UserManagement: React.FC = () => {
   }, [fetchUsers, searchTerm, selectedCompanyId]);
 
   const handleCreateUser = () => {
+    if (!hrElevated && !userMgmtMenuFlags.canCreate) {
+      setError(t('userManagement.tabDisabledNoCreate'));
+      return;
+    }
     setEditingUser(null);
     setFormData({
       employee_number: '',
@@ -251,9 +470,13 @@ const UserManagement: React.FC = () => {
       emergency_phone: '',
       hire_date: '',
       department: '',
+      department_id: '' as number | '',
       position: '',
       employment_type: 'fulltime',
       salary: '',
+      bank_name: '',
+      bank_account: '',
+      bank_ifsc: '',
       userid: '',
       password: '',
       role: 'user',
@@ -261,6 +484,7 @@ const UserManagement: React.FC = () => {
     is_payment_officer: false,
     company_id: undefined
     } as any);
+    setPageTab(1);
     setViewMode('create');
   };
 
@@ -278,9 +502,16 @@ const UserManagement: React.FC = () => {
       emergency_phone: (user as any).emergency_phone || '',
       hire_date: (user as any).hire_date || '',
       department: user.department || '',
+      department_id:
+        (user as any).department_id != null && (user as any).department_id !== ''
+          ? Number((user as any).department_id)
+          : ('' as number | ''),
       position: user.position || '',
       employment_type: (user as any).employment_type || 'fulltime',
       salary: (user as any).salary || '',
+      bank_name: (user as any).bank_name || '',
+      bank_account: normalizeBankAccountDigits((user as any).bank_account || ''),
+      bank_ifsc: normalizeIfsc((user as any).bank_ifsc || ''),
       userid: user.userid,
       password: '',
       role: user.role,
@@ -288,6 +519,7 @@ const UserManagement: React.FC = () => {
       is_payment_officer: (user as any).is_payment_officer || false,
       company_id: undefined
     } as any);
+    setPageTab(1);
     setViewMode('edit');
   };
 
@@ -300,7 +532,7 @@ const UserManagement: React.FC = () => {
           setSuccess(t('userManagement.userDeleted'));
           fetchUsers();
         } catch (error) {
-          setError('사용자 삭제에 실패했습니다.');
+          setError(t('userManagement.deleteFailed'));
         }
       },
       { confirmColor: 'error' }
@@ -335,15 +567,15 @@ const UserManagement: React.FC = () => {
     }
 
     showConfirm(
-      `정말로 선택한 ${selectedUsers.length}명의 사용자를 삭제하시겠습니까?`,
+      t('userManagement.confirmDeleteSelectedBulk', { count: selectedUsers.length }),
       async () => {
         try {
           await Promise.all(selectedUsers.map(userId => api.delete(`/users/${userId}`)));
-          setSuccess(`${selectedUsers.length}명의 사용자가 삭제되었습니다.`);
+          setSuccess(t('userManagement.deleteSelectedSuccess', { count: selectedUsers.length }));
           setSelectedUsers([]);
           fetchUsers();
         } catch (error) {
-          setError('사용자 삭제에 실패했습니다.');
+          setError(t('userManagement.deleteFailed'));
         }
       },
       { confirmColor: 'error' }
@@ -359,14 +591,14 @@ const UserManagement: React.FC = () => {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `사용자_입력_샘플_${new Date().toISOString().split('T')[0]}.xlsx`);
+      link.setAttribute('download', `${t('userManagement.excelSampleFilename')}_${new Date().toISOString().split('T')[0]}.xlsx`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Excel 샘플 다운로드 오류:', error);
-      setError('Excel 샘플 파일 다운로드 중 오류가 발생했습니다.');
+      setError(t('userManagement.excelSampleDownloadError'));
     }
   };
 
@@ -384,14 +616,14 @@ const UserManagement: React.FC = () => {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `사용자_목록_${new Date().toISOString().split('T')[0]}.xlsx`);
+      link.setAttribute('download', `${t('userManagement.excelExportFilename')}_${new Date().toISOString().split('T')[0]}.xlsx`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Excel 내보내기 오류:', error);
-      setError('Excel 파일 내보내기 중 오류가 발생했습니다.');
+      setError(t('userManagement.excelExportError'));
     }
   };
 
@@ -406,7 +638,7 @@ const UserManagement: React.FC = () => {
   // Excel 파일 가져오기
   const handleImportExcel = async () => {
     if (!importFile) {
-      setError('Excel 파일을 선택해주세요.');
+      setError(t('userManagement.excelSelectFile'));
       return;
     }
 
@@ -436,7 +668,7 @@ const UserManagement: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Excel 가져오기 오류:', error);
-      setError(error.response?.data?.message || 'Excel 파일 가져오기 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || t('userManagement.excelImportError'));
     } finally {
       setImportLoading(false);
     }
@@ -456,7 +688,13 @@ const UserManagement: React.FC = () => {
         ...formData,
         password: formData.password || (editingUser ? undefined : 'default123')
       };
-      
+
+      if (submitData.department_id === '' || submitData.department_id === undefined) {
+        submitData.department_id = null;
+      } else {
+        submitData.department_id = Number(submitData.department_id);
+      }
+
       if (editingUser) {
         // 수정 시 비밀번호가 없으면 제외
         if (!submitData.password) {
@@ -472,10 +710,11 @@ const UserManagement: React.FC = () => {
         await api.post('/users', submitData);
         setSuccess(t('userManagement.userCreated'));
       }
+      setPageTab(0);
       setViewMode('list');
       fetchUsers();
     } catch (error: any) {
-      setError(error.response?.data?.message || '작업에 실패했습니다.');
+      setError(error.response?.data?.message || t('userManagement.operationFailed'));
     }
   };
 
@@ -499,10 +738,40 @@ const UserManagement: React.FC = () => {
     }
   };
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'active': return t('userManagement.statusActive');
+      case 'inactive': return t('userManagement.statusInactive');
+      case 'suspended': return t('userManagement.statusSuspended');
+      default: return status;
+    }
+  };
+
+  const getEmploymentTypeLabel = (type: string | undefined) => {
+    switch (type) {
+      case 'fulltime': return t('userManagement.empFulltime');
+      case 'daily': return t('userManagement.empDaily');
+      case 'contract': return t('userManagement.empContract');
+      case 'parttime': return t('userManagement.empParttime');
+      case 'intern': return t('userManagement.empIntern');
+      default: return '-';
+    }
+  };
+
+  const getGenderLabel = (g: string | undefined) => {
+    switch (g) {
+      case 'male': return t('userManagement.genderMale');
+      case 'female': return t('userManagement.genderFemale');
+      case 'other': return t('userManagement.genderOther');
+      default: return '-';
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return 'success';
       case 'inactive': return 'error';
+      case 'suspended': return 'warning';
       case 'pending': return 'warning';
       default: return 'default';
     }
@@ -582,7 +851,7 @@ const UserManagement: React.FC = () => {
               {t('userManagement.description')}
             </Typography>
           </Box>
-          {viewMode === 'list' && (
+          {pageTab === 0 && viewMode === 'list' && (
             <Box sx={{ display: 'flex', gap: 1 }}>
               <Button
                 variant="outlined"
@@ -626,28 +895,71 @@ const UserManagement: React.FC = () => {
         {/* 탭 네비게이션 */}
         <Card sx={{ mb: 3 }}>
           <Tabs
-            value={viewMode === 'list' ? 0 : 1}
+            value={pageTab}
             onChange={(e, newValue) => {
-              if (newValue === 0) {
-                setViewMode('list');
-              } else if (newValue === 1) {
+              const v = newValue as 0 | 1 | 2;
+              if (v === 0 && !menusLoading && !hrElevated && !userMgmtMenuFlags.canView) {
+                return;
+              }
+              if (v === 1 && !menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate) {
+                return;
+              }
+              if (v === 2 && !menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate) {
+                return;
+              }
+              if (v === 1) {
                 handleCreateUser();
+                return;
+              }
+              setPageTab(v);
+              if (v === 0) {
+                setViewMode('list');
+                setEditingUser(null);
+              } else {
+                setViewMode('list');
+                setEditingUser(null);
               }
             }}
           >
-            <Tab label={t('userManagement.userList')} />
-            <Tab label={t('userManagement.addUser')} />
+            <Tab
+              label={t('userManagement.userList')}
+              disabled={!menusLoading && !hrElevated && !userMgmtMenuFlags.canView}
+              title={
+                !menusLoading && !hrElevated && !userMgmtMenuFlags.canView
+                  ? t('userManagement.tabDisabledNoView')
+                  : undefined
+              }
+            />
+            <Tab
+              label={t('userManagement.addUser')}
+              disabled={!menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate}
+              title={
+                !menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate
+                  ? t('userManagement.tabDisabledNoCreate')
+                  : undefined
+              }
+            />
+            <Tab
+              label={t('userManagement.departmentTab')}
+              disabled={!menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate}
+              title={
+                !menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate
+                  ? t('userManagement.tabDisabledNoCreate')
+                  : undefined
+              }
+            />
           </Tabs>
         </Card>
       </Box>
 
       {/* 검색 및 필터 */}
-      {viewMode === 'list' && (
+      {pageTab === 0 && viewMode === 'list' && (
         <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
         <TextField
           placeholder={t('userManagement.search')}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
+          size="small"
           sx={{ flex: 1 }}
           InputProps={{
             startAdornment: (
@@ -658,7 +970,7 @@ const UserManagement: React.FC = () => {
           }}
         />
         {user?.role === 'root' && (
-          <FormControl sx={{ minWidth: 200 }}>
+          <FormControl sx={{ minWidth: 200 }} size="small">
             <Select
               value={selectedCompanyId}
               onChange={(e) => setSelectedCompanyId(e.target.value as number | '')}
@@ -699,21 +1011,48 @@ const UserManagement: React.FC = () => {
       )}
 
       {/* 사용자 테이블 */}
-      {viewMode === 'list' && (
-      <TableContainer component={Paper} sx={{ boxShadow: 2 }}>
+      {pageTab === 0 && viewMode === 'list' && (
+      <TableContainer
+        component={Paper}
+        sx={{
+          boxShadow: 1,
+          borderRadius: 1,
+          border: '1px solid',
+          borderColor: 'divider'
+        }}
+      >
         <Table
           size="small"
           sx={{
+            fontSize: '0.8125rem',
             '& .MuiTableHead-root .MuiTableCell-root': {
-              py: 1.2
+              py: 1,
+              px: 1,
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              color: 'text.secondary',
+              letterSpacing: '0.02em',
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+              bgcolor: 'grey.100'
             },
             '& .MuiTableBody-root .MuiTableCell-root': {
-              py: 0.95
-            }
+              py: 1.45,
+              px: 1,
+              fontSize: '0.8125rem',
+              lineHeight: 1.45,
+              verticalAlign: 'middle',
+              borderBottom: '1px solid',
+              borderColor: 'divider'
+            },
+            '& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-root': {
+              borderBottom: 'none'
+            },
+            '& .MuiTableSortLabel-root': { fontSize: 'inherit', fontWeight: 600 }
           }}
         >
           <TableHead>
-            <TableRow sx={{ bgcolor: 'grey.50' }}>
+            <TableRow sx={{ bgcolor: 'grey.100' }}>
               <TableCell padding="checkbox">
                 <Checkbox
                   indeterminate={selectedUsers.length > 0 && selectedUsers.length < filteredUsers.length}
@@ -781,7 +1120,7 @@ const UserManagement: React.FC = () => {
                   direction={orderBy === 'created_at' ? order : 'asc'}
                   onClick={() => handleSort('created_at')}
                 >
-                  생성일
+                  {t('userManagement.createdAt')}
                 </TableSortLabel>
               </TableCell>
             </TableRow>
@@ -815,52 +1154,95 @@ const UserManagement: React.FC = () => {
               </TableRow>
             ) : (
               filteredUsers.map((user) => (
-                <TableRow 
-                  key={user.id} 
+                <TableRow
+                  key={user.id}
                   hover
                   onClick={() => handleViewUser(user)}
-                  sx={{ cursor: 'pointer' }}
+                  sx={{
+                    cursor: 'pointer',
+                    '&:hover': { bgcolor: 'action.hover' }
+                  }}
                 >
                   <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       checked={selectedUsers.includes(user.id)}
                       onChange={() => handleSelectUser(user.id)}
+                      size="small"
                     />
                   </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Avatar sx={{ mr: 1.75, width: 36, height: 36, bgcolor: 'primary.main' }}>
-                        <PersonIcon />
-                      </Avatar>
-                      <Box>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', lineHeight: 1.24 }}>
-                          {user.username}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.24 }}>
-                          {user.userid}
-                        </Typography>
-                      </Box>
-                    </Box>
+                  <TableCell sx={{ minWidth: 140 }}>
+                    <Typography
+                      component="div"
+                      sx={{
+                        fontSize: '0.8125rem',
+                        fontWeight: 600,
+                        lineHeight: 1.4,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        minWidth: 0
+                      }}
+                    >
+                      {user.username}
+                    </Typography>
                   </TableCell>
-                  <TableCell>{user.email}</TableCell>
+                  <TableCell
+                    sx={{
+                      maxWidth: 220,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {user.email}
+                  </TableCell>
                   <TableCell>
-                    <Chip 
-                      label={getRoleLabel(user.role)} 
+                    <Chip
+                      label={getRoleLabel(user.role)}
                       color={getRoleColor(user.role) as any}
                       size="small"
+                      sx={{
+                        height: 22,
+                        maxWidth: '100%',
+                        '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' }
+                      }}
                     />
                   </TableCell>
-                  <TableCell>{user.department || '-'}</TableCell>
-                  <TableCell>{user.position || '-'}</TableCell>
+                  <TableCell
+                    sx={{
+                      maxWidth: 120,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      color: 'text.secondary'
+                    }}
+                  >
+                    {user.department || '—'}
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      maxWidth: 120,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      color: 'text.secondary'
+                    }}
+                  >
+                    {user.position || '—'}
+                  </TableCell>
                   <TableCell>
-                    <Chip 
-                      label={user.status} 
+                    <Chip
+                      label={getStatusLabel(user.status)}
                       color={getStatusColor(user.status) as any}
                       size="small"
+                      sx={{
+                        height: 22,
+                        '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' }
+                      }}
                     />
                   </TableCell>
-                  <TableCell>
-                    {new Date(user.created_at).toLocaleDateString('ko-KR')}
+                  <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap', fontSize: '0.75rem' }}>
+                    {new Date(user.created_at).toLocaleDateString(dateLocale)}
                   </TableCell>
                 </TableRow>
               ))
@@ -870,56 +1252,67 @@ const UserManagement: React.FC = () => {
       </TableContainer>
       )}
 
+      {/* 부서 관리 (탭) */}
+      {pageTab === 2 && (
+        <DepartmentManagementPanel
+          embedded
+          canCreate={hrElevated || userMgmtMenuFlags.canCreate}
+          canEdit={hrElevated || userMgmtMenuFlags.canEdit}
+          canDelete={hrElevated || userMgmtMenuFlags.canDelete}
+        />
+      )}
+
       {/* 사용자 생성/편집 폼 (본문에 표시) */}
-      {(viewMode === 'create' || viewMode === 'edit') && (
+      {pageTab === 1 && (viewMode === 'create' || viewMode === 'edit') && (
         <Card sx={{ mt: 2 }}>
           <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6">
-                {editingUser ? '사용자 정보 수정' : '신규 사용자 등록'}
+                {editingUser ? t('userManagement.editUserTitle') : t('userManagement.createUserTitle')}
               </Typography>
               <Button onClick={() => {
+                setPageTab(0);
                 setViewMode('list');
                 setEditingUser(null);
               }}>
-                목록으로
+                {t('userManagement.backToList')}
               </Button>
             </Box>
             <form onSubmit={handleSubmit}>
-              <Box sx={{ p: 3 }}>
+              <Box sx={{ p: 2 }}>
               {/* 기본 정보 섹션 */}
-              <Accordion defaultExpanded>
+              <Accordion defaultExpanded sx={accordionDenseSx}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <AccountCircleIcon color="primary" />
-                    <Typography variant="h6">기본 정보</Typography>
+                    <Typography variant="h6">{t('userManagement.sectionBasic')}</Typography>
                   </Box>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Box sx={{ 
                     display: 'grid', 
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 2 
+                    gap: 1.5 
                   }}>
                     <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          사원번호
+                      <Box sx={{ mb: 1.25 }}>
+                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                          {t('userManagement.employeeNumber')}
                         </Typography>
                         <TextField
                           fullWidth
                           variant="outlined"
                           value={formData.employee_number}
                           onChange={(e) => setFormData({ ...formData, employee_number: e.target.value })}
-                          placeholder={editingUser ? "수정하려면 입력하세요" : "비워두면 자동 생성됩니다"}
-                          helperText={!editingUser ? "회사명 약자와 시퀀스 번호로 자동 생성됩니다" : ""}
+                          placeholder={editingUser ? t('userManagement.placeholderEmployeeEdit') : t('userManagement.placeholderEmployeeAuto')}
+                          helperText={!editingUser ? t('userManagement.helperEmployeeAuto') : ''}
                         />
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          이름 <span style={{ color: 'red' }}>*</span>
+                      <Box sx={{ mb: 1.25 }}>
+                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                          {t('userManagement.name')} <span style={{ color: 'red' }}>*</span>
                         </Typography>
                         <TextField
                           fullWidth
@@ -931,9 +1324,9 @@ const UserManagement: React.FC = () => {
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          생년월일
+                      <Box sx={{ mb: 1.25 }}>
+                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                          {t('userManagement.dateOfBirth')}
                         </Typography>
                         <TextField
                           fullWidth
@@ -946,9 +1339,9 @@ const UserManagement: React.FC = () => {
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          성별
+                      <Box sx={{ mb: 1.25 }}>
+                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                          {t('userManagement.gender')}
                         </Typography>
                         <FormControl fullWidth>
                           <Select
@@ -956,47 +1349,54 @@ const UserManagement: React.FC = () => {
                             onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
                             displayEmpty
                           >
-                            <MenuItem value="">선택하세요</MenuItem>
-                            <MenuItem value="male">남성</MenuItem>
-                            <MenuItem value="female">여성</MenuItem>
-                            <MenuItem value="other">기타</MenuItem>
+                            <MenuItem value="">{t('userManagement.selectPlaceholder')}</MenuItem>
+                            <MenuItem value="male">{t('userManagement.genderMale')}</MenuItem>
+                            <MenuItem value="female">{t('userManagement.genderFemale')}</MenuItem>
+                            <MenuItem value="other">{t('userManagement.genderOther')}</MenuItem>
                           </Select>
                         </FormControl>
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          전화번호
+                      <Box sx={{ mb: 1.25 }}>
+                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                          {t('userManagement.phoneNumber')}
                         </Typography>
                         <TextField
                           fullWidth
                           variant="outlined"
                           value={formData.phone}
                           onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                          placeholder="010-1234-5678"
+                          placeholder={t('userManagement.phonePlaceholder')}
                         />
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          이메일 <span style={{ color: 'red' }}>*</span>
+                      <Box sx={{ mb: 1.25 }}>
+                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                          {t('userManagement.email')} <span style={{ color: 'red' }}>*</span>
                         </Typography>
                         <TextField
                           fullWidth
                           type="email"
                           variant="outlined"
                           value={formData.email}
-                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          onChange={(e) => {
+                            const email = e.target.value;
+                            setFormData({
+                              ...formData,
+                              email,
+                              ...(!editingUser ? { userid: email } : {})
+                            });
+                          }}
                           required
                         />
                       </Box>
                     </Box>
                     <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          주소
+                      <Box sx={{ mb: 1.25 }}>
+                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                          {t('userManagement.address')}
                         </Typography>
                         <TextField
                           fullWidth
@@ -1009,30 +1409,30 @@ const UserManagement: React.FC = () => {
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          비상연락처 이름
+                      <Box sx={{ mb: 1.25 }}>
+                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                          {t('userManagement.emergencyContactName')}
                         </Typography>
                         <TextField
                           fullWidth
                           variant="outlined"
                           value={formData.emergency_contact}
                           onChange={(e) => setFormData({ ...formData, emergency_contact: e.target.value })}
-                          placeholder="비상연락처 이름"
+                          placeholder={t('userManagement.placeholderEmergencyName')}
                         />
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          비상연락처 전화번호
+                      <Box sx={{ mb: 1.25 }}>
+                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                          {t('userManagement.emergencyContactPhone')}
                         </Typography>
                         <TextField
                           fullWidth
                           variant="outlined"
                           value={formData.emergency_phone}
                           onChange={(e) => setFormData({ ...formData, emergency_phone: e.target.value })}
-                          placeholder="010-1234-5678"
+                          placeholder={t('userManagement.phonePlaceholder')}
                         />
                       </Box>
                     </Box>
@@ -1041,122 +1441,267 @@ const UserManagement: React.FC = () => {
               </Accordion>
 
               {/* 인사 정보 섹션 */}
-              <Accordion>
+              <Accordion defaultExpanded sx={accordionDenseSx}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <WorkIcon color="primary" />
-                    <Typography variant="h6">인사 정보</Typography>
+                    <Typography variant="h6">{t('userManagement.sectionHr')}</Typography>
                   </Box>
                 </AccordionSummary>
-                <AccordionDetails>
-                  <Box sx={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 2 
-                  }}>
-                    <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          입사일
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          type="date"
-                          variant="outlined"
-                          value={formData.hire_date}
-                          onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
-                          InputLabelProps={{ shrink: true }}
-                        />
-                      </Box>
+                <AccordionDetails sx={{ pt: 1, pb: 1.125, px: 2 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                    <Box sx={{ width: '100%' }}>
+                      <Typography sx={hrFieldLabelSx}>{t('userManagement.hireDate')}</Typography>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        type="date"
+                        variant="outlined"
+                        value={formData.hire_date}
+                        onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
+                        InputLabelProps={{ shrink: true }}
+                        sx={{
+                          '& .MuiInputBase-input': { fontSize: '0.8125rem', py: 0.875 }
+                        }}
+                      />
                     </Box>
-                    <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          근무형태
-                        </Typography>
-                        <FormControl fullWidth>
-                          <Select
-                            value={formData.employment_type}
-                            onChange={(e) => setFormData({ ...formData, employment_type: e.target.value })}
-                            displayEmpty
-                          >
-                            <MenuItem value="fulltime">정규직</MenuItem>
-                            <MenuItem value="contract">계약직</MenuItem>
-                            <MenuItem value="parttime">파트타임</MenuItem>
-                            <MenuItem value="intern">인턴</MenuItem>
-                          </Select>
-                        </FormControl>
+                    <Box
+                      sx={{
+                        ...highlightPayrollFieldsSx,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 1,
+                        width: '100%',
+                        boxSizing: 'border-box'
+                      }}
+                    >
+                      {/* 1행: 근무형태 | 급여 */}
+                      <Box
+                        sx={{
+                          display: 'grid',
+                          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                          gap: 1,
+                          alignItems: 'start',
+                          width: '100%'
+                        }}
+                      >
+                        <Box sx={{ width: '100%', minWidth: 0 }}>
+                          <Typography sx={hrFieldLabelSx}>{t('userManagement.employmentType')}</Typography>
+                          <FormControl fullWidth size="small">
+                            <Select
+                              value={formData.employment_type}
+                              onChange={(e) => setFormData({ ...formData, employment_type: e.target.value })}
+                              displayEmpty
+                              sx={{ fontSize: '0.8125rem', '& .MuiSelect-select': { py: 0.875 } }}
+                              MenuProps={{
+                                PaperProps: {
+                                  sx: { maxHeight: 320, '& .MuiMenuItem-root': { fontSize: '0.8125rem' } }
+                                },
+                                anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+                                transformOrigin: { vertical: 'top', horizontal: 'left' }
+                              }}
+                            >
+                              <MenuItem value="fulltime">{t('userManagement.empFulltime')}</MenuItem>
+                              <MenuItem value="daily">{t('userManagement.empDaily')}</MenuItem>
+                              <MenuItem value="contract">{t('userManagement.empContract')}</MenuItem>
+                              <MenuItem value="parttime">{t('userManagement.empParttime')}</MenuItem>
+                              <MenuItem value="intern">{t('userManagement.empIntern')}</MenuItem>
+                            </Select>
+                          </FormControl>
+                        </Box>
+                        <Box sx={{ width: '100%', minWidth: 0 }}>
+                          <Typography sx={hrFieldLabelSx}>{t('userManagement.salary')}</Typography>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            type="number"
+                            variant="outlined"
+                            value={formData.salary}
+                            onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
+                            placeholder={t('userManagement.placeholderMonthlySalary')}
+                            sx={{ '& .MuiInputBase-input': { fontSize: '0.8125rem', py: 0.875 } }}
+                            InputProps={{
+                              endAdornment: (
+                                <Typography sx={{ fontSize: '0.75rem', mr: 0.75 }}>INR</Typography>
+                              )
+                            }}
+                          />
+                        </Box>
                       </Box>
-                    </Box>
-                    <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          부서
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          variant="outlined"
-                          value={formData.department}
-                          onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                          placeholder="예: 개발팀, 영업팀"
-                        />
-                      </Box>
-                    </Box>
-                    <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          직급/직책
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          variant="outlined"
-                          value={formData.position}
-                          onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                          placeholder="예: 대리, 과장, 팀장"
-                        />
-                      </Box>
-                    </Box>
-                    <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          급여
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          type="number"
-                          variant="outlined"
-                          value={formData.salary}
-                          onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-                          placeholder="월 급여액"
-                          InputProps={{
-                            endAdornment: <Typography variant="body2" sx={{ mr: 1 }}>INR</Typography>
+                      {/* 2행: 부서 | 직책 — 하이라이트 */}
+                      <Box sx={{ ...highlightDeptPositionRowSx }}>
+                        <Box
+                          sx={{
+                            display: 'grid',
+                            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                            gap: 1,
+                            alignItems: 'start',
+                            width: '100%'
                           }}
-                        />
+                        >
+                          <Box sx={{ width: '100%', minWidth: 0 }}>
+                            <Typography sx={hrFieldLabelSx}>{t('userManagement.department')}</Typography>
+                            <FormControl fullWidth size="small">
+                              <Select
+                                value={formData.department_id === '' ? '' : String(formData.department_id)}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  if (v === '') {
+                                    setFormData({ ...formData, department_id: '', department: '' });
+                                  } else {
+                                    const id = Number(v);
+                                    const d = departments.find((x) => x.id === id);
+                                    setFormData({
+                                      ...formData,
+                                      department_id: id,
+                                      department: d?.name || ''
+                                    });
+                                  }
+                                }}
+                                displayEmpty
+                                sx={{ fontSize: '0.8125rem', '& .MuiSelect-select': { py: 0.875 } }}
+                                renderValue={(selected) => {
+                                  if (selected === '') {
+                                    return (
+                                      <Typography component="span" color="text.secondary" sx={{ fontStyle: 'italic', fontSize: '0.8125rem' }}>
+                                        {t('departmentManagement.noDepartment')}
+                                      </Typography>
+                                    );
+                                  }
+                                  const d = departments.find((x) => String(x.id) === selected);
+                                  return d?.name ?? '';
+                                }}
+                                MenuProps={{
+                                  PaperProps: {
+                                    sx: { maxHeight: 320, '& .MuiMenuItem-root': { fontSize: '0.8125rem' } }
+                                  },
+                                  anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+                                  transformOrigin: { vertical: 'top', horizontal: 'left' }
+                                }}
+                              >
+                                <MenuItem value="">
+                                  <em>{t('departmentManagement.noDepartment')}</em>
+                                </MenuItem>
+                                {departments.map((d) => (
+                                  <MenuItem key={d.id} value={String(d.id)}>
+                                    {d.name}
+                                  </MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                            <Typography color="text.secondary" sx={hrHintSx}>
+                              {t('userManagement.deptFromMasterHint')}
+                            </Typography>
+                          </Box>
+                          <Box sx={{ width: '100%', minWidth: 0 }}>
+                            <Typography sx={hrFieldLabelSx}>{t('userManagement.positionTitle')}</Typography>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              variant="outlined"
+                              value={formData.position}
+                              onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                              placeholder={t('userManagement.positionPlaceholder')}
+                              sx={{ '& .MuiInputBase-input': { fontSize: '0.8125rem', py: 0.875 } }}
+                            />
+                          </Box>
+                        </Box>
                       </Box>
                     </Box>
                   </Box>
                 </AccordionDetails>
               </Accordion>
 
+              {/* 개인 은행 계좌 */}
+              <Accordion defaultExpanded sx={accordionDenseSx}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <AccountBalanceIcon color="primary" />
+                    <Typography variant="h6">{t('userManagement.sectionBank')}</Typography>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Box
+                    sx={{
+                      ...highlightBankFieldsSx,
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                      gap: 1.5,
+                      alignItems: 'flex-start',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <Box sx={{ width: '100%', minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                        {t('userManagement.bankName')}
+                      </Typography>
+                      <TextField
+                        fullWidth
+                        variant="outlined"
+                        value={formData.bank_name}
+                        onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
+                        placeholder={t('userManagement.bankNamePlaceholder')}
+                      />
+                    </Box>
+                    <Box sx={{ width: '100%', minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                        {t('userManagement.accountNumber')}
+                      </Typography>
+                      <TextField
+                        fullWidth
+                        variant="outlined"
+                        value={formatBankAccountDisplay(formData.bank_account)}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            bank_account: normalizeBankAccountDigits(e.target.value)
+                          })
+                        }
+                        placeholder={t('userManagement.accountPlaceholder')}
+                        inputProps={{ inputMode: 'numeric', autoComplete: 'off' }}
+                      />
+                    </Box>
+                    <Box sx={{ width: '100%', minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                        {t('userManagement.ifscCode')}
+                      </Typography>
+                      <TextField
+                        fullWidth
+                        variant="outlined"
+                        value={formatIfscDisplay(formData.bank_ifsc)}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            bank_ifsc: normalizeIfsc(e.target.value)
+                          })
+                        }
+                        placeholder={t('userManagement.ifscPlaceholder')}
+                        inputProps={{ maxLength: 14, autoComplete: 'off' }}
+                      />
+                    </Box>
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
+
               {/* 계정 정보 섹션 */}
-              <Accordion>
+              <Accordion defaultExpanded sx={accordionDenseSx}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <SecurityIcon color="primary" />
-                    <Typography variant="h6">계정 정보</Typography>
+                    <Typography variant="h6">{t('userManagement.sectionAccount')}</Typography>
                   </Box>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Box sx={{ 
                     display: 'grid', 
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 2 
+                    gap: 1.5 
                   }}>
                     {user?.role === 'root' && !editingUser && (
                       <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
-                        <Box sx={{ mb: 2 }}>
-                          <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                            회사 선택 <span style={{ color: 'red' }}>*</span>
+                        <Box sx={{ mb: 1.25 }}>
+                          <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                            {t('userManagement.companySelect')} <span style={{ color: 'red' }}>*</span>
                           </Typography>
                           <FormControl fullWidth>
                             <Select
@@ -1175,9 +1720,9 @@ const UserManagement: React.FC = () => {
                       </Box>
                     )}
                     <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          사용자 ID <span style={{ color: 'red' }}>*</span>
+                      <Box sx={{ mb: 1.25 }}>
+                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                          {t('userManagement.userId')} <span style={{ color: 'red' }}>*</span>
                         </Typography>
                         <TextField
                           fullWidth
@@ -1190,9 +1735,9 @@ const UserManagement: React.FC = () => {
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          비밀번호 {!editingUser && <span style={{ color: 'red' }}>*</span>}
+                      <Box sx={{ mb: 1.25 }}>
+                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                          {t('userManagement.password')} {!editingUser && <span style={{ color: 'red' }}>*</span>}
                         </Typography>
                         <TextField
                           fullWidth
@@ -1201,14 +1746,14 @@ const UserManagement: React.FC = () => {
                           value={formData.password}
                           onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                           required={!editingUser}
-                          placeholder={editingUser ? "변경 시에만 입력" : "비밀번호를 입력하세요"}
+                          placeholder={editingUser ? t('userManagement.passwordPlaceholderEdit') : t('userManagement.passwordPlaceholderNew')}
                         />
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          역할 <span style={{ color: 'red' }}>*</span>
+                      <Box sx={{ mb: 1.25 }}>
+                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                          {t('userManagement.roleLabel')} <span style={{ color: 'red' }}>*</span>
                         </Typography>
                         <FormControl fullWidth>
                           <Select
@@ -1216,9 +1761,9 @@ const UserManagement: React.FC = () => {
                             onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                             displayEmpty
                           >
-                            <MenuItem value="user">사용자</MenuItem>
-                            <MenuItem value="admin">관리자</MenuItem>
-                            <MenuItem value="audit">감사</MenuItem>
+                            <MenuItem value="user">{t('userManagement.roleUser')}</MenuItem>
+                            <MenuItem value="admin">{t('userManagement.roleAdmin')}</MenuItem>
+                            <MenuItem value="audit">{t('userManagement.roleAudit')}</MenuItem>
                             {user?.role === 'root' && (
                               <MenuItem value="root">Root</MenuItem>
                             )}
@@ -1227,9 +1772,9 @@ const UserManagement: React.FC = () => {
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          상태
+                      <Box sx={{ mb: 1.25 }}>
+                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                          {t('userManagement.statusLabel')}
                         </Typography>
                         <FormControl fullWidth>
                           <Select
@@ -1237,17 +1782,17 @@ const UserManagement: React.FC = () => {
                             onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                             displayEmpty
                           >
-                            <MenuItem value="active">활성</MenuItem>
-                            <MenuItem value="inactive">비활성</MenuItem>
-                            <MenuItem value="suspended">정지</MenuItem>
+                            <MenuItem value="active">{t('userManagement.statusActive')}</MenuItem>
+                            <MenuItem value="inactive">{t('userManagement.statusInactive')}</MenuItem>
+                            <MenuItem value="suspended">{t('userManagement.statusSuspended')}</MenuItem>
                           </Select>
                         </FormControl>
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 2 }}>
-                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
-                          송금 담당자
+                      <Box sx={{ mb: 1.25 }}>
+                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                          {t('userManagement.paymentOfficer')}
                         </Typography>
                         <FormControlLabel
                           control={
@@ -1256,7 +1801,7 @@ const UserManagement: React.FC = () => {
                               onChange={(e) => setFormData({ ...formData, is_payment_officer: e.target.checked })}
                             />
                           }
-                          label="송금 담당자로 지정"
+                          label={t('userManagement.paymentOfficerAssign')}
                         />
                       </Box>
                     </Box>
@@ -1266,13 +1811,14 @@ const UserManagement: React.FC = () => {
             </Box>
               <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
                 <Button onClick={() => {
+                  setPageTab(0);
                   setViewMode('list');
                   setEditingUser(null);
                 }}>
-                  취소
+                  {t('common.cancel')}
                 </Button>
                 <Button type="submit" variant="contained" size="large">
-                  {editingUser ? '수정' : '등록'}
+                  {editingUser ? t('userManagement.submitEdit') : t('userManagement.submitRegister')}
                 </Button>
               </Box>
             </form>
@@ -1291,9 +1837,21 @@ const UserManagement: React.FC = () => {
         }}
       >
         <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              fontWeight: 600,
+              fontSize: '1.125rem',
+              color:
+                theme.palette.mode === 'dark'
+                  ? alpha(theme.palette.common.white, 0.95)
+                  : theme.palette.grey[900]
+            }}
+          >
             <PersonIcon color="primary" />
-            사용자 상세 정보
+            {t('userManagement.userDetailTitle')}
           </Box>
         </DialogTitle>
         <DialogContent dividers>
@@ -1304,70 +1862,68 @@ const UserManagement: React.FC = () => {
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <AccountCircleIcon color="primary" />
-                    <Typography variant="h6">기본 정보</Typography>
+                    <Typography variant="h6" sx={userDetailSectionTitleSx}>{t('userManagement.sectionBasic')}</Typography>
                   </Box>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Box sx={{ 
                     display: 'grid', 
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 2 
+                    gap: 1.5 
                   }}>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        사원번호
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.employeeNumber')}
                       </Typography>
-                      <Typography variant="body1">
+                      <Typography variant="body1" sx={userDetailValueSx}>
                         {(selectedUser as any).employee_number || '-'}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        이름
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.name')}
                       </Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                      <Typography variant="body1" sx={{ ...userDetailValueSx, fontWeight: 600 }}>
                         {selectedUser.username}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        생년월일
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.dateOfBirth')}
                       </Typography>
-                      <Typography variant="body1">
+                      <Typography variant="body1" sx={userDetailValueSx}>
                         {(selectedUser as any).birth_date 
-                          ? new Date((selectedUser as any).birth_date).toLocaleDateString('ko-KR')
+                          ? new Date((selectedUser as any).birth_date).toLocaleDateString(dateLocale)
                           : '-'}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        성별
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.gender')}
                       </Typography>
-                      <Typography variant="body1">
-                        {(selectedUser as any).gender === 'male' ? '남성' : 
-                         (selectedUser as any).gender === 'female' ? '여성' : 
-                         (selectedUser as any).gender === 'other' ? '기타' : '-'}
+                      <Typography variant="body1" sx={userDetailValueSx}>
+                        {getGenderLabel((selectedUser as any).gender)}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        전화번호
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.phoneNumber')}
                       </Typography>
-                      <Typography variant="body1">
+                      <Typography variant="body1" sx={userDetailValueSx}>
                         {(selectedUser as any).phone || '-'}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        이메일
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.email')}
                       </Typography>
-                      <Typography variant="body1">
+                      <Typography variant="body1" sx={userDetailValueSx}>
                         {selectedUser.email}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        송금 담당자
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.paymentOfficer')}
                       </Typography>
                       <FormControlLabel
                         control={
@@ -1376,30 +1932,30 @@ const UserManagement: React.FC = () => {
                             disabled
                           />
                         }
-                        label={(selectedUser as any).is_payment_officer ? '지정됨' : '미지정'}
+                        label={(selectedUser as any).is_payment_officer ? t('userManagement.paymentOfficerAssigned') : t('userManagement.paymentOfficerNotAssigned')}
                       />
                     </Box>
                     <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        주소
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.address')}
                       </Typography>
-                      <Typography variant="body1">
+                      <Typography variant="body1" sx={userDetailValueSx}>
                         {(selectedUser as any).address || '-'}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        비상연락처 이름
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.emergencyContactName')}
                       </Typography>
-                      <Typography variant="body1">
+                      <Typography variant="body1" sx={userDetailValueSx}>
                         {(selectedUser as any).emergency_contact || '-'}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        비상연락처 전화번호
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.emergencyContactPhone')}
                       </Typography>
-                      <Typography variant="body1">
+                      <Typography variant="body1" sx={userDetailValueSx}>
                         {(selectedUser as any).emergency_phone || '-'}
                       </Typography>
                     </Box>
@@ -1408,63 +1964,60 @@ const UserManagement: React.FC = () => {
               </Accordion>
 
               {/* 인사 정보 */}
-              <Accordion>
+              <Accordion defaultExpanded>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <WorkIcon color="primary" />
-                    <Typography variant="h6">인사 정보</Typography>
+                    <Typography variant="h6" sx={userDetailSectionTitleSx}>{t('userManagement.sectionHr')}</Typography>
                   </Box>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Box sx={{ 
                     display: 'grid', 
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 2 
+                    gap: 1.5 
                   }}>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        입사일
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.hireDate')}
                       </Typography>
-                      <Typography variant="body1">
+                      <Typography variant="body1" sx={userDetailValueSx}>
                         {(selectedUser as any).hire_date 
-                          ? new Date((selectedUser as any).hire_date).toLocaleDateString('ko-KR')
+                          ? new Date((selectedUser as any).hire_date).toLocaleDateString(dateLocale)
                           : '-'}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        근무형태
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.employmentType')}
                       </Typography>
-                      <Typography variant="body1">
-                        {(selectedUser as any).employment_type === 'fulltime' ? '정규직' :
-                         (selectedUser as any).employment_type === 'contract' ? '계약직' :
-                         (selectedUser as any).employment_type === 'parttime' ? '파트타임' :
-                         (selectedUser as any).employment_type === 'intern' ? '인턴' : '-'}
+                      <Typography variant="body1" sx={userDetailValueSx}>
+                        {getEmploymentTypeLabel((selectedUser as any).employment_type)}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        부서
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.department')}
                       </Typography>
-                      <Typography variant="body1">
+                      <Typography variant="body1" sx={userDetailValueSx}>
                         {selectedUser.department || '-'}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        직급/직책
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.positionTitle')}
                       </Typography>
-                      <Typography variant="body1">
+                      <Typography variant="body1" sx={userDetailValueSx}>
                         {selectedUser.position || '-'}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        급여
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.salary')}
                       </Typography>
-                      <Typography variant="body1">
-                        {(selectedUser as any).salary 
-                          ? `₹${(selectedUser as any).salary.toLocaleString()}`
+                      <Typography variant="body1" sx={userDetailValueSx}>
+                        {(selectedUser as any).salary != null && (selectedUser as any).salary !== ''
+                          ? formatSalaryInr((selectedUser as any).salary)
                           : '-'}
                       </Typography>
                     </Box>
@@ -1472,31 +2025,77 @@ const UserManagement: React.FC = () => {
                 </AccordionDetails>
               </Accordion>
 
+              {/* 개인 은행 계좌 */}
+              <Accordion defaultExpanded>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <AccountBalanceIcon color="primary" />
+                    <Typography variant="h6" sx={userDetailSectionTitleSx}>{t('userManagement.sectionBank')}</Typography>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+                      gap: 1.5
+                    }}
+                  >
+                    <Box>
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.bankName')}
+                      </Typography>
+                      <Typography variant="body1" sx={userDetailValueSx}>{(selectedUser as any).bank_name || '—'}</Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.accountNumber')}
+                      </Typography>
+                      <Typography variant="body1" sx={userDetailValueSx}>
+                        {(selectedUser as any).bank_account
+                          ? formatBankAccountDisplay(String((selectedUser as any).bank_account))
+                          : '—'}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.ifscCode')}
+                      </Typography>
+                      <Typography variant="body1" sx={userDetailValueSx}>
+                        {(selectedUser as any).bank_ifsc
+                          ? formatIfscDisplay(String((selectedUser as any).bank_ifsc))
+                          : '—'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
+
               {/* 계정 정보 */}
-              <Accordion>
+              <Accordion defaultExpanded>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <SecurityIcon color="primary" />
-                    <Typography variant="h6">계정 정보</Typography>
+                    <Typography variant="h6" sx={userDetailSectionTitleSx}>{t('userManagement.sectionAccount')}</Typography>
                   </Box>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Box sx={{ 
                     display: 'grid', 
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 2 
+                    gap: 1.5 
                   }}>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        사용자 ID
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.userId')}
                       </Typography>
-                      <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                      <Typography variant="body1" sx={{ ...userDetailValueSx, fontWeight: 600 }}>
                         {selectedUser.userid}
                       </Typography>
                     </Box>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        역할
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.roleLabel')}
                       </Typography>
                       <Chip 
                         label={getRoleLabel(selectedUser.role)} 
@@ -1505,21 +2104,21 @@ const UserManagement: React.FC = () => {
                       />
                     </Box>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        상태
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.statusLabel')}
                       </Typography>
                       <Chip 
-                        label={selectedUser.status} 
+                        label={getStatusLabel(selectedUser.status)} 
                         color={getStatusColor(selectedUser.status) as any}
                         size="small"
                       />
                     </Box>
                     <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        생성일
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.createdAt')}
                       </Typography>
-                      <Typography variant="body1">
-                        {new Date(selectedUser.created_at).toLocaleDateString('ko-KR')}
+                      <Typography variant="body1" sx={userDetailValueSx}>
+                        {new Date(selectedUser.created_at).toLocaleDateString(dateLocale)}
                       </Typography>
                     </Box>
                   </Box>
@@ -1529,7 +2128,7 @@ const UserManagement: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setOpenViewDialog(false)}>닫기</Button>
+          <Button onClick={() => setOpenViewDialog(false)}>{t('common.close')}</Button>
           {selectedUser && (
             <Button 
               variant="contained" 
@@ -1539,7 +2138,7 @@ const UserManagement: React.FC = () => {
                 handleEditUser(selectedUser);
               }}
             >
-              수정
+              {t('userManagement.edit')}
             </Button>
           )}
         </DialogActions>
@@ -1556,7 +2155,7 @@ const UserManagement: React.FC = () => {
         maxWidth="md"
         fullWidth
       >
-        <DialogTitle>Excel 파일 가져오기</DialogTitle>
+        <DialogTitle>{t('userManagement.excelImportTitle')}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
             <input
@@ -1567,27 +2166,27 @@ const UserManagement: React.FC = () => {
             />
             {importFile && (
               <Alert severity="info" sx={{ mb: 2 }}>
-                선택된 파일: {importFile.name}
+                {t('userManagement.selectedFile')}: {importFile.name}
               </Alert>
             )}
             {importResult && (
               <Box sx={{ mt: 2 }}>
                 <Typography variant="h6" gutterBottom>
-                  가져오기 결과
+                  {t('userManagement.importResultTitle')}
                 </Typography>
                 <Alert severity="success" sx={{ mb: 2 }}>
-                  총 {importResult.total}건 중 {importResult.success.length}건 성공
+                  {t('userManagement.importSuccessSummary', { total: importResult.total, success: importResult.success.length })}
                 </Alert>
                 {importResult.failed.length > 0 && (
                   <Box>
                     <Typography variant="subtitle2" color="error" gutterBottom>
-                      실패: {importResult.failed.length}건
+                      {t('userManagement.importFailedCount', { count: importResult.failed.length })}
                     </Typography>
                     <Box sx={{ maxHeight: 200, overflow: 'auto', mt: 1 }}>
                       {importResult.failed.map((item: any, index: number) => (
                         <Alert key={index} severity="error" sx={{ mb: 1 }}>
                           <Typography variant="body2">
-                            행 {item.row}: {item.error}
+                            {t('userManagement.importRowError', { row: item.row, error: item.error })}
                           </Typography>
                           {item.data && (
                             <Typography variant="caption" color="text.secondary">
@@ -1611,7 +2210,7 @@ const UserManagement: React.FC = () => {
               setImportResult(null);
             }}
           >
-            닫기
+            {t('common.close')}
           </Button>
           <Button
             variant="contained"
@@ -1619,7 +2218,7 @@ const UserManagement: React.FC = () => {
             disabled={!importFile || importLoading}
             startIcon={importLoading ? <CircularProgress size={20} /> : <UploadIcon />}
           >
-            {importLoading ? '가져오는 중...' : '가져오기'}
+            {importLoading ? t('userManagement.importing') : t('userManagement.importButton')}
           </Button>
         </DialogActions>
       </Dialog>

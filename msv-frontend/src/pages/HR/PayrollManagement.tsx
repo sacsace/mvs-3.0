@@ -1,537 +1,583 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Typography,
   Card,
   CardContent,
   Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Chip,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
   MenuItem,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Tooltip,
   Alert,
   Snackbar,
-  Pagination,
   InputAdornment,
-  Divider,
-  Avatar,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar
+  Tooltip
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Visibility as ViewIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
   AttachMoney as MoneyIcon,
-  Print as PrintIcon,
-  Download as DownloadIcon,
-  Person as PersonIcon,
-  Calculate as CalculateIcon,
-  Receipt as ReceiptIcon
+  Email as EmailIcon,
+  TaskAlt as TaskAltIcon,
+  FileDownload as FileDownloadIcon
 } from '@mui/icons-material';
-import { APP_CONSTANTS } from '../../constants';
-import { useStore } from '../../store';
 import { payrollService } from '../../services/api';
-import { api } from '../../services/api';
+import { useStore } from '../../store';
+import PayrollExcelGrid, { payrollRecordToGridRow, type PayrollGridRow } from './PayrollExcelGrid';
+import PayrollPayslipDialog from './PayrollPayslipDialog';
+import PayrollSendPayslipsDialog from './PayrollSendPayslipsDialog';
+import { exportPayrollGridToExcel } from './payroll/exportPayrollGridToExcel';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+import { normalizePayMonth, isPayMonthAfterCurrent } from '../../utils/payMonth';
 
-interface PayrollItem {
-  id: number;
-  employeeId: number;
-  employeeName: string;
-  department: string;
-  position: string;
-  basicSalary: number;
-  overtimePay: number;
-  bonus: number;
-  allowances: number;
-  deductions: number;
-  grossSalary: number;
-  tax: number;
-  netSalary: number;
-  payPeriod: string;
-  status: 'pending' | 'approved' | 'paid' | 'cancelled';
-  paymentDate?: string;
-  createdAt: string;
-  createdBy: string;
+const PAYROLL_MENU_ROUTES = ['/hr/payroll', '/hr'] as const;
+
+function parsePayrollMoney(v: unknown): number {
+  const n = parseFloat(String(v ?? '').replace(/,/g, '').trim());
+  return Number.isFinite(n) ? n : 0;
 }
+
+/** 필드 테두리·라벨 영역 클릭 시에도 네이티브 월 선택기가 열리도록 */
+function openMonthPickerFromFieldContainer(e: React.MouseEvent<HTMLElement>) {
+  if ((e.target as HTMLElement).closest('input[type="month"]')) return;
+  const input = e.currentTarget.querySelector('input[type="month"]') as HTMLInputElement | null;
+  if (!input || input.disabled) return;
+  try {
+    if (typeof input.showPicker === 'function') {
+      input.showPicker();
+    } else {
+      input.focus();
+      input.click();
+    }
+  } catch {
+    input.focus();
+    input.click();
+  }
+}
+
+type PayrollBulkPreviewAttendance = {
+  with_attendance: number;
+  without_attendance: number;
+  without_attendance_usernames: string[];
+  daily_without_records: { id: number; username: string }[];
+};
+
+type PayrollBulkPreviewPayload = {
+  payroll_period: string;
+  can_generate: boolean;
+  block_reason?: string | null;
+  existing_active_count?: number;
+  employee_total: number;
+  attendance: PayrollBulkPreviewAttendance | null;
+};
 
 const PayrollManagement: React.FC = () => {
   const { t } = useTranslation();
-  const { user } = useStore();
-  const [payrolls, setPayrolls] = useState<PayrollItem[]>([]);
-  const [filteredPayrolls, setFilteredPayrolls] = useState<PayrollItem[]>([]);
+  const isRoot = useStore((s) => s.user?.role === 'root');
+  const menuFlags = useMenuRoutePermissionFlags(PAYROLL_MENU_ROUTES);
+  const [payrollRecords, setPayrollRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
-  const [selectedPayroll, setSelectedPayroll] = useState<PayrollItem | null>(null);
-  const [viewMode, setViewMode] = useState<'list' | 'view'>('list');
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
-  const [page, setPage] = useState(1);
-  const [itemsPerPage] = useState(APP_CONSTANTS.DEFAULT_PAGE_SIZE);
+  const [payrollPeriod, setPayrollPeriod] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [creating, setCreating] = useState(false);
+  const [payslipOpen, setPayslipOpen] = useState(false);
+  const [payslipRow, setPayslipRow] = useState<PayrollGridRow | null>(null);
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [lockedPeriods, setLockedPeriods] = useState<Set<string>>(new Set());
+  const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [payrollPreviewOpen, setPayrollPreviewOpen] = useState(false);
+  const [payrollPreviewPayload, setPayrollPreviewPayload] = useState<PayrollBulkPreviewPayload | null>(null);
+  const [previewAttendanceLoading, setPreviewAttendanceLoading] = useState(false);
 
-  // 사용자 권한 확인
-  const isAdmin = user?.role === 'admin' || user?.role === 'root';
-  const isHR = user?.role === 'hr';
-  const canManagePayroll = isAdmin || isHR;
+  const loadLocks = useCallback(async () => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) {
+      setLockedPeriods(new Set());
+      return;
+    }
+    try {
+      const res = await payrollService.getPayrollPeriodLocks();
+      if (res.success && Array.isArray((res as any).data?.locked_periods)) {
+        const keys = ((res as any).data.locked_periods as string[])
+          .map((p) => normalizePayMonth(p) || String(p).trim())
+          .filter(Boolean);
+        setLockedPeriods(new Set(keys));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [menuFlags.menusLoading, menuFlags.canRead]);
 
-  useEffect(() => {
-    loadPayrollData();
-  }, []);
-
-  useEffect(() => {
-    filterPayrolls();
-  }, [payrolls, searchTerm, statusFilter, departmentFilter]);
-
-  const loadPayrollData = async () => {
+  const loadPayrollData = useCallback(async () => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) {
+      setPayrollRecords([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      const response = await payrollService.getPayrolls({ page: 1, limit: 1000 });
+      const response = await payrollService.getPayrolls({ page: 1, limit: 10000 });
       if (response.success) {
-        // API 응답을 프론트엔드 형식으로 변환
-        const payrollData: PayrollItem[] = (response.data || []).map((p: any) => ({
-          id: p.id,
-          employeeId: p.employee_id,
-          employeeName: p.employee?.username || t('payrollManagement.unknown'),
-          department: p.employee?.department || '-',
-          position: p.employee?.position || '-',
-          basicSalary: parseFloat(p.basic_salary || 0),
-          overtimePay: parseFloat(p.overtime_pay || 0),
-          bonus: parseFloat(p.bonus || 0),
-          allowances: parseFloat(p.allowances || 0),
-          deductions: parseFloat(p.deductions || 0),
-          grossSalary: parseFloat(p.gross_salary || 0),
-          tax: parseFloat(p.tax_amount || 0),
-          netSalary: parseFloat(p.net_salary || 0),
-          payPeriod: p.payroll_period || '',
-          status: p.status || 'pending',
-          paymentDate: p.payment_date || undefined,
-          createdAt: p.created_at || new Date().toISOString(),
-          createdBy: t('payrollManagement.system')
-        }));
-        setPayrolls(payrollData);
+        setPayrollRecords(response.data || []);
       } else {
         setError(response.message || t('payrollManagement.errors.loadFailed'));
       }
-    } catch (error: any) {
-      console.error('급여 데이터 로드 오류:', error);
-      setError(error.response?.data?.message || t('payrollManagement.errors.loadFailed'));
+    } catch (err: any) {
+      console.error('급여 데이터 로드 오류:', err);
+      setError(err.response?.data?.message || t('payrollManagement.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [t, menuFlags.menusLoading, menuFlags.canRead]);
 
-  const filterPayrolls = () => {
-    let filtered = payrolls;
+  useEffect(() => {
+    void loadPayrollData();
+    void loadLocks();
+  }, [loadPayrollData, loadLocks]);
 
+  const periodTrim = payrollPeriod.trim();
+  const periodKey = normalizePayMonth(periodTrim);
+  const isFuturePayMonth = !!periodKey && isPayMonthAfterCurrent(periodKey);
+  const maxSelectablePayMonth = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  })();
+
+  /** 목록·요약: 선택 급여월(정규화)과 일치하는 활성 급여만 */
+  const payrollRecordsForSelectedMonth = useMemo(() => {
+    if (!periodKey) return [];
+    return payrollRecords.filter((p: any) => {
+      const rowMonth = normalizePayMonth(String(p.payroll_period ?? '').trim());
+      const active = p.is_active === undefined || p.is_active === true;
+      return active && rowMonth === periodKey;
+    });
+  }, [payrollRecords, periodKey]);
+
+  const filteredRecords = useMemo(() => {
+    let list = [...payrollRecordsForSelectedMonth];
     if (searchTerm) {
-      filtered = filtered.filter(payroll =>
-        payroll.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        payroll.department.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        payroll.position.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const s = searchTerm.toLowerCase();
+      list = list.filter((p: any) => {
+        const emp = p.employee || {};
+        return (
+          String(emp.username || '')
+            .toLowerCase()
+            .includes(s) ||
+          String(emp.department || '')
+            .toLowerCase()
+            .includes(s) ||
+          String(emp.position || '')
+            .toLowerCase()
+            .includes(s)
+        );
+      });
     }
-
-    if (statusFilter) {
-      filtered = filtered.filter(payroll => payroll.status === statusFilter);
-    }
-
     if (departmentFilter) {
-      filtered = filtered.filter(payroll => payroll.department === departmentFilter);
+      list = list.filter((p: any) => (p.employee?.department || '') === departmentFilter);
     }
+    return list;
+  }, [payrollRecordsForSelectedMonth, searchTerm, departmentFilter]);
 
-    setFilteredPayrolls(filtered);
-  };
-
-  const getStatusChip = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <Chip label={t('payrollManagement.status.pending')} color="warning" size="small" />;
-      case 'approved':
-        return <Chip label={t('payrollManagement.status.approved')} color="info" size="small" />;
-      case 'paid':
-        return <Chip label={t('payrollManagement.status.paid')} color="success" size="small" />;
-      case 'cancelled':
-        return <Chip label={t('payrollManagement.status.cancelled')} color="error" size="small" />;
-      default:
-        return <Chip label={t('payrollManagement.unknown')} color="default" size="small" />;
-    }
-  };
-
-  const handleViewPayroll = (payroll: PayrollItem) => {
-    setSelectedPayroll(payroll);
-    setViewMode('view');
-  };
-
-  const handleEditPayroll = (payroll: PayrollItem) => {
-    setSelectedPayroll(payroll);
-    setOpenDialog(true);
-  };
-
-  const handleDeletePayroll = async (id: number) => {
-    if (window.confirm(t('payrollManagement.confirmDelete'))) {
-      try {
-        const response = await payrollService.deletePayroll(id);
-        if (response.success) {
-          setSuccess(t('payrollManagement.success.deleted'));
-          loadPayrollData();
-        } else {
-          setError(response.message || t('payrollManagement.errors.deleteFailed'));
-        }
-      } catch (error: any) {
-        console.error('삭제 오류:', error);
-        setError(error.response?.data?.message || t('payrollManagement.errors.deleteError'));
-      }
-    }
-  };
-
-  const handleApprovePayroll = async (id: number) => {
-    try {
-      const response = await payrollService.approvePayroll(id);
-      if (response.success) {
-        setSuccess(t('payrollManagement.success.approved'));
-        loadPayrollData();
-      } else {
-        setError(response.message || t('payrollManagement.errors.approveFailed'));
-      }
-    } catch (error: any) {
-      console.error('급여 승인 오류:', error);
-      setError(error.response?.data?.message || t('payrollManagement.errors.approveError'));
-    }
-  };
-
-  const handlePayPayroll = async (id: number) => {
-    try {
-      const response = await payrollService.payPayroll(id);
-      if (response.success) {
-        setSuccess(t('payrollManagement.success.paid'));
-        loadPayrollData();
-      } else {
-        setError(response.message || t('payrollManagement.errors.payFailed'));
-      }
-    } catch (error: any) {
-      console.error('급여 지급 오류:', error);
-      setError(error.response?.data?.message || t('payrollManagement.errors.payError'));
-    }
-  };
-
-  const totalGrossSalary = payrolls.reduce((sum, payroll) => sum + payroll.grossSalary, 0);
-  const totalNetSalary = payrolls.reduce((sum, payroll) => sum + payroll.netSalary, 0);
-  const totalTax = payrolls.reduce((sum, payroll) => sum + payroll.tax, 0);
-  const pendingCount = payrolls.filter(payroll => payroll.status === 'pending').length;
-
-  const paginatedPayrolls = filteredPayrolls.slice(
-    (page - 1) * itemsPerPage,
-    page * itemsPerPage
+  const gridRows = useMemo(
+    () => filteredRecords.map((p, i) => payrollRecordToGridRow(p, i)),
+    [filteredRecords]
   );
 
-  const departments = Array.from(new Set(payrolls.map(payroll => payroll.department)));
+  const departments = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          payrollRecordsForSelectedMonth.map((p: any) => p.employee?.department).filter(Boolean) as string[]
+        )
+      ),
+    [payrollRecordsForSelectedMonth]
+  );
 
-  if (viewMode === 'view' && selectedPayroll) {
-    return (
-      <Box sx={{ 
-        p: 3, 
-        backgroundColor: 'workArea.main',
-        borderRadius: 2,
-        minHeight: '100%'
-      }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <ReceiptIcon />
-            {t('payrollManagement.detailTitle')}
-          </Typography>
-          <Button
-            variant="outlined"
-            onClick={() => setViewMode('list')}
-          >
-            {t('payrollManagement.backToList')}
-          </Button>
-        </Box>
+  /** 조회 급여월(`periodKey`)에 해당하는 활성 급여만 합산 — 상단 카드·그리드 데이터 범위와 동일 */
+  const summaryStats = useMemo(() => {
+    const rows = payrollRecordsForSelectedMonth;
+    return {
+      gross: rows.reduce((s, p: any) => s + parsePayrollMoney(p.gross_salary), 0),
+      net: rows.reduce((s, p: any) => s + parsePayrollMoney(p.net_salary), 0),
+      tax: rows.reduce((s, p: any) => s + parsePayrollMoney(p.tax_amount), 0),
+      pending: rows.filter((p: any) => p.status === 'pending').length
+    };
+  }, [payrollRecordsForSelectedMonth]);
 
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-              <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
-                <PersonIcon />
-              </Avatar>
-              <Box>
-                <Typography variant="h5" fontWeight="bold">
-                  {selectedPayroll.employeeName}
-                </Typography>
-                <Typography variant="body1" color="text.secondary">
-                  {selectedPayroll.position} • {selectedPayroll.department}
-                </Typography>
-              </Box>
-            </Box>
+  /** 미리보기 API로 출퇴근·중복 여부 확인 후 확인 창 표시 */
+  const handleRequestBulkPayrollPreview = async () => {
+    if (menuFlags.menusLoading || !menuFlags.canCreate) return;
+    const pk = normalizePayMonth(payrollPeriod.trim());
+    if (!pk) {
+      setError(t('payrollManagement.errors.periodRequired'));
+      return;
+    }
+    if (isPayMonthAfterCurrent(pk)) {
+      setError(t('payrollManagement.errors.futurePayMonthNotAllowed'));
+      return;
+    }
+    if (lockedPeriods.has(pk)) {
+      setError(t('payrollManagement.errors.periodLocked'));
+      return;
+    }
+    setPreviewAttendanceLoading(true);
+    setError('');
+    try {
+      const res = await payrollService.previewBulkPayrollGeneration(payrollPeriod.trim());
+      if (!res.success) {
+        setError((res as any).message || t('payrollManagement.errors.bulkCreateFailed'));
+        return;
+      }
+      const data = (res as any).data as PayrollBulkPreviewPayload;
+      if (!data.can_generate) {
+        if (data.block_reason === 'already_exists') {
+          setError(t('payrollManagement.preview.blockedAlreadyExists'));
+        } else {
+          setError(t('payrollManagement.errors.bulkCreateFailed'));
+        }
+        return;
+      }
+      setPayrollPreviewPayload(data);
+      setOpenDialog(false);
+      setPayrollPreviewOpen(true);
+    } catch (err: any) {
+      const st = err.response?.status;
+      const msg = err.response?.data?.message;
+      if (st === 403 && msg) setError(msg);
+      else setError(msg || t('payrollManagement.errors.bulkCreateFailed'));
+    } finally {
+      setPreviewAttendanceLoading(false);
+    }
+  };
 
-            <Divider sx={{ my: 3 }} />
+  const handleExecuteBulkPayrollAfterPreview = async () => {
+    if (menuFlags.menusLoading || !menuFlags.canCreate) return;
+    const pk = normalizePayMonth(payrollPeriod.trim());
+    const period = pk || payrollPeriod.trim();
+    if (!period) {
+      setError(t('payrollManagement.errors.periodRequired'));
+      return;
+    }
+    if (pk && isPayMonthAfterCurrent(pk)) {
+      setError(t('payrollManagement.errors.futurePayMonthNotAllowed'));
+      return;
+    }
+    if (pk && lockedPeriods.has(pk)) {
+      setError(t('payrollManagement.errors.periodLocked'));
+      return;
+    }
+    setCreating(true);
+    setError('');
+    try {
+      const res = await payrollService.bulkGeneratePayrolls(period);
+      if (res.success) {
+        setSuccess((res as any).message || t('payrollManagement.success.bulkCreated'));
+        setOpenDialog(false);
+        setPayrollPreviewOpen(false);
+        setPayrollPreviewPayload(null);
+        await loadPayrollData();
+      } else {
+        setError((res as any).message || t('payrollManagement.errors.bulkCreateFailed'));
+      }
+    } catch (err: any) {
+      const st = err.response?.status;
+      const msg = err.response?.data?.message;
+      if (st === 403 && msg) setError(msg);
+      else if (st === 409) setError(msg || t('payrollManagement.errors.alreadyGenerated'));
+      else setError(msg || t('payrollManagement.errors.bulkCreateFailed'));
+    } finally {
+      setCreating(false);
+    }
+  };
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3 }}>
-              <Box>
-                <Typography variant="h6" gutterBottom>{t('payrollManagement.payInfo')}</Typography>
-                <List>
-                  <ListItem>
-                    <ListItemText 
-                      primary={t('payrollManagement.columns.payPeriod')}
-                      secondary={selectedPayroll.payPeriod}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText 
-                      primary={t('payrollManagement.columns.basicSalary')}
-                      secondary={`Rs. ${selectedPayroll.basicSalary.toLocaleString()}`}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText 
-                      primary={t('payrollManagement.overtimePay')}
-                      secondary={`Rs. ${selectedPayroll.overtimePay.toLocaleString()}`}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText 
-                      primary={t('payrollManagement.bonus')}
-                      secondary={`Rs. ${selectedPayroll.bonus.toLocaleString()}`}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText 
-                      primary={t('payrollManagement.allowances')}
-                      secondary={`Rs. ${selectedPayroll.allowances.toLocaleString()}`}
-                    />
-                  </ListItem>
-                </List>
-              </Box>
+  const handleConfirmCompletePeriod = async () => {
+    if (menuFlags.menusLoading || !menuFlags.canMutate) return;
+    const period = normalizePayMonth(payrollPeriod.trim()) || payrollPeriod.trim();
+    if (!period) {
+      setError(t('payrollManagement.errors.periodRequired'));
+      return;
+    }
+    const pkComplete = normalizePayMonth(payrollPeriod.trim());
+    if (pkComplete && isPayMonthAfterCurrent(pkComplete)) {
+      setError(t('payrollManagement.errors.futurePayMonthNotAllowed'));
+      return;
+    }
+    if (lockedPeriods.has(period)) {
+      setCompleteDialogOpen(false);
+      return;
+    }
+    setCompleting(true);
+    setError('');
+    try {
+      const res = await payrollService.completePayrollPeriod(period);
+      if (res.success) {
+        setSuccess((res as any).message || t('payrollManagement.success.periodCompleted'));
+        setCompleteDialogOpen(false);
+        await loadLocks();
+        await loadPayrollData();
+      } else {
+        setError((res as any).message || t('payrollManagement.errors.periodCompleteFailed'));
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || t('payrollManagement.errors.periodCompleteFailed'));
+    } finally {
+      setCompleting(false);
+    }
+  };
 
-              <Box>
-                <Typography variant="h6" gutterBottom>{t('payrollManagement.deductionInfo')}</Typography>
-                <List>
-                  <ListItem>
-                    <ListItemText 
-                      primary={t('payrollManagement.deductions')}
-                      secondary={`Rs. ${selectedPayroll.deductions.toLocaleString()}`}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText 
-                      primary={t('payrollManagement.columns.tax')}
-                      secondary={`Rs. ${selectedPayroll.tax.toLocaleString()}`}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText 
-                      primary={t('payrollManagement.columns.totalSalary')}
-                      secondary={`Rs. ${selectedPayroll.grossSalary.toLocaleString()}`}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText 
-                      primary={t('payrollManagement.columns.netSalary')}
-                      secondary={`Rs. ${selectedPayroll.netSalary.toLocaleString()}`}
-                    />
-                  </ListItem>
-                  <ListItem>
-                    <ListItemText 
-                      primary={t('payrollManagement.columns.status')}
-                      secondary={getStatusChip(selectedPayroll.status)}
-                    />
-                  </ListItem>
-                </List>
-              </Box>
-            </Box>
+  const handleOpenPayslip = useCallback(
+    (row: PayrollGridRow) => {
+      if (menuFlags.menusLoading || !menuFlags.canRead) return;
+      setPayslipRow(row);
+      setPayslipOpen(true);
+    },
+    [menuFlags.menusLoading, menuFlags.canRead]
+  );
 
-            <Box sx={{ mt: 3, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-              <Button
-                variant="outlined"
-                startIcon={<EditIcon />}
-                onClick={() => handleEditPayroll(selectedPayroll)}
-              >
-                {t('payrollManagement.actions.edit')}
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<PrintIcon />}
-              >
-                {t('payrollManagement.actions.print')}
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<DownloadIcon />}
-              >
-                {t('payrollManagement.actions.downloadPdf')}
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
-      </Box>
-    );
-  }
+  const handleExportExcel = useCallback(() => {
+    if (menuFlags.menusLoading || !menuFlags.canRead || !gridRows.length) return;
+    exportPayrollGridToExcel(gridRows, t);
+    setSuccess(t('payrollManagement.success.exportedExcel'));
+  }, [gridRows, menuFlags.canRead, menuFlags.menusLoading, t]);
+
+  /** 급여 생성 완료(잠금)된 월 — 명세서 발송 허용·「급여 생성 완료」재실행 비활성 */
+  const selectedPeriodPayrollComplete = !!periodKey && lockedPeriods.has(periodKey);
+  /** 확정된 월만 상단·대화상자에서 일괄 생성 차단(미생성 월은 미리보기 후 생성) */
+  const bulkCreateBlockedByLock = !!periodKey && lockedPeriods.has(periodKey);
+  /** 그리드가 이미 선택 월만 표시하므로 동일 */
+  const gridRowsForPayslipSend = gridRows;
+
+  const payslipSendDisabled =
+    menuFlags.menusLoading ||
+    !menuFlags.canMutate ||
+    loading ||
+    !selectedPeriodPayrollComplete ||
+    gridRowsForPayslipSend.length === 0;
+
+  const payslipSendTooltip = payslipSendDisabled
+    ? loading || menuFlags.menusLoading
+      ? ''
+      : !menuFlags.canMutate
+        ? t('common.menuNoMutate')
+        : !selectedPeriodPayrollComplete
+          ? t('payrollManagement.payslip.sendRequiresComplete')
+          : t('payrollManagement.payslip.sendNoRowsForPayMonth')
+    : '';
+
+  /** 상단 버튼: 월별 차단 없이 열기 — 대화상자에서 2·3월 등 다른 급여월 선택 가능 */
+  const bulkCreateOpenDisabled =
+    menuFlags.menusLoading || !menuFlags.canCreate || creating;
+  /** 대화상자「생성」: 확정·미래 월 비활성(미생성 과거·당월은 미리보기로 판별) */
+  const bulkCreateDisabled =
+    bulkCreateOpenDisabled ||
+    bulkCreateBlockedByLock ||
+    previewAttendanceLoading ||
+    isFuturePayMonth;
+  const bulkCreateDialogTooltip = bulkCreateDisabled
+    ? previewAttendanceLoading || creating || menuFlags.menusLoading
+      ? ''
+      : !menuFlags.canCreate
+        ? t('common.menuNoCreate')
+        : isFuturePayMonth
+          ? t('payrollManagement.errors.futurePayMonthNotAllowed')
+          : periodKey && lockedPeriods.has(periodKey)
+            ? t('payrollManagement.errors.periodLocked')
+            : ''
+    : '';
+  const bulkCreateHeaderTooltip = bulkCreateOpenDisabled
+    ? bulkCreateDialogTooltip
+    : bulkCreateBlockedByLock
+      ? t('payrollManagement.hints.createChooseOtherMonth')
+      : '';
+
+  const completePayrollToolbarDisabled =
+    menuFlags.menusLoading ||
+    !menuFlags.canMutate ||
+    completing ||
+    !periodKey ||
+    selectedPeriodPayrollComplete ||
+    isFuturePayMonth;
+  const completePayrollToolbarTooltip = completePayrollToolbarDisabled
+    ? completing || menuFlags.menusLoading
+      ? ''
+      : !menuFlags.canMutate
+        ? t('common.menuNoMutate')
+        : !periodKey
+          ? t('payrollManagement.errors.periodRequired')
+          : isFuturePayMonth
+            ? t('payrollManagement.errors.futurePayMonthNotAllowed')
+            : selectedPeriodPayrollComplete
+              ? t('payrollManagement.errors.periodAlreadyFinalized')
+              : ''
+    : '';
+
+  const completeDialogConfirmDisabled =
+    menuFlags.menusLoading ||
+    !menuFlags.canMutate ||
+    completing ||
+    !periodKey ||
+    lockedPeriods.has(periodKey) ||
+    isFuturePayMonth;
+  const completeDialogConfirmTooltip = completeDialogConfirmDisabled
+    ? completing || menuFlags.menusLoading
+      ? ''
+      : !menuFlags.canMutate
+        ? t('common.menuNoMutate')
+        : !periodKey
+          ? t('payrollManagement.errors.periodRequired')
+          : isFuturePayMonth
+            ? t('payrollManagement.errors.futurePayMonthNotAllowed')
+            : lockedPeriods.has(periodKey)
+              ? t('payrollManagement.errors.periodAlreadyFinalized')
+              : ''
+    : '';
 
   return (
-    <Box sx={{ 
-      p: 3, 
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%'
-    }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+    <Box
+      sx={{
+        p: 3,
+        backgroundColor: 'workArea.main',
+        borderRadius: 2,
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        minHeight: 'calc(100dvh - 200px)',
+        boxSizing: 'border-box'
+      }}
+    >
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexShrink: 0 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <MoneyIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-          <Typography component="h1" sx={{ 
-            fontSize: '16px !important',
-            fontWeight: 600,
-            color: 'text.primary',
-            lineHeight: 1.5
-          }}>
+          <Typography
+            component="h1"
+            sx={{
+              fontSize: '16px !important',
+              fontWeight: 600,
+              color: 'text.primary',
+              lineHeight: 1.5
+            }}
+          >
             {t('payrollManagement.title')}
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setOpenDialog(true)}
-          sx={{ borderRadius: 2 }}
-        >
-          {t('payrollManagement.actions.createPayroll')}
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Tooltip title={bulkCreateHeaderTooltip} disableHoverListener={!bulkCreateHeaderTooltip}>
+            <span style={{ display: 'inline-flex' }}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                disabled={bulkCreateOpenDisabled}
+                onClick={() => setOpenDialog(true)}
+                sx={{ borderRadius: 2 }}
+              >
+                {t('payrollManagement.actions.createPayroll')}
+              </Button>
+            </span>
+          </Tooltip>
+        </Box>
       </Box>
 
-      {/* 통계 카드 */}
-      <Box sx={{ 
-        display: 'grid', 
-        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
-        gap: 2, 
-        mb: 3 
-      }}>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              {t('payrollManagement.summary.totalSalary')}
-            </Typography>
-            <Typography variant="h4">
-              Rs. {totalGrossSalary.toLocaleString()}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              {t('payrollManagement.summary.netSalary')}
-            </Typography>
-            <Typography variant="h4">
-              Rs. {totalNetSalary.toLocaleString()}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              {t('payrollManagement.summary.totalTax')}
-            </Typography>
-            <Typography variant="h4">
-              Rs. {totalTax.toLocaleString()}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              {t('payrollManagement.summary.pendingPayroll')}
-            </Typography>
-            <Typography variant="h4" color="warning.main">
-              {pendingCount}
-            </Typography>
-          </CardContent>
-        </Card>
-      </Box>
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
 
-      {/* 필터 및 검색 */}
-      <Card sx={{ mb: 3 }}>
+      <Card sx={{ mb: 3, flexShrink: 0 }}>
         <CardContent>
-          <Box sx={{ 
-            display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr' },
-            gap: 2, 
-            alignItems: 'flex-end' 
-          }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'repeat(2, minmax(0, 1fr))',
+                md: 'repeat(4, minmax(0, 1fr))'
+              },
+              gap: 2,
+              alignItems: 'end',
+              '& > *': { minWidth: 0 }
+            }}
+          >
             <TextField
               fullWidth
+              size="small"
+              type="month"
+              label={t('payrollManagement.searchPayMonthLabel')}
+              value={payrollPeriod}
+              onChange={(e) => setPayrollPeriod(e.target.value)}
+              onClick={openMonthPickerFromFieldContainer}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ max: maxSelectablePayMonth }}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              sx={{ cursor: menuFlags.menusLoading || !menuFlags.canRead ? undefined : 'pointer' }}
+            />
+            <TextField
+              fullWidth
+              size="small"
+              label={t('payrollManagement.searchFieldLabel')}
               placeholder={t('payrollManagement.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              InputLabelProps={{ shrink: true }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon />
+                    <SearchIcon fontSize="small" />
                   </InputAdornment>
-                ),
+                )
               }}
             />
-            <FormControl fullWidth>
-              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                {t('payrollManagement.columns.status')}
-              </Typography>
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                displayEmpty
-                sx={{ height: '40px' }}
-              >
-                <MenuItem value="">{t('payrollManagement.all')}</MenuItem>
-                <MenuItem value="pending">{t('payrollManagement.status.pending')}</MenuItem>
-                <MenuItem value="approved">{t('payrollManagement.status.approved')}</MenuItem>
-                <MenuItem value="paid">{t('payrollManagement.status.paid')}</MenuItem>
-                <MenuItem value="cancelled">{t('payrollManagement.status.cancelled')}</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                {t('payrollManagement.department')}
-              </Typography>
-              <Select
-                value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
-                displayEmpty
-                sx={{ height: '40px' }}
-              >
-                <MenuItem value="">{t('payrollManagement.all')}</MenuItem>
-                {departments.map(dept => (
-                  <MenuItem key={dept} value={dept}>{dept}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('payrollManagement.department')}
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) =>
+                  selected === '' || selected == null ? t('payrollManagement.all') : String(selected)
+              }}
+            >
+              <MenuItem value="">{t('payrollManagement.all')}</MenuItem>
+              {departments.map((dept) => (
+                <MenuItem key={dept} value={dept}>
+                  {dept}
+                </MenuItem>
+              ))}
+            </TextField>
             <Button
               fullWidth
               variant="outlined"
+              size="medium"
               startIcon={<FilterIcon />}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
               onClick={() => {
                 setSearchTerm('');
-                setStatusFilter('');
                 setDepartmentFilter('');
+              }}
+              sx={{
+                height: 40,
+                minHeight: 40,
+                boxSizing: 'border-box',
+                textTransform: 'none'
               }}
             >
               {t('payrollManagement.actions.reset')}
@@ -540,138 +586,335 @@ const PayrollManagement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* 급여 목록 테이블 */}
-      <Card>
-        <TableContainer>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>{t('payrollManagement.columns.employeeInfo')}</TableCell>
-                <TableCell>{t('payrollManagement.columns.payPeriod')}</TableCell>
-                <TableCell>{t('payrollManagement.columns.basicSalary')}</TableCell>
-                <TableCell>{t('payrollManagement.columns.totalSalary')}</TableCell>
-                <TableCell>{t('payrollManagement.columns.netSalary')}</TableCell>
-                <TableCell>{t('payrollManagement.columns.status')}</TableCell>
-                <TableCell>{t('payrollManagement.columns.paymentDate')}</TableCell>
-                <TableCell>{t('payrollManagement.columns.actions')}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {paginatedPayrolls.map((payroll) => (
-                <TableRow key={payroll.id} hover>
-                  <TableCell>
-                    <Box>
-                      <Typography variant="subtitle2" fontWeight="bold">
-                        {payroll.employeeName}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {payroll.position} • {payroll.department}
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell>{payroll.payPeriod}</TableCell>
-                  <TableCell>Rs. {payroll.basicSalary.toLocaleString()}</TableCell>
-                  <TableCell>Rs. {payroll.grossSalary.toLocaleString()}</TableCell>
-                  <TableCell>Rs. {payroll.netSalary.toLocaleString()}</TableCell>
-                  <TableCell>{getStatusChip(payroll.status)}</TableCell>
-                  <TableCell>{payroll.paymentDate || '-'}</TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Tooltip title={t('payrollManagement.actions.view')}>
-                        <IconButton size="small" onClick={() => handleViewPayroll(payroll)}>
-                          <ViewIcon />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title={t('payrollManagement.actions.edit')}>
-                        <IconButton size="small" onClick={() => handleEditPayroll(payroll)}>
-                          <EditIcon />
-                        </IconButton>
-                      </Tooltip>
-                      {payroll.status === 'pending' && (
-                        <Tooltip title={t('payrollManagement.actions.approve')}>
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleApprovePayroll(payroll.id)}
-                            color="info"
-                          >
-                            <CalculateIcon />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                      {payroll.status === 'approved' && (
-                        <Tooltip title={t('payrollManagement.actions.pay')}>
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handlePayPayroll(payroll.id)}
-                            color="success"
-                          >
-                            <MoneyIcon />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                      <Tooltip title={t('payrollManagement.actions.delete')}>
-                        <IconButton size="small" onClick={() => handleDeletePayroll(payroll.id)}>
-                          <DeleteIcon />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, flexShrink: 0 }}>
+        {periodKey
+          ? t('payrollManagement.summary.scopeForPayMonth', { period: periodKey })
+          : t('payrollManagement.summary.scopeNoMonth')}
+      </Typography>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+          gap: 2,
+          mb: 3,
+          flexShrink: 0
+        }}
+      >
+        <Card>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom>
+              {t('payrollManagement.summary.totalSalary')}
+            </Typography>
+            <Typography variant="h4">Rs. {summaryStats.gross.toLocaleString()}</Typography>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom>
+              {t('payrollManagement.summary.netSalary')}
+            </Typography>
+            <Typography variant="h4">Rs. {summaryStats.net.toLocaleString()}</Typography>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom>
+              {t('payrollManagement.summary.totalTax')}
+            </Typography>
+            <Typography variant="h4">Rs. {summaryStats.tax.toLocaleString()}</Typography>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <Typography color="textSecondary" gutterBottom>
+              {t('payrollManagement.summary.pendingPayroll')}
+            </Typography>
+            <Typography variant="h4" color="warning.main">
+              {summaryStats.pending}
+            </Typography>
+          </CardContent>
+        </Card>
+      </Box>
 
-        {/* 페이지네이션 */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-          <Pagination
-            count={Math.ceil(filteredPayrolls.length / itemsPerPage)}
-            page={page}
-            onChange={(_, value) => setPage(value)}
-            color="primary"
-          />
-        </Box>
+      <Card
+        elevation={0}
+        sx={{
+          boxShadow: 'none',
+          border: 'none',
+          bgcolor: 'transparent',
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
+        <CardContent
+          sx={{
+            p: 0,
+            '&:last-child': { pb: 0 },
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+        >
+          <Box
+            sx={{
+              px: 2,
+              pt: 2,
+              pb: 1,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 1,
+              flexShrink: 0
+            }}
+          >
+            <Typography variant="body2" color="text.secondary" sx={{ flex: '1 1 200px' }}>
+              {t('payrollManagement.gridHint')}
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexShrink: 0, flexWrap: 'wrap' }}>
+              <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<FileDownloadIcon />}
+                    onClick={handleExportExcel}
+                    disabled={menuFlags.menusLoading || !menuFlags.canRead || loading || gridRows.length === 0}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    {t('payrollManagement.actions.exportExcel')}
+                  </Button>
+                </span>
+              </Tooltip>
+              <Tooltip title={payslipSendTooltip} disableHoverListener={!payslipSendTooltip}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<EmailIcon />}
+                    disabled={payslipSendDisabled}
+                    onClick={() => setSendDialogOpen(true)}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    {t('payrollManagement.payslip.sendTitle')}
+                  </Button>
+                </span>
+              </Tooltip>
+              <Tooltip title={completePayrollToolbarTooltip} disableHoverListener={!completePayrollToolbarTooltip}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="contained"
+                    color="error"
+                    startIcon={<TaskAltIcon />}
+                    onClick={() => setCompleteDialogOpen(true)}
+                    disabled={completePayrollToolbarDisabled}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    {t('payrollManagement.actions.completePayroll')}
+                  </Button>
+                </span>
+              </Tooltip>
+            </Box>
+          </Box>
+          <Box sx={{ flex: 1, minHeight: 0, px: 2, pb: 2, display: 'flex', flexDirection: 'column' }}>
+            <PayrollExcelGrid
+              rows={gridRows}
+              loading={loading}
+              onReload={loadPayrollData}
+              onError={(msg) => setError(msg ?? '')}
+              onSuccess={setSuccess}
+              onOpenPayslip={handleOpenPayslip}
+              lockedPeriods={lockedPeriods}
+              isRoot={isRoot}
+              allowCellEdit={!menuFlags.menusLoading && menuFlags.canMutate}
+              allowDelete={!menuFlags.menusLoading && menuFlags.canDelete}
+              allowOpenPayslip={!menuFlags.menusLoading && menuFlags.canRead}
+            />
+          </Box>
+        </CardContent>
       </Card>
 
-      {/* 급여 생성/수정 다이얼로그 */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
-          {selectedPayroll ? t('payrollManagement.dialog.editTitle') : t('payrollManagement.dialog.createTitle')}
-        </DialogTitle>
+      <PayrollPayslipDialog
+        open={payslipOpen}
+        row={payslipRow}
+        onClose={() => {
+          setPayslipOpen(false);
+          setPayslipRow(null);
+        }}
+      />
+
+      <PayrollSendPayslipsDialog
+        open={sendDialogOpen}
+        rows={gridRowsForPayslipSend}
+        onClose={() => setSendDialogOpen(false)}
+        onSent={(msg) => setSuccess(msg)}
+        onError={(msg) => setError(msg)}
+      />
+
+      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{t('payrollManagement.dialog.createTitle')}</DialogTitle>
         <DialogContent>
           <Box sx={{ mt: 2 }}>
-            <Typography variant="h6" gutterBottom>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               {t('payrollManagement.dialog.enterInfo')}
             </Typography>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              {t('payrollManagement.dialog.underDevelopment')}
-            </Typography>
+            <TextField
+              fullWidth
+              type="month"
+              label={t('payrollManagement.dialog.payrollPeriodLabel')}
+              value={payrollPeriod}
+              onChange={(e) => setPayrollPeriod(e.target.value)}
+              onClick={openMonthPickerFromFieldContainer}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ max: maxSelectablePayMonth }}
+              disabled={menuFlags.menusLoading || !menuFlags.canCreate}
+              sx={{ cursor: menuFlags.menusLoading || !menuFlags.canCreate ? undefined : 'pointer' }}
+            />
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>{t('common.cancel')}</Button>
-          <Button variant="contained">
-            {selectedPayroll ? t('payrollManagement.actions.edit') : t('payrollManagement.actions.create')}
+          <Button onClick={() => setOpenDialog(false)} disabled={creating || previewAttendanceLoading}>
+            {t('common.cancel')}
+          </Button>
+          <Tooltip title={bulkCreateDialogTooltip} disableHoverListener={!bulkCreateDialogTooltip}>
+            <span style={{ display: 'inline-flex' }}>
+              <Button
+                variant="contained"
+                onClick={() => void handleRequestBulkPayrollPreview()}
+                disabled={bulkCreateDisabled}
+              >
+                {t('payrollManagement.actions.create')}
+              </Button>
+            </span>
+          </Tooltip>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={payrollPreviewOpen}
+        onClose={() => {
+          if (!creating) {
+            setPayrollPreviewOpen(false);
+            setPayrollPreviewPayload(null);
+          }
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{t('payrollManagement.preview.title')}</DialogTitle>
+        <DialogContent>
+          {payrollPreviewPayload?.attendance && (
+            <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              <Typography variant="body2">
+                {t('payrollManagement.preview.summary', {
+                  period: payrollPreviewPayload.payroll_period,
+                  total: payrollPreviewPayload.employee_total
+                })}
+              </Typography>
+              <Typography variant="body2" color="success.main">
+                {t('payrollManagement.preview.withAttendance', {
+                  count: payrollPreviewPayload.attendance.with_attendance
+                })}
+              </Typography>
+              <Typography variant="body2" color={payrollPreviewPayload.attendance.without_attendance > 0 ? 'warning.main' : 'text.secondary'}>
+                {t('payrollManagement.preview.withoutAttendance', {
+                  count: payrollPreviewPayload.attendance.without_attendance
+                })}
+              </Typography>
+              {payrollPreviewPayload.attendance.without_attendance_usernames.length > 0 && (
+                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word' }}>
+                  {t('payrollManagement.preview.withoutNames', {
+                    names: payrollPreviewPayload.attendance.without_attendance_usernames.join(', ')
+                  })}
+                </Typography>
+              )}
+              {payrollPreviewPayload.attendance.daily_without_records.length > 0 && (
+                <Alert severity="info" sx={{ mt: 0.5 }}>
+                  {t('payrollManagement.preview.dailyNote')}
+                </Alert>
+              )}
+              <Typography variant="caption" color="text.secondary">
+                {t('payrollManagement.preview.footnote')}
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              if (!creating) {
+                setPayrollPreviewOpen(false);
+                setPayrollPreviewPayload(null);
+              }
+            }}
+            disabled={creating}
+          >
+            {t('common.cancel')}
+          </Button>
+          <Button variant="contained" onClick={() => void handleExecuteBulkPayrollAfterPreview()} disabled={creating}>
+            {t('payrollManagement.preview.confirmRun')}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* 스낵바 */}
-      <Snackbar
-        open={!!error}
-        autoHideDuration={6000}
-        onClose={() => setError('')}
+      <Dialog
+        open={completeDialogOpen}
+        onClose={() => !completing && setCompleteDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
       >
+        <DialogTitle>{t('payrollManagement.dialog.completeTitle')}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 1 }}>
+            <TextField
+              fullWidth
+              type="month"
+              label={t('payrollManagement.dialog.payrollPeriodLabel')}
+              value={payrollPeriod}
+              onChange={(e) => setPayrollPeriod(e.target.value)}
+              onClick={openMonthPickerFromFieldContainer}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{ max: maxSelectablePayMonth }}
+              sx={{
+                mb: 2,
+                cursor: menuFlags.menusLoading || !menuFlags.canMutate ? undefined : 'pointer'
+              }}
+              disabled={menuFlags.menusLoading || !menuFlags.canMutate}
+            />
+            <Typography variant="body2" color="text.secondary">
+              {t('payrollManagement.dialog.completeMessage', {
+                period: payrollPeriod.trim() || '—'
+              })}
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCompleteDialogOpen(false)} disabled={completing}>
+            {t('common.cancel')}
+          </Button>
+          <Tooltip title={completeDialogConfirmTooltip} disableHoverListener={!completeDialogConfirmTooltip}>
+            <span style={{ display: 'inline-flex' }}>
+              <Button
+                variant="contained"
+                color="error"
+                onClick={() => void handleConfirmCompletePeriod()}
+                disabled={completeDialogConfirmDisabled}
+              >
+                {t('payrollManagement.actions.completePayroll')}
+              </Button>
+            </span>
+          </Tooltip>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError('')}>
         <Alert onClose={() => setError('')} severity="error">
           {error}
         </Alert>
       </Snackbar>
 
-      <Snackbar
-        open={!!success}
-        autoHideDuration={6000}
-        onClose={() => setSuccess('')}
-      >
+      <Snackbar open={!!success} autoHideDuration={4000} onClose={() => setSuccess('')}>
         <Alert onClose={() => setSuccess('')} severity="success">
           {success}
         </Alert>

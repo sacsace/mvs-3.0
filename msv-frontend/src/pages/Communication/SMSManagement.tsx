@@ -66,6 +66,8 @@ import {
   History as HistoryIcon
 } from '@mui/icons-material';
 import { useStore } from '../../store';
+import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 interface SMS {
   id: number;
@@ -86,6 +88,7 @@ interface SMS {
 
 const SMSManagement: React.FC = () => {
   const { user } = useStore();
+  const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [smsList, setSmsList] = useState<SMS[]>([]);
   const [filteredSms, setFilteredSms] = useState<SMS[]>([]);
   const [loading, setLoading] = useState(false);
@@ -253,16 +256,20 @@ const SMSManagement: React.FC = () => {
     setViewMode('view');
   };
 
-  const handleDeleteSMS = async (id: number) => {
-    if (window.confirm('정말로 이 SMS를 삭제하시겠습니까?')) {
-      try {
-        setSmsList(prev => prev.filter(sms => sms.id !== id));
-        setSuccess('SMS가 성공적으로 삭제되었습니다.');
-      } catch (error) {
-        console.error('삭제 오류:', error);
-        setError('삭제 중 오류가 발생했습니다.');
-      }
-    }
+  const handleDeleteSMS = (id: number) => {
+    showConfirm(
+      '정말로 이 SMS를 삭제하시겠습니까?',
+      () => {
+        try {
+          setSmsList((prev) => prev.filter((sms) => sms.id !== id));
+          setSuccess('SMS가 성공적으로 삭제되었습니다.');
+        } catch (error) {
+          console.error('삭제 오류:', error);
+          setError('삭제 중 오류가 발생했습니다.');
+        }
+      },
+      { title: '삭제 확인', confirmColor: 'error', confirmText: '삭제', cancelText: '취소' }
+    );
   };
 
   const handleResendSMS = (id: number) => {
@@ -681,6 +688,17 @@ const SMSManagement: React.FC = () => {
           {success}
         </Alert>
       </Snackbar>
+
+      <ConfirmDialog
+        open={dialogState.open}
+        title={dialogState.title}
+        message={dialogState.message}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+        confirmColor={dialogState.confirmColor}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
     </Box>
   );
 };

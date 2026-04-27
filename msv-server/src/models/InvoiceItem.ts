@@ -11,6 +11,11 @@ interface InvoiceItemAttributes {
   total_price: number;
   tax_rate: number;
   tax_amount: number;
+  hsn_sac?: string | null;
+  cgst_rate: number;
+  sgst_rate: number;
+  igst_rate: number;
+  cess_rate: number;
   is_active: boolean;
   created_at: Date;
   updated_at: Date;
@@ -28,6 +33,11 @@ class InvoiceItem extends Model<InvoiceItemAttributes, InvoiceItemCreationAttrib
   public total_price!: number;
   public tax_rate!: number;
   public tax_amount!: number;
+  public hsn_sac?: string | null;
+  public cgst_rate!: number;
+  public sgst_rate!: number;
+  public igst_rate!: number;
+  public cess_rate!: number;
   public is_active!: boolean;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
@@ -78,6 +88,30 @@ InvoiceItem.init(
     },
     tax_amount: {
       type: DataTypes.DECIMAL(15, 2),
+      allowNull: false,
+      defaultValue: 0,
+    },
+    hsn_sac: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    cgst_rate: {
+      type: DataTypes.DECIMAL(7, 2),
+      allowNull: false,
+      defaultValue: 0,
+    },
+    sgst_rate: {
+      type: DataTypes.DECIMAL(7, 2),
+      allowNull: false,
+      defaultValue: 0,
+    },
+    igst_rate: {
+      type: DataTypes.DECIMAL(7, 2),
+      allowNull: false,
+      defaultValue: 0,
+    },
+    cess_rate: {
+      type: DataTypes.DECIMAL(7, 2),
       allowNull: false,
       defaultValue: 0,
     },

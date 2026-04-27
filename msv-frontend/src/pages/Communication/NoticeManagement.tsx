@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -86,8 +86,9 @@ import {
   PushPin as PushPinIcon
 } from '@mui/icons-material';
 import { useStore } from '../../store';
-import { noticeService } from '../../services/api';
+import { noticeService, userUiPreferencesService } from '../../services/api';
 import { useTranslation } from 'react-i18next';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -186,6 +187,11 @@ const ResizableImage = Image.extend({
   },
 });
 
+/** 연간 스케줄표 달력 표시 크기 (기준 대비 약 20% 확대) */
+const YEARLY_CALENDAR_SCALE = 1.2;
+const ycsRem = (rem: number) => `${rem * YEARLY_CALENDAR_SCALE}rem`;
+const ycsSp = (u: number) => u * YEARLY_CALENDAR_SCALE;
+
 // HTML 태그 제거 함수
 const stripHtmlTags = (html: string): string => {
   if (!html) return '';
@@ -194,9 +200,34 @@ const stripHtmlTags = (html: string): string => {
   return tmp.textContent || tmp.innerText || '';
 };
 
+const NOTICE_MENU_ROUTES = ['/communication/notice', '/communication/notices', '/communication'];
+
 const NoticeManagement: React.FC = () => {
   const { user } = useStore();
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
+  const noticeMenuFlags = useMenuRoutePermissionFlags(NOTICE_MENU_ROUTES);
+
+  /** 연간 스케줄표: 등록·수정(저장)은 admin/root만 */
+  const canManageYearlySchedule = useMemo(
+    () => user?.role === 'admin' || user?.role === 'root',
+    [user?.role]
+  );
+
+  /** 메뉴 `수정`(can_edit)이 있을 때만 — 본인 글이어도 등록만 있으면 수정 UI는 숨김(정책). admin/root는 메뉴 수정권한으로 허용 */
+  const canUserEditNotice = (n: Notice | null) => {
+    if (!n || !user) return false;
+    if (!noticeMenuFlags.canEdit) return false;
+    if (user.role === 'root' || user.role === 'admin') return true;
+    const aid = Number((n as any).authorId ?? (n as any).author_id);
+    return Number.isFinite(aid) && Number(user.id) === aid;
+  };
+
+  const isNoticeAuthor = (n: Notice | null) => {
+    if (!n || !user) return false;
+    const aid = Number((n as any).authorId ?? (n as any).author_id);
+    return Number.isFinite(aid) && Number(user.id) === aid;
+  };
+
   const isEn = i18n.language === 'en';
   const txt = (ko: string, en: string) => (isEn ? en : ko);
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -237,7 +268,8 @@ const NoticeManagement: React.FC = () => {
     isPinned: false, // 고정하기
     attachments: [] as string[]
   });
-  const scheduleStorageKey = user?.id ? `mvs-notice-schedules:${user.id}` : null;
+  const skipSchedulePersistRef = useRef(true);
+  const [scheduleStorageReady, setScheduleStorageReady] = useState(false);
 
   // Tiptap 에디터 설정
   const editor = useEditor({
@@ -436,55 +468,72 @@ const NoticeManagement: React.FC = () => {
     }
   ];
 
-  useEffect(() => {
-    loadData();
-  }, [page, searchTerm, statusFilter]);
-
   const toDateKey = (date: Date) => {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
 
   useEffect(() => {
-    if (!scheduleStorageKey) return;
-    try {
-      const raw = localStorage.getItem(scheduleStorageKey);
-      if (!raw) {
-        setCustomSchedules({});
-        return;
-      }
+    if (!user?.id) {
+      setScheduleStorageReady(false);
+      setCustomSchedules({});
+      return;
+    }
 
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== 'object') {
-        setCustomSchedules({});
-        return;
-      }
+    let cancelled = false;
+    setScheduleStorageReady(false);
+    skipSchedulePersistRef.current = true;
 
-      const sanitized: Record<string, CalendarScheduleItem[]> = {};
-      Object.entries(parsed).forEach(([dateKey, value]) => {
-        if (!Array.isArray(value)) return;
-        const list: CalendarScheduleItem[] = value
-          .filter((item: any) => item && typeof item.title === 'string')
-          .map((item: any) => ({
-            id: String(item.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
-            title: String(item.title).trim(),
-            type: (item.type === 'company_holiday' ? 'company_holiday' : 'normal') as 'normal' | 'company_holiday'
-          }))
-          .filter((item) => item.title.length > 0);
-        if (list.length > 0) {
-          sanitized[dateKey] = list;
+    userUiPreferencesService
+      .get()
+      .then((data) => {
+        if (cancelled) return;
+        const raw = data.calendarSchedules || {};
+        const sanitized: Record<string, CalendarScheduleItem[]> = {};
+        Object.entries(raw).forEach(([dateKey, value]) => {
+          if (!Array.isArray(value)) return;
+          const list: CalendarScheduleItem[] = value
+            .filter((item: any) => item && typeof item.title === 'string')
+            .map((item: any) => ({
+              id: String(item.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+              title: String(item.title).trim(),
+              type: (item.type === 'company_holiday' ? 'company_holiday' : 'normal') as 'normal' | 'company_holiday'
+            }))
+            .filter((item) => item.title.length > 0);
+          if (list.length > 0) sanitized[dateKey] = list;
+        });
+        setCustomSchedules(sanitized);
+        requestAnimationFrame(() => {
+          setScheduleStorageReady(true);
+          setTimeout(() => {
+            skipSchedulePersistRef.current = false;
+          }, 400);
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCustomSchedules({});
+          requestAnimationFrame(() => {
+            setScheduleStorageReady(true);
+            setTimeout(() => {
+              skipSchedulePersistRef.current = false;
+            }, 400);
+          });
         }
       });
 
-      setCustomSchedules(sanitized);
-    } catch {
-      setCustomSchedules({});
-    }
-  }, [scheduleStorageKey]);
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
-    if (!scheduleStorageKey) return;
-    localStorage.setItem(scheduleStorageKey, JSON.stringify(customSchedules));
-  }, [scheduleStorageKey, customSchedules]);
+    if (!user?.id || !scheduleStorageReady || skipSchedulePersistRef.current) return;
+    if (!canManageYearlySchedule) return;
+    const t = window.setTimeout(() => {
+      userUiPreferencesService.patch({ calendarSchedules: customSchedules }).catch(() => {});
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [user?.id, customSchedules, scheduleStorageReady, canManageYearlySchedule]);
 
   const openScheduleDialog = (date: Date) => {
     setSelectedScheduleDate(date);
@@ -501,6 +550,7 @@ const NoticeManagement: React.FC = () => {
   };
 
   const handleAddSchedule = () => {
+    if (!canManageYearlySchedule) return;
     if (!selectedScheduleDate) return;
     const rawTitle = newScheduleTitle.trim();
     const title =
@@ -528,6 +578,7 @@ const NoticeManagement: React.FC = () => {
   };
 
   const handleDeleteSchedule = (dateKey: string, scheduleId: string) => {
+    if (!canManageYearlySchedule) return;
     setCustomSchedules((prev) => {
       const existing = prev[dateKey] || [];
       const updated = existing.filter((item) => item.id !== scheduleId);
@@ -542,7 +593,12 @@ const NoticeManagement: React.FC = () => {
     });
   };
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    if (noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead) {
+      setNotices([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const response = await noticeService.getNotices({
@@ -567,8 +623,11 @@ const NoticeManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [itemsPerPage, noticeMenuFlags.canRead, noticeMenuFlags.menusLoading, page, searchTerm, statusFilter]);
 
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const getCategoryChip = (category: string) => {
     switch (category) {
@@ -650,6 +709,7 @@ const NoticeManagement: React.FC = () => {
   };
 
   const handleEditNotice = (notice: Notice) => {
+    if (!canUserEditNotice(notice)) return;
     setSelectedNotice(notice);
     // 에디터 내용 설정을 위해 먼저 formData 설정
     const editFormData = {
@@ -686,6 +746,10 @@ const NoticeManagement: React.FC = () => {
 
   const handleSaveEdit = async () => {
     try {
+      if (!selectedNotice || !canUserEditNotice(selectedNotice)) {
+        setError(isEn ? 'You do not have permission to edit notices.' : '공지사항을 수정할 권한이 없습니다.');
+        return;
+      }
       const contentText = editor ? editor.getText().trim() : formData.content.trim();
       if (!formData.title.trim() || !contentText) {
         setError('제목과 내용은 필수입니다.');
@@ -725,6 +789,10 @@ const NoticeManagement: React.FC = () => {
   };
 
   const handleOpenCreateDialog = () => {
+    if (!noticeMenuFlags.canCreate) {
+      setError(isEn ? 'You do not have permission to create notices.' : '공지사항을 등록할 권한이 없습니다.');
+      return;
+    }
     setSelectedNotice(null);
     setFormData({
       title: '',
@@ -757,6 +825,10 @@ const NoticeManagement: React.FC = () => {
       };
 
       if (selectedNotice) {
+        if (!canUserEditNotice(selectedNotice)) {
+          setError(isEn ? 'You do not have permission to edit notices.' : '공지사항을 수정할 권한이 없습니다.');
+          return;
+        }
         // 수정
         const response = await noticeService.updateNotice(selectedNotice.id, noticeData);
         if (response.success) {
@@ -768,6 +840,10 @@ const NoticeManagement: React.FC = () => {
           setError(response.message || '수정 중 오류가 발생했습니다.');
         }
       } else {
+        if (!noticeMenuFlags.canCreate) {
+          setError(isEn ? 'You do not have permission to create notices.' : '공지사항을 등록할 권한이 없습니다.');
+          return;
+        }
         // 생성
         const response = await noticeService.createNotice(noticeData);
         if (response.success) {
@@ -786,13 +862,21 @@ const NoticeManagement: React.FC = () => {
   };
 
   const handleDeleteNotice = (notice: Notice) => {
+    if (!noticeMenuFlags.canDelete) {
+      setError(isEn ? 'You do not have permission to delete notices.' : '공지사항을 삭제할 권한이 없습니다.');
+      return;
+    }
     setNoticeToDelete(notice);
     setDeleteDialogOpen(true);
   };
 
   const confirmDeleteNotice = async () => {
     if (!noticeToDelete) return;
-    
+    if (!noticeMenuFlags.canDelete) {
+      setError(isEn ? 'You do not have permission to delete notices.' : '공지사항을 삭제할 권한이 없습니다.');
+      return;
+    }
+
     try {
       const response = await noticeService.deleteNotice(noticeToDelete.id);
       if (response.success) {
@@ -1105,16 +1189,25 @@ const NoticeManagement: React.FC = () => {
     const weekDays = isEn ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] : ['일', '월', '화', '수', '목', '금', '토'];
     
     return (
-      <Box sx={{ width: '100%' }}>
+      <Box
+        sx={{
+          width: '100%',
+          maxWidth: '100%',
+          maxHeight: { xs: 'calc(100vh - 200px)', sm: 'calc(100vh - 220px)' },
+          overflowY: 'auto',
+          pr: ycsSp(0.5),
+          boxSizing: 'border-box',
+        }}
+      >
         {/* 요일 헤더 */}
-        <Box sx={{ display: 'flex', mb: 1 }}>
+        <Box sx={{ display: 'flex', mb: ycsSp(0.5) }}>
           {weekDays.map((day, index) => (
             <Box 
               key={day} 
               sx={{ 
                 flex: 1, 
                 textAlign: 'center', 
-                py: 0.8,
+                py: ycsSp(0.35),
                 borderRight: index < weekDays.length - 1 ? '1px solid' : 'none',
                 borderColor: 'divider'
               }}
@@ -1122,7 +1215,7 @@ const NoticeManagement: React.FC = () => {
               <Typography 
                 variant="body2" 
                 fontWeight="bold"
-                sx={{ fontSize: '0.95rem' }}
+                sx={{ fontSize: ycsRem(0.78) }}
                 color={index === 0 ? 'error.main' : index === 6 ? 'error.main' : 'text.primary'}
               >
                 {day}
@@ -1159,11 +1252,11 @@ const NoticeManagement: React.FC = () => {
               >
                 <Box
                   sx={{
-                    aspectRatio: '1 / 0.8',
+                    aspectRatio: '3 / 2',
                     border: '1px solid',
                     borderColor: 'divider',
                     borderRadius: 1,
-                    p: 0.5,
+                    p: ycsSp(0.35),
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'flex-start',
@@ -1198,20 +1291,20 @@ const NoticeManagement: React.FC = () => {
                   }}
                   onClick={() => openScheduleDialog(date)}
                 >
-                  <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25 }}>
+                  <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: ycsSp(0.25) }}>
                     <Typography
                       variant="body2"
                       sx={{
                         fontWeight: hasCompanyHoliday ? 800 : (isTodayDate ? 'bold' : isHolidayDate ? 'bold' : 'normal'),
-                        fontSize: '0.86rem',
+                        fontSize: ycsRem(0.78),
                         display: 'inline-flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        minWidth: hasCompanyHoliday ? 22 : 'auto',
-                        height: hasCompanyHoliday ? 22 : 'auto',
-                        px: hasCompanyHoliday ? 0.4 : 0,
+                        minWidth: hasCompanyHoliday ? Math.round(22 * YEARLY_CALENDAR_SCALE) : 'auto',
+                        height: hasCompanyHoliday ? Math.round(22 * YEARLY_CALENDAR_SCALE) : 'auto',
+                        px: hasCompanyHoliday ? ycsSp(0.4) : 0,
                         borderRadius: hasCompanyHoliday ? '50%' : 0,
-                        border: hasCompanyHoliday ? '3px solid' : 'none',
+                        border: hasCompanyHoliday ? `${Math.round(3 * YEARLY_CALENDAR_SCALE)}px solid` : 'none',
                         borderColor: hasCompanyHoliday ? (isTodayDate ? 'common.white' : 'warning.dark') : 'transparent',
                         bgcolor: hasCompanyHoliday && !isTodayDate ? 'warning.main' : 'transparent',
                         color: hasCompanyHoliday && !isTodayDate ? 'common.white' : undefined,
@@ -1221,20 +1314,20 @@ const NoticeManagement: React.FC = () => {
                       {date.getDate()}
                     </Typography>
                     {hasCompanyHoliday && (
-                      <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.1 }}>
+                      <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: ycsSp(0.1) }}>
                         <CompanyHolidayStarIcon color={isTodayDate ? '#FFFFFF' : '#FF1744'} />
                         <CompanyHolidayStarIcon color={isTodayDate ? '#FFFFFF' : '#FF1744'} />
                       </Box>
                     )}
                   </Box>
                   {holidayNames.length > 0 && (
-                    <Box sx={{ mt: 0.15, display: 'flex', flexDirection: 'column', gap: 0.1 }}>
+                    <Box sx={{ mt: ycsSp(0.15), display: 'flex', flexDirection: 'column', gap: ycsSp(0.1) }}>
                       {holidayNames.slice(0, 2).map((name) => (
                         <Typography
                           key={`${dateKey}-${name}`}
                           variant="caption"
                           sx={{
-                            fontSize: '0.64rem',
+                            fontSize: ycsRem(0.58),
                             color: isTodayDate ? 'white' : 'error.main',
                             fontWeight: 700,
                             lineHeight: 1.1
@@ -1247,7 +1340,7 @@ const NoticeManagement: React.FC = () => {
                         <Typography
                           variant="caption"
                           sx={{
-                            fontSize: '0.62rem',
+                            fontSize: ycsRem(0.56),
                             color: isTodayDate ? 'white' : 'error.main',
                             fontWeight: 700,
                             lineHeight: 1.1
@@ -1259,13 +1352,13 @@ const NoticeManagement: React.FC = () => {
                     </Box>
                   )}
                   {customLabels.length > 0 && (
-                    <Box sx={{ mt: 0.3, display: 'flex', flexDirection: 'column', gap: 0.2 }}>
+                    <Box sx={{ mt: ycsSp(0.3), display: 'flex', flexDirection: 'column', gap: ycsSp(0.2) }}>
                       {customLabels.slice(0, 2).map((item) => (
                         <Typography
                           key={`${dateKey}-${item.id}`}
                           variant="caption"
                           sx={{
-                            fontSize: item.type === 'company_holiday' ? '0.74rem' : '0.67rem',
+                            fontSize: item.type === 'company_holiday' ? ycsRem(0.66) : ycsRem(0.6),
                             color: isTodayDate
                               ? 'white'
                               : item.type === 'company_holiday'
@@ -1274,8 +1367,8 @@ const NoticeManagement: React.FC = () => {
                             fontWeight: 700,
                             lineHeight: 1.15,
                             bgcolor: item.type === 'company_holiday' ? 'warning.dark' : 'transparent',
-                            px: item.type === 'company_holiday' ? 0.35 : 0,
-                            borderRadius: item.type === 'company_holiday' ? 0.6 : 0,
+                            px: item.type === 'company_holiday' ? ycsSp(0.35) : 0,
+                            borderRadius: item.type === 'company_holiday' ? ycsSp(0.6) : 0,
                             display: 'inline-flex',
                             alignSelf: 'flex-start'
                           }}
@@ -1287,7 +1380,7 @@ const NoticeManagement: React.FC = () => {
                         <Typography
                           variant="caption"
                           sx={{
-                            fontSize: '0.67rem',
+                            fontSize: ycsRem(0.6),
                             color: isTodayDate ? 'white' : 'primary.main',
                             fontWeight: 700
                           }}
@@ -1298,18 +1391,18 @@ const NoticeManagement: React.FC = () => {
                     </Box>
                   )}
                   {complianceLabels.length > 0 && (
-                    <Box sx={{ mt: 0.2, display: 'flex', flexDirection: 'column', gap: 0.1 }}>
+                    <Box sx={{ mt: ycsSp(0.2), display: 'flex', flexDirection: 'column', gap: ycsSp(0.1) }}>
                       {complianceLabels.slice(0, 2).map((item) => (
                         <Typography
                           key={`${dateKey}-${item.id}`}
                           variant="caption"
-                          sx={{ fontSize: '0.62rem', color: item.color, fontWeight: 700, lineHeight: 1.1 }}
+                          sx={{ fontSize: ycsRem(0.56), color: item.color, fontWeight: 700, lineHeight: 1.1 }}
                         >
                           {item.label}
                         </Typography>
                       ))}
                       {complianceLabels.length > 2 && (
-                        <Typography variant="caption" sx={{ fontSize: '0.62rem', color: 'info.main', fontWeight: 700 }}>
+                        <Typography variant="caption" sx={{ fontSize: ycsRem(0.56), color: 'info.main', fontWeight: 700 }}>
                           +{complianceLabels.length - 2}
                         </Typography>
                       )}
@@ -1723,6 +1816,13 @@ const NoticeManagement: React.FC = () => {
                     작성일: {selectedNotice.createdAt}
                     {selectedNotice.publishedAt && ` • 게시일: ${selectedNotice.publishedAt}`}
                   </Typography>
+                  {isNoticeAuthor(selectedNotice) && !noticeMenuFlags.canEdit && (
+                    <Alert severity="info" sx={{ mt: 2 }}>
+                      {isEn
+                        ? 'You wrote this notice, but your account does not have the notice menu “Edit” permission. Enable Edit (or ask an admin) in Menu Permission Management — “Register” alone does not allow editing.'
+                        : '본인이 작성한 공지이지만, 메뉴 권한에 공지사항「수정」이 없습니다. 메뉴권한관리에서 해당 사용자에 수정을 허용해 주세요. 「등록」만으로는 수정할 수 없습니다.'}
+                    </Alert>
+                  )}
                 </Box>
 
                 <Divider sx={{ my: 3 }} />
@@ -1784,8 +1884,7 @@ const NoticeManagement: React.FC = () => {
                       onClick={() => {
                         // 첨부파일 다운로드 또는 열기
                         // 실제 파일 URL이 있다면 여기서 처리
-                        console.log('첨부파일 클릭:', attachment);
-                      }}
+                                              }}
                     >
                       <ListItemAvatar>
                         <Avatar sx={{ bgcolor: 'primary.main' }}>
@@ -1839,7 +1938,7 @@ const NoticeManagement: React.FC = () => {
                     </Button>
                   </>
                 ) : (
-                  user && user.id === selectedNotice.authorId && (
+                  canUserEditNotice(selectedNotice) && (
                     <Button
                       variant="outlined"
                       startIcon={<EditIcon />}
@@ -1859,12 +1958,12 @@ const NoticeManagement: React.FC = () => {
 
   return (
     <Box sx={{ 
-      p: 3, 
+      p: 2,
       backgroundColor: 'workArea.main',
       borderRadius: 2,
       minHeight: '100%'
     }}>
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -1886,17 +1985,33 @@ const NoticeManagement: React.FC = () => {
         </Box>
 
         {/* 탭 네비게이션 */}
-        <Card sx={{ mb: 3 }}>
+        <Card sx={{ mb: 2 }}>
           <Tabs 
             value={activeTab} 
             onChange={(_, newValue) => setActiveTab(newValue)}
             sx={{ borderBottom: 1, borderColor: 'divider' }}
           >
-            <Tab label={txt('공지사항', 'Notices')} icon={<AnnouncementIcon />} iconPosition="start" />
-            <Tab label={txt('연간 스케줄표', 'Yearly Schedule')} icon={<CalendarTodayIcon />} iconPosition="start" />
+            <Tab
+              label={txt('공지사항', 'Notices')}
+              icon={<AnnouncementIcon />}
+              iconPosition="start"
+              disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
+            />
+            <Tab
+              label={txt('연간 스케줄표', 'Yearly Schedule')}
+              icon={<CalendarTodayIcon />}
+              iconPosition="start"
+              disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
+            />
           </Tabs>
         </Card>
       </Box>
+
+      {!noticeMenuFlags.menusLoading && !noticeMenuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
 
       {/* 탭별 컨텐츠 */}
       {activeTab === 0 && (
@@ -1915,6 +2030,7 @@ const NoticeManagement: React.FC = () => {
               placeholder={txt('제목, 내용, 작성자 검색', 'Search title, content, author')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -1923,7 +2039,7 @@ const NoticeManagement: React.FC = () => {
                 ),
               }}
             />
-            <FormControl fullWidth>
+            <FormControl fullWidth disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}>
               <InputLabel>{txt('상태', 'Status')}</InputLabel>
               <Select
                 value={statusFilter}
@@ -1933,14 +2049,19 @@ const NoticeManagement: React.FC = () => {
                 <MenuItem value="published">{txt('게시됨', 'Published')}</MenuItem>
               </Select>
             </FormControl>
-            <Button
-              fullWidth
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleOpenCreateDialog}
-            >
-              {txt('새 공지사항', 'New Notice')}
-            </Button>
+            <Tooltip title={t('common.menuNoCreate')} disableHoverListener={noticeMenuFlags.menusLoading || noticeMenuFlags.canCreate}>
+              <span style={{ display: 'block', width: '100%' }}>
+                <Button
+                  fullWidth
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={handleOpenCreateDialog}
+                  disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canCreate}
+                >
+                  {txt('새 공지사항', 'New Notice')}
+                </Button>
+              </span>
+            </Tooltip>
           </Box>
         </CardContent>
       </Card>
@@ -2033,10 +2154,17 @@ const NoticeManagement: React.FC = () => {
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Tooltip title={txt('삭제', 'Delete')}>
-                        <IconButton size="small" onClick={() => handleDeleteNotice(notice)} color="error">
-                          <DeleteIcon />
-                        </IconButton>
+                      <Tooltip title={noticeMenuFlags.menusLoading || !noticeMenuFlags.canDelete ? t('common.menuNoDelete') : txt('삭제', 'Delete')}>
+                        <span style={{ display: 'inline-flex' }}>
+                          <IconButton
+                            size="small"
+                            disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canDelete}
+                            onClick={() => handleDeleteNotice(notice)}
+                            color="error"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </span>
                       </Tooltip>
                     </Box>
                   </TableCell>
@@ -2065,13 +2193,13 @@ const NoticeManagement: React.FC = () => {
 
       {/* 연간 스케줄표 탭 */}
       {activeTab === 1 && (
-        <Card>
-          <CardContent>
-            <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="h6" sx={{ fontWeight: 600 }}>
+        <Card sx={{ mb: 2 }}>
+          <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+            <Box sx={{ mb: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, fontSize: '1rem' }}>
                 {txt('연간 스케줄표', 'Yearly Schedule')}
               </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <IconButton 
                   onClick={() => {
                     const prevMonth = new Date(currentDate);
@@ -2082,7 +2210,7 @@ const NoticeManagement: React.FC = () => {
                 >
                   <ChevronLeftIcon />
                 </IconButton>
-                <Typography variant="h6" sx={{ minWidth: 200, textAlign: 'center' }}>
+                <Typography variant="subtitle1" sx={{ minWidth: 160, textAlign: 'center', fontSize: '0.95rem', fontWeight: 600 }}>
                   {isEn
                     ? `${currentDate.toLocaleString('en-US', { month: 'long' })} ${currentDate.getFullYear()}`
                     : `${currentDate.getFullYear()}년 ${currentDate.getMonth() + 1}월`}
@@ -2106,6 +2234,14 @@ const NoticeManagement: React.FC = () => {
                 </Button>
               </Box>
             </Box>
+            {!canManageYearlySchedule && (
+              <Alert severity="info" sx={{ mb: 1.5 }}>
+                {txt(
+                  '연간 스케줄 등록·수정·삭제는 관리자(admin) 또는 시스템 관리자(root)만 할 수 있습니다. 날짜를 누르면 해당 일의 일정을 볼 수 있습니다.',
+                  'Adding, editing, or deleting yearly schedule entries is limited to admin or root. Click a date to view schedules for that day.'
+                )}
+              </Alert>
+            )}
             {renderCalendar()}
           </CardContent>
         </Card>
@@ -2530,35 +2666,47 @@ const NoticeManagement: React.FC = () => {
           )}
         </DialogTitle>
         <DialogContent dividers>
-          <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
-            <TextField
-              fullWidth
-              size="small"
-              value={newScheduleTitle}
-              onChange={(e) => setNewScheduleTitle(e.target.value)}
-              placeholder={txt('일정을 입력하세요', 'Enter a schedule')}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleAddSchedule();
+          {!canManageYearlySchedule && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {txt(
+                '일정 등록·삭제는 관리자(admin) 이상만 가능합니다.',
+                'Only admin or root users can add or remove schedule entries.'
+              )}
+            </Alert>
+          )}
+          {canManageYearlySchedule && (
+            <>
+              <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={newScheduleTitle}
+                  onChange={(e) => setNewScheduleTitle(e.target.value)}
+                  placeholder={txt('일정을 입력하세요', 'Enter a schedule')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddSchedule();
+                    }
+                  }}
+                />
+                <Button variant="contained" onClick={handleAddSchedule}>
+                  {txt('추가', 'Add')}
+                </Button>
+              </Box>
+              <FormControlLabel
+                sx={{ mb: 1 }}
+                control={
+                  <Switch
+                    checked={scheduleAsCompanyHoliday}
+                    onChange={(e) => setScheduleAsCompanyHoliday(e.target.checked)}
+                    color="warning"
+                  />
                 }
-              }}
-            />
-            <Button variant="contained" onClick={handleAddSchedule}>
-              {txt('추가', 'Add')}
-            </Button>
-          </Box>
-          <FormControlLabel
-            sx={{ mb: 1 }}
-            control={
-              <Switch
-                checked={scheduleAsCompanyHoliday}
-                onChange={(e) => setScheduleAsCompanyHoliday(e.target.checked)}
-                color="warning"
+                label={txt('회사 휴일로 표시', 'Mark as company holiday')}
               />
-            }
-            label={txt('회사 휴일로 표시', 'Mark as company holiday')}
-          />
+            </>
+          )}
 
           <List sx={{ p: 0 }}>
             {selectedScheduleDate && (customSchedules[toDateKey(selectedScheduleDate)] || []).length > 0 ? (
@@ -2567,13 +2715,15 @@ const NoticeManagement: React.FC = () => {
                   key={item.id}
                   disableGutters
                   secondaryAction={
-                    <Button
-                      size="small"
-                      color="error"
-                      onClick={() => handleDeleteSchedule(toDateKey(selectedScheduleDate), item.id)}
-                    >
-                      {txt('삭제', 'Delete')}
-                    </Button>
+                    canManageYearlySchedule ? (
+                      <Button
+                        size="small"
+                        color="error"
+                        onClick={() => handleDeleteSchedule(toDateKey(selectedScheduleDate), item.id)}
+                      >
+                        {txt('삭제', 'Delete')}
+                      </Button>
+                    ) : undefined
                   }
                   sx={{
                     py: 0.75,

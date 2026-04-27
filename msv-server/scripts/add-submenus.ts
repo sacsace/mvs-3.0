@@ -59,7 +59,8 @@ async function addSubMenus() {
         { name_ko: '조직도 관리', name_en: 'Organization Chart Management', route: '/basic-info/organization', icon: 'account_tree', order: 3 },
         { name_ko: '메뉴권한관리', name_en: 'Menu Permission Management', route: '/basic-info/menu-permissions', icon: 'lock', order: 4 },
         { name_ko: '로그인 정보 관리', name_en: 'Login Information Management', route: '/basic-info/login-info', icon: 'person', order: 5 },
-        { name_ko: '시스템 설정', name_en: 'System Settings', route: '/basic-info/system-settings', icon: 'settings', order: 6 }
+        { name_ko: '시스템 설정', name_en: 'System Settings', route: '/basic-info/system-settings', icon: 'settings', order: 6 },
+        { name_ko: '메일 발송 테스트', name_en: 'Mail send test', route: '/basic-info/mail-send-test', icon: 'email', order: 7 }
       ];
       
       for (const submenu of basicInfoSubmenus) {
@@ -101,10 +102,11 @@ async function addSubMenus() {
       console.log(`\nAdding hr submenus (parent ID: ${parents.hr})...`);
       const hrSubmenus = [
         { name_ko: '사용자 관리', name_en: 'User Management', route: '/hr/users', icon: 'people', order: 1 },
-        { name_ko: '근태 관리', name_en: 'Attendance Management', route: '/hr/attendance', icon: 'schedule', order: 2 },
-        { name_ko: '급여 관리', name_en: 'Payroll Management', route: '/hr/payroll', icon: 'payments', order: 3 },
-        { name_ko: '휴가 관리', name_en: 'Leave Management', route: '/hr/leave', icon: 'event', order: 4 },
-        { name_ko: '성과 관리', name_en: 'Performance Management', route: '/hr/performance', icon: 'trending_up', order: 5 }
+        { name_ko: '전자근로계약', name_en: 'Employment Contracts', route: '/hr/employment-contracts', icon: 'description', order: 2 },
+        { name_ko: '근태 관리', name_en: 'Attendance Management', route: '/hr/attendance', icon: 'schedule', order: 3 },
+        { name_ko: '근태 통계', name_en: 'Attendance Statistics', route: '/hr/attendance/statistics', icon: 'assessment', order: 4 },
+        { name_ko: '휴가 관리', name_en: 'Leave Management', route: '/hr/leave', icon: 'event', order: 5 },
+        { name_ko: '급여 관리', name_en: 'Payroll Management', route: '/hr/payroll', icon: 'payments', order: 6 }
       ];
       
       for (const submenu of hrSubmenus) {
@@ -146,12 +148,10 @@ async function addSubMenus() {
       console.log(`\nAdding work submenus (parent ID: ${parents.work})...`);
       const workSubmenus = [
         { name_ko: '업무 관리', name_en: 'Work Management', route: '/work/projects', icon: 'view_kanban', order: 1 },
-        { name_ko: '업무 통계', name_en: 'Task Statistics', route: '/work/statistics', icon: 'bar_chart', order: 2 },
-        { name_ko: '전자결재', name_en: 'Electronic Approval', route: '/work/approval', icon: 'approval', order: 3 },
-        // 견적서 관리는 회계관리로 이동하여 제거됨
-        { name_ko: '회의실 예약', name_en: 'Meeting Room Booking', route: '/work/meeting-room', icon: 'meeting_room', order: 4 },
-        { name_ko: '객실 예약 관리', name_en: 'Room Reservation Management', route: '/work/room-reservation', icon: 'hotel', order: 5 },
-        { name_ko: '업무 보고서', name_en: 'Work Report', route: '/work/reports', icon: 'assessment', order: 6 }
+        { name_ko: '전자결재', name_en: 'Electronic Approval', route: '/work/approval', icon: 'approval', order: 2 },
+        { name_ko: '업무 통계', name_en: 'Task Statistics', route: '/work/statistics', icon: 'bar_chart', order: 3 },
+        { name_ko: '업무 보고서', name_en: 'Work Report', route: '/work/reports', icon: 'assessment', order: 4 },
+        { name_ko: '객실 예약 관리', name_en: 'Room Reservation Management', route: '/work/room-reservation', icon: 'hotel', order: 5 }
       ];
       
       for (const submenu of workSubmenus) {

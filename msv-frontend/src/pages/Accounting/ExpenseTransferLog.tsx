@@ -100,7 +100,7 @@ const ExpenseTransferLog: React.FC = () => {
             {expense.expense_id}
           </Typography>
           <Typography variant="body2">
-            신청자: {expense.requester_name || '-'} · 금액: {expense.currency || 'KRW'} {Number(expense.total_amount || 0).toLocaleString()}
+            신청자: {expense.requester_name || '-'} · 금액: {expense.currency || 'INR'} {Number(expense.total_amount || 0).toLocaleString()}
           </Typography>
           <Divider sx={{ my: 2 }} />
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>

@@ -25,6 +25,7 @@ module.exports = {
     'lcov',
     'html'
   ],
+  setupFiles: ['<rootDir>/src/__tests__/jest-preset-env.cjs'],
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1'

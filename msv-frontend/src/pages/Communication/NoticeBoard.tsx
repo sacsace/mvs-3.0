@@ -47,6 +47,8 @@ import {
   Person as PersonIcon,
   AttachFile as AttachFileIcon
 } from '@mui/icons-material';
+import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 interface Notice {
   id: number;
@@ -65,6 +67,7 @@ interface Notice {
 }
 
 const NoticeBoard: React.FC = () => {
+  const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
@@ -218,10 +221,14 @@ const NoticeBoard: React.FC = () => {
   };
 
   const handleDeleteNotice = (id: number) => {
-    if (window.confirm('이 공지사항을 삭제하시겠습니까?')) {
-      showSnackbar('공지사항이 삭제되었습니다.', 'success');
-      loadNotices();
-    }
+    showConfirm(
+      '이 공지사항을 삭제하시겠습니까?',
+      () => {
+        showSnackbar('공지사항이 삭제되었습니다.', 'success');
+        loadNotices();
+      },
+      { title: '삭제 확인', confirmColor: 'error', confirmText: '삭제', cancelText: '취소' }
+    );
   };
 
   const handleViewNotice = (notice: Notice) => {
@@ -562,6 +569,17 @@ const NoticeBoard: React.FC = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      <ConfirmDialog
+        open={dialogState.open}
+        title={dialogState.title}
+        message={dialogState.message}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+        confirmColor={dialogState.confirmColor}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
     </Box>
   );
 };

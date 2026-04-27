@@ -1,5 +1,7 @@
 # MVS 개발 프롬프트
 
+> **문서 갱신**: 2026-04-27 — 보안·Railway·환경 변수·UI 반영 사항 추가
+
 ## 프로젝트 개요
 MVS은 React + Node.js + PostgreSQL 기반의 **차세대 기업용 통합 업무 관리 시스템**입니다.
 **1인 개발자 환경**에 최적화된 네이티브 개발 환경을 사용하며, **멀티테넌트 SaaS 플랫폼**으로 설계되었습니다.
@@ -22,7 +24,7 @@ MVS은 React + Node.js + PostgreSQL 기반의 **차세대 기업용 통합 업�
 - **다국어 지원**: 한국어/영어 메뉴 및 인터페이스 지원
 
 ### 기술 스택
-- **Frontend**: React 18, TypeScript, Material-UI v5, Vite, Zustand
+- **Frontend**: React 18, TypeScript, Material-UI v5, Create React App (`react-scripts`), Zustand
 - **Backend**: Node.js 20, Express, Sequelize ORM, Socket.io
 - **Database**: PostgreSQL 15, Redis (캐싱)
 - **인증**: JWT + OAuth 2.0, Multi-Factor Authentication
@@ -73,7 +75,7 @@ MVS/
 │   │   ├── services/    # 비즈니스 로직
 │   │   ├── middleware/  # 미들웨어
 │   │   └── utils/       # 유틸리티
-│   └── tests/           # 백엔드 테스트
+│   └── src/__tests__/   # Jest 설정·백엔드 테스트
 ├── msv-frontend/        # 프론트엔드 React 앱
 │   ├── src/
 │   │   ├── components/  # React 컴포넌트
@@ -84,8 +86,9 @@ MVS/
 │   │   ├── types/       # TypeScript 타입
 │   │   └── utils/       # 유틸리티
 │   └── tests/           # 프론트엔드 테스트
-├── scripts/             # 배포 및 유틸리티 스크립트
-└── railway.toml         # Railway 배포 설정
+├── server/                # 로컬 서버 기동·중지 PowerShell (start-server.ps1 등)
+├── scripts/               # 배포 및 기타 유틸리티 스크립트
+└── railway.toml           # Railway 배포 설정
 ```
 
 ## 개발 가이드라인
@@ -103,10 +106,17 @@ MVS/
 4. **타입 안전성**: TypeScript strict 모드로 타입 안전성 보장
 5. **재사용성**: 공통 컴포넌트와 유틸리티 함수 최대한 활용
 6. **성능 최적화**: 데이터베이스 쿼리 최적화 및 인덱스 활용
-7. **보안**: SQL 인젝션, XSS 등 보안 취약점 방지
+7. **보안**: SQL 인젝션, XSS 등 보안 취약점 방지; **시크릿·API 키는 코드에 하드코딩하지 않고** 환경 변수만 사용 (아래 「보안 가이드라인」)
 8. **테스트**: 단위 테스트 및 통합 테스트 작성
 9. **문서화**: API 문서 및 코드 주석 작성
 10. **버전 관리**: 의미있는 커밋 메시지 작성
+
+### 로깅 및 불필요한 코드
+- **애플리케이션 소스**(`msv-frontend/src`, `msv-server/src`)에는 디버깅용 `console.log` / `console.info` / `console.debug`를 남기지 않는다. (일회성 CLI·`scripts/` 유지보수 스크립트는 예외)
+- **민감 정보**(JWT·비밀번호·전체 요청 본문 등)는 콘솔·로그에 출력하지 않는다.
+- **실패·경고**는 `console.error` / `console.warn` 또는 프로젝트 표준 로거로만 남긴다. 서버 기동 한 줄 요약·DB 연결 성공 등 운영에 필요한 최소 메시지는 허용한다.
+- **빈 `useEffect`**, 주석만 남은 디버그 블록, 사용하지 않는 import는 제거한다.
+- 로컬 실행 중 생성되는 **`msv-server/server-log.txt`** 등 산출 로그 파일은 저장소에 포함하지 않는다(`.gitignore` 참고).
 
 ## 메뉴 구성 시스템
 
@@ -933,7 +943,11 @@ chore: 빌드 설정 변경
 
 ## 모니터링 및 로깅
 
-### 로그 레벨
+### 애플리케이션 코드에서의 로깅
+- 프론트·백엔드 **비즈니스 코드**에는 `console.log` 남용을 피하고, 위 **「로깅 및 불필요한 코드」** 절을 따른다.
+- 배포·스테이징에서는 브라우저 개발자 도구에 토큰 일부가 노출되지 않도록 API 클라이언트에 디버그 출력을 두지 않는다.
+
+### 로그 레벨(백엔드·인프라 일반)
 - `error`: 에러 로그
 - `warn`: 경고 로그
 - `info`: 정보 로그
@@ -948,17 +962,29 @@ chore: 빌드 설정 변경
 
 ## 보안 가이드라인
 
-### 인증 및 권한
-- JWT 토큰 만료 시간 설정
-- 비밀번호 해싱 (bcrypt)
-- API 레이트 리미팅
-- CORS 설정
+### 시크릿·환경 변수 (코드에 금지)
+- **`JWT_SECRET`**: 반드시 환경 변수로 설정. **32자 이상**이어야 서버가 기동된다(`msv-server/src/config/env.ts`의 `validateEnv`).
+- **`SESSION_SECRET`**, DB 비밀번호, 외부 API 키 등: **소스에 기본값·샘플 시크릿을 넣지 않는다.** (과거 `mvs-jwt-secret` 같은 하드코딩 금지)
+- Excel/시드 등 **예시 비밀번호**는 실제 서비스에서 쓰이는 값(`password123` 등)을 쓰지 않고, “임포트 후 변경”이 분명한 문구를 사용한다.
 
-### 데이터 보안
-- SQL 인젝션 방지 (Sequelize ORM)
-- XSS 방지 (React 기본 보호)
-- CSRF 토큰 사용
-- 민감한 데이터 암호화
+### 인증 및 권한
+- JWT: 로그인·미들웨어·Socket.io는 **`process.env.JWT_SECRET`**만 사용한다.
+- 비밀번호: **bcrypt** 해시 저장; 평문 로그·응답 금지.
+- API: **Helmet**, **express-rate-limit**(전역·로그인·업로드 분리), 프로덕션에서 **`trust proxy`**(Railway 리버스 프록시 뒤 IP·레이트 리밋 정확도).
+- **CORS**: 프로덕션에서는 **`CORS_ORIGIN`** 필수(쉼표로 여러 Origin). localhost만으로 두면 기동 검증 실패.
+- **메뉴 권한**: `user_permissions` + 라우트 미들웨어로 API 단에서 강제(`middleware/menuPermission.ts`).
+
+### 데이터·멀티테넌트
+- 조회/수정/삭제 시 **`tenant_id`·`company_id`** 조건 누락 금지(앱 레이어 격리; DB RLS는 별도 도입 시 문서화).
+- SQL: Sequelize 위주; `sequelize.literal` 등 사용자 입력 결합 시 인젝션 재검토.
+- XSS: React 이스케이프 + `dangerouslySetInnerHTML` 사용 시 입력 검증·최소화.
+
+### 로깅
+- 요청 본문 로깅 시 **password·token·authorization** 등은 마스킹(`index.ts`의 `sanitizeLogPayload` 패턴 준수).
+
+### 알려진 트레이드오프 (개선 여지)
+- PostgreSQL 연결 SSL에서 `rejectUnauthorized: false`는 호스팅 편의와의 타협; CA 검증 가능하면 강화 검토.
+- 프로덕션 Helmet에서 **CSP 비활성**인 상태 — 도입 시 프론트 번들·인라인 스크립트와 충돌 점검 필요.
 
 ## 참고 자료
 
@@ -996,6 +1022,19 @@ MVS은 **현대적이고 확장 가능한 기업용 통합 업무 관리 시스�
 ### Railway 배포 (프로덕션)
 - **Nixpacks 사용**: 빠르고 간단한 자동 배포
 - **Git 기반 배포**: 푸시 시 자동 배포 트리거
+- **백엔드 서비스 변수 (필수 예시)**  
+  - `DATABASE_URL` — Railway Postgres 플러그인 연결 문자열  
+  - `JWT_SECRET` — **32자 이상** 임의 문자열  
+  - `CORS_ORIGIN` — 프론트 공개 URL(여러 개면 쉼표 구분). **미설정 시 프로덕션 기동 실패**  
+  - `PORT` — Railway가 주입하는 경우가 많음(미설정 시 기본 5000)  
+  - (선택) `TRUST_PROXY=1` — `NODE_ENV`가 production이 아닌데 리버스 프록시 뒤에 둘 때
+- **시작 스크립트**: `npm run start:railway` → 빌드(`dist`) 후 `scripts/run-migrations.cjs`로 마이그레이션, 이후 `node dist/index.js`
+- **프론트엔드 빌드 변수**  
+  - API가 **별도 Railway 서비스/도메인**이면 빌드 시 **`REACT_APP_API_URL`** = `https://<백엔드 호스트>/api` 형태로 설정(끝에 `/api` 없으면 `api.ts`에서 보정).  
+  - 미설정 시 **동일 오리진의 `/api`**로 요청하며 콘솔에 경고가 출력된다(같은 서비스에서 리버스 프록시로 `/api`만 넘기는 구성용).
+
+### 백엔드 테스트(Jest)
+- `config/env`·`database` 로드 전에 환경이 필요하므로 **`src/__tests__/jest-preset-env.cjs`**가 `jest.config.js`의 `setupFiles`로 먼저 실행된다(`DATABASE_URL`·`JWT_SECRET` 등 최소값). 새 테스트가 DB를 켜면 로컬/CI에서 해당 URL 접근 가능 여부를 확인한다.
 
 ### 로컬 개발 환경
 - **네이티브 환경**: PostgreSQL과 Redis를 로컬에 직접 설치
@@ -1030,6 +1069,15 @@ MVS/
 ## 테스트 계정
 - **사용자 ID**: testuser
 - **비밀번호**: TestPassword123!
+
+## 제품·UI 반영 메모 (에이전트·인수인계용)
+다음은 최근 코드에 반영된 동작이다. 신규 화면·메뉴 추가 시 충돌하지 않도록 참고한다.
+
+| 구분 | 내용 |
+|------|------|
+| 고객 지원 | **페이지·라우트 제거** (`CustomerSupport.tsx` 삭제, `/customers/support` 라우트 없음). DB 메뉴 제거는 마이그레이션 `20260427103000-remove-customer-support-menu.js` 실행. 사이드바 등에서는 **`isRemovedNavMenuRoute`**(`customers/support`)로 남은 DB 메뉴를 네비에서 숨길 수 있음. |
+| 협력업체 목록 | 연락처 열: **이메일만** 표시(전화번호 목록 비표시). |
+| 투숙객 명단 | 목록 테이블: **예약번호·이메일 열 비표시**. 검색은 고객명·회사명·호실 중심 문구(`i18n`); 키워드로 예약번호·이메일 검색은 백엔드 필터에서 유지 가능. |
 
 ---
 

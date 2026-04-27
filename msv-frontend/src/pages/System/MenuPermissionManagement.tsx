@@ -455,14 +455,8 @@ const MenuPermissionManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [defaultPermissionDialogOpen, setDefaultPermissionDialogOpen] = useState(false);
-  // 사이드바 너비 가져오기 (localStorage에서)
-  const getSidebarWidth = () => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('sidebarWidth');
-      return saved ? parseInt(saved, 10) : 280;
-    }
-    return 280;
-  };
+  /** 레이아웃 추정용 기본 사이드바 너비 (실제 너비는 DB 사용자 UI 설정) */
+  const getSidebarWidth = () => 280;
 
   // 4:6 비율을 위한 기본 너비 계산 (전체 너비의 40%)
   const getDefaultLeftPanelWidth = () => {
@@ -1681,9 +1675,7 @@ const MenuPermissionManagement: React.FC = () => {
                         </ListItemIcon>
                         <ListItemText
                           primary={c.name}
-                          secondary={c.domain}
                           primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}
-                          secondaryTypographyProps={{ fontSize: '0.75rem' }}
                         />
                       </ListItemButton>
                     ))}

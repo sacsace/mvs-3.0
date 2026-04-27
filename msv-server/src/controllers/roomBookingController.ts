@@ -41,7 +41,6 @@ export const getRoomBookings = async (req: RequestWithUser, res: Response) => {
     const tenantId = req.user?.tenant_id;
     const companyId = req.user?.company_id;
     const userRole = req.user?.role;
-    const userId = req.user?.id;
     const { room_id, user_id, status, check_in_date, check_out_date, company_id } = req.query;
 
     const whereClause: any = {};
@@ -50,11 +49,8 @@ export const getRoomBookings = async (req: RequestWithUser, res: Response) => {
     if (userRole !== 'root' && userRole !== 'audit') {
       whereClause.tenant_id = tenantId;
       whereClause.company_id = companyId;
-      
-      // 일반 사용자는 자신의 예약만 조회
-      if (userRole === 'user') {
-        whereClause.user_id = userId;
-      }
+      // 역할이 user여도 동일 회사(tenant+company) 전체 예약 조회 — 메뉴 can_view로 접근 통제.
+      // (구) user_id 필터는 숙박/프론트에서 예약자≠로그인 직원일 때 목록이 비는 원인이었음.
     } else {
       // root는 company_id 쿼리 파라미터로 회사별 필터링 가능
       if (userRole === 'root' && company_id) {
@@ -139,17 +135,12 @@ export const getRoomBooking = async (req: RequestWithUser, res: Response) => {
     const tenantId = req.user?.tenant_id;
     const companyId = req.user?.company_id;
     const userRole = req.user?.role;
-    const userId = req.user?.id;
 
     const whereClause: any = { id };
     
     if (userRole !== 'root' && userRole !== 'audit') {
       whereClause.tenant_id = tenantId;
       whereClause.company_id = companyId;
-      
-      if (userRole === 'user') {
-        whereClause.user_id = userId;
-      }
     }
 
     // 활성화된 예약만 조회
@@ -343,22 +334,15 @@ export const updateRoomBooking = async (req: RequestWithUser, res: Response) => 
     const tenantId = req.user?.tenant_id;
     const companyId = req.user?.company_id;
     const userRole = req.user?.role;
-    const userId = req.user?.id;
     const { guest_name, company_name, guest_email, guest_phone, check_in_date, check_in_time, check_out_date, check_out_time,
             number_of_guests, total_amount, status, payment_status, payment_method,
-            special_requests } = req.body;
+            special_requests, room_id, room_number, room_type } = req.body;
 
     const whereClause: any = { id, is_active: true };
     
     if (userRole !== 'root' && userRole !== 'audit') {
       whereClause.tenant_id = tenantId;
       whereClause.company_id = companyId;
-      
-      // 일반 사용자는 자신의 예약만 수정 가능 (pending, confirmed 상태만)
-      if (userRole === 'user') {
-        whereClause.user_id = userId;
-        whereClause.status = { [Op.in]: ['pending', 'confirmed'] };
-      }
     }
 
     const booking = await (RoomBooking as any).findOne({
@@ -370,6 +354,74 @@ export const updateRoomBooking = async (req: RequestWithUser, res: Response) => 
         success: false, 
         message: '회의실 예약을 찾을 수 없습니다.' 
       });
+    }
+
+    const wantsRoomChange = [room_id, room_number, room_type].some((x) => x !== undefined);
+    if (wantsRoomChange) {
+      if (room_id === undefined || room_number === undefined || room_type === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: '객실을 변경할 때는 room_id, room_number, room_type을 함께 보내야 합니다.'
+        });
+      }
+      const nextRoomId = Number(room_id);
+      const nextRoomNumber = String(room_number).trim();
+      const nextRoomType = String(room_type).trim();
+      if (!Number.isFinite(nextRoomId) || !nextRoomNumber || !nextRoomType) {
+        return res.status(400).json({
+          success: false,
+          message: '객실 정보가 올바르지 않습니다.'
+        });
+      }
+
+      const effCheckIn = check_in_date !== undefined ? check_in_date : booking.check_in_date;
+      const effCheckOut = check_out_date !== undefined ? check_out_date : booking.check_out_date;
+      const effCheckInTime = check_in_time !== undefined ? check_in_time : booking.check_in_time;
+
+      const conflictingBookings = await (RoomBooking as any).findAll({
+        where: {
+          room_id: nextRoomId,
+          tenant_id: tenantId,
+          company_id: companyId,
+          id: { [Op.ne]: booking.id },
+          status: { [Op.notIn]: ['cancelled', 'no_show'] },
+          [Op.or]: [
+            {
+              check_in_date: {
+                [Op.between]: [effCheckIn, effCheckOut]
+              }
+            },
+            {
+              check_out_date: {
+                [Op.between]: [effCheckIn, effCheckOut]
+              }
+            }
+          ]
+        }
+      });
+
+      const normalizedNewCheckInDate = String(effCheckIn).slice(0, 10);
+      const requestedCheckInAt = buildDateTime(effCheckIn as string, effCheckInTime || DEFAULT_CHECKIN_TIME);
+      const hasConflict = (conflictingBookings || []).some((existingBooking: any) => {
+        const existingCheckoutDate = String(existingBooking?.check_out_date || '').slice(0, 10);
+        if (existingCheckoutDate === normalizedNewCheckInDate) {
+          const checkoutAt = buildDateTime(existingBooking?.check_out_date, existingBooking?.check_out_time);
+          if (checkoutAt && requestedCheckInAt) {
+            const availableAt = new Date(checkoutAt.getTime() + CHECKOUT_BUFFER_HOURS * 60 * 60 * 1000);
+            if (requestedCheckInAt >= availableAt) {
+              return false;
+            }
+          }
+        }
+        return true;
+      });
+
+      if (hasConflict) {
+        return res.status(400).json({
+          success: false,
+          message: '해당 날짜에 이미 예약이 있습니다.'
+        });
+      }
     }
 
     // 날짜 재계산
@@ -395,7 +447,14 @@ export const updateRoomBooking = async (req: RequestWithUser, res: Response) => 
       status: status !== undefined ? status : booking.status,
       payment_status: payment_status !== undefined ? payment_status : booking.payment_status,
       payment_method: payment_method !== undefined ? payment_method : booking.payment_method,
-      special_requests: special_requests !== undefined ? special_requests : booking.special_requests
+      special_requests: special_requests !== undefined ? special_requests : booking.special_requests,
+      ...(wantsRoomChange
+        ? {
+            room_id: Number(room_id),
+            room_number: String(room_number).trim(),
+            room_type: String(room_type).trim()
+          }
+        : {})
     });
 
     // 사용자 정보 포함하여 반환
@@ -437,19 +496,12 @@ export const deleteRoomBooking = async (req: RequestWithUser, res: Response) => 
     const tenantId = req.user?.tenant_id;
     const companyId = req.user?.company_id;
     const userRole = req.user?.role;
-    const userId = req.user?.id;
 
     const whereClause: any = { id };
     
     if (userRole !== 'root' && userRole !== 'audit') {
       whereClause.tenant_id = tenantId;
       whereClause.company_id = companyId;
-      
-      // 일반 사용자는 자신의 예약만 삭제 가능 (pending, confirmed 상태만)
-      if (userRole === 'user') {
-        whereClause.user_id = userId;
-        whereClause.status = { [Op.in]: ['pending', 'confirmed'] };
-      }
     }
 
     const booking = await (RoomBooking as any).findOne({
@@ -546,8 +598,6 @@ export const cancelRoomBooking = async (req: RequestWithUser, res: Response) => 
     const { id } = req.params;
     const tenantId = req.user?.tenant_id;
     const companyId = req.user?.company_id;
-    const userId = req.user?.id;
-    const userRole = req.user?.role;
 
     const whereClause: any = {
       id,
@@ -555,11 +605,6 @@ export const cancelRoomBooking = async (req: RequestWithUser, res: Response) => 
       company_id: companyId,
       status: { [Op.in]: ['pending', 'confirmed'] }
     };
-    
-    // 일반 사용자는 자신의 예약만 취소 가능
-    if (userRole === 'user') {
-      whereClause.user_id = userId;
-    }
 
     const booking = await (RoomBooking as any).findOne({
       where: whereClause

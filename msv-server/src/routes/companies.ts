@@ -16,30 +16,18 @@ router.get('/', authenticateToken, async (req, res) => {
     const userId = (req as any).user.id;
     const userCompanyId = (req as any).user.company_id;
     
-    console.log('🔍 회사 목록 조회 시작:', {
-      userId: userId,
-      userCompanyId: userCompanyId,
-      tenantId: tenantId,
-      userRole: userRole,
-      isRoot: userRole === 'root',
-      isAudit: userRole === 'audit'
-    });
-    
+        
     // root나 audit 권한이면 모든 회사 조회 가능, 아니면 자신의 테넌트 회사만
     const whereClause: any = {};
     if (userRole !== 'root' && userRole !== 'audit') {
       whereClause.tenant_id = tenantId;
-      console.log('🔍 일반 사용자 - tenant_id 필터 적용:', tenantId);
-    } else {
-      console.log('🔍 Root/Audit 사용자 - 모든 회사 조회 (WHERE 절 없음)');
-    }
+          } else {
+          }
     
-    console.log('🔍 WHERE 절:', whereClause);
-    
+        
     // 디버깅: WHERE 절 없이 전체 조회해서 개수 확인
     const allCompaniesCount = await (Company as any).count();
-    console.log('🔍 전체 회사 개수 (WHERE 절 없이):', allCompaniesCount);
-    
+        
     let companies: any[] = [];
     
     try {
@@ -53,11 +41,7 @@ router.get('/', authenticateToken, async (req, res) => {
         ) as exists;
       `, { type: QueryTypes.SELECT }) as any[];
       
-      console.log('🔍 테이블 존재 확인 결과 (목록):', JSON.stringify(tableCheck, null, 2));
-      console.log('🔍 tableCheck 타입:', typeof tableCheck);
-      console.log('🔍 tableCheck[0]:', tableCheck?.[0]);
-      console.log('🔍 tableCheck[0]?.exists:', tableCheck?.[0]?.exists);
-      
+                              
       // tableCheck 구조 확인 및 처리
       const tableExists = tableCheck && (
         (Array.isArray(tableCheck) && tableCheck[0] && tableCheck[0].exists) ||
@@ -65,20 +49,16 @@ router.get('/', authenticateToken, async (req, res) => {
         (tableCheck[0]?.exists === true)
       );
       
-      console.log('🔍 테이블 존재 여부 최종 판단:', tableExists);
-      
+            
       if (tableExists) {
-        console.log('✅ company_gst_numbers 테이블 존재 확인됨 (목록 조회)');
-        
+                
         // 먼저 회사 목록만 조회
         companies = await (Company as any).findAll({
           where: whereClause,
           order: [['created_at', 'DESC']]
         });
         
-        console.log('🔍 회사 목록 조회 완료, 개수:', companies.length);
-        console.log('🔍 회사 ID 목록:', companies.map((c: any) => c.id));
-        
+                        
         // 각 회사별로 GST 번호 직접 조회
         companies = await Promise.all(companies.map(async (company: any) => {
           const companyData: any = company.toJSON();
@@ -120,8 +100,7 @@ router.get('/', authenticateToken, async (req, res) => {
           }
           
           // GST 번호 직접 조회 (Raw SQL 사용)
-          console.log(`\n🔍 [GST 조회 시작] 회사 ID: ${companyData.id}, 회사명: ${companyData.name}`);
-          try {
+                    try {
             // Raw SQL 쿼리로 직접 조회 (status 조건 제거하여 모든 GST 조회)
             const gstQuery = `
               SELECT gst_number, state_code, status 
@@ -130,33 +109,21 @@ router.get('/', authenticateToken, async (req, res) => {
               ORDER BY id ASC
             `;
             
-            console.log(`🔍 [GST 조회] 회사 ID ${companyData.id} - 실행할 SQL 쿼리:`, gstQuery.replace(/\$1/, companyData.id.toString()));
-            
+                        
             const gstResults = await (sequelize as any).query(gstQuery, {
               bind: [companyData.id],
               type: QueryTypes.SELECT
             }) as any[];
             
-            console.log(`🔍 [GST 조회] 회사 ID ${companyData.id} - 쿼리 실행 완료`);
-            console.log(`🔍 [GST 조회] 회사 ID ${companyData.id} - 조회 결과 (Raw SQL):`, JSON.stringify(gstResults, null, 2));
-            console.log(`🔍 [GST 조회] 회사 ID ${companyData.id} - 조회된 행 개수:`, gstResults.length);
-            
+                                                
             companyData.gst_numbers = gstResults.map((row: any) => row.gst_number).filter((gst: string) => gst);
             
-            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-            console.log(`📋 회사 ID ${companyData.id} (${companyData.name}) - GST 번호 조회 결과`);
-            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-            console.log('조회된 행 개수:', gstResults.length);
-            console.log('GST 번호 개수:', companyData.gst_numbers.length);
-            if (companyData.gst_numbers && companyData.gst_numbers.length > 0) {
+                                                                        if (companyData.gst_numbers && companyData.gst_numbers.length > 0) {
               companyData.gst_numbers.forEach((gst: string, idx: number) => {
-                console.log(`  ${idx + 1}. ${gst}`);
-              });
+                              });
             } else {
-              console.log('  (GST 번호 없음)');
-            }
-            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-          } catch (gstError: any) {
+                          }
+                      } catch (gstError: any) {
             console.error(`\n❌ [GST 조회 실패] 회사 ID ${companyData.id}의 GST 번호 조회 실패:`);
             console.error('에러 메시지:', gstError.message);
             console.error('에러 스택:', gstError.stack);
@@ -166,23 +133,12 @@ router.get('/', authenticateToken, async (req, res) => {
           
           // 로그인한 사용자의 회사 정보인 경우 GST 번호 로그 출력
           if (companyData.id === userCompanyId) {
-            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-            console.log('👤 로그인한 사용자의 회사 GST 번호 (목록 조회)');
-            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-            console.log('사용자 ID:', userId);
-            console.log('회사 ID:', companyData.id);
-            console.log('회사명:', companyData.name);
-            console.log('GST 번호:', companyData.gst_numbers);
-            console.log('GST 번호 개수:', companyData.gst_numbers?.length || 0);
-            if (companyData.gst_numbers && companyData.gst_numbers.length > 0) {
+                                                                                                            if (companyData.gst_numbers && companyData.gst_numbers.length > 0) {
               companyData.gst_numbers.forEach((gst: string, idx: number) => {
-                console.log(`  ${idx + 1}. ${gst}`);
-              });
+                              });
             } else {
-              console.log('  (GST 번호 없음)');
-            }
-            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          }
+                          }
+                      }
           
           // 각 회사별 실제 직원 수 계산
           try {
@@ -202,14 +158,12 @@ router.get('/', authenticateToken, async (req, res) => {
         }));
       } else {
         // 테이블이 없으면 기본 조회
-        console.log('⚠️ company_gst_numbers 테이블이 없음, 기본 조회 진행');
-        companies = await (Company as any).findAll({
+                companies = await (Company as any).findAll({
           where: whereClause,
           order: [['created_at', 'DESC']]
         });
         
-        console.log('🔍 기본 조회 완료, 개수:', companies.length);
-        
+                
         // 데이터 변환 (Promise.all로 비동기 처리)
         companies = await Promise.all(companies.map(async (company: any) => {
           const companyData: any = company.toJSON ? company.toJSON() : company;
@@ -270,14 +224,12 @@ router.get('/', authenticateToken, async (req, res) => {
       }
     } catch (includeError: any) {
       // include 실패 시 기본 조회
-      console.log('⚠️ GST 번호 조회 실패, 기본 데이터만 반환:', includeError.message);
-      companies = await (Company as any).findAll({
+            companies = await (Company as any).findAll({
         where: whereClause,
         order: [['created_at', 'DESC']]
       });
       
-      console.log('🔍 에러 후 기본 조회 완료, 개수:', companies.length);
-      
+            
       // 데이터 변환
       companies = companies.map((company: any) => {
         const companyData: any = company.toJSON ? company.toJSON() : company;
@@ -298,25 +250,16 @@ router.get('/', authenticateToken, async (req, res) => {
       });
     }
 
-    console.log('✅ 회사 목록 조회 완료, 반환할 회사 개수:', companies.length);
-    if (companies.length === 0) {
-      console.log('⚠️ 회사 목록이 비어있습니다. WHERE 절:', whereClause);
-      console.log('⚠️ 요청한 tenant_id:', tenantId, 'userRole:', userRole);
-      
+        if (companies.length === 0) {
+                  
       // WHERE 절 없이 조회해서 실제 데이터 확인
       const allCompanies = await (Company as any).findAll({
         attributes: ['id', 'name', 'tenant_id', 'company_id'],
         limit: 5
       });
       const allCompaniesData = allCompanies.map((c: any) => c.toJSON ? c.toJSON() : c);
-      console.log('🔍 데이터베이스의 실제 회사 샘플 (최대 5개):', allCompaniesData);
-    } else {
-      console.log('✅ 조회된 회사 목록:', companies.slice(0, 3).map((c: any) => ({
-        id: c.id,
-        name: c.name,
-        tenant_id: c.tenant_id
-      })));
-    }
+          } else {
+          }
     
     res.json({
       success: true,
@@ -422,14 +365,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const userId = (req as any).user.id;
     const userCompanyId = (req as any).user.company_id;
     
-    console.log('🔍 회사 조회 시작:', {
-      id: id,
-      tenantId: tenantId,
-      userRole: userRole,
-      userId: userId,
-      userCompanyId: userCompanyId
-    });
-    
+        
     let company: any = null;
     
     try {
@@ -443,8 +379,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
         ) as exists;
       `, { type: QueryTypes.SELECT }) as any[];
       
-      console.log('🔍 테이블 존재 확인 결과:', tableCheck);
-      
+            
       // 먼저 회사 정보만 조회
       company = await (Company as any).findOne({
         where: whereClause
@@ -453,11 +388,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
       if (company) {
         const companyData: any = company.toJSON();
         
-        console.log('🔍 회사 기본 정보 조회 완료:', {
-          id: companyData.id,
-          name: companyData.name
-        });
-        
+                
         // 이미지 필드 변환
         if (companyData.company_logo) {
           companyData.company_logo = `data:image/jpeg;base64,${companyData.company_logo.toString('base64')}`;
@@ -494,18 +425,10 @@ router.get('/:id', authenticateToken, async (req, res) => {
           companyData.mvs_end_date = '';
         }
         
-        console.log('📅 MVS 사용 기간 변환 (특정 회사 조회):', {
-          login_period_start: companyData.login_period_start,
-          login_period_end: companyData.login_period_end,
-          mvs_start_date: companyData.mvs_start_date,
-          mvs_end_date: companyData.mvs_end_date
-        });
-        
+                
         // GST 번호 직접 조회 (Raw SQL 사용)
         if (tableCheck && tableCheck[0] && tableCheck[0].exists) {
-          console.log('✅ company_gst_numbers 테이블 존재 확인됨');
-          console.log('🔍 GST 번호 직접 조회 시작 - 회사 ID:', companyData.id);
-          
+                              
           try {
             // Raw SQL 쿼리로 직접 조회
             const gstQuery = `
@@ -515,66 +438,38 @@ router.get('/:id', authenticateToken, async (req, res) => {
               ORDER BY id ASC
             `;
             
-            console.log('🔍 실행할 SQL 쿼리:', gstQuery.replace(/\$1/, companyData.id.toString()));
-            
+                        
             const gstResults = await (sequelize as any).query(gstQuery, {
               bind: [companyData.id],
               type: QueryTypes.SELECT
             }) as any[];
             
-            console.log('🔍 GST 번호 조회 결과 (Raw SQL):', JSON.stringify(gstResults, null, 2));
-            
+                        
             companyData.gst_numbers = gstResults.map((row: any) => row.gst_number).filter((gst: string) => gst);
             
-            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-            console.log(`📋 회사 ID ${companyData.id} (${companyData.name}) - GST 번호 조회 결과`);
-            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-            console.log('조회된 행 개수:', gstResults.length);
-            console.log('GST 번호 개수:', companyData.gst_numbers.length);
-            if (companyData.gst_numbers && companyData.gst_numbers.length > 0) {
+                                                                        if (companyData.gst_numbers && companyData.gst_numbers.length > 0) {
               companyData.gst_numbers.forEach((gst: string, idx: number) => {
-                console.log(`  ${idx + 1}. ${gst}`);
-              });
+                              });
             } else {
-              console.log('  (GST 번호 없음)');
-            }
-            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          } catch (gstError: any) {
+                          }
+                      } catch (gstError: any) {
             console.error('❌ GST 번호 직접 조회 실패:', gstError.message);
             console.error('에러 스택:', gstError.stack);
             companyData.gst_numbers = [];
           }
         } else {
-          console.log('⚠️ company_gst_numbers 테이블이 존재하지 않습니다.');
-          companyData.gst_numbers = [];
+                    companyData.gst_numbers = [];
         }
         
         // 로그인한 사용자의 회사 정보인 경우 GST 번호 로그 출력
-        console.log('🔍 사용자 정보 확인:', {
-          userId: userId,
-          userCompanyId: userCompanyId,
-          companyId: companyData.id,
-          일치여부: companyData.id === userCompanyId
-        });
-        
+                
         if (companyData.id === userCompanyId) {
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.log('👤 로그인한 사용자의 회사 GST 번호');
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.log('사용자 ID:', userId);
-          console.log('회사 ID:', companyData.id);
-          console.log('회사명:', companyData.name);
-          console.log('GST 번호:', companyData.gst_numbers);
-          console.log('GST 번호 개수:', companyData.gst_numbers?.length || 0);
-          if (companyData.gst_numbers && companyData.gst_numbers.length > 0) {
+                                                                                          if (companyData.gst_numbers && companyData.gst_numbers.length > 0) {
             companyData.gst_numbers.forEach((gst: string, idx: number) => {
-              console.log(`  ${idx + 1}. ${gst}`);
-            });
+                          });
           } else {
-            console.log('  (GST 번호 없음)');
-          }
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        }
+                      }
+                  }
         
           // 각 회사별 실제 직원 수 계산
           try {
@@ -585,12 +480,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
               }
             });
             companyData.employee_count = employeeCount || 0;
-            console.log('👥 직원 수 계산 완료:', {
-              companyId: companyData.id,
-              companyName: companyData.name,
-              employeeCount: companyData.employee_count
-            });
-            
+                        
             // 디버깅: 실제 사용자 목록 확인
             const users = await (User as any).findAll({
               where: {
@@ -598,25 +488,12 @@ router.get('/:id', authenticateToken, async (req, res) => {
               },
               attributes: ['id', 'username', 'status', 'company_id']
             });
-            console.log('👥 회사 직원 목록:', users.map((u: any) => ({
-              id: u.id,
-              username: u.username,
-              status: u.status,
-              company_id: u.company_id
-            })));
-          } catch (employeeCountError: any) {
+                      } catch (employeeCountError: any) {
             console.error(`직원 수 계산 오류 (회사 ID: ${companyData.id}):`, employeeCountError);
             companyData.employee_count = 0;
           }
         
-        console.log('🔍 최종 회사 데이터:', {
-          id: companyData.id,
-          name: companyData.name,
-          gst_numbers: companyData.gst_numbers,
-          gst_numbers_length: companyData.gst_numbers?.length,
-          employee_count: companyData.employee_count
-        });
-        
+                
         company = companyData;
       }
     } catch (error: any) {
@@ -678,12 +555,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
             }
           });
           companyData.employee_count = employeeCount || 0;
-          console.log('👥 직원 수 계산 완료 (에러 처리 경로):', {
-            companyId: companyData.id,
-            companyName: companyData.name,
-            employeeCount: companyData.employee_count
-          });
-          
+                    
           // 디버깅: 실제 사용자 목록 확인
           const users = await (User as any).findAll({
             where: {
@@ -691,13 +563,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
             },
             attributes: ['id', 'username', 'status', 'company_id']
           });
-          console.log('👥 회사 직원 목록 (에러 처리 경로):', users.map((u: any) => ({
-            id: u.id,
-            username: u.username,
-            status: u.status,
-            company_id: u.company_id
-          })));
-        } catch (employeeCountError: any) {
+                  } catch (employeeCountError: any) {
           console.error(`직원 수 계산 오류 (회사 ID: ${companyData.id}):`, employeeCountError);
           companyData.employee_count = 0;
         }
@@ -741,17 +607,8 @@ router.post(
   }),
   async (req, res) => {
   try {
-    console.log('=== 회사 생성 요청 시작 ===');
-    console.log('요청 사용자:', (req as any).user);
-    const tenantId = (req as any).user.tenant_id;
-    console.log('Tenant ID:', tenantId);
-    console.log('요청 본문:', {
-      ...req.body,
-      company_logo: req.body.company_logo ? `Base64(${req.body.company_logo.length} chars)` : null,
-      company_seal: req.body.company_seal ? `Base64(${req.body.company_seal.length} chars)` : null,
-      ceo_signature: req.body.ceo_signature ? `Base64(${req.body.ceo_signature.length} chars)` : null
-    });
-    
+            const tenantId = (req as any).user.tenant_id;
+            
     const companyData: any = {
       ...req.body,
       tenant_id: tenantId
@@ -800,8 +657,7 @@ router.post(
         try {
           const base64Data = companyData[field].replace(/^data:image\/\w+;base64,/, '');
           companyData[field] = Buffer.from(base64Data, 'base64');
-          console.log(`✅ 이미지 변환 성공: ${field}, 크기: ${companyData[field].length} bytes`);
-        } catch (error: any) {
+                  } catch (error: any) {
           console.error(`❌ 이미지 변환 실패 (${field}):`, error.message);
           return res.status(400).json({
             success: false,
@@ -820,8 +676,7 @@ router.post(
         ? companyData.gst_numbers.filter((gst: string) => gst && gst.trim() !== '')
         : [];
       delete companyData.gst_numbers; // Company 테이블에는 저장하지 않음
-      console.log('GST 번호:', gstNumbers);
-    }
+          }
     
     // 일반 필드와 이미지 필드 분리
     const nonImageData: any = {};
@@ -835,19 +690,12 @@ router.post(
       }
     });
 
-    console.log('일반 필드 데이터:', nonImageData);
-    console.log('이미지 필드 데이터:', Object.keys(imageData));
-
-    // 일반 필드로 회사 생성
-    console.log('회사 생성 시도...');
-    const company = await (Company as any).create(nonImageData);
+            // 일반 필드로 회사 생성
+        const company = await (Company as any).create(nonImageData);
     const companyId = company.id;
-    console.log('✅ 회사 생성 성공, ID:', companyId);
-
-    // GST 번호 저장
+        // GST 번호 저장
     if (gstNumbers !== undefined && gstNumbers.length > 0) {
-      console.log('🔍 GST 번호 저장 시작, 개수:', gstNumbers.length);
-      try {
+            try {
         // company_gst_numbers 테이블 존재 여부 확인
         const [tableCheck] = await (sequelize as any).query(`
           SELECT EXISTS (
@@ -858,8 +706,7 @@ router.post(
           ) as exists;
         `, { type: QueryTypes.SELECT }) as any[];
         
-        console.log('🔍 GST 테이블 존재 확인 결과:', tableCheck);
-        
+                
         const tableExists = tableCheck && (
           (Array.isArray(tableCheck) && tableCheck[0] && tableCheck[0].exists) ||
           (tableCheck.exists) ||
@@ -867,43 +714,32 @@ router.post(
         );
         
         if (tableExists) {
-          console.log('✅ company_gst_numbers 테이블 존재 확인됨');
-          console.log('🔍 GST 번호 저장 시도...');
-          console.log('🔍 저장할 GST 번호:', gstNumbers);
-          console.log('🔍 회사 ID:', companyId);
-          
+                                                  
           const gstEntries = gstNumbers.map((gst: string) => ({
             company_id: companyId,
             gst_number: gst.trim(),
             status: 'active'
           }));
           
-          console.log('🔍 GST 엔트리:', JSON.stringify(gstEntries, null, 2));
-          
+                    
           const createdGst = await (CompanyGstNumber as any).bulkCreate(gstEntries);
-          console.log('✅ GST 번호 저장 완료:', gstNumbers);
-          console.log('✅ 생성된 GST 레코드 수:', createdGst.length);
-        } else {
-          console.log('⚠️ company_gst_numbers 테이블이 존재하지 않습니다. GST 번호 저장을 건너뜁니다.');
-        }
+                            } else {
+                  }
       } catch (gstError: any) {
         // 테이블이 없는 경우 등 에러는 무시하고 계속 진행
         console.error('❌ GST 번호 저장 오류:', gstError.message);
         console.error('에러 스택:', gstError.stack);
         if (gstError.code === '42P01') {
-          console.log('⚠️ company_gst_numbers 테이블이 존재하지 않습니다. GST 번호 저장을 건너뜁니다.');
-        } else {
+                  } else {
           console.error('❌ GST 번호 저장 오류 (계속 진행):', gstError.message);
         }
       }
     } else {
-      console.log('ℹ️ GST 번호가 없거나 비어있어 저장하지 않습니다.');
-    }
+          }
     
     // 이미지 필드가 있으면 별도로 업데이트
     if (Object.keys(imageData).length > 0) {
-      console.log('이미지 필드 저장 시도...');
-      for (const [field, value] of Object.entries(imageData)) {
+            for (const [field, value] of Object.entries(imageData)) {
         if (value !== null && Buffer.isBuffer(value)) {
           const hexString = '\\x' + (value as Buffer).toString('hex');
           await (sequelize as any).query(
@@ -913,14 +749,12 @@ router.post(
               type: QueryTypes.UPDATE
             }
           );
-          console.log(`✅ ${field} 이미지 저장 완료`);
-        }
+                  }
       }
     }
 
     // 최종 회사 데이터 조회 (GST 번호 포함 시도)
-    console.log('최종 회사 데이터 조회...');
-    let finalCompany = await (Company as any).findOne({
+        let finalCompany = await (Company as any).findOne({
       where: { 
         id: companyId,
         tenant_id: tenantId 
@@ -971,16 +805,14 @@ router.post(
       }
     } catch (includeError: any) {
       // include 실패 시 기본 데이터만 반환
-      console.log('⚠️ GST 번호 조회 실패, 기본 데이터만 반환:', includeError.message);
-      if (finalCompany) {
+            if (finalCompany) {
         const companyData: any = finalCompany.toJSON();
         companyData.gst_numbers = [];
         finalCompany = companyData;
       }
     }
 
-    console.log('✅ 회사 생성 완료');
-    res.status(201).json({
+        res.status(201).json({
       success: true,
       data: finalCompany,
       message: '회사가 성공적으로 생성되었습니다.'
@@ -1085,11 +917,7 @@ router.put(
       }
     }
     
-    console.log('📅 날짜 필드 처리 후:', {
-      login_period_start: updateData.login_period_start,
-      login_period_end: updateData.login_period_end
-    });
-    
+        
     // 이미지 필드 처리 (Base64를 Buffer로 변환)
     const imageFields = ['company_logo', 'company_seal', 'ceo_signature'];
     for (const field of imageFields) {
@@ -1104,8 +932,7 @@ router.put(
             const base64Data = updateData[field].replace(/^data:image\/\w+;base64,/, '');
             const imageBuffer = Buffer.from(base64Data, 'base64');
             updateData[field] = imageBuffer;
-            console.log(`✅ 이미지 변환 성공: ${field}, 크기: ${imageBuffer.length} bytes`);
-          } catch (error: any) {
+                      } catch (error: any) {
             console.error(`❌ 이미지 변환 실패 (${field}):`, error.message);
             return res.status(400).json({
               success: false,
@@ -1149,8 +976,7 @@ router.put(
     delete updateData.createdAt; // camelCase 버전도 제거
     delete updateData.updatedAt; // camelCase 버전도 제거 (updated_at은 자동 업데이트됨)
     
-    console.log('회사 수정 데이터:', { ...updateData, company_logo: updateData.company_logo ? `Buffer(${updateData.company_logo?.length} bytes)` : null });
-    
+        
     // DB 컬럼 길이 확인 및 자동 수정
     try {
       const [columnInfo] = await (sequelize as any).query(`
@@ -1162,13 +988,11 @@ router.put(
       `, { type: QueryTypes.SELECT }) as any[];
       
       if (columnInfo && columnInfo.character_maximum_length && columnInfo.character_maximum_length < 50) {
-        console.log(`🔧 business_number 컬럼 길이 자동 수정: ${columnInfo.character_maximum_length} -> 50`);
-        await (sequelize as any).query(`
+                await (sequelize as any).query(`
           ALTER TABLE companies 
           ALTER COLUMN business_number TYPE VARCHAR(50);
         `, { type: QueryTypes.RAW });
-        console.log('✅ business_number 컬럼 길이 수정 완료');
-      }
+              }
     } catch (columnFixError: any) {
       console.error('⚠️ 컬럼 길이 자동 수정 실패 (계속 진행):', columnFixError.message);
     }
@@ -1198,13 +1022,11 @@ router.put(
           `, { type: QueryTypes.SELECT }) as any[];
           
           if (columnInfo && columnInfo.data_type === 'character varying') {
-            console.log(`🔧 ${imageField} 컬럼 타입 자동 수정: VARCHAR -> BYTEA`);
-            await (sequelize as any).query(`
+                        await (sequelize as any).query(`
               ALTER TABLE companies 
               ALTER COLUMN ${imageField} TYPE BYTEA USING NULL;
             `, { type: QueryTypes.RAW });
-            console.log(`✅ ${imageField} 컬럼 타입 수정 완료: BYTEA`);
-          }
+                      }
         } catch (columnFixError: any) {
           console.error(`⚠️ ${imageField} 컬럼 타입 자동 수정 실패 (계속 진행):`, columnFixError.message);
         }
@@ -1245,8 +1067,7 @@ router.put(
           const missingColumns = columnChecks.filter(check => !check.exists).map(check => check.columnName);
           
           if (missingColumns.length > 0) {
-            console.log(`🔧 누락된 컬럼 자동 추가 중: ${missingColumns.join(', ')}`);
-            
+                        
             for (const columnName of missingColumns) {
               try {
                 // status 컬럼 (ENUM 타입)
@@ -1268,48 +1089,42 @@ router.put(
                     ALTER TABLE companies 
                     ADD COLUMN IF NOT EXISTS status company_status_enum NOT NULL DEFAULT 'active';
                   `, { type: QueryTypes.RAW });
-                  console.log(`✅ status 컬럼 추가 완료`);
-                }
+                                  }
                 // bank_address 컬럼
                 else if (columnName === 'bank_address') {
                   await (sequelize as any).query(`
                     ALTER TABLE companies 
                     ADD COLUMN IF NOT EXISTS bank_address TEXT;
                   `, { type: QueryTypes.RAW });
-                  console.log(`✅ bank_address 컬럼 추가 완료`);
-                }
+                                  }
                 // swift_code 컬럼
                 else if (columnName === 'swift_code') {
                   await (sequelize as any).query(`
                     ALTER TABLE companies 
                     ADD COLUMN IF NOT EXISTS swift_code VARCHAR(11);
                   `, { type: QueryTypes.RAW });
-                  console.log(`✅ swift_code 컬럼 추가 완료`);
-                }
+                                  }
                 // msme_number 컬럼
                 else if (columnName === 'msme_number') {
                   await (sequelize as any).query(`
                     ALTER TABLE companies 
                     ADD COLUMN IF NOT EXISTS msme_number VARCHAR(50);
                   `, { type: QueryTypes.RAW });
-                  console.log(`✅ msme_number 컬럼 추가 완료`);
-                }
+                                  }
                 // iec_number 컬럼
                 else if (columnName === 'iec_number') {
                   await (sequelize as any).query(`
                     ALTER TABLE companies 
                     ADD COLUMN IF NOT EXISTS iec_number VARCHAR(50);
                   `, { type: QueryTypes.RAW });
-                  console.log(`✅ iec_number 컬럼 추가 완료`);
-                }
+                                  }
                 // pan_number 컬럼
                 else if (columnName === 'pan_number') {
                   await (sequelize as any).query(`
                     ALTER TABLE companies 
                     ADD COLUMN IF NOT EXISTS pan_number VARCHAR(50);
                   `, { type: QueryTypes.RAW });
-                  console.log(`✅ pan_number 컬럼 추가 완료`);
-                }
+                                  }
               } catch (addColumnError: any) {
                 console.error(`❌ ${columnName} 컬럼 추가 실패:`, addColumnError.message);
               }
@@ -1318,12 +1133,7 @@ router.put(
         }
         
         // 업데이트할 데이터 로그 출력
-        console.log('📝 업데이트할 데이터:', {
-          ...nonImageUpdates,
-          login_period_start: nonImageUpdates.login_period_start,
-          login_period_end: nonImageUpdates.login_period_end
-        });
-        
+                
         // 날짜 필드를 DATEONLY 형식으로 변환 (YYYY-MM-DD)
         const finalUpdates = { ...nonImageUpdates };
         if (finalUpdates.login_period_start instanceof Date) {
@@ -1340,11 +1150,7 @@ router.put(
           finalUpdates.login_period_end = finalUpdates.login_period_end.split('T')[0];
         }
         
-        console.log('📅 최종 날짜 형식:', {
-          login_period_start: finalUpdates.login_period_start,
-          login_period_end: finalUpdates.login_period_end
-        });
-        
+                
         // 모든 컬럼 업데이트 (Sequelize가 존재하지 않는 컬럼은 자동으로 무시)
         const updateResult = await (Company as any).update(finalUpdates, {
           where: { 
@@ -1353,16 +1159,14 @@ router.put(
           }
         });
         
-        console.log(`✅ 회사 정보 업데이트 완료 (${Object.keys(finalUpdates).length}개 필드, 영향받은 행: ${updateResult[0]})`);
-      } catch (updateError: any) {
+              } catch (updateError: any) {
         // 컬럼이 존재하지 않는 경우를 더 명확하게 처리
         if (updateError.message && updateError.message.includes('column') && updateError.message.includes('does not exist')) {
           console.error('❌ 존재하지 않는 컬럼으로 인한 업데이트 오류:', updateError.message);
           // 존재하지 않는 컬럼을 제외하고 다시 시도
           const errorColumn = updateError.message.match(/column "(\w+)" does not exist/i)?.[1];
           if (errorColumn) {
-            console.log(`🔧 존재하지 않는 컬럼 '${errorColumn}' 제외 후 재시도`);
-            const retryUpdates = { ...nonImageUpdates };
+                        const retryUpdates = { ...nonImageUpdates };
             delete retryUpdates[errorColumn];
             if (Object.keys(retryUpdates).length > 0) {
               await (Company as any).update(retryUpdates, {
@@ -1371,8 +1175,7 @@ router.put(
                   tenant_id: tenantId 
                 }
               });
-              console.log(`✅ 회사 정보 업데이트 완료 (${Object.keys(retryUpdates).length}개 필드, '${errorColumn}' 제외)`);
-            }
+                          }
           } else {
             throw updateError;
           }
@@ -1412,15 +1215,12 @@ router.put(
             }));
             await (CompanyGstNumber as any).bulkCreate(gstEntries);
           }
-          console.log('✅ GST 번호 업데이트 완료');
-        } else {
-          console.log('⚠️ company_gst_numbers 테이블이 존재하지 않습니다. GST 번호 업데이트를 건너뜁니다.');
-        }
+                  } else {
+                  }
       } catch (gstError: any) {
         // 테이블이 없는 경우 등 에러는 무시하고 계속 진행
         if (gstError.code === '42P01') {
-          console.log('⚠️ company_gst_numbers 테이블이 존재하지 않습니다. GST 번호 업데이트를 건너뜁니다.');
-        } else {
+                  } else {
           console.error('GST 번호 업데이트 오류:', gstError.message);
         }
       }
@@ -1448,8 +1248,7 @@ router.put(
               type: QueryTypes.UPDATE
             }
           );
-          console.log(`✅ ${field} 이미지 업데이트 완료`);
-        }
+                  }
       }
     }
     
@@ -1505,8 +1304,7 @@ router.put(
       }
     } catch (includeError: any) {
       // include 실패 시 기본 데이터만 반환
-      console.log('⚠️ GST 번호 조회 실패, 기본 데이터만 반환:', includeError.message);
-      if (updatedCompany) {
+            if (updatedCompany) {
         const companyData: any = updatedCompany.toJSON();
         companyData.gst_numbers = [];
         updatedCompany = companyData;
@@ -1532,16 +1330,14 @@ router.put(
 // DB 컬럼 길이 수정 (root 권한만, 개발용)
 router.post('/fix-column-lengths', authenticateToken, requireRole(['root']), async (req, res) => {
   try {
-    console.log('🔧 DB 컬럼 길이 수정 시작...');
-    
+        
     // business_number 컬럼 길이 변경
     await (sequelize as any).query(`
       ALTER TABLE companies 
       ALTER COLUMN business_number TYPE VARCHAR(50);
     `, { type: QueryTypes.RAW });
     
-    console.log('✅ business_number 컬럼 길이 변경 완료: VARCHAR(20) -> VARCHAR(50)');
-    
+        
     // 변경 후 확인
     const [columnInfo] = await (sequelize as any).query(`
       SELECT 

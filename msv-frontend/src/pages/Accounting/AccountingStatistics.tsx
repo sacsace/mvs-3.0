@@ -5,11 +5,9 @@ import {
   Card,
   CardContent,
   FormControl,
-  InputLabel,
   Select,
   MenuItem,
   Button,
-  Paper,
   Stack,
   Chip,
   Divider,
@@ -33,14 +31,12 @@ import {
   Receipt as ReceiptIcon,
   Download as DownloadIcon,
   Refresh as RefreshIcon,
-  DateRange as DateRangeIcon,
   AccountBalance as AccountBalanceIcon,
   ShowChart as ShowChartIcon,
   PieChart as PieChartIcon,
   BarChart as BarChartIcon,
 } from '@mui/icons-material';
 import {
-  LineChart,
   Line,
   XAxis,
   YAxis,
@@ -52,7 +48,6 @@ import {
   Cell,
   BarChart,
   Bar,
-  AreaChart,
   Area,
   Legend,
   ComposedChart,
@@ -60,6 +55,7 @@ import {
 import * as XLSX from 'xlsx';
 import { useStore } from '../../store';
 import { accountingService } from '../../services/api';
+import { UTILS } from '../../constants';
 
 interface AccountingStats {
   totalRevenue: number;
@@ -167,6 +163,7 @@ const AccountingStatistics: React.FC = () => {
 
   useEffect(() => {
     loadStatistics();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- loadStatistics는 상위 상태를 클로저로 사용
   }, [selectedPeriod, selectedYear, selectedMonth, selectedCompanyId, user?.company_id, user?.role]);
 
   const loadCompanies = async () => {
@@ -278,9 +275,7 @@ const AccountingStatistics: React.FC = () => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return `Rs. ${amount.toLocaleString()}`;
-  };
+  const formatCurrency = (amount: number) => UTILS.formatCurrency(amount);
 
   const formatAxisAmount = (value: number) => {
     if (Math.abs(value) >= 1000000) return `${(value / 1000000).toFixed(1)}M`;

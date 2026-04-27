@@ -24,7 +24,9 @@ import {
   DialogContent,
   DialogActions,
   Avatar,
-  InputAdornment
+  InputAdornment,
+  Tooltip,
+  Alert
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -37,8 +39,17 @@ import {
   Phone as PhoneIcon,
   LocationOn as LocationIcon
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+
+const EMPLOYEE_MENU_ROUTES = ['/hr/users', '/hr'] as const;
+
+const formatInrInt = (n: number) =>
+  Math.round(n).toLocaleString('en-US', { maximumFractionDigits: 0, minimumFractionDigits: 0 });
 
 const EmployeeManagement: React.FC = () => {
+  const { t } = useTranslation();
+  const menuFlags = useMenuRoutePermissionFlags(EMPLOYEE_MENU_ROUTES);
   const [employees, setEmployees] = useState([
     {
       id: 1,
@@ -192,6 +203,12 @@ const EmployeeManagement: React.FC = () => {
         </Typography>
       </Box>
 
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
+
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
         <Card>
           <CardContent>
@@ -229,7 +246,7 @@ const EmployeeManagement: React.FC = () => {
               평균 연봉
             </Typography>
             <Typography variant="h4" color="warning.main">
-              Rs. {Math.round(employees.reduce((sum, emp) => sum + emp.salary, 0) / employees.length).toLocaleString()}
+              Rs. {formatInrInt(employees.reduce((sum, emp) => sum + emp.salary, 0) / employees.length)}
             </Typography>
           </CardContent>
         </Card>
@@ -243,6 +260,7 @@ const EmployeeManagement: React.FC = () => {
               placeholder="이름, 사번, 이메일로 검색"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -251,7 +269,7 @@ const EmployeeManagement: React.FC = () => {
                 ),
               }}
             />
-            <FormControl fullWidth sx={{ px: 2, pt: 2 }}>
+            <FormControl fullWidth sx={{ px: 2, pt: 2 }} disabled={menuFlags.menusLoading || !menuFlags.canRead}>
               <InputLabel sx={{ 
                 backgroundColor: 'white',
                 px: 1,
@@ -289,7 +307,7 @@ const EmployeeManagement: React.FC = () => {
                 <MenuItem value="경영진">경영진</MenuItem>
               </Select>
             </FormControl>
-            <FormControl fullWidth sx={{ px: 2, pt: 2 }}>
+            <FormControl fullWidth sx={{ px: 2, pt: 2 }} disabled={menuFlags.menusLoading || !menuFlags.canRead}>
               <InputLabel sx={{ 
                 backgroundColor: 'white',
                 px: 1,
@@ -326,13 +344,18 @@ const EmployeeManagement: React.FC = () => {
                 <MenuItem value="on_leave">휴직</MenuItem>
               </Select>
             </FormControl>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleAdd}
-            >
-              직원 추가
-            </Button>
+            <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
+              <span style={{ display: 'inline-flex' }}>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  disabled={menuFlags.menusLoading || !menuFlags.canCreate}
+                  onClick={handleAdd}
+                >
+                  직원 추가
+                </Button>
+              </span>
+            </Tooltip>
           </Box>
         </CardContent>
       </Card>
@@ -413,21 +436,31 @@ const EmployeeManagement: React.FC = () => {
                       />
                     </TableCell>
                     <TableCell>{employee.joinDate}</TableCell>
-                    <TableCell align="right">Rs. {employee.salary.toLocaleString()}</TableCell>
+                    <TableCell align="right">Rs. {formatInrInt(employee.salary)}</TableCell>
                     <TableCell>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleEdit(employee)}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleDelete(employee.id)}
-                        color="error"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
+                      <Tooltip title={t('common.menuNoEdit')} disableHoverListener={menuFlags.menusLoading || menuFlags.canEdit}>
+                        <span style={{ display: 'inline-flex' }}>
+                          <IconButton
+                            size="small"
+                            disabled={menuFlags.menusLoading || !menuFlags.canEdit}
+                            onClick={() => handleEdit(employee)}
+                          >
+                            <EditIcon />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title={t('common.menuNoDelete')} disableHoverListener={menuFlags.menusLoading || menuFlags.canDelete}>
+                        <span style={{ display: 'inline-flex' }}>
+                          <IconButton
+                            size="small"
+                            disabled={menuFlags.menusLoading || !menuFlags.canDelete}
+                            onClick={() => handleDelete(employee.id)}
+                            color="error"
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -503,7 +536,26 @@ const EmployeeManagement: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDialog(false)}>취소</Button>
-          <Button onClick={handleSave} variant="contained">저장</Button>
+          <Tooltip
+            title={selectedEmployee ? t('common.menuNoEdit') : t('common.menuNoCreate')}
+            disableHoverListener={
+              menuFlags.menusLoading ||
+              (selectedEmployee ? menuFlags.canEdit : menuFlags.canCreate)
+            }
+          >
+            <span style={{ display: 'inline-flex' }}>
+              <Button
+                onClick={handleSave}
+                variant="contained"
+                disabled={
+                  menuFlags.menusLoading ||
+                  (selectedEmployee ? !menuFlags.canEdit : !menuFlags.canCreate)
+                }
+              >
+                저장
+              </Button>
+            </span>
+          </Tooltip>
         </DialogActions>
       </Dialog>
     </Box>

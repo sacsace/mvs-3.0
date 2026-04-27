@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Card,
@@ -20,7 +20,6 @@ import {
   DialogActions,
   TextField,
   FormControl,
-  InputLabel,
   Select,
   MenuItem,
   Alert,
@@ -28,54 +27,33 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction,
   Tooltip,
-  Badge,
   Tabs,
   Tab,
-  Grid,
-  Avatar,
   InputAdornment,
 } from '@mui/material';
+import type { SelectChangeEvent } from '@mui/material/Select';
 import {
   ReceiptLong as ReceiptLongIcon,
   Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
   Send as SendIcon,
   Visibility as ViewIcon,
   Download as DownloadIcon,
   Print as PrintIcon,
-  ContentCopy as CopyIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
-  Schedule as ScheduleIcon,
-  Business as BusinessIcon,
-  Person as PersonIcon,
-  AttachMoney as AttachMoneyIcon,
-  Description as DescriptionIcon,
-  Email as EmailIcon,
-  Phone as PhoneIcon,
-  LocationOn as LocationOnIcon,
-  CalendarToday as CalendarTodayIcon,
-  AccessTime as AccessTimeIcon,
-  Warning as WarningIcon,
-  Info as InfoIcon,
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  Refresh as RefreshIcon,
   FilterList as FilterListIcon,
   Search as SearchIcon,
-  MoreVert as MoreVertIcon,
   QrCode as QrCodeIcon,
   LocalShipping as LocalShippingIcon,
-  AccountBalance as AccountBalanceIcon,
   Security as SecurityIcon,
   Verified as VerifiedIcon,
-  Gavel as GavelIcon
+  Gavel as GavelIcon,
+  ThumbUp as ThumbUpIcon,
+  ThumbDown as ThumbDownIcon
 } from '@mui/icons-material';
 import { useStore } from '../../store';
-import { api } from '../../services/api';
+import { api, userService, accountingService } from '../../services/api';
 import { AxiosResponse } from 'axios';
 import { useTranslation } from 'react-i18next';
 
@@ -147,6 +125,11 @@ interface EInvoice {
   cessTotal: number;
   totalAmount: number;
   transactionType: 'B2B' | 'B2C' | 'Export' | 'SEZ';
+  /** NIC Invoice Registration Portal 처리 상태 */
+  irpStatus: 'draft' | 'submitted' | 'irn_generated' | 'failed';
+  gstAckNo: string;
+  gstAckDate: string;
+  irpLastError: string;
   status: 'draft' | 'generated' | 'uploaded' | 'cancelled';
   issueDate: string;
   dueDate: string;
@@ -157,6 +140,10 @@ interface EInvoice {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  approvalStatus?: string | null;
+  approverUserId?: number;
+  approverName?: string;
+  createdByUserId?: number;
 }
 
 interface ProformaInvoice {
@@ -179,7 +166,7 @@ const EInvoiceManagement: React.FC = () => {
   const [proformaInvoices, setProformaInvoices] = useState<ProformaInvoice[]>([]);
   const [companies, setCompanies] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState(0);
   const [isCreating, setIsCreating] = useState(false);
@@ -188,11 +175,15 @@ const EInvoiceManagement: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>('');
+  const [irnLoadingId, setIrnLoadingId] = useState<string | null>(null);
+  const [listSubTab, setListSubTab] = useState<'requested' | 'pending'>('requested');
+  const [companyUsers, setCompanyUsers] = useState<Array<{ id: number; username: string; email: string }>>([]);
+  const [proformaApproverId, setProformaApproverId] = useState<number | ''>('');
 
   const normalizeParty = (party: any, fallbackName: string) => ({
     id: String(party?.id ?? ''),
     name: String(party?.name ?? party?.customer_name ?? party?.customerName ?? fallbackName),
-    gstin: String(party?.gstin ?? ''),
+    gstin: String(party?.gstin ?? party?.business_number ?? ''),
     address: String(party?.address ?? ''),
     phone: String(party?.phone ?? ''),
     email: String(party?.email ?? '')
@@ -202,7 +193,7 @@ const EInvoiceManagement: React.FC = () => {
     items.map((item, index) => ({
       id: String(item?.id ?? `item-${index}`),
       description: String(item?.description ?? item?.item_name ?? t('eInvoiceManagement.defaults.item')),
-      hsnCode: String(item?.hsnCode ?? ''),
+      hsnCode: String(item?.hsnCode ?? item?.hsn_sac ?? ''),
       quantity: Number(item?.quantity ?? 1),
       unit: String(item?.unit ?? ''),
       unitPrice: Number(item?.unit_price ?? item?.unitPrice ?? 0),
@@ -224,11 +215,13 @@ const EInvoiceManagement: React.FC = () => {
       companies.find((company) => company.id === raw?.company_id),
       t('eInvoiceManagement.defaults.company')
     );
+    const gstIrn = String(raw?.gst_irn ?? '');
+    const irpStatus = (raw?.irp_status ?? 'draft') as EInvoice['irpStatus'];
     return {
       id: String(raw?.id ?? ''),
       invoiceNumber: String(raw?.invoice_number ?? raw?.invoiceNumber ?? ''),
-      irn: String(raw?.irn ?? raw?.invoice_number ?? ''),
-      qrCode: String(raw?.qr_code ?? ''),
+      irn: gstIrn,
+      qrCode: String(raw?.signed_qr_code ?? raw?.qr_code ?? ''),
       seller,
       buyer,
       items: normalizeInvoiceItems(raw?.items ?? []),
@@ -239,6 +232,10 @@ const EInvoiceManagement: React.FC = () => {
       cessTotal: Number(raw?.cess_total ?? 0),
       totalAmount: Number(raw?.total_amount ?? 0),
       transactionType: (raw?.transaction_type ?? 'B2B') as EInvoice['transactionType'],
+      irpStatus,
+      gstAckNo: String(raw?.gst_ack_no ?? ''),
+      gstAckDate: String(raw?.gst_ack_date ?? ''),
+      irpLastError: String(raw?.irp_last_error ?? ''),
       status: (raw?.status ?? 'draft') as EInvoice['status'],
       issueDate: String(raw?.invoice_date ?? raw?.issueDate ?? raw?.created_at ?? ''),
       dueDate: String(raw?.due_date ?? raw?.dueDate ?? ''),
@@ -246,9 +243,14 @@ const EInvoiceManagement: React.FC = () => {
       terms: String(raw?.terms ?? ''),
       proformaInvoiceId: raw?.proforma_invoice_id ? String(raw?.proforma_invoice_id) : undefined,
       ewayBillId: raw?.eway_bill_id ? String(raw?.eway_bill_id) : undefined,
-      createdBy: String(raw?.created_by ?? ''),
+      createdBy:
+        raw?.creator?.username || raw?.creator?.email || String(raw?.created_by ?? ''),
       createdAt: String(raw?.created_at ?? ''),
-      updatedAt: String(raw?.updated_at ?? '')
+      updatedAt: String(raw?.updated_at ?? ''),
+      approvalStatus: raw?.approval_status ?? null,
+      approverUserId: raw?.approver_user_id != null ? Number(raw.approver_user_id) : undefined,
+      approverName: raw?.approver?.username || raw?.approver?.email || '',
+      createdByUserId: raw?.created_by != null ? Number(raw.created_by) : undefined
     };
   };
 
@@ -280,7 +282,8 @@ const EInvoiceManagement: React.FC = () => {
     subtotal: 0,
     taxAmount: 0,
     notes: '',
-    terms: 'Payment due within 30 days of invoice date.'
+    terms: 'Payment due within 30 days of invoice date.',
+    approverUserId: '' as number | ''
   });
 
   // 데이터 로드
@@ -322,7 +325,30 @@ const EInvoiceManagement: React.FC = () => {
     if (user?.role === 'root' || user?.role === 'audit') {
       loadCompanies();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- normalize*, t, user.role는 초기 로드 시점 기준
   }, [selectedCompanyId]);
+
+  useEffect(() => {
+    const loadUsers = async () => {
+      if (!user?.company_id) {
+        setCompanyUsers([]);
+        return;
+      }
+      try {
+        const res = await userService.getUsers({ company_id: Number(user.company_id) });
+        if (res?.success && Array.isArray(res.data)) {
+          setCompanyUsers(
+            res.data
+              .filter((u: any) => u.status === 'active')
+              .map((u: any) => ({ id: u.id, username: u.username || u.userid || '', email: u.email || '' }))
+          );
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    loadUsers();
+  }, [user?.company_id]);
 
   const loadCompanies = async () => {
     try {
@@ -340,9 +366,16 @@ const EInvoiceManagement: React.FC = () => {
     setActiveTab(newValue);
   };
 
+  const isEInvoiceExportAllowed = (e: EInvoice) =>
+    !e.approvalStatus || e.approvalStatus === 'approved';
+
   // E-Invoice 생성
   const handleCreate = async () => {
     try {
+      if (formData.approverUserId === '') {
+        setError(t('eInvoiceManagement.errors.selectApprover'));
+        return;
+      }
       let response: AxiosResponse<any>;
       if (formData.proformaInvoiceId) {
         response = await api.post(
@@ -352,7 +385,8 @@ const EInvoiceManagement: React.FC = () => {
             dueDate: formData.dueDate,
             notes: formData.notes,
             terms: formData.terms,
-            transactionType: formData.transactionType
+            transactionType: formData.transactionType,
+            approver_user_id: Number(formData.approverUserId)
           }
         );
       } else {
@@ -373,7 +407,9 @@ const EInvoiceManagement: React.FC = () => {
           total_amount: totalAmount,
           notes: formData.notes,
           status: 'draft',
-          items: []
+          transaction_type: formData.transactionType,
+          items: [],
+          approver_user_id: Number(formData.approverUserId)
         });
       }
       if (response.data.success) {
@@ -389,7 +425,8 @@ const EInvoiceManagement: React.FC = () => {
           subtotal: 0,
           taxAmount: 0,
           notes: '',
-          terms: 'Payment due within 30 days of invoice date.'
+          terms: 'Payment due within 30 days of invoice date.',
+          approverUserId: ''
         });
         // 데이터 새로고침
         const params: any = {};
@@ -421,14 +458,21 @@ const EInvoiceManagement: React.FC = () => {
       subtotal: 0,
       taxAmount: 0,
       notes: '',
-      terms: 'Payment due within 30 days of invoice date.'
+      terms: 'Payment due within 30 days of invoice date.',
+      approverUserId: ''
     });
   };
 
   // 프로포마 인보이스에서 E-Invoice 생성
   const handleCreateFromProforma = async (proformaInvoiceId: string) => {
     try {
-      const response = await api.post(`/accounting/proforma-invoices/${proformaInvoiceId}/create-e-invoice`);
+      if (proformaApproverId === '') {
+        setError(t('eInvoiceManagement.errors.selectApprover'));
+        return;
+      }
+      const response = await api.post(`/accounting/proforma-invoices/${proformaInvoiceId}/create-e-invoice`, {
+        approver_user_id: Number(proformaApproverId)
+      });
       if (response.data.success) {
         setEinvoices(prev => [normalizeEInvoice(response.data.data), ...prev]);
         setError('');
@@ -451,6 +495,25 @@ const EInvoiceManagement: React.FC = () => {
     } catch (error) {
       console.error('상태 업데이트 오류:', error);
       setError(t('eInvoiceManagement.errors.updateStatus'));
+    }
+  };
+
+  /** NIC IRP에 JSON 제출 → IRN / Signed QR (GST_IRP_MODE=live 시 GSP 연동) */
+  const handleGenerateIrn = async (id: string) => {
+    setIrnLoadingId(id);
+    setError('');
+    try {
+      const response = await api.post(`/accounting/e-invoices/${id}/generate-irn`);
+      if (response.data.success) {
+        const normalized = normalizeEInvoice(response.data.data);
+        setEinvoices((prev) => prev.map((e) => (e.id === id ? normalized : e)));
+        setSelectedEInvoice((sel) => (sel?.id === id ? normalized : sel));
+      }
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || t('eInvoiceManagement.errors.generateIrn');
+      setError(msg);
+    } finally {
+      setIrnLoadingId(null);
     }
   };
 
@@ -500,6 +563,25 @@ const EInvoiceManagement: React.FC = () => {
     }
   };
 
+  const getIrpStatusLabel = (s: EInvoice['irpStatus']) => {
+    switch (s) {
+      case 'draft': return t('eInvoiceManagement.irpStatus.draft');
+      case 'submitted': return t('eInvoiceManagement.irpStatus.submitted');
+      case 'irn_generated': return t('eInvoiceManagement.irpStatus.irn_generated');
+      case 'failed': return t('eInvoiceManagement.irpStatus.failed');
+      default: return s;
+    }
+  };
+
+  const getIrpStatusColor = (s: EInvoice['irpStatus']) => {
+    switch (s) {
+      case 'irn_generated': return 'success';
+      case 'failed': return 'error';
+      case 'submitted': return 'warning';
+      default: return 'default';
+    }
+  };
+
   // 거래 유형 색상 반환
   const getTransactionTypeColor = (type: string) => {
     switch (type) {
@@ -511,20 +593,83 @@ const EInvoiceManagement: React.FC = () => {
     }
   };
 
-  // 필터링된 데이터
-  const filteredEInvoices = einvoices.filter(einvoice => {
-    const matchesStatus = filterStatus === 'all' || einvoice.status === filterStatus;
-    const search = searchTerm.toLowerCase();
-    const matchesSearch = searchTerm === '' || 
-      String(einvoice.invoiceNumber || '').toLowerCase().includes(search) ||
-      String(einvoice.buyer?.name || '').toLowerCase().includes(search) ||
-      String(einvoice.buyer?.gstin || '').toLowerCase().includes(search) ||
-      String(einvoice.seller?.name || '').toLowerCase().includes(search) ||
-      String(einvoice.seller?.gstin || '').toLowerCase().includes(search) ||
-      String(einvoice.irn || '').toLowerCase().includes(search) ||
-      String(einvoice.transactionType || '').toLowerCase().includes(search);
-    return matchesStatus && matchesSearch;
-  });
+  const filteredEInvoices = useMemo(() => {
+    const uid = Number(user?.id);
+    return einvoices.filter((einvoice) => {
+      const matchesStatus = filterStatus === 'all' || einvoice.status === filterStatus;
+      const search = searchTerm.toLowerCase();
+      const matchesSearch =
+        searchTerm === '' ||
+        String(einvoice.invoiceNumber || '')
+          .toLowerCase()
+          .includes(search) ||
+        String(einvoice.buyer?.name || '')
+          .toLowerCase()
+          .includes(search) ||
+        String(einvoice.buyer?.gstin || '')
+          .toLowerCase()
+          .includes(search) ||
+        String(einvoice.seller?.name || '')
+          .toLowerCase()
+          .includes(search) ||
+        String(einvoice.seller?.gstin || '')
+          .toLowerCase()
+          .includes(search) ||
+        String(einvoice.irn || '')
+          .toLowerCase()
+          .includes(search) ||
+        String(einvoice.transactionType || '')
+          .toLowerCase()
+          .includes(search);
+      const base = matchesStatus && matchesSearch;
+      if (!base) return false;
+      if (listSubTab === 'pending') {
+        return (
+          einvoice.approvalStatus === 'pending_approval' &&
+          Number(einvoice.approverUserId) === uid
+        );
+      }
+      return Number(einvoice.createdByUserId) === uid;
+    });
+  }, [einvoices, filterStatus, searchTerm, listSubTab, user?.id]);
+
+  const handleApproveInvoice = async (id: string) => {
+    try {
+      const res = await accountingService.approveInvoice(Number(id));
+      if (res?.success) {
+        setError('');
+        const params: any = {};
+        if ((user?.role === 'root' || user?.role === 'audit') && selectedCompanyId) {
+          params.company_id = selectedCompanyId;
+        }
+        const r = await api.get('/accounting/e-invoices', { params });
+        if (r.data.success) {
+          setEinvoices((r.data.data || []).map((item: any) => normalizeEInvoice(item)));
+        }
+      }
+    } catch (e: any) {
+      setError(e?.response?.data?.message || t('eInvoiceManagement.errors.updateStatus'));
+    }
+  };
+
+  const handleRejectInvoice = async (id: string) => {
+    try {
+      const res = await accountingService.rejectInvoice(Number(id));
+      if (res?.success) {
+        setError('');
+        const params: any = {};
+        if ((user?.role === 'root' || user?.role === 'audit') && selectedCompanyId) {
+          params.company_id = selectedCompanyId;
+        }
+        const r = await api.get('/accounting/e-invoices', { params });
+        if (r.data.success) {
+          setEinvoices((r.data.data || []).map((item: any) => normalizeEInvoice(item)));
+        }
+      }
+    } catch (e: any) {
+      setError(e?.response?.data?.message || t('eInvoiceManagement.errors.updateStatus'));
+    }
+  };
 
   return (
     <Box sx={{ p: 3 }}>
@@ -723,6 +868,43 @@ const EInvoiceManagement: React.FC = () => {
                         onChange={(e) => setFormData(prev => ({ ...prev, terms: e.target.value }))}
                       />
                     </Box>
+
+                    <FormControl fullWidth>
+                      <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                        {t('eInvoiceManagement.approval.approver')} *
+                      </Typography>
+                      <Select<number | ''>
+                        displayEmpty
+                        value={formData.approverUserId === '' ? '' : formData.approverUserId}
+                        onChange={(e: SelectChangeEvent<number | ''>) => {
+                          const raw = e.target.value as string | number | '';
+                          setFormData((prev) => ({
+                            ...prev,
+                            approverUserId: raw === '' ? '' : Number(raw)
+                          }));
+                        }}
+                        renderValue={(selected: number | '' | undefined) => {
+                          if (selected === '' || selected === undefined) {
+                            return (
+                              <Typography color="text.secondary">
+                                {t('eInvoiceManagement.approval.selectApprover')}
+                              </Typography>
+                            );
+                          }
+                          const u = companyUsers.find((x) => x.id === selected);
+                          return u ? `${u.username} (${u.email})` : String(selected);
+                        }}
+                      >
+                        <MenuItem value="">
+                          <Typography color="text.secondary">{t('eInvoiceManagement.approval.selectApprover')}</Typography>
+                        </MenuItem>
+                        {companyUsers.map((u) => (
+                          <MenuItem key={u.id} value={u.id}>
+                            {u.username} ({u.email})
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                     
                     <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 2 }}>
                       <Button variant="outlined" onClick={handleCancelCreate}>
@@ -820,6 +1002,17 @@ const EInvoiceManagement: React.FC = () => {
                   </CardContent>
                 </Card>
 
+                <Box sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
+                  <Tabs
+                    value={listSubTab}
+                    onChange={(_, v) => setListSubTab(v)}
+                    sx={{ minHeight: 40, '& .MuiTab-root': { minHeight: 40, textTransform: 'none' } }}
+                  >
+                    <Tab value="requested" label={t('eInvoiceManagement.approval.tabRequested')} />
+                    <Tab value="pending" label={t('eInvoiceManagement.approval.tabPending')} />
+                  </Tabs>
+                </Box>
+
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                   <Typography variant="h6">{t('eInvoiceManagement.list.title', { count: filteredEInvoices.length })}</Typography>
                   <Button
@@ -843,7 +1036,8 @@ const EInvoiceManagement: React.FC = () => {
                       <TableHead>
                         <TableRow>
                           <TableCell>{t('eInvoiceManagement.columns.invoiceNumber')}</TableCell>
-                          <TableCell>IRN</TableCell>
+                          <TableCell>{t('eInvoiceManagement.columns.irn')}</TableCell>
+                          <TableCell>{t('eInvoiceManagement.columns.irp')}</TableCell>
                           <TableCell>{t('eInvoiceManagement.columns.buyer')}</TableCell>
                           <TableCell>{t('eInvoiceManagement.columns.transactionType')}</TableCell>
                           <TableCell>{t('eInvoiceManagement.columns.amount')}</TableCell>
@@ -861,13 +1055,32 @@ const EInvoiceManagement: React.FC = () => {
                               {einvoice.invoiceNumber}
                             </Typography>
                           </TableCell>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <VerifiedIcon fontSize="small" color="success" />
-                              <Typography variant="body2" color="primary">
-                                {einvoice.irn}
+                          <TableCell sx={{ maxWidth: 200 }}>
+                            {einvoice.irn ? (
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <VerifiedIcon fontSize="small" color="success" />
+                                <Typography variant="body2" color="primary" sx={{ wordBreak: 'break-all' }}>
+                                  {einvoice.irn.length > 20 ? `${einvoice.irn.slice(0, 16)}…` : einvoice.irn}
+                                </Typography>
+                              </Box>
+                            ) : (
+                              <Typography variant="body2" color="text.secondary">
+                                {t('eInvoiceManagement.irp.pendingIrn')}
                               </Typography>
-                            </Box>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              size="small"
+                              label={getIrpStatusLabel(einvoice.irpStatus)}
+                              color={getIrpStatusColor(einvoice.irpStatus) as any}
+                            />
+                            {einvoice.irpLastError ? (
+                              <Typography variant="caption" color="error" display="block" sx={{ mt: 0.5 }}>
+                                {einvoice.irpLastError.slice(0, 80)}
+                                {einvoice.irpLastError.length > 80 ? '…' : ''}
+                              </Typography>
+                            ) : null}
                           </TableCell>
                           <TableCell>
                             <Box>
@@ -892,11 +1105,22 @@ const EInvoiceManagement: React.FC = () => {
                             </Typography>
                           </TableCell>
                           <TableCell>
-                            <Chip
-                              label={getStatusLabel(einvoice.status)}
-                              size="small"
-                              color={getStatusColor(einvoice.status) as any}
-                            />
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'flex-start' }}>
+                              <Chip
+                                label={getStatusLabel(einvoice.status)}
+                                size="small"
+                                color={getStatusColor(einvoice.status) as any}
+                              />
+                              {einvoice.approvalStatus === 'pending_approval' && (
+                                <Chip size="small" label={t('eInvoiceManagement.approval.pendingChip')} color="warning" />
+                              )}
+                              {einvoice.approvalStatus === 'approved' && (
+                                <Chip size="small" label={t('eInvoiceManagement.approval.approvedChip')} color="success" />
+                              )}
+                              {einvoice.approvalStatus === 'rejected' && (
+                                <Chip size="small" label={t('eInvoiceManagement.approval.rejectedChip')} color="error" />
+                              )}
+                            </Box>
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2">
@@ -911,7 +1135,7 @@ const EInvoiceManagement: React.FC = () => {
                                 color="success"
                                 icon={<LocalShippingIcon />}
                               />
-                            ) : einvoice.status === 'generated' ? (
+                            ) : einvoice.irpStatus === 'irn_generated' ? (
                               <Button
                                 variant="outlined"
                                 size="small"
@@ -927,14 +1151,61 @@ const EInvoiceManagement: React.FC = () => {
                             )}
                           </TableCell>
                           <TableCell>
-                            <Box sx={{ display: 'flex', gap: 1 }}>
+                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                              {einvoice.irpStatus !== 'irn_generated' && (
+                                <Tooltip
+                                  title={
+                                    !isEInvoiceExportAllowed(einvoice)
+                                      ? t('eInvoiceManagement.approval.needApprovalForIrn')
+                                      : t('eInvoiceManagement.actions.generateIrn')
+                                  }
+                                >
+                                  <span>
+                                    <Button
+                                      size="small"
+                                      variant="contained"
+                                      color="secondary"
+                                      disabled={
+                                        irnLoadingId === einvoice.id ||
+                                        einvoice.irpStatus === 'submitted' ||
+                                        !isEInvoiceExportAllowed(einvoice)
+                                      }
+                                      onClick={() => handleGenerateIrn(einvoice.id)}
+                                    >
+                                      {irnLoadingId === einvoice.id ? '…' : 'IRN'}
+                                    </Button>
+                                  </span>
+                                </Tooltip>
+                              )}
+                              {listSubTab === 'pending' && einvoice.approvalStatus === 'pending_approval' && (
+                                <>
+                                  <Tooltip title={t('eInvoiceManagement.approval.approve')}>
+                                    <IconButton
+                                      size="small"
+                                      color="success"
+                                      onClick={() => void handleApproveInvoice(einvoice.id)}
+                                    >
+                                      <ThumbUpIcon />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title={t('eInvoiceManagement.approval.reject')}>
+                                    <IconButton
+                                      size="small"
+                                      color="error"
+                                      onClick={() => void handleRejectInvoice(einvoice.id)}
+                                    >
+                                      <ThumbDownIcon />
+                                    </IconButton>
+                                  </Tooltip>
+                                </>
+                              )}
                               <Tooltip title={t('eInvoiceManagement.actions.view')}>
                                 <IconButton size="small" onClick={() => handleView(einvoice)}>
                                   <ViewIcon />
                                 </IconButton>
                               </Tooltip>
                               <Tooltip title={t('eInvoiceManagement.actions.qrCode')}>
-                                <IconButton size="small">
+                                <IconButton size="small" disabled={!einvoice.qrCode}>
                                   <QrCodeIcon />
                                 </IconButton>
                               </Tooltip>
@@ -942,7 +1213,7 @@ const EInvoiceManagement: React.FC = () => {
                                 <IconButton 
                                   size="small" 
                                   onClick={() => handleStatusUpdate(einvoice.id, 'uploaded')}
-                                  disabled={einvoice.status !== 'generated'}
+                                  disabled={einvoice.irpStatus !== 'irn_generated'}
                                 >
                                   <SendIcon />
                                 </IconButton>
@@ -973,6 +1244,41 @@ const EInvoiceManagement: React.FC = () => {
             <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
               {t('eInvoiceManagement.proforma.description')}
             </Typography>
+            <Box sx={{ mb: 2, maxWidth: 480 }}>
+              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary' }}>
+                {t('eInvoiceManagement.approval.approver')} *
+              </Typography>
+              <FormControl fullWidth size="small">
+                <Select<number | ''>
+                  displayEmpty
+                  value={proformaApproverId === '' ? '' : proformaApproverId}
+                  onChange={(e: SelectChangeEvent<number | ''>) => {
+                    const raw = e.target.value as string | number | '';
+                    setProformaApproverId(raw === '' ? '' : Number(raw));
+                  }}
+                  renderValue={(selected: number | '' | undefined) => {
+                    if (selected === '' || selected === undefined) {
+                      return (
+                        <Typography color="text.secondary">
+                          {t('eInvoiceManagement.approval.selectApprover')}
+                        </Typography>
+                      );
+                    }
+                    const u = companyUsers.find((x) => x.id === selected);
+                    return u ? `${u.username} (${u.email})` : String(selected);
+                  }}
+                >
+                  <MenuItem value="">
+                    <Typography color="text.secondary">{t('eInvoiceManagement.approval.selectApprover')}</Typography>
+                  </MenuItem>
+                  {companyUsers.map((u) => (
+                    <MenuItem key={u.id} value={u.id}>
+                      {u.username} ({u.email})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Box>
             <TableContainer component={Paper}>
               <Table>
                 <TableHead>
@@ -1036,6 +1342,9 @@ const EInvoiceManagement: React.FC = () => {
             <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
               {t('eInvoiceManagement.gst.title')}
             </Typography>
+            <Alert severity="info" sx={{ mb: 3 }}>
+              {t('eInvoiceManagement.gst.irpWorkflow')}
+            </Alert>
             <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 3 }}>
               <Card>
                 <CardContent>
@@ -1183,8 +1492,13 @@ const EInvoiceManagement: React.FC = () => {
                 <Box>
                   <Typography variant="h6">{selectedEInvoice.invoiceNumber}</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    IRN: {selectedEInvoice.irn}
+                    IRN: {selectedEInvoice.irn || '—'}
                   </Typography>
+                  {selectedEInvoice.gstAckNo ? (
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      Ack No.: {selectedEInvoice.gstAckNo} · {selectedEInvoice.gstAckDate}
+                    </Typography>
+                  ) : null}
                 </Box>
                 <Box sx={{ textAlign: 'right' }}>
                   <Chip
@@ -1326,9 +1640,21 @@ const EInvoiceManagement: React.FC = () => {
                   borderRadius: 2,
                   bgcolor: '#f5f5f5'
                 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('eInvoiceManagement.detail.qrCode')}: {selectedEInvoice.qrCode}
-                  </Typography>
+                  {selectedEInvoice.qrCode ? (
+                    <Box sx={{ maxWidth: 360, mx: 'auto' }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, wordBreak: 'break-all' }}>
+                        SignedQRCode (Base64, NIC)
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 11, wordBreak: 'break-all' }}>
+                        {selectedEInvoice.qrCode.slice(0, 200)}
+                        {selectedEInvoice.qrCode.length > 200 ? '…' : ''}
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      {t('eInvoiceManagement.irp.pendingIrn')}
+                    </Typography>
+                  )}
                 </Box>
               </Box>
 
@@ -1354,12 +1680,46 @@ const EInvoiceManagement: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenViewDialog(false)}>{t('common.close')}</Button>
-          <Button variant="outlined" startIcon={<PrintIcon />}>
-            {t('common.print')}
-          </Button>
-          <Button variant="outlined" startIcon={<DownloadIcon />}>
-            {t('common.download')}
-          </Button>
+          <Tooltip
+            title={
+              selectedEInvoice && !isEInvoiceExportAllowed(selectedEInvoice)
+                ? t('eInvoiceManagement.approval.needApprovalForPrint')
+                : ''
+            }
+          >
+            <span>
+              <Button
+                variant="outlined"
+                startIcon={<PrintIcon />}
+                disabled={!selectedEInvoice || !isEInvoiceExportAllowed(selectedEInvoice)}
+                onClick={() => {
+                  if (selectedEInvoice && isEInvoiceExportAllowed(selectedEInvoice)) window.print();
+                }}
+              >
+                {t('common.print')}
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip
+            title={
+              selectedEInvoice && !isEInvoiceExportAllowed(selectedEInvoice)
+                ? t('eInvoiceManagement.approval.needApprovalForPrint')
+                : ''
+            }
+          >
+            <span>
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                disabled={!selectedEInvoice || !isEInvoiceExportAllowed(selectedEInvoice)}
+                onClick={() => {
+                  if (selectedEInvoice && isEInvoiceExportAllowed(selectedEInvoice)) window.print();
+                }}
+              >
+                {t('common.download')}
+              </Button>
+            </span>
+          </Tooltip>
           <Button variant="contained" startIcon={<SendIcon />}>
             {t('eInvoiceManagement.actions.upload')}
           </Button>

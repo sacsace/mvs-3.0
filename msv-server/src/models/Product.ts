@@ -8,6 +8,10 @@ interface ProductAttributes {
   product_code: string;
   name: string;
   description?: string;
+  image_url?: string;
+  supplier?: string;
+  partner_id?: number | null;
+  location?: string;
   category: string;
   unit_price: number;
   cost_price: number;
@@ -31,6 +35,10 @@ class Product extends Model<ProductAttributes, ProductCreationAttributes> implem
   public product_code!: string;
   public name!: string;
   public description?: string;
+  public image_url?: string;
+  public supplier?: string;
+  public partner_id?: number | null;
+  public location?: string;
   public category!: string;
   public unit_price!: number;
   public cost_price!: number;
@@ -79,6 +87,26 @@ Product.init(
     },
     description: {
       type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    image_url: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+    },
+    supplier: {
+      type: DataTypes.STRING(200),
+      allowNull: true,
+    },
+    partner_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'partners',
+        key: 'id'
+      }
+    },
+    location: {
+      type: DataTypes.STRING(200),
       allowNull: true,
     },
     category: {

@@ -22,7 +22,10 @@ export const getUserMenus = async (req: Request, res: Response) => {
           tenant_id: tenantId,
           is_active: true
         },
-        order: [['order', 'ASC']]
+        order: [
+          ['order', 'ASC'],
+          ['id', 'ASC']
+        ]
       });
     } else {
       // admin과 일반 사용자는 권한이 있는 메뉴만 조회
@@ -42,8 +45,47 @@ export const getUserMenus = async (req: Request, res: Response) => {
             required: true
           }
         ],
-        order: [['order', 'ASC']]
+        order: [
+          ['order', 'ASC'],
+          ['id', 'ASC']
+        ]
       });
+
+      /**
+       * 하위 메뉴에만 can_view 권한이 있고 부모 행이 조회 결과에 없으면 buildMenuTree에서 자식이 누락됨.
+       * (예: 공지사항만 체크한 사용자 — 사이드바/헤더 진입·AppLayout 경로 매칭이 깨짐)
+       */
+      if (userMenus.length > 0) {
+        const tid = tenantId;
+        const collected: any[] = [...userMenus];
+        const idSet = new Set(collected.map((m: any) => Number(m.id)));
+        let guard = 0;
+        while (guard++ < 24) {
+          const parentIds = [
+            ...new Set(
+              collected
+                .map((m: any) => (m.parent_id != null ? Number(m.parent_id) : NaN))
+                .filter((pid: number) => Number.isInteger(pid) && pid > 0 && !idSet.has(pid))
+            )
+          ];
+          if (parentIds.length === 0) break;
+          const parents = await (Menu as any).findAll({
+            where: { id: { [Op.in]: parentIds }, tenant_id: tid, is_active: true }
+          });
+          if (!parents?.length) break;
+          let added = false;
+          for (const p of parents) {
+            const pid = Number((p as any).id);
+            if (!idSet.has(pid)) {
+              collected.push(p);
+              idSet.add(pid);
+              added = true;
+            }
+          }
+          if (!added) break;
+        }
+        userMenus = collected;
+      }
     }
 
     // 계층 구조로 변환
@@ -75,7 +117,10 @@ export const getAllMenus = async (req: Request, res: Response) => {
         tenant_id: tenantId,
         is_active: true
       },
-      order: [['order', 'ASC']]
+      order: [
+        ['order', 'ASC'],
+        ['id', 'ASC']
+      ]
     });
 
     const menuTree = buildMenuTree(menus, language as string);
@@ -337,9 +382,14 @@ function buildMenuTree(menus: any[], language: string) {
     }
   });
 
-  // 자식 메뉴 정렬
+  // 자식 메뉴 정렬: order 우선, 동일 시 id로 안정 정렬(구 DB·타이 등으로 order가 겹칠 때 대비)
   const sortMenus = (menuList: any[]) => {
-    menuList.sort((a, b) => a.order - b.order);
+    menuList.sort((a, b) => {
+      const ao = Number(a.order) || 0;
+      const bo = Number(b.order) || 0;
+      if (ao !== bo) return ao - bo;
+      return (Number(a.id) || 0) - (Number(b.id) || 0);
+    });
     menuList.forEach(menu => {
       if (menu.children.length > 0) {
         sortMenus(menu.children);

@@ -19,6 +19,7 @@ import {
   getEInvoices,
   createEInvoice,
   updateEInvoiceStatus,
+  generateEInvoiceIrn,
   createEWayBillFromEInvoice,
   getExpenseReports,
   getExpenseReportById,
@@ -44,6 +45,8 @@ import {
   deleteAsset,
   getAccountingBasicInfo,
   updateAccountingBasicInfo,
+  approveInvoice,
+  rejectInvoice,
 } from '../controllers/accountingController';
 import {
   getEWayBills,
@@ -94,6 +97,8 @@ router.use(authenticateToken);
 router.get('/invoices/next-number', getNextInvoiceNumber);
 router.get('/invoices', getInvoices);
 router.get('/invoices/:id', getInvoice);
+router.post('/invoices/:id/approve', restrictAuditToReadOnly, approveInvoice);
+router.post('/invoices/:id/reject', restrictAuditToReadOnly, rejectInvoice);
 router.post(
   '/invoices',
   restrictAuditToReadOnly,
@@ -109,7 +114,8 @@ router.post(
     payment_status: { type: 'string', maxLength: 20 },
     payment_method: { type: 'string', maxLength: 50 },
     payment_date: { type: 'string', pattern: datePattern },
-    notes: { type: 'string' }
+    notes: { type: 'string' },
+    approver_user_id: { required: true, type: 'number' }
   }),
   createInvoice
 );
@@ -128,7 +134,8 @@ router.put(
     payment_status: { type: 'string', maxLength: 20 },
     payment_method: { type: 'string', maxLength: 50 },
     payment_date: { type: 'string', pattern: datePattern },
-    notes: { type: 'string' }
+    notes: { type: 'string' },
+    approver_user_id: { type: 'number' }
   }),
   updateInvoice
 );
@@ -198,7 +205,8 @@ router.post(
     tax_amount: { type: 'number' },
     total_amount: { type: 'number' },
     status: { type: 'string', maxLength: 20 },
-    notes: { type: 'string' }
+    notes: { type: 'string' },
+    approver_user_id: { required: true, type: 'number' }
   }),
   createEInvoice
 );
@@ -210,6 +218,7 @@ router.put(
   }),
   updateEInvoiceStatus
 );
+router.post('/e-invoices/:id/generate-irn', restrictAuditToReadOnly, generateEInvoiceIrn);
 router.post('/e-invoices/:id/create-eway-bill', restrictAuditToReadOnly, createEWayBillFromEInvoice);
 
 // E-Way Bill 관련 라우트

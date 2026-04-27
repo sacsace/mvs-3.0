@@ -20,9 +20,16 @@ interface QuotationAttributes {
   total_amount: number;
   currency: string;
   valid_until?: Date;
-  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'cancelled';
+  status: 'draft' | 'sent' | 'pending_approval' | 'accepted' | 'rejected' | 'expired' | 'cancelled';
+  approver_user_id?: number;
+  approved_at?: Date;
+  /** 승인자 반려 시 사유 */
+  rejection_reason?: string;
   notes?: string;
   terms?: string;
+  /** 소프트 삭제 시각·실행자 (행은 DB에 유지) */
+  deleted_at?: Date;
+  deleted_by?: number;
   created_by: number;
   created_at?: Date;
   updated_at?: Date;
@@ -49,9 +56,14 @@ class Quotation extends Model<QuotationAttributes, QuotationCreationAttributes> 
   public total_amount!: number;
   public currency!: string;
   public valid_until?: Date;
-  public status!: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'cancelled';
+  public status!: 'draft' | 'sent' | 'pending_approval' | 'accepted' | 'rejected' | 'expired' | 'cancelled';
+  public approver_user_id?: number;
+  public approved_at?: Date;
+  public rejection_reason?: string;
   public notes?: string;
   public terms?: string;
+  public deleted_at?: Date;
+  public deleted_by?: number;
   public created_by!: number;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
@@ -91,7 +103,7 @@ Quotation.init(
       allowNull: false
     },
     customer_email: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.STRING(2000),
       allowNull: true
     },
     customer_phone: {
@@ -142,9 +154,27 @@ Quotation.init(
       allowNull: true
     },
     status: {
-      type: DataTypes.ENUM('draft', 'sent', 'accepted', 'rejected', 'expired', 'cancelled'),
+      type: DataTypes.ENUM('draft', 'sent', 'pending_approval', 'accepted', 'rejected', 'expired', 'cancelled'),
       allowNull: false,
       defaultValue: 'draft'
+    },
+    approver_user_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'users',
+        key: 'id'
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'SET NULL'
+    },
+    approved_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    rejection_reason: {
+      type: DataTypes.TEXT,
+      allowNull: true
     },
     notes: {
       type: DataTypes.TEXT,
@@ -153,6 +183,20 @@ Quotation.init(
     terms: {
       type: DataTypes.TEXT,
       allowNull: true
+    },
+    deleted_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    deleted_by: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'users',
+        key: 'id'
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'SET NULL'
     },
     created_by: {
       type: DataTypes.INTEGER,

@@ -4,11 +4,11 @@
   "description": "MVS - 차세대 기업용 통합 업무 관리 시스템",
   "main": "index.js",
   "scripts": {
-    "dev": "powershell -ExecutionPolicy Bypass -File ./scripts/server/start-server.ps1",
+    "dev": "powershell -ExecutionPolicy Bypass -File ./server/start-server.ps1",
     "dev:backend": "powershell -Command \"cd 'msv-server'; npm run dev\"",
     "dev:frontend": "powershell -Command \"cd 'msv-frontend'; npm start\"",
     "db:upload:railway": "powershell -ExecutionPolicy Bypass -File ./scripts/upload-local-db-to-railway.ps1",
-    "start": "powershell -ExecutionPolicy Bypass -File ./scripts/server/start-server.ps1",
+    "start": "powershell -ExecutionPolicy Bypass -File ./server/start-server.ps1",
     "start:railway": "echo 'This is a monorepo root. Please deploy msv-server or msv-frontend services separately.' && exit 1",
     "stop": "powershell -Command \"Get-Process -Name node -ErrorAction SilentlyContinue | Stop-Process -Force; netstat -ano | Select-String ':3000.*LISTENING|:5000.*LISTENING' | ForEach-Object { ($_.Line -split '\\s+')[-1] } | Select-Object -Unique | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }; Write-Host 'All servers stopped' -ForegroundColor Green\"",
     "build": "cd msv-server && npm install && npm run build && cd ../msv-frontend && npm install && npm run build",

@@ -52,6 +52,8 @@ import {
   Description as DescriptionIcon
 } from '@mui/icons-material';
 import { useStore } from '../../store';
+import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 interface ProformaItem {
   id: number;
@@ -103,6 +105,7 @@ interface ProformaInvoice {
 
 const ProformaInvoice: React.FC = () => {
   const { user } = useStore();
+  const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [proformaInvoices, setProformaInvoices] = useState<ProformaInvoice[]>([]);
   const [filteredProformaInvoices, setFilteredProformaInvoices] = useState<ProformaInvoice[]>([]);
   const [loading, setLoading] = useState(false);
@@ -166,7 +169,7 @@ const ProformaInvoice: React.FC = () => {
       totalTax: 7400000,
       totalAmount: 76500000,
       status: 'sent',
-      currency: 'KRW',
+      currency: 'INR',
       paymentTerms: '계약 체결 후 30일',
       deliveryTerms: '개발 완료 후 2주 이내',
       notes: '긴급 프로젝트로 우선 처리 요청',
@@ -206,7 +209,7 @@ const ProformaInvoice: React.FC = () => {
       totalTax: 600000,
       totalAmount: 6600000,
       status: 'accepted',
-      currency: 'KRW',
+      currency: 'INR',
       paymentTerms: '서비스 완료 후 15일',
       deliveryTerms: '즉시 시작 가능',
       attachments: ['컨설팅_계획서.pdf'],
@@ -248,7 +251,7 @@ const ProformaInvoice: React.FC = () => {
       totalTax: 500000,
       totalAmount: 5500000,
       status: 'expired',
-      currency: 'KRW',
+      currency: 'INR',
       paymentTerms: '계약 체결 후 7일',
       deliveryTerms: '계약 체결 후 1일',
       attachments: ['라이선스_안내서.pdf'],
@@ -331,16 +334,20 @@ const ProformaInvoice: React.FC = () => {
     setOpenDialog(true);
   };
 
-  const handleDeleteProformaInvoice = async (id: number) => {
-    if (window.confirm('정말로 이 프로포마 인보이스를 삭제하시겠습니까?')) {
-      try {
-        setProformaInvoices(prev => prev.filter(proformaInvoice => proformaInvoice.id !== id));
-        setSuccess('프로포마 인보이스가 성공적으로 삭제되었습니다.');
-      } catch (error) {
-        console.error('삭제 오류:', error);
-        setError('삭제 중 오류가 발생했습니다.');
-      }
-    }
+  const handleDeleteProformaInvoice = (id: number) => {
+    showConfirm(
+      '정말로 이 프로포마 인보이스를 삭제하시겠습니까?',
+      () => {
+        try {
+          setProformaInvoices((prev) => prev.filter((proformaInvoice) => proformaInvoice.id !== id));
+          setSuccess('프로포마 인보이스가 성공적으로 삭제되었습니다.');
+        } catch (error) {
+          console.error('삭제 오류:', error);
+          setError('삭제 중 오류가 발생했습니다.');
+        }
+      },
+      { title: '삭제 확인', confirmColor: 'error', confirmText: '삭제', cancelText: '취소' }
+    );
   };
 
   const handleConvertToInvoice = (id: number) => {
@@ -923,6 +930,17 @@ const ProformaInvoice: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={dialogState.open}
+        title={dialogState.title}
+        message={dialogState.message}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+        confirmColor={dialogState.confirmColor}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
 
       {/* 스낵바 */}
       <Snackbar

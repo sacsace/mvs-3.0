@@ -19,6 +19,7 @@ dist/
 # Logs
 logs
 *.log
+msv-server/server-log.txt
 
 # Runtime data
 pids
@@ -131,3 +132,8 @@ playwright/.cache/
 
 # Railway specific
 .railway/
+
+# 로컬 전용 — 저장소에 포함하지 않음
+backup/
+msv-server/uploads/
+msv-frontend/.env.development

@@ -27,6 +27,8 @@ import {
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Search as SearchIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { roomTypeService } from '../../services/api';
+import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 type RoomType = {
   id: number;
@@ -40,6 +42,7 @@ type RoomType = {
 
 const RoomTypeManagement: React.FC = () => {
   const { t } = useTranslation();
+  const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -164,18 +167,27 @@ const RoomTypeManagement: React.FC = () => {
   };
 
   const handleDelete = (roomTypeId: number) => {
-    if (window.confirm(t('roomTypeManagement.confirmDelete'))) {
-      void (async () => {
-        try {
-          const response = await roomTypeService.deleteRoomType(roomTypeId);
-          if (response.success) {
-            await loadRoomTypes();
+    showConfirm(
+      t('roomTypeManagement.confirmDelete'),
+      () => {
+        void (async () => {
+          try {
+            const response = await roomTypeService.deleteRoomType(roomTypeId);
+            if (response.success) {
+              await loadRoomTypes();
+            }
+          } catch (error) {
+            console.warn('객실 유형 삭제 실패:', error);
           }
-        } catch (error) {
-          console.warn('객실 유형 삭제 실패:', error);
-        }
-      })();
-    }
+        })();
+      },
+      {
+        title: t('common.confirm'),
+        confirmColor: 'error',
+        confirmText: t('common.delete'),
+        cancelText: t('common.cancel')
+      }
+    );
   };
 
   return (
@@ -251,7 +263,25 @@ const RoomTypeManagement: React.FC = () => {
       <Card>
         <TableContainer component={Box} sx={{ borderRadius: 2, overflow: 'hidden' }}>
           <Table size="small" stickyHeader>
-            <TableHead>
+            <TableHead
+              sx={{
+                bgcolor: 'background.paper',
+                '& .MuiTableCell-head': {
+                  bgcolor: 'background.paper',
+                  color: 'text.primary',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  textTransform: 'none',
+                  letterSpacing: 'normal',
+                  borderBottom: '2px solid',
+                  borderColor: 'primary.main',
+                  py: 1.25
+                },
+                '& .MuiTableCell-head:last-of-type': {
+                  textAlign: 'center'
+                }
+              }}
+            >
               <TableRow>
                 {[
                   t('roomTypeManagement.columns.roomType'),
@@ -261,17 +291,7 @@ const RoomTypeManagement: React.FC = () => {
                   t('roomTypeManagement.columns.status'),
                   t('roomTypeManagement.columns.actions')
                 ].map((label) => (
-                  <TableCell
-                    key={label}
-                    sx={{
-                      fontWeight: 700,
-                      color: '#c62828',
-                      backgroundColor: '#f8f9fb',
-                      borderBottom: '1px solid #e0e0e0'
-                    }}
-                  >
-                    {label}
-                  </TableCell>
+                  <TableCell key={label}>{label}</TableCell>
                 ))}
               </TableRow>
             </TableHead>
@@ -408,6 +428,17 @@ const RoomTypeManagement: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={dialogState.open}
+        title={dialogState.title}
+        message={dialogState.message}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+        confirmColor={dialogState.confirmColor}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
     </Box>
   );
 };

@@ -188,7 +188,7 @@ const StockOutManagement: React.FC = () => {
             <Typography component="h1" sx={{
               fontSize: '16px !important',
               fontWeight: 600,
-              color: 'red',
+              color: 'text.primary',
               lineHeight: 1.5
             }}>
               재고 이동 및 조정

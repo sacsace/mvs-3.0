@@ -225,8 +225,7 @@ const EInvoiceCreate: React.FC = () => {
         updatedAt: new Date().toISOString()
       };
 
-      console.log('E-Invoice 생성:', newInvoice);
-      setSuccess('E-Invoice가 성공적으로 생성되었습니다.');
+            setSuccess('E-Invoice가 성공적으로 생성되었습니다.');
     } catch (error) {
       console.error('E-Invoice 생성 오류:', error);
       setError('E-Invoice 생성 중 오류가 발생했습니다.');

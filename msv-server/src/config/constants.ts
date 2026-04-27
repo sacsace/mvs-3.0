@@ -31,15 +31,15 @@ export const SYSTEM_CONSTANTS = {
     ALLOWED_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'application/pdf']
   },
   
-  // 세션 설정
+  // 세션 설정 (express-session 등에서 사용 시 env 필수 — 코드에 기본 시크릿 없음)
   SESSION: {
-    SECRET: process.env.SESSION_SECRET || 'mvs-session-secret',
+    SECRET: process.env.SESSION_SECRET || '',
     MAX_AGE: 24 * 60 * 60 * 1000 // 24시간
   },
-  
-  // JWT 설정
+
+  // JWT는 반드시 환경 변수로만 설정 (validateEnv에서 길이 검증)
   JWT: {
-    SECRET: process.env.JWT_SECRET || 'mvs-jwt-secret',
+    SECRET: process.env.JWT_SECRET || '',
     EXPIRES_IN: '24h'
   }
 };

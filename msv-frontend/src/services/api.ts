@@ -2,11 +2,45 @@ import axios from 'axios';
 import { useErrorStore } from '../store/errorStore';
 
 // API Base URL 동적 설정
-// 1. 환경 변수가 있으면 사용 (최우선) - Railway 배포 시 필수
-// 2. 프로덕션 환경에서는 현재 호스트 기반으로 자동 결정
-// 3. 개발 환경에서는 localhost 기본값 사용
+// - 프로덕션(Railway 등): 빌드 시 주입된 REACT_APP_API_URL 최우선. 없으면 동일 오리진 /api (리버스 프록시·같은 서비스용).
+// - 개발: LAN IPv4 / 단일 호스트명은 REACT_APP_API_URL보다 우선(백엔드 :5000).
+// - 그다음 REACT_APP_API_URL, localhost:5000/api
 const getApiBaseUrl = (): string => {
-  // 환경 변수가 설정되어 있으면 우선 사용 (Railway 배포 시 필수)
+  const normalizeApiUrl = (raw: string) => {
+    const trimmed = raw.trim().replace(/\/+$/, '');
+    return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+  };
+
+  // 프로덕션: API가 별도 Railway 서비스인 경우 빌드 변수 필수에 가깝게 처리
+  if (process.env.NODE_ENV === 'production') {
+    const fromEnv = process.env.REACT_APP_API_URL?.trim();
+    if (fromEnv) {
+      return normalizeApiUrl(fromEnv);
+    }
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      console.warn(
+        '[MVS] REACT_APP_API_URL이 없습니다. 동일 오리진의 /api 로 요청합니다. API가 다른 호스트면 Railway 빌드에 REACT_APP_API_URL을 설정하세요.'
+      );
+      return `${window.location.origin.replace(/\/+$/, '')}/api`;
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    const { hostname } = window.location;
+
+    // 1) IPv4 (예: 192.168.x.x) — env의 localhost보다 항상 먼저
+    if (hostname.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+      return `http://${hostname}:5000/api`;
+    }
+
+    // 2) 개발: http://PC이름:3000 형태 (점 없는 단일 호스트명)
+    if (process.env.NODE_ENV === 'development' && !hostname.includes('.')) {
+      if (hostname !== 'localhost' && hostname !== '::1') {
+        return `http://${hostname}:5000/api`;
+      }
+    }
+  }
+
   if (process.env.REACT_APP_API_URL) {
     const envApiUrl = process.env.REACT_APP_API_URL.trim();
     const localhostMatch = envApiUrl.match(/^https?:\/\/(localhost|127\.0\.0\.1)(?::(\d+))?(\/api)?\/?$/);
@@ -17,72 +51,46 @@ const getApiBaseUrl = (): string => {
       return 'http://localhost:5000/api';
     }
 
-    console.log('🔧 환경 변수에서 API URL 사용:', envApiUrl);
-    return envApiUrl;
+    return normalizeApiUrl(envApiUrl);
   }
 
-  // 브라우저 환경에서 실행 중인 경우
   if (typeof window !== 'undefined') {
     const { protocol, hostname, port } = window.location;
-    console.log('📍 현재 위치:', { protocol, hostname, port });
-    
-    // IP 주소인 경우 (예: 192.168.0.109)
-    if (hostname.match(/^\d+\.\d+\.\d+\.\d+$/)) {
-      // IP 주소인 경우, 백엔드는 항상 5000 포트 사용
-      const apiUrl = `http://${hostname}:5000/api`;
-      console.log('🌐 IP 주소 감지, API URL:', apiUrl);
-      return apiUrl;
+
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+      return 'http://localhost:5000/api';
     }
-    
-    // localhost인 경우 (127.0.0.1 포함)
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      // localhost는 항상 5000 포트 사용 (프론트엔드 포트와 무관)
-      // localhost:3000, localhost:3001 등 어떤 포트에서든 백엔드는 5000 포트 사용
-      const apiUrl = 'http://localhost:5000/api';
-      console.log('🏠 localhost 감지, API URL:', apiUrl);
-      return apiUrl;
-    }
-    
-    // 프로덕션 환경 (도메인인 경우)
-    // 같은 호스트의 /api 경로 사용 (프론트엔드와 백엔드가 같은 도메인)
-    // 예: https://example.com -> https://example.com/api
-    // 주의: 이 경우 프론트엔드와 백엔드가 같은 포트를 사용해야 함
-    // 백엔드가 별도 포트인 경우 환경 변수 사용 필수
+
     const apiPort = port ? `:${port}` : '';
-    const apiUrl = `${protocol}//${hostname}${apiPort}/api`;
-    console.log('🌍 도메인 감지, API URL:', apiUrl);
-    return apiUrl;
+    return `${protocol}//${hostname}${apiPort}/api`;
   }
 
-  // 서버 사이드 렌더링 환경 (기본값)
-  console.log('⚙️ SSR 환경, 기본 API URL 사용');
   return 'http://localhost:5000/api';
 };
 
 const API_BASE_URL = getApiBaseUrl();
 const AUTH_STORAGE_KEY = 'mvs-auth-storage';
+
+/** 인증 스냅샷은 localStorage 대신 sessionStorage (탭 단위, 서버 데이터와 혼동 방지) */
+const authStorage = {
+  getItem: (key: string) => (typeof window !== 'undefined' ? window.sessionStorage.getItem(key) : null),
+  setItem: (key: string, value: string) => {
+    if (typeof window !== 'undefined') window.sessionStorage.setItem(key, value);
+  },
+  removeItem: (key: string) => {
+    if (typeof window !== 'undefined') window.sessionStorage.removeItem(key);
+  }
+};
 const SESSION_WARNING_MS = 30 * 1000; // 30초
 const SESSION_CHECK_INTERVAL_MS = 5 * 1000; // 5초
 const REFRESH_COOLDOWN_MS = 10 * 1000; // 10초
 const ACTIVITY_REFRESH_WINDOW_MS = 2 * 60 * 1000; // 만료 2분 전부터 활동 기반 연장
 const ACTIVITY_RECENT_WINDOW_MS = 5 * 60 * 1000; // 최근 5분 활동은 "사용 중"으로 간주
 const ACTIVE_SESSION_REFRESH_COOLDOWN_MS = 3 * 60 * 1000; // 사용 중일 때 3분마다 선제 갱신
+const CRITICAL_REFRESH_WINDOW_MS = SESSION_WARNING_MS; // 만료 임계 구간(30초)에서는 쿨다운 무시
 
 // API Base URL을 export하여 다른 컴포넌트에서도 사용 가능하도록 함
 export { getApiBaseUrl, API_BASE_URL };
-
-// 디버깅을 위한 상세 로그
-console.log('=== API Configuration ===');
-console.log('API Base URL:', API_BASE_URL);
-console.log('Environment:', process.env.NODE_ENV);
-console.log('REACT_APP_API_URL:', process.env.REACT_APP_API_URL || '(not set)');
-if (typeof window !== 'undefined') {
-  console.log('Window location:', window.location.href);
-  console.log('Hostname:', window.location.hostname);
-  console.log('Port:', window.location.port);
-  console.log('Protocol:', window.location.protocol);
-}
-console.log('========================');
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -96,10 +104,11 @@ let expiryWarningShownForToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
 let lastRefreshAt = 0;
 let lastUserActivityAt = Date.now();
+const isUserRecentlyActive = () => Date.now() - lastUserActivityAt <= ACTIVITY_RECENT_WINDOW_MS;
 
 const readStoredAuthToken = (): { raw: string; parsed: any; token: string } | null => {
   try {
-    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    const raw = authStorage.getItem(AUTH_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     const token = parsed?.state?.token;
@@ -111,21 +120,23 @@ const readStoredAuthToken = (): { raw: string; parsed: any; token: string } | nu
   }
 };
 
+export const getAuthTokenFromStorage = (): string | null => readStoredAuthToken()?.token ?? null;
+
 const updateStoredAuthToken = (token: string) => {
   try {
-    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    const raw = authStorage.getItem(AUTH_STORAGE_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw);
     if (!parsed?.state) return;
     parsed.state.token = token;
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(parsed));
+    authStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(parsed));
   } catch (error) {
     console.error('저장된 인증 정보 갱신 오류:', error);
   }
 };
 
 const clearAuthAndRedirectLogin = () => {
-  localStorage.removeItem(AUTH_STORAGE_KEY);
+  authStorage.removeItem(AUTH_STORAGE_KEY);
   if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
     window.location.href = '/login';
   }
@@ -142,6 +153,8 @@ const isAuthBypassEndpoint = (url?: string) => {
 };
 
 const showSessionExpiryWarning = (token: string) => {
+  // 사용자가 최근에 활동 중이면 경고 대신 자동 연장 흐름에 맡긴다.
+  if (isUserRecentlyActive()) return;
   if (expiryWarningShownForToken === token) return;
   expiryWarningShownForToken = token;
   const errorStore = useErrorStore.getState();
@@ -212,7 +225,8 @@ const maybeRefreshSessionByActivity = async () => {
   // 1) 만료 임박: 빠르게 연장 시도
   // 2) 사용 중: 만료 임박이 아니어도 주기적으로 선제 연장
   if (isNearExpiry) {
-    if (nearExpiryRefreshTooSoon) return;
+    const isCriticalExpiry = remainingTime <= CRITICAL_REFRESH_WINDOW_MS;
+    if (!isCriticalExpiry && nearExpiryRefreshTooSoon) return;
   } else {
     if (!isRecentlyActive || activeSessionRefreshTooSoon) return;
   }
@@ -239,16 +253,17 @@ api.interceptors.request.use(
           return Promise.reject(new Error('세션이 만료되었습니다.'));
         }
 
-        if (remainingTime <= SESSION_WARNING_MS) {
+        if (remainingTime <= SESSION_WARNING_MS && !isUserRecentlyActive()) {
           showSessionExpiryWarning(activeToken);
         } else {
           expiryWarningShownForToken = null;
         }
 
+        const isCriticalExpiry = remainingTime <= CRITICAL_REFRESH_WINDOW_MS;
         const shouldRefresh =
           !skipRefresh &&
           !isAuthBypassEndpoint(config.url) &&
-          Date.now() - lastRefreshAt >= REFRESH_COOLDOWN_MS;
+          (isCriticalExpiry || Date.now() - lastRefreshAt >= REFRESH_COOLDOWN_MS);
 
         if (shouldRefresh) {
           const refreshedToken = await requestSessionRefresh(activeToken);
@@ -259,13 +274,8 @@ api.interceptors.request.use(
       }
 
       config.headers.Authorization = `Bearer ${activeToken}`;
-      console.log('🔍 [API 요청] 토큰 전달됨:', {
-        url: config.url,
-        hasToken: !!activeToken,
-        tokenPrefix: activeToken.substring(0, 20) + '...'
-      });
     } else {
-      console.warn('⚠️ [API 요청] localStorage에 토큰 없음:', config.url);
+      console.warn('⚠️ [API 요청] sessionStorage에 토큰 없음:', config.url);
     }
     return config;
   },
@@ -314,9 +324,13 @@ const checkSessionTimeout = () => {
     }
 
     if (timeUntilExpiry <= SESSION_WARNING_MS) {
-      showSessionExpiryWarning(storedAuth.token);
+      if (!isUserRecentlyActive()) {
+        showSessionExpiryWarning(storedAuth.token);
+      } else {
+        expiryWarningShownForToken = null;
+      }
       // API 호출이 없는 화면에서도 "실사용 중"이면 세션을 자동 연장
-      if (Date.now() - lastUserActivityAt <= ACTIVITY_RECENT_WINDOW_MS) {
+      if (isUserRecentlyActive()) {
         void maybeRefreshSessionByActivity();
       }
     } else {
@@ -407,7 +421,7 @@ api.interceptors.response.use(
         if (error.response?.data?.message === '유효하지 않은 토큰입니다.' || 
             error.response?.status === 401) {
           // 로그아웃 처리
-          localStorage.removeItem('mvs-auth-storage');
+          authStorage.removeItem('mvs-auth-storage');
           // 로그인 페이지로 리다이렉트
           if (window.location.pathname !== '/login' && window.location.pathname !== '/') {
             window.location.href = '/login';
@@ -587,8 +601,61 @@ export const userService = {
 
 // 로그인 정보 관리 API 서비스
 export const loginInfoService = {
-  // 로그인 정보 목록 조회
-  getLoginInfos: async (params?: { company_id?: number }) => {
+  getLoginInfoTabs: async (companyId: number) => {
+    try {
+      const response = await api.get('/login-info/tabs', { params: { company_id: companyId } });
+      return response.data;
+    } catch (error) {
+      console.error('로그인 정보 탭 조회 오류:', error);
+      throw error;
+    }
+  },
+
+  createLoginInfoTab: async (data: { company_id: number; name: string }) => {
+    try {
+      const response = await api.post('/login-info/tabs', data);
+      return response.data;
+    } catch (error) {
+      console.error('로그인 정보 탭 추가 오류:', error);
+      throw error;
+    }
+  },
+
+  updateLoginInfoTab: async (
+    tabId: number,
+    data: {
+      name?: string;
+      column_headers?: Record<string, string> | null;
+      column_hidden?: string[] | null;
+      column_schema?: {
+        columns: Array<
+          | { kind: 'builtin'; key: string }
+          | { kind: 'custom'; id: string; label: string }
+        >;
+      } | null;
+    }
+  ) => {
+    try {
+      const response = await api.put(`/login-info/tabs/${tabId}`, data);
+      return response.data;
+    } catch (error) {
+      console.error('로그인 정보 탭 수정 오류:', error);
+      throw error;
+    }
+  },
+
+  deleteLoginInfoTab: async (tabId: number) => {
+    try {
+      const response = await api.delete(`/login-info/tabs/${tabId}`);
+      return response.data;
+    } catch (error) {
+      console.error('로그인 정보 탭 삭제 오류:', error);
+      throw error;
+    }
+  },
+
+  // 로그인 정보 목록 조회 (company_id + tab_id 필수)
+  getLoginInfos: async (params: { company_id: number; tab_id: number }) => {
     try {
       const response = await api.get('/login-info', { params });
       return response.data;
@@ -650,11 +717,12 @@ export const loginInfoService = {
   },
 
   // 엑셀 가져오기
-  importExcel: async (file: File, companyId: number) => {
+  importExcel: async (file: File, companyId: number, tabId: number) => {
     try {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('company_id', String(companyId));
+      formData.append('tab_id', String(tabId));
       const response = await api.post('/login-info/import', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
@@ -701,6 +769,26 @@ export const accountingService = {
     }
   },
 
+  approveInvoice: async (id: number) => {
+    try {
+      const response = await api.post(`/accounting/invoices/${id}/approve`);
+      return response.data;
+    } catch (error) {
+      console.error('인보이스 승인 오류:', error);
+      throw error;
+    }
+  },
+
+  rejectInvoice: async (id: number) => {
+    try {
+      const response = await api.post(`/accounting/invoices/${id}/reject`);
+      return response.data;
+    } catch (error) {
+      console.error('인보이스 반려 오류:', error);
+      throw error;
+    }
+  },
+
   // 인보이스 생성
   createInvoice: async (invoiceData: any) => {
     try {
@@ -712,10 +800,12 @@ export const accountingService = {
     }
   },
 
-  // 인보이스 이메일 전송
-  sendInvoiceEmail: async (id: number, data: { to: string; subject?: string; message?: string; pdf_base64: string; filename?: string }) => {
+  /** 인보이스 PDF 첨부 메일 — 본문 대용량·SMTP 지연 대비 타임아웃 연장 (기본 10초 초과 방지) */
+  sendInvoiceEmail: async (id: number, data: { to: string; subject?: string; message?: string; filename?: string }) => {
     try {
-      const response = await api.post(`/accounting/invoices/${id}/send-email`, data);
+      const response = await api.post(`/accounting/invoices/${id}/send-email`, data, {
+        timeout: 120000
+      });
       return response.data;
     } catch (error) {
       console.error('인보이스 이메일 전송 오류:', error);
@@ -753,10 +843,13 @@ export const accountingService = {
     }
   },
 
-  // 인보이스 삭제
-  deleteInvoice: async (id: number) => {
+  // 인보이스 삭제 승인 요청 (직접 삭제 아님)
+  deleteInvoice: async (
+    id: number,
+    data: { approver_user_id: number; memo?: string }
+  ) => {
     try {
-      const response = await api.delete(`/accounting/invoices/${id}`);
+      const response = await api.delete(`/accounting/invoices/${id}`, { data });
       return response.data;
     } catch (error) {
       console.error('인보이스 삭제 오류:', error);
@@ -1098,6 +1191,115 @@ export const hrService = {
 
 // 재고 관리 API 서비스
 export const inventoryService = {
+  getProductCategories: async () => {
+    try {
+      const response = await api.get('/inventory/product-categories');
+      return response.data;
+    } catch (error) {
+      console.error('제품 카테고리 목록 오류:', error);
+      throw error;
+    }
+  },
+  createProductCategory: async (name: string) => {
+    try {
+      const response = await api.post('/inventory/product-categories', { name });
+      return response.data;
+    } catch (error) {
+      console.error('제품 카테고리 등록 오류:', error);
+      throw error;
+    }
+  },
+  updateProductCategory: async (id: number, name: string) => {
+    try {
+      const response = await api.put(`/inventory/product-categories/${id}`, { name });
+      return response.data;
+    } catch (error) {
+      console.error('제품 카테고리 수정 오류:', error);
+      throw error;
+    }
+  },
+  deleteProductCategory: async (id: number) => {
+    try {
+      const response = await api.delete(`/inventory/product-categories/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('제품 카테고리 삭제 오류:', error);
+      throw error;
+    }
+  },
+  getInventoryLocations: async () => {
+    try {
+      const response = await api.get('/inventory/inventory-locations');
+      return response.data;
+    } catch (error) {
+      console.error('보관 위치 목록 오류:', error);
+      throw error;
+    }
+  },
+  createInventoryLocation: async (name: string) => {
+    try {
+      const response = await api.post('/inventory/inventory-locations', { name });
+      return response.data;
+    } catch (error) {
+      console.error('보관 위치 등록 오류:', error);
+      throw error;
+    }
+  },
+  updateInventoryLocation: async (id: number, name: string) => {
+    try {
+      const response = await api.put(`/inventory/inventory-locations/${id}`, { name });
+      return response.data;
+    } catch (error) {
+      console.error('보관 위치 수정 오류:', error);
+      throw error;
+    }
+  },
+  deleteInventoryLocation: async (id: number) => {
+    try {
+      const response = await api.delete(`/inventory/inventory-locations/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('보관 위치 삭제 오류:', error);
+      throw error;
+    }
+  },
+  getProductUnits: async () => {
+    try {
+      const response = await api.get('/inventory/product-units');
+      return response.data;
+    } catch (error) {
+      console.error('제품 단위 목록 오류:', error);
+      throw error;
+    }
+  },
+  createProductUnit: async (name: string) => {
+    try {
+      const response = await api.post('/inventory/product-units', { name });
+      return response.data;
+    } catch (error) {
+      console.error('제품 단위 등록 오류:', error);
+      throw error;
+    }
+  },
+  updateProductUnit: async (id: number, name: string) => {
+    try {
+      const response = await api.put(`/inventory/product-units/${id}`, { name });
+      return response.data;
+    } catch (error) {
+      console.error('제품 단위 수정 오류:', error);
+      throw error;
+    }
+  },
+  deleteProductUnit: async (id: number) => {
+    try {
+      const response = await api.delete(`/inventory/product-units/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('제품 단위 삭제 오류:', error);
+      throw error;
+    }
+  },
+
   // 제품 목록 조회
   getProducts: async (params?: any) => {
     try {
@@ -1116,6 +1318,21 @@ export const inventoryService = {
       return response.data;
     } catch (error) {
       console.error('제품 조회 오류:', error);
+      throw error;
+    }
+  },
+
+  /** 제품 사진 업로드 → { success, data: { url } } */
+  uploadProductImage: async (file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await api.post('/inventory/products/upload-image', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('제품 이미지 업로드 오류:', error);
       throw error;
     }
   },
@@ -1206,6 +1423,22 @@ export const inventoryService = {
       console.error('재고 조정 오류:', error);
       throw error;
     }
+  },
+
+  /** 엑셀 일괄 반영 양식 다운로드 */
+  downloadProductExcelSample: async (): Promise<Blob> => {
+    const response = await api.get('/inventory/products/excel/sample', { responseType: 'blob' });
+    return response.data;
+  },
+
+  /** 엑셀 업로드로 제품 일괄 등록·수정 */
+  bulkUpdateProductsFromExcel: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/inventory/products/excel/bulk-update', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
   }
 };
 
@@ -1213,18 +1446,7 @@ export const inventoryService = {
 export const partnerService = {
   // Excel 샘플 다운로드
   downloadExcelSample: async () => {
-    const token = localStorage.getItem('mvs-auth-storage');
-    let authToken = '';
-    if (token) {
-      try {
-        const authData = JSON.parse(token);
-        if (authData.state?.token) {
-          authToken = authData.state.token;
-        }
-      } catch (error) {
-        console.error('토큰 파싱 오류:', error);
-      }
-    }
+    const authToken = getAuthTokenFromStorage() || '';
 
     const response = await fetch(`${API_BASE_URL}/partners/excel/sample`, {
       method: 'GET',
@@ -1250,18 +1472,7 @@ export const partnerService = {
 
   // Excel 파일 내보내기
   exportExcel: async () => {
-    const token = localStorage.getItem('mvs-auth-storage');
-    let authToken = '';
-    if (token) {
-      try {
-        const authData = JSON.parse(token);
-        if (authData.state?.token) {
-          authToken = authData.state.token;
-        }
-      } catch (error) {
-        console.error('토큰 파싱 오류:', error);
-      }
-    }
+    const authToken = getAuthTokenFromStorage() || '';
 
     const response = await fetch(`${API_BASE_URL}/partners/excel/export`, {
       method: 'GET',
@@ -1290,18 +1501,7 @@ export const partnerService = {
     const formData = new FormData();
     formData.append('file', file);
 
-    const token = localStorage.getItem('mvs-auth-storage');
-    let authToken = '';
-    if (token) {
-      try {
-        const authData = JSON.parse(token);
-        if (authData.state?.token) {
-          authToken = authData.state.token;
-        }
-      } catch (error) {
-        console.error('토큰 파싱 오류:', error);
-      }
-    }
+    const authToken = getAuthTokenFromStorage() || '';
 
     const response = await api.post('/partners/excel/import', formData, {
       headers: {
@@ -1413,6 +1613,17 @@ export const systemSettingsService = {
       console.error('백업 실행 오류:', error);
       throw error;
     }
+  },
+
+  /** SMTP 테스트 메일 (관리자 전용) */
+  sendTestMail: async (body: { to: string; subject?: string }) => {
+    try {
+      const response = await api.post('/system-settings/test-mail', body);
+      return response.data;
+    } catch (error) {
+      console.error('테스트 메일 발송 오류:', error);
+      throw error;
+    }
   }
 };
 
@@ -1431,12 +1642,30 @@ export const officeLocationService = {
 // 근태 관리 API 서비스
 export const attendanceService = {
   // 근태 목록 조회
-  getAttendances: async (params?: { user_id?: number; date?: string; start_date?: string; end_date?: string; department?: string; status?: string }) => {
+  getAttendances: async (params?: { date?: string; start_date?: string; end_date?: string; status?: string }) => {
     try {
       const response = await api.get('/hr/attendances', { params });
       return response.data;
     } catch (error) {
       console.error('근태 목록 조회 오류:', error);
+      throw error;
+    }
+  },
+
+  /** 회사 전체 근태 (HR 통계) — admin/root/audit 만 */
+  getCompanyAttendances: async (params?: {
+    user_id?: number;
+    date?: string;
+    start_date?: string;
+    end_date?: string;
+    department?: string;
+    status?: string;
+  }) => {
+    try {
+      const response = await api.get('/hr/attendances/company', { params });
+      return response.data;
+    } catch (error) {
+      console.error('회사 근태 목록 조회 오류:', error);
       throw error;
     }
   },
@@ -1582,6 +1811,73 @@ export const payrollService = {
     }
   },
 
+  /** 확정된 급여 근무월(YYYY-MM) 목록 */
+  getPayrollPeriodLocks: async () => {
+    try {
+      const response = await api.get('/hr/payroll-period-locks');
+      return response.data;
+    } catch (error) {
+      console.error('급여 월 잠금 목록 조회 오류:', error);
+      throw error;
+    }
+  },
+
+  /** 선택한 근무월 급여 확정(잠금) — 일반 사용자는 이후 해당 월 수정 불가 */
+  completePayrollPeriod: async (payroll_period: string) => {
+    try {
+      const response = await api.post('/hr/payroll-periods/complete', { payroll_period });
+      return response.data;
+    } catch (error) {
+      console.error('급여 월 확정 오류:', error);
+      throw error;
+    }
+  },
+
+  /** 현재 회사 활성 사용자 기준 급여 일괄 생성 (인도 PF/ESI/PT/TDS 옵션 선택 가능) */
+  /** 일괄 생성 전: 확정·중복·직원별 해당 월 출퇴근 건수 요약 */
+  previewBulkPayrollGeneration: async (payroll_period: string) => {
+    try {
+      const response = await api.post('/hr/payrolls/bulk-generate/preview', { payroll_period });
+      return response.data;
+    } catch (error) {
+      console.error('급여 일괄 생성 미리보기 오류:', error);
+      throw error;
+    }
+  },
+
+  bulkGeneratePayrolls: async (
+    payroll_period: string,
+    opts?: {
+      statutory_india?: boolean;
+      /** 기본 gross_6pct(참고 시트). epf_12pct_half = 예전 50%×12% EPF식 */
+      pf_mode?: 'gross_6pct' | 'epf_12pct_half';
+      pf_cap_1800?: boolean;
+      estimate_tds?: boolean;
+    }
+  ) => {
+    try {
+      const response = await api.post('/hr/payrolls/bulk-generate', {
+        payroll_period,
+        ...opts
+      });
+      return response.data;
+    } catch (error) {
+      console.error('급여 일괄 생성 오류:', error);
+      throw error;
+    }
+  },
+
+  /** 급여 명세서 PDF(base64)를 직원 이메일로 발송 */
+  sendPayrollPayslip: async (id: number, pdf_base64: string) => {
+    try {
+      const response = await api.post(`/hr/payrolls/${id}/send-payslip`, { pdf_base64 });
+      return response.data;
+    } catch (error) {
+      console.error('급여 명세서 메일 오류:', error);
+      throw error;
+    }
+  },
+
   // 급여 수정
   updatePayroll: async (id: number, data: any) => {
     try {
@@ -1630,7 +1926,7 @@ export const payrollService = {
 // 휴가 관리 API 서비스
 export const vacationService = {
   // 휴가 목록 조회
-  getVacations: async (params?: { user_id?: number; status?: string; vacation_type?: string; start_date?: string; end_date?: string; approved_by?: number }) => {
+  getVacations: async (params?: { user_id?: number; status?: string; vacation_type?: string; start_date?: string; end_date?: string; approved_by?: number; same_department?: boolean }) => {
     try {
       const response = await api.get('/hr/vacations', { params });
       return response.data;
@@ -1756,61 +2052,152 @@ export const vacationService = {
   }
 };
 
-// 성과 관리 API 서비스
-export const performanceService = {
-  // 성과 목록 조회
-  getPerformances: async (params?: { user_id?: number; status?: string; review_period?: string }) => {
+export const employmentContractService = {
+  getTemplates: async (company_id?: number) => {
     try {
-      const response = await api.get('/hr/performances', { params });
+      const response = await api.get('/hr/employment-contract-templates', {
+        params: company_id ? { company_id } : undefined
+      });
       return response.data;
     } catch (error) {
-      console.error('성과 목록 조회 오류:', error);
+      console.error('전자근로계약 템플릿 조회 오류:', error);
       throw error;
     }
   },
-
-  // 성과 상세 조회
-  getPerformance: async (id: number) => {
+  createTemplate: async (data: any) => {
     try {
-      const response = await api.get(`/hr/performances/${id}`);
+      const response = await api.post('/hr/employment-contract-templates', data);
       return response.data;
     } catch (error) {
-      console.error('성과 상세 조회 오류:', error);
+      console.error('전자근로계약 템플릿 생성 오류:', error);
       throw error;
     }
   },
-
-  // 성과 생성
-  createPerformance: async (data: any) => {
+  updateTemplate: async (id: number, data: any) => {
     try {
-      const response = await api.post('/hr/performances', data);
+      const response = await api.put(`/hr/employment-contract-templates/${id}`, data);
       return response.data;
     } catch (error) {
-      console.error('성과 생성 오류:', error);
+      console.error('전자근로계약 템플릿 수정 오류:', error);
       throw error;
     }
   },
-
-  // 성과 수정
-  updatePerformance: async (id: number, data: any) => {
+  deleteTemplate: async (id: number) => {
     try {
-      const response = await api.put(`/hr/performances/${id}`, data);
+      const response = await api.delete(`/hr/employment-contract-templates/${id}`);
       return response.data;
     } catch (error) {
-      console.error('성과 수정 오류:', error);
+      console.error('전자근로계약 템플릿 삭제 오류:', error);
       throw error;
     }
   },
-
-  // 성과 삭제
-  deletePerformance: async (id: number) => {
+  getContracts: async (params?: { company_id?: number; employee_id?: number; status?: string }) => {
     try {
-      const response = await api.delete(`/hr/performances/${id}`);
+      const response = await api.get('/hr/employment-contracts', { params });
       return response.data;
     } catch (error) {
-      console.error('성과 삭제 오류:', error);
+      console.error('전자근로계약 목록 조회 오류:', error);
       throw error;
     }
+  },
+  getContract: async (id: number) => {
+    try {
+      const response = await api.get(`/hr/employment-contracts/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('전자근로계약 상세 조회 오류:', error);
+      throw error;
+    }
+  },
+  createContract: async (data: any) => {
+    try {
+      const response = await api.post('/hr/employment-contracts', data);
+      return response.data;
+    } catch (error) {
+      console.error('전자근로계약 생성 오류:', error);
+      throw error;
+    }
+  },
+  updateContract: async (id: number, data: any) => {
+    try {
+      const response = await api.put(`/hr/employment-contracts/${id}`, data);
+      return response.data;
+    } catch (error) {
+      console.error('전자근로계약 수정 오류:', error);
+      throw error;
+    }
+  },
+  deleteContract: async (id: number) => {
+    try {
+      const response = await api.delete(`/hr/employment-contracts/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('전자근로계약 삭제 오류:', error);
+      throw error;
+    }
+  },
+  signContract: async (
+    id: number,
+    signer_type: 'company' | 'employee',
+    sign_method: 'internal_ack' | 'aadhaar_esign' = 'internal_ack',
+    extra?: { aadhaar_consent?: boolean; aadhaar_last4?: string; aadhaar_auth_ref?: string; signature_data?: string }
+  ) => {
+    try {
+      const response = await api.post(`/hr/employment-contracts/${id}/sign`, {
+        signer_type,
+        sign_method,
+        ...(extra || {})
+      });
+      return response.data;
+    } catch (error) {
+      console.error('전자근로계약 서명 오류:', error);
+      throw error;
+    }
+  },
+  getMyContracts: async (status?: string) => {
+    try {
+      const response = await api.get('/hr/my/employment-contracts', {
+        params: status ? { status } : undefined
+      });
+      return response.data;
+    } catch (error) {
+      console.error('내 전자근로계약 조회 오류:', error);
+      throw error;
+    }
+  },
+  getContractAuditLogs: async (id: number, params?: { limit?: number }) => {
+    try {
+      const response = await api.get(`/hr/employment-contracts/${id}/audit-logs`, { params });
+      return response.data;
+    } catch (error) {
+      console.error('전자근로계약 감사로그 조회 오류:', error);
+      throw error;
+    }
+  }
+};
+
+/** 인사 — 부서 관리 */
+export const departmentService = {
+  list: async (includeInactive = false) => {
+    const response = await api.get('/hr/departments', {
+      params: includeInactive ? { include_inactive: '1' } : undefined
+    });
+    return response.data;
+  },
+  create: async (data: { name: string; code?: string; sort_order?: number; is_active?: boolean }) => {
+    const response = await api.post('/hr/departments', data);
+    return response.data;
+  },
+  update: async (
+    id: number,
+    data: { name?: string; code?: string | null; sort_order?: number; is_active?: boolean }
+  ) => {
+    const response = await api.put(`/hr/departments/${id}`, data);
+    return response.data;
+  },
+  delete: async (id: number) => {
+    const response = await api.delete(`/hr/departments/${id}`);
+    return response.data;
   }
 };
 
@@ -1890,6 +2277,10 @@ export const workBoardService = {
     const response = await api.put(`/work/boards/${boardId}`, data);
     return response.data;
   },
+  moveBoard: async (boardId: number, index: number) => {
+    const response = await api.post(`/work/boards/${boardId}/move`, { index });
+    return response.data;
+  },
   deleteBoard: async (boardId: number) => {
     const response = await api.delete(`/work/boards/${boardId}`);
     return response.data;
@@ -1934,11 +2325,15 @@ export const workBoardService = {
     boardId: number,
     cardId: number,
     content: string,
-    mention_user_ids?: number[]
+    mention_user_ids?: number[],
+    parent_id?: number | null
   ) => {
     const payload: any = { content };
     if (Array.isArray(mention_user_ids) && mention_user_ids.length > 0) {
       payload.mention_user_ids = mention_user_ids;
+    }
+    if (parent_id != null && Number.isInteger(parent_id) && parent_id > 0) {
+      payload.parent_id = parent_id;
     }
     const response = await api.post(`/work/boards/${boardId}/cards/${cardId}/comments`, payload);
     return response.data;
@@ -2138,6 +2533,19 @@ export const quotationService = {
     }
   },
 
+  /** DB 기준 다음 견적 번호(비활성 건 포함) — 중복 방지 */
+  suggestNextQuotationNumber: async (params?: { year?: number }) => {
+    try {
+      const response = await api.get('/quotations/next-number', {
+        params: params?.year != null ? { year: params.year } : undefined
+      });
+      return response.data;
+    } catch (error) {
+      console.error('견적서 번호 채번 오류:', error);
+      throw error;
+    }
+  },
+
   // 견적서 상세 조회
   getQuotation: async (id: number) => {
     try {
@@ -2182,27 +2590,57 @@ export const quotationService = {
     }
   },
 
-  // 견적서 전송
-  sendQuotation: async (id: number) => {
+  // 견적서 전송 (pdfBase64: 화면 캡처 PDF — 없으면 서버에서 단순 PDF 생성). 대용량 base64·SMTP 전송에 시간이 걸릴 수 있음
+  sendQuotation: async (id: number, body?: { pdfBase64?: string }) => {
     try {
-      const response = await api.post(`/quotations/${id}/send`);
+      const response = await api.post(`/quotations/${id}/send`, body ?? {}, { timeout: 120000 });
       return response.data;
     } catch (error) {
       console.error('견적서 전송 오류:', error);
       throw error;
     }
+  },
+
+  approveQuotation: async (id: number) => {
+    try {
+      const response = await api.post(`/quotations/${id}/approve`);
+      return response.data;
+    } catch (error) {
+      console.error('견적서 승인 오류:', error);
+      throw error;
+    }
+  },
+
+  rejectQuotation: async (id: number, payload: { reason: string }) => {
+    try {
+      const response = await api.post(`/quotations/${id}/reject`, payload);
+      return response.data;
+    } catch (error) {
+      console.error('견적서 반려 오류:', error);
+      throw error;
+    }
+  },
+
+  /** 관리자: 작성자별 견적 집계(반려·승인 등) — 역량 평가 참고 */
+  getQuotationCreatorMetrics: async (params?: { company_id?: number }) => {
+    try {
+      const response = await api.get('/quotations/metrics/by-creator', { params });
+      return response.data;
+    } catch (error) {
+      console.error('견적 집계 조회 오류:', error);
+      throw error;
+    }
   }
 };
 
-// 회의실 예약 API 서비스
+/** 객실 예약 API (호텔 프론트·객실 예약 관리 페이지용; `/work/room-bookings`) */
 export const roomBookingService = {
-  // 회의실 예약 목록 조회
   getRoomBookings: async (params?: { room_id?: number; user_id?: number; status?: string; check_in_date?: string; check_out_date?: string }) => {
     try {
       const response = await api.get('/work/room-bookings', { params });
       return response.data;
     } catch (error) {
-      console.error('회의실 예약 목록 조회 오류:', error);
+      console.error('객실 예약 목록 조회 오류:', error);
       throw error;
     }
   },
@@ -2213,7 +2651,7 @@ export const roomBookingService = {
       const response = await api.get(`/work/room-bookings/${id}`);
       return response.data;
     } catch (error) {
-      console.error('회의실 예약 상세 조회 오류:', error);
+      console.error('객실 예약 상세 조회 오류:', error);
       throw error;
     }
   },
@@ -2224,7 +2662,7 @@ export const roomBookingService = {
       const response = await api.post('/work/room-bookings', data);
       return response.data;
     } catch (error) {
-      console.error('회의실 예약 생성 오류:', error);
+      console.error('객실 예약 생성 오류:', error);
       throw error;
     }
   },
@@ -2235,7 +2673,7 @@ export const roomBookingService = {
       const response = await api.put(`/work/room-bookings/${id}`, data);
       return response.data;
     } catch (error) {
-      console.error('회의실 예약 수정 오류:', error);
+      console.error('객실 예약 수정 오류:', error);
       throw error;
     }
   },
@@ -2246,7 +2684,7 @@ export const roomBookingService = {
       const response = await api.delete(`/work/room-bookings/${id}`);
       return response.data;
     } catch (error) {
-      console.error('회의실 예약 삭제 오류:', error);
+      console.error('객실 예약 삭제 오류:', error);
       throw error;
     }
   },
@@ -2257,7 +2695,7 @@ export const roomBookingService = {
       const response = await api.post(`/work/room-bookings/${id}/confirm`);
       return response.data;
     } catch (error) {
-      console.error('회의실 예약 확인 오류:', error);
+      console.error('객실 예약 확인 오류:', error);
       throw error;
     }
   },
@@ -2268,7 +2706,7 @@ export const roomBookingService = {
       const response = await api.post(`/work/room-bookings/${id}/cancel`);
       return response.data;
     } catch (error) {
-      console.error('회의실 예약 취소 오류:', error);
+      console.error('객실 예약 취소 오류:', error);
       throw error;
     }
   }
@@ -2338,7 +2776,16 @@ export const roomTypeRoomService = {
 // 업무 보고서 API 서비스
 export const workReportService = {
   // 업무 보고서 목록 조회
-  getWorkReports: async (params?: { author_id?: number; status?: string; type?: string; priority?: string; start_date?: string; end_date?: string }) => {
+  getWorkReports: async (params?: {
+    author_id?: number;
+    status?: string;
+    type?: string;
+    priority?: string;
+    start_date?: string;
+    end_date?: string;
+    /** `cc`는 서버에서 받은 보고서와 동일하게 처리(예전 클라이언트 호환) */
+    scope?: 'authored' | 'received' | 'cc';
+  }) => {
     try {
       const response = await api.get('/work/reports', { params });
       return response.data;
@@ -2493,6 +2940,35 @@ export const ewayBillService = {
       console.error('E-Way Bill 삭제 오류:', error);
       throw error;
     }
+  }
+};
+
+/** users.settings.ui — DB 저장 (localStorage 사용 안 함) */
+export type UserUiCalendarScheduleItem = {
+  id: string;
+  title: string;
+  type?: 'normal' | 'company_holiday';
+};
+
+export type UserUiPreferencesData = {
+  calendarSchedules?: Record<string, UserUiCalendarScheduleItem[]>;
+  dashboardCards?: string[];
+  quickActionRoutes?: string[];
+  sidebarWidth?: number;
+  sidebarAutoCollapse?: boolean;
+  language?: 'ko' | 'en';
+  companyHolidayReminderShown?: Record<string, string>;
+  roomInvoiceTaxSnapshot?: Record<string, unknown>;
+};
+
+export const userUiPreferencesService = {
+  get: async (): Promise<UserUiPreferencesData> => {
+    const response = await api.get('/users/me/ui-preferences');
+    return response.data?.data || {};
+  },
+  patch: async (patch: Partial<UserUiPreferencesData>): Promise<UserUiPreferencesData> => {
+    const response = await api.patch('/users/me/ui-preferences', patch);
+    return response.data?.data || {};
   }
 };
 

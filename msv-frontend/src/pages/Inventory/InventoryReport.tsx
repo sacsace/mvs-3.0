@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -15,15 +15,22 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
   Paper,
   Chip,
   Stack,
-  Divider,
   LinearProgress,
-  Grid
+  Grid,
+  TextField,
+  InputAdornment,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Alert
 } from '@mui/material';
 import {
-  Assessment as AssessmentIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   Inventory as InventoryIcon,
@@ -31,7 +38,9 @@ import {
   CheckCircle as CheckCircleIcon,
   Download as DownloadIcon,
   Print as PrintIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Search as SearchIcon,
+  Error as ErrorIcon
 } from '@mui/icons-material';
 import {
   LineChart,
@@ -48,8 +57,12 @@ import {
   Bar,
   Legend
 } from 'recharts';
+import { useTranslation } from 'react-i18next';
 import { inventoryService } from '../../services/api';
-import { useStore } from '../../store';
+import { UTILS } from '../../constants';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+
+const INVENTORY_REPORT_MENU_ROUTES = ['/inventory/report', '/inventory'] as const;
 
 interface InventoryStats {
   totalProducts: number;
@@ -61,6 +74,7 @@ interface InventoryStats {
 
 interface ProductReport {
   id: number;
+  productCode: string;
   name: string;
   category: string;
   currentStock: number;
@@ -73,7 +87,133 @@ interface ProductReport {
   lastMovement: string;
 }
 
+type ReportSortKey =
+  | 'productCode'
+  | 'name'
+  | 'category'
+  | 'currentStock'
+  | 'stockRate'
+  | 'minMax'
+  | 'unitPrice'
+  | 'totalValue'
+  | 'turnoverRate'
+  | 'status'
+  | 'lastMovement';
+
+function reportStockRatePercent(current: number, max: number): number | null {
+  if (!(max > 0) || !Number.isFinite(max)) return null;
+  const c = Number(current);
+  if (!Number.isFinite(c)) return null;
+  return (c / max) * 100;
+}
+
+function getReportStatusSortRank(p: ProductReport): number {
+  if (p.currentStock === 0) return 0;
+  if (p.minStock > 0 && p.currentStock <= p.minStock) return 1;
+  if (p.maxStock > 0 && p.currentStock >= p.maxStock * 0.9) return 2;
+  return 3;
+}
+
+function compareReportRows(a: ProductReport, b: ProductReport, orderBy: ReportSortKey): number {
+  switch (orderBy) {
+    case 'productCode':
+      return a.productCode.localeCompare(b.productCode, undefined, { sensitivity: 'base' });
+    case 'name':
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    case 'category':
+      return a.category.localeCompare(b.category, undefined, { sensitivity: 'base' });
+    case 'currentStock':
+      return a.currentStock - b.currentStock;
+    case 'stockRate': {
+      const ra = reportStockRatePercent(a.currentStock, a.maxStock);
+      const rb = reportStockRatePercent(b.currentStock, b.maxStock);
+      const na = ra == null ? Number.NEGATIVE_INFINITY : ra;
+      const nb = rb == null ? Number.NEGATIVE_INFINITY : rb;
+      return na - nb;
+    }
+    case 'minMax': {
+      const c1 = a.minStock - b.minStock;
+      if (c1 !== 0) return c1;
+      return a.maxStock - b.maxStock;
+    }
+    case 'unitPrice':
+      return a.unitPrice - b.unitPrice;
+    case 'totalValue':
+      return a.totalValue - b.totalValue;
+    case 'turnoverRate':
+      return (a.turnoverRate || 0) - (b.turnoverRate || 0);
+    case 'status':
+      return getReportStatusSortRank(a) - getReportStatusSortRank(b);
+    case 'lastMovement': {
+      const ta = new Date(a.lastMovement).getTime();
+      const tb = new Date(b.lastMovement).getTime();
+      const na = Number.isNaN(ta) ? 0 : ta;
+      const nb = Number.isNaN(tb) ? 0 : tb;
+      return na - nb;
+    }
+    default:
+      return 0;
+  }
+}
+
+type TxRow = {
+  id: number;
+  transaction_type?: string;
+  quantity?: number | string;
+  unit_price?: number | string;
+  total_amount?: number | string;
+  notes?: string | null;
+  created_at?: string;
+  created_by?: number;
+  creator?: { username?: string; email?: string } | null;
+};
+
+function formatTransactionCreator(tx: TxRow): string {
+  const u = tx.creator;
+  if (u?.username?.trim()) return u.username.trim();
+  if (u?.email?.trim()) return u.email.trim();
+  if (tx.created_by != null) return `#${tx.created_by}`;
+  return '—';
+}
+
 const InventoryReport: React.FC = () => {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language?.startsWith('en') ? 'en-US' : 'ko-KR';
+  const sortLocale = i18n.language?.startsWith('en') ? 'en' : 'ko';
+  const menuFlags = useMenuRoutePermissionFlags(INVENTORY_REPORT_MENU_ROUTES);
+
+  const getStatusInfo = useCallback(
+    (product: ProductReport) => {
+      if (product.currentStock === 0) {
+        return { label: t('inventoryStatus.rowStatus.outOfStock'), color: 'error' as const, icon: <ErrorIcon /> };
+      }
+      if (product.minStock > 0 && product.currentStock <= product.minStock) {
+        return { label: t('inventoryStatus.rowStatus.lowStock'), color: 'warning' as const, icon: <WarningIcon /> };
+      }
+      if (product.maxStock > 0 && product.currentStock >= product.maxStock * 0.9) {
+        return { label: t('inventoryStatus.rowStatus.overstock'), color: 'info' as const, icon: <WarningIcon /> };
+      }
+      return { label: t('inventoryStatus.rowStatus.normal'), color: 'success' as const, icon: <CheckCircleIcon /> };
+    },
+    [t]
+  );
+
+  const formatTxTypeChip = useCallback(
+    (txType?: string) => {
+      if (!txType) return { label: '—', color: 'default' as const };
+      const map: Record<string, { key: 'in' | 'out' | 'adjustment' | 'transfer'; color: 'success' | 'error' | 'warning' | 'info' }> = {
+        in: { key: 'in', color: 'success' },
+        out: { key: 'out', color: 'error' },
+        adjustment: { key: 'adjustment', color: 'warning' },
+        transfer: { key: 'transfer', color: 'info' }
+      };
+      const m = map[txType];
+      if (m) return { label: t(`inventoryStatus.txType.${m.key}`), color: m.color };
+      return { label: txType, color: 'default' as const };
+    },
+    [t]
+  );
+
   const [stats, setStats] = useState<InventoryStats>({
     totalProducts: 0,
     totalValue: 0,
@@ -88,22 +228,34 @@ const InventoryReport: React.FC = () => {
   const [selectedPeriod, setSelectedPeriod] = useState('month');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [reportOrderBy, setReportOrderBy] = useState<ReportSortKey>('productCode');
+  const [reportOrder, setReportOrder] = useState<'asc' | 'desc'>('asc');
+
+  const [txDialogOpen, setTxDialogOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<ProductReport | null>(null);
+  const [txRows, setTxRows] = useState<TxRow[]>([]);
+  const [txLoading, setTxLoading] = useState(false);
+  const [txError, setTxError] = useState('');
+  const [txTotal, setTxTotal] = useState(0);
 
   const chartColors = ['#4caf50', '#2196f3', '#ff9800', '#9c27b0', '#00bcd4', '#f44336'];
 
-  useEffect(() => {
-    loadReportData();
-  }, [selectedPeriod, selectedCategory]);
-
-  const loadReportData = async () => {
+  const loadReportData = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
-      const response = await inventoryService.getInventoryReport();
-      
-      if (response.success && response.data) {
-        const { stats: reportStats, categoryDistribution: catDist, monthlyTransactions, lowStockProducts: lowStock } = response.data;
-        
-        // 통계 설정
+      const [reportRes, productsRes] = await Promise.all([
+        inventoryService.getInventoryReport().catch(() => ({ success: false as const })),
+        inventoryService.getProducts({ page: 1, limit: 2000, search: '', category: '' })
+      ]);
+
+      let reportOk = false;
+      if (reportRes && 'success' in reportRes && reportRes.success && reportRes.data) {
+        reportOk = true;
+        const { stats: reportStats, categoryDistribution: catDist, monthlyTransactions, lowStockProducts: lowStock } =
+          reportRes.data;
         setStats(reportStats);
         setCategoryDistribution((catDist || []).map((item: any, index: number) => ({
           ...item,
@@ -111,50 +263,138 @@ const InventoryReport: React.FC = () => {
         })));
         setMonthlyData(monthlyTransactions || []);
         setLowStockProducts(lowStock || []);
+      }
 
-        // 제품 목록 로드
-        const productsResponse = await inventoryService.getProducts({ limit: 1000 });
-        if (productsResponse.success && productsResponse.data) {
-          let productsList = productsResponse.data.map((product: any) => ({
-            id: product.id,
-            name: product.name,
-            category: product.category || '기타',
-            currentStock: parseFloat(product.stock_quantity || 0),
-            minStock: parseFloat(product.min_stock_level || 0),
-            maxStock: parseFloat(product.max_stock_level || 100),
-            unitPrice: parseFloat(product.unit_price || 0),
-            totalValue: parseFloat(product.stock_quantity || 0) * parseFloat(product.unit_price || 0),
-            turnoverRate: parseFloat(product.turnover_rate || 0),
-            status: parseFloat(product.stock_quantity || 0) <= parseFloat(product.min_stock_level || 0) ? 'low' : 'normal',
-            lastMovement: product.updated_at || new Date().toISOString()
-          }));
+      if (productsRes?.success && Array.isArray(productsRes.data)) {
+        const productsList: ProductReport[] = productsRes.data.map((product: any) => ({
+          id: product.id,
+          productCode: String(product.product_code ?? product.sku ?? ''),
+          name: product.name,
+          category: product.category || t('inventoryReport.categoryOther'),
+          currentStock: parseFloat(product.stock_quantity || 0),
+          minStock: parseFloat(product.min_stock_level || 0),
+          maxStock: parseFloat(product.max_stock_level || 0),
+          unitPrice: parseFloat(product.unit_price || 0),
+          totalValue: parseFloat(product.stock_quantity || 0) * parseFloat(product.unit_price || 0),
+          turnoverRate: parseFloat(product.turnover_rate || 0),
+          status: parseFloat(product.stock_quantity || 0) <= parseFloat(product.min_stock_level || 0) ? 'low' : 'normal',
+          lastMovement: product.updated_at || new Date().toISOString()
+        }));
+        setProducts(productsList);
 
-          // 카테고리 필터링
-          if (selectedCategory) {
-            productsList = productsList.filter((product: ProductReport) => product.category === selectedCategory);
-          }
-          setProducts(productsList);
+        if (!reportOk) {
+          let totalValue = 0;
+          let low = 0;
+          let out = 0;
+          productsList.forEach((p) => {
+            totalValue += p.totalValue;
+            if (p.currentStock === 0) out++;
+            else if (p.minStock > 0 && p.currentStock <= p.minStock) low++;
+          });
+          setStats({
+            totalProducts: productsList.length,
+            totalValue,
+            lowStockItems: low,
+            outOfStockItems: out,
+            averageTurnover: 0
+          });
+          setCategoryDistribution([]);
+          setMonthlyData([]);
+          setLowStockProducts([]);
         }
+      } else {
+        setProducts([]);
+        setLoadError(t('inventoryReport.errors.productsLoadFailed'));
       }
     } catch (error) {
       console.error('재고 보고서 데이터 로드 실패:', error);
+      setLoadError(t('inventoryReport.errors.dataLoadError'));
+      setProducts([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
-  const formatCurrency = (amount: number) => {
-    return `Rs. ${amount.toLocaleString()}`;
-  };
+  useEffect(() => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) return;
+    void loadReportData();
+  }, [loadReportData, menuFlags.menusLoading, menuFlags.canRead]);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'normal': return 'success';
-      case 'low': return 'warning';
-      case 'out': return 'error';
-      default: return 'default';
+  const categoryOptions = useMemo(() => {
+    const s = new Set<string>();
+    products.forEach((p) => {
+      if (p.category) s.add(p.category);
+    });
+    return Array.from(s).sort((a, b) => a.localeCompare(b, sortLocale));
+  }, [products, sortLocale]);
+
+  const filteredProducts = useMemo(() => {
+    let list = products;
+    if (selectedCategory) {
+      list = list.filter((p) => p.category === selectedCategory);
     }
-  };
+    const q = searchTerm.trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (p) => p.name.toLowerCase().includes(q) || p.productCode.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [products, selectedCategory, searchTerm]);
+
+  const sortedFilteredProducts = useMemo(() => {
+    const copy = [...filteredProducts];
+    copy.sort((a, b) => {
+      const c = compareReportRows(a, b, reportOrderBy);
+      return reportOrder === 'asc' ? c : -c;
+    });
+    return copy;
+  }, [filteredProducts, reportOrderBy, reportOrder]);
+
+  const handleReportRequestSort = useCallback(
+    (property: ReportSortKey) => {
+      const isAsc = reportOrderBy === property && reportOrder === 'asc';
+      setReportOrder(isAsc ? 'desc' : 'asc');
+      setReportOrderBy(property);
+    },
+    [reportOrderBy, reportOrder]
+  );
+
+  const openTxDialog = useCallback(async (row: ProductReport) => {
+    if (!menuFlags.canRead) return;
+    setSelectedProduct(row);
+    setTxDialogOpen(true);
+    setTxRows([]);
+    setTxError('');
+    setTxLoading(true);
+    setTxTotal(0);
+    try {
+      const res = await inventoryService.getInventoryTransactions({
+        product_id: row.id,
+        page: 1,
+        limit: 1000
+      });
+      if (res?.success && Array.isArray(res.data)) {
+        setTxRows(res.data as TxRow[]);
+        setTxTotal(Number((res as { pagination?: { total?: number } }).pagination?.total ?? res.data.length));
+      } else {
+        setTxError(t('inventoryStatus.errors.txLoadFailed'));
+      }
+    } catch {
+      setTxError(t('inventoryStatus.errors.txLoadError'));
+    } finally {
+      setTxLoading(false);
+    }
+  }, [t, menuFlags.canRead]);
+
+  const closeTxDialog = useCallback(() => {
+    setTxDialogOpen(false);
+    setSelectedProduct(null);
+    setTxRows([]);
+    setTxError('');
+  }, []);
+
+  const formatCurrency = (amount: number) => UTILS.formatCurrency(amount);
 
   const turnoverData = products.reduce((acc: any[], product) => {
     const existing = acc.find(item => item.category === product.category);
@@ -170,20 +410,17 @@ const InventoryReport: React.FC = () => {
     turnover: item.count ? Number((item.totalTurnover / item.count).toFixed(2)) : 0
   }));
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'normal': return '정상';
-      case 'low': return '부족';
-      case 'out': return '품절';
-      default: return status;
-    }
-  };
-
+  /** 재고율(%) = (현재재고 ÷ 최대재고) × 100 — 막대는 100%에서 포화, 숫자는 초과 시 그대로 표시 */
   const getStockLevel = (current: number, min: number, max: number) => {
-    const percentage = (current / max) * 100;
-    if (current <= min) return { level: 'low', percentage };
-    if (current >= max * 0.8) return { level: 'high', percentage };
-    return { level: 'normal', percentage };
+    const rawPct =
+      max > 0 && Number.isFinite(max) && Number.isFinite(current) ? (current / max) * 100 : null;
+    const barValue = rawPct == null ? 0 : Math.min(rawPct, 100);
+    if (rawPct == null) {
+      return { level: 'normal' as const, barValue: 0, displayPercent: null as number | null };
+    }
+    if (min > 0 && current <= min) return { level: 'low' as const, barValue, displayPercent: rawPct };
+    if (max > 0 && current >= max * 0.9) return { level: 'high' as const, barValue, displayPercent: rawPct };
+    return { level: 'normal' as const, barValue, displayPercent: rawPct };
   };
 
   return (
@@ -195,47 +432,60 @@ const InventoryReport: React.FC = () => {
           <Typography component="h1" sx={{
             fontSize: '16px !important',
             fontWeight: 600,
-            color: 'red',
+            color: 'text.primary',
             lineHeight: 1.5
           }}>
-            재고 보고서
+            {t('inventoryReport.pageTitle')}
           </Typography>
         </Box>
         <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-          재고 현황, 회전율, 비용 분석 등 재고 관련 통계를 확인하는 페이지입니다.
+          {t('inventoryReport.pageSubtitle')}
         </Typography>
       </Box>
+
+      {loadError ? (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {loadError}
+        </Alert>
+      ) : null}
+
+      {!menuFlags.menusLoading && !menuFlags.canRead ? (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      ) : null}
 
       {/* 필터 및 액션 */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
             <Stack direction="row" spacing={2}>
-              <FormControl size="small" sx={{ minWidth: 120 }}>
-                <InputLabel>기간</InputLabel>
+              <FormControl size="small" sx={{ minWidth: 120 }} disabled={menuFlags.menusLoading || !menuFlags.canRead}>
+                <InputLabel>{t('inventoryReport.periodLabel')}</InputLabel>
                 <Select
                   value={selectedPeriod}
-                  label="기간"
+                  label={t('inventoryReport.periodLabel')}
                   onChange={(e) => setSelectedPeriod(e.target.value)}
                 >
-                  <MenuItem value="week">주간</MenuItem>
-                  <MenuItem value="month">월간</MenuItem>
-                  <MenuItem value="quarter">분기</MenuItem>
-                  <MenuItem value="year">연간</MenuItem>
+                  <MenuItem value="week">{t('inventoryReport.periodWeek')}</MenuItem>
+                  <MenuItem value="month">{t('inventoryReport.periodMonth')}</MenuItem>
+                  <MenuItem value="quarter">{t('inventoryReport.periodQuarter')}</MenuItem>
+                  <MenuItem value="year">{t('inventoryReport.periodYear')}</MenuItem>
                 </Select>
               </FormControl>
-              <FormControl size="small" sx={{ minWidth: 120 }}>
-                <InputLabel>카테고리</InputLabel>
+              <FormControl size="small" sx={{ minWidth: 120 }} disabled={menuFlags.menusLoading || !menuFlags.canRead}>
+                <InputLabel>{t('inventoryReport.categoryLabel')}</InputLabel>
                 <Select
                   value={selectedCategory}
-                  label="카테고리"
+                  label={t('inventoryReport.categoryLabel')}
                   onChange={(e) => setSelectedCategory(e.target.value)}
                 >
-                  <MenuItem value="">전체</MenuItem>
-                  <MenuItem value="전자제품">전자제품</MenuItem>
-                  <MenuItem value="사무용품">사무용품</MenuItem>
-                  <MenuItem value="소모품">소모품</MenuItem>
-                  <MenuItem value="기타">기타</MenuItem>
+                  <MenuItem value="">{t('inventoryReport.allCategories')}</MenuItem>
+                  {categoryOptions.map((c) => (
+                    <MenuItem key={c} value={c}>
+                      {c}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Stack>
@@ -244,21 +494,23 @@ const InventoryReport: React.FC = () => {
                 variant="outlined"
                 startIcon={<RefreshIcon />}
                 onClick={loadReportData}
-                disabled={loading}
+                disabled={loading || menuFlags.menusLoading || !menuFlags.canRead}
               >
-                새로고침
+                {t('inventoryReport.refresh')}
               </Button>
               <Button
                 variant="outlined"
                 startIcon={<PrintIcon />}
+                disabled={menuFlags.menusLoading || !menuFlags.canRead}
               >
-                인쇄
+                {t('inventoryReport.print')}
               </Button>
               <Button
                 variant="contained"
                 startIcon={<DownloadIcon />}
+                disabled={menuFlags.menusLoading || !menuFlags.canRead}
               >
-                보고서 다운로드
+                {t('inventoryReport.downloadReport')}
               </Button>
             </Stack>
           </Stack>
@@ -280,14 +532,14 @@ const InventoryReport: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <Box>
                 <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                  총 제품 수
+                  {t('inventoryReport.statsTotalProducts')}
                 </Typography>
                 <Typography variant="h4" fontWeight={600}>
-                  {stats.totalProducts}
+                  {loading ? '…' : stats.totalProducts}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   <CheckCircleIcon sx={{ fontSize: '1rem', mr: 0.5 }} />
-                  활성 제품
+                  {t('inventoryReport.statsActiveProducts')}
                 </Typography>
               </Box>
               <InventoryIcon sx={{ fontSize: '2rem', color: 'primary.main', opacity: 0.7 }} />
@@ -299,14 +551,14 @@ const InventoryReport: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <Box>
                 <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                  총 재고 가치
+                  {t('inventoryReport.statsTotalValue')}
                 </Typography>
                 <Typography variant="h4" fontWeight={600} color="success.main">
-                  {formatCurrency(stats.totalValue)}
+                  {loading ? '…' : formatCurrency(stats.totalValue)}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   <TrendingUpIcon sx={{ fontSize: '1rem', mr: 0.5 }} />
-                  +8.2% 전월 대비
+                  {t('inventoryReport.statsTotalValueHint')}
                 </Typography>
               </Box>
               <TrendingUpIcon sx={{ fontSize: '2rem', color: 'success.main', opacity: 0.7 }} />
@@ -318,14 +570,14 @@ const InventoryReport: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <Box>
                 <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                  재고 부족
+                  {t('inventoryReport.statsLowStock')}
                 </Typography>
                 <Typography variant="h4" fontWeight={600} color="warning.main">
-                  {stats.lowStockItems}
+                  {loading ? '…' : stats.lowStockItems}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   <WarningIcon sx={{ fontSize: '1rem', mr: 0.5 }} />
-                  주의 필요
+                  {t('inventoryReport.statsLowStockHint')}
                 </Typography>
               </Box>
               <WarningIcon sx={{ fontSize: '2rem', color: 'warning.main', opacity: 0.7 }} />
@@ -337,13 +589,13 @@ const InventoryReport: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <Box>
                 <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                  평균 회전율
+                  {t('inventoryReport.statsAvgTurnover')}
                 </Typography>
                 <Typography variant="h4" fontWeight={600} color="info.main">
-                  {stats.averageTurnover}x
+                  {loading ? '…' : `${stats.averageTurnover}x`}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  연간 기준
+                  {t('inventoryReport.statsAvgTurnoverHint')}
                 </Typography>
               </Box>
               <TrendingDownIcon sx={{ fontSize: '2rem', color: 'info.main', opacity: 0.7 }} />
@@ -359,7 +611,7 @@ const InventoryReport: React.FC = () => {
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-                월별 재고 추이
+                {t('inventoryReport.chartMonthlyTrend')}
               </Typography>
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={monthlyData}>
@@ -372,14 +624,14 @@ const InventoryReport: React.FC = () => {
                     dataKey="stock" 
                     stroke="#4caf50" 
                     strokeWidth={3}
-                    name="재고량"
+                    name={t('inventoryReport.chartSeriesStock')}
                   />
                   <Line 
                     type="monotone" 
                     dataKey="movements" 
                     stroke="#2196f3" 
                     strokeWidth={3}
-                    name="입출고"
+                    name={t('inventoryReport.chartSeriesMovements')}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -392,12 +644,12 @@ const InventoryReport: React.FC = () => {
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-                카테고리별 재고 분포
+                {t('inventoryReport.chartCategoryDistribution')}
               </Typography>
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
-                    data={categoryDistribution.length > 0 ? categoryDistribution : [{ name: '데이터 없음', value: 0 }]}
+                    data={categoryDistribution.length > 0 ? categoryDistribution : [{ name: t('inventoryReport.noData'), value: 0 }]}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
@@ -442,14 +694,16 @@ const InventoryReport: React.FC = () => {
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-                카테고리별 회전율 분석
+                {t('inventoryReport.chartTurnoverByCategory')}
               </Typography>
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={turnoverData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="category" />
                   <YAxis />
-                  <RechartsTooltip formatter={(value: number) => value + '회'} />
+                  <RechartsTooltip
+                    formatter={(value: number) => t('inventoryReport.turnoverTooltip', { value })}
+                  />
                   <Bar dataKey="turnover" fill="#8884d8" />
                 </BarChart>
               </ResponsiveContainer>
@@ -461,92 +715,351 @@ const InventoryReport: React.FC = () => {
       {/* 상세 재고 현황 테이블 */}
       <Card>
         <CardContent>
-          <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-            상세 재고 현황
-          </Typography>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>제품명</TableCell>
-                  <TableCell>카테고리</TableCell>
-                  <TableCell>현재 재고</TableCell>
-                  <TableCell>재고 수준</TableCell>
-                  <TableCell>단가</TableCell>
-                  <TableCell>총 가치</TableCell>
-                  <TableCell>회전율</TableCell>
-                  <TableCell>상태</TableCell>
-                  <TableCell>최근 이동</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {products.map((product) => {
-                  const stockLevel = getStockLevel(product.currentStock, product.minStock, product.maxStock);
-                  return (
-                    <TableRow key={product.id} hover>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={500}>
-                          {product.name}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {product.category}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={500}>
-                          {product.currentStock}개
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ minWidth: 100 }}>
-                          <LinearProgress
-                            variant="determinate"
-                            value={stockLevel.percentage}
-                            color={stockLevel.level === 'low' ? 'error' : stockLevel.level === 'high' ? 'warning' : 'success'}
-                            sx={{ mb: 1 }}
-                          />
-                          <Typography variant="caption" color="text.secondary">
-                            {product.minStock}~{product.maxStock}개
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
+            <Typography variant="h6">{t('inventoryReport.detailTableTitle')}</Typography>
+            <TextField
+              size="small"
+              placeholder={t('inventoryReport.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: 'text.secondary' }} />
+                  </InputAdornment>
+                )
+              }}
+              sx={{ minWidth: 260 }}
+            />
+          </Box>
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+              <CircularProgress />
+            </Box>
+          ) : filteredProducts.length === 0 ? (
+            <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+              {t('inventoryReport.emptyFiltered')}
+            </Typography>
+          ) : (
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead
+                  sx={{
+                    bgcolor: 'background.paper',
+                    '& .MuiTableCell-head': {
+                      bgcolor: 'background.paper',
+                      color: 'text.primary',
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      textTransform: 'none',
+                      letterSpacing: 'normal',
+                      borderBottom: '2px solid',
+                      borderColor: 'primary.main',
+                      py: 1.25
+                    }
+                  }}
+                >
+                  <TableRow>
+                    <TableCell sortDirection={reportOrderBy === 'productCode' ? reportOrder : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={reportOrderBy === 'productCode'}
+                        direction={reportOrderBy === 'productCode' ? reportOrder : 'asc'}
+                        onClick={() => handleReportRequestSort('productCode')}
+                      >
+                        {t('inventoryReport.colProductCode')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sortDirection={reportOrderBy === 'name' ? reportOrder : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={reportOrderBy === 'name'}
+                        direction={reportOrderBy === 'name' ? reportOrder : 'asc'}
+                        onClick={() => handleReportRequestSort('name')}
+                      >
+                        {t('inventoryReport.colProductName')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sortDirection={reportOrderBy === 'category' ? reportOrder : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={reportOrderBy === 'category'}
+                        direction={reportOrderBy === 'category' ? reportOrder : 'asc'}
+                        onClick={() => handleReportRequestSort('category')}
+                      >
+                        {t('inventoryReport.colCategory')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell align="right" sortDirection={reportOrderBy === 'currentStock' ? reportOrder : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={reportOrderBy === 'currentStock'}
+                        direction={reportOrderBy === 'currentStock' ? reportOrder : 'asc'}
+                        onClick={() => handleReportRequestSort('currentStock')}
+                      >
+                        {t('inventoryReport.colCurrentStock')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell align="right" sortDirection={reportOrderBy === 'stockRate' ? reportOrder : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={reportOrderBy === 'stockRate'}
+                        direction={reportOrderBy === 'stockRate' ? reportOrder : 'asc'}
+                        onClick={() => handleReportRequestSort('stockRate')}
+                      >
+                        {t('inventoryReport.colStockRate')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell align="right" sortDirection={reportOrderBy === 'minMax' ? reportOrder : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={reportOrderBy === 'minMax'}
+                        direction={reportOrderBy === 'minMax' ? reportOrder : 'asc'}
+                        onClick={() => handleReportRequestSort('minMax')}
+                      >
+                        {t('inventoryReport.colMinMax')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell align="right" sortDirection={reportOrderBy === 'unitPrice' ? reportOrder : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={reportOrderBy === 'unitPrice'}
+                        direction={reportOrderBy === 'unitPrice' ? reportOrder : 'asc'}
+                        onClick={() => handleReportRequestSort('unitPrice')}
+                      >
+                        {t('inventoryReport.colUnitPrice')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell align="right" sortDirection={reportOrderBy === 'totalValue' ? reportOrder : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={reportOrderBy === 'totalValue'}
+                        direction={reportOrderBy === 'totalValue' ? reportOrder : 'asc'}
+                        onClick={() => handleReportRequestSort('totalValue')}
+                      >
+                        {t('inventoryReport.colTotalValue')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell align="right" sortDirection={reportOrderBy === 'turnoverRate' ? reportOrder : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={reportOrderBy === 'turnoverRate'}
+                        direction={reportOrderBy === 'turnoverRate' ? reportOrder : 'asc'}
+                        onClick={() => handleReportRequestSort('turnoverRate')}
+                      >
+                        {t('inventoryReport.colTurnover')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sortDirection={reportOrderBy === 'status' ? reportOrder : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={reportOrderBy === 'status'}
+                        direction={reportOrderBy === 'status' ? reportOrder : 'asc'}
+                        onClick={() => handleReportRequestSort('status')}
+                      >
+                        {t('inventoryReport.colStatus')}
+                      </TableSortLabel>
+                    </TableCell>
+                    <TableCell sortDirection={reportOrderBy === 'lastMovement' ? reportOrder : false}>
+                      <TableSortLabel
+                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                        active={reportOrderBy === 'lastMovement'}
+                        direction={reportOrderBy === 'lastMovement' ? reportOrder : 'asc'}
+                        onClick={() => handleReportRequestSort('lastMovement')}
+                      >
+                        {t('inventoryReport.colLastUpdated')}
+                      </TableSortLabel>
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {sortedFilteredProducts.map((product) => {
+                    const stockLevel = getStockLevel(product.currentStock, product.minStock, product.maxStock);
+                    const statusInfo = getStatusInfo(product);
+                    const lowOrOut =
+                      product.currentStock === 0 ||
+                      (product.minStock > 0 && product.currentStock <= product.minStock);
+                    return (
+                      <TableRow
+                        key={product.id}
+                        hover
+                        onClick={menuFlags.canRead ? () => void openTxDialog(product) : undefined}
+                        sx={{
+                          cursor: menuFlags.canRead ? 'pointer' : 'default',
+                          '&:active': { bgcolor: menuFlags.canRead ? 'action.selected' : undefined }
+                        }}
+                      >
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600}>
+                            {product.productCode || '—'}
                           </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {formatCurrency(product.unitPrice)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight={500}>
-                          {formatCurrency(product.totalValue)}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {product.turnoverRate}회/년
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={getStatusText(product.status)}
-                          color={getStatusColor(product.status)}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {new Date(product.lastMovement).toLocaleDateString()}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={500}>
+                            {product.name}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{product.category}</TableCell>
+                        <TableCell>
+                          <Typography
+                            variant="body2"
+                            fontWeight={600}
+                            color={lowOrOut ? 'error.main' : 'text.primary'}
+                          >
+                            {t('inventoryStatus.pieces', { n: product.currentStock })}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Box sx={{ minWidth: 88 }}>
+                            <LinearProgress
+                              variant="determinate"
+                              value={stockLevel.barValue}
+                              color={
+                                stockLevel.level === 'low'
+                                  ? 'error'
+                                  : stockLevel.level === 'high'
+                                    ? 'warning'
+                                    : 'success'
+                              }
+                              sx={{ mb: 0.5 }}
+                            />
+                            <Typography variant="caption">
+                              {stockLevel.displayPercent == null
+                                ? '—'
+                                : `${stockLevel.displayPercent.toFixed(1)}%`}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="caption" color="text.secondary">
+                            {t('inventoryReport.minMaxUnits', { min: product.minStock, max: product.maxStock })}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{formatCurrency(product.unitPrice)}</TableCell>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600}>
+                            {formatCurrency(product.totalValue)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {t('inventoryReport.turnoverPerYear', { rate: product.turnoverRate || 0 })}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip icon={statusInfo.icon} label={statusInfo.label} color={statusInfo.color} size="small" />
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {product.lastMovement
+                              ? new Date(product.lastMovement).toLocaleDateString(locale)
+                              : '—'}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
         </CardContent>
       </Card>
+
+      <Dialog open={txDialogOpen} onClose={closeTxDialog} maxWidth="md" fullWidth scroll="paper">
+        <DialogTitle sx={{ pr: 6 }}>
+          {t('inventoryStatus.txDialog.title')}
+          {selectedProduct ? (
+            <Typography
+              component="span"
+              variant="body2"
+              color="text.secondary"
+              sx={{ display: 'block', mt: 0.5, fontWeight: 400 }}
+            >
+              {selectedProduct.name} · {selectedProduct.productCode || '—'}
+            </Typography>
+          ) : null}
+        </DialogTitle>
+        <DialogContent dividers>
+          {txLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress size={32} />
+            </Box>
+          ) : txError ? (
+            <Alert severity="error">{txError}</Alert>
+          ) : txRows.length === 0 ? (
+            <Typography color="text.secondary" sx={{ py: 2 }}>
+              {t('inventoryStatus.txDialog.noRecords')}
+            </Typography>
+          ) : (
+            <>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                {t('inventoryStatus.txDialog.totalShown', { total: txTotal })}
+              </Typography>
+              <TableContainer component={Paper} variant="outlined">
+                <Table size="small">
+                  <TableHead
+                    sx={{
+                      bgcolor: 'background.paper',
+                      '& .MuiTableCell-head': {
+                        bgcolor: 'background.paper',
+                        color: 'text.primary',
+                        fontWeight: 600,
+                        fontSize: '0.875rem',
+                        textTransform: 'none',
+                        letterSpacing: 'normal',
+                        borderBottom: '2px solid',
+                        borderColor: 'primary.main',
+                        py: 1.25
+                      }
+                    }}
+                  >
+                    <TableRow>
+                      <TableCell width={160}>{t('inventoryStatus.txColumns.datetime')}</TableCell>
+                      <TableCell width={100}>{t('inventoryStatus.txColumns.type')}</TableCell>
+                      <TableCell width={120}>{t('inventoryStatus.txColumns.handler')}</TableCell>
+                      <TableCell align="right">{t('inventoryStatus.txColumns.quantity')}</TableCell>
+                      <TableCell align="right">{t('inventoryStatus.txColumns.unitPrice')}</TableCell>
+                      <TableCell align="right">{t('inventoryStatus.txColumns.amount')}</TableCell>
+                      <TableCell>{t('inventoryStatus.txColumns.notes')}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {txRows.map((tx) => {
+                      const tinfo = formatTxTypeChip(tx.transaction_type);
+                      const qty = Number(tx.quantity ?? 0);
+                      const at = tx.created_at ? new Date(tx.created_at) : null;
+                      return (
+                        <TableRow key={tx.id}>
+                          <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                            {at && !Number.isNaN(at.getTime())
+                              ? at.toLocaleString(locale, { dateStyle: 'short', timeStyle: 'medium' })
+                              : '—'}
+                          </TableCell>
+                          <TableCell>
+                            <Chip size="small" label={tinfo.label} color={tinfo.color} variant="outlined" />
+                          </TableCell>
+                          <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTransactionCreator(tx)}</TableCell>
+                          <TableCell align="right">{qty.toLocaleString(locale)}</TableCell>
+                          <TableCell align="right">{formatCurrency(Number(tx.unit_price ?? 0))}</TableCell>
+                          <TableCell align="right">{formatCurrency(Number(tx.total_amount ?? 0))}</TableCell>
+                          <TableCell sx={{ maxWidth: 220, wordBreak: 'break-word' }}>{tx.notes?.trim() || '—'}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={closeTxDialog} variant="contained">
+            {t('inventoryStatus.txDialog.close')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

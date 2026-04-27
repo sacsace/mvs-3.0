@@ -5,97 +5,80 @@ import {
   Card,
   CardContent,
   Button,
+  TextField,
+  Alert,
+  CircularProgress,
+  Autocomplete,
   Tabs,
   Tab,
-  Chip,
-  MenuItem,
-  Select,
-  FormControl,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
   IconButton,
+  Tooltip,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  Alert,
-  Tooltip,
-  CircularProgress,
-  Autocomplete
+  InputAdornment
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import {
   Add as AddIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon,
-  Refresh as RefreshIcon
+  DeleteOutline as DeleteOutlineIcon,
+  FileDownload as FileDownloadIcon,
+  Refresh as RefreshIcon,
+  Search as SearchIcon,
+  ViewColumn as ViewColumnIcon
 } from '@mui/icons-material';
 import { companyService, loginInfoService } from '../../services/api';
 import { useStore } from '../../store';
+import LoginInfoExcelGrid, { LoginInfoColumnSchema, LoginInfoExcelGridHandle } from './LoginInfoExcelGrid';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+
+const LOGIN_INFO_MENU_ROUTES = ['/basic-info/login-info', '/basic-info'] as const;
 
 interface Company {
   id: number;
   name: string;
 }
 
+interface LoginInfoTabRow {
+  id: number;
+  company_id: number;
+  name: string;
+  sort_order: number;
+  column_headers?: Record<string, string> | null;
+  column_hidden?: string[] | null;
+  column_schema?: LoginInfoColumnSchema | null;
+}
+
 interface LoginInfo {
   id: number;
   tenant_id: number;
   company_id: number;
+  tab_id?: number;
   division: string;
   login_id: string;
   password: string;
   open_file_returns?: string;
   url?: string;
+  extra_fields?: Record<string, string> | null;
 }
 
-interface LoginLog {
-  id: number;
-  tenant_id?: number | null;
-  company_id?: number | null;
-  user_id?: number | null;
-  userid?: string | null;
-  status: 'success' | 'failure';
-  reason?: string | null;
-  ip_address?: string | null;
-  user_agent?: string | null;
-  logged_at?: string;
-  user?: {
-    id: number;
-    username?: string;
-    userid?: string;
-  } | null;
+/** 행 검색: 대소문자 구분 없이 비교 (영문 기준 소문자화 + NFC 정규화) */
+function normalizeForRowSearch(s: string): string {
+  return String(s ?? '')
+    .normalize('NFC')
+    .toLocaleLowerCase('en');
 }
-
-interface LoginInfoForm {
-  id?: number;
-  company_id: number | '';
-  division: string;
-  login_id: string;
-  password: string;
-  open_file_returns: string;
-  url: string;
-}
-
-const emptyForm: LoginInfoForm = {
-  company_id: '',
-  division: '',
-  login_id: '',
-  password: '',
-  open_file_returns: '',
-  url: ''
-};
 
 const LoginInfoManagement: React.FC = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { user } = useStore();
+  const menuFlags = useMenuRoutePermissionFlags(LOGIN_INFO_MENU_ROUTES);
+  const gridRef = useRef<LoginInfoExcelGridHandle>(null);
   const fieldLabelSx = {
     display: 'block',
     mb: 0.75,
@@ -103,29 +86,60 @@ const LoginInfoManagement: React.FC = () => {
     fontWeight: 500,
     color: isDark ? 'rgba(224, 235, 255, 0.9)' : theme.palette.text.secondary
   };
-  const [activeTab, setActiveTab] = useState<'info' | 'log'>('info');
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>('');
+  const [tabs, setTabs] = useState<LoginInfoTabRow[]>([]);
+  const [tabsLoading, setTabsLoading] = useState(false);
+  const [selectedTabId, setSelectedTabId] = useState<number | ''>('');
   const [loginInfos, setLoginInfos] = useState<LoginInfo[]>([]);
-  const [loginLogs, setLoginLogs] = useState<LoginLog[]>([]);
+  /** 그리드 행 필터 (클라이언트 검색) */
+  const [rowSearchQuery, setRowSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
-  const [logLoading, setLogLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [logFilters, setLogFilters] = useState({
-    userid: '',
-    status: '' as '' | 'success' | 'failure',
-    start_date: '',
-    end_date: ''
-  });
-
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
-  const [formData, setFormData] = useState<LoginInfoForm>(emptyForm);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [newTabName, setNewTabName] = useState('');
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [renameTabName, setRenameTabName] = useState('');
+  const [deleteTabDialogOpen, setDeleteTabDialogOpen] = useState(false);
 
   const selectedCompany = useMemo(
     () => companies.find((company) => company.id === selectedCompanyId),
     [companies, selectedCompanyId]
+  );
+
+  const activeTab = useMemo(
+    () => tabs.find((x) => x.id === selectedTabId),
+    [tabs, selectedTabId]
+  );
+
+  const filteredLoginInfos = useMemo(() => {
+    const q = normalizeForRowSearch(rowSearchQuery.trim());
+    if (!q) return loginInfos;
+    return loginInfos.filter((row) => {
+      const parts: string[] = [
+        row.division,
+        row.login_id,
+        row.password,
+        row.open_file_returns ?? '',
+        row.url ?? '',
+        ...Object.values(row.extra_fields ?? {})
+      ];
+      return parts.some((p) => normalizeForRowSearch(String(p ?? '')).includes(q));
+    });
+  }, [loginInfos, rowSearchQuery]);
+
+  const dialogPaperSx = useMemo(
+    () =>
+      isDark
+        ? {
+            bgcolor: 'rgba(10, 20, 44, 0.98)',
+            border: '1px solid rgba(255, 255, 255, 0.14)',
+            backgroundImage: 'none'
+          }
+        : undefined,
+    [isDark]
   );
 
   const loadCompanies = useCallback(async () => {
@@ -161,13 +175,50 @@ const LoginInfoManagement: React.FC = () => {
     }
   }, [selectedCompanyId, t, user?.company_id]);
 
-  const loadLoginInfos = useCallback(async (companyId?: number) => {
+  const loadTabs = useCallback(
+    async (companyId: number, preferTabId?: number) => {
+      if (menuFlags.menusLoading || !menuFlags.canRead) {
+        setTabs([]);
+        setSelectedTabId('');
+        setTabsLoading(false);
+        return;
+      }
+      setTabsLoading(true);
+      setErrorMessage(null);
+      try {
+        const response = await loginInfoService.getLoginInfoTabs(companyId);
+        const list: LoginInfoTabRow[] = response?.data || [];
+        setTabs(list);
+        if (preferTabId != null && list.some((x) => x.id === preferTabId)) {
+          setSelectedTabId(preferTabId);
+        } else {
+          setSelectedTabId((prev) => {
+            if (typeof prev === 'number' && list.some((x) => x.id === prev)) return prev;
+            return list[0]?.id ?? '';
+          });
+        }
+      } catch (error: any) {
+        console.error('탭 로드 오류:', error);
+        setTabs([]);
+        setSelectedTabId('');
+        setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.loadTabsFailed'));
+      } finally {
+        setTabsLoading(false);
+      }
+    },
+    [menuFlags.canRead, menuFlags.menusLoading, t]
+  );
+
+  const loadLoginInfos = useCallback(async (companyId: number, tabId: number) => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) {
+      setLoginInfos([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setErrorMessage(null);
     try {
-      const response = await loginInfoService.getLoginInfos(
-        companyId ? { company_id: companyId } : undefined
-      );
+      const response = await loginInfoService.getLoginInfos({ company_id: companyId, tab_id: tabId });
       if (response?.success) {
         setLoginInfos(response.data || []);
       }
@@ -178,135 +229,48 @@ const LoginInfoManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  const loadLoginLogs = useCallback(async (companyId?: number) => {
-    setLogLoading(true);
-    setErrorMessage(null);
-    try {
-      const response = await loginInfoService.getLoginLogs({
-        company_id: companyId,
-        userid: logFilters.userid.trim() || undefined,
-        status: logFilters.status || undefined,
-        start_date: logFilters.start_date || undefined,
-        end_date: logFilters.end_date || undefined,
-        limit: 300
-      });
-      if (response?.success) {
-        setLoginLogs(response.data || []);
-      } else {
-        setLoginLogs([]);
-      }
-    } catch (error: any) {
-      console.error('로그인 로그 로드 오류:', error);
-      setLoginLogs([]);
-      setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.loadLogsFailed'));
-    } finally {
-      setLogLoading(false);
-    }
-  }, [logFilters.end_date, logFilters.start_date, logFilters.status, logFilters.userid, t]);
+  }, [menuFlags.canRead, menuFlags.menusLoading]);
 
   useEffect(() => {
     loadCompanies();
   }, [loadCompanies]);
 
   useEffect(() => {
-    if (selectedCompanyId) {
-      if (activeTab === 'info') {
-        loadLoginInfos(Number(selectedCompanyId));
-      } else {
-        loadLoginLogs(Number(selectedCompanyId));
-      }
-    } else {
-      if (activeTab === 'info') {
-        setLoginInfos([]);
-      } else {
-        setLoginLogs([]);
-      }
-    }
-  }, [activeTab, loadLoginInfos, loadLoginLogs, selectedCompanyId]);
-
-  const openCreateDialog = () => {
-    setDialogMode('create');
-    setFormData({
-      ...emptyForm,
-      company_id: selectedCompanyId || ''
-    });
-    setDialogOpen(true);
-  };
-
-  const openEditDialog = (item: LoginInfo) => {
-    setDialogMode('edit');
-    setFormData({
-      id: item.id,
-      company_id: item.company_id,
-      division: item.division,
-      login_id: item.login_id,
-      password: item.password,
-      open_file_returns: item.open_file_returns || '',
-      url: item.url || ''
-    });
-    setDialogOpen(true);
-  };
-
-  const handleSave = async () => {
-    if (!formData.company_id || !formData.division || !formData.login_id || !formData.password) {
-      setErrorMessage(t('loginInfoManagement.errors.requiredFields'));
+    if (menuFlags.menusLoading || !menuFlags.canRead) {
+      setTabs([]);
+      setSelectedTabId('');
+      setLoginInfos([]);
       return;
     }
-
-    try {
-      setLoading(true);
-      setErrorMessage(null);
-
-      const payload = {
-        company_id: formData.company_id,
-        division: formData.division.trim(),
-        login_id: formData.login_id.trim(),
-        password: formData.password.trim(),
-        open_file_returns: formData.open_file_returns.trim() || null,
-        url: formData.url.trim() || null
-      };
-
-      if (dialogMode === 'create') {
-        await loginInfoService.createLoginInfo(payload);
-      } else if (formData.id) {
-        await loginInfoService.updateLoginInfo(formData.id, payload);
-      }
-
-      setDialogOpen(false);
-      if (selectedCompanyId) {
-        await loadLoginInfos(Number(selectedCompanyId));
-      }
-    } catch (error: any) {
-      console.error('로그인 정보 저장 오류:', error);
-      setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.saveFailed'));
-    } finally {
-      setLoading(false);
+    if (!selectedCompanyId) {
+      setTabs([]);
+      setSelectedTabId('');
+      setLoginInfos([]);
+      return;
     }
-  };
+    loadTabs(Number(selectedCompanyId));
+  }, [selectedCompanyId, loadTabs, menuFlags.menusLoading, menuFlags.canRead]);
 
-  const handleDelete = async (id: number) => {
-    const confirmed = window.confirm(t('loginInfoManagement.confirm.delete'));
-    if (!confirmed) return;
+  useEffect(() => {
+    setRowSearchQuery('');
+  }, [selectedCompanyId, selectedTabId]);
 
-    try {
-      setLoading(true);
-      setErrorMessage(null);
-      await loginInfoService.deleteLoginInfo(id);
-      if (selectedCompanyId) {
-        await loadLoginInfos(Number(selectedCompanyId));
-      }
-    } catch (error: any) {
-      console.error('로그인 정보 삭제 오류:', error);
-      setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.deleteFailed'));
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    if (menuFlags.menusLoading || !menuFlags.canRead) {
+      setLoginInfos([]);
+      return;
     }
-  };
+    if (!selectedCompanyId || selectedTabId === '') {
+      setLoginInfos([]);
+      return;
+    }
+    setLoginInfos([]);
+    loadLoginInfos(Number(selectedCompanyId), Number(selectedTabId));
+  }, [selectedCompanyId, selectedTabId, loadLoginInfos, menuFlags.menusLoading, menuFlags.canRead]);
 
   const handleImportClick = () => {
-    if (!selectedCompanyId) {
+    if (menuFlags.menusLoading || !menuFlags.canMutate) return;
+    if (!selectedCompanyId || selectedTabId === '') {
       setErrorMessage(t('loginInfoManagement.errors.selectCompanyForImport'));
       return;
     }
@@ -314,16 +278,17 @@ const LoginInfoManagement: React.FC = () => {
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (menuFlags.menusLoading || !menuFlags.canMutate) return;
     const file = event.target.files?.[0];
-    if (!file || !selectedCompanyId) {
+    if (!file || !selectedCompanyId || selectedTabId === '') {
       return;
     }
 
     try {
       setLoading(true);
       setErrorMessage(null);
-      await loginInfoService.importExcel(file, Number(selectedCompanyId));
-      await loadLoginInfos(Number(selectedCompanyId));
+      await loginInfoService.importExcel(file, Number(selectedCompanyId), Number(selectedTabId));
+      await loadLoginInfos(Number(selectedCompanyId), Number(selectedTabId));
     } catch (error: any) {
       console.error('엑셀 가져오기 오류:', error);
       setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.importFailed'));
@@ -333,53 +298,109 @@ const LoginInfoManagement: React.FC = () => {
     }
   };
 
-  const handleLogSearch = async () => {
-    if (!selectedCompanyId) {
-      setErrorMessage(t('loginInfoManagement.errors.selectCompanyFirst'));
-      return;
-    }
-    await loadLoginLogs(Number(selectedCompanyId));
+  const openAddTabDialog = () => {
+    setNewTabName('');
+    setAddDialogOpen(true);
   };
 
-  const handleLogFilterReset = async () => {
-    const nextFilters = {
-      userid: '',
-      status: '' as '' | 'success' | 'failure',
-      start_date: '',
-      end_date: ''
-    };
-    setLogFilters(nextFilters);
-
-    if (!selectedCompanyId) {
-      setLoginLogs([]);
+  const submitAddTab = async () => {
+    if (menuFlags.menusLoading || !menuFlags.canCreate) return;
+    const name = newTabName.trim();
+    if (!name || !selectedCompanyId) {
+      setErrorMessage(t('loginInfoManagement.errors.tabNameRequired'));
       return;
     }
-
-    setLogLoading(true);
     try {
-      const response = await loginInfoService.getLoginLogs({
+      setErrorMessage(null);
+      const res = await loginInfoService.createLoginInfoTab({
         company_id: Number(selectedCompanyId),
-        limit: 300
+        name
       });
-      if (response?.success) {
-        setLoginLogs(response.data || []);
+      setAddDialogOpen(false);
+      setNewTabName('');
+      if (res?.success && res.data?.id) {
+        await loadTabs(Number(selectedCompanyId), res.data.id);
       } else {
-        setLoginLogs([]);
+        await loadTabs(Number(selectedCompanyId));
       }
     } catch (error: any) {
-      console.error('로그인 로그 초기화 조회 오류:', error);
-      setLoginLogs([]);
-      setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.loadLogsFailed'));
-    } finally {
-      setLogLoading(false);
+      setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.saveTabFailed'));
     }
   };
 
-  const formatDateTime = (value?: string) => {
-    if (!value) return '-';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '-';
-    return date.toLocaleString(i18n.language === 'en' ? 'en-US' : 'ko-KR', { hour12: false });
+  const openRenameDialog = () => {
+    if (!activeTab) return;
+    setRenameTabName(activeTab.name);
+    setRenameDialogOpen(true);
+  };
+
+  const submitRenameTab = async () => {
+    if (menuFlags.menusLoading || !menuFlags.canEdit) return;
+    const name = renameTabName.trim();
+    if (!name || selectedTabId === '' || !selectedCompanyId) {
+      setErrorMessage(t('loginInfoManagement.errors.tabNameRequired'));
+      return;
+    }
+    try {
+      setErrorMessage(null);
+      await loginInfoService.updateLoginInfoTab(Number(selectedTabId), { name });
+      setRenameDialogOpen(false);
+      await loadTabs(Number(selectedCompanyId), Number(selectedTabId));
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.saveTabFailed'));
+    }
+  };
+
+  const handleDeleteTab = () => {
+    if (selectedTabId === '' || !selectedCompanyId) return;
+    setDeleteTabDialogOpen(true);
+  };
+
+  const handleColumnHeadersPatch = useCallback(
+    async (patch: Record<string, string>) => {
+      if (menuFlags.menusLoading || !menuFlags.canMutate) return;
+      if (selectedTabId === '' || !selectedCompanyId) return;
+      try {
+        setErrorMessage(null);
+        await loginInfoService.updateLoginInfoTab(Number(selectedTabId), { column_headers: patch });
+        await loadTabs(Number(selectedCompanyId), Number(selectedTabId));
+      } catch (error: any) {
+        setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.saveTabFailed'));
+        throw error;
+      }
+    },
+    [loadTabs, menuFlags.canMutate, menuFlags.menusLoading, selectedCompanyId, selectedTabId, t]
+  );
+
+  const handleColumnSchemaChange = useCallback(
+    async (schema: LoginInfoColumnSchema | null) => {
+      if (menuFlags.menusLoading || !menuFlags.canMutate) return;
+      if (selectedTabId === '' || !selectedCompanyId) return;
+      try {
+        setErrorMessage(null);
+        await loginInfoService.updateLoginInfoTab(Number(selectedTabId), {
+          column_schema: schema
+        });
+        await loadTabs(Number(selectedCompanyId), Number(selectedTabId));
+      } catch (error: any) {
+        setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.saveTabFailed'));
+        throw error;
+      }
+    },
+    [loadTabs, menuFlags.canMutate, menuFlags.menusLoading, selectedCompanyId, selectedTabId, t]
+  );
+
+  const confirmDeleteTab = async () => {
+    if (menuFlags.menusLoading || !menuFlags.canDelete) return;
+    if (selectedTabId === '' || !selectedCompanyId) return;
+    try {
+      setErrorMessage(null);
+      await loginInfoService.deleteLoginInfoTab(Number(selectedTabId));
+      setDeleteTabDialogOpen(false);
+      await loadTabs(Number(selectedCompanyId));
+    } catch (error: any) {
+      setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.deleteTabFailed'));
+    }
   };
 
   return (
@@ -395,456 +416,453 @@ const LoginInfoManagement: React.FC = () => {
             }
           : undefined,
         '& .MuiTypography-root': isDark ? { color: 'rgba(245, 248, 255, 0.92)' } : undefined,
-        '& .MuiTab-root': isDark ? { color: 'rgba(235, 241, 255, 0.72)' } : undefined,
-        '& .Mui-selected': isDark ? { color: '#9cc2ff !important' } : undefined,
         '& .MuiInputLabel-root': isDark ? { color: 'rgba(230, 236, 255, 0.78)' } : undefined,
         '& .MuiInputBase-input': isDark ? { color: 'rgba(246, 249, 255, 0.95)' } : undefined,
         '& .MuiInputBase-input::placeholder': isDark ? { color: 'rgba(223, 232, 255, 0.56)', opacity: 1 } : undefined,
         '& .MuiOutlinedInput-notchedOutline': isDark ? { borderColor: 'rgba(222, 231, 255, 0.32)' } : undefined,
         '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': isDark ? { borderColor: 'rgba(181, 206, 255, 0.48)' } : undefined,
         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': isDark ? { borderColor: 'rgba(138, 181, 255, 0.82)' } : undefined,
-        '& .MuiAutocomplete-popupIndicator, & .MuiAutocomplete-clearIndicator': isDark ? { color: 'rgba(220, 231, 255, 0.8)' } : undefined,
-        '& .MuiTableCell-root': isDark ? { color: 'rgba(241, 246, 255, 0.9)', borderColor: 'rgba(255, 255, 255, 0.1)' } : undefined,
-        '& .MuiTableHead-root .MuiTableCell-root': isDark ? { color: 'rgba(199, 217, 255, 0.92)', backgroundColor: 'rgba(255, 255, 255, 0.03)' } : undefined
+        '& .MuiAutocomplete-popupIndicator, & .MuiAutocomplete-clearIndicator': isDark ? { color: 'rgba(220, 231, 255, 0.8)' } : undefined
       }}
     >
-      <Typography variant="h5" sx={{ mb: 2, fontWeight: 600 }}>
-        {t('loginInfoManagement.title')}
-      </Typography>
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="h5" sx={{ fontWeight: 600 }}>
+          {t('loginInfoManagement.title')}
+        </Typography>
+        <Typography
+          variant="body2"
+          sx={{
+            mt: 0.75,
+            color: isDark ? 'rgba(200, 214, 235, 0.88)' : 'text.secondary',
+            lineHeight: 1.5,
+            maxWidth: 720
+          }}
+        >
+          {t('loginInfoManagement.description')}
+        </Typography>
+        <Typography
+          variant="body2"
+          sx={{
+            mt: 1,
+            color: isDark ? 'rgba(180, 200, 230, 0.85)' : 'text.secondary',
+            lineHeight: 1.5,
+            maxWidth: 900,
+            fontSize: '0.8125rem'
+          }}
+        >
+          {t('loginInfoManagement.excelHint')}
+        </Typography>
+      </Box>
 
       {errorMessage && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorMessage(null)}>
           {errorMessage}
         </Alert>
       )}
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
 
-      <Card sx={{ mb: 2 }}>
-        <CardContent sx={{ py: 1 }}>
-          <Tabs
-            value={activeTab}
-            onChange={(_, value) => setActiveTab(value)}
-            sx={{ minHeight: 42, '& .MuiTab-root': { minHeight: 42 } }}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: { xs: 'stretch', md: 'flex-end' },
+              flexDirection: { xs: 'column', md: 'row' },
+              gap: 2
+            }}
           >
-            <Tab value="info" label={t('loginInfoManagement.tabs.info')} />
-            <Tab value="log" label={t('loginInfoManagement.tabs.log')} />
-          </Tabs>
-        </CardContent>
-      </Card>
-
-      {activeTab === 'info' ? (
-        <>
-          <Card sx={{ mb: 3 }}>
-            <CardContent>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: { xs: 'stretch', md: 'center' },
-                  flexDirection: { xs: 'column', md: 'row' },
-                  gap: 2
-                }}
-              >
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="caption" sx={fieldLabelSx}>
-                    {t('loginInfoManagement.fields.company')}
-                  </Typography>
-                  <Autocomplete
-                    options={companies}
-                    value={selectedCompany || null}
-                    onChange={(_, newValue) => setSelectedCompanyId(newValue?.id ?? '')}
-                    getOptionLabel={(option) => option.name}
-                    isOptionEqualToValue={(option, value) => option.id === value.id}
-                    renderInput={(params) => (
-                      <TextField {...params} size="small" placeholder={t('loginInfoManagement.placeholders.selectCompany')} />
-                    )}
-                  />
-                </Box>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: { xs: 'flex-start', md: 'flex-end' },
-                    gap: 1,
-                    flexWrap: 'wrap',
-                    alignSelf: { xs: 'stretch', md: 'flex-end' },
-                    '& .MuiButton-root': {
-                      height: 40
-                    }
-                  }}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={handleFileChange}
-                    style={{ display: 'none' }}
-                  />
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="caption" sx={fieldLabelSx}>
+                {t('loginInfoManagement.fields.company')}
+              </Typography>
+              <Autocomplete
+                options={companies}
+                value={selectedCompany || null}
+                onChange={(_, newValue) => setSelectedCompanyId(newValue?.id ?? '')}
+                getOptionLabel={(option) => option.name}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                renderInput={(params) => (
+                  <TextField {...params} size="small" placeholder={t('loginInfoManagement.placeholders.selectCompany')} />
+                )}
+              />
+            </Box>
+            <TextField
+              size="small"
+              placeholder={t('loginInfoManagement.placeholders.searchRows')}
+              value={rowSearchQuery}
+              onChange={(e) => setRowSearchQuery(e.target.value)}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead || !selectedCompanyId || selectedTabId === ''}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" color="action" />
+                  </InputAdornment>
+                )
+              }}
+              sx={{
+                width: { xs: '100%', sm: '100%', md: 280 },
+                flexShrink: 0,
+                '& .MuiInputBase-root': { height: 40 }
+              }}
+            />
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: { xs: 'flex-start', md: 'flex-end' },
+                gap: 1,
+                flexWrap: 'wrap',
+                alignSelf: { xs: 'stretch', md: 'flex-end' },
+                '& .MuiButton-root': {
+                  height: 40
+                }
+              }}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleFileChange}
+                style={{ display: 'none' }}
+              />
+              <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
+                <span style={{ display: 'inline-flex' }}>
                   <Button
                     variant="outlined"
                     startIcon={<RefreshIcon />}
-                    onClick={() => selectedCompanyId && loadLoginInfos(Number(selectedCompanyId))}
+                    onClick={() =>
+                      selectedCompanyId &&
+                      selectedTabId !== '' &&
+                      loadLoginInfos(Number(selectedCompanyId), Number(selectedTabId))
+                    }
+                    disabled={menuFlags.menusLoading || !menuFlags.canRead || !selectedCompanyId || selectedTabId === ''}
                   >
                     {t('loginInfoManagement.actions.refresh')}
                   </Button>
-                  <Button variant="outlined" onClick={handleImportClick}>
+                </span>
+              </Tooltip>
+              <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canMutate}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="outlined"
+                    onClick={handleImportClick}
+                    disabled={
+                      menuFlags.menusLoading ||
+                      !menuFlags.canMutate ||
+                      !selectedCompanyId ||
+                      selectedTabId === ''
+                    }
+                  >
                     {t('loginInfoManagement.actions.importExcel')}
                   </Button>
-                  <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
+                </span>
+              </Tooltip>
+              <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<FileDownloadIcon />}
+                    onClick={() => gridRef.current?.exportToExcel()}
+                    disabled={menuFlags.menusLoading || !menuFlags.canRead || !selectedCompanyId || selectedTabId === ''}
+                  >
+                    {t('loginInfoManagement.actions.exportExcel')}
+                  </Button>
+                </span>
+              </Tooltip>
+              <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canMutate}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<ViewColumnIcon />}
+                    onClick={() => gridRef.current?.openAddColumnDialog()}
+                    disabled={
+                      menuFlags.menusLoading ||
+                      !menuFlags.canMutate ||
+                      !selectedCompanyId ||
+                      selectedTabId === ''
+                    }
+                  >
+                    {t('loginInfoManagement.actions.addColumn')}
+                  </Button>
+                </span>
+              </Tooltip>
+              <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => gridRef.current?.addRow()}
+                    disabled={
+                      menuFlags.menusLoading ||
+                      !menuFlags.canCreate ||
+                      !selectedCompanyId ||
+                      selectedTabId === ''
+                    }
+                  >
                     {t('loginInfoManagement.actions.addNew')}
                   </Button>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
+                </span>
+              </Tooltip>
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
 
-          <Card>
-            <CardContent>
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                  {selectedCompany
-                    ? t('loginInfoManagement.companyInfoTitle', { companyName: selectedCompany.name })
-                    : t('loginInfoManagement.tabs.info')}
-                </Typography>
-              </Box>
-
-              {loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                  <CircularProgress />
-                </Box>
-              ) : (
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ width: 60 }}>No</TableCell>
-                      <TableCell>{t('loginInfoManagement.fields.division')}</TableCell>
-                      <TableCell>{t('loginInfoManagement.fields.loginId')}</TableCell>
-                      <TableCell>{t('loginInfoManagement.fields.password')}</TableCell>
-                      <TableCell>{t('loginInfoManagement.fields.openFileReturns')}</TableCell>
-                      <TableCell>URL</TableCell>
-                      <TableCell align="right" sx={{ width: 120 }}>
-                        {t('loginInfoManagement.fields.actions')}
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {loginInfos.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={7} align="center">
-                          {t('loginInfoManagement.empty.noData')}
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      loginInfos.map((item, index) => (
-                        <TableRow key={item.id}>
-                          <TableCell>{index + 1}</TableCell>
-                          <TableCell>{item.division}</TableCell>
-                          <TableCell>{item.login_id}</TableCell>
-                          <TableCell>{item.password}</TableCell>
-                          <TableCell>{item.open_file_returns || '-'}</TableCell>
-                          <TableCell>
-                            {item.url ? (
-                              <a href={item.url} target="_blank" rel="noreferrer">
-                                {item.url}
-                              </a>
-                            ) : (
-                              '-'
-                            )}
-                          </TableCell>
-                          <TableCell align="right">
-                            <Tooltip title={t('loginInfoManagement.actions.edit')}>
-                              <IconButton size="small" onClick={() => openEditDialog(item)}>
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title={t('loginInfoManagement.actions.delete')}>
-                              <IconButton size="small" onClick={() => handleDelete(item.id)}>
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      ) : (
-        <>
-          <Card sx={{ mb: 3 }}>
-            <CardContent>
+      <Card
+        sx={{
+          borderRadius: '6px',
+          overflow: 'hidden'
+        }}
+      >
+        <CardContent>
+          {!selectedCompanyId ? (
+            <Typography color="text.secondary">{t('loginInfoManagement.errors.selectCompanyFirst')}</Typography>
+          ) : tabsLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : tabs.length === 0 ? (
+            <Typography color="text.secondary">{t('loginInfoManagement.errors.noTabs')}</Typography>
+          ) : (
+            <>
               <Box
                 sx={{
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', md: '2fr 1fr 1fr 1fr auto auto' },
-                  gap: 1.5,
-                  alignItems: 'center'
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  mb: 1
                 }}
               >
-                <Box>
-                  <Typography variant="caption" sx={fieldLabelSx}>
-                    {t('loginInfoManagement.fields.company')}
-                  </Typography>
-                  <Autocomplete
-                    options={companies}
-                    value={selectedCompany || null}
-                    onChange={(_, newValue) => setSelectedCompanyId(newValue?.id ?? '')}
-                    getOptionLabel={(option) => option.name}
-                    isOptionEqualToValue={(option, value) => option.id === value.id}
-                    renderInput={(params) => (
-                      <TextField {...params} size="small" placeholder={t('loginInfoManagement.placeholders.selectCompany')} />
-                    )}
-                  />
-                </Box>
-                <Box>
-                  <Typography variant="caption" sx={fieldLabelSx}>
-                    {t('loginInfoManagement.fields.searchUserId')}
-                  </Typography>
-                  <TextField
-                    size="small"
-                    placeholder={t('loginInfoManagement.placeholders.searchUserId')}
-                    value={logFilters.userid}
-                    onChange={(event) =>
-                      setLogFilters((prev) => ({ ...prev, userid: event.target.value }))
-                    }
-                    fullWidth
-                  />
-                </Box>
-                <Box>
-                  <Typography variant="caption" sx={fieldLabelSx}>
-                    {t('loginInfoManagement.fields.result')}
-                  </Typography>
-                  <FormControl size="small" fullWidth>
-                    <Select
-                      value={logFilters.status}
-                      displayEmpty
-                      onChange={(event) =>
-                        setLogFilters((prev) => ({
-                          ...prev,
-                          status: event.target.value as '' | 'success' | 'failure'
-                        }))
-                      }
-                    >
-                      <MenuItem value="">{t('loginInfoManagement.filters.all')}</MenuItem>
-                      <MenuItem value="success">{t('loginInfoManagement.status.success')}</MenuItem>
-                      <MenuItem value="failure">{t('loginInfoManagement.status.failure')}</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Box>
-                <Box>
-                  <Typography variant="caption" sx={fieldLabelSx}>
-                    {t('loginInfoManagement.fields.startDate')}
-                  </Typography>
-                  <TextField
-                    size="small"
-                    type="date"
-                    placeholder={t('loginInfoManagement.placeholders.date')}
-                    value={logFilters.start_date}
-                    onChange={(event) =>
-                      setLogFilters((prev) => ({ ...prev, start_date: event.target.value }))
-                    }
-                    fullWidth
-                  />
-                </Box>
-                <Box>
-                  <Typography variant="caption" sx={fieldLabelSx}>
-                    {t('loginInfoManagement.fields.endDate')}
-                  </Typography>
-                  <TextField
-                    size="small"
-                    type="date"
-                    placeholder={t('loginInfoManagement.placeholders.date')}
-                    value={logFilters.end_date}
-                    onChange={(event) =>
-                      setLogFilters((prev) => ({ ...prev, end_date: event.target.value }))
-                    }
-                    fullWidth
-                  />
-                </Box>
-                <Button
-                  variant="outlined"
-                  onClick={handleLogFilterReset}
+                <Tabs
+                  value={selectedTabId === '' ? false : selectedTabId}
+                  onChange={(_, v) => setSelectedTabId(v as number)}
+                  variant="scrollable"
+                  scrollButtons="auto"
                   sx={{
-                    alignSelf: 'end',
-                    height: 40,
-                    mb: 0.1,
-                    whiteSpace: 'nowrap'
+                    flex: 1,
+                    minWidth: 0,
+                    borderBottom: 1,
+                    borderColor: 'divider',
+                    '& .MuiTab-root': {
+                      textTransform: 'none',
+                      ...(isDark ? { color: 'rgba(200, 214, 235, 0.75)' } : {})
+                    },
+                    '& .Mui-selected': isDark ? { color: 'rgba(199, 217, 255, 0.98) !important' } : undefined
                   }}
                 >
-                  {t('loginInfoManagement.actions.reset')}
-                </Button>
-                <Button variant="contained" onClick={handleLogSearch} startIcon={<RefreshIcon />}>
-                  {t('loginInfoManagement.actions.search')}
-                </Button>
+                  {tabs.map((tab) => (
+                    <Tab key={tab.id} value={tab.id} label={tab.name} disabled={menuFlags.menusLoading} />
+                  ))}
+                </Tabs>
+                <Tooltip
+                  title={
+                    menuFlags.menusLoading || !menuFlags.canCreate
+                      ? t('common.menuNoCreate')
+                      : t('loginInfoManagement.tabs.addTab')
+                  }
+                >
+                  <span style={{ display: 'inline-flex' }}>
+                    <IconButton
+                      size="small"
+                      onClick={openAddTabDialog}
+                      disabled={menuFlags.menusLoading || !menuFlags.canCreate}
+                      aria-label={t('loginInfoManagement.tabs.addTab')}
+                    >
+                      <AddIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip
+                  title={
+                    menuFlags.menusLoading || !menuFlags.canEdit
+                      ? t('common.menuNoEdit')
+                      : t('loginInfoManagement.tabs.renameTab')
+                  }
+                >
+                  <span style={{ display: 'inline-flex' }}>
+                    <IconButton
+                      size="small"
+                      onClick={openRenameDialog}
+                      disabled={menuFlags.menusLoading || !menuFlags.canEdit || !activeTab}
+                      aria-label={t('loginInfoManagement.tabs.renameTab')}
+                    >
+                      <EditIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip
+                  title={
+                    menuFlags.menusLoading || !menuFlags.canDelete
+                      ? t('common.menuNoDelete')
+                      : t('loginInfoManagement.tabs.deleteTab')
+                  }
+                >
+                  <span style={{ display: 'inline-flex' }}>
+                    <IconButton
+                      size="small"
+                      onClick={() => void handleDeleteTab()}
+                      disabled={
+                        menuFlags.menusLoading ||
+                        !menuFlags.canDelete ||
+                        !activeTab ||
+                        tabs.length <= 1
+                      }
+                      aria-label={t('loginInfoManagement.tabs.deleteTab')}
+                    >
+                      <DeleteOutlineIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
               </Box>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent>
-              <Box
-                sx={{
-                  mb: 1.5,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 1,
-                  flexWrap: 'wrap'
-                }}
-              >
+              <Box sx={{ mb: 2 }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                  {t('loginInfoManagement.tabs.log')}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {t('loginInfoManagement.recentCount', { count: loginLogs.length })}
+                  {t('loginInfoManagement.companyInfoTitleWithTab', {
+                    companyName: selectedCompany?.name ?? '',
+                    tabName: activeTab?.name ?? ''
+                  })}
                 </Typography>
               </Box>
-
-              {logLoading ? (
+              {loading && loginInfos.length === 0 ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
                   <CircularProgress />
                 </Box>
-              ) : (
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ width: 70 }}>No</TableCell>
-                      <TableCell sx={{ width: 190 }}>{t('loginInfoManagement.fields.loginAt')}</TableCell>
-                      <TableCell sx={{ width: 110 }}>{t('loginInfoManagement.fields.result')}</TableCell>
-                      <TableCell sx={{ minWidth: 120 }}>{t('loginInfoManagement.fields.userId')}</TableCell>
-                      <TableCell sx={{ minWidth: 120 }}>{t('loginInfoManagement.fields.userName')}</TableCell>
-                      <TableCell sx={{ minWidth: 130 }}>IP</TableCell>
-                      <TableCell sx={{ minWidth: 170 }}>{t('loginInfoManagement.fields.reason')}</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {loginLogs.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={7} align="center">
-                          {t('loginInfoManagement.empty.noData')}
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      loginLogs.map((log, index) => (
-                        <TableRow key={log.id}>
-                          <TableCell>{index + 1}</TableCell>
-                          <TableCell>{formatDateTime(log.logged_at)}</TableCell>
-                          <TableCell>
-                            <Chip
-                              size="small"
-                              label={log.status === 'success' ? t('loginInfoManagement.status.success') : t('loginInfoManagement.status.failure')}
-                              color={log.status === 'success' ? 'success' : 'error'}
-                              variant={log.status === 'success' ? 'filled' : 'outlined'}
-                            />
-                          </TableCell>
-                          <TableCell>{log.userid || '-'}</TableCell>
-                          <TableCell>{log.user?.username || '-'}</TableCell>
-                          <TableCell>{log.ip_address || '-'}</TableCell>
-                          <TableCell>{log.reason || '-'}</TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </>
-      )}
+              ) : selectedTabId !== '' ? (
+                <LoginInfoExcelGrid
+                  key={`${selectedCompanyId}-${selectedTabId}`}
+                  ref={gridRef}
+                  companyId={Number(selectedCompanyId)}
+                  companyName={selectedCompany?.name}
+                  tabId={Number(selectedTabId)}
+                  tabLabel={activeTab?.name ?? ''}
+                  columnHeaders={activeTab?.column_headers}
+                  columnSchema={activeTab?.column_schema}
+                  columnHiddenLegacy={activeTab?.column_hidden}
+                  onColumnHeadersPatch={handleColumnHeadersPatch}
+                  onColumnSchemaChange={handleColumnSchemaChange}
+                  loginInfos={filteredLoginInfos}
+                  loading={loading}
+                  isDark={isDark}
+                  onReload={async () => {
+                    if (selectedCompanyId) {
+                      await loadLoginInfos(Number(selectedCompanyId), Number(selectedTabId));
+                    }
+                  }}
+                  onError={setErrorMessage}
+                />
+              ) : null}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {dialogMode === 'create' ? t('loginInfoManagement.dialog.createTitle') : t('loginInfoManagement.dialog.editTitle')}
+      <Dialog
+        open={addDialogOpen}
+        onClose={() => setAddDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: dialogPaperSx }}
+      >
+        <DialogTitle sx={isDark ? { color: 'rgba(245, 248, 255, 0.95)' } : undefined}>
+          {t('loginInfoManagement.tabs.addTab')}
         </DialogTitle>
-        <DialogContent sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <Box>
-            <Typography variant="caption" sx={fieldLabelSx}>
-              {t('loginInfoManagement.fields.company')}
-            </Typography>
-            <Autocomplete
-              options={companies}
-              value={companies.find((company) => company.id === formData.company_id) || null}
-              onChange={(_, newValue) =>
-                setFormData((prev) => ({ ...prev, company_id: newValue?.id ?? '' }))
-              }
-              getOptionLabel={(option) => option.name}
-              isOptionEqualToValue={(option, value) => option.id === value.id}
-              renderInput={(params) => (
-                <TextField {...params} size="small" placeholder={t('loginInfoManagement.placeholders.selectCompany')} />
-              )}
-            />
-          </Box>
-          <Box>
-            <Typography variant="caption" sx={fieldLabelSx}>
-              {t('loginInfoManagement.fields.divisionRequired')}
-            </Typography>
-            <TextField
-              value={formData.division}
-              onChange={(event) => setFormData((prev) => ({ ...prev, division: event.target.value }))}
-              size="small"
-              placeholder={t('loginInfoManagement.placeholders.enterDivision')}
-              fullWidth
-              required
-            />
-          </Box>
-          <Box>
-            <Typography variant="caption" sx={fieldLabelSx}>
-              {t('loginInfoManagement.fields.loginIdRequired')}
-            </Typography>
-            <TextField
-              value={formData.login_id}
-              onChange={(event) => setFormData((prev) => ({ ...prev, login_id: event.target.value }))}
-              size="small"
-              placeholder={t('loginInfoManagement.placeholders.enterLoginId')}
-              fullWidth
-              required
-            />
-          </Box>
-          <Box>
-            <Typography variant="caption" sx={fieldLabelSx}>
-              {t('loginInfoManagement.fields.passwordRequired')}
-            </Typography>
-            <TextField
-              value={formData.password}
-              onChange={(event) => setFormData((prev) => ({ ...prev, password: event.target.value }))}
-              size="small"
-              placeholder={t('loginInfoManagement.placeholders.enterPassword')}
-              fullWidth
-              required
-            />
-          </Box>
-          <Box>
-            <Typography variant="caption" sx={fieldLabelSx}>
-              {t('loginInfoManagement.fields.openFileReturns')}
-            </Typography>
-            <TextField
-              value={formData.open_file_returns}
-              onChange={(event) =>
-                setFormData((prev) => ({ ...prev, open_file_returns: event.target.value }))
-              }
-              size="small"
-              placeholder={t('loginInfoManagement.placeholders.enterValue')}
-              fullWidth
-            />
-          </Box>
-          <Box>
-            <Typography variant="caption" sx={fieldLabelSx}>
-              URL
-            </Typography>
-            <TextField
-              value={formData.url}
-              onChange={(event) => setFormData((prev) => ({ ...prev, url: event.target.value }))}
-              size="small"
-              placeholder="https://example.com"
-              fullWidth
-            />
-          </Box>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label={t('loginInfoManagement.tabs.tabName')}
+            fullWidth
+            value={newTabName}
+            onChange={(e) => setNewTabName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void submitAddTab()}
+          />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
-          <Button variant="contained" onClick={handleSave} disabled={loading}>
-            {loading ? t('loginInfoManagement.actions.saving') : t('common.save')}
-          </Button>
+          <Button onClick={() => setAddDialogOpen(false)}>{t('loginInfoManagement.actions.cancel')}</Button>
+          <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
+            <span style={{ display: 'inline-flex' }}>
+              <Button
+                variant="contained"
+                disabled={menuFlags.menusLoading || !menuFlags.canCreate}
+                onClick={() => void submitAddTab()}
+              >
+                {t('loginInfoManagement.actions.add')}
+              </Button>
+            </span>
+          </Tooltip>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={renameDialogOpen}
+        onClose={() => setRenameDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: dialogPaperSx }}
+      >
+        <DialogTitle sx={isDark ? { color: 'rgba(245, 248, 255, 0.95)' } : undefined}>
+          {t('loginInfoManagement.tabs.renameTab')}
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label={t('loginInfoManagement.tabs.tabName')}
+            fullWidth
+            value={renameTabName}
+            onChange={(e) => setRenameTabName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && void submitRenameTab()}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRenameDialogOpen(false)}>{t('loginInfoManagement.actions.cancel')}</Button>
+          <Tooltip title={t('common.menuNoEdit')} disableHoverListener={menuFlags.menusLoading || menuFlags.canEdit}>
+            <span style={{ display: 'inline-flex' }}>
+              <Button
+                variant="contained"
+                disabled={menuFlags.menusLoading || !menuFlags.canEdit}
+                onClick={() => void submitRenameTab()}
+              >
+                {t('loginInfoManagement.actions.save')}
+              </Button>
+            </span>
+          </Tooltip>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={deleteTabDialogOpen}
+        onClose={() => setDeleteTabDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: dialogPaperSx }}
+      >
+        <DialogTitle sx={{ fontWeight: 600, ...(isDark ? { color: 'rgba(245, 248, 255, 0.95)' } : {}) }}>
+          {t('loginInfoManagement.dialog.deleteTabTitle')}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ color: isDark ? 'rgba(200, 214, 235, 0.92)' : 'text.secondary' }}>
+            {t('loginInfoManagement.confirm.deleteTab')}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDeleteTabDialogOpen(false)}>{t('loginInfoManagement.actions.cancel')}</Button>
+          <Tooltip title={t('common.menuNoDelete')} disableHoverListener={menuFlags.menusLoading || menuFlags.canDelete}>
+            <span style={{ display: 'inline-flex' }}>
+              <Button
+                color="error"
+                variant="contained"
+                disabled={menuFlags.menusLoading || !menuFlags.canDelete}
+                onClick={() => void confirmDeleteTab()}
+              >
+                {t('loginInfoManagement.actions.delete')}
+              </Button>
+            </span>
+          </Tooltip>
         </DialogActions>
       </Dialog>
     </Box>
@@ -852,3 +870,4 @@ const LoginInfoManagement: React.FC = () => {
 };
 
 export default LoginInfoManagement;
+

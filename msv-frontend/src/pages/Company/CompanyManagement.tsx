@@ -8,7 +8,6 @@ import {
   Button,
   Grid,
   FormControl,
-  InputLabel,
   Select,
   MenuItem,
   Avatar,
@@ -37,8 +36,10 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
   InputAdornment,
-  CircularProgress
+  CircularProgress,
+  Tooltip
 } from '@mui/material';
 import {
   Business as BusinessIcon,
@@ -67,6 +68,12 @@ import {
 import { useStore } from '../../store';
 import { api } from '../../services/api';
 import { useTranslation } from 'react-i18next';
+import { alpha, useTheme } from '@mui/material/styles';
+import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+
+const COMPANY_MENU_ROUTES = ['/basic-info/company', '/basic-info'] as const;
 
 // TabPanel 컴포넌트 정의
 interface TabPanelProps {
@@ -135,6 +142,35 @@ interface Company {
   updated_at: string;
 }
 
+type CompanySortKey = 'name' | 'ceo_name' | 'industry' | 'employee_count' | 'mvs_start';
+
+function descendingComparator(a: Company, b: Company, orderBy: CompanySortKey): number {
+  if (orderBy === 'employee_count') {
+    return (b.employee_count ?? 0) - (a.employee_count ?? 0);
+  }
+  if (orderBy === 'mvs_start') {
+    const as = a.mvs_start_date || '';
+    const bs = b.mvs_start_date || '';
+    if (bs < as) return -1;
+    if (bs > as) return 1;
+    return 0;
+  }
+  const va = String(a[orderBy] ?? '').toLowerCase();
+  const vb = String(b[orderBy] ?? '').toLowerCase();
+  if (vb < va) return -1;
+  if (vb > va) return 1;
+  return 0;
+}
+
+function getCompanySortComparator(
+  order: 'asc' | 'desc',
+  orderBy: CompanySortKey
+): (a: Company, b: Company) => number {
+  return order === 'desc'
+    ? (a, b) => descendingComparator(a, b, orderBy)
+    : (a, b) => -descendingComparator(a, b, orderBy);
+}
+
 // 로그인 기간 설정 타입
 interface LoginPeriod {
   start_date: string;
@@ -160,11 +196,25 @@ interface ImagePreview {
 
 const CompanyManagement: React.FC = () => {
   const { t } = useTranslation();
+  const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
+  const theme = useTheme();
+  /** text.secondary보다 진한 보조 텍스트 (통계·테이블 보조 열) */
+  const pageMutedFg = alpha(
+    theme.palette.text.primary,
+    theme.palette.mode === 'dark' ? 0.93 : 0.84
+  );
+  /** 테이블 주요 본문(회사명·대표 등) */
+  const tablePrimaryFg = alpha(
+    theme.palette.text.primary,
+    theme.palette.mode === 'dark' ? 0.98 : 0.92
+  );
   const { user } = useStore();
+  const menuFlags = useMenuRoutePermissionFlags(COMPANY_MENU_ROUTES);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [planFilter, setPlanFilter] = useState('all');
+  const [order, setOrder] = useState<'asc' | 'desc'>('asc');
+  const [orderBy, setOrderBy] = useState<CompanySortKey>('name');
   const [openDialog, setOpenDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState<'view' | 'edit' | 'add'>('view');
   const [formData, setFormData] = useState<Omit<Company, 'id' | 'tenant_id' | 'created_at' | 'updated_at'>>({
@@ -252,6 +302,11 @@ const CompanyManagement: React.FC = () => {
         setLoading(false);
         return;
       }
+      if (menuFlags.menusLoading || !menuFlags.canRead) {
+        setCompanies([]);
+        setLoading(false);
+        return;
+      }
 
       try {
         setLoading(true);
@@ -260,20 +315,11 @@ const CompanyManagement: React.FC = () => {
         // root 사용자는 모든 회사 목록, 일반 사용자는 본인 회사만
         if (user.role === 'root') {
           // root 사용자: 모든 회사 목록 조회
-          console.log('🔍 [회사 정보 관리] Root 사용자 - 회사 목록 조회 시작');
-          const response = await api.get('/company');
-          console.log('🔍 [회사 정보 관리] API 응답:', {
-            status: response.status,
-            success: response.data?.success,
-            dataType: Array.isArray(response.data?.data) ? 'array' : typeof response.data?.data,
-            dataLength: Array.isArray(response.data?.data) ? response.data.data.length : (response.data?.data ? 1 : 0),
-            fullResponse: response.data
-          });
-          
+                    const response = await api.get('/company');
+                    
           if (response.data && response.data.success) {
             const companiesData = Array.isArray(response.data.data) ? response.data.data : (response.data.data ? [response.data.data] : []);
-            console.log('🔍 [회사 정보 관리] 변환 전 데이터:', companiesData);
-            
+                        
             // 데이터베이스 필드를 프론트엔드 인터페이스에 맞게 변환
             const transformedCompanies = companiesData.map((company: any) => {
               // GST 번호 처리: 배열이 아니거나 비어있으면 빈 배열로 설정
@@ -309,9 +355,7 @@ const CompanyManagement: React.FC = () => {
               };
             });
             
-            console.log('🔍 [회사 정보 관리] 변환 후 데이터:', transformedCompanies);
-            console.log('🔍 [회사 정보 관리] 설정할 회사 개수:', transformedCompanies.length);
-            setCompanies(transformedCompanies);
+                                    setCompanies(transformedCompanies);
           } else {
             console.error('❌ [회사 정보 관리] API 응답 실패:', response.data);
             setError(response.data?.message || '회사 목록을 불러오는데 실패했습니다.');
@@ -320,15 +364,8 @@ const CompanyManagement: React.FC = () => {
         } else {
           // 일반 사용자: 본인 회사 정보만 조회
           if (user.company_id) {
-            console.log('🔍 [회사 정보 관리] 일반 사용자 - 회사 정보 조회 시작, company_id:', user.company_id);
-            const response = await api.get(`/company/${user.company_id}`);
-            console.log('🔍 [회사 정보 관리] API 응답:', {
-              status: response.status,
-              success: response.data?.success,
-              hasData: !!response.data?.data,
-              fullResponse: response.data
-            });
-            
+                        const response = await api.get(`/company/${user.company_id}`);
+                        
             if (response.data && response.data.success && response.data.data) {
               const company = response.data.data;
               
@@ -363,8 +400,7 @@ const CompanyManagement: React.FC = () => {
                 timezone: company.timezone || 'Asia/Seoul',
                 settings: company.settings || {}
               };
-              console.log('🔍 [회사 정보 관리] 변환 후 데이터:', transformedCompany);
-              setCompanies([transformedCompany]);
+                            setCompanies([transformedCompany]);
             } else {
               console.error('❌ [회사 정보 관리] API 응답 실패 또는 데이터 없음:', response.data);
               setError(response.data?.message || '회사 정보를 불러오는데 실패했습니다.');
@@ -397,12 +433,11 @@ const CompanyManagement: React.FC = () => {
         setCompanies([]);
       } finally {
         setLoading(false);
-        console.log('🔍 [회사 정보 관리] 로딩 완료, companies.length:', companies.length);
-      }
+              }
     };
 
     fetchCompanies();
-  }, [user?.role, user?.company_id, user?.id]);
+  }, [user?.role, user?.company_id, user?.id, menuFlags.menusLoading, menuFlags.canRead]);
 
   // 회사 추가
   const handleAdd = () => {
@@ -458,15 +493,7 @@ const CompanyManagement: React.FC = () => {
 
   // 회사 수정
   const handleEdit = (company: Company) => {
-    console.log('🔍 handleEdit - 회사 데이터:', {
-      id: company.id,
-      name: company.name,
-      gst_numbers: company.gst_numbers,
-      gst_numbers_type: typeof company.gst_numbers,
-      gst_numbers_length: company.gst_numbers?.length,
-      gst_numbers_isArray: Array.isArray(company.gst_numbers)
-    });
-    
+        
     setSelectedCompany(company);
     
     // GST 번호 처리 - 빈 문자열이 아닌 값만 필터링
@@ -480,12 +507,7 @@ const CompanyManagement: React.FC = () => {
       }
     }
     
-    console.log('🔍 handleEdit - 처리된 GST 번호:', {
-      original: company.gst_numbers,
-      processed: gstNumbers,
-      final: gstNumbers.length > 0 ? gstNumbers : ['']
-    });
-    
+        
     setFormData({
       ...company,
       gst_numbers: gstNumbers.length > 0 ? gstNumbers : [''],
@@ -505,15 +527,7 @@ const CompanyManagement: React.FC = () => {
 
   // 회사 보기
   const handleView = (company: Company) => {
-    console.log('🔍 handleView - 회사 데이터:', {
-      id: company.id,
-      name: company.name,
-      gst_numbers: company.gst_numbers,
-      gst_numbers_type: typeof company.gst_numbers,
-      gst_numbers_length: company.gst_numbers?.length,
-      gst_numbers_isArray: Array.isArray(company.gst_numbers)
-    });
-    
+        
     setSelectedCompany(company);
     
     // GST 번호 처리 - 빈 문자열이 아닌 값만 필터링
@@ -527,12 +541,7 @@ const CompanyManagement: React.FC = () => {
       }
     }
     
-    console.log('🔍 handleView - 처리된 GST 번호:', {
-      original: company.gst_numbers,
-      processed: gstNumbers,
-      final: gstNumbers.length > 0 ? gstNumbers : ['']
-    });
-    
+        
     setFormData({
       ...company,
       gst_numbers: gstNumbers.length > 0 ? gstNumbers : [''],
@@ -557,10 +566,7 @@ const CompanyManagement: React.FC = () => {
 
   // 회사 저장
   const handleSave = async () => {
-    console.log('=== 회사 저장 시작 ===');
-    console.log('Dialog Mode:', dialogMode);
-    console.log('Form Data:', formData);
-    
+                
     setLoading(true);
     setError('');
     setSuccess('');
@@ -568,15 +574,13 @@ const CompanyManagement: React.FC = () => {
     // 필수 항목 검증 (NOT NULL 제약조건이 있는 필드)
     // address와 phone은 DB에서 NOT NULL이므로 추가/수정 모두에서 필수
     if (!formData.address || formData.address.trim() === '') {
-      console.log('❌ 주소 검증 실패: 주소가 없음');
-      setError('주소는 필수 입력 항목입니다.');
+            setError('주소는 필수 입력 항목입니다.');
       setLoading(false);
       return;
     }
 
     if (!formData.phone || formData.phone.trim() === '') {
-      console.log('❌ 전화번호 검증 실패: 전화번호가 없음');
-      setError('전화번호는 필수 입력 항목입니다.');
+            setError('전화번호는 필수 입력 항목입니다.');
       setLoading(false);
       return;
     }
@@ -585,16 +589,14 @@ const CompanyManagement: React.FC = () => {
     if (dialogMode === 'add') {
       // 회사명 검증
       if (!formData.name || formData.name.trim() === '') {
-        console.log('❌ 회사명 검증 실패: 회사명이 없음');
-        setError('회사명은 필수 입력 항목입니다.');
+                setError('회사명은 필수 입력 항목입니다.');
         setLoading(false);
         return;
       }
 
       // 사업자등록번호 검증
       if (!formData.business_number || formData.business_number.trim() === '') {
-        console.log('❌ 사업자등록번호 검증 실패: 사업자등록번호가 없음');
-        setError('사업자등록번호는 필수 입력 항목입니다.');
+                setError('사업자등록번호는 필수 입력 항목입니다.');
         setLoading(false);
         return;
       }
@@ -602,16 +604,14 @@ const CompanyManagement: React.FC = () => {
       // GST 번호 필수 검증 (최소 1개 이상 입력되어야 함)
       const validGstNumbers = (formData.gst_numbers || []).filter((gst: string) => gst && gst.trim() !== '');
       if (validGstNumbers.length === 0) {
-        console.log('❌ GST 번호 검증 실패: GST 번호가 없음');
-        setError('GST 번호는 필수 입력 항목입니다. 최소 1개 이상 입력해주세요.');
+                setError('GST 번호는 필수 입력 항목입니다. 최소 1개 이상 입력해주세요.');
         setLoading(false);
         return;
       }
 
       // PAN 번호 필수 검증
       if (!formData.pan_number || formData.pan_number.trim() === '') {
-        console.log('❌ PAN 번호 검증 실패: PAN 번호가 없음');
-        setError('PAN 번호는 필수 입력 항목입니다.');
+                setError('PAN 번호는 필수 입력 항목입니다.');
         setLoading(false);
         return;
       }
@@ -619,25 +619,16 @@ const CompanyManagement: React.FC = () => {
 
     try {
       if (dialogMode === 'add') {
-        console.log('📝 회사 등록 모드');
-        // 회사 등록 시 MVS 시스템 사용 가능하도록 설정
+                // 회사 등록 시 MVS 시스템 사용 가능하도록 설정
         const companyData = {
           ...formData,
           subscription_status: 'active',
           status: 'active' // 백엔드에서 사용하는 status 필드
         };
-        console.log('📤 회사 등록 요청 데이터:', {
-          ...companyData,
-          company_logo: companyData.company_logo ? `Base64(${companyData.company_logo.length} chars)` : null,
-          company_seal: companyData.company_seal ? `Base64(${companyData.company_seal.length} chars)` : null,
-          ceo_signature: companyData.ceo_signature ? `Base64(${companyData.ceo_signature.length} chars)` : null
-        });
-        
+                
         const response = await api.post('/company', companyData);
-        console.log('📥 회사 등록 응답:', response.data);
-        if (response.data.success) {
-          console.log('✅ 회사 등록 성공');
-          setSuccess('회사가 성공적으로 등록되었습니다. MVS 시스템을 사용할 수 있습니다.');
+                if (response.data.success) {
+                    setSuccess('회사가 성공적으로 등록되었습니다. MVS 시스템을 사용할 수 있습니다.');
         } else {
           console.error('❌ 회사 등록 실패:', response.data.message);
           setError(response.data.message || '회사 등록에 실패했습니다.');
@@ -674,12 +665,9 @@ const CompanyManagement: React.FC = () => {
           }
         });
         
-        console.log('수정 요청 데이터:', updateData);
-        const response = await api.put(`/company/${selectedCompany.id}`, updateData);
-        console.log('수정 응답:', response.data);
-        if (response.data.success) {
-          console.log('✅ 회사 정보 수정 성공');
-          setSuccess('회사 정보가 성공적으로 수정되었습니다.');
+                const response = await api.put(`/company/${selectedCompany.id}`, updateData);
+                if (response.data.success) {
+                    setSuccess('회사 정보가 성공적으로 수정되었습니다.');
           // 성공 시 다이얼로그 닫기
           setOpenDialog(false);
         } else {
@@ -740,51 +728,55 @@ const CompanyManagement: React.FC = () => {
   };
 
   // 회사 삭제
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('정말로 이 회사를 삭제하시겠습니까?')) return;
-    
-    setLoading(true);
-    setError('');
-    setSuccess('');
+  const handleDelete = (id: number) => {
+    showConfirm(
+      '정말로 이 회사를 삭제하시겠습니까?',
+      () => {
+        void (async () => {
+          setLoading(true);
+          setError('');
+          setSuccess('');
 
-    try {
-      await api.delete(`/company/${id}`);
-      setSuccess('회사가 성공적으로 삭제되었습니다.');
-      
-      // 목록 새로고침
-      const response = await api.get('/company');
-      if (response.data.success) {
-        const companiesData = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
-        
-        // 데이터베이스 필드를 프론트엔드 인터페이스에 맞게 변환
-        const transformedCompanies = companiesData.map((company: any) => ({
-          ...company,
-          employee_count: company.employee_count || 0,
-          subscription_plan: company.subscription_plan || 'basic',
-          subscription_status: company.status || 'active',
-          company_logo: company.company_logo || '',
-          company_seal: company.company_seal || '',
-          ceo_signature: company.ceo_signature || '',
-          account_holder_name: company.account_holder_name || '',
-          bank_name: company.bank_name || '',
-          account_number: company.account_number || '',
-          ifsc_code: company.ifsc_code || '',
-          login_period_start: company.login_period_start || '',
-          login_period_end: company.login_period_end || '',
-          login_time_start: company.login_time_start || '09:00:00',
-          login_time_end: company.login_time_end || '18:00:00',
-          timezone: company.timezone || 'Asia/Seoul',
-          settings: company.settings || {}
-        }));
-        
-        setCompanies(transformedCompanies);
-      }
-    } catch (error: any) {
-      console.error('회사 삭제 오류:', error);
-      setError(error.response?.data?.message || '회사 삭제 중 오류가 발생했습니다.');
-    } finally {
-      setLoading(false);
-    }
+          try {
+            await api.delete(`/company/${id}`);
+            setSuccess('회사가 성공적으로 삭제되었습니다.');
+
+            const response = await api.get('/company');
+            if (response.data.success) {
+              const companiesData = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
+
+              const transformedCompanies = companiesData.map((company: any) => ({
+                ...company,
+                employee_count: company.employee_count || 0,
+                subscription_plan: company.subscription_plan || 'basic',
+                subscription_status: company.status || 'active',
+                company_logo: company.company_logo || '',
+                company_seal: company.company_seal || '',
+                ceo_signature: company.ceo_signature || '',
+                account_holder_name: company.account_holder_name || '',
+                bank_name: company.bank_name || '',
+                account_number: company.account_number || '',
+                ifsc_code: company.ifsc_code || '',
+                login_period_start: company.login_period_start || '',
+                login_period_end: company.login_period_end || '',
+                login_time_start: company.login_time_start || '09:00:00',
+                login_time_end: company.login_time_end || '18:00:00',
+                timezone: company.timezone || 'Asia/Seoul',
+                settings: company.settings || {}
+              }));
+
+              setCompanies(transformedCompanies);
+            }
+          } catch (error: any) {
+            console.error('회사 삭제 오류:', error);
+            setError(error.response?.data?.message || '회사 삭제 중 오류가 발생했습니다.');
+          } finally {
+            setLoading(false);
+          }
+        })();
+      },
+      { title: '삭제 확인', confirmColor: 'error', confirmText: t('common.delete'), cancelText: t('common.cancel') }
+    );
   };
 
   // 필터링된 회사 목록 - MVS 시스템을 사용할 수 있는 회사들 (활성 상태)
@@ -793,11 +785,22 @@ const CompanyManagement: React.FC = () => {
                           company.business_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           company.ceo_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (company.industry && company.industry.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesPlan = planFilter === 'all' || company.subscription_plan === planFilter;
     // MVS 시스템을 사용할 수 있는 회사만 표시 (활성 상태)
     const isActive = company.subscription_status === 'active';
-    return matchesSearch && matchesPlan && isActive;
+    return matchesSearch && isActive;
   });
+
+  const handleRequestSort = (property: CompanySortKey) => {
+    const isAsc = orderBy === property && order === 'asc';
+    setOrder(isAsc ? 'desc' : 'asc');
+    setOrderBy(property);
+  };
+
+  const sortedCompanies = useMemo(() => {
+    const copy = [...filteredCompanies];
+    copy.sort(getCompanySortComparator(order, orderBy));
+    return copy;
+  }, [filteredCompanies, order, orderBy]);
 
   // 공통 TextField 스타일
   const textFieldStyles = {
@@ -930,19 +933,6 @@ const CompanyManagement: React.FC = () => {
       suspended: { labelKey: 'companyManagement.suspended' as const, color: 'error' as const }
     };
     const config = statusConfig[status as keyof typeof statusConfig];
-    if (!config) return null;
-    return <Chip label={t(config.labelKey)} color={config.color} size="small" sx={{ fontSize: '0.75rem' }} />;
-  };
-
-  // 플랜 칩 생성
-  const getPlanChip = (plan: string) => {
-    const planConfig = {
-      basic: { labelKey: 'companyManagement.planBasic' as const, color: 'default' as const },
-      standard: { labelKey: 'companyManagement.planStandard' as const, color: 'info' as const },
-      premium: { labelKey: 'companyManagement.planPremium' as const, color: 'warning' as const },
-      enterprise: { labelKey: 'companyManagement.planEnterprise' as const, color: 'success' as const }
-    };
-    const config = planConfig[plan as keyof typeof planConfig];
     if (!config) return null;
     return <Chip label={t(config.labelKey)} color={config.color} size="small" sx={{ fontSize: '0.75rem' }} />;
   };
@@ -1183,12 +1173,7 @@ const CompanyManagement: React.FC = () => {
                     gstNumbersToShow = [''];
                   }
                   
-                  console.log('🔍 GST 번호 렌더링:', {
-                    formData_gst_numbers: formData.gst_numbers,
-                    gstNumbersToShow: gstNumbersToShow,
-                    dialogMode: dialogMode
-                  });
-                  
+                                    
                   return gstNumbersToShow;
                 })().map((gstNumber: string, index: number) => (
                     <Box key={index} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
@@ -1441,26 +1426,45 @@ const CompanyManagement: React.FC = () => {
           {dialogMode === 'view' ? t('companyManagement.close') : t('companyManagement.cancel')}
         </Button>
         {dialogMode === 'view' && (user?.role === 'root' || user?.role === 'admin') && (
-          <Button 
-            onClick={() => {
-              setDialogMode('edit');
-            }} 
-            variant="contained" 
-            color="primary"
-            sx={{ borderRadius: 2 }}
-          >
-            수정
-          </Button>
+          <Tooltip title={t('common.menuNoEdit')} disableHoverListener={menuFlags.menusLoading || menuFlags.canEdit}>
+            <span style={{ display: 'inline-flex' }}>
+              <Button 
+                onClick={() => {
+                  setDialogMode('edit');
+                }} 
+                variant="contained" 
+                color="primary"
+                disabled={menuFlags.menusLoading || !menuFlags.canEdit}
+                sx={{ borderRadius: 2 }}
+              >
+                수정
+              </Button>
+            </span>
+          </Tooltip>
         )}
         {dialogMode !== 'view' && (
-          <Button 
-            onClick={handleSave} 
-            variant="contained" 
-            disabled={loading}
-            sx={{ borderRadius: 2 }}
+          <Tooltip
+            title={dialogMode === 'add' ? t('common.menuNoCreate') : t('common.menuNoEdit')}
+            disableHoverListener={
+              menuFlags.menusLoading ||
+              (dialogMode === 'add' ? menuFlags.canCreate : menuFlags.canEdit)
+            }
           >
-            {loading ? t('companyManagement.saving') : t('companyManagement.save')}
-          </Button>
+            <span style={{ display: 'inline-flex' }}>
+              <Button 
+                onClick={handleSave} 
+                variant="contained" 
+                disabled={
+                  loading ||
+                  menuFlags.menusLoading ||
+                  (dialogMode === 'add' ? !menuFlags.canCreate : !menuFlags.canEdit)
+                }
+                sx={{ borderRadius: 2 }}
+              >
+                {loading ? t('companyManagement.saving') : t('companyManagement.save')}
+              </Button>
+            </span>
+          </Tooltip>
         )}
       </DialogActions>
     </Dialog>
@@ -1492,23 +1496,33 @@ const CompanyManagement: React.FC = () => {
               {t('companyManagement.pageTitle')}
             </Typography>
           </Box>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+          <Typography variant="body2" sx={{ fontSize: '0.875rem', color: pageMutedFg }}>
             {t('companyManagement.description')}
           </Typography>
         </Box>
         {user?.role === 'root' && (
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={handleAdd}
-            sx={{ borderRadius: 2 }}
-          >
-            {t('companyManagement.addCompany')}
-          </Button>
+          <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
+            <span style={{ display: 'inline-flex' }}>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleAdd}
+                disabled={menuFlags.menusLoading || !menuFlags.canCreate}
+                sx={{ borderRadius: 2 }}
+              >
+                {t('companyManagement.addCompany')}
+              </Button>
+            </span>
+          </Tooltip>
         )}
       </Box>
 
       {/* 알림 메시지 */}
+      {!menuFlags.menusLoading && !menuFlags.canRead && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          {t('common.menuNoView')}
+        </Alert>
+      )}
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
           {error}
@@ -1525,13 +1539,13 @@ const CompanyManagement: React.FC = () => {
         <>
           <Box sx={{ 
             display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
             gap: 2, 
             mb: 3 
           }}>
             <Card>
               <CardContent>
-                <Typography color="textSecondary" gutterBottom>
+                <Typography sx={{ color: pageMutedFg }} gutterBottom>
                   {t('companyManagement.mvsUsageCompanies')}
                 </Typography>
                 <Typography variant="h4" color="primary.main">
@@ -1541,31 +1555,11 @@ const CompanyManagement: React.FC = () => {
             </Card>
             <Card>
               <CardContent>
-                <Typography color="textSecondary" gutterBottom>
+                <Typography sx={{ color: pageMutedFg }} gutterBottom>
                   {t('companyManagement.totalCompanies')}
                 </Typography>
                 <Typography variant="h4" color="text.primary">
                   {companies.length}
-                </Typography>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  {t('companyManagement.basicPlan')}
-                </Typography>
-                <Typography variant="h4" color="info.main">
-                  {companies.filter(c => c.subscription_plan === 'basic' && c.subscription_status === 'active').length}
-                </Typography>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  {t('companyManagement.premiumPlan')}
-                </Typography>
-                <Typography variant="h4" color="warning.main">
-                  {companies.filter(c => c.subscription_plan === 'premium' && c.subscription_status === 'active').length}
                 </Typography>
               </CardContent>
             </Card>
@@ -1581,6 +1575,7 @@ const CompanyManagement: React.FC = () => {
                   onChange={(e) => setSearchTerm(e.target.value)}
                   variant="outlined"
                   size="small"
+                  disabled={menuFlags.menusLoading || !menuFlags.canRead}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
@@ -1588,24 +1583,8 @@ const CompanyManagement: React.FC = () => {
                       </InputAdornment>
                     )
                   }}
-                  sx={{ minWidth: 300 }}
+                  sx={{ minWidth: 300, flex: 1, maxWidth: 480 }}
                 />
-                <FormControl sx={{ minWidth: 120 }} variant="outlined" size="small">
-                  <InputLabel sx={{ fontSize: '0.875rem' }}>{t('companyManagement.subscriptionPlan')}</InputLabel>
-                  <Select
-                    variant="outlined"
-                    value={planFilter}
-                    onChange={(e) => setPlanFilter(e.target.value)}
-                    label={t('companyManagement.subscriptionPlan')}
-                    sx={{ fontSize: '0.875rem' }}
-                  >
-                    <MenuItem value="all" sx={{ fontSize: '0.875rem' }}>{t('companyManagement.allPlans')}</MenuItem>
-                    <MenuItem value="basic" sx={{ fontSize: '0.875rem' }}>{t('companyManagement.planBasic')}</MenuItem>
-                    <MenuItem value="standard" sx={{ fontSize: '0.875rem' }}>{t('companyManagement.planStandard')}</MenuItem>
-                    <MenuItem value="premium" sx={{ fontSize: '0.875rem' }}>{t('companyManagement.planPremium')}</MenuItem>
-                    <MenuItem value="enterprise" sx={{ fontSize: '0.875rem' }}>{t('companyManagement.planEnterprise')}</MenuItem>
-                  </Select>
-                </FormControl>
               </Box>
             </CardContent>
           </Card>
@@ -1616,87 +1595,162 @@ const CompanyManagement: React.FC = () => {
       {loading ? (
         <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', p: 8 }}>
           <CircularProgress sx={{ mb: 2 }} />
-          <Typography color="text.secondary">{t('companyManagement.loadingMessage')}</Typography>
+          <Typography sx={{ color: pageMutedFg }}>{t('companyManagement.loadingMessage')}</Typography>
         </Box>
       ) : user?.role === 'root' ? (
         // root 사용자: 회사 리스트 표시
         <Card>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography
+                variant="h6"
+                sx={{ display: 'flex', alignItems: 'center', gap: 1, color: tablePrimaryFg, fontWeight: 600 }}
+              >
                 <BusinessIcon color="primary" />
                 {t('companyManagement.companyListTitle', { count: filteredCompanies.length })}
               </Typography>
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<AddIcon />}
-                onClick={handleAdd}
-                sx={{ borderRadius: 2 }}
-              >
-                {t('companyManagement.addCompany')}
-              </Button>
+              <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<AddIcon />}
+                    onClick={handleAdd}
+                    disabled={menuFlags.menusLoading || !menuFlags.canCreate}
+                    sx={{ borderRadius: 2 }}
+                  >
+                    {t('companyManagement.addCompany')}
+                  </Button>
+                </span>
+              </Tooltip>
             </Box>
             {filteredCompanies.length > 0 ? (
               <TableContainer>
                 <Table>
                   <TableHead>
                     <TableRow sx={{ backgroundColor: 'grey.50' }}>
-                      <TableCell sx={{ fontWeight: 'bold', color: 'text.primary' }}>{t('companyManagement.companyInfo')}</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold', color: 'text.primary' }}>{t('companyManagement.representative')}</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold', color: 'text.primary' }}>{t('companyManagement.industry')}</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold', color: 'text.primary' }}>{t('companyManagement.employeeCount')}</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold', color: 'text.primary' }}>{t('companyManagement.subscriptionPlan')}</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold', color: 'text.primary' }}>{t('companyManagement.mvsUsagePeriod')}</TableCell>
-                      <TableCell sx={{ fontWeight: 'bold', textAlign: 'center', color: 'text.primary' }}>{t('companyManagement.actions')}</TableCell>
+                      <TableCell sortDirection={orderBy === 'name' ? order : false}>
+                        <TableSortLabel
+                          active={orderBy === 'name'}
+                          direction={orderBy === 'name' ? order : 'asc'}
+                          onClick={() => handleRequestSort('name')}
+                          sx={{
+                            fontWeight: 700,
+                            color: pageMutedFg,
+                            '&.Mui-active': { color: pageMutedFg },
+                            '& .MuiTableSortLabel-icon': { color: pageMutedFg, opacity: 0.95 }
+                          }}
+                        >
+                          {t('companyManagement.companyInfo')}
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell sortDirection={orderBy === 'ceo_name' ? order : false}>
+                        <TableSortLabel
+                          active={orderBy === 'ceo_name'}
+                          direction={orderBy === 'ceo_name' ? order : 'asc'}
+                          onClick={() => handleRequestSort('ceo_name')}
+                          sx={{
+                            fontWeight: 700,
+                            color: pageMutedFg,
+                            '&.Mui-active': { color: pageMutedFg },
+                            '& .MuiTableSortLabel-icon': { color: pageMutedFg, opacity: 0.95 }
+                          }}
+                        >
+                          {t('companyManagement.representative')}
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell sortDirection={orderBy === 'industry' ? order : false}>
+                        <TableSortLabel
+                          active={orderBy === 'industry'}
+                          direction={orderBy === 'industry' ? order : 'asc'}
+                          onClick={() => handleRequestSort('industry')}
+                          sx={{
+                            fontWeight: 700,
+                            color: pageMutedFg,
+                            '&.Mui-active': { color: pageMutedFg },
+                            '& .MuiTableSortLabel-icon': { color: pageMutedFg, opacity: 0.95 }
+                          }}
+                        >
+                          {t('companyManagement.industry')}
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell sortDirection={orderBy === 'employee_count' ? order : false}>
+                        <TableSortLabel
+                          active={orderBy === 'employee_count'}
+                          direction={orderBy === 'employee_count' ? order : 'asc'}
+                          onClick={() => handleRequestSort('employee_count')}
+                          sx={{
+                            fontWeight: 700,
+                            color: pageMutedFg,
+                            '&.Mui-active': { color: pageMutedFg },
+                            '& .MuiTableSortLabel-icon': { color: pageMutedFg, opacity: 0.95 }
+                          }}
+                        >
+                          {t('companyManagement.employeeCount')}
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell sortDirection={orderBy === 'mvs_start' ? order : false}>
+                        <TableSortLabel
+                          active={orderBy === 'mvs_start'}
+                          direction={orderBy === 'mvs_start' ? order : 'asc'}
+                          onClick={() => handleRequestSort('mvs_start')}
+                          sx={{
+                            fontWeight: 700,
+                            color: pageMutedFg,
+                            '&.Mui-active': { color: pageMutedFg },
+                            '& .MuiTableSortLabel-icon': { color: pageMutedFg, opacity: 0.95 }
+                          }}
+                        >
+                          {t('companyManagement.mvsUsagePeriod')}
+                        </TableSortLabel>
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 700, textAlign: 'center', color: pageMutedFg }}>
+                        {t('companyManagement.actions')}
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {filteredCompanies.map((company) => (
+                    {sortedCompanies.map((company) => (
                       <TableRow 
                         key={company.id} 
                         hover 
-                        onClick={() => handleView(company)}
-                        sx={{ cursor: 'pointer' }}
+                        onClick={() => {
+                          if (!menuFlags.menusLoading && menuFlags.canRead) handleView(company);
+                        }}
+                        sx={{
+                          cursor: menuFlags.menusLoading || !menuFlags.canRead ? 'default' : 'pointer'
+                        }}
                       >
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
                             <Avatar sx={{ mr: 2, bgcolor: 'primary.main', width: 40, height: 40 }}>
                               {company.name.charAt(0)}
                             </Avatar>
-                            <Box>
-                              <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                                {company.name}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {t('companyManagement.businessNumberLabel')}: {company.business_number}
-                              </Typography>
-                            </Box>
+                            <Typography variant="body1" sx={{ fontWeight: 600, color: tablePrimaryFg }}>
+                              {company.name}
+                            </Typography>
                           </Box>
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: tablePrimaryFg }}>
                             {company.ceo_name}
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography variant="body2" sx={{ color: tablePrimaryFg, fontWeight: 500 }}>
                             {company.industry || '-'}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <PeopleIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary' }} />
-                            <Typography variant="body2">
+                            <PeopleIcon sx={{ mr: 1, fontSize: '1rem', color: pageMutedFg }} />
+                            <Typography variant="body2" sx={{ color: tablePrimaryFg, fontWeight: 500 }}>
                               {t('companyManagement.employeesCount', { count: company.employee_count })}
                             </Typography>
                           </Box>
                         </TableCell>
                         <TableCell>
-                          {getPlanChip(company.subscription_plan)}
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" color="text.secondary">
+                          <Typography variant="body2" sx={{ color: tablePrimaryFg, fontWeight: 500 }}>
                             {company.mvs_start_date && company.mvs_end_date
                               ? `${company.mvs_start_date} ~ ${company.mvs_end_date}`
                               : '-'}
@@ -1704,16 +1758,21 @@ const CompanyManagement: React.FC = () => {
                         </TableCell>
                         <TableCell align="center">
                           <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                            <IconButton 
-                              size="small" 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDelete(company.id);
-                              }} 
-                              color="error"
-                            >
-                              <DeleteIcon />
-                            </IconButton>
+                            <Tooltip title={menuFlags.menusLoading || !menuFlags.canDelete ? t('common.menuNoDelete') : t('companyManagement.delete')}>
+                              <span style={{ display: 'inline-flex' }}>
+                                <IconButton 
+                                  size="small" 
+                                  disabled={menuFlags.menusLoading || !menuFlags.canDelete}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete(company.id);
+                                  }} 
+                                  color="error"
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
                           </Box>
                         </TableCell>
                       </TableRow>
@@ -1723,12 +1782,12 @@ const CompanyManagement: React.FC = () => {
               </TableContainer>
             ) : (
               <Box sx={{ textAlign: 'center', py: 8 }}>
-                <BusinessIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2, opacity: 0.3 }} />
-                <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
+                <BusinessIcon sx={{ fontSize: 64, color: pageMutedFg, mb: 2, opacity: 0.45 }} />
+                <Typography variant="h6" sx={{ mb: 1, color: pageMutedFg }}>
                   {t('companyManagement.noCompaniesTitle')}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {searchTerm || planFilter !== 'all'
+                <Typography variant="body2" sx={{ color: pageMutedFg }}>
+                  {searchTerm.trim()
                     ? t('companyManagement.noCompaniesMatch')
                     : t('companyManagement.noActiveCompanies')}
                 </Typography>
@@ -1747,14 +1806,19 @@ const CompanyManagement: React.FC = () => {
                   {t('companyManagement.companyInfo')}
                 </Typography>
                 {(user?.role === 'admin' || user?.role === 'root') && (
-                  <Button
-                    variant="outlined"
-                    startIcon={<EditIcon />}
-                    onClick={() => handleEdit(companies[0])}
-                    sx={{ borderRadius: 2, fontSize: '0.75rem' }}
-                  >
-                    수정
-                  </Button>
+                  <Tooltip title={t('common.menuNoEdit')} disableHoverListener={menuFlags.menusLoading || menuFlags.canEdit}>
+                    <span style={{ display: 'inline-flex' }}>
+                      <Button
+                        variant="outlined"
+                        startIcon={<EditIcon />}
+                        onClick={() => handleEdit(companies[0])}
+                        disabled={menuFlags.menusLoading || !menuFlags.canEdit}
+                        sx={{ borderRadius: 2, fontSize: '0.75rem' }}
+                      >
+                        수정
+                      </Button>
+                    </span>
+                  </Tooltip>
                 )}
               </Box>
               
@@ -1794,10 +1858,6 @@ const CompanyManagement: React.FC = () => {
                   <Box>
                     <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>직원 수</Typography>
                     <Typography variant="body1" sx={{ fontWeight: 'medium', fontSize: '0.75rem' }}>{companies[0].employee_count}명</Typography>
-                  </Box>
-                  <Box>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>구독 플랜</Typography>
-                    {getPlanChip(companies[0].subscription_plan)}
                   </Box>
                   <Box>
                     <Typography variant="subtitle2" color="text.secondary" gutterBottom sx={{ mb: 1.5, fontSize: '0.75rem' }}>{t('companyManagement.status')}</Typography>
@@ -1962,11 +2022,11 @@ const CompanyManagement: React.FC = () => {
           <Card>
             <CardContent>
               <Box sx={{ textAlign: 'center', py: 8 }}>
-                <BusinessIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2, opacity: 0.3 }} />
-                <Typography variant="h6" color="text.secondary" sx={{ mb: 1 }}>
+                <BusinessIcon sx={{ fontSize: 64, color: pageMutedFg, mb: 2, opacity: 0.45 }} />
+                <Typography variant="h6" sx={{ mb: 1, color: pageMutedFg }}>
                   회사 정보가 없습니다
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" sx={{ color: pageMutedFg }}>
                   회사 정보를 불러올 수 없습니다.
                 </Typography>
               </Box>
@@ -1977,6 +2037,17 @@ const CompanyManagement: React.FC = () => {
 
       {/* 회사 상세 다이얼로그 */}
       {renderCompanyDialog()}
+
+      <ConfirmDialog
+        open={dialogState.open}
+        title={dialogState.title}
+        message={dialogState.message}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+        confirmColor={dialogState.confirmColor}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
     </Box>
   );
 };

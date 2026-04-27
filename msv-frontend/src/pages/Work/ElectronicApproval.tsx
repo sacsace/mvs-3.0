@@ -76,6 +76,13 @@ import { Color } from '@tiptap/extension-color';
 import { FontFamily } from '@tiptap/extension-font-family';
 import { TextAlign } from '@tiptap/extension-text-align';
 import { Underline } from '@tiptap/extension-underline';
+import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import PromptDialog from '../../components/Common/PromptDialog';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import { usePromptDialog } from '../../hooks/usePromptDialog';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+
+const WORK_APPROVAL_MENU_ROUTES = ['/work/approval', '/work'] as const;
 
 const FontSize = TextStyle.extend({
   addAttributes() {
@@ -194,7 +201,13 @@ const ResizableImage = Image.extend({
 
 const ElectronicApproval: React.FC = () => {
   const { user } = useStore();
-  const { t } = useTranslation();
+  const approvalMenuFlags = useMenuRoutePermissionFlags(WORK_APPROVAL_MENU_ROUTES);
+  const { t, i18n } = useTranslation();
+  const approvalFlowLabels = useMemo(
+    () => [t('approval.flowDraft'), t('approval.flowReview'), t('approval.flowApprove')],
+    [t]
+  );
+  const dateLocale = i18n.language?.startsWith('en') ? 'en-US' : 'ko-KR';
   const [documents, setDocuments] = useState<ApprovalDocument[]>([]);
   const [filteredDocuments, setFilteredDocuments] = useState<ApprovalDocument[]>([]);
   const [error, setError] = useState('');
@@ -214,7 +227,7 @@ const ElectronicApproval: React.FC = () => {
   const [formData, setFormData] = useState({
     title: '',
     type: 'expense' as 'expense' | 'vacation' | 'purchase' | 'contract' | 'other',
-    category: '일반',
+    category: '',
     amount: '',
     description: '',
     priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
@@ -246,6 +259,13 @@ const ElectronicApproval: React.FC = () => {
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const approverInputRef = useRef<HTMLInputElement | null>(null);
   const [draftDocumentId, setDraftDocumentId] = useState<string>('');
+  const { dialogState: confirmDialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
+  const {
+    dialogState: promptDialogState,
+    showPrompt,
+    handleConfirm: handlePromptConfirm,
+    handleCancel: handlePromptCancel
+  } = usePromptDialog();
 
   // Quill 기반 HTML이 들어와도 본문 내용만 남기도록 정규화
   const normalizeEditorHtml = useCallback((rawHtml: string) => {
@@ -965,7 +985,7 @@ const ElectronicApproval: React.FC = () => {
           category: d.category || '',
           amount: d.amount ? parseFloat(d.amount) : undefined,
           requesterId: d.requester_id,
-          requesterName: d.requester?.username || '알 수 없음',
+          requesterName: d.requester?.username || t('approval.unknownUser'),
           requesterDepartment: d.requester?.department || '-',
           requesterPosition: d.requester?.position || '-',
           description: normalizeEditorHtml(d.description || ''),
@@ -982,15 +1002,15 @@ const ElectronicApproval: React.FC = () => {
         }));
         setDocuments(documentsData.length > 0 ? documentsData : sampleData);
       } else {
-        setError(response.message || '전자 결제 목록을 불러올 수 없습니다.');
+        setError(response.message || t('approval.errors.loadList'));
         setDocuments(sampleData);
       }
     } catch (error: any) {
       console.error('전자 결제 목록 조회 오류:', error);
-      setError(error.response?.data?.message || '전자 결제 목록을 불러오는데 실패했습니다.');
+      setError(error.response?.data?.message || t('approval.errors.loadListFailed'));
       setDocuments(sampleData);
     }
-  }, [normalizeEditorHtml, parseJsonArray, sampleData]);
+  }, [normalizeEditorHtml, parseJsonArray, sampleData, t]);
 
   useEffect(() => {
     if (!editor) return;
@@ -1269,7 +1289,7 @@ const ElectronicApproval: React.FC = () => {
         id: 1,
         stepOrder: 1,
         approverId: nextApproverId,
-        approverName: approver?.username || '알 수 없음',
+        approverName: approver?.username || t('approval.unknownUser'),
         approverDepartment: approver?.department || '-',
         approverPosition: approver?.position || '-',
         status: 'pending'
@@ -1293,7 +1313,7 @@ const ElectronicApproval: React.FC = () => {
     setFormData({
       title: '',
       type: 'expense',
-      category: '일반',
+      category: t('approval.categoryGeneral'),
       amount: '',
       description: '',
       priority: 'medium',
@@ -1358,7 +1378,7 @@ const ElectronicApproval: React.FC = () => {
     }
 
     if (!formData.description) {
-      setError('설명은 필수입니다.');
+      setError(t('approval.validation.descriptionRequired'));
       editor?.chain().focus().run();
       return;
     }
@@ -1418,86 +1438,99 @@ const ElectronicApproval: React.FC = () => {
       }
 
       if (response.success) {
-        setSuccess(selectedDocument ? '결재 문서가 수정되었습니다.' : '결재 문서가 생성되었습니다.');
+        setSuccess(selectedDocument ? t('approval.toast.documentUpdated') : t('approval.toast.documentCreated'));
         setViewMode('list');
         setActiveTab(0); // 내가 요청한 결제 탭으로 이동
         setSelectedDocument(null);
         loadApprovalData();
       } else {
-        setError(response.message || '결재 문서 저장에 실패했습니다.');
+        setError(response.message || t('approval.errors.saveFailed'));
       }
     } catch (error: any) {
       console.error('결재 문서 저장 오류:', error);
-      setError(error.response?.data?.message || '결재 문서 저장 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || t('approval.errors.saveError'));
     } finally {
       setSaving(false);
     }
   };
 
-  const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null as number | null });
-
-  const handleDeleteDocument = async (id: number) => {
-    setConfirmDelete({ open: true, id });
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!confirmDelete.id) {
-      setConfirmDelete({ open: false, id: null });
-      return;
-    }
-    try {
-      const response = await approvalService.deleteApproval(confirmDelete.id);
-      if (response.success) {
-        setSuccess('결재 문서가 성공적으로 삭제되었습니다.');
-        loadApprovalData();
-      } else {
-        setError(response.message || '결재 문서 삭제에 실패했습니다.');
+  const handleDeleteDocument = (id: number) => {
+    showConfirm(
+      t('approval.confirmDeleteMessage', { defaultValue: '정말로 이 결재 문서를 삭제하시겠습니까?' }),
+      () => {
+        void (async () => {
+          try {
+            const response = await approvalService.deleteApproval(id);
+            if (response.success) {
+              setSuccess(t('approval.toast.documentDeleted'));
+              loadApprovalData();
+            } else {
+              setError(response.message || t('approval.errors.deleteFailed'));
+            }
+          } catch (error: any) {
+            console.error('삭제 오류:', error);
+            setError(error.response?.data?.message || t('approval.errors.deleteError'));
+          }
+        })();
+      },
+      {
+        title: t('approval.confirmDeleteTitle', { defaultValue: '삭제 확인' }),
+        confirmColor: 'error',
+        confirmText: t('common.delete'),
+        cancelText: t('common.cancel')
       }
-    } catch (error: any) {
-      console.error('삭제 오류:', error);
-      setError(error.response?.data?.message || '삭제 중 오류가 발생했습니다.');
-    } finally {
-      setConfirmDelete({ open: false, id: null });
-    }
+    );
   };
 
   const handleApproveDocument = async (id: number) => {
     try {
       const response = await approvalService.approveApproval(id);
       if (response.success) {
-        setSuccess('결재 문서가 승인되었습니다.');
+        setSuccess(t('approval.toast.documentApproved'));
         loadApprovalData();
         if (viewMode === 'view' && selectedDocument?.id === id) {
           setViewMode('list');
         }
       } else {
-        setError(response.message || '결재 승인에 실패했습니다.');
+        setError(response.message || t('approval.errors.approveFailed'));
       }
     } catch (error: any) {
       console.error('결재 승인 오류:', error);
-      setError(error.response?.data?.message || '결재 승인 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || t('approval.errors.approveError'));
     }
   };
 
-  const handleRejectDocument = async (id: number) => {
-    const comment = window.prompt(t('approval.validation.rejectionReasonPrompt'));
-    if (comment !== null) {
-      try {
-        const response = await approvalService.rejectApproval(id, comment);
-        if (response.success) {
-          setSuccess('결재 문서가 반려되었습니다.');
-          loadApprovalData();
-          if (viewMode === 'view' && selectedDocument?.id === id) {
-            setViewMode('list');
+  const handleRejectDocument = (id: number) => {
+    showPrompt(
+      t('approval.validation.rejectionReasonPrompt', { defaultValue: '반려 사유를 입력하세요.' }),
+      (comment) => {
+        void (async () => {
+          try {
+            const response = await approvalService.rejectApproval(id, comment);
+            if (response.success) {
+              setSuccess(t('approval.toast.documentRejected'));
+              loadApprovalData();
+              if (viewMode === 'view' && selectedDocument?.id === id) {
+                setViewMode('list');
+              }
+            } else {
+              setError(response.message || t('approval.errors.rejectFailed'));
+            }
+          } catch (error: any) {
+            console.error('결재 반려 오류:', error);
+            setError(error.response?.data?.message || t('approval.errors.rejectError'));
           }
-        } else {
-          setError(response.message || '결재 반려에 실패했습니다.');
-        }
-      } catch (error: any) {
-        console.error('결재 반려 오류:', error);
-        setError(error.response?.data?.message || '결재 반려 중 오류가 발생했습니다.');
+        })();
+      },
+      {
+        title: t('approval.rejectDialogTitle', { defaultValue: '결재 반려' }),
+        label: t('approval.rejectReasonLabel', { defaultValue: '반려 사유' }),
+        multiline: true,
+        minRows: 3,
+        confirmText: t('approval.rejectSubmit', { defaultValue: '반려' }),
+        cancelText: t('common.cancel')
       }
-    }
+    );
   };
 
   const handleEscalateDocument = async () => {
@@ -1513,7 +1546,7 @@ const ElectronicApproval: React.FC = () => {
         comment: escalationComment
       });
       if (response.success) {
-        setSuccess('결재 문서가 에스컬레이션되었습니다.');
+        setSuccess(t('approval.toast.documentEscalated'));
         const updated = await approvalService.getApproval(selectedDocument.id);
         if (updated.success) {
           const updatedDoc: ApprovalDocument = {
@@ -1524,7 +1557,7 @@ const ElectronicApproval: React.FC = () => {
             category: updated.data.category || '',
             amount: updated.data.amount ? parseFloat(updated.data.amount) : undefined,
             requesterId: updated.data.requester_id,
-            requesterName: updated.data.requester?.username || '알 수 없음',
+            requesterName: updated.data.requester?.username || t('approval.unknownUser'),
             requesterDepartment: updated.data.requester?.department || '-',
             requesterPosition: updated.data.requester?.position || '-',
             description: updated.data.description || '',
@@ -1545,11 +1578,11 @@ const ElectronicApproval: React.FC = () => {
         setEscalateTo(null);
         setEscalationComment('');
       } else {
-        setError(response.message || '에스컬레이션에 실패했습니다.');
+        setError(response.message || t('approval.errors.escalateFailed'));
       }
     } catch (error: any) {
       console.error('에스컬레이션 오류:', error);
-      setError(error.response?.data?.message || '에스컬레이션 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || t('approval.errors.escalateError'));
     } finally {
       setEscalating(false);
     }
@@ -1567,7 +1600,7 @@ const ElectronicApproval: React.FC = () => {
       });
 
       if (response.data.success) {
-        setSuccess(parentId ? '답글이 추가되었습니다.' : '댓글이 추가되었습니다.');
+        setSuccess(parentId ? t('approval.toast.replyAdded') : t('approval.toast.commentAdded'));
         setNewComment('');
         setReplyText('');
         setReplyingTo(null);
@@ -1580,11 +1613,11 @@ const ElectronicApproval: React.FC = () => {
           }
         }
       } else {
-        setError(response.data.message || '댓글 추가에 실패했습니다.');
+        setError(response.data.message || t('approval.errors.commentAddFailed'));
       }
     } catch (error: any) {
       console.error('댓글 추가 오류:', error);
-      setError(error.response?.data?.message || '댓글 추가 중 오류가 발생했습니다.');
+      setError(error.response?.data?.message || t('approval.errors.commentAddError'));
     }
   };
 
@@ -1599,7 +1632,7 @@ const ElectronicApproval: React.FC = () => {
       try {
         const response = await approvalService.approveApproval(selectedDocument.id, undefined, signature);
         if (response.success) {
-          setSuccess('결재 문서가 승인되었습니다.');
+          setSuccess(t('approval.toast.documentApproved'));
           setSignatureDialogOpen(false);
           setSigningStepId(null);
           loadApprovalData();
@@ -1607,11 +1640,11 @@ const ElectronicApproval: React.FC = () => {
             setViewMode('list');
           }
         } else {
-          setError(response.message || '결재 승인에 실패했습니다.');
+          setError(response.message || t('approval.errors.approveFailed'));
         }
       } catch (error: any) {
         console.error('결재 승인 오류:', error);
-        setError(error.response?.data?.message || '결재 승인 중 오류가 발생했습니다.');
+        setError(error.response?.data?.message || t('approval.errors.approveError'));
       }
     }
   };
@@ -1662,13 +1695,13 @@ const ElectronicApproval: React.FC = () => {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <AssignmentIcon />
-            결재 문서 상세
+            {t('approval.detailPageTitle')}
           </Typography>
           <Button
             variant="outlined"
             onClick={() => setViewMode('list')}
           >
-            목록으로
+            {t('approval.backToList')}
           </Button>
         </Box>
 
@@ -1680,7 +1713,7 @@ const ElectronicApproval: React.FC = () => {
                   {selectedDocument.title}
                 </Typography>
                 <Typography variant="body1" color="text.secondary" gutterBottom>
-                  문서번호: {selectedDocument.documentId}
+                  {t('approval.documentNumber')}: {selectedDocument.documentId}
                 </Typography>
                 <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
                   {getStatusChip(selectedDocument.status)}
@@ -1695,7 +1728,7 @@ const ElectronicApproval: React.FC = () => {
                   </Typography>
                 )}
                 <Typography variant="body2" color="text.secondary">
-                  신청일: {formatDateTime(selectedDocument.createdAt)}
+                  {t('approval.requestDate')}: {formatDateTime(selectedDocument.createdAt)}
                 </Typography>
               </Box>
             </Box>
@@ -1722,7 +1755,7 @@ const ElectronicApproval: React.FC = () => {
 
             {/* 문서 내용 */}
             <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" gutterBottom>문서 내용</Typography>
+              <Typography variant="h6" gutterBottom>{t('approval.detail.documentContent')}</Typography>
               <Card sx={{ p: 2, bgcolor: 'grey.50' }}>
                 <Box
                   sx={{
@@ -1751,7 +1784,7 @@ const ElectronicApproval: React.FC = () => {
                   if (!attachmentList.length) return null;
                   return (
                     <Box>
-                      <Typography variant="subtitle2" gutterBottom>첨부파일:</Typography>
+                      <Typography variant="subtitle2" gutterBottom>{t('approval.detail.attachmentsLabel')}</Typography>
                       <List dense>
                         {attachmentList.map((file: any, index: number) => {
                           const label = typeof file === 'string' ? file : (file.name || file.storedName || 'attachment');
@@ -1777,15 +1810,15 @@ const ElectronicApproval: React.FC = () => {
 
             {/* 결재 흐름 - 카드형(좌측 이미지 스타일) */}
             <Box sx={{ mb: 4 }}>
-              <Typography variant="h6" gutterBottom>결재 흐름</Typography>
+              <Typography variant="h6" gutterBottom>{t('approval.detail.approvalFlow')}</Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                 {selectedDocument.approvalFlow.map((step) => {
                   const statusLabel = (() => {
                     switch (step.status) {
-                      case 'approved': return '승인';
-                      case 'pending': return '대기';
-                      case 'rejected': return '반려';
-                      case 'skipped': return '건너뜀';
+                      case 'approved': return t('approval.detail.stepApproved');
+                      case 'pending': return t('approval.detail.stepPending');
+                      case 'rejected': return t('approval.detail.stepRejected');
+                      case 'skipped': return t('approval.detail.stepSkipped');
                       default: return step.status;
                     }
                   })();
@@ -1810,7 +1843,7 @@ const ElectronicApproval: React.FC = () => {
                           {step.approverPosition || '-'} / {step.approverDepartment || '-'}
                         </Typography>
                         {step.escalated && (
-                          <Chip label="에스컬레이션" size="small" color="info" />
+                          <Chip label={t('approval.detail.escalationChip')} size="small" color="info" />
                         )}
                         <Box
                           sx={{
@@ -1830,7 +1863,7 @@ const ElectronicApproval: React.FC = () => {
                             <Box
                               component="img"
                               src={step.signature}
-                              alt="서명"
+                              alt={t('approval.detail.signatureAlt')}
                               sx={{
                                 maxWidth: '100%',
                                 maxHeight: '100%',
@@ -1838,15 +1871,15 @@ const ElectronicApproval: React.FC = () => {
                               }}
                             />
                           ) : (
-                            <Typography variant="caption" color="text.secondary">서명 없음</Typography>
+                            <Typography variant="caption" color="text.secondary">{t('approval.detail.noSignature')}</Typography>
                           )}
                         </Box>
                         <Typography variant="caption" color="text.secondary">
-                          승인일: {approvedDate || '-'}
+                          {t('approval.detail.approvalDate')}: {approvedDate || '-'}
                         </Typography>
                         {step.comment && (
                           <Typography variant="caption" color="text.secondary">
-                            의견: {step.comment}
+                            {t('approval.detail.commentLabel')}: {step.comment}
                           </Typography>
                         )}
                         {step.status === 'pending' &&
@@ -1859,7 +1892,7 @@ const ElectronicApproval: React.FC = () => {
                             onClick={() => handleOpenSignatureDialog(step.id)}
                             sx={{ mt: 0.5 }}
                           >
-                            서명하기
+                            {t('approval.signatureDialogTitle')}
                           </Button>
                         )}
                       </CardContent>
@@ -1872,7 +1905,7 @@ const ElectronicApproval: React.FC = () => {
             {/* 에스컬레이션 */}
             {isCurrentApprover && (
               <Box sx={{ mb: 4 }}>
-                <Typography variant="h6" gutterBottom>에스컬레이션</Typography>
+                <Typography variant="h6" gutterBottom>{t('approval.detail.escalationSection')}</Typography>
                 <Card variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
                   <Grid container spacing={2} alignItems="center">
                     <Grid size={{ xs: 12, md: 6 }}>
@@ -1971,7 +2004,7 @@ const ElectronicApproval: React.FC = () => {
                                         size="small"
                                         multiline
                                         rows={2}
-                                        placeholder="답글을 입력하세요..."
+                                        placeholder={t('approval.detail.replyPlaceholder')}
                                         value={replyText}
                                         onChange={(e) => setReplyText(e.target.value)}
                                         sx={{ mb: 1 }}
@@ -2040,7 +2073,7 @@ const ElectronicApproval: React.FC = () => {
                   fullWidth
                   multiline
                   rows={3}
-                  placeholder="댓글을 입력하세요..."
+                  placeholder={t('approval.detail.commentPlaceholder')}
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
                   sx={{ mb: 1 }}
@@ -2122,7 +2155,7 @@ const ElectronicApproval: React.FC = () => {
           maxWidth="sm"
           fullWidth
         >
-          <DialogTitle>서명하기</DialogTitle>
+          <DialogTitle>{t('approval.signatureDialogTitle')}</DialogTitle>
           <DialogContent>
             <SignaturePad
               onSave={handleSaveSignature}
@@ -2139,7 +2172,7 @@ const ElectronicApproval: React.FC = () => {
               setSignatureDialogOpen(false);
               setSigningStepId(null);
             }}>
-              취소
+              {t('approval.cancel')}
             </Button>
           </DialogActions>
         </Dialog>
@@ -2181,7 +2214,7 @@ const ElectronicApproval: React.FC = () => {
             color: 'text.primary',
             lineHeight: 1.5
           }}>
-            전자결재
+            {t('approval.pageTitle')}
           </Typography>
         </Box>
       </Box>
@@ -2213,6 +2246,7 @@ const ElectronicApproval: React.FC = () => {
         >
           <Tab
             label={t('approval.myRequests')}
+            disabled={approvalMenuFlags.menusLoading || !approvalMenuFlags.canRead}
             sx={{
               fontWeight: 600,
               '&.Mui-selected': {
@@ -2224,6 +2258,7 @@ const ElectronicApproval: React.FC = () => {
           />
           <Tab
             label={t('approval.received')}
+            disabled={approvalMenuFlags.menusLoading || !approvalMenuFlags.canRead}
             sx={{
               fontWeight: 600,
               '&.Mui-selected': {
@@ -2235,6 +2270,7 @@ const ElectronicApproval: React.FC = () => {
           />
           <Tab
             label={t('approval.createDocument')}
+            disabled={approvalMenuFlags.menusLoading || !approvalMenuFlags.canCreate}
             sx={{
               fontWeight: 600,
               '&.Mui-selected': {
@@ -2271,17 +2307,17 @@ const ElectronicApproval: React.FC = () => {
                   variant="h6"
                   sx={{ fontWeight: 700, letterSpacing: 0.2, fontSize: '44px', lineHeight: 1.1 }}
                 >
-                  전자 결재
+                  {t('approval.formHeroTitle')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {selectedDocument ? '수정 문서' : '신규 문서'}
+                  {selectedDocument ? t('approval.editDocument') : t('approval.newDocument')}
                 </Typography>
                 {companyLogo && (
                   <Box sx={{ mt: 1, display: 'flex', alignItems: 'center' }}>
                     <Box
                       component="img"
                       src={companyLogo}
-                      alt="회사 로고"
+                      alt={t('approval.companyLogoAlt')}
                       sx={{ maxHeight: 40, maxWidth: 180, objectFit: 'contain' }}
                     />
                   </Box>
@@ -2296,17 +2332,17 @@ const ElectronicApproval: React.FC = () => {
                   bgcolor: 'white'
                 }}>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                    문서번호
+                    {t('approval.documentNumber')}
                   </Typography>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                    {selectedDocument?.documentId || draftDocumentId || '자동 생성'}
+                    {selectedDocument?.documentId || draftDocumentId || t('approval.autoGenerated')}
                   </Typography>
                   <Box sx={{ mt: 0.75 }}>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                      작성일
+                      {t('approval.writtenDate')}
                     </Typography>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                      {selectedDocument?.createdAt || new Date().toLocaleDateString('ko-KR')}
+                      {selectedDocument?.createdAt || new Date().toLocaleDateString(dateLocale)}
                     </Typography>
                   </Box>
                 </Box>
@@ -2320,7 +2356,7 @@ const ElectronicApproval: React.FC = () => {
                   p: 1,
                   bgcolor: 'white'
                 }}>
-                  {['기안', '검토', '승인'].map((label) => (
+                  {approvalFlowLabels.map((label, flowIdx) => (
                     <Box key={label} sx={{ 
                       border: '1px dashed',
                       borderColor: 'grey.300',
@@ -2335,7 +2371,7 @@ const ElectronicApproval: React.FC = () => {
                       <Typography variant="caption" color="text.secondary">
                         {label}
                       </Typography>
-                      {label === '기안' && user?.username && (
+                      {flowIdx === 0 && user?.username && (
                         <Typography variant="caption" sx={{ color: 'text.primary', fontWeight: 600 }}>
                           {user.username}
                         </Typography>
@@ -2366,7 +2402,7 @@ const ElectronicApproval: React.FC = () => {
                   <Grid container spacing={2} sx={{ px: 0.5 }}>
                     <Grid size={{ xs: 12, sm: 6 }}>
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        신청자
+                        {t('approval.requester')}
                       </Typography>
                       <Typography variant="body1" sx={{ fontWeight: 500 }}>
                         {user.username}
@@ -2374,7 +2410,7 @@ const ElectronicApproval: React.FC = () => {
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6 }}>
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        부서/직책
+                        {t('approval.departmentRole')}
                       </Typography>
                       <Typography variant="body1" sx={{ fontWeight: 500 }}>
                         {(user as any).department || '-'} {(user as any).position ? `· ${(user as any).position}` : ''}
@@ -2395,11 +2431,11 @@ const ElectronicApproval: React.FC = () => {
                     borderColor: 'grey.300',
                     letterSpacing: 0.2
                   }}>
-                  결제 승인자
+                  {t('approval.approverSectionTitle')}
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                   <Typography variant="body2" color="text.secondary">
-                    결제 승인자 **
+                    {t('approval.approverFieldLabel')}
                   </Typography>
                   <Autocomplete
                     options={users.filter(u => u.id !== user?.id)}
@@ -2906,7 +2942,7 @@ const ElectronicApproval: React.FC = () => {
                                 {t('approval.toolbar.numberedList')}
                               </Button>
                               <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-                              <Tooltip title="왼쪽 정렬">
+                              <Tooltip title={t('approval.toolbar.alignLeft')}>
                                 <Button
                                   size="small"
                                   variant={editor.isActive({ textAlign: 'left' }) ? 'contained' : 'text'}
@@ -2916,7 +2952,7 @@ const ElectronicApproval: React.FC = () => {
                                   <FormatAlignLeftIcon fontSize="small" />
                                 </Button>
                               </Tooltip>
-                              <Tooltip title="가운데 정렬">
+                              <Tooltip title={t('approval.toolbar.alignCenter')}>
                                 <Button
                                   size="small"
                                   variant={editor.isActive({ textAlign: 'center' }) ? 'contained' : 'text'}
@@ -2926,7 +2962,7 @@ const ElectronicApproval: React.FC = () => {
                                   <FormatAlignCenterIcon fontSize="small" />
                                 </Button>
                               </Tooltip>
-                              <Tooltip title="오른쪽 정렬">
+                              <Tooltip title={t('approval.toolbar.alignRight')}>
                                 <Button
                                   size="small"
                                   variant={editor.isActive({ textAlign: 'right' }) ? 'contained' : 'text'}
@@ -2943,7 +2979,7 @@ const ElectronicApproval: React.FC = () => {
                                 onClick={() => editor.chain().focus().toggleBlockquote().run()}
                                 sx={{ minWidth: 'auto', px: 1 }}
                               >
-                                인용
+                                {t('approval.toolbar.quote')}
                               </Button>
                               <Button
                                 size="small"
@@ -2956,20 +2992,32 @@ const ElectronicApproval: React.FC = () => {
                               <Button
                                 size="small"
                                 onClick={() => {
-                                  const url = window.prompt('링크 URL을 입력하세요', 'https://');
-                                  if (url === null) return;
-                                  const normalizedUrl = url.trim();
-                                  if (!normalizedUrl) return;
-                                  const safeUrl = normalizedUrl.replace(/"/g, '&quot;');
-                                  editor
-                                    .chain()
-                                    .focus()
-                                    .insertContent(`<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`)
-                                    .run();
+                                  showPrompt(
+                                    t('approval.linkPrompt', { defaultValue: '링크 URL을 입력하세요.' }),
+                                    (url) => {
+                                      const normalizedUrl = url.trim();
+                                      if (!normalizedUrl) return;
+                                      const safeUrl = normalizedUrl.replace(/"/g, '&quot;');
+                                      editor
+                                        ?.chain()
+                                        .focus()
+                                        .insertContent(
+                                          `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeUrl}</a>`
+                                        )
+                                        .run();
+                                    },
+                                    {
+                                      title: t('approval.toolbar.link'),
+                                      defaultValue: 'https://',
+                                      required: false,
+                                      confirmText: t('common.confirm'),
+                                      cancelText: t('common.cancel')
+                                    }
+                                  );
                                 }}
                                 sx={{ minWidth: 'auto', px: 1 }}
                               >
-                                링크
+                                {t('approval.toolbar.link')}
                               </Button>
                               <Button
                                 size="small"
@@ -3012,7 +3060,7 @@ const ElectronicApproval: React.FC = () => {
                                 onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()}
                                 sx={{ minWidth: 'auto', px: 1 }}
                               >
-                                지우기
+                                {t('approval.toolbar.clear')}
                               </Button>
                             </Box>
                           )}
@@ -3026,11 +3074,11 @@ const ElectronicApproval: React.FC = () => {
                       maxWidth="sm"
                       fullWidth
                     >
-                      <DialogTitle>표 만들기</DialogTitle>
+                      <DialogTitle>{t('approval.tableDialog.title')}</DialogTitle>
                       <DialogContent>
                         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
                           <TextField
-                            label="행 수"
+                            label={t('approval.tableDialog.rows')}
                             type="number"
                             value={tableRows}
                             onChange={(e) => setTableRows(Math.max(1, parseInt(e.target.value) || 1))}
@@ -3039,7 +3087,7 @@ const ElectronicApproval: React.FC = () => {
                             size="small"
                           />
                           <TextField
-                            label="열 수"
+                            label={t('approval.tableDialog.cols')}
                             type="number"
                             value={tableCols}
                             onChange={(e) => setTableCols(Math.max(1, parseInt(e.target.value) || 1))}
@@ -3048,21 +3096,21 @@ const ElectronicApproval: React.FC = () => {
                             size="small"
                           />
                           <FormControl fullWidth size="small">
-                            <InputLabel>헤더 행</InputLabel>
+                            <InputLabel>{t('approval.tableDialog.headerRow')}</InputLabel>
                             <Select
                               value={tableHasHeader ? 'yes' : 'no'}
                               onChange={(e) => setTableHasHeader(e.target.value === 'yes')}
-                              label="헤더 행"
+                              label={t('approval.tableDialog.headerRow')}
                             >
-                              <MenuItem value="yes">있음</MenuItem>
-                              <MenuItem value="no">없음</MenuItem>
+                              <MenuItem value="yes">{t('approval.tableDialog.yes')}</MenuItem>
+                              <MenuItem value="no">{t('approval.tableDialog.no')}</MenuItem>
                             </Select>
                           </FormControl>
                         </Box>
                       </DialogContent>
                       <DialogActions>
                         <Button onClick={() => setTableDialogOpen(false)}>
-                          취소
+                          {t('approval.cancel')}
                         </Button>
                         <Button 
                           variant="contained"
@@ -3080,7 +3128,7 @@ const ElectronicApproval: React.FC = () => {
                             }
                           }}
                         >
-                          만들기
+                          {t('approval.tableDialog.create')}
                         </Button>
                       </DialogActions>
                     </Dialog>
@@ -3129,11 +3177,11 @@ const ElectronicApproval: React.FC = () => {
                         }
                       }}
                     >
-                      파일 선택
+                      {t('approval.selectFiles')}
                     </Button>
                   </label>
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                    여러 파일 선택 가능
+                    {t('approval.multipleFilesHint')}
                   </Typography>
                 </Box>
                 {existingAttachments.length > 0 && (
@@ -3441,7 +3489,23 @@ const ElectronicApproval: React.FC = () => {
         <Card>
         <TableContainer>
           <Table>
-            <TableHead>
+            <TableHead
+              sx={{
+                bgcolor: 'background.paper',
+                '& .MuiTableCell-head': {
+                  bgcolor: 'background.paper',
+                  color: 'text.primary',
+                  fontWeight: 600,
+                  fontSize: '0.875rem',
+                  textTransform: 'none',
+                  letterSpacing: 'normal',
+                  borderBottom: '2px solid',
+                  borderColor: 'primary.main',
+                  py: 1.25,
+                  '& .MuiTableSortLabel-root': { color: 'inherit' }
+                }
+              }}
+            >
               <TableRow>
                 <TableCell>
                   <TableSortLabel
@@ -3755,27 +3819,32 @@ const ElectronicApproval: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      <Dialog
-        open={confirmDelete.open}
-        onClose={() => setConfirmDelete({ open: false, id: null })}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle sx={{ fontWeight: 700 }}>삭제 확인</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary">
-            정말로 이 결재 문서를 삭제하시겠습니까?
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setConfirmDelete({ open: false, id: null })} variant="outlined">
-            취소
-          </Button>
-          <Button onClick={handleConfirmDelete} color="error" variant="contained">
-            삭제
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConfirmDialog
+        open={confirmDialogState.open}
+        title={confirmDialogState.title}
+        message={confirmDialogState.message}
+        confirmText={confirmDialogState.confirmText}
+        cancelText={confirmDialogState.cancelText}
+        confirmColor={confirmDialogState.confirmColor}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
+
+      <PromptDialog
+        open={promptDialogState.open}
+        title={promptDialogState.title}
+        message={promptDialogState.message}
+        label={promptDialogState.label}
+        defaultValue={promptDialogState.defaultValue}
+        placeholder={promptDialogState.placeholder}
+        multiline={promptDialogState.multiline}
+        minRows={promptDialogState.minRows}
+        confirmText={promptDialogState.confirmText}
+        cancelText={promptDialogState.cancelText}
+        required={promptDialogState.required}
+        onConfirm={handlePromptConfirm}
+        onCancel={handlePromptCancel}
+      />
 
       {/* 스낵바 */}
       <Snackbar

@@ -335,12 +335,7 @@ const OrganizationChart: React.FC = () => {
         });
       });
       
-      console.log('🔍 [조직도] 노드 생성 완료:', {
-        노드개수: orgNodes.length,
-        엣지개수: orgEdges.length,
-        부서개수: departments.length
-      });
-      
+            
       setNodes(orgNodes);
       setEdges(orgEdges);
     } catch (error: any) {
@@ -356,8 +351,7 @@ const OrganizationChart: React.FC = () => {
       setEdges([]);
     } finally {
       setLoading(false);
-      console.log('🔍 [조직도] 로딩 완료');
-    }
+          }
   }, [user?.company_id]);
 
   // 초기 데이터 로드
@@ -462,7 +456,7 @@ const OrganizationChart: React.FC = () => {
             <Typography component="h1" sx={{
               fontSize: '16px !important',
               fontWeight: 600,
-              color: 'red',
+              color: 'text.primary',
               lineHeight: 1.5
             }}>
               조직도 관리

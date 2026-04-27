@@ -1,12 +1,29 @@
 import express from 'express';
+import nodemailer from 'nodemailer';
 import { Company, User } from '../models';
 import { authenticateToken, requireRole } from '../middleware/auth';
+import { buildNodemailerTransportOptions, getResolvedMailTransportOptions } from '../utils/mailConfig';
 
 const router = express.Router();
+
+const DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
+const MIN_SESSION_TIMEOUT_MINUTES = 5;
+const MAX_SESSION_TIMEOUT_MINUTES = 24 * 60;
+
+const normalizeSessionTimeoutMinutes = (value: unknown): number => {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return DEFAULT_SESSION_TIMEOUT_MINUTES;
+  const rounded = Math.floor(num);
+  if (rounded < MIN_SESSION_TIMEOUT_MINUTES) return MIN_SESSION_TIMEOUT_MINUTES;
+  if (rounded > MAX_SESSION_TIMEOUT_MINUTES) return MAX_SESSION_TIMEOUT_MINUTES;
+  return rounded;
+};
 
 const buildDefaultSettings = (company: Company) => ({
   general: {
     companyName: company.name || 'MVS',
+    /** 메일 제목 등 `[약어]` — 예: MSV */
+    companyAbbreviation: '',
     companyLogo: '',
     timezone: company.timezone || 'Asia/Kolkata',
     language: 'ko',
@@ -44,6 +61,15 @@ const buildDefaultSettings = (company: Company) => ({
     backupFrequency: 'daily',
     retentionDays: 30,
     cloudBackup: false
+  },
+  mailServer: {
+    host: '',
+    port: 587,
+    secure: false,
+    authUser: '',
+    fromEmail: '',
+    fromName: '',
+    authPassConfigured: false
   }
 });
 
@@ -51,6 +77,31 @@ const buildSettingsResponse = (company: Company, user?: User | null) => {
   const defaultSettings = buildDefaultSettings(company);
   const companySettings = company.settings || {};
   const userSettings = user?.settings || {};
+
+  /** SMTP 폼·저장: 사용자 `settings.mailServer`만 (회사 SMTP는 발송 시 폴백으로만 사용) */
+  const userMail = ((userSettings as any).mailServer || {}) as Record<string, unknown>;
+  const { authPass: _omitPass, ...userMailSafe } = userMail;
+
+  const loginEmail = (user?.email && String(user.email).trim()) || '';
+  const loginName = (user?.username && String(user.username).trim()) || '';
+
+  const authUserSaved = userMail.authUser != null ? String(userMail.authUser).trim() : '';
+  const fromEmailSaved = userMail.fromEmail != null ? String(userMail.fromEmail).trim() : '';
+  const fromNameSaved = userMail.fromName != null ? String(userMail.fromName).trim() : '';
+
+  const mergedMail = {
+    ...defaultSettings.mailServer,
+    ...userMailSafe,
+    port: userMail.port != null ? Number(userMail.port) || 587 : defaultSettings.mailServer.port,
+    secure:
+      userMail.secure !== undefined && userMail.secure !== null
+        ? Boolean(userMail.secure)
+        : defaultSettings.mailServer.secure,
+    authUser: authUserSaved || loginEmail,
+    fromEmail: fromEmailSaved || loginEmail,
+    fromName: fromNameSaved || loginName,
+    authPassConfigured: Boolean(userMail.authPass)
+  };
 
   return {
     ...defaultSettings,
@@ -65,7 +116,8 @@ const buildSettingsResponse = (company: Company, user?: User | null) => {
       ...defaultSettings.appearance,
       ...(companySettings.appearance || {}),
       ...(userSettings.appearance || {})
-    }
+    },
+    mailServer: mergedMail
   };
 };
 
@@ -106,10 +158,16 @@ router.get('/', authenticateToken, async (req, res) => {
     }
 
     const settings = buildSettingsResponse(company, user);
+    const userRole = (req as any).user.role;
 
     // 회사 로고가 있으면 Base64로 변환
     if (company.company_logo && Buffer.isBuffer(company.company_logo)) {
       settings.general.companyLogo = `data:image/png;base64,${company.company_logo.toString('base64')}`;
+    }
+
+    // 백업 설정은 root만 조회 가능
+    if (userRole !== 'root') {
+      delete (settings as { backup?: unknown }).backup;
     }
 
     res.json({
@@ -238,40 +296,72 @@ router.put('/', authenticateToken, async (req, res) => {
         });
       }
 
-      const { appearance, ...restSettings } = settings || {};
-      const existingCompanySettings = company.settings || {};
-      const settingsToSave = {
+      const rawBody = (settings || {}) as Record<string, unknown>;
+      const backup = rawBody.backup;
+      const restSettings = { ...rawBody };
+      if (restSettings.security && typeof restSettings.security === 'object') {
+        const securitySettings = restSettings.security as Record<string, unknown>;
+        securitySettings.sessionTimeout = normalizeSessionTimeoutMinutes(securitySettings.sessionTimeout);
+      }
+      delete restSettings.appearance;
+      delete restSettings.backup;
+      delete restSettings.mailServer;
+      const existingCompanySettings = (company.settings || {}) as Record<string, unknown>;
+      const settingsToSave: Record<string, unknown> = {
         ...existingCompanySettings,
         ...restSettings,
         general: restSettings.general
           ? {
-              ...existingCompanySettings.general,
-              ...restSettings.general,
+              ...(existingCompanySettings.general as Record<string, unknown>),
+              ...(restSettings.general as Record<string, unknown>),
               companyLogo: undefined // 로고는 별도 필드에 저장되므로 settings에서 제거
             }
           : existingCompanySettings.general
       };
 
+      if (userRole === 'root' && backup !== undefined) {
+        settingsToSave.backup = backup;
+      }
+
       await company.update({
-        settings: settingsToSave
+        settings: settingsToSave as any
       });
+      await company.reload();
     }
 
     let updatedUser = user;
 
-    // 외관 설정은 사용자별로 저장
-    if (settings.appearance) {
-      const existingUserSettings = user.settings || {};
-      const updatedUserSettings = {
-        ...existingUserSettings,
-        appearance: {
-          ...(existingUserSettings.appearance || {}),
-          ...settings.appearance
-        }
-      };
+    await company.reload();
 
+    const existingUserSettings = (user.settings || {}) as Record<string, unknown>;
+    let nextUserSettings = { ...existingUserSettings };
+
+    if (settings.appearance && typeof settings.appearance === 'object') {
+      nextUserSettings.appearance = {
+        ...((existingUserSettings.appearance || {}) as Record<string, unknown>),
+        ...(settings.appearance as Record<string, unknown>)
+      };
+    }
+
+    if (settings.mailServer && typeof settings.mailServer === 'object') {
+      const inc = settings.mailServer as Record<string, unknown>;
+      const prevUserMail = (existingUserSettings.mailServer || {}) as Record<string, unknown>;
+      const passwordUnchanged = !inc.authPass || String(inc.authPass).trim() === '';
+      const effectivePrevPass = (prevUserMail.authPass && String(prevUserMail.authPass).trim()) || '';
+      nextUserSettings.mailServer = {
+        host: inc.host != null ? String(inc.host).trim() : prevUserMail.host || '',
+        port: inc.port != null ? Math.max(1, Number(inc.port) || 587) : prevUserMail.port || 587,
+        secure: inc.secure != null ? Boolean(inc.secure) : Boolean(prevUserMail.secure),
+        authUser: inc.authUser != null ? String(inc.authUser).trim() : prevUserMail.authUser || '',
+        authPass: passwordUnchanged ? effectivePrevPass : String(inc.authPass).trim(),
+        fromEmail: inc.fromEmail != null ? String(inc.fromEmail).trim() : prevUserMail.fromEmail || '',
+        fromName: inc.fromName != null ? String(inc.fromName).trim() : prevUserMail.fromName || ''
+      };
+    }
+
+    if (settings.appearance || (settings.mailServer && typeof settings.mailServer === 'object')) {
       updatedUser = await user.update({
-        settings: updatedUserSettings
+        settings: nextUserSettings as any
       });
     }
 
@@ -399,10 +489,8 @@ router.post('/logo', authenticateToken, requireRole(['root', 'admin']), async (r
 });
 
 // 백업 실행
-router.post('/backup', authenticateToken, requireRole(['root', 'admin']), async (req, res) => {
+router.post('/backup', authenticateToken, requireRole(['root']), async (req, res) => {
   try {
-    const tenantId = (req as any).user.tenant_id;
-
     // 실제 백업 로직은 나중에 구현
     // 현재는 성공 응답만 반환
     res.json({
@@ -419,6 +507,107 @@ router.post('/backup', authenticateToken, requireRole(['root', 'admin']), async 
     res.status(500).json({
       success: false,
       message: '백업 실행 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error?.message : undefined
+    });
+  }
+});
+
+const EMAIL_RX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// SMTP 테스트 메일 발송 (현재 사용자의 SMTP 설정 우선)
+router.post('/test-mail', authenticateToken, requireRole(['root', 'admin']), async (req, res) => {
+  try {
+    const tenantId = (req as any).user.tenant_id;
+    const companyId = (req as any).user.company_id;
+    const userId = (req as any).user.id;
+    const rawTo = req.body?.to;
+    const rawSubject = req.body?.subject;
+
+    const to = typeof rawTo === 'string' ? rawTo.trim() : '';
+    if (!to || !EMAIL_RX.test(to)) {
+      return res.status(400).json({
+        success: false,
+        message: '유효한 수신 이메일 주소를 입력하세요.'
+      });
+    }
+
+    if (!companyId) {
+      return res.status(400).json({
+        success: false,
+        message: '회사 정보가 없습니다.'
+      });
+    }
+
+    const companyRow = await (Company as any).findByPk(companyId, {
+      attributes: ['id', 'tenant_id', 'name', 'settings']
+    });
+
+    if (!companyRow) {
+      return res.status(404).json({
+        success: false,
+        message: '회사 정보를 찾을 수 없습니다.'
+      });
+    }
+    if (tenantId != null && Number(companyRow.tenant_id) !== Number(tenantId)) {
+      return res.status(403).json({
+        success: false,
+        message: '권한이 없습니다.'
+      });
+    }
+
+    const userRow = await User.findOne({
+      where: { id: userId, tenant_id: tenantId, company_id: companyId },
+      attributes: ['id', 'settings']
+    });
+
+    const mailOpts = getResolvedMailTransportOptions(companyRow, userRow);
+    if (!mailOpts) {
+      return res.status(503).json({
+        success: false,
+        message:
+          '메일 서버가 설정되지 않았습니다. 시스템 설정의 SMTP(호스트·계정·비밀번호) 또는 서버 환경변수(EMAIL_*)를 설정하세요. (로그인한 사용자별 SMTP가 우선 적용됩니다.)'
+      });
+    }
+
+    const companyName = String(companyRow.name || 'MVS').trim();
+    const defaultSubject = `[${companyName}] 메일 발송 테스트`;
+    const subject =
+      typeof rawSubject === 'string' && rawSubject.trim().length > 0
+        ? rawSubject.trim().slice(0, 200)
+        : defaultSubject;
+
+    const sentAt = new Date().toISOString();
+    const html = `
+      <p>이 메일은 <strong>${companyName}</strong> MVS 시스템의 SMTP 설정 테스트로 발송되었습니다.</p>
+      <p>발송 시각(UTC): ${sentAt}</p>
+      <p style="margin-top:16px;color:#666;font-size:12px;">본 메일은 테스트용입니다.</p>
+    `;
+    const text = `SMTP 테스트 메일 (${companyName})\n발송 시각(UTC): ${sentAt}`;
+
+    const transporter = nodemailer.createTransport(buildNodemailerTransportOptions(mailOpts));
+
+    await transporter.sendMail({
+      from: mailOpts.from,
+      to,
+      subject,
+      text,
+      html
+    });
+
+    res.json({
+      success: true,
+      message: '테스트 메일을 발송했습니다. 수신함을 확인하세요.',
+      data: { to, subject }
+    });
+  } catch (error: any) {
+    console.error('테스트 메일 발송 오류:', error);
+    const msg =
+      typeof error?.message === 'string' && error.message.trim()
+        ? error.message.trim()
+        : '테스트 메일 발송 중 오류가 발생했습니다.';
+    res.status(502).json({
+      success: false,
+      message: msg,
       error: process.env.NODE_ENV === 'development' ? error?.message : undefined
     });
   }

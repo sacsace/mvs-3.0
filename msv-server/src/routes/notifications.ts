@@ -1,5 +1,11 @@
 import express from 'express';
-import { sendNotification, getNotifications, updateNotification, deleteNotification } from '../controllers/notificationController';
+import {
+  sendNotification,
+  getNotifications,
+  updateNotification,
+  deleteNotification,
+  getActionInbox
+} from '../controllers/notificationController';
 import { authenticateToken } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
 
@@ -15,6 +21,9 @@ router.post('/send', validateBody({
   type: { required: true, type: 'string', oneOf: ['info', 'success', 'warning', 'error'] },
   target_type: { required: true, type: 'string', oneOf: ['user', 'tenant', 'all'] }
 }), sendNotification);
+
+// 승인·결제 대기 등 인박스 (앱 헤더 알림)
+router.get('/inbox', getActionInbox);
 
 // 알림 목록 조회
 router.get('/', getNotifications);

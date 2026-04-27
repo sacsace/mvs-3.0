@@ -1,21 +1,27 @@
 import sequelize from '../config/database';
+import { ensureUserEmploymentDailyEnum } from '../db/ensureUserEmploymentDailyEnum';
 import User from './User';
 import Menu from './Menu';
 import UserPermission from './UserPermission';
 import Company from './Company';
 import LoginInfo from './LoginInfo';
+import LoginInfoTab from './LoginInfoTab';
 import LoginLog from './LoginLog';
 import Tenant from './Tenant';
+import Department from './Department';
 import Customer from './Customer';
-import SalesOpportunity from './SalesOpportunity';
 import Contract from './Contract';
 import SupportTicket from './SupportTicket';
 import SupportResponse from './SupportResponse';
 import Invoice from './Invoice';
 import InvoiceItem from './InvoiceItem';
 import Product from './Product';
+import ProductCategory from './ProductCategory';
+import ProductUnit from './ProductUnit';
+import InventoryLocation from './InventoryLocation';
 import Project from './Project';
 import Payroll from './Payroll';
+import PayrollPeriodLock from './PayrollPeriodLock';
 import InventoryTransaction from './InventoryTransaction';
 import CompanyGstNumber from './CompanyGstNumber';
 import Partner from './Partner';
@@ -41,11 +47,20 @@ import WorkBoardList from './WorkBoardList';
 import WorkBoardCard from './WorkBoardCard';
 import WorkBoardCardComment from './WorkBoardCardComment';
 import WorkBoardMember from './WorkBoardMember';
+import EmploymentContractTemplate from './EmploymentContractTemplate';
+import EmploymentContract from './EmploymentContract';
+import EmploymentContractSignature from './EmploymentContractSignature';
+import EmploymentContractAuditLog from './EmploymentContractAuditLog';
 
 // 관계 설정
 // 테넌트 관계
 (Tenant as any).hasMany(User, { foreignKey: 'tenant_id', as: 'users' });
 (User as any).belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+
+(Tenant as any).hasMany(Department, { foreignKey: 'tenant_id', as: 'departments' });
+(Department as any).belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(User as any).belongsTo(Department, { foreignKey: 'department_id', as: 'departmentEntity' });
+(Department as any).hasMany(User, { foreignKey: 'department_id', as: 'users' });
 
 (Tenant as any).hasMany(Company, { foreignKey: 'tenant_id', as: 'companies' });
 (Company as any).belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
@@ -57,11 +72,18 @@ Menu.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
 (Company as any).hasMany(User, { foreignKey: 'company_id', as: 'users' });
 (User as any).belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 
-// 로그인 정보 관리 관계
+// 로그인 정보 탭 / 행 관계
+(Company as any).hasMany(LoginInfoTab, { foreignKey: 'company_id', as: 'loginInfoTabs' });
+LoginInfoTab.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+(Tenant as any).hasMany(LoginInfoTab, { foreignKey: 'tenant_id', as: 'loginInfoTabs' });
+LoginInfoTab.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+
 (Company as any).hasMany(LoginInfo, { foreignKey: 'company_id', as: 'loginInfos' });
 (Tenant as any).hasMany(LoginInfo, { foreignKey: 'tenant_id', as: 'loginInfos' });
 LoginInfo.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 LoginInfo.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+LoginInfo.belongsTo(LoginInfoTab, { foreignKey: 'tab_id', as: 'loginInfoTab' });
+(LoginInfoTab as any).hasMany(LoginInfo, { foreignKey: 'tab_id', as: 'loginInfos' });
 LoginInfo.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
 LoginInfo.belongsTo(User, { foreignKey: 'updated_by', as: 'updater' });
 
@@ -87,13 +109,6 @@ UserPermission.belongsTo(Menu, { foreignKey: 'menu_id', as: 'menu' });
 (Company as any).hasMany(Customer, { foreignKey: 'company_id', as: 'customers' });
 (Customer as any).belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 
-// 영업 기회 관계
-(Customer as any).hasMany(SalesOpportunity, { foreignKey: 'customer_id', as: 'salesOpportunities' });
-(SalesOpportunity as any).belongsTo(Customer, { foreignKey: 'customer_id', as: 'customer' });
-
-(User as any).hasMany(SalesOpportunity, { foreignKey: 'assigned_to', as: 'assignedOpportunities' });
-(SalesOpportunity as any).belongsTo(User, { foreignKey: 'assigned_to', as: 'assignedUser' });
-
 // 계약 관계
 (Customer as any).hasMany(Contract, { foreignKey: 'customer_id', as: 'contracts' });
 (Contract as any).belongsTo(Customer, { foreignKey: 'customer_id', as: 'customer' });
@@ -117,6 +132,9 @@ UserPermission.belongsTo(Menu, { foreignKey: 'menu_id', as: 'menu' });
 
 (User as any).hasMany(Invoice, { foreignKey: 'created_by', as: 'createdInvoices' });
 (Invoice as any).belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+
+(User as any).hasMany(Invoice, { foreignKey: 'approver_user_id', as: 'invoicesPendingApproval' });
+(Invoice as any).belongsTo(User, { foreignKey: 'approver_user_id', as: 'approver' });
 
 (Invoice as any).hasMany(InvoiceItem, { foreignKey: 'invoice_id', as: 'items' });
 (InvoiceItem as any).belongsTo(Invoice, { foreignKey: 'invoice_id', as: 'invoice' });
@@ -248,6 +266,9 @@ UserPermission.belongsTo(Menu, { foreignKey: 'menu_id', as: 'menu' });
 (User as any).hasMany(Quotation, { foreignKey: 'created_by', as: 'createdQuotations' });
 (Quotation as any).belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
 
+(User as any).hasMany(Quotation, { foreignKey: 'approver_user_id', as: 'quotationsPendingApproval' });
+(Quotation as any).belongsTo(User, { foreignKey: 'approver_user_id', as: 'approver' });
+
 // 회의실 예약 관계
 (Tenant as any).hasMany(RoomBooking, { foreignKey: 'tenant_id', as: 'roomBookings' });
 (RoomBooking as any).belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
@@ -287,6 +308,8 @@ RoomType.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
 
 (User as any).hasMany(WorkReport, { foreignKey: 'reviewer_id', as: 'reviewedWorkReports' });
 (WorkReport as any).belongsTo(User, { foreignKey: 'reviewer_id', as: 'reviewer' });
+(User as any).hasMany(WorkReport, { foreignKey: 'recipient_id', as: 'receivedWorkReports' });
+(WorkReport as any).belongsTo(User, { foreignKey: 'recipient_id', as: 'recipient' });
 
 // 재고 거래 관계
 (Tenant as any).hasMany(InventoryTransaction, { foreignKey: 'tenant_id', as: 'inventoryTransactions' });
@@ -363,12 +386,51 @@ Asset.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 (WorkBoardCardComment as any).belongsTo(WorkBoardCard, { foreignKey: 'card_id', as: 'card' });
 (User as any).hasMany(WorkBoardCardComment, { foreignKey: 'user_id', as: 'boardCardComments' });
 (WorkBoardCardComment as any).belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+(WorkBoardCardComment as any).belongsTo(WorkBoardCardComment, {
+  foreignKey: 'parent_id',
+  as: 'parentComment'
+});
+(WorkBoardCardComment as any).hasMany(WorkBoardCardComment, {
+  foreignKey: 'parent_id',
+  as: 'replies'
+});
 
 (WorkBoard as any).hasMany(WorkBoardMember, { foreignKey: 'board_id', as: 'members' });
 (WorkBoardMember as any).belongsTo(WorkBoard, { foreignKey: 'board_id', as: 'board' });
 (User as any).hasMany(WorkBoardMember, { foreignKey: 'user_id', as: 'boardMemberships' });
 (WorkBoardMember as any).belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 (WorkBoardMember as any).belongsTo(User, { foreignKey: 'invited_by', as: 'inviter' });
+
+// 전자근로계약
+(Tenant as any).hasMany(EmploymentContractTemplate, { foreignKey: 'tenant_id', as: 'employmentContractTemplates' });
+(EmploymentContractTemplate as any).belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(Company as any).hasMany(EmploymentContractTemplate, { foreignKey: 'company_id', as: 'employmentContractTemplates' });
+(EmploymentContractTemplate as any).belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+(User as any).hasMany(EmploymentContractTemplate, { foreignKey: 'created_by', as: 'createdEmploymentContractTemplates' });
+(EmploymentContractTemplate as any).belongsTo(User, { foreignKey: 'created_by', as: 'templateCreator' });
+
+(Tenant as any).hasMany(EmploymentContract, { foreignKey: 'tenant_id', as: 'employmentContracts' });
+(EmploymentContract as any).belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(Company as any).hasMany(EmploymentContract, { foreignKey: 'company_id', as: 'employmentContracts' });
+(EmploymentContract as any).belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+(User as any).hasMany(EmploymentContract, { foreignKey: 'employee_id', as: 'employeeContracts' });
+(EmploymentContract as any).belongsTo(User, { foreignKey: 'employee_id', as: 'employee' });
+(EmploymentContractTemplate as any).hasMany(EmploymentContract, { foreignKey: 'template_id', as: 'contracts' });
+(EmploymentContract as any).belongsTo(EmploymentContractTemplate, { foreignKey: 'template_id', as: 'template' });
+
+(EmploymentContract as any).hasMany(EmploymentContractSignature, { foreignKey: 'contract_id', as: 'signatures' });
+(EmploymentContractSignature as any).belongsTo(EmploymentContract, { foreignKey: 'contract_id', as: 'contract' });
+(User as any).hasMany(EmploymentContractSignature, { foreignKey: 'signer_id', as: 'employmentContractSignatures' });
+(EmploymentContractSignature as any).belongsTo(User, { foreignKey: 'signer_id', as: 'signer' });
+
+(EmploymentContract as any).hasMany(EmploymentContractAuditLog, { foreignKey: 'contract_id', as: 'auditLogs' });
+(EmploymentContractAuditLog as any).belongsTo(EmploymentContract, { foreignKey: 'contract_id', as: 'contract' });
+(Tenant as any).hasMany(EmploymentContractAuditLog, { foreignKey: 'tenant_id', as: 'employmentContractAuditLogs' });
+(EmploymentContractAuditLog as any).belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(Company as any).hasMany(EmploymentContractAuditLog, { foreignKey: 'company_id', as: 'employmentContractAuditLogs' });
+(EmploymentContractAuditLog as any).belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+(User as any).hasMany(EmploymentContractAuditLog, { foreignKey: 'actor_id', as: 'employmentContractAuditActions' });
+(EmploymentContractAuditLog as any).belongsTo(User, { foreignKey: 'actor_id', as: 'actor' });
 
 // 데이터베이스 연결 함수
 const connectDB = async () => {
@@ -379,7 +441,9 @@ const connectDB = async () => {
     try {
       await sequelize.authenticate();
       console.log('Database connection successful');
-      
+
+      await ensureUserEmploymentDailyEnum(sequelize);
+
       // 개발 환경에서만 테이블 동기화
       // if (process.env.NODE_ENV === 'development') {
         // await sequelize.sync({ alter: true });
@@ -408,18 +472,23 @@ export {
   UserPermission, 
   Company, 
   LoginInfo,
+  LoginInfoTab,
   LoginLog,
-  Tenant, 
+  Tenant,
+  Department,
   Customer,
-  SalesOpportunity,
   Contract,
   SupportTicket,
   SupportResponse,
   Invoice,
   InvoiceItem,
   Product,
+  ProductCategory,
+  ProductUnit,
+  InventoryLocation,
   Project,
   Payroll,
+  PayrollPeriodLock,
   InventoryTransaction,
   CompanyGstNumber,
   Partner,
@@ -445,5 +514,9 @@ export {
   WorkBoardCard,
   WorkBoardCardComment,
   WorkBoardMember,
+  EmploymentContractTemplate,
+  EmploymentContract,
+  EmploymentContractSignature,
+  EmploymentContractAuditLog,
   connectDB 
 };

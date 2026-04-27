@@ -182,7 +182,7 @@ const StockInManagement: React.FC = () => {
             <Typography component="h1" sx={{
               fontSize: '16px !important',
               fontWeight: 600,
-              color: 'red',
+              color: 'text.primary',
               lineHeight: 1.5
             }}>
               입출고 관리

@@ -54,7 +54,7 @@ const checkAndAddUserHrColumns = async () => {
         name: 'employment_type',
         type: 'VARCHAR(20)',
         nullable: true,
-        enum: ['fulltime', 'contract', 'parttime', 'intern']
+        enum: ['fulltime', 'contract', 'parttime', 'intern', 'daily']
       },
       {
         name: 'salary',
@@ -93,11 +93,23 @@ const checkAndAddUserHrColumns = async () => {
 
       if (!employmentEnumCheck[0]?.exists) {
         await sequelize.query(`
-          CREATE TYPE user_employment_type_enum AS ENUM ('fulltime', 'contract', 'parttime', 'intern');
+          CREATE TYPE user_employment_type_enum AS ENUM ('fulltime', 'contract', 'parttime', 'intern', 'daily');
         `, { type: QueryTypes.RAW });
         console.log('✅ user_employment_type_enum 타입 생성 완료');
       } else {
         console.log('✓ user_employment_type_enum 타입 이미 존재함');
+        try {
+          await sequelize.query(`
+            DO $$ BEGIN
+              ALTER TYPE user_employment_type_enum ADD VALUE 'daily';
+            EXCEPTION
+              WHEN duplicate_object THEN NULL;
+            END $$;
+          `, { type: QueryTypes.RAW });
+          console.log('✓ user_employment_type_enum 에 daily 라벨 확인');
+        } catch (e: any) {
+          console.warn('⚠ user_employment_type_enum daily 추가 생략(이미 있거나 권한 없음):', e?.message);
+        }
       }
     } catch (error: any) {
       console.error('❌ employment_type ENUM 타입 처리 중 오류:', error.message);

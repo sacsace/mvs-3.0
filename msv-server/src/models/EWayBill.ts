@@ -57,13 +57,19 @@ interface EWayBillAttributes {
   // 기타
   generated_by: number; // 생성자 ID
   notes?: string; // 비고
-  qr_code?: string; // QR 코드 데이터
+  qr_code?: string; // QR 코드 데이터(GSTN 서명 QR 또는 mock)
+  /** 인도 GSTN에서 발급한 E-Way Bill 번호(live 성공 시) */
+  gstn_eway_bill_no?: string | null;
+  /** GSTN 기준 유효 만료 시각 */
+  gstn_valid_upto?: Date | null;
+  /** live 발급 실패 시 마지막 오류 메시지 */
+  gstn_last_error?: string | null;
   is_active: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
 
-interface EWayBillCreationAttributes extends Optional<EWayBillAttributes, 'id' | 'eway_bill_number' | 'sub_supply_type' | 'to_gstin' | 'vehicle_number' | 'vehicle_type' | 'transporter_id' | 'transporter_name' | 'transporter_gstin' | 'transporter_doc_number' | 'transporter_doc_date' | 'distance' | 'generated_at' | 'valid_until' | 'cancelled_at' | 'cancellation_reason' | 'notes' | 'qr_code' | 'is_active' | 'created_at' | 'updated_at'> {}
+interface EWayBillCreationAttributes extends Optional<EWayBillAttributes, 'id' | 'eway_bill_number' | 'sub_supply_type' | 'to_gstin' | 'vehicle_number' | 'vehicle_type' | 'transporter_id' | 'transporter_name' | 'transporter_gstin' | 'transporter_doc_number' | 'transporter_doc_date' | 'distance' | 'generated_at' | 'valid_until' | 'cancelled_at' | 'cancellation_reason' | 'notes' | 'qr_code' | 'gstn_eway_bill_no' | 'gstn_valid_upto' | 'gstn_last_error' | 'is_active' | 'created_at' | 'updated_at'> {}
 
 class EWayBill extends Model<EWayBillAttributes, EWayBillCreationAttributes> implements EWayBillAttributes {
   public id!: number;
@@ -116,6 +122,9 @@ class EWayBill extends Model<EWayBillAttributes, EWayBillCreationAttributes> imp
   public generated_by!: number;
   public notes?: string;
   public qr_code?: string;
+  public gstn_eway_bill_no?: string | null;
+  public gstn_valid_upto?: Date | null;
+  public gstn_last_error?: string | null;
   public is_active!: boolean;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
@@ -304,6 +313,18 @@ EWayBill.init(
       allowNull: true
     },
     qr_code: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    gstn_eway_bill_no: {
+      type: DataTypes.STRING(32),
+      allowNull: true
+    },
+    gstn_valid_upto: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    gstn_last_error: {
       type: DataTypes.TEXT,
       allowNull: true
     },

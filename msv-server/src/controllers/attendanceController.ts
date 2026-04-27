@@ -142,17 +142,166 @@ const getServerNowInTimeZone = () => {
   };
 };
 
-// 근태 목록 조회
+const getHourMinuteInAttendanceZone = (now: Date = new Date()) => {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+  const parts = formatter.formatToParts(now);
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
+  return { hour, minute };
+};
+
+const attendanceDateToYmd = (value: unknown): string => {
+  if (typeof value === 'string') {
+    return value.length >= 10 ? value.slice(0, 10) : value;
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  return String(value ?? '');
+};
+
+const checkoutAtEndOfDayIst = (dateYmd: string) => new Date(`${dateYmd}T23:00:00+05:30`);
+
+type CheckoutComputed = {
+  checkOutTime: Date;
+  workHours: number;
+  status: 'normal' | 'late' | 'early' | 'overtime' | 'absent';
+  adjustedForMaxHours: boolean;
+};
+
+/** 퇴근 시각 기준 근무시간·상태 계산 (수동 퇴근·자동 퇴근 공통) */
+const computeCheckoutFields = (attendance: any, checkOutTime: Date): CheckoutComputed => {
+  const checkInDate = attendance.check_in instanceof Date
+    ? attendance.check_in
+    : new Date(attendance.check_in);
+  const checkInMs = checkInDate.getTime();
+  let out = checkOutTime;
+  let checkOutMs = out.getTime();
+  let timeDiffMs = checkOutMs - checkInMs;
+
+  if (timeDiffMs < 0) {
+    throw new Error('CHECKOUT_BEFORE_CHECKIN');
+  }
+
+  let workHours = timeDiffMs / (1000 * 60 * 60);
+  let adjustedForMaxHours = false;
+
+  if (workHours > 24) {
+    adjustedForMaxHours = true;
+    checkOutMs = checkInMs + 24 * 60 * 60 * 1000;
+    out = new Date(checkOutMs);
+    timeDiffMs = checkOutMs - checkInMs;
+    workHours = timeDiffMs / (1000 * 60 * 60);
+  }
+
+  let status: CheckoutComputed['status'] = attendance.status;
+  const standardEndTime = new Date(checkInDate);
+  standardEndTime.setHours(18, 0, 0, 0);
+
+  if (out < standardEndTime) {
+    status = 'early';
+  } else if (out > standardEndTime) {
+    status = 'overtime';
+  } else if (status === 'late') {
+    status = 'normal';
+  }
+
+  return {
+    checkOutTime: out,
+    workHours: parseFloat(workHours.toFixed(2)),
+    status,
+    adjustedForMaxHours
+  };
+};
+
+// 근태 목록 조회 — 항상 로그인한 본인 기록만 (근태 관리 «근태 현황» 등)
 export const getAttendances = async (req: AuthRequest, res: Response) => {
   try {
     const tenantId = req.user?.tenant_id;
     const companyId = req.user?.company_id;
     const userRole = req.user?.role;
+    const { date, start_date, end_date, status } = req.query;
+
+    const whereClause: any = {};
+
+    if (userRole !== 'root' && userRole !== 'audit') {
+      whereClause.tenant_id = tenantId;
+      whereClause.company_id = companyId;
+    } else {
+      if (tenantId) whereClause.tenant_id = tenantId;
+      if (companyId) whereClause.company_id = companyId;
+    }
+
+    if (req.user?.id == null) {
+      return res.status(401).json({ success: false, message: '인증이 필요합니다.' });
+    }
+    whereClause.user_id = req.user.id;
+
+    if (date) {
+      whereClause.date = date;
+    } else if (start_date && end_date) {
+      whereClause.date = {
+        [Op.between]: [start_date, end_date]
+      };
+    }
+
+    if (status) {
+      whereClause.status = status;
+    }
+
+    whereClause.is_active = true;
+
+    const includeOptions: any[] = [
+      {
+        model: User,
+        as: 'user',
+        attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number'],
+        required: true
+      }
+    ];
+
+    const attendances = await (Attendance as any).findAll({
+      where: whereClause,
+      include: includeOptions,
+      order: [['date', 'DESC'], ['check_in', 'DESC']]
+    });
+
+    res.json({
+      success: true,
+      data: (attendances || []).map(attachLocalTimes)
+    });
+  } catch (error: any) {
+    console.error('근태 목록 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '근태 목록 조회 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+/** 회사 전체 근태 목록 — HR «근태 통계» 등 (admin / root / audit 만) */
+export const getCompanyAttendances = async (req: AuthRequest, res: Response) => {
+  try {
+    const userRole = req.user?.role;
+    if (userRole !== 'root' && userRole !== 'audit' && userRole !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: '회사 근태 목록을 조회할 권한이 없습니다.'
+      });
+    }
+
+    const tenantId = req.user?.tenant_id;
+    const companyId = req.user?.company_id;
     const { user_id, date, start_date, end_date, department, status } = req.query;
 
     const whereClause: any = {};
-    
-    // root나 audit 권한이면 모든 근태 조회 가능, 아니면 자신의 회사 근태만
+
     if (userRole !== 'root' && userRole !== 'audit') {
       whereClause.tenant_id = tenantId;
       whereClause.company_id = companyId;
@@ -162,7 +311,10 @@ export const getAttendances = async (req: AuthRequest, res: Response) => {
     }
 
     if (user_id) {
-      whereClause.user_id = user_id;
+      const parsed = parseInt(String(user_id), 10);
+      if (!Number.isNaN(parsed)) {
+        whereClause.user_id = parsed;
+      }
     }
 
     if (date) {
@@ -177,10 +329,8 @@ export const getAttendances = async (req: AuthRequest, res: Response) => {
       whereClause.status = status;
     }
 
-    // 활성화된 근태만 조회
     whereClause.is_active = true;
 
-    // 사용자 정보 포함
     const includeOptions: any[] = [
       {
         model: User,
@@ -202,9 +352,9 @@ export const getAttendances = async (req: AuthRequest, res: Response) => {
       data: (attendances || []).map(attachLocalTimes)
     });
   } catch (error: any) {
-    console.error('근태 목록 조회 오류:', error);
-    res.status(500).json({ 
-      success: false, 
+    console.error('회사 근태 목록 조회 오류:', error);
+    res.status(500).json({
+      success: false,
       message: '근태 목록 조회 중 오류가 발생했습니다.',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -279,15 +429,7 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
       });
     }
     const today = getDateInTimeZone(checkInTime);
-    console.log('[Attendance] check-in time source', {
-      use_server_time,
-      client_time,
-      client_date,
-      resolved_today: today,
-      resolved_check_in_ist: formatTimeInZone(checkInTime),
-      skip_geo: shouldSkipGeo
-    });
-    const parsedLatitude = typeof latitude === 'string' ? parseFloat(latitude) : latitude;
+        const parsedLatitude = typeof latitude === 'string' ? parseFloat(latitude) : latitude;
     const parsedLongitude = typeof longitude === 'string' ? parseFloat(longitude) : longitude;
     if (!shouldSkipGeo) {
       if (typeof parsedLatitude !== 'number' || typeof parsedLongitude !== 'number' || Number.isNaN(parsedLatitude) || Number.isNaN(parsedLongitude)) {
@@ -407,12 +549,7 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
       payload.check_in_local = clientDisplay ?? formatTimeInZone(checkInTime);
       payload.check_in_display = clientDisplay ?? formatTimeInZone(checkInTime);
     }
-    console.log('[Attendance] check-in response display', {
-      check_in: payload?.check_in,
-      check_in_local: payload?.check_in_local,
-      check_in_display: payload?.check_in_display
-    });
-    res.json({
+        res.json({
       success: true,
       data: payload,
       message: isLate ? '출근 처리되었습니다. (지각)' : '출근 처리되었습니다.'
@@ -446,15 +583,7 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
       });
     }
     const today = getDateInTimeZone(checkOutTime);
-    console.log('[Attendance] check-out time source', {
-      use_server_time,
-      client_time,
-      client_date,
-      resolved_today: today,
-      resolved_check_out_ist: formatTimeInZone(checkOutTime)
-    });
-
-    // 출근 기록이 있지만 퇴근 기록이 없는 가장 최근 근태 기록 찾기
+        // 출근 기록이 있지만 퇴근 기록이 없는 가장 최근 근태 기록 찾기
     // 하루가 지나더라도 출근 기록이 있으면 퇴근 가능
     const attendance = await (Attendance as any).findOne({
       where: {
@@ -482,64 +611,27 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // 근무 시간 계산: 퇴근 시간 - 출근 시간 (getTime()은 UTC 기준 밀리초)
-    const checkInDate = attendance.check_in instanceof Date
-      ? attendance.check_in
-      : new Date(attendance.check_in);
-    const checkInMs = checkInDate.getTime();
-    let checkOutMs = checkOutTime.getTime();
-    let timeDiffMs = checkOutMs - checkInMs;
-
-    // 음수 값 방지 (퇴근 시간이 출근 시간보다 이전인 경우)
-    if (timeDiffMs < 0) {
+    let computed: CheckoutComputed;
+    try {
+      computed = computeCheckoutFields(attendance, checkOutTime);
+    } catch {
       return res.status(400).json({
         success: false,
         message: '퇴근 시간이 출근 시간보다 이전일 수 없습니다.'
       });
     }
 
-    // 밀리초 → 시간 (퇴근 - 출근)
-    let workHours = timeDiffMs / (1000 * 60 * 60);
-    let adjustedForMaxHours = false;
-
-    // 디버깅 로그 (개발 환경)
     if (process.env.NODE_ENV === 'development') {
-      console.log('[Attendance] 근무시간 계산 (퇴근 - 출근)', {
-        check_in_ms: checkInMs,
-        check_out_ms: checkOutMs,
-        timeDiff_ms: timeDiffMs,
-        workHours: workHours.toFixed(4),
-        workHours_rounded: parseFloat(workHours.toFixed(2))
-      });
-    }
-    
-    // 비정상적으로 긴 근무시간 방지 (24시간 초과 시 24시간으로 보정)
-    if (workHours > 24) {
-      adjustedForMaxHours = true;
-      checkOutMs = checkInMs + 24 * 60 * 60 * 1000;
-      checkOutTime = new Date(checkOutMs);
-      timeDiffMs = checkOutMs - checkInMs;
-      workHours = timeDiffMs / (1000 * 60 * 60);
-    }
+      const checkInDate = attendance.check_in instanceof Date
+        ? attendance.check_in
+        : new Date(attendance.check_in);
+          }
 
-    // 상태 판단
-    let status = attendance.status;
-    const standardEndTime = new Date(checkInDate);
-    standardEndTime.setHours(18, 0, 0, 0);
-
-    if (checkOutTime < standardEndTime) {
-      status = 'early'; // 조기퇴근
-    } else if (checkOutTime > standardEndTime) {
-      status = 'overtime'; // 야근
-    } else if (status === 'late') {
-      // 지각이었지만 정상 퇴근
-      status = 'normal';
-    }
-
-    attendance.check_out = checkOutTime;
+    checkOutTime = computed.checkOutTime;
+    attendance.check_out = computed.checkOutTime;
     attendance.check_out_client_time = client_time;
-    attendance.work_hours = parseFloat(workHours.toFixed(2));
-    attendance.status = status;
+    attendance.work_hours = computed.workHours;
+    attendance.status = computed.status;
     await attendance.save();
 
     // 사용자 정보 포함하여 반환
@@ -559,15 +651,10 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
       payload.check_out_local = clientDisplay ?? formatTimeInZone(checkOutTime);
       payload.check_out_display = clientDisplay ?? formatTimeInZone(checkOutTime);
     }
-    console.log('[Attendance] check-out response display', {
-      check_out: payload?.check_out,
-      check_out_local: payload?.check_out_local,
-      check_out_display: payload?.check_out_display
-    });
-    res.json({
+        res.json({
       success: true,
       data: payload,
-      message: adjustedForMaxHours
+      message: computed.adjustedForMaxHours
         ? '근무 시간이 24시간을 초과하여 퇴근 시간이 24시간으로 보정되었습니다.'
         : '퇴근 처리되었습니다.'
     });
@@ -897,4 +984,84 @@ export const getTodayAttendance = async (req: AuthRequest, res: Response) => {
   }
 };
 
+const AUTO_CHECKOUT_NOTE = '자동 퇴근(23:00)';
+
+/** 출근만 있고 퇴근이 없는 행을 해당 근무일 23:00(IST)에 맞춰 마감합니다. */
+export const runAutoCheckoutOpenAttendances = async (): Promise<number> => {
+  if (process.env.DISABLE_ATTENDANCE_AUTO_CHECKOUT === 'true') {
+    return 0;
+  }
+
+  const { date: todayStr } = getServerNowInTimeZone();
+  const { hour } = getHourMinuteInAttendanceZone();
+
+  const baseWhere: any = {
+    check_in: { [Op.ne]: null },
+    check_out: null,
+    is_active: true
+  };
+
+  const openRows: any[] = [];
+
+  const pastOpen = await (Attendance as any).findAll({
+    where: {
+      ...baseWhere,
+      date: { [Op.lt]: todayStr }
+    }
+  });
+  openRows.push(...pastOpen);
+
+  if (hour >= 23) {
+    const todayOpen = await (Attendance as any).findAll({
+      where: {
+        ...baseWhere,
+        date: todayStr
+      }
+    });
+    openRows.push(...todayOpen);
+  }
+
+  let updated = 0;
+  for (const attendance of openRows) {
+    const dateYmd = attendanceDateToYmd(attendance.date);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) continue;
+
+    const targetCheckout = checkoutAtEndOfDayIst(dateYmd);
+    try {
+      const computed = computeCheckoutFields(attendance, targetCheckout);
+      const note = attendance.notes
+        ? `${attendance.notes}\n${AUTO_CHECKOUT_NOTE}`
+        : AUTO_CHECKOUT_NOTE;
+      attendance.check_out = computed.checkOutTime;
+      attendance.check_out_client_time = null;
+      attendance.work_hours = computed.workHours;
+      attendance.status = computed.status;
+      attendance.notes = note;
+      await attendance.save();
+      updated += 1;
+    } catch (e) {
+      console.warn('[Attendance] 자동 퇴근 스킵', { id: attendance.id, dateYmd, error: String(e) });
+    }
+  }
+
+  if (updated > 0) {
+      }
+  return updated;
+};
+
+let attendanceAutoCheckoutTimer: ReturnType<typeof setInterval> | null = null;
+
+/** 1분마다 검사: 과거 미마감은 즉시 보정, 당일은 근무 타임존 기준 23시 이후 해당 일 23:00으로 마감 */
+export const startAttendanceAutoCheckoutScheduler = () => {
+  if (attendanceAutoCheckoutTimer || process.env.DISABLE_ATTENDANCE_AUTO_CHECKOUT === 'true') {
+    return;
+  }
+  const tick = () => {
+    runAutoCheckoutOpenAttendances().catch((err) => {
+      console.error('[Attendance] 자동 퇴근 작업 오류:', err);
+    });
+  };
+  tick();
+  attendanceAutoCheckoutTimer = setInterval(tick, 60 * 1000);
+};
 

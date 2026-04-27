@@ -98,12 +98,12 @@ export const APP_CONSTANTS = {
     FINANCE: 'finance'
   },
   
-  // 통화
+  /** MVS 표시 통화: Rs. / ISO INR */
   CURRENCIES: {
-    KRW: 'KRW',
-    USD: 'USD',
-    INR: 'INR'
+    INR: 'INR',
+    USD: 'USD'
   },
+  DEFAULT_CURRENCY: 'INR' as const,
   
   // 세율 (기본값)
   DEFAULT_TAX_RATE: 10,
@@ -208,9 +208,10 @@ export const MESSAGES = {
 
 // 유틸리티 함수들
 export const UTILS = {
-  // 숫자 포맷팅 (INR 형식)
-  formatCurrency: (amount: number, currency: string = APP_CONSTANTS.CURRENCIES.INR): string => {
-    return `Rs. ${amount.toLocaleString('en-IN')}`;
+  // 숫자 포맷팅 (MVS 공통: Rs. · INR)
+  formatCurrency: (amount: number, _currencyCode: string = APP_CONSTANTS.CURRENCIES.INR): string => {
+    const n = Number(amount) || 0;
+    return `Rs. ${n.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
   },
   
   // 날짜 포맷팅

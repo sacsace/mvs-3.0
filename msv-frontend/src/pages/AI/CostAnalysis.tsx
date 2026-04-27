@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -47,7 +47,7 @@ import {
   Download as DownloadIcon
 } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ComposedChart, Area, PieChart, Pie, Cell } from 'recharts';
-import { useStore } from '../../store';
+import { useMenuStore } from '../../store';
 import { api } from '../../services/api';
 
 // TabPanel 컴포넌트 정의
@@ -67,7 +67,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`simple-tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ px: { xs: 0, sm: 0.5 }, py: { xs: 2, sm: 2.5 } }}>{children}</Box>}
     </div>
   );
 }
@@ -137,7 +137,15 @@ interface CostAnalysisData {
 }
 
 const CostAnalysis: React.FC = () => {
-  const { user } = useStore();
+  const { language } = useMenuStore();
+  const txt = useCallback((ko: string, en: string) => (language === 'en' ? en : ko), [language]);
+  /** API는 0~1 소수 또는 이미 퍼센트 값을 줄 수 있음 */
+  const formatConfidencePercent = useCallback((value: number) => {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 0;
+    if (n > 0 && n <= 1) return Math.round(n * 100);
+    return Math.round(Math.min(100, Math.max(0, n)));
+  }, []);
   const [analysisData, setAnalysisData] = useState<CostAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -159,14 +167,18 @@ const CostAnalysis: React.FC = () => {
         }
       } catch (error) {
         console.error('비용 분석 데이터 로드 오류:', error);
-        setError('비용 분석 데이터를 불러오는데 실패했습니다.');
+        setError(
+          language === 'en'
+            ? 'Failed to load cost analysis data.'
+            : '비용 분석 데이터를 불러오는데 실패했습니다.'
+        );
       } finally {
         setLoading(false);
       }
     };
 
     fetchAnalysisData();
-  }, [timeRange, selectedCategory]);
+  }, [timeRange, selectedCategory, language]);
 
   // AI 인사이트 생성
   const generateAIInsights = async () => {
@@ -185,7 +197,9 @@ const CostAnalysis: React.FC = () => {
       }
     } catch (error) {
       console.error('AI 인사이트 생성 오류:', error);
-      setError('AI 인사이트 생성에 실패했습니다.');
+      setError(
+        language === 'en' ? 'Failed to generate AI insights.' : 'AI 인사이트 생성에 실패했습니다.'
+      );
     } finally {
       setAiProcessing(false);
     }
@@ -212,26 +226,43 @@ const CostAnalysis: React.FC = () => {
     setOpenInsightDialog(true);
   };
 
-  // 색상 팔레트
-  const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00ff00', '#ff6b6b', '#4ecdc4', '#45b7d1'];
-
   if (loading) {
     return (
       <Box sx={{ p: 3, textAlign: 'center' }}>
         <CircularProgress />
-        <Typography sx={{ mt: 2 }}>AI 분석 중...</Typography>
+        <Typography sx={{ mt: 2, fontSize: '0.9375rem' }}>{txt('AI 분석 중...', 'Analyzing...')}</Typography>
       </Box>
     );
   }
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 1280, mx: 'auto' }}>
+      <Typography
+        variant="h5"
+        component="h1"
+        gutterBottom
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          fontWeight: 700,
+          fontSize: { xs: '1.35rem', sm: '1.55rem' },
+          letterSpacing: '-0.02em',
+          '& .MuiSvgIcon-root': { fontSize: { xs: '1.35rem', sm: '1.5rem' } },
+        }}
+      >
         <PsychologyIcon color="primary" />
-        AI 비용 분석
+        {txt('AI 비용 분석', 'AI Cost Analysis')}
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        최근 비용 추이와 카테고리별 지출을 분석하고, AI가 절감 포인트와 향후 비용을 예측합니다.
+      <Typography
+        variant="body1"
+        color="text.secondary"
+        sx={{ mb: 3, fontSize: '0.9375rem', lineHeight: 1.65, maxWidth: 720 }}
+      >
+        {txt(
+          '최근 비용 추이와 카테고리별 지출을 분석하고, AI가 절감 포인트와 향후 비용을 예측합니다.',
+          'Analyzes recent spending by category and uses AI to suggest savings and forecast costs.'
+        )}
       </Typography>
 
       {error && (
@@ -242,31 +273,42 @@ const CostAnalysis: React.FC = () => {
 
       {/* 필터 및 액션 */}
       <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>기간</InputLabel>
+        <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 2,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              '& .MuiInputLabel-root': { fontSize: '0.8125rem' },
+              '& .MuiSelect-select': { fontSize: '0.875rem', fontWeight: 500, py: 1.1 },
+            }}
+          >
+            <FormControl size="small" sx={{ minWidth: 128 }}>
+              <InputLabel>{txt('기간', 'Period')}</InputLabel>
               <Select
                 value={timeRange}
+                label={txt('기간', 'Period')}
                 onChange={(e) => setTimeRange(e.target.value)}
               >
-                <MenuItem value="1month">1개월</MenuItem>
-                <MenuItem value="3months">3개월</MenuItem>
-                <MenuItem value="6months">6개월</MenuItem>
-                <MenuItem value="1year">1년</MenuItem>
+                <MenuItem value="1month">{txt('1개월', '1 month')}</MenuItem>
+                <MenuItem value="3months">{txt('3개월', '3 months')}</MenuItem>
+                <MenuItem value="6months">{txt('6개월', '6 months')}</MenuItem>
+                <MenuItem value="1year">{txt('1년', '1 year')}</MenuItem>
               </Select>
             </FormControl>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>카테고리</InputLabel>
+            <FormControl size="small" sx={{ minWidth: 140 }}>
+              <InputLabel>{txt('카테고리', 'Category')}</InputLabel>
               <Select
                 value={selectedCategory}
+                label={txt('카테고리', 'Category')}
                 onChange={(e) => setSelectedCategory(e.target.value)}
               >
-                <MenuItem value="all">전체</MenuItem>
-                <MenuItem value="operational">운영비</MenuItem>
-                <MenuItem value="personnel">인사비</MenuItem>
-                <MenuItem value="technology">기술비</MenuItem>
-                <MenuItem value="marketing">마케팅비</MenuItem>
+                <MenuItem value="all">{txt('전체', 'All')}</MenuItem>
+                <MenuItem value="operational">{txt('운영비', 'Operational')}</MenuItem>
+                <MenuItem value="personnel">{txt('인사비', 'Personnel')}</MenuItem>
+                <MenuItem value="technology">{txt('기술비', 'Technology')}</MenuItem>
+                <MenuItem value="marketing">{txt('마케팅비', 'Marketing')}</MenuItem>
               </Select>
             </FormControl>
             <Button
@@ -274,28 +316,44 @@ const CostAnalysis: React.FC = () => {
               startIcon={<AutoAwesomeIcon />}
               onClick={generateAIInsights}
               disabled={aiProcessing}
-              size="small"
+              size="medium"
+              sx={{ fontSize: '0.875rem', fontWeight: 600, px: 2, py: 1 }}
             >
-              {aiProcessing ? 'AI 분석 중...' : 'AI 인사이트 생성'}
+              {aiProcessing ? txt('AI 분석 중...', 'Analyzing...') : txt('AI 인사이트 생성', 'Generate AI insights')}
             </Button>
             <Button
               variant="outlined"
               startIcon={<DownloadIcon />}
-              size="small"
+              size="medium"
+              sx={{ fontSize: '0.875rem', fontWeight: 600, px: 2, py: 1 }}
             >
-              보고서 다운로드
+              {txt('보고서 다운로드', 'Download report')}
             </Button>
           </Box>
         </CardContent>
       </Card>
 
       {/* 탭 네비게이션 */}
-      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-        <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)}>
-          <Tab label="개요" icon={<AnalyticsIcon />} />
-          <Tab label="AI 인사이트" icon={<PsychologyIcon />} />
-          <Tab label="예측 분석" icon={<TimelineIcon />} />
-          <Tab label="벤치마킹" icon={<CompareIcon />} />
+      <Box
+        sx={{
+          borderBottom: 1,
+          borderColor: 'divider',
+          mb: 2.5,
+          '& .MuiTab-root': {
+            fontSize: '0.8125rem',
+            fontWeight: 600,
+            minHeight: 48,
+            textTransform: 'none',
+            letterSpacing: '0.02em',
+          },
+          '& .MuiTab-iconWrapper': { fontSize: '1.125rem' },
+        }}
+      >
+        <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)} variant="scrollable" allowScrollButtonsMobile>
+          <Tab label={txt('개요', 'Overview')} icon={<AnalyticsIcon />} />
+          <Tab label={txt('AI 인사이트', 'AI insights')} icon={<PsychologyIcon />} />
+          <Tab label={txt('예측 분석', 'Forecast')} icon={<TimelineIcon />} />
+          <Tab label={txt('벤치마킹', 'Benchmarks')} icon={<CompareIcon />} />
         </Tabs>
       </Box>
 
@@ -305,15 +363,15 @@ const CostAnalysis: React.FC = () => {
           {/* 총 비용 카드 */}
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '1rem', fontWeight: 600 }}>
                 <AttachMoneyIcon color="primary" />
-                총 비용
+                {txt('총 비용', 'Total cost')}
               </Typography>
-              <Typography variant="h4" color="primary.main">
+              <Typography variant="h4" color="primary.main" sx={{ fontSize: '1.75rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
                 Rs. {analysisData?.totalCost?.toLocaleString() || 0}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                현재 기간 기준
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem', mt: 0.5 }}>
+                {txt('현재 기간 기준', 'For the selected period')}
               </Typography>
             </CardContent>
           </Card>
@@ -321,9 +379,9 @@ const CostAnalysis: React.FC = () => {
           {/* 월별 트렌드 */}
           <Card sx={{ gridColumn: 'span 2' }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '1rem', fontWeight: 600 }}>
                 <TrendingUpIcon color="primary" />
-                월별 비용 트렌드
+                {txt('월별 비용 트렌드', 'Monthly cost trend')}
               </Typography>
               <ResponsiveContainer width="100%" height={300}>
                 <ComposedChart data={analysisData?.monthlyTrend || []}>
@@ -342,9 +400,9 @@ const CostAnalysis: React.FC = () => {
           {/* 카테고리별 분석 */}
           <Card sx={{ gridColumn: 'span 2' }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '1rem', fontWeight: 600 }}>
                 <AssessmentIcon color="primary" />
-                카테고리별 비용 분석
+                {txt('카테고리별 비용 분석', 'Cost by category')}
               </Typography>
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
@@ -369,19 +427,19 @@ const CostAnalysis: React.FC = () => {
           {/* 부서별 비용 */}
           <Card sx={{ gridColumn: 'span 2' }}>
             <CardContent>
-              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '1rem', fontWeight: 600 }}>
                 <SpeedIcon color="primary" />
-                부서별 비용 효율성
+                {txt('부서별 비용 효율성', 'Department cost efficiency')}
               </Typography>
               <TableContainer component={Paper}>
                 <Table size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell>부서</TableCell>
-                      <TableCell align="right">비용</TableCell>
-                      <TableCell align="right">예산</TableCell>
-                      <TableCell align="right">효율성</TableCell>
-                      <TableCell align="center">상태</TableCell>
+                      <TableCell>{txt('부서', 'Department')}</TableCell>
+                      <TableCell align="right">{txt('비용', 'Cost')}</TableCell>
+                      <TableCell align="right">{txt('예산', 'Budget')}</TableCell>
+                      <TableCell align="right">{txt('효율성', 'Efficiency')}</TableCell>
+                      <TableCell align="center">{txt('상태', 'Status')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -402,7 +460,13 @@ const CostAnalysis: React.FC = () => {
                         </TableCell>
                         <TableCell align="center">
                           <Chip
-                            label={dept.efficiency > 80 ? '우수' : dept.efficiency > 60 ? '양호' : '개선필요'}
+                            label={
+                              dept.efficiency > 80
+                                ? txt('우수', 'Excellent')
+                                : dept.efficiency > 60
+                                  ? txt('양호', 'Good')
+                                  : txt('개선필요', 'Needs improvement')
+                            }
                             size="small"
                             color={dept.efficiency > 80 ? 'success' : dept.efficiency > 60 ? 'warning' : 'error'}
                           />
@@ -423,41 +487,52 @@ const CostAnalysis: React.FC = () => {
           {analysisData?.aiInsights?.map((insight) => (
             <Card key={insight.id} sx={{ cursor: 'pointer' }} onClick={() => handleInsightView(insight)}>
               <CardContent>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <PsychologyIcon color="primary" />
-                    <Typography variant="h6">{insight.title}</Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5, gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', minWidth: 0 }}>
+                    <PsychologyIcon color="primary" sx={{ fontSize: '1.35rem', flexShrink: 0 }} />
+                    <Typography variant="subtitle1" component="h2" sx={{ fontSize: '1.125rem', fontWeight: 700, lineHeight: 1.35 }}>
+                      {insight.title}
+                    </Typography>
                     <Chip
                       label={insight.type}
                       size="small"
                       color={insight.type === 'cost_optimization' ? 'success' : 'primary'}
+                      sx={{ '& .MuiChip-label': { fontSize: '0.6875rem', fontFamily: 'ui-monospace, monospace' } }}
                     />
                   </Box>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Box sx={{ display: 'flex', gap: 0.75, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                     <Chip
                       label={insight.impact}
                       size="small"
                       color={insight.impact === 'high' ? 'error' : insight.impact === 'medium' ? 'warning' : 'default'}
+                      sx={{ '& .MuiChip-label': { fontSize: '0.75rem', fontWeight: 600, textTransform: 'capitalize' } }}
                     />
                     <Chip
-                      label={`${insight.confidence}% 신뢰도`}
+                      label={`${formatConfidencePercent(insight.confidence)}% ${txt('신뢰도', 'confidence')}`}
                       size="small"
                       color="info"
+                      sx={{ '& .MuiChip-label': { fontSize: '0.75rem', fontWeight: 600 } }}
                     />
                   </Box>
                 </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                <Typography variant="body1" color="text.secondary" sx={{ mb: 2, fontSize: '0.9375rem', lineHeight: 1.65 }}>
                   {insight.description}
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
                   {insight.tags.map((tag, index) => (
-                    <Chip key={index} label={tag} size="small" variant="outlined" />
+                    <Chip
+                      key={index}
+                      label={tag}
+                      size="small"
+                      variant="outlined"
+                      sx={{ '& .MuiChip-label': { fontSize: '0.75rem' } }}
+                    />
                   ))}
                 </Box>
                 {insight.estimatedSavings && (
-                  <Box sx={{ mt: 2, p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
-                    <Typography variant="body2" color="success.dark">
-                      <strong>예상 절약액:</strong> Rs. {insight.estimatedSavings.toLocaleString()}
+                  <Box sx={{ mt: 2, px: 2, py: 1.5, bgcolor: 'success.main', borderRadius: 1 }}>
+                    <Typography sx={{ fontSize: '1rem', fontWeight: 600, color: 'success.contrastText' }}>
+                      {txt('예상 절약액:', 'Est. savings:')} Rs. {insight.estimatedSavings.toLocaleString()}
                     </Typography>
                   </Box>
                 )}
@@ -472,9 +547,9 @@ const CostAnalysis: React.FC = () => {
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 3 }}>
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '1rem', fontWeight: 600 }}>
                 <TimelineIcon color="primary" />
-                비용 예측
+                {txt('비용 예측', 'Cost forecast')}
               </Typography>
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={analysisData?.predictions || []}>
@@ -490,16 +565,16 @@ const CostAnalysis: React.FC = () => {
 
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '1rem', fontWeight: 600 }}>
                 <InsightsIcon color="primary" />
-                예측 요인
+                {txt('예측 요인', 'Forecast factors')}
               </Typography>
               <List>
                 {analysisData?.predictions?.map((prediction, index) => (
                   <ListItem key={index}>
                     <ListItemText
                       primary={prediction.period}
-                      secondary={`Rs. ${prediction.predictedCost.toLocaleString()} (신뢰도: ${prediction.confidence}%)`}
+                      secondary={`Rs. ${prediction.predictedCost.toLocaleString()} (${txt('신뢰도', 'confidence')}: ${formatConfidencePercent(prediction.confidence)}%)`}
                     />
                     <Chip
                       label={prediction.factors.length} 
@@ -520,20 +595,20 @@ const CostAnalysis: React.FC = () => {
           {analysisData?.benchmarks?.map((benchmark, index) => (
             <Card key={index}>
               <CardContent>
-                <Typography variant="h6" gutterBottom>
+                <Typography variant="h6" gutterBottom sx={{ fontSize: '1rem', fontWeight: 600 }}>
                   {benchmark.metric}
                 </Typography>
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2">현재</Typography>
+                    <Typography variant="body2">{txt('현재', 'Current')}</Typography>
                     <Typography variant="h6">{benchmark.current} {benchmark.unit}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2">업계 평균</Typography>
+                    <Typography variant="body2">{txt('업계 평균', 'Industry avg.')}</Typography>
                     <Typography variant="body2">{benchmark.industry} {benchmark.unit}</Typography>
                   </Box>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2">최고 수준</Typography>
+                    <Typography variant="body2">{txt('최고 수준', 'Best in class')}</Typography>
                     <Typography variant="body2">{benchmark.best} {benchmark.unit}</Typography>
                   </Box>
                   <LinearProgress
@@ -550,26 +625,47 @@ const CostAnalysis: React.FC = () => {
 
       {/* 인사이트 상세 다이얼로그 */}
       <Dialog open={openInsightDialog} onClose={() => setOpenInsightDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
+        <DialogTitle sx={{ pb: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <PsychologyIcon color="primary" />
-            {selectedInsight?.title}
+            <PsychologyIcon color="primary" sx={{ fontSize: '1.35rem' }} />
+            <Typography component="span" sx={{ fontSize: '1.125rem', fontWeight: 700, lineHeight: 1.35 }}>
+              {selectedInsight?.title}
+            </Typography>
           </Box>
         </DialogTitle>
         <DialogContent>
           {selectedInsight && (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Typography variant="body1">{selectedInsight.description}</Typography>
-              
-              <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-                <Chip label={selectedInsight.type} size="small" color="primary" />
-                <Chip label={selectedInsight.impact} size="small" color="secondary" />
-                <Chip label={`${selectedInsight.confidence}% 신뢰도`} size="small" color="info" />
+              <Typography variant="body1" sx={{ fontSize: '0.9375rem', lineHeight: 1.65, color: 'text.secondary' }}>
+                {selectedInsight.description}
+              </Typography>
+
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Chip
+                  label={selectedInsight.type}
+                  size="small"
+                  color="primary"
+                  sx={{ '& .MuiChip-label': { fontSize: '0.6875rem', fontFamily: 'ui-monospace, monospace' } }}
+                />
+                <Chip
+                  label={selectedInsight.impact}
+                  size="small"
+                  color="secondary"
+                  sx={{ '& .MuiChip-label': { fontSize: '0.75rem', fontWeight: 600, textTransform: 'capitalize' } }}
+                />
+                <Chip
+                  label={`${formatConfidencePercent(selectedInsight.confidence)}% ${txt('신뢰도', 'confidence')}`}
+                  size="small"
+                  color="info"
+                  sx={{ '& .MuiChip-label': { fontSize: '0.75rem', fontWeight: 600 } }}
+                />
               </Box>
 
               <Divider />
 
-              <Typography variant="h6">추천 사항</Typography>
+              <Typography variant="h6" sx={{ fontSize: '1rem', fontWeight: 600 }}>
+                {txt('추천 사항', 'Recommendations')}
+              </Typography>
               <List>
                 {selectedInsight.recommendations.map((recommendation, index) => (
                   <ListItem key={index}>
@@ -582,9 +678,9 @@ const CostAnalysis: React.FC = () => {
               </List>
 
               {selectedInsight.estimatedSavings && (
-                <Box sx={{ p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
-                  <Typography variant="h6" color="success.dark">
-                    예상 절약액: Rs. {selectedInsight.estimatedSavings.toLocaleString()}
+                <Box sx={{ px: 2, py: 1.5, bgcolor: 'success.main', borderRadius: 1 }}>
+                  <Typography sx={{ fontSize: '1rem', fontWeight: 600, color: 'success.contrastText' }}>
+                    {txt('예상 절약액:', 'Est. savings:')} Rs. {selectedInsight.estimatedSavings.toLocaleString()}
                   </Typography>
                 </Box>
               )}
@@ -592,13 +688,13 @@ const CostAnalysis: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenInsightDialog(false)}>닫기</Button>
+          <Button onClick={() => setOpenInsightDialog(false)}>{txt('닫기', 'Close')}</Button>
           <Button 
             onClick={() => handleInsightStatusUpdate(selectedInsight?.id || '', 'implemented')} 
             variant="contained"
             disabled={selectedInsight?.status === 'implemented'}
           >
-            구현하기
+            {txt('구현하기', 'Mark implemented')}
           </Button>
         </DialogActions>
       </Dialog>

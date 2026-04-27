@@ -78,6 +78,36 @@ interface StatusSummary {
   unassigned: number;
 }
 
+/** WorkBoardDetailPage·백엔드와 동일한 “완료” 열 규칙 (업무 종료 시 이동하는 열과 집계 일치) */
+const isCompletedListTitle = (title: string): boolean => {
+  const normalized = String(title || '').trim().toLowerCase();
+  if (!normalized) return false;
+  const keywords = ['완료', '종료', 'done', 'completed', 'closed'];
+  return keywords.some((keyword) => normalized.includes(keyword));
+};
+
+const resolveCompletedListId = (
+  lists: { id: number; title: string; position: number }[]
+): number | null => {
+  const sorted = [...lists].sort((a, b) => a.position - b.position);
+  const byTitle = sorted.find((l) => isCompletedListTitle(l.title));
+  if (byTitle) return byTitle.id;
+  if (sorted.length >= 2) return sorted[sorted.length - 1].id;
+  return null;
+};
+
+const listStatusForStats = (
+  list: { id: number; title: string; position: number },
+  completedListId: number | null
+): 'done' | 'progress' | 'todo' => {
+  if (completedListId != null && list.id === completedListId) return 'done';
+  const normalized = (list.title || '').replace(/\s+/g, '').toLowerCase();
+  if (normalized.includes('진행') || normalized.includes('doing') || normalized.includes('progress')) {
+    return 'progress';
+  }
+  return 'todo';
+};
+
 const WorkStatistics: React.FC = () => {
   const { t } = useTranslation();
   const [statistics, setStatistics] = useState<WorkStatistic[]>([]);
@@ -96,13 +126,6 @@ const WorkStatistics: React.FC = () => {
     const m = String(now.getMonth() + 1).padStart(2, '0');
     return `${now.getFullYear()}-${m}`;
   }, []);
-
-  const classifyStatus = (listTitle: string): 'done' | 'progress' | 'todo' => {
-    const normalized = (listTitle || '').replace(/\s+/g, '').toLowerCase();
-    if (normalized.includes('완료') || normalized.includes('done')) return 'done';
-    if (normalized.includes('진행') || normalized.includes('doing') || normalized.includes('progress')) return 'progress';
-    return 'todo';
-  };
 
   const loadStatisticsData = useCallback(async () => {
     setError('');
@@ -149,8 +172,22 @@ const WorkStatistics: React.FC = () => {
           }
         }
 
+        const listsForResolve = (board.lists || []).map((l: any) => ({
+          id: Number(l.id),
+          title: String(l.title || ''),
+          position: Number(l.position) || 0
+        }));
+        const completedListId = resolveCompletedListId(listsForResolve);
+
         for (const list of board.lists || []) {
-          const status = classifyStatus(list.title || '');
+          const status = listStatusForStats(
+            {
+              id: Number(list.id),
+              title: String(list.title || ''),
+              position: Number(list.position) || 0
+            },
+            completedListId
+          );
           for (const card of list.cards || []) {
             if (status === 'done') summary.done += 1;
             else if (status === 'progress') summary.progress += 1;
@@ -346,31 +383,41 @@ const WorkStatistics: React.FC = () => {
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' }, gap: 2, mb: 3 }}>
         <Card>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom>{t('workStatistics.summary.avgEfficiency')}</Typography>
+            <Typography variant="body2" gutterBottom sx={{ color: 'text.primary', opacity: 0.72, fontWeight: 500 }}>
+              {t('workStatistics.summary.avgEfficiency')}
+            </Typography>
             <Typography variant="h4" color={getEfficiencyColor(averageEfficiency) + '.main'}>{averageEfficiency.toFixed(1)}%</Typography>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom>{t('workStatistics.summary.avgCompletionRate')}</Typography>
+            <Typography variant="body2" gutterBottom sx={{ color: 'text.primary', opacity: 0.72, fontWeight: 500 }}>
+              {t('workStatistics.summary.avgCompletionRate')}
+            </Typography>
             <Typography variant="h4" color={getProductivityColor(averageProductivity) + '.main'}>{averageProductivity.toFixed(1)}%</Typography>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom>{t('workStatistics.summary.totalAssignedCards')}</Typography>
+            <Typography variant="body2" gutterBottom sx={{ color: 'text.primary', opacity: 0.72, fontWeight: 500 }}>
+              {t('workStatistics.summary.totalAssignedCards')}
+            </Typography>
             <Typography variant="h4">{totalAssigned}</Typography>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom>{t('workStatistics.summary.completedCards')}</Typography>
+            <Typography variant="body2" gutterBottom sx={{ color: 'text.primary', opacity: 0.72, fontWeight: 500 }}>
+              {t('workStatistics.summary.completedCards')}
+            </Typography>
             <Typography variant="h4">{totalTasksCompleted}</Typography>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
-            <Typography color="textSecondary" gutterBottom>{t('workStatistics.summary.overallCompletionRate')}</Typography>
+            <Typography variant="body2" gutterBottom sx={{ color: 'text.primary', opacity: 0.72, fontWeight: 500 }}>
+              {t('workStatistics.summary.overallCompletionRate')}
+            </Typography>
             <Typography variant="h4" color="success.main">{completionRate.toFixed(1)}%</Typography>
           </CardContent>
         </Card>
@@ -387,13 +434,19 @@ const WorkStatistics: React.FC = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon />
+                    <SearchIcon sx={{ color: 'text.primary', opacity: 0.55 }} />
                   </InputAdornment>
                 )
               }}
+              sx={{
+                '& .MuiInputBase-input::placeholder': {
+                  color: 'text.primary',
+                  opacity: 0.5
+                }
+              }}
             />
             <FormControl fullWidth>
-              <InputLabel>{t('workStatistics.filters.department')}</InputLabel>
+              <InputLabel sx={{ color: 'text.primary', opacity: 0.75 }}>{t('workStatistics.filters.department')}</InputLabel>
               <Select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}>
                 <MenuItem value="">{t('workStatistics.filters.all')}</MenuItem>
                 {departments.map((dept) => (
@@ -402,7 +455,7 @@ const WorkStatistics: React.FC = () => {
               </Select>
             </FormControl>
             <FormControl fullWidth>
-              <InputLabel>{t('workStatistics.filters.period')}</InputLabel>
+              <InputLabel sx={{ color: 'text.primary', opacity: 0.75 }}>{t('workStatistics.filters.period')}</InputLabel>
               <Select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value)}>
                 <MenuItem value="">{t('workStatistics.filters.all')}</MenuItem>
                 {periods.map((period) => (
@@ -428,7 +481,21 @@ const WorkStatistics: React.FC = () => {
 
       <Card sx={{ mb: 3 }}>
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={tabValue} onChange={(_e, newValue) => setTabValue(newValue)}>
+          <Tabs
+            value={tabValue}
+            onChange={(_e, newValue) => setTabValue(newValue)}
+            sx={{
+              '& .MuiTab-root': {
+                color: 'text.primary',
+                opacity: 0.62,
+                fontWeight: 500
+              },
+              '& .MuiTab-root.Mui-selected': {
+                opacity: 1,
+                fontWeight: 600
+              }
+            }}
+          >
             <Tab label={t('workStatistics.tabs.assigneeStats')} icon={<PersonIcon />} />
             <Tab label={t('workStatistics.tabs.completionComparison')} icon={<TrendingUpIcon />} />
             <Tab label={t('workStatistics.tabs.cardStatusDistribution')} icon={<PieChartIcon />} />
@@ -439,7 +506,23 @@ const WorkStatistics: React.FC = () => {
         <TabPanel value={tabValue} index={0}>
           <TableContainer>
             <Table>
-              <TableHead>
+              <TableHead
+                sx={{
+                  bgcolor: 'background.paper',
+                  '& .MuiTableCell-head': {
+                    bgcolor: 'background.paper',
+                    color: 'text.primary',
+                    opacity: 0.92,
+                    fontWeight: 600,
+                    fontSize: '0.875rem',
+                    textTransform: 'none',
+                    letterSpacing: 'normal',
+                    borderBottom: '2px solid',
+                    borderColor: 'primary.main',
+                    py: 1.25
+                  }
+                }}
+              >
                 <TableRow>
                   <TableCell>{t('workStatistics.columns.employeeInfo')}</TableCell>
                   <TableCell>{t('workStatistics.columns.period')}</TableCell>
@@ -459,15 +542,19 @@ const WorkStatistics: React.FC = () => {
                           <PersonIcon />
                         </Avatar>
                         <Box>
-                          <Typography variant="subtitle2" fontWeight="bold">{stat.employeeName}</Typography>
-                          <Typography variant="body2" color="text.secondary">{stat.position} • {stat.department}</Typography>
+                          <Typography variant="subtitle2" fontWeight="bold" sx={{ color: 'text.primary' }}>
+                            {stat.employeeName}
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: 'text.primary', opacity: 0.68, mt: 0.25 }}>
+                            {stat.position} • {stat.department}
+                          </Typography>
                         </Box>
                       </Box>
                     </TableCell>
-                    <TableCell>{stat.period}</TableCell>
-                    <TableCell>{stat.tasksAssigned}</TableCell>
-                    <TableCell>{stat.tasksInProgress}</TableCell>
-                    <TableCell>{stat.tasksCompleted}</TableCell>
+                    <TableCell sx={{ color: 'text.primary', opacity: 0.88, fontWeight: 500 }}>{stat.period}</TableCell>
+                    <TableCell sx={{ color: 'text.primary', opacity: 0.88, fontWeight: 500 }}>{stat.tasksAssigned}</TableCell>
+                    <TableCell sx={{ color: 'text.primary', opacity: 0.88, fontWeight: 500 }}>{stat.tasksInProgress}</TableCell>
+                    <TableCell sx={{ color: 'text.primary', opacity: 0.88, fontWeight: 500 }}>{stat.tasksCompleted}</TableCell>
                     <TableCell>
                       <Chip label={`${stat.efficiency.toFixed(1)}%`} color={getEfficiencyColor(stat.efficiency)} size="small" />
                     </TableCell>
@@ -479,7 +566,7 @@ const WorkStatistics: React.FC = () => {
                 {paginatedStatistics.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={7}>
-                      <Typography color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+                      <Typography sx={{ py: 2, textAlign: 'center', color: 'text.primary', opacity: 0.65 }}>
                         {t('workStatistics.empty.noAssigneeStats')}
                       </Typography>
                     </TableCell>
@@ -500,7 +587,9 @@ const WorkStatistics: React.FC = () => {
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
-          <Typography variant="h6" gutterBottom>{t('workStatistics.charts.completionByAssignee')}</Typography>
+          <Typography variant="h6" gutterBottom sx={{ color: 'text.primary', fontWeight: 600 }}>
+            {t('workStatistics.charts.completionByAssignee')}
+          </Typography>
           <Box sx={{ height: 400 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={productivityData}>
@@ -516,7 +605,9 @@ const WorkStatistics: React.FC = () => {
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
-          <Typography variant="h6" gutterBottom>{t('workStatistics.charts.cardStatusDistribution')}</Typography>
+          <Typography variant="h6" gutterBottom sx={{ color: 'text.primary', fontWeight: 600 }}>
+            {t('workStatistics.charts.cardStatusDistribution')}
+          </Typography>
           <Box sx={{ height: 400 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -541,7 +632,9 @@ const WorkStatistics: React.FC = () => {
         </TabPanel>
 
         <TabPanel value={tabValue} index={3}>
-          <Typography variant="h6" gutterBottom>{t('workStatistics.charts.efficiencyByAssignee')}</Typography>
+          <Typography variant="h6" gutterBottom sx={{ color: 'text.primary', fontWeight: 600 }}>
+            {t('workStatistics.charts.efficiencyByAssignee')}
+          </Typography>
           <Box sx={{ height: 400 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={efficiencyTrendData}>

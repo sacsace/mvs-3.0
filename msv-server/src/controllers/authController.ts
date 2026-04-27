@@ -30,6 +30,19 @@ const getClientIp = (req: Request): string | null => {
   return req.ip || req.socket?.remoteAddress || null;
 };
 
+const DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
+const MIN_SESSION_TIMEOUT_MINUTES = 5;
+const MAX_SESSION_TIMEOUT_MINUTES = 24 * 60;
+
+const normalizeSessionTimeoutMinutes = (value: unknown): number => {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return DEFAULT_SESSION_TIMEOUT_MINUTES;
+  const rounded = Math.floor(num);
+  if (rounded < MIN_SESSION_TIMEOUT_MINUTES) return MIN_SESSION_TIMEOUT_MINUTES;
+  if (rounded > MAX_SESSION_TIMEOUT_MINUTES) return MAX_SESSION_TIMEOUT_MINUTES;
+  return rounded;
+};
+
 let loginLogSchemaEnsured = false;
 const ensureLoginLogSchema = async () => {
   if (loginLogSchemaEnsured) return;
@@ -852,7 +865,7 @@ export const login = async (req: LoginRequest, res: Response) => {
     }
 
     // 시스템 설정/사용기간 정보 로드
-    let sessionTimeoutMinutes = 30; // 기본값 30분
+    let sessionTimeoutMinutes = DEFAULT_SESSION_TIMEOUT_MINUTES;
     let loginPeriodStart: Date | null = null;
     let loginPeriodEnd: Date | null = null;
     let subscriptionStatus: string | null = null;
@@ -863,7 +876,7 @@ export const login = async (req: LoginRequest, res: Response) => {
           attributes: ['settings', 'login_period_start', 'login_period_end', 'subscription_status']
         });
         if (company && company.settings && company.settings.security) {
-          sessionTimeoutMinutes = company.settings.security.sessionTimeout || 30;
+          sessionTimeoutMinutes = normalizeSessionTimeoutMinutes(company.settings.security.sessionTimeout);
         }
         if (company) {
           loginPeriodStart = company.login_period_start ? new Date(company.login_period_start) : null;
@@ -1031,7 +1044,7 @@ export const refreshToken = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    let sessionTimeoutMinutes = 30; // 기본값 30분
+    let sessionTimeoutMinutes = DEFAULT_SESSION_TIMEOUT_MINUTES;
     try {
       if (user.company_id) {
         const company = await (Company as any).findOne({
@@ -1039,7 +1052,7 @@ export const refreshToken = async (req: AuthRequest, res: Response) => {
           attributes: ['settings']
         });
         if (company && company.settings && company.settings.security) {
-          sessionTimeoutMinutes = company.settings.security.sessionTimeout || 30;
+          sessionTimeoutMinutes = normalizeSessionTimeoutMinutes(company.settings.security.sessionTimeout);
         }
       }
     } catch (error) {

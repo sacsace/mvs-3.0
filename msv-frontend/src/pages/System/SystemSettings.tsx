@@ -19,7 +19,9 @@ import {
   DialogActions,
   CircularProgress,
   Alert,
-  Snackbar
+  Snackbar,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
@@ -27,18 +29,80 @@ import {
   Security as SecurityIcon,
   Storage as StorageIcon,
   CloudUpload as CloudUploadIcon,
-  Save as SaveIcon
+  Save as SaveIcon,
+  Email as EmailIcon,
+  DisplaySettings as DisplaySettingsIcon
 } from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
 import { systemSettingsService } from '../../services/api';
 import { useStore, useMenuStore } from '../../store';
+import SystemLoginHistoryTab from './SystemLoginHistoryTab';
+
+/** 시스템 설정 폼: 약간 촘촘한 줄간격·글자 크기 */
+const CARD_CONTENT_COMPACT = { py: 1.5, px: 2, '&:last-child': { pb: 1.5 } } as const;
+const SECTION_TITLE = { fontSize: '0.9375rem', fontWeight: 600, lineHeight: 1.35 } as const;
+const SECTION_HEADER = { display: 'flex', alignItems: 'center', mb: 1 } as const;
+const SECTION_DIVIDER = { mb: 1.25 } as const;
+const FIELD_LABEL = {
+  fontSize: '0.75rem',
+  mb: 0.5,
+  fontWeight: 500,
+  color: 'text.primary',
+  lineHeight: 1.35
+} as const;
+const FIELD_BLOCK = { mb: 1.25 } as const;
+const SWITCH_LABEL = { mb: 0.35, '& .MuiFormControlLabel-label': { fontSize: '0.8125rem', lineHeight: 1.35 } } as const;
+
+/** 설정 카드 — 테두리·얕은 그림자로 블록 구분 */
+const SETTINGS_CARD_SX = {
+  border: '1px solid',
+  borderColor: 'divider',
+  borderRadius: 2,
+  boxShadow: '0 1px 4px rgba(15, 23, 42, 0.07)',
+  bgcolor: 'background.paper',
+  overflow: 'hidden'
+} as const;
+
+/** 우측 열(화면·알림·보안): 좌측 일반 설정과 같은 행 높이에 맞춤 — md 이상만 */
+const SETTINGS_RIGHT_STACK_SX = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 2,
+  minWidth: 0,
+  minHeight: 0,
+  height: { xs: 'auto', md: '100%' }
+} as const;
+
+const SETTINGS_RIGHT_CARD_SX = {
+  ...SETTINGS_CARD_SX,
+  display: 'flex',
+  flexDirection: 'column',
+  flex: { xs: '0 0 auto', md: '1 1 0' },
+  minHeight: { md: 0 }
+} as const;
+
+const SETTINGS_RIGHT_CARD_CONTENT_SX = {
+  ...CARD_CONTENT_COMPACT,
+  flex: { xs: 'none', md: 1 },
+  display: 'flex',
+  flexDirection: 'column',
+  minHeight: { md: 0 }
+} as const;
+
+/** 서버에만 비밀번호가 있을 때 입력란에 보이는 마스크(실제 값과 무관) */
+const MAIL_AUTH_PASS_MASK = '********';
 
 const SystemSettings: React.FC = () => {
+  const { t } = useTranslation();
   const { user } = useStore();
   const { language, setLanguage } = useMenuStore();
+  const [settingsTab, setSettingsTab] = useState(0);
   const canManageAll = user?.role === 'root' || user?.role === 'admin';
+  const isRoot = user?.role === 'root';
   const [settings, setSettings] = useState({
     general: {
       companyName: 'MVS',
+      companyAbbreviation: 'MVS',
       companyLogo: '',
       timezone: 'Asia/Kolkata',
       language: 'ko',
@@ -77,6 +141,16 @@ const SystemSettings: React.FC = () => {
       retentionDays: 30,
       cloudBackup: false,
       lastBackup: null as string | null
+    },
+    mailServer: {
+      host: '',
+      port: 587,
+      secure: false,
+      authUser: '',
+      authPass: '',
+      authPassConfigured: false,
+      fromEmail: '',
+      fromName: ''
     }
   });
 
@@ -90,6 +164,8 @@ const SystemSettings: React.FC = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewLogo, setPreviewLogo] = useState<string>('');
+  /** 메일 비밀번호: 저장만 되어 있을 때 필드에 마스크 표시, 포커스 시 편집용으로 비움 */
+  const [mailAuthPassFocused, setMailAuthPassFocused] = useState(false);
 
   // 설정 로드
   const loadSettings = useCallback(async () => {
@@ -97,15 +173,31 @@ const SystemSettings: React.FC = () => {
       setLoading(true);
       const response = await systemSettingsService.getSettings();
       if (response.success && response.data) {
+        const d = response.data as typeof settings;
+        const ms = (d as any).mailServer || {};
+        const loginEmail = (user?.email && String(user.email).trim()) || '';
+        const loginName = (user?.username && String(user.username).trim()) || '';
         const normalizedSettings = {
-          ...response.data,
+          ...d,
           general: {
-            ...response.data.general,
+            ...d.general,
+            companyAbbreviation: String((d as any).general?.companyAbbreviation ?? 'MVS'),
             // 인도 서비스 기본 통화 고정
             currency: 'INR'
+          },
+          mailServer: {
+            host: String(ms.host || ''),
+            port: typeof ms.port === 'number' ? ms.port : parseInt(String(ms.port || 587), 10) || 587,
+            secure: Boolean(ms.secure),
+            authUser: String(ms.authUser || '').trim() || loginEmail,
+            authPass: '',
+            authPassConfigured: Boolean(ms.authPassConfigured),
+            fromEmail: String(ms.fromEmail || '').trim() || loginEmail,
+            fromName: String(ms.fromName || '').trim() || loginName
           }
         };
         setSettings(normalizedSettings);
+        setMailAuthPassFocused(false);
         if (response.data.general?.companyLogo) {
           setPreviewLogo(response.data.general.companyLogo);
         }
@@ -133,7 +225,7 @@ const SystemSettings: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.email, user?.username]);
 
   useEffect(() => {
     loadSettings();
@@ -141,16 +233,56 @@ const SystemSettings: React.FC = () => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem('sidebarAutoCollapse', settings.appearance.sidebarCollapsed ? 'true' : 'false');
-    window.dispatchEvent(new CustomEvent('mvs-sidebar-auto-collapse'));
+    window.dispatchEvent(
+      new CustomEvent('mvs-sidebar-auto-collapse', {
+        detail: { collapsed: settings.appearance.sidebarCollapsed }
+      })
+    );
   }, [settings.appearance.sidebarCollapsed]);
 
   const handleSettingChange = (category: string, key: string, value: any) => {
+    let nextValue = value;
+    if (category === 'security' && key === 'sessionTimeout') {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) {
+        nextValue = Math.min(24 * 60, Math.max(5, Math.floor(parsed)));
+      } else {
+        nextValue = 30;
+      }
+    }
     setSettings(prev => ({
       ...prev,
       [category]: {
         ...prev[category as keyof typeof prev],
+        [key]: nextValue
+      }
+    }));
+  };
+
+  const handleMailServerChange = (key: string, value: string | number | boolean) => {
+    setSettings((prev) => {
+      const mailServer = {
+        ...prev.mailServer,
         [key]: value
+      } as typeof prev.mailServer;
+      // 포트별 TLS 방식 고정(587=STARTTLS, 465=SSL) — Gmail 등 오설정 방지
+      if (key === 'port') {
+        const p = typeof value === 'number' ? value : parseInt(String(value), 10) || 587;
+        if (p === 465) mailServer.secure = true;
+        else if (p === 587 || p === 2525 || p === 25) mailServer.secure = false;
+      }
+      return { ...prev, mailServer };
+    });
+  };
+
+  const applyGmailMailPreset = () => {
+    setSettings((prev) => ({
+      ...prev,
+      mailServer: {
+        ...prev.mailServer,
+        host: 'smtp.gmail.com',
+        port: 587,
+        secure: false
       }
     }));
   };
@@ -210,7 +342,13 @@ const SystemSettings: React.FC = () => {
   const handleSave = async () => {
     try {
       setSaving(true);
-      const payload = canManageAll ? settings : { appearance: settings.appearance };
+      let payload: typeof settings | { appearance: typeof settings.appearance } = canManageAll
+        ? settings
+        : { appearance: settings.appearance };
+      if (canManageAll && !isRoot) {
+        const { backup: _omitBackup, ...withoutBackup } = settings;
+        payload = withoutBackup;
+      }
       const response = await systemSettingsService.saveSettings(payload);
       if (response.success) {
         setSnackbar({
@@ -319,11 +457,13 @@ const SystemSettings: React.FC = () => {
   };
 
   const handleBackupNow = () => {
+    if (!isRoot) return;
     setDialogType('backup');
     setOpenDialog(true);
   };
 
   const handleBackupConfirm = async () => {
+    if (!isRoot) return;
     try {
       setBackingUp(true);
       const response = await systemSettingsService.runBackup();
@@ -357,7 +497,7 @@ const SystemSettings: React.FC = () => {
   if (loading) {
     return (
       <Box sx={{ 
-        p: 3, 
+        p: 2, 
         backgroundColor: 'workArea.main',
         borderRadius: 2,
         minHeight: '100%',
@@ -370,9 +510,14 @@ const SystemSettings: React.FC = () => {
     );
   }
 
+  const showMailPassMask =
+    settings.mailServer.authPassConfigured &&
+    settings.mailServer.authPass === '' &&
+    !mailAuthPassFocused;
+
   return (
     <Box sx={{ 
-      p: 3, 
+      p: 2, 
       backgroundColor: 'workArea.main',
       borderRadius: 2,
       minHeight: '100%'
@@ -382,68 +527,103 @@ const SystemSettings: React.FC = () => {
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center', 
-        mb: 3 
+        mb: 2 
       }}>
         <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <SettingsIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+            <SettingsIcon sx={{ fontSize: '15px !important', color: 'primary.main' }} />
             <Typography component="h1" sx={{
-              fontSize: '16px !important',
+              fontSize: '15px !important',
               fontWeight: 600,
               color: 'text.primary',
-              lineHeight: 1.5
+              lineHeight: 1.35
             }}>
               시스템 설정
             </Typography>
           </Box>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem', lineHeight: 1.45 }}>
             시스템 전반의 설정을 관리하는 페이지입니다.
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={saving ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
-          onClick={handleSave}
-          disabled={saving}
-          sx={{ borderRadius: 2 }}
-        >
-          {saving ? '저장 중...' : '설정 저장'}
-        </Button>
+        {settingsTab === 0 && (
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <SaveIcon sx={{ fontSize: 18 }} />}
+            onClick={handleSave}
+            disabled={saving}
+            sx={{ borderRadius: 1.5, py: 0.75 }}
+          >
+            {saving ? '저장 중...' : '설정 저장'}
+          </Button>
+        )}
       </Box>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 3 }}>
-        {/* 일반 설정 */}
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <SettingsIcon sx={{ mr: 1, color: 'primary.main' }} />
-              <Typography variant="h6">일반 설정</Typography>
+      <Card sx={{ mb: 1.5 }}>
+        <CardContent sx={{ py: 0.25, '&:last-child': { pb: 0.25 } }}>
+          <Tabs
+            value={settingsTab}
+            onChange={(_, v) => setSettingsTab(v)}
+            sx={{
+              minHeight: 38,
+              '& .MuiTab-root': {
+                minHeight: 38,
+                textTransform: 'none',
+                fontSize: '0.8125rem',
+                py: 0.75
+              }
+            }}
+          >
+            <Tab label={t('systemSettings.tabs.basic')} />
+            <Tab label={t('systemSettings.tabs.systemLoginHistory')} />
+          </Tabs>
+        </CardContent>
+      </Card>
+
+      {settingsTab === 1 && <SystemLoginHistoryTab />}
+
+      {settingsTab === 0 && (
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+          gap: 2,
+          alignItems: 'stretch'
+        }}
+      >
+        {/* 일반 설정 — 좌측 */}
+        <Card sx={{ ...SETTINGS_CARD_SX, height: { md: '100%' }, display: 'flex', flexDirection: 'column' }}>
+          <CardContent sx={{ ...CARD_CONTENT_COMPACT, flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <Box sx={SECTION_HEADER}>
+              <SettingsIcon sx={{ mr: 0.75, color: 'primary.main', fontSize: 20 }} />
+              <Typography component="h2" sx={SECTION_TITLE}>일반 설정</Typography>
             </Box>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={SECTION_DIVIDER} />
             
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.25 }}>
               <Avatar 
-                sx={{ mr: 2, width: 60, height: 60 }}
+                sx={{ mr: 1.5, width: 48, height: 48 }}
                 src={previewLogo || settings.general.companyLogo}
               >
                 {settings.general.companyName.charAt(0)}
               </Avatar>
               <Box>
-                <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8125rem', lineHeight: 1.35 }}>
                   회사 로고
                 </Typography>
-                <Button size="small" onClick={handleLogoUpload} disabled={!canManageAll}>
+                <Button size="small" onClick={handleLogoUpload} disabled={!canManageAll} sx={{ mt: 0.25 }}>
                   로고 변경
                 </Button>
               </Box>
             </Box>
 
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+            <Box sx={FIELD_BLOCK}>
+              <Typography sx={FIELD_LABEL}>
                 회사명
               </Typography>
               <TextField
                 fullWidth
+                size="small"
                 value={settings.general.companyName}
                 onChange={(e) => handleSettingChange('general', 'companyName', e.target.value)}
                 variant="outlined"
@@ -451,16 +631,31 @@ const SystemSettings: React.FC = () => {
               />
             </Box>
 
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+            <Box sx={FIELD_BLOCK}>
+              <Typography sx={FIELD_LABEL}>{t('systemSettings.general.companyAbbreviation')}</Typography>
+              <TextField
+                fullWidth
+                size="small"
+                value={settings.general.companyAbbreviation}
+                onChange={(e) => handleSettingChange('general', 'companyAbbreviation', e.target.value.toUpperCase())}
+                variant="outlined"
+                disabled={!canManageAll}
+                placeholder="MSV"
+                helperText={t('systemSettings.general.companyAbbreviationHint')}
+              />
+            </Box>
+
+            <Box sx={FIELD_BLOCK}>
+              <Typography sx={{ ...FIELD_LABEL, mb: 0.75 }}>
                 사무실 위치 (출근 제한 기준)
               </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 1 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25, mb: 0.75 }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Typography variant="caption" sx={{ mb: 0.5, color: 'text.secondary', fontWeight: 600 }}>
+                  <Typography variant="caption" sx={{ mb: 0.35, color: 'text.secondary', fontWeight: 600, fontSize: '0.7rem' }}>
                     위도
                   </Typography>
                   <TextField
+                    size="small"
                     type="number"
                     inputProps={{ step: '0.000001' }}
                     value={settings.general.officeLocation.latitude}
@@ -470,10 +665,11 @@ const SystemSettings: React.FC = () => {
                   />
                 </Box>
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Typography variant="caption" sx={{ mb: 0.5, color: 'text.secondary', fontWeight: 600 }}>
+                  <Typography variant="caption" sx={{ mb: 0.35, color: 'text.secondary', fontWeight: 600, fontSize: '0.7rem' }}>
                     경도
                   </Typography>
                   <TextField
+                    size="small"
                     type="number"
                     inputProps={{ step: '0.000001' }}
                     value={settings.general.officeLocation.longitude}
@@ -483,12 +679,13 @@ const SystemSettings: React.FC = () => {
                   />
                 </Box>
               </Box>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25 }}>
                 <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Typography variant="caption" sx={{ mb: 0.5, color: 'text.secondary', fontWeight: 600 }}>
+                  <Typography variant="caption" sx={{ mb: 0.35, color: 'text.secondary', fontWeight: 600, fontSize: '0.7rem' }}>
                     허용 반경 (미터)
                   </Typography>
                   <TextField
+                    size="small"
                     type="number"
                     inputProps={{ min: 10, step: '10' }}
                     value={settings.general.officeLocation.radiusMeters}
@@ -497,31 +694,32 @@ const SystemSettings: React.FC = () => {
                     disabled={!canManageAll}
                   />
                 </Box>
-                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Box sx={{ height: '18px', mb: 0.5 }} />
+                <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
                   <Button
                     variant="outlined"
+                    size="small"
                     onClick={handleUseCurrentLocation}
                     disabled={locatingOffice || !canManageAll}
                     fullWidth
-                    sx={{ height: '56px' }}
+                    sx={{ py: 1 }}
                   >
                     {locatingOffice ? '위치 확인 중...' : '현재 위치 가져오기'}
                   </Button>
                 </Box>
               </Box>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block', fontSize: '0.75rem' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block', fontSize: '0.7rem', lineHeight: 1.4 }}>
                 등록된 위치에서만 출근할 수 있습니다.
               </Typography>
             </Box>
 
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+            <Box sx={FIELD_BLOCK}>
+              <Typography sx={FIELD_LABEL}>
                 시간대
               </Typography>
               <TextField
                 value="인도 표준시 (IST)"
                 fullWidth
+                size="small"
                 disabled
                 sx={{
                   '& .MuiInputBase-root': {
@@ -529,16 +727,16 @@ const SystemSettings: React.FC = () => {
                   }
                 }}
               />
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block', fontSize: '0.75rem' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.35, display: 'block', fontSize: '0.7rem', lineHeight: 1.4 }}>
                 시간대는 항상 인도 표준시(IST)로 고정됩니다.
               </Typography>
             </Box>
 
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+            <Box sx={FIELD_BLOCK}>
+              <Typography sx={FIELD_LABEL}>
                 언어
               </Typography>
-              <FormControl fullWidth>
+              <FormControl fullWidth size="small">
                 <Select
                   value={settings.general.language}
                   onChange={(e) => handleSettingChange('general', 'language', e.target.value)}
@@ -552,10 +750,10 @@ const SystemSettings: React.FC = () => {
             </Box>
 
             <Box>
-              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+              <Typography sx={FIELD_LABEL}>
                 통화
               </Typography>
-              <FormControl fullWidth>
+              <FormControl fullWidth size="small">
                 <Select
                   value={'INR'}
                   onChange={(e) => handleSettingChange('general', 'currency', e.target.value)}
@@ -569,17 +767,22 @@ const SystemSettings: React.FC = () => {
           </CardContent>
         </Card>
 
+        {/* 우측: 화면 설정 → 알림 설정 → 보안 설정 (md: 좌측과 동일 행 높이) */}
+        <Box sx={SETTINGS_RIGHT_STACK_SX}>
         {/* 외관 설정 */}
-        <Card>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 2 }}>화면 설정</Typography>
-            <Divider sx={{ mb: 2 }} />
+        <Card sx={SETTINGS_RIGHT_CARD_SX}>
+          <CardContent sx={SETTINGS_RIGHT_CARD_CONTENT_SX}>
+            <Box sx={SECTION_HEADER}>
+              <DisplaySettingsIcon sx={{ mr: 0.75, color: 'primary.main', fontSize: 20 }} />
+              <Typography component="h2" sx={SECTION_TITLE}>화면 설정</Typography>
+            </Box>
+            <Divider sx={SECTION_DIVIDER} />
 
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+            <Box sx={FIELD_BLOCK}>
+              <Typography sx={FIELD_LABEL}>
                 테마
               </Typography>
-              <FormControl fullWidth>
+              <FormControl fullWidth size="small">
                 <Select
                   value={(() => {
                     const rawTheme = String(settings.appearance.theme || 'light');
@@ -617,7 +820,7 @@ const SystemSettings: React.FC = () => {
                   <MenuItem value="graphite">그래파이트 테마</MenuItem>
                 </Select>
               </FormControl>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block', fontSize: '0.7rem', lineHeight: 1.45 }}>
                 {{
                   light: '밝고 깔끔한 기본 테마',
                   dark: '중성 다크 톤의 기본 야간 테마',
@@ -629,114 +832,148 @@ const SystemSettings: React.FC = () => {
               </Typography>
             </Box>
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={settings.appearance.sidebarCollapsed}
-                  onChange={(e) => handleSettingChange('appearance', 'sidebarCollapsed', e.target.checked)}
-                />
-              }
-              label="사이드바 자동 접기"
-              sx={{ mb: 1 }}
-            />
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: { xs: 0.75, sm: 1 },
+                columnGap: 1.25,
+                rowGap: 0.75
+              }}
+            >
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={settings.appearance.sidebarCollapsed}
+                    onChange={(e) => handleSettingChange('appearance', 'sidebarCollapsed', e.target.checked)}
+                  />
+                }
+                label="사이드바 자동 접기"
+                sx={{ ...SWITCH_LABEL, mb: 0 }}
+              />
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={settings.appearance.showNotifications}
-                  onChange={(e) => handleSettingChange('appearance', 'showNotifications', e.target.checked)}
-                />
-              }
-              label="알림 표시"
-            />
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={settings.appearance.showNotifications}
+                    onChange={(e) => handleSettingChange('appearance', 'showNotifications', e.target.checked)}
+                  />
+                }
+                label="알림 표시"
+                sx={{ ...SWITCH_LABEL, mb: 0 }}
+              />
+            </Box>
           </CardContent>
         </Card>
 
         {/* 알림 설정 */}
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <NotificationsIcon sx={{ mr: 1, color: 'primary.main' }} />
-              <Typography variant="h6">알림 설정</Typography>
+        <Card sx={SETTINGS_RIGHT_CARD_SX}>
+          <CardContent sx={SETTINGS_RIGHT_CARD_CONTENT_SX}>
+            <Box sx={SECTION_HEADER}>
+              <NotificationsIcon sx={{ mr: 0.75, color: 'primary.main', fontSize: 20 }} />
+              <Typography component="h2" sx={SECTION_TITLE}>알림 설정</Typography>
             </Box>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={SECTION_DIVIDER} />
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={settings.notifications.emailNotifications}
-                  onChange={(e) => handleSettingChange('notifications', 'emailNotifications', e.target.checked)}
-                  disabled={!canManageAll}
-                />
-              }
-              label="이메일 알림"
-              sx={{ mb: 1 }}
-            />
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: { xs: 0.75, sm: 1 },
+                columnGap: 1.25,
+                rowGap: 0.75
+              }}
+            >
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={settings.notifications.emailNotifications}
+                    onChange={(e) => handleSettingChange('notifications', 'emailNotifications', e.target.checked)}
+                    disabled={!canManageAll}
+                  />
+                }
+                label="이메일 알림"
+                sx={{ ...SWITCH_LABEL, mb: 0 }}
+              />
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={settings.notifications.pushNotifications}
-                  onChange={(e) => handleSettingChange('notifications', 'pushNotifications', e.target.checked)}
-                  disabled={!canManageAll}
-                />
-              }
-              label="푸시 알림"
-              sx={{ mb: 1 }}
-            />
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={settings.notifications.pushNotifications}
+                    onChange={(e) => handleSettingChange('notifications', 'pushNotifications', e.target.checked)}
+                    disabled={!canManageAll}
+                  />
+                }
+                label="푸시 알림"
+                sx={{ ...SWITCH_LABEL, mb: 0 }}
+              />
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={settings.notifications.smsNotifications}
-                  onChange={(e) => handleSettingChange('notifications', 'smsNotifications', e.target.checked)}
-                  disabled={!canManageAll}
-                />
-              }
-              label="SMS 알림"
-              sx={{ mb: 1 }}
-            />
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={settings.notifications.smsNotifications}
+                    onChange={(e) => handleSettingChange('notifications', 'smsNotifications', e.target.checked)}
+                    disabled={!canManageAll}
+                  />
+                }
+                label="SMS 알림"
+                sx={{ ...SWITCH_LABEL, mb: 0 }}
+              />
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={settings.notifications.taskReminders}
-                  onChange={(e) => handleSettingChange('notifications', 'taskReminders', e.target.checked)}
-                  disabled={!canManageAll}
-                />
-              }
-              label="업무 알림"
-              sx={{ mb: 1 }}
-            />
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={settings.notifications.taskReminders}
+                    onChange={(e) => handleSettingChange('notifications', 'taskReminders', e.target.checked)}
+                    disabled={!canManageAll}
+                  />
+                }
+                label="업무 알림"
+                sx={{ ...SWITCH_LABEL, mb: 0 }}
+              />
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={settings.notifications.systemAlerts}
-                  onChange={(e) => handleSettingChange('notifications', 'systemAlerts', e.target.checked)}
-                  disabled={!canManageAll}
-                />
-              }
-              label="시스템 알림"
-            />
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={settings.notifications.systemAlerts}
+                    onChange={(e) => handleSettingChange('notifications', 'systemAlerts', e.target.checked)}
+                    disabled={!canManageAll}
+                  />
+                }
+                label="시스템 알림"
+                sx={{ ...SWITCH_LABEL, mb: 0 }}
+              />
+            </Box>
           </CardContent>
         </Card>
 
         {/* 보안 설정 */}
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <SecurityIcon sx={{ mr: 1, color: 'primary.main' }} />
-              <Typography variant="h6">보안 설정</Typography>
+        <Card sx={SETTINGS_RIGHT_CARD_SX}>
+          <CardContent sx={SETTINGS_RIGHT_CARD_CONTENT_SX}>
+            <Box sx={SECTION_HEADER}>
+              <SecurityIcon sx={{ mr: 0.75, color: 'primary.main', fontSize: 20 }} />
+              <Typography component="h2" sx={SECTION_TITLE}>보안 설정</Typography>
             </Box>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={SECTION_DIVIDER} />
 
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+            <Box sx={FIELD_BLOCK}>
+              <Typography sx={FIELD_LABEL}>
                 최소 비밀번호 길이
               </Typography>
               <TextField
                 fullWidth
+                size="small"
                 type="number"
                 value={settings.security.passwordMinLength}
                 onChange={(e) => handleSettingChange('security', 'passwordMinLength', parseInt(e.target.value))}
@@ -745,15 +982,17 @@ const SystemSettings: React.FC = () => {
               />
             </Box>
 
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+            <Box sx={FIELD_BLOCK}>
+              <Typography sx={FIELD_LABEL}>
                 세션 타임아웃 (분)
               </Typography>
               <TextField
                 fullWidth
+                size="small"
                 type="number"
                 value={settings.security.sessionTimeout}
                 onChange={(e) => handleSettingChange('security', 'sessionTimeout', parseInt(e.target.value))}
+                inputProps={{ min: 5, max: 1440, step: 1 }}
                 variant="outlined"
                 disabled={!canManageAll}
               />
@@ -762,73 +1001,199 @@ const SystemSettings: React.FC = () => {
             <FormControlLabel
               control={
                 <Switch
+                  size="small"
                   checked={settings.security.requireSpecialChars}
                   onChange={(e) => handleSettingChange('security', 'requireSpecialChars', e.target.checked)}
                   disabled={!canManageAll}
                 />
               }
               label="특수문자 필수"
-              sx={{ mb: 1 }}
+              sx={SWITCH_LABEL}
             />
 
             <FormControlLabel
               control={
                 <Switch
+                  size="small"
                   checked={settings.security.twoFactorAuth}
                   onChange={(e) => handleSettingChange('security', 'twoFactorAuth', e.target.checked)}
                   disabled={!canManageAll}
                 />
               }
               label="2단계 인증"
-              sx={{ mb: 1 }}
+              sx={SWITCH_LABEL}
             />
 
             <FormControlLabel
               control={
                 <Switch
+                  size="small"
                   checked={settings.security.ipWhitelist}
                   onChange={(e) => handleSettingChange('security', 'ipWhitelist', e.target.checked)}
                   disabled={!canManageAll}
                 />
               }
               label="IP 화이트리스트"
+              sx={{ ...SWITCH_LABEL, mb: 0 }}
             />
           </CardContent>
         </Card>
+        </Box>
 
-        {/* 백업 설정 */}
-        <Card sx={{ gridColumn: { xs: '1', md: '1 / -1' } }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <StorageIcon sx={{ mr: 1, color: 'primary.main' }} />
-              <Typography variant="h6">백업 설정</Typography>
+        {/* 보내는 메일 서버 (SMTP) */}
+        <Card sx={{ ...SETTINGS_CARD_SX, gridColumn: { xs: '1', md: '1 / -1' } }}>
+          <CardContent sx={CARD_CONTENT_COMPACT}>
+            <Box sx={SECTION_HEADER}>
+              <EmailIcon sx={{ mr: 0.75, color: 'primary.main', fontSize: 20 }} />
+              <Typography component="h2" sx={SECTION_TITLE}>{t('systemSettings.mailServer.title')}</Typography>
             </Box>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={SECTION_DIVIDER} />
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: '0.8125rem', lineHeight: 1.45 }}>
+              {t('systemSettings.mailServer.hint')}
+            </Typography>
+            <Alert severity="info" sx={{ mb: 1.5, py: 0.75, fontSize: '0.8125rem', '& .MuiAlert-message': { width: '100%' } }}>
+              {t('systemSettings.mailServer.gmailHint')}
+            </Alert>
+            {canManageAll && (
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={applyGmailMailPreset}
+                sx={{ mb: 1.5, textTransform: 'none', fontSize: '0.8125rem' }}
+              >
+                {t('systemSettings.mailServer.gmailPreset')}
+              </Button>
+            )}
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+                gap: 1.25
+              }}
+            >
+              <TextField
+                fullWidth
+                size="small"
+                label={t('systemSettings.mailServer.host')}
+                value={settings.mailServer.host}
+                onChange={(e) => handleMailServerChange('host', e.target.value)}
+                disabled={!canManageAll}
+                placeholder="smtp.gmail.com"
+              />
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label={t('systemSettings.mailServer.port')}
+                value={settings.mailServer.port}
+                onChange={(e) => handleMailServerChange('port', parseInt(e.target.value, 10) || 587)}
+                disabled={!canManageAll}
+              />
+              <FormControlLabel
+                sx={{ gridColumn: { xs: '1', sm: '1 / -1' }, ...SWITCH_LABEL }}
+                control={
+                  <Switch
+                    size="small"
+                    checked={settings.mailServer.secure}
+                    onChange={(e) => handleMailServerChange('secure', e.target.checked)}
+                    disabled={!canManageAll}
+                  />
+                }
+                label={t('systemSettings.mailServer.secure')}
+              />
+              <TextField
+                fullWidth
+                size="small"
+                label={t('systemSettings.mailServer.authUser')}
+                value={settings.mailServer.authUser}
+                onChange={(e) => handleMailServerChange('authUser', e.target.value)}
+                disabled={!canManageAll}
+                autoComplete="off"
+              />
+              <TextField
+                fullWidth
+                size="small"
+                type={showMailPassMask ? 'text' : 'password'}
+                label={t('systemSettings.mailServer.authPass')}
+                value={showMailPassMask ? MAIL_AUTH_PASS_MASK : settings.mailServer.authPass}
+                onChange={(e) => handleMailServerChange('authPass', e.target.value)}
+                onFocus={() => setMailAuthPassFocused(true)}
+                onBlur={() => setMailAuthPassFocused(false)}
+                disabled={!canManageAll}
+                autoComplete="new-password"
+                sx={
+                  showMailPassMask
+                    ? {
+                        '& .MuiInputBase-input': {
+                          fontFamily: 'ui-monospace, monospace',
+                          letterSpacing: '0.08em'
+                        }
+                      }
+                    : undefined
+                }
+                helperText={
+                  settings.mailServer.authPassConfigured
+                    ? t('systemSettings.mailServer.authPassHint')
+                    : undefined
+                }
+              />
+              <TextField
+                fullWidth
+                size="small"
+                label={t('systemSettings.mailServer.fromEmail')}
+                value={settings.mailServer.fromEmail}
+                onChange={(e) => handleMailServerChange('fromEmail', e.target.value)}
+                disabled={!canManageAll}
+                placeholder="noreply@company.com"
+              />
+              <TextField
+                fullWidth
+                size="small"
+                label={t('systemSettings.mailServer.fromName')}
+                value={settings.mailServer.fromName}
+                onChange={(e) => handleMailServerChange('fromName', e.target.value)}
+                disabled={!canManageAll}
+                placeholder="MVS"
+              />
+            </Box>
+          </CardContent>
+        </Card>
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+        {/* 백업 설정 — root 전용 */}
+        {isRoot && (
+        <Card sx={{ ...SETTINGS_CARD_SX, gridColumn: { xs: '1', md: '1 / -1' } }}>
+          <CardContent sx={CARD_CONTENT_COMPACT}>
+            <Box sx={SECTION_HEADER}>
+              <StorageIcon sx={{ mr: 0.75, color: 'primary.main', fontSize: 20 }} />
+              <Typography component="h2" sx={SECTION_TITLE}>백업 설정</Typography>
+            </Box>
+            <Divider sx={SECTION_DIVIDER} />
+
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 1.5 }}>
               <Box>
                 <FormControlLabel
                   control={
                     <Switch
+                      size="small"
                       checked={settings.backup.autoBackup}
                       onChange={(e) => handleSettingChange('backup', 'autoBackup', e.target.checked)}
-                      disabled={!canManageAll}
+                      disabled={!isRoot}
                     />
                   }
                   label="자동 백업"
-                  sx={{ mb: 2 }}
+                  sx={{ ...SWITCH_LABEL, mb: 1 }}
                 />
 
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+                <Box sx={FIELD_BLOCK}>
+                  <Typography sx={FIELD_LABEL}>
                     백업 주기
                   </Typography>
-                  <FormControl fullWidth>
+                  <FormControl fullWidth size="small">
                     <Select
                       value={settings.backup.backupFrequency}
                       onChange={(e) => handleSettingChange('backup', 'backupFrequency', e.target.value)}
                       displayEmpty
-                      disabled={!canManageAll}
+                      disabled={!isRoot}
                     >
                       <MenuItem value="hourly">매시간</MenuItem>
                       <MenuItem value="daily">매일</MenuItem>
@@ -838,17 +1203,18 @@ const SystemSettings: React.FC = () => {
                   </FormControl>
                 </Box>
 
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" sx={{ mb: 1, fontWeight: 500, color: 'text.primary' }}>
+                <Box sx={FIELD_BLOCK}>
+                  <Typography sx={FIELD_LABEL}>
                     보관 기간 (일)
                   </Typography>
                   <TextField
                     fullWidth
+                    size="small"
                     type="number"
                     value={settings.backup.retentionDays}
                     onChange={(e) => handleSettingChange('backup', 'retentionDays', parseInt(e.target.value))}
                     variant="outlined"
-                    disabled={!canManageAll}
+                    disabled={!isRoot}
                   />
                 </Box>
               </Box>
@@ -857,26 +1223,28 @@ const SystemSettings: React.FC = () => {
                 <FormControlLabel
                   control={
                     <Switch
+                      size="small"
                       checked={settings.backup.cloudBackup}
                       onChange={(e) => handleSettingChange('backup', 'cloudBackup', e.target.checked)}
-                      disabled={!canManageAll}
+                      disabled={!isRoot}
                     />
                   }
                   label="클라우드 백업"
-                  sx={{ mb: 2 }}
+                  sx={{ ...SWITCH_LABEL, mb: 1 }}
                 />
 
                 <Button
                   variant="outlined"
-                  startIcon={<CloudUploadIcon />}
+                  size="small"
+                  startIcon={<CloudUploadIcon sx={{ fontSize: 18 }} />}
                   onClick={handleBackupNow}
-                  disabled={!canManageAll}
-                  sx={{ mb: 2 }}
+                  disabled={!isRoot}
+                  sx={{ mb: 1 }}
                 >
                   지금 백업하기
                 </Button>
 
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem', lineHeight: 1.45 }}>
                   마지막 백업: {settings.backup.lastBackup 
                     ? new Date(settings.backup.lastBackup).toLocaleString('ko-KR')
                     : '없음'}
@@ -885,7 +1253,9 @@ const SystemSettings: React.FC = () => {
             </Box>
           </CardContent>
         </Card>
+        )}
       </Box>
+      )}
 
       {/* 다이얼로그 */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>

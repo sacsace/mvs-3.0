@@ -186,13 +186,15 @@ const QuotationManagement: React.FC = () => {
             discountAmount: parseFloat(q.discount || 0),
             totalAmount: parseFloat(q.total_amount || 0),
             status: q.status || 'draft',
-            issueDate: q.created_at ? q.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+            issueDate: (q.created_at ?? q.createdAt)
+              ? String(q.created_at ?? q.createdAt).split('T')[0]
+              : new Date().toISOString().split('T')[0],
             validUntil: q.valid_until || '',
             notes: q.notes || '',
             terms: q.terms || '',
             createdBy: q.creator?.username || '알 수 없음',
-            createdAt: q.created_at || new Date().toISOString(),
-            updatedAt: q.updated_at || new Date().toISOString()
+            createdAt: (q.created_at ?? q.createdAt) || new Date().toISOString(),
+            updatedAt: (q.updated_at ?? q.updatedAt) || new Date().toISOString()
           }));
           setQuotations(quotationsData);
         } else {
@@ -235,7 +237,7 @@ const QuotationManagement: React.FC = () => {
         tax_amount: 0,
         discount: 0,
         total_amount: 0,
-        currency: 'KRW',
+        currency: 'INR',
         valid_until: formData.validUntil || null,
         notes: formData.notes || '',
         terms: formData.terms || ''
@@ -263,13 +265,15 @@ const QuotationManagement: React.FC = () => {
             discountAmount: parseFloat(q.discount || 0),
             totalAmount: parseFloat(q.total_amount || 0),
             status: q.status || 'draft',
-            issueDate: q.created_at ? q.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+            issueDate: (q.created_at ?? q.createdAt)
+              ? String(q.created_at ?? q.createdAt).split('T')[0]
+              : new Date().toISOString().split('T')[0],
             validUntil: q.valid_until || '',
             notes: q.notes || '',
             terms: q.terms || '',
             createdBy: q.creator?.username || '알 수 없음',
-            createdAt: q.created_at || new Date().toISOString(),
-            updatedAt: q.updated_at || new Date().toISOString()
+            createdAt: (q.created_at ?? q.createdAt) || new Date().toISOString(),
+            updatedAt: (q.updated_at ?? q.updatedAt) || new Date().toISOString()
           }));
           setQuotations(quotationsData);
         }
@@ -333,13 +337,15 @@ const QuotationManagement: React.FC = () => {
             discountAmount: parseFloat(q.discount || 0),
             totalAmount: parseFloat(q.total_amount || 0),
             status: q.status || 'draft',
-            issueDate: q.created_at ? q.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+            issueDate: (q.created_at ?? q.createdAt)
+              ? String(q.created_at ?? q.createdAt).split('T')[0]
+              : new Date().toISOString().split('T')[0],
             validUntil: q.valid_until || '',
             notes: q.notes || '',
             terms: q.terms || '',
             createdBy: q.creator?.username || '알 수 없음',
-            createdAt: q.created_at || new Date().toISOString(),
-            updatedAt: q.updated_at || new Date().toISOString()
+            createdAt: (q.created_at ?? q.createdAt) || new Date().toISOString(),
+            updatedAt: (q.updated_at ?? q.updatedAt) || new Date().toISOString()
           }));
           setQuotations(quotationsData);
         }
@@ -456,7 +462,25 @@ const QuotationManagement: React.FC = () => {
 
             <TableContainer component={Paper}>
               <Table>
-                <TableHead>
+                <TableHead
+                  sx={{
+                    bgcolor: 'background.paper',
+                    '& .MuiTableCell-head': {
+                      bgcolor: 'background.paper',
+                      color: 'text.primary',
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      textTransform: 'none',
+                      letterSpacing: 'normal',
+                      borderBottom: '2px solid',
+                      borderColor: 'primary.main',
+                      py: 1.25
+                    },
+                    '& .MuiTableCell-head:last-of-type': {
+                      textAlign: 'center'
+                    }
+                  }}
+                >
                   <TableRow>
                     <TableCell>견적서 번호</TableCell>
                     <TableCell>고객</TableCell>
@@ -577,7 +601,25 @@ const QuotationManagement: React.FC = () => {
             </Typography>
             <TableContainer component={Paper}>
               <Table>
-                <TableHead>
+                <TableHead
+                  sx={{
+                    bgcolor: 'background.paper',
+                    '& .MuiTableCell-head': {
+                      bgcolor: 'background.paper',
+                      color: 'text.primary',
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      textTransform: 'none',
+                      letterSpacing: 'normal',
+                      borderBottom: '2px solid',
+                      borderColor: 'primary.main',
+                      py: 1.25
+                    },
+                    '& .MuiTableCell-head:last-of-type': {
+                      textAlign: 'center'
+                    }
+                  }}
+                >
                   <TableRow>
                     <TableCell>견적서 번호</TableCell>
                     <TableCell>고객</TableCell>
@@ -821,7 +863,22 @@ const QuotationManagement: React.FC = () => {
                 <Typography variant="h6" gutterBottom>항목 목록</Typography>
                 <TableContainer component={Paper}>
                   <Table size="small">
-                    <TableHead>
+                    <TableHead
+                      sx={{
+                        bgcolor: 'background.paper',
+                        '& .MuiTableCell-head': {
+                          bgcolor: 'background.paper',
+                          color: 'text.primary',
+                          fontWeight: 600,
+                          fontSize: '0.875rem',
+                          textTransform: 'none',
+                          letterSpacing: 'normal',
+                          borderBottom: '2px solid',
+                          borderColor: 'primary.main',
+                          py: 1.25
+                        }
+                      }}
+                    >
                       <TableRow>
                         <TableCell>설명</TableCell>
                         <TableCell align="right">수량</TableCell>

@@ -39,31 +39,20 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     const companyId = (req as any).user.company_id;
     const userRole = (req as any).user.role;
     
-    console.log('🔍 파트너 목록 조회 시작:', {
-      tenantId,
-      companyId,
-      userRole,
-      isRoot: userRole === 'root',
-      isAudit: userRole === 'audit'
-    });
-    
+        
     // root나 audit 권한이면 모든 파트너 조회 가능, 아니면 자신의 회사 파트너만
     const whereClause: any = {};
     if (userRole !== 'root' && userRole !== 'audit') {
       whereClause.tenant_id = tenantId;
       whereClause.company_id = companyId;
-      console.log('🔍 일반 사용자 - tenant_id, company_id 필터 적용');
-    } else {
-      console.log('🔍 Root/Audit 사용자 - 모든 파트너 조회 (WHERE 절 없음)');
-    }
+          } else {
+          }
 
     // is_active 필터 추가
     whereClause.is_active = true;
     
     const allPartnersCount = await (Partner as any).count();
-    console.log('🔍 전체 파트너 개수 (WHERE 절 없이):', allPartnersCount);
-
-    const partners = await (Partner as any).findAll({
+        const partners = await (Partner as any).findAll({
       where: whereClause,
       include: [{
         model: PartnerGstNumber,
@@ -74,31 +63,20 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       order: [['created_at', 'DESC']]
     });
 
-    console.log('🔍 파트너 목록 조회 완료, 개수:', partners.length);
-
-    const partnersData = partners.map((partner: any) => {
+        const partnersData = partners.map((partner: any) => {
       const partnerData = partner.toJSON ? partner.toJSON() : partner;
       partnerData.gstNumbers = partnerData.gstNumbers?.map((gst: any) => gst.gst_number) || [];
       return partnerData;
     });
 
-    console.log('✅ 파트너 목록 조회 완료, 반환할 파트너 개수:', partnersData.length);
-    if (partnersData.length === 0) {
-      console.log('⚠️ 파트너 목록이 비어있습니다. 데이터베이스 확인 필요.');
-      // 디버깅: WHERE 절 없이 전체 파트너 조회
+        if (partnersData.length === 0) {
+            // 디버깅: WHERE 절 없이 전체 파트너 조회
       const allPartners = await (Partner as any).findAll({
         limit: 5
       });
       const allPartnersData = allPartners.map((p: any) => p.toJSON ? p.toJSON() : p);
-      console.log('🔍 데이터베이스의 실제 파트너 샘플 (최대 5개):', allPartnersData);
-    } else {
-      console.log('✅ 조회된 파트너 목록:', partnersData.slice(0, 3).map((p: any) => ({
-        id: p.id,
-        companyName: p.company_name,
-        businessNumber: p.business_number,
-        gstCount: p.gstNumbers?.length || 0
-      })));
-    }
+          } else {
+          }
 
     res.json({
       success: true,

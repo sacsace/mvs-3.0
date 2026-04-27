@@ -68,7 +68,24 @@ const ko = {
       errorCount: '총 {{count}}개의 알림이 있습니다.',
       errorCountTruncated: '(최근 100개만 표시됩니다)',
       languageKo: '한국어',
-      languageEn: 'English'
+      languageEn: 'English',
+      menuNoView: '메뉴에「보기」권한이 없습니다.',
+      menuNoCreate: '메뉴에「등록」권한이 없습니다.',
+      menuNoEdit: '메뉴에「수정」권한이 없습니다.',
+      menuNoDelete: '메뉴에「삭제」권한이 없습니다.',
+      menuNoMutate: '메뉴에「등록」또는「수정」권한이 없습니다.',
+      notificationInbox: {
+        expenseTitle: '결제 승인 요청',
+        expenseBody: '{{requester}} · {{title}} · {{amount}} {{currency}}',
+        vacationTitle: '휴가 승인 요청',
+        vacationBody: '{{name}} · {{start}} ~ {{end}} ({{days}}일)',
+        quotationTitle: '견적 승인 요청',
+        quotationBody: '{{customer}} · No.{{number}}',
+        chipPayment: '결제',
+        chipVacation: '휴가',
+        chipQuotation: '견적'
+      },
+      selectPlaceholder: '선택하세요'
     },
     app: {
       accountingTitle: '회계 관리',
@@ -222,6 +239,8 @@ const ko = {
       projectCount: '프로젝트 수',
       approvalPending: '결재 대기',
       vacationPending: '휴가 승인 대기',
+      vacationLeaveCalendar: '휴가 달력',
+      vacationLeaveCalendarEmpty: '표시할 휴가가 없습니다. 부서 정보를 확인해 주세요.',
       paid: '결제완료',
       unpaid: '미결제',
       noCustomerName: '고객명 없음',
@@ -293,6 +312,10 @@ const ko = {
       description: 'MVS 시스템 사용자 계정을 관리합니다.',
       userList: '사용자 목록',
       addUser: '사용자 추가',
+      departmentTab: '부서 관리',
+      tabDisabledNoView: '메뉴에「보기」권한이 없어 이 탭을 사용할 수 없습니다.',
+      tabDisabledNoCreate: '메뉴에「등록」권한이 없어 사용자를 추가할 수 없습니다.',
+      tabDisabledNoEdit: '메뉴에「수정」권한이 없어 부서 관리를 사용할 수 없습니다.',
       deleteSelected: '선택 삭제',
       excelSample: 'Excel 샘플',
       excelExport: 'Excel 내보내기',
@@ -307,6 +330,7 @@ const ko = {
       loadFailed: '사용자 목록을 불러오는데 실패했습니다.',
       name: '이름',
       email: '이메일',
+      loginId: '로그인 ID',
       role: '역할',
       department: '부서',
       position: '직책',
@@ -329,7 +353,83 @@ const ko = {
       roleAudit: '감사',
       statusActive: '활성',
       statusInactive: '비활성',
-      selectUsers: '삭제할 사용자를 선택해주세요.'
+      selectUsers: '삭제할 사용자를 선택해주세요.',
+      editUserTitle: '사용자 정보 수정',
+      createUserTitle: '신규 사용자 등록',
+      backToList: '목록으로',
+      sectionBasic: '기본 정보',
+      sectionHr: '인사 정보',
+      sectionBank: '개인 은행 계좌',
+      sectionAccount: '계정 정보',
+      employeeNumber: '사원번호',
+      placeholderEmployeeEdit: '수정하려면 입력하세요',
+      placeholderEmployeeAuto: '비워두면 자동 생성됩니다',
+      helperEmployeeAuto: '회사명 약자와 시퀀스 번호로 자동 생성됩니다',
+      dateOfBirth: '생년월일',
+      gender: '성별',
+      selectPlaceholder: '선택하세요',
+      genderMale: '남성',
+      genderFemale: '여성',
+      genderOther: '기타',
+      phoneNumber: '전화번호',
+      phonePlaceholder: '010-1234-5678',
+      address: '주소',
+      emergencyContactName: '비상연락처 이름',
+      emergencyContactPhone: '비상연락처 전화번호',
+      placeholderEmergencyName: '비상연락처 이름',
+      hireDate: '입사일',
+      employmentType: '근무형태',
+      empFulltime: '정규직',
+      empDaily: '일용직',
+      empContract: '계약직',
+      empParttime: '파트타임',
+      empIntern: '인턴',
+      salary: '급여',
+      placeholderMonthlySalary: '월 급여액',
+      deptPlaceholder: '예: 개발팀, 영업팀',
+      deptFromMasterHint: '부서는 「부서 관리」에 등록된 항목에서 선택합니다.',
+      positionTitle: '직급/직책',
+      positionPlaceholder: '예: 대리, 과장, 팀장',
+      bankName: '은행명',
+      bankNamePlaceholder: '예: HDFC Bank, State Bank of India',
+      accountNumber: '계좌번호',
+      accountPlaceholder: '계좌번호',
+      ifscCode: 'IFSC 코드',
+      ifscPlaceholder: '예: HDFC0001234',
+      companySelect: '회사 선택',
+      userId: '사용자 ID',
+      password: '비밀번호',
+      passwordPlaceholderEdit: '변경 시에만 입력',
+      passwordPlaceholderNew: '비밀번호를 입력하세요',
+      roleLabel: '역할',
+      statusLabel: '상태',
+      statusSuspended: '정지',
+      paymentOfficer: '송금 담당자',
+      paymentOfficerAssign: '송금 담당자로 지정',
+      paymentOfficerAssigned: '지정됨',
+      paymentOfficerNotAssigned: '미지정',
+      submitEdit: '수정',
+      submitRegister: '등록',
+      userDetailTitle: '사용자 상세 정보',
+      createdAt: '생성일',
+      deleteFailed: '사용자 삭제에 실패했습니다.',
+      confirmDeleteSelectedBulk: '정말로 선택한 {{count}}명의 사용자를 삭제하시겠습니까?',
+      deleteSelectedSuccess: '{{count}}명의 사용자가 삭제되었습니다.',
+      operationFailed: '작업에 실패했습니다.',
+      excelSampleDownloadError: 'Excel 샘플 파일 다운로드 중 오류가 발생했습니다.',
+      excelExportError: 'Excel 파일 내보내기 중 오류가 발생했습니다.',
+      excelSelectFile: 'Excel 파일을 선택해주세요.',
+      excelImportError: 'Excel 파일 가져오기 중 오류가 발생했습니다.',
+      excelImportTitle: 'Excel 파일 가져오기',
+      selectedFile: '선택된 파일',
+      importResultTitle: '가져오기 결과',
+      importSuccessSummary: '총 {{total}}건 중 {{success}}건 성공',
+      importFailedCount: '실패: {{count}}건',
+      importRowError: '행 {{row}}: {{error}}',
+      importing: '가져오는 중...',
+      importButton: '가져오기',
+      excelSampleFilename: '사용자_입력_샘플',
+      excelExportFilename: '사용자_목록'
     },
     attendanceManagement: {
       pageTitle: '근태 관리',
@@ -371,21 +471,50 @@ const ko = {
       checkOutError: '퇴근 처리 중 오류가 발생했습니다.',
       loadListFailed: '근태 목록을 불러올 수 없습니다.',
       loadListError: '근태 목록을 불러오는 중 오류가 발생했습니다.',
-      officeNotRegistered: '사무실 위치가 등록되지 않았습니다. 시스템 설정에서 사무실 위치를 등록해주세요.'
+      officeNotRegistered: '사무실 위치가 등록되지 않았습니다. 시스템 설정에서 사무실 위치를 등록해주세요.',
+      statusHolidayWork: '휴일근무',
+      statWorkingDays: '근무일',
+      statVacationDays: '휴가일',
+      statLateDays: '지각일',
+      currentMonthRange: '조회 기간',
+      monthPeriodLabel: '{{year}}년 {{month}}월'
     },
     quotationManagement: {
       title: '견적서 관리',
       create: '견적서 작성',
       editTitle: '견적서 수정',
+      detailTitle: '견적서 상세',
+      backToList: '목록으로',
+      sendEmail: '메일 보내기',
       delete: '삭제',
       save: '저장',
       cancel: '취소',
       search: '검색',
       totalQuotations: '총 견적서',
       approvedQuotations: '승인된 견적서',
-      pendingQuotations: '대기 중인 견적서',
+      pendingQuotations: '승인 대기(내가 결재)',
+      tabRequested: '내가 요청한 견적',
+      tabPendingApproval: '승인 대기',
+      approver: '승인자',
+      selectApprover: '승인자 선택',
+      itemQtyUnitRequired: '각 품목의 수량(QTY)은 1 이상, 단가(Unit Price)는 0보다 큰 값을 입력해 주세요.',
+      exportAfterApproval: '승인된 견적서만 인쇄·PDF로 저장할 수 있습니다.',
+      emailAfterApproval: '승인된 견적서만 이메일로 보낼 수 있습니다.',
+      emailPdfNeedDetail:
+        '메일 첨부 PDF는 화면과 동일하게 보내려면 견적 상세를 연 뒤 다시 시도해 주세요.',
+      approve: '승인',
+      reject: '반려',
+      rejectionReason: '반려 사유',
+      rejectionReasonRequired: '반려 사유를 입력해 주세요.',
+      rejectionReasonPlaceholder: '반려 사유를 입력하세요.',
+      rejectDialogTitle: '견적서 반려',
+      approveSuccess: '견적서가 승인되었습니다.',
+      rejectSuccess: '견적서가 반려되었습니다.',
+      editLocked: '승인·발송·반려된 견적서는 수정할 수 없습니다.',
       searchPlaceholder: '견적서 번호, 고객명, 이메일 검색',
       customerSearchPlaceholder: '고객명 검색',
+      customerEmailMultipleHint: '여러 명은 쉼표(,) 또는 세미콜론(;)으로 구분합니다.',
+      invalidEmailInList: '유효하지 않은 이메일이 포함되어 있습니다: {{part}}',
       quotationNumber: '견적서 번호',
       customerName: '고객명',
       issueDate: '발행일',
@@ -396,9 +525,13 @@ const ko = {
       view: '보기',
       edit: '수정',
       print: '인쇄',
+      savePdf: 'PDF로 저장',
+      pdfSaved: 'PDF 파일로 저장했습니다.',
+      pdfSaveFailed: 'PDF 저장에 실패했습니다.',
       email: '이메일',
-      confirmDelete: '정말로 이 견적서를 삭제하시겠습니까?',
-      deleted: '견적서가 성공적으로 삭제되었습니다.',
+      confirmDelete:
+        '이 견적서를 목록에서 숨기시겠습니까? 데이터는 삭제되지 않으며, 반려·승인 이력은 역량 평가·감사 집계에 활용할 수 있습니다.',
+      deleted: '목록에서 숨겼습니다. (데이터는 DB에 보존됩니다)',
       updated: '견적서가 성공적으로 수정되었습니다.',
       created: '견적서가 성공적으로 추가되었습니다.',
       printed: '견적서가 인쇄되었습니다.',
@@ -408,6 +541,7 @@ const ko = {
       deleteFailed: '삭제 중 오류가 발생했습니다.',
       statusDraft: '초안',
       statusSent: '발송됨',
+      statusPendingApproval: '승인 대기',
       statusApproved: '승인됨',
       statusRejected: '거절됨',
       statusExpired: '만료됨',
@@ -609,10 +743,25 @@ const ko = {
       cancel: '취소'
     },
     loginInfoManagement: {
-      title: '로그인 정보 관리',
+      title: '로그인 정보',
+      description:
+        '회사별로 세무·은행 등 외부 사이트와 MCA(Ministry of Corporate Affairs, 법인등기 등) 관련 로그인 ID·비밀번호·URL을 저장합니다. MSV 로그인 계정과는 별개입니다.',
+      excelHint:
+        '셀을 클릭해 바로 입력하면 저장됩니다. 엑셀에서 복사한 영역을 그리드에 붙여 넣을 수 있습니다. (구분·Login ID·비밀번호가 모두 있어야 저장됩니다.)',
+      hints: {
+        doubleClickHeader: '헤더를 더블클릭하면 열 이름을 바꿀 수 있습니다. 기본 문구와 같게 두면 초기화됩니다.',
+        removeColumn: '이 열 삭제 (행 데이터에서 해당 열 값이 제거될 수 있습니다)',
+        moveColumnLeft: '열을 왼쪽으로 옮기기',
+        moveColumnRight: '열을 오른쪽으로 옮기기'
+      },
       tabs: {
-        info: '로그인 정보',
-        log: '로그인 로그'
+        info: '외부 사이트 로그인 정보',
+        external: '외부 사이트',
+        mca: 'MCA 로그인 정보',
+        addTab: '탭 추가',
+        renameTab: '탭 이름 바꾸기',
+        deleteTab: '탭 삭제',
+        tabName: '탭 이름'
       },
       fields: {
         company: '회사 선택',
@@ -631,20 +780,28 @@ const ko = {
         reason: '사유',
         divisionRequired: '구분 *',
         loginIdRequired: 'Login ID *',
-        passwordRequired: 'Password *'
+        passwordRequired: 'Password *',
+        columnName: '열 이름'
       },
       actions: {
         refresh: '새로고침',
         importExcel: '엑셀 가져오기',
-        addNew: '새 항목 추가',
+        exportExcel: '엑셀로 내보내기',
+        addNew: '새 행 추가',
+        addRow: '행 추가',
         edit: '수정',
         delete: '삭제',
         reset: '초기화',
         search: '조회',
-        saving: '저장 중...'
+        saving: '저장 중...',
+        cancel: '취소',
+        add: '추가',
+        save: '저장',
+        addColumn: '열 추가'
       },
       placeholders: {
         selectCompany: '회사를 선택하세요',
+        searchRows: '구분, Login ID, URL 등 검색…',
         searchUserId: '사용자 ID 검색',
         date: '연도-월-일',
         enterDivision: '구분을 입력하세요',
@@ -662,14 +819,20 @@ const ko = {
       empty: {
         noData: '데이터가 없습니다.'
       },
-      companyInfoTitle: '{{companyName}} 로그인 정보',
+      companyInfoTitle: '{{companyName}} 외부 사이트 로그인 정보',
+      companyInfoTitleMca: '{{companyName}} MCA 로그인 정보',
+      companyInfoTitleWithTab: '{{companyName}} — {{tabName}}',
       recentCount: '최근 {{count}}건 표시',
       dialog: {
         createTitle: '로그인 정보 추가',
-        editTitle: '로그인 정보 수정'
+        editTitle: '로그인 정보 수정',
+        deleteRowTitle: '로그인 정보 삭제',
+        deleteTabTitle: '탭 삭제',
+        addColumnTitle: '열 추가'
       },
       confirm: {
-        delete: '선택한 로그인 정보를 삭제하시겠습니까?'
+        delete: '선택한 로그인 정보를 삭제하시겠습니까?',
+        deleteTab: '이 탭과 탭 안의 모든 로그인 행이 삭제됩니다. 계속할까요?'
       },
       errors: {
         loadCompaniesFailed: '회사 목록을 불러오는데 실패했습니다.',
@@ -679,8 +842,58 @@ const ko = {
         deleteFailed: '로그인 정보를 삭제하지 못했습니다.',
         selectCompanyForImport: '엑셀 가져오기를 위해 회사를 먼저 선택해주세요.',
         importFailed: '엑셀 가져오기에 실패했습니다.',
-        selectCompanyFirst: '회사를 먼저 선택해주세요.'
+        selectCompanyFirst: '회사를 먼저 선택해주세요.',
+        nothingToExport: '내보낼 데이터가 없습니다. 내용이 있는 행만 저장됩니다.',
+        loadTabsFailed: '탭 목록을 불러오지 못했습니다.',
+        noTabs: '표시할 탭이 없습니다.',
+        tabNameRequired: '탭 이름을 입력해주세요.',
+        saveTabFailed: '탭을 저장하지 못했습니다.',
+        deleteTabFailed: '탭을 삭제하지 못했습니다.',
+        cannotRemoveLastColumn: '최소 한 개의 데이터 열은 남아 있어야 합니다.',
+        cannotRemoveCoreColumn: '구분·Login ID·Password 열은 삭제할 수 없습니다.',
+        columnLabelInvalid: '열 이름은 1~80자로 입력해주세요.'
       }
+    },
+    systemSettings: {
+      general: {
+        companyAbbreviation: '회사 약어 (메일 제목)',
+        companyAbbreviationHint: '견적 메일 제목 [MSV] 형식에 사용됩니다. 예: MSV'
+      },
+      tabs: {
+        basic: '기본 설정',
+        systemLoginHistory: '시스템 로그인 이력'
+      },
+      loginHistoryHint: 'MSV 시스템에 로그인한 사용자·시각·성공 여부 등을 조회합니다.',
+      mailServer: {
+        title: '보내는 메일 서버 (SMTP)',
+        host: 'SMTP 호스트',
+        port: '포트',
+        secure: 'SSL/TLS (465 전용)',
+        authUser: '사용자명',
+        authPass: '비밀번호',
+        authPassHint: '저장된 비밀번호가 있습니다. 변경할 때만 입력하세요.',
+        fromEmail: '보내는 이메일 주소',
+        fromName: '보내는 표시 이름',
+        hint: '로그인한 사용자 계정에만 저장됩니다. 사용자명·보내는 주소·표시 이름은 비어 있으면 로그인 이메일·이름으로 채워 보여 줍니다. 발송 시에는 여기 설정이 우선이고, 호스트·인증 등이 비어 있거나 실패하면 회사 공통 설정, 그다음 서버 환경변수(EMAIL_*) 순입니다.',
+        gmailHint:
+          'Gmail: 호스트 smtp.gmail.com, 포트 587, 아래 SSL/TLS는 끄기(STARTTLS 사용). 2단계 인증이 켜져 있으면 일반 비밀번호가 아니라 Google 계정 → 보안 → 앱 비밀번호(16자리)를 입력하세요. 포트 465를 쓰면 SSL/TLS를 켜도 됩니다.',
+        gmailPreset: 'Gmail 권장값 적용 (smtp.gmail.com · 587 · STARTTLS)'
+      }
+    },
+    mailSendTest: {
+      title: '메일 발송 테스트',
+      cardTitle: 'SMTP 테스트',
+      description:
+        '현재 로그인 사용자에 저장된 SMTP로 테스트 메일을 보냅니다. 수신 주소를 입력한 뒤 발송을 누르세요.',
+      to: '수신 이메일',
+      subjectOptional: '제목 (선택)',
+      subjectPlaceholder: '비우면 기본 제목이 사용됩니다',
+      subjectHint: '비우면 “[회사명] 메일 발송 테스트” 형식으로 보냅니다.',
+      send: '테스트 메일 보내기',
+      sent: '테스트 메일을 발송했습니다.',
+      failed: '발송에 실패했습니다.',
+      toRequired: '수신 이메일 주소를 입력하세요.',
+      noPermission: '이 기능은 관리자(root/admin)만 사용할 수 있습니다.'
     },
     payrollManagement: {
       title: '급여 관리',
@@ -697,11 +910,86 @@ const ko = {
       unknown: '알 수 없음',
       system: '시스템',
       searchPlaceholder: '직원명, 부서, 직책 검색',
+      searchPayMonthLabel: '급여월',
+      searchFieldLabel: '검색',
+      gridHint: '셀을 클릭하여 값을 수정합니다. 포커스를 잃으면 저장됩니다.',
+      gridWorkingMonth: '근속\n개월 수',
+      gridColumns: {
+        rowNo: '번호',
+        bankAccount: '계좌번호',
+        ifsc: 'IFSC',
+        bankName: '은행명',
+        department: '부서',
+        employeeName: '이름',
+        position: '직책',
+        joiningDate: '입사일',
+        basicSalary: '기본급',
+        totalDayOfMonth: '월\n총일',
+        unpaidLeave: '무급\n휴가',
+        daysWorked: '근무\n일수',
+        overtime: 'OT',
+        sumTotal: '합계',
+        pfEmployee: 'PF 직원\n부담',
+        pfEmployer: 'PF 사업주\n부담',
+        esicEmployee: 'ESIC 직원\n부담',
+        esicEmployer: 'ESIC 사업주\n부담',
+        tds: 'TDS',
+        pt: 'PT',
+        netSalary: '실수령'
+      },
+      payslip: {
+        title: '급여 명세서',
+        companySection: '회사 정보',
+        companyName: '회사명',
+        companyContact: '회사 연락처',
+        downloadPdf: 'PDF 다운로드',
+        sendTitle: '급여 명세서 보내기',
+        sendRequiresComplete:
+          '선택한 급여월에 대해「급여 생성 완료」를 먼저 진행한 뒤 발송할 수 있습니다. (급여 생성 대화상자의 급여월 기준)',
+        sendNoRowsForPayMonth:
+          '급여 생성·완료에 사용한 급여월과 동일한 근무월 행이 표에 없습니다. 급여월을 맞추거나 필터를 초기화해 보세요.',
+        sendHint: '목록에 표시된 직원에게 개별로 급여 명세서 PDF를 이메일로 보냅니다. 이메일이 등록된 직원만 선택할 수 있습니다.',
+        sendEmailNote:
+          '서버에 메일 설정(EMAIL_HOST, EMAIL_USER, EMAIL_PASS)이 되어 있어야 발송됩니다.',
+        sendAction: '선택한 직원에게 발송',
+        sendNoSelection: '발송할 직원을 선택하세요. (이메일 등록 필수)',
+        sendResult: '발송 완료: 성공 {{ok}}건, 실패 {{fail}}건',
+        sendFailed: '발송 중 오류가 발생했습니다.',
+        colName: '이름',
+        colEmail: '이메일',
+        colPeriod: '급여 기간',
+        noEmail: '(이메일 없음)',
+        employee: '직원',
+        birthDate: '생년월일',
+        department: '부서',
+        position: '직책',
+        email: '이메일',
+        period: '급여 기간',
+        earnings: '지급',
+        deductions: '공제',
+        netPay: '실수령',
+        basicSalary: '기본급',
+        overtime: '초과근무',
+        gross: '총액(합계)',
+        tds: 'TDS',
+        deductMonth: '당월 공제',
+        netSalary: '실수령액',
+        bank: '은행',
+        account: '계좌',
+        pfEmployee: 'PF (직원)',
+        pfEmployer: 'PF (사업주)',
+        esicEmployee: 'ESIC (직원)',
+        esicEmployer: 'ESIC (사업주)',
+        pt: 'PT (직업세)',
+        bankSection: '입금 계좌'
+      },
       summary: {
         totalSalary: '총 급여액',
         netSalary: '실수령액',
         totalTax: '총 세금',
-        pendingPayroll: '대기중인 급여'
+        pendingPayroll: '대기중인 급여',
+        scopeForPayMonth: '아래 합계는 조회 급여월 {{period}}의 활성 급여만 합산했습니다.',
+        scopeNoMonth: '급여월을 선택하면 해당 월 합계가 표시됩니다.'
       },
       columns: {
         employeeInfo: '직원 정보',
@@ -729,23 +1017,57 @@ const ko = {
         print: '인쇄',
         downloadPdf: 'PDF 다운로드',
         createPayroll: '급여 생성',
+        completePayroll: '급여 생성 완료',
+        exportExcel: '엑셀로 내보내기',
         reset: '초기화',
         create: '생성'
       },
       dialog: {
         createTitle: '급여 생성',
         editTitle: '급여 수정',
-        enterInfo: '급여 정보를 입력해주세요.',
-        underDevelopment: '급여 생성 기능은 개발 중입니다.'
+        enterInfo:
+          '급여 기간을 선택한 뒤 생성합니다. 해당 월에 유효한 전자근로계약(서명·기간)의 기본급·상여, 근태 기록의 근무일·연장근로가 반영됩니다. 계약이 없으면 직원 프로필 급여를 사용합니다.',
+        payrollPeriodLabel: '급여 기간 (근무월)',
+        underDevelopment: '급여 생성 기능은 개발 중입니다.',
+        completeTitle: '급여 월 확정',
+        completeMessage:
+          '{{period}} 급여를 확정합니다. 확정 후에는 일반 사용자가 해당 월 데이터를 수정·삭제·승인·지급 처리할 수 없습니다. (root는 예외) 계속하시겠습니까?'
+      },
+      hints: {
+        createChooseOtherMonth:
+          '지금 기본 급여월에는 이미 생성된 급여가 있거나 확정되어 있을 수 있습니다. 버튼을 눌러 대화상자에서 2월·3월 등 생성할 급여월을 바꾼 뒤 생성하세요.'
+      },
+      preview: {
+        title: '급여 생성 전 확인',
+        blockedAlreadyExists: '이미 해당 급여월에 생성된 급여가 있어 일괄 생성할 수 없습니다.',
+        summary: '급여월 {{period}} · 재직 직원 {{total}}명',
+        withAttendance: '해당 월 출퇴근 기록이 있는 직원: {{count}}명',
+        withoutAttendance: '해당 월 출퇴근 기록이 없는 직원: {{count}}명',
+        withoutNames: '기록 없음(이름 일부): {{names}}',
+        dailyNote: '일용직은 해당 월 출퇴근이 없으면 상여가 0으로 반영될 수 있습니다.',
+        footnote: '기록이 없어도 급여 행은 생성되며, 근무일·무급·연장 등은 시스템 규칙에 따라 산정됩니다.',
+        confirmRun: '급여 생성 실행'
       },
       confirmDelete: '정말로 이 급여 항목을 삭제하시겠습니까?',
       success: {
         deleted: '급여 항목이 성공적으로 삭제되었습니다.',
+        saved: '저장되었습니다.',
+        exportedExcel: '엑셀 파일로 저장했습니다.',
+        bulkCreated: '급여가 생성되었습니다.',
         approved: '급여가 승인되었습니다.',
-        paid: '급여가 지급되었습니다.'
+        paid: '급여가 지급되었습니다.',
+        periodCompleted: '급여 월이 확정되었습니다.'
       },
       errors: {
         loadFailed: '급여 데이터를 불러오는데 실패했습니다.',
+        saveFailed: '저장에 실패했습니다.',
+        periodRequired: '급여 기간을 선택해주세요.',
+        periodLocked: '해당 급여 월은 이미 확정되어 일괄 생성할 수 없습니다.',
+        alreadyGenerated: '이미 해당 급여 월에 생성된 급여가 있습니다. 동일 월로 다시 일괄 생성할 수 없습니다.',
+        periodAlreadyFinalized: '이미 확정된 급여 월입니다. 다시 확정할 필요가 없습니다.',
+        periodCompleteFailed: '급여 월 확정에 실패했습니다.',
+        futurePayMonthNotAllowed: '아직 도래하지 않은 급여 월은 생성·확정할 수 없습니다.',
+        bulkCreateFailed: '급여 일괄 생성에 실패했습니다.',
         deleteFailed: '급여 삭제에 실패했습니다.',
         deleteError: '삭제 중 오류가 발생했습니다.',
         approveFailed: '급여 승인에 실패했습니다.',
@@ -753,6 +1075,30 @@ const ko = {
         payFailed: '급여 지급에 실패했습니다.',
         payError: '급여 지급 중 오류가 발생했습니다.'
       }
+    },
+    departmentManagement: {
+      title: '부서 관리',
+      name: '부서명',
+      code: '코드',
+      sortOrder: '정렬',
+      active: '사용',
+      inactive: '미사용',
+      add: '부서 추가',
+      edit: '수정',
+      delete: '삭제',
+      save: '저장',
+      cancel: '취소',
+      empty: '등록된 부서가 없습니다.',
+      loadFailed: '부서 목록을 불러오지 못했습니다.',
+      saveFailed: '저장에 실패했습니다.',
+      deleteFailed: '삭제에 실패했습니다.',
+      deleteConfirm: '이 부서를 삭제할까요?',
+      nameRequired: '부서명을 입력해주세요.',
+      selectDepartment: '부서 선택',
+      noDepartment: '선택 안 함',
+      usersBlockedDelete: '소속 사용자가 있어 삭제할 수 없습니다.',
+      saved: '저장되었습니다.',
+      deleted: '삭제되었습니다.'
     },
     workBoards: {
       title: '업무 관리',
@@ -770,6 +1116,8 @@ const ko = {
         boardName: '예: 1분기 마케팅',
         description: '보드에 대한 간단한 설명'
       },
+      /** 카드 목록에서 설명 미입력 시에도 한 줄 영역 유지 */
+      noDescription: '설명 없음',
       empty: {
         noBoards: '아직 작업 보드가 없습니다. 새 작업 보드를 만들어 보세요.'
       },
@@ -778,7 +1126,8 @@ const ko = {
       },
       errors: {
         loadListFailed: '목록을 불러올 수 없습니다.',
-        createFailed: '생성에 실패했습니다.'
+        createFailed: '생성에 실패했습니다.',
+        reorderFailed: '보드 순서를 변경하지 못했습니다.'
       }
     },
     workStatistics: {
@@ -836,10 +1185,283 @@ const ko = {
         loadStatsFailed: '업무 관리 카드 통계를 불러오는데 실패했습니다.'
       }
     },
+    inventoryManagement: {
+      pageTitle: '기본 재고 등록',
+      excelBulkApply: '엑셀 일괄 반영',
+      downloadTemplate: '양식 다운로드',
+      addItem: '재고 추가',
+      manageWarehouseButton: '창고 관리',
+      manageCategoryButton: '카테고리 관리',
+      manageUnitButton: '단위 관리',
+      stats: {
+        totalItems: '총 재고 항목',
+        totalValue: '총 재고 가치',
+        lowStock: '재고 부족',
+        outOfStock: '품절'
+      },
+      searchPlaceholder: '제품명, SKU, 카테고리 검색',
+      category: '카테고리',
+      warehouse: '창고',
+      status: '상태',
+      all: '전체',
+      stockStatus: {
+        inStock: '재고 있음',
+        lowStock: '재고 부족',
+        outOfStock: '품절',
+        unknown: '알 수 없음'
+      },
+      reset: '초기화',
+      columns: {
+        status: '상태',
+        productName: '제품명',
+        sku: 'SKU',
+        category: '카테고리',
+        currentStock: '현재 재고',
+        unitPrice: '단가',
+        totalValue: '총 가치',
+        supplier: '공급업체',
+        location: '위치',
+        lastUpdated: '마지막 업데이트',
+        actions: '작업'
+      },
+      tooltips: {
+        view: '보기',
+        edit: '수정',
+        delete: '삭제'
+      },
+      currency: 'Rs.',
+      dialog: {
+        editTitle: '재고 수정',
+        addTitle: '재고 추가',
+        viewTitle: '재고 상세',
+        registerCategoryTitle: '카테고리 등록',
+        registerLocationTitle: '보관 위치 등록',
+        registerWarehouseTitle: '창고 등록',
+        manageCategoryTitle: '카테고리 관리',
+        manageWarehouseTitle: '창고 관리',
+        manageUnitTitle: '단위 관리',
+        editCategoryTitle: '카테고리 수정',
+        editWarehouseTitle: '창고 수정',
+        registerUnitTitle: '단위 등록',
+        editUnitTitle: '단위 수정'
+      },
+      masterRegister: {
+        categoryHint: '재고 품목에서 선택할 수 있는 카테고리를 미리 등록합니다.',
+        warehouseHint: '제품 보관 위치(창고·창동 등)를 등록합니다. 재고 추가 시 위치 목록에 표시됩니다.',
+        unitHint: '재고 품목에서 선택할 수 있는 단위(개, 박스 등)를 등록합니다.'
+      },
+      masterManage: {
+        columnName: '이름',
+        emptyCategory: '등록된 카테고리가 없습니다. 위에서 추가하세요.',
+        emptyWarehouse: '등록된 창고가 없습니다. 위에서 추가하세요.',
+        emptyUnit: '등록된 단위가 없습니다. 위에서 추가하세요.'
+      },
+      form: {
+        productName: '제품명',
+        sku: 'SKU',
+        category: '카테고리',
+        supplier: '공급업체',
+        currentStock: '현재 재고',
+        minStock: '최소 재고',
+        maxStock: '최대 재고',
+        unit: '단위',
+        unitPrice: '단가',
+        location: '위치',
+        required: ' *',
+        productImage: '제품 이미지',
+        noImage: '이미지 없음',
+        selectImage: '이미지 선택',
+        removeImage: '이미지 제거',
+        generateSku: 'SKU 자동 생성',
+        barcodeQrSection: '바코드 (SKU 기준)',
+        barcodeHint: 'SKU를 입력하면 CODE128 바코드가 표시됩니다.',
+        registerCategory: '등록',
+        registerLocation: '등록',
+        registerUnit: '등록',
+        selectPartner: '협력업체 선택',
+        selectCategory: '카테고리 선택',
+        selectLocation: '위치 선택',
+        selectUnit: '단위 선택',
+        autocompleteNoOptions: '일치하는 항목이 없습니다.',
+        noCategoriesHint: '등록된 카테고리가 없습니다. 등록 버튼으로 추가하세요.',
+        noPartnersHint: '협력업체 관리에 등록된 업체가 없습니다.',
+        noLocationsHint: '등록된 위치가 없습니다. 등록 버튼으로 추가하세요.',
+        noUnitsHint: '등록된 단위가 없습니다. 등록 버튼으로 추가하세요.',
+        categoryName: '카테고리명',
+        locationName: '위치명',
+        warehouseName: '창고명',
+        unitName: '단위명'
+      },
+      detail: {
+        printBarcode: '바코드 인쇄',
+        noBarcodeForPrint: '표시할 바코드가 없습니다.',
+        barcodeNeedSku: 'SKU가 있어야 바코드를 표시할 수 있습니다.'
+      },
+      validation: {
+        categoryRequired: '카테고리를 선택하세요.',
+        partnerRequired: '공급업체(협력업체)를 선택하세요.',
+        locationRequired: '보관 위치를 선택하세요.',
+        unitRequired: '단위를 선택하세요.'
+      },
+      actions: {
+        cancel: '취소',
+        add: '추가',
+        update: '수정',
+        close: '닫기',
+        edit: '수정'
+      },
+      messages: {
+        loadError: '재고 데이터를 불러오는데 실패했습니다.',
+        deleteConfirm: '정말로 이 항목을 삭제하시겠습니까?',
+        deleteSuccess: '재고 항목이 성공적으로 삭제되었습니다.',
+        updateSuccess: '재고 항목이 성공적으로 수정되었습니다.',
+        addSuccess: '재고 항목이 성공적으로 추가되었습니다.',
+        saveError: '저장 중 오류가 발생했습니다.',
+        excelSampleError: '엑셀 양식 다운로드에 실패했습니다.',
+        excelApplyError: '엑셀 일괄 반영에 실패했습니다.',
+        deleteError: '삭제 중 오류가 발생했습니다.',
+        excelApplyDone: '엑셀 반영이 완료되었습니다.',
+        rowErrorLine: '{{row}}행: {{error}}',
+        masterCategorySaved: '카테고리가 등록되었습니다.',
+        masterWarehouseSaved: '창고(보관 위치)가 등록되었습니다.',
+        masterCategoryUpdated: '카테고리가 수정되었습니다.',
+        masterWarehouseUpdated: '창고가 수정되었습니다.',
+        masterCategoryDeleted: '카테고리가 삭제되었습니다.',
+        masterWarehouseDeleted: '창고가 삭제되었습니다.',
+        deleteCategoryConfirm: '"{{name}}" 카테고리를 삭제할까요?',
+        deleteWarehouseConfirm: '"{{name}}" 창고를 삭제할까요?',
+        masterUnitSaved: '단위가 등록되었습니다.',
+        masterUnitUpdated: '단위가 수정되었습니다.',
+        masterUnitDeleted: '단위가 삭제되었습니다.',
+        deleteUnitConfirm: '"{{name}}" 단위를 삭제할까요?',
+        noPermissionCreate: '재고를 등록할 권한이 없습니다.',
+        noPermissionEdit: '재고를 수정할 권한이 없습니다.',
+        noPermissionDelete: '재고를 삭제할 권한이 없습니다.',
+        noPermissionView: '재고를 조회할 권한이 없습니다.',
+        noPermissionExcel: '엑셀 일괄 반영 권한이 없습니다.',
+        noPermissionReadPage: '기본 재고 등록 메뉴를 조회할 권한이 없습니다.'
+      },
+      excelFilePrefix: '재고_일괄반영_양식'
+    },
+    inventoryStatus: {
+      pageTitle: '재고 현황 조회',
+      pageSubtitle:
+        '등록된 상품 재고를 조회합니다. (DB 연동) 행을 클릭하면 해당 상품의 입·출고 내역을 볼 수 있습니다.',
+      errors: {
+        loadListFailed: '재고 목록을 불러오지 못했습니다.',
+        loadDataError: '재고 데이터를 불러오는 중 오류가 발생했습니다.',
+        txLoadFailed: '입출고 내역을 불러오지 못했습니다.',
+        txLoadError: '입출고 내역을 불러오는 중 오류가 발생했습니다.'
+      },
+      stats: {
+        totalValue: '총 재고 가치',
+        lowStock: '재고 부족',
+        outOfStock: '재고 없음',
+        totalProducts: '총 상품 수'
+      },
+      statsCountSuffix: '{{count}}개',
+      alertLowOut: '재고 부족 상품 {{low}}개, 재고 없음 상품 {{out}}개가 있습니다.',
+      tableTitle: '재고 현황',
+      searchPlaceholder: '상품명 또는 코드 검색',
+      emptyTable: '표시할 재고 상품이 없습니다. 기본 재고 등록에서 상품을 추가하세요.',
+      columns: {
+        productCode: '상품코드',
+        productName: '상품명',
+        category: '카테고리',
+        currentStock: '현재재고',
+        minStock: '최소재고',
+        maxStock: '최대재고',
+        stockRate: '재고율',
+        unitPrice: '단가',
+        totalValue: '총가치',
+        status: '상태'
+      },
+      rowStatus: {
+        outOfStock: '재고없음',
+        lowStock: '재고부족',
+        overstock: '재고과다',
+        normal: '정상'
+      },
+      pieces: '{{n}}개',
+      txDialog: {
+        title: '입·출고 내역',
+        noRecords: '등록된 입·출고 기록이 없습니다.',
+        totalShown: '총 {{total}}건 (최대 1,000건까지 표시)',
+        close: '닫기'
+      },
+      txColumns: {
+        datetime: '일시',
+        type: '구분',
+        handler: '처리자',
+        quantity: '수량',
+        unitPrice: '단가',
+        amount: '금액',
+        notes: '비고'
+      },
+      txType: {
+        in: '입고',
+        out: '출고',
+        adjustment: '조정',
+        transfer: '이동'
+      }
+    },
+    inventoryReport: {
+      pageTitle: '재고 보고서',
+      pageSubtitle:
+        '재고 현황·통계·차트를 함께 확인합니다. 아래 표에서 행을 클릭하면 해당 제품의 입·출고 내역을 볼 수 있습니다.',
+      periodLabel: '기간',
+      periodWeek: '주간',
+      periodMonth: '월간',
+      periodQuarter: '분기',
+      periodYear: '연간',
+      categoryLabel: '카테고리',
+      allCategories: '전체',
+      refresh: '새로고침',
+      print: '인쇄',
+      downloadReport: '보고서 다운로드',
+      statsTotalProducts: '총 제품 수',
+      statsActiveProducts: '활성 제품',
+      statsTotalValue: '총 재고 가치',
+      statsTotalValueHint: '등록 제품 기준 합계',
+      statsLowStock: '재고 부족',
+      statsLowStockHint: '주의 필요',
+      statsAvgTurnover: '평균 회전율',
+      statsAvgTurnoverHint: '연간 기준',
+      chartMonthlyTrend: '월별 재고 추이',
+      chartCategoryDistribution: '카테고리별 재고 분포',
+      chartTurnoverByCategory: '카테고리별 회전율 분석',
+      chartSeriesStock: '재고량',
+      chartSeriesMovements: '입출고',
+      noData: '데이터 없음',
+      detailTableTitle: '상세 재고 현황',
+      searchPlaceholder: '상품명 또는 코드 검색',
+      emptyFiltered: '표시할 제품이 없습니다. 검색·필터를 바꾸거나 새로고침 해 보세요.',
+      colProductCode: '상품코드',
+      colProductName: '제품명',
+      colCategory: '카테고리',
+      colCurrentStock: '현재 재고',
+      colStockRate: '재고율',
+      colMinMax: '최소~최대',
+      colUnitPrice: '단가',
+      colTotalValue: '총 가치',
+      colTurnover: '회전율',
+      colStatus: '상태',
+      colLastUpdated: '최근 갱신',
+      minMaxUnits: '{{min}}~{{max}}개',
+      turnoverPerYear: '{{rate}}회/년',
+      turnoverTooltip: '{{value}}회',
+      categoryOther: '기타',
+      errors: {
+        productsLoadFailed: '제품·재고 목록을 불러오지 못했습니다.',
+        dataLoadError: '데이터를 불러오는 중 오류가 발생했습니다.'
+      }
+    },
     frontDesk: {
       title: '프론트데스크',
-      description: '체크인/체크아웃, 객실 배정, 고객 요청 처리를 관리합니다.',
+      description: '체크인/체크아웃, 기존 예약의 객실 배정(호실 변경), 고객 요청 처리를 관리합니다.',
       bookingListTitle: '예약/체크인 목록',
+      searchPlaceholder: '예약번호, 고객명, 호실, 유형, 상태, 날짜 검색…',
+      searchNoResults: '검색 조건에 맞는 예약이 없습니다.',
       quickActionsTitle: '빠른 작업',
       summary: {
         todayCheckin: '오늘 체크인',
@@ -866,26 +1488,109 @@ const ko = {
       actions: {
         checkin: '체크인',
         checkout: '체크아웃',
+        noShow: '노쇼',
+        cancelBooking: '예약 취소',
         newCheckin: '신규 체크인',
         processCheckout: '체크아웃 처리',
+        processNoShow: '노쇼 처리',
         assignRoom: '객실 배정',
         process: '처리'
+      },
+      confirmNoShow: '이 예약을 노쇼로 처리하시겠습니까?',
+      walkIn: {
+        title: '워크인 체크인',
+        subtitle: '사전 예약 없이 방금 도착한 손님을 즉시 체크인합니다. 객실·숙박 기간·요금을 입력하세요.',
+        hintExisting: '이미 예약된 건은 목록에서 「체크인」을 사용하세요.',
+        guestName: '고객명',
+        guestPhone: '연락처',
+        guestEmail: '이메일',
+        roomType: '객실 유형',
+        roomTypeHint: '등록된 객실 유형을 선택하세요. 유형·숙박 일정 선택 뒤 예약 가능한 호실만 호실란에 표시됩니다.',
+        roomNumber: '호실',
+        checkIn: '체크인일',
+        checkOut: '체크아웃일',
+        checkOutAutoHint: '기본은 체크인 다음 날이며, 변경할 수 있습니다. 체크인 다음 날 이전은 선택할 수 없습니다.',
+        checkInTime: '체크인 시간',
+        checkOutTime: '체크아웃 시간',
+        guests: '투숙 인원',
+        nightlyRate: '1박 요금',
+        totalHint: '예상 총액',
+        specialRequests: '요청 사항',
+        submit: '즉시 체크인',
+        success: '워크인 체크인이 등록되었습니다.',
+        openExistingCheckin: '기존 예약 체크인',
+        errors: {
+          required: '필수 항목을 입력하세요.',
+          roomType: '객실 유형을 선택하세요.',
+          room: '호실을 선택하세요.',
+          dates: '체크아웃은 체크인 이후여야 합니다.',
+          amount: '1박 요금 또는 총액을 확인하세요.',
+          roomId: '호실 번호를 확인하세요.',
+          createFailed: '등록에 실패했습니다.',
+          pastCheckin: '체크인일은 오늘 이전일 수 없습니다.',
+          checkinFailed: '체크인 처리에 실패했습니다. 목록에서 다시 시도하세요.'
+        }
+      },
+      assignRoom: {
+        title: '객실 배정 (호실 변경)',
+        subtitle: '등록된 예약을 선택한 뒤, 같은 객실 유형 안에서 배정 호실만 바꿉니다. 투숙 기간·고객 정보는 변경되지 않습니다.',
+        selectBooking: '예약 선택',
+        guest: '고객',
+        currentRoom: '현재 호실',
+        stayPeriod: '투숙 기간',
+        newRoom: '변경할 호실',
+        submit: '호실 변경',
+        success: '배정 객실이 변경되었습니다.',
+        sameRoom: '이미 선택한 호실과 동일합니다.',
+        noEligible: '호실을 변경할 수 있는 예약이 없습니다. (체크아웃·취소·노쇼 제외)',
+        errors: {
+          selectBooking: '예약을 선택하세요.',
+          selectRoom: '변경할 호실을 선택하세요.',
+          failed: '호실 변경에 실패했습니다.'
+        }
       },
       dialog: {
         checkinTitle: '체크인 처리',
         checkoutTitle: '체크아웃 처리',
+        noShowTitle: '노쇼 처리',
+        noShowHint: '체크인 전인 예약만 노쇼로 표시할 수 있습니다.',
+        cancelTitle: '예약 취소',
+        cancelHint: '대기·확정 상태의 예약만 취소할 수 있습니다. 취소 후에는 동일 예약으로 체크인할 수 없습니다.',
+        confirmCancel: '이 예약을 취소하시겠습니까?',
         selectBooking: '예약 선택'
+      },
+      invoice: {
+        title: '인보이스 · 결제',
+        subtitle: '체크아웃 전 요금을 확인하고 결제 수단을 선택하세요. (GST 포함 표시)',
+        bookingRef: '예약번호',
+        guest: '고객',
+        room: '객실',
+        nights: '박',
+        lineAccommodation: '숙박 요금 (과세 표준)',
+        gstLabel: 'GST 18%',
+        grandTotal: '결제 총액',
+        paymentMethod: '결제 수단',
+        cash: '현금',
+        card: '카드',
+        upi: 'UPI',
+        bank: '계좌 이체',
+        confirmPay: '결제 완료 및 체크아웃',
+        currency: 'Rs.'
       },
       empty: {
         noData: '아직 표시할 데이터가 없습니다.'
       },
       messages: {
         checkinDone: '체크인이 완료되었습니다.',
-        checkoutDone: '체크아웃이 완료되었습니다.'
+        checkoutDone: '체크아웃이 완료되었습니다.',
+        noShowDone: '노쇼로 처리되었습니다.',
+        cancelDone: '예약이 취소되었습니다.',
+        noEligibleBookings: '선택할 수 있는 예약이 없습니다. 목록 상태를 확인해 주세요.'
       },
       errors: {
         loadBookingsFailed: '예약 목록을 불러오는데 실패했습니다.',
-        processFailed: '처리 중 오류가 발생했습니다.'
+        processFailed: '처리 중 오류가 발생했습니다.',
+        cancelFailed: '예약 취소에 실패했습니다.'
       }
     },
     reservationStatus: {
@@ -1016,7 +1721,7 @@ const ko = {
         all: '전체'
       },
       placeholders: {
-        search: '고객명, 예약번호, 이메일 검색',
+        search: '고객명, 회사명, 호실 검색',
         bookingNo: '예약 번호',
         roomType: '객실 유형',
         roomNo: '객실 번호',
@@ -1147,7 +1852,7 @@ const ko = {
     },
     eInvoiceManagement: {
       title: '전자세금계산서',
-      description: '인도 GST 규정을 준수하는 전자 인보이스를 생성하고 관리하세요.',
+      description: '인도 GST e-invoice: 초안 저장 후 NIC IRP(또는 GSP)로 JSON 제출하여 IRN·Signed QR을 발급합니다.',
       defaults: {
         item: '항목',
         unspecified: '미지정',
@@ -1197,9 +1902,19 @@ const ko = {
         reset: '초기화',
         newEInvoice: '새 E-Invoice',
         createEInvoice: 'E-Invoice 생성',
+        generateIrn: 'NIC IRP에 제출하여 IRN 발급',
         view: '보기',
         qrCode: 'QR 코드',
         upload: '업로드'
+      },
+      irp: {
+        pendingIrn: 'IRN 미발급'
+      },
+      irpStatus: {
+        draft: '초안',
+        submitted: 'IRP 제출 중',
+        irn_generated: 'IRN 발급됨',
+        failed: 'IRP 오류'
       },
       list: {
         title: 'E-Invoice 목록 ({{count}}건)'
@@ -1210,6 +1925,8 @@ const ko = {
       },
       columns: {
         invoiceNumber: '인보이스 번호',
+        irn: 'IRN',
+        irp: 'NIC IRP',
         buyer: '구매자',
         transactionType: '거래 유형',
         amount: '금액',
@@ -1234,6 +1951,8 @@ const ko = {
       },
       gst: {
         title: 'GST 규정 준수 현황',
+        irpWorkflow:
+          '법적 IRN은 Invoice Registration Portal(IRP)에서 발급됩니다. MVS는 NIC 스키마 JSON을 구성한 뒤 제출합니다. 기본(GST_IRP_MODE=mock)은 개발용 시뮬레이션입니다. 운영 시 GSP 계약 후 GST_GSP_BASE_URL 등 환경 변수로 연동하세요.',
         checklist: {
           title: 'GST 규정 준수 체크리스트',
           gstinValidationPrimary: 'GSTIN 유효성 검증',
@@ -1293,9 +2012,24 @@ const ko = {
       errors: {
         loadData: '데이터를 불러오는데 실패했습니다.',
         selectProformaOrCustomer: '프로포마 인보이스 또는 고객을 선택해주세요.',
+        selectApprover: '승인자를 선택해주세요.',
         createEInvoice: 'E-Invoice를 생성하는데 실패했습니다.',
         updateStatus: '상태를 업데이트하는데 실패했습니다.',
-        createEWayBill: 'E-Way Bill을 생성하는데 실패했습니다.'
+        createEWayBill: 'E-Way Bill을 생성하는데 실패했습니다.',
+        generateIrn: 'IRN 발급(IRP)에 실패했습니다.'
+      },
+      approval: {
+        tabRequested: '내가 요청한 전자세금계산서',
+        tabPending: '승인 대기',
+        approver: '승인자',
+        selectApprover: '승인자 선택',
+        approve: '승인',
+        reject: '반려',
+        pendingChip: '승인 대기',
+        approvedChip: '내부 승인됨',
+        rejectedChip: '반려',
+        needApprovalForIrn: '내부 승인 후 IRN을 발급할 수 있습니다.',
+        needApprovalForPrint: '내부 승인 후 인쇄·저장할 수 있습니다.'
       }
     },
     eWayBillManagement: {
@@ -1375,6 +2109,7 @@ const ko = {
       },
       dialog: {
         createTitle: '새 E-Way Bill 생성',
+        editTitle: 'E-Way Bill 수정',
         selectEInvoice: 'E-Invoice 선택',
         vehicleNo: '차량번호',
         vehicleType: '차량 유형',
@@ -1385,7 +2120,36 @@ const ko = {
         toAddress: '도착지 주소',
         distance: '운송 거리 (km)',
         transportDate: '운송일',
-        transportTime: '운송 시간'
+        transportTime: '운송 시간',
+        cancelButton: '취소',
+        submitCreate: '생성',
+        submitUpdate: '저장',
+        hintRequired: '필수 항목을 입력한 뒤 생성할 수 있습니다.',
+        validationRequired: '인보이스 번호, 공급자·수령자 GSTIN 및 상호 등 필수 항목을 입력해주세요.',
+        createSuccess: 'E-Way Bill이 생성되었습니다.',
+        updateSuccess: 'E-Way Bill이 수정되었습니다.',
+        invoiceNumber: '인보이스 번호',
+        invoiceDate: '인보이스 일자',
+        supplyType: '공급 유형',
+        fromGstin: '공급자 GSTIN',
+        fromName: '공급자 상호',
+        supplierAddress: '공급자 주소',
+        fromPincode: '공급자 우편번호',
+        fromState: '공급자 주/도',
+        fromStateCode: '공급자 주 코드',
+        toGstin: '수령자 GSTIN',
+        toName: '수령자 상호',
+        recipientAddress: '수령자 주소',
+        toPincode: '수령자 우편번호',
+        toState: '수령자 주/도',
+        toStateCode: '수령자 주 코드',
+        vehicleNumber: '차량 번호',
+        distanceKm: '거리 (km)',
+        itemName: '품목명',
+        hsnCode: 'HSN',
+        quantity: '수량',
+        unitPrice: '단가',
+        notes: '비고'
       },
       detail: {
         title: 'E-Way Bill 상세',
@@ -1422,6 +2186,33 @@ const ko = {
         createEWayBill: 'E-Way Bill을 생성하는데 실패했습니다.',
         updateStatus: '상태를 업데이트하는데 실패했습니다.'
       }
+    },
+    accountingBasicInfo: {
+      title: '회계 기본정보 관리',
+      description: '회사별로 자주 쓰는 회계 기본정보를 간단히 등록하세요.',
+      sections: {
+        accountCategories: '계정과목',
+        expenseCategories: '비용항목',
+        taxCodes: '세금코드',
+        paymentMethods: '결제수단'
+      },
+      placeholders: {
+        accountCategories: '예: 매출, 매입, 인건비',
+        expenseCategories: '예: 출장비, 교통비',
+        taxCodes: '예: VAT 10%, 면세',
+        paymentMethods: '예: 계좌이체, 카드'
+      },
+      add: '추가',
+      emptyList: '등록된 항목이 없습니다.',
+      readOnlyHint: '관리 권한이 있는 사용자만 수정할 수 있습니다.',
+      errors: {
+        loadFailed: '회계 기본정보를 불러올 수 없습니다.',
+        loadError: '회계 기본정보를 불러오는 중 오류가 발생했습니다.',
+        saveFailed: '저장에 실패했습니다.',
+        saveError: '저장 중 오류가 발생했습니다.'
+      },
+      successSaved: '저장되었습니다.',
+      saving: '저장 중...'
     },
     expenseApproval: {
       title: '지출결의서',
@@ -1590,6 +2381,11 @@ const ko = {
       departmentLeaveStatus: '부서별 휴가 현황',
       departmentLeaveCount: '부서별 휴가 신청 건수',
       departmentLeaveDays: '부서별 휴가 일수',
+      departmentLeaveCalendar: '부서 휴가 일정',
+      departmentFilter: '부서',
+      allDepartments: '전체 부서',
+      calendarStatusLegend: '색: 대기 · 승인 · 거부 · 취소',
+      departmentLeaveCalendarEmpty: '표시할 부서가 없습니다. 휴가 신청에 부서 정보가 있어야 합니다.',
       noLeaveRequests: '휴가 신청이 없습니다.',
       noSearchResults: '검색 결과가 없습니다.',
       noPendingLeave: '승인 대기 중인 휴가가 없습니다.',
@@ -1606,6 +2402,9 @@ const ko = {
       leaveRejected: '휴가가 거부되었습니다.',
       leaveDeleted: '휴가 신청이 삭제되었습니다.',
       confirmDelete: '정말 이 휴가 신청을 삭제하시겠습니까?',
+      noPermissionCreate: '휴가 메뉴에「등록」권한이 없어 신청할 수 없습니다.',
+      noPermissionExport: '보내기를 하려면 휴가 메뉴에「보기」또는「수정」권한이 필요합니다.',
+      noPermissionEditRequest: '휴가 메뉴에「수정」권한이 없어 신청 내용을 수정할 수 없습니다.',
       enterRejectionReasonPrompt: '거부 사유를 입력하세요:',
       annual: '연차',
       sick: '병가',
@@ -1654,8 +2453,59 @@ const ko = {
       excelDownloadSuccess: 'Excel 파일이 다운로드되었습니다.',
       excelExportError: 'Excel 파일 내보내기 중 오류가 발생했습니다.'
     },
+    attendanceStatistics: {
+      title: '근태 통계',
+      description: '선택한 기간의 근태 기록을 직원별로 집계합니다.',
+      startDate: '시작일',
+      endDate: '종료일',
+      refresh: '조회',
+      loadError: '근태 데이터를 불러오지 못했습니다.',
+      empty: '집계할 데이터가 없습니다.',
+      cards: {
+        people: '대상 인원',
+        records: '근태 건수',
+        totalHours: '총 근무시간(h)',
+        late: '지각(건)',
+        absent: '결근(건)'
+      },
+      table: {
+        name: '이름',
+        department: '부서',
+        records: '기록 수',
+        totalHours: '총 근무(h)',
+        normal: '정상',
+        late: '지각',
+        absent: '결근'
+      },
+      detail: {
+        dialogTitle: '{{name}} — 출퇴근 기록',
+        close: '닫기',
+        date: '날짜',
+        checkIn: '출근',
+        checkOut: '퇴근',
+        workHours: '근무(h)',
+        status: '상태',
+        empty: '표시할 출퇴근 기록이 없습니다.'
+      }
+    },
     approval: {
-      title: '전자 결제',
+      title: '전자결재',
+      pageTitle: '전자결재',
+      formHeroTitle: '전자 결재',
+      newDocument: '신규 문서',
+      editDocument: '수정 문서',
+      writtenDate: '작성일',
+      autoGenerated: '자동 생성',
+      flowDraft: '기안',
+      flowReview: '검토',
+      flowApprove: '승인',
+      departmentRole: '부서/직책',
+      approverSectionTitle: '결재 승인자',
+      approverFieldLabel: '결재 승인자 **',
+      categoryGeneral: '일반',
+      companyLogoAlt: '회사 로고',
+      detailPageTitle: '결재 문서 상세',
+      backToList: '목록으로',
       myRequests: '내가 요청한 결제',
       received: '받은 결제',
       createDocument: '결제 문서 작성',
@@ -1671,8 +2521,13 @@ const ko = {
       amount: '금액',
       deadline: '마감일',
       attachments: '첨부 파일',
+      selectFiles: '파일 선택',
+      multipleFilesHint: '여러 파일 선택 가능',
       selectApprover: '승인자를 선택하세요',
       enterDescription: '결재 문서 설명을 입력하세요',
+      linkPrompt: '링크 URL을 입력하세요',
+      signatureDialogTitle: '서명하기',
+      unknownUser: '알 수 없음',
       expense: '지출신청',
       vacation: '휴가신청',
       purchase: '구매신청',
@@ -1720,7 +2575,34 @@ const ko = {
       validation: {
         titleRequired: '제목과 설명을 입력해주세요.',
         approverRequired: '최소 1명 이상의 승인자를 선택해주세요.',
-        rejectionReasonPrompt: '반려 사유를 입력하세요:'
+        rejectionReasonPrompt: '반려 사유를 입력하세요:',
+        descriptionRequired: '설명은 필수입니다.'
+      },
+      errors: {
+        loadList: '전자 결재 목록을 불러올 수 없습니다.',
+        loadListFailed: '전자 결재 목록을 불러오는데 실패했습니다.',
+        saveFailed: '결재 문서 저장에 실패했습니다.',
+        saveError: '결재 문서 저장 중 오류가 발생했습니다.',
+        deleteFailed: '결재 문서 삭제에 실패했습니다.',
+        deleteError: '삭제 중 오류가 발생했습니다.',
+        approveFailed: '결재 승인에 실패했습니다.',
+        approveError: '결재 승인 중 오류가 발생했습니다.',
+        rejectFailed: '결재 반려에 실패했습니다.',
+        rejectError: '결재 반려 중 오류가 발생했습니다.',
+        escalateFailed: '에스컬레이션에 실패했습니다.',
+        escalateError: '에스컬레이션 중 오류가 발생했습니다.',
+        commentAddFailed: '댓글 추가에 실패했습니다.',
+        commentAddError: '댓글 추가 중 오류가 발생했습니다.'
+      },
+      toast: {
+        documentCreated: '결재 문서가 생성되었습니다.',
+        documentUpdated: '결재 문서가 수정되었습니다.',
+        documentDeleted: '결재 문서가 성공적으로 삭제되었습니다.',
+        documentApproved: '결재 문서가 승인되었습니다.',
+        documentRejected: '결재 문서가 반려되었습니다.',
+        documentEscalated: '결재 문서가 에스컬레이션되었습니다.',
+        commentAdded: '댓글이 추가되었습니다.',
+        replyAdded: '답글이 추가되었습니다.'
       },
       toolbar: {
         body: '본문',
@@ -1730,7 +2612,39 @@ const ko = {
         list: '목록',
         numberedList: '1. 목록',
         image: '이미지',
-        table: '표'
+        table: '표',
+        quote: '인용',
+        link: '링크',
+        clear: '지우기',
+        alignLeft: '왼쪽 정렬',
+        alignCenter: '가운데 정렬',
+        alignRight: '오른쪽 정렬'
+      },
+      tableDialog: {
+        title: '표 만들기',
+        rows: '행 수',
+        cols: '열 수',
+        headerRow: '헤더 행',
+        yes: '있음',
+        no: '없음',
+        create: '만들기'
+      },
+      detail: {
+        documentContent: '문서 내용',
+        attachmentsLabel: '첨부파일:',
+        approvalFlow: '결재 흐름',
+        stepApproved: '승인',
+        stepPending: '대기',
+        stepRejected: '반려',
+        stepSkipped: '건너뜀',
+        escalationChip: '에스컬레이션',
+        signatureAlt: '서명',
+        noSignature: '서명 없음',
+        escalationSection: '에스컬레이션',
+        replyPlaceholder: '답글을 입력하세요...',
+        commentPlaceholder: '댓글을 입력하세요...',
+        approvalDate: '승인일',
+        commentLabel: '의견'
       }
     }
   }
@@ -1804,7 +2718,24 @@ const en = {
       errorCount: 'There are {{count}} notifications.',
       errorCountTruncated: '(Showing up to 100)',
       languageKo: 'Korean',
-      languageEn: 'English'
+      languageEn: 'English',
+      menuNoView: 'You do not have View permission for this menu.',
+      menuNoCreate: 'You do not have Create permission for this menu.',
+      menuNoEdit: 'You do not have Edit permission for this menu.',
+      menuNoDelete: 'You do not have Delete permission for this menu.',
+      menuNoMutate: 'You need Create or Edit permission for this menu.',
+      notificationInbox: {
+        expenseTitle: 'Payment approval requested',
+        expenseBody: '{{requester}} · {{title}} · {{amount}} {{currency}}',
+        vacationTitle: 'Leave approval requested',
+        vacationBody: '{{name}} · {{start}} – {{end}} ({{days}} days)',
+        quotationTitle: 'Quotation approval requested',
+        quotationBody: '{{customer}} · No.{{number}}',
+        chipPayment: 'Pay',
+        chipVacation: 'Leave',
+        chipQuotation: 'Quote'
+      },
+      selectPlaceholder: 'Select'
     },
     app: {
       accountingTitle: 'Accounting Management',
@@ -1958,6 +2889,8 @@ const en = {
       projectCount: 'Projects',
       approvalPending: 'Pending Approvals',
       vacationPending: 'Pending Vacation Approvals',
+      vacationLeaveCalendar: 'Leave calendar',
+      vacationLeaveCalendarEmpty: 'No leave to display. Check your department info.',
       paid: 'Paid',
       unpaid: 'Unpaid',
       noCustomerName: 'No customer name',
@@ -2029,6 +2962,10 @@ const en = {
       description: 'Manage MVS system user accounts.',
       userList: 'User List',
       addUser: 'Add User',
+      departmentTab: 'Department Management',
+      tabDisabledNoView: 'You do not have menu “View” permission for this tab.',
+      tabDisabledNoCreate: 'You do not have menu “Create” permission to add users.',
+      tabDisabledNoEdit: 'You do not have menu “Edit” permission for department management.',
       deleteSelected: 'Delete Selected',
       excelSample: 'Excel Sample',
       excelExport: 'Export Excel',
@@ -2043,6 +2980,7 @@ const en = {
       loadFailed: 'Failed to load user list.',
       name: 'Name',
       email: 'Email',
+      loginId: 'Login ID',
       role: 'Role',
       department: 'Department',
       position: 'Position',
@@ -2065,7 +3003,83 @@ const en = {
       roleAudit: 'Audit',
       statusActive: 'Active',
       statusInactive: 'Inactive',
-      selectUsers: 'Please select users to delete.'
+      selectUsers: 'Please select users to delete.',
+      editUserTitle: 'Edit User Information',
+      createUserTitle: 'Register New User',
+      backToList: 'Back to List',
+      sectionBasic: 'Basic Information',
+      sectionHr: 'HR Information',
+      sectionBank: 'Personal Bank Account',
+      sectionAccount: 'Account Information',
+      employeeNumber: 'Employee ID',
+      placeholderEmployeeEdit: 'Enter to edit',
+      placeholderEmployeeAuto: 'Leave blank for auto-generation',
+      helperEmployeeAuto: 'Auto-generated from company abbreviation and sequence number',
+      dateOfBirth: 'Date of Birth',
+      gender: 'Gender',
+      selectPlaceholder: 'Select',
+      genderMale: 'Male',
+      genderFemale: 'Female',
+      genderOther: 'Other',
+      phoneNumber: 'Phone Number',
+      phonePlaceholder: 'e.g. +91 98765 43210',
+      address: 'Address',
+      emergencyContactName: 'Emergency Contact Name',
+      emergencyContactPhone: 'Emergency Contact Phone',
+      placeholderEmergencyName: 'Emergency contact name',
+      hireDate: 'Joining Date',
+      employmentType: 'Employment Type',
+      empFulltime: 'Full-time',
+      empDaily: 'Daily Worker',
+      empContract: 'Contract',
+      empParttime: 'Part-time',
+      empIntern: 'Intern',
+      salary: 'Salary',
+      placeholderMonthlySalary: 'Monthly salary amount',
+      deptPlaceholder: 'e.g. Development, Sales',
+      deptFromMasterHint: 'Choose a department from Departments (HR).',
+      positionTitle: 'Position / Title',
+      positionPlaceholder: 'e.g. Manager, Team Lead',
+      bankName: 'Bank Name',
+      bankNamePlaceholder: 'e.g. HDFC Bank, State Bank of India',
+      accountNumber: 'Account Number',
+      accountPlaceholder: 'Account number',
+      ifscCode: 'IFSC Code',
+      ifscPlaceholder: 'e.g. HDFC0001234',
+      companySelect: 'Company',
+      userId: 'User ID',
+      password: 'Password',
+      passwordPlaceholderEdit: 'Only when changing password',
+      passwordPlaceholderNew: 'Enter password',
+      roleLabel: 'Role',
+      statusLabel: 'Status',
+      statusSuspended: 'Suspended',
+      paymentOfficer: 'Payment Officer',
+      paymentOfficerAssign: 'Assign as payment officer',
+      paymentOfficerAssigned: 'Assigned',
+      paymentOfficerNotAssigned: 'Not assigned',
+      submitEdit: 'Save',
+      submitRegister: 'Register',
+      userDetailTitle: 'User Details',
+      createdAt: 'Created',
+      deleteFailed: 'Failed to delete user(s).',
+      confirmDeleteSelectedBulk: 'Are you sure you want to delete {{count}} selected user(s)?',
+      deleteSelectedSuccess: '{{count}} user(s) deleted.',
+      operationFailed: 'Operation failed.',
+      excelSampleDownloadError: 'Failed to download Excel sample file.',
+      excelExportError: 'Failed to export Excel file.',
+      excelSelectFile: 'Please select an Excel file.',
+      excelImportError: 'Failed to import Excel file.',
+      excelImportTitle: 'Import Excel File',
+      selectedFile: 'Selected file',
+      importResultTitle: 'Import result',
+      importSuccessSummary: '{{success}} of {{total}} succeeded',
+      importFailedCount: 'Failed: {{count}}',
+      importRowError: 'Row {{row}}: {{error}}',
+      importing: 'Importing...',
+      importButton: 'Import',
+      excelSampleFilename: 'user_import_sample',
+      excelExportFilename: 'user_list'
     },
     attendanceManagement: {
       pageTitle: 'Attendance Management',
@@ -2107,7 +3121,13 @@ const en = {
       checkOutError: 'An error occurred during check-out.',
       loadListFailed: 'Failed to load attendance list.',
       loadListError: 'An error occurred while loading the attendance list.',
-      officeNotRegistered: 'Office location is not registered. Please register the office location in System Settings.'
+      officeNotRegistered: 'Office location is not registered. Please register the office location in System Settings.',
+      statusHolidayWork: 'Holiday work',
+      statWorkingDays: 'Working days',
+      statVacationDays: 'Vacation days',
+      statLateDays: 'Late days',
+      currentMonthRange: 'Period',
+      monthPeriodLabel: '{{month}}/{{year}}'
     },
     companyManagement: {
       title: 'Company Management',
@@ -2305,10 +3325,26 @@ const en = {
       cancel: 'Cancel'
     },
     loginInfoManagement: {
-      title: 'Login Info Management',
+      title: 'Login credentials',
+      description:
+        'Store login IDs, passwords, and URLs for external sites (e.g. tax, banking) and MCA (Ministry of Corporate Affairs) per company. Not the same as MSV user accounts.',
+      excelHint:
+        'Edits save when you leave the cell. You can paste from Excel. Division, Login ID, and Password are required to save.',
+      hints: {
+        doubleClickHeader:
+          'Double-click a column header to rename it. Matching the default text resets the header.',
+        removeColumn: 'Remove this column (values in this column may be cleared for all rows)',
+        moveColumnLeft: 'Move column left',
+        moveColumnRight: 'Move column right'
+      },
       tabs: {
-        info: 'Login Info',
-        log: 'Login Logs'
+        info: 'External site login credentials',
+        external: 'External sites',
+        mca: 'MCA login credentials',
+        addTab: 'Add tab',
+        renameTab: 'Rename tab',
+        deleteTab: 'Delete tab',
+        tabName: 'Tab name'
       },
       fields: {
         company: 'Company',
@@ -2327,20 +3363,28 @@ const en = {
         reason: 'Reason',
         divisionRequired: 'Division *',
         loginIdRequired: 'Login ID *',
-        passwordRequired: 'Password *'
+        passwordRequired: 'Password *',
+        columnName: 'Column name'
       },
       actions: {
         refresh: 'Refresh',
         importExcel: 'Import Excel',
-        addNew: 'Add New',
+        exportExcel: 'Export to Excel',
+        addNew: 'Add row',
+        addRow: 'Add row',
         edit: 'Edit',
         delete: 'Delete',
         reset: 'Reset',
         search: 'Search',
-        saving: 'Saving...'
+        saving: 'Saving...',
+        cancel: 'Cancel',
+        add: 'Add',
+        save: 'Save',
+        addColumn: 'Add column'
       },
       placeholders: {
         selectCompany: 'Select a company',
+        searchRows: 'Search division, login ID, URL…',
         searchUserId: 'Search user ID',
         date: 'YYYY-MM-DD',
         enterDivision: 'Enter division',
@@ -2358,14 +3402,20 @@ const en = {
       empty: {
         noData: 'No data available.'
       },
-      companyInfoTitle: '{{companyName}} Login Info',
+      companyInfoTitle: '{{companyName}} — external site logins',
+      companyInfoTitleMca: '{{companyName}} — MCA logins',
+      companyInfoTitleWithTab: '{{companyName}} — {{tabName}}',
       recentCount: 'Showing {{count}} recent records',
       dialog: {
         createTitle: 'Add Login Info',
-        editTitle: 'Edit Login Info'
+        editTitle: 'Edit Login Info',
+        deleteRowTitle: 'Delete login entry',
+        deleteTabTitle: 'Delete tab',
+        addColumnTitle: 'Add column'
       },
       confirm: {
-        delete: 'Are you sure you want to delete the selected login info?'
+        delete: 'Are you sure you want to delete the selected login info?',
+        deleteTab: 'This will delete the tab and all login rows inside it. Continue?'
       },
       errors: {
         loadCompaniesFailed: 'Failed to load company list.',
@@ -2375,8 +3425,58 @@ const en = {
         deleteFailed: 'Failed to delete login info.',
         selectCompanyForImport: 'Please select a company before importing Excel.',
         importFailed: 'Failed to import Excel.',
-        selectCompanyFirst: 'Please select a company first.'
+        selectCompanyFirst: 'Please select a company first.',
+        nothingToExport: 'Nothing to export. Only rows with at least one filled cell are included.',
+        loadTabsFailed: 'Failed to load tabs.',
+        noTabs: 'No tabs to display.',
+        tabNameRequired: 'Please enter a tab name.',
+        saveTabFailed: 'Failed to save the tab.',
+        deleteTabFailed: 'Failed to delete the tab.',
+        cannotRemoveLastColumn: 'At least one data column must remain.',
+        cannotRemoveCoreColumn: 'Division, Login ID, and Password columns cannot be removed.',
+        columnLabelInvalid: 'Enter a column name between 1 and 80 characters.'
       }
+    },
+    systemSettings: {
+      general: {
+        companyAbbreviation: 'Company abbreviation (email subject)',
+        companyAbbreviationHint: 'Used in quotation emails as [MSV]. Example: MSV'
+      },
+      tabs: {
+        basic: 'General',
+        systemLoginHistory: 'System login history'
+      },
+      loginHistoryHint: 'View who logged into the MSV system, when, and success or failure.',
+      mailServer: {
+        title: 'Outgoing mail server (SMTP)',
+        host: 'SMTP host',
+        port: 'Port',
+        secure: 'SSL/TLS (port 465 only)',
+        authUser: 'Username',
+        authPass: 'Password',
+        authPassHint: 'A password is already saved. Enter only to change it.',
+        fromEmail: 'From email address',
+        fromName: 'From display name',
+        hint: 'Saved only on your signed-in account. Username, from address, and display name default from your login email and name when left empty. When sending, this SMTP is tried first; if host or auth is missing or sending fails, company-wide settings apply, then server env vars (EMAIL_*).',
+        gmailHint:
+          'Gmail: host smtp.gmail.com, port 587, keep SSL/TLS off (STARTTLS). With 2-Step Verification, use a Google App Password (16 characters), not your normal password. Port 465 may use SSL/TLS on.',
+        gmailPreset: 'Apply Gmail defaults (smtp.gmail.com · 587 · STARTTLS)'
+      }
+    },
+    mailSendTest: {
+      title: 'Mail send test',
+      cardTitle: 'SMTP test',
+      description:
+        'Sends a test message using the SMTP saved for the current user. Enter the recipient address and click Send.',
+      to: 'Recipient email',
+      subjectOptional: 'Subject (optional)',
+      subjectPlaceholder: 'Leave blank to use the default subject',
+      subjectHint: 'If empty, the subject will be “[Company name] mail send test”.',
+      send: 'Send test mail',
+      sent: 'Test mail sent.',
+      failed: 'Failed to send.',
+      toRequired: 'Please enter a recipient email address.',
+      noPermission: 'Only administrators (root/admin) can use this feature.'
     },
     payrollManagement: {
       title: 'Payroll Management',
@@ -2393,11 +3493,86 @@ const en = {
       unknown: 'Unknown',
       system: 'System',
       searchPlaceholder: 'Search employee, department, position',
+      searchPayMonthLabel: 'Pay month',
+      searchFieldLabel: 'Search',
+      gridHint: 'Click a cell to edit. Changes save when the cell loses focus.',
+      gridWorkingMonth: 'Working\nMonth',
+      gridColumns: {
+        rowNo: 'No.',
+        bankAccount: 'A/C',
+        ifsc: 'IFSC',
+        bankName: 'Bank',
+        department: 'Department',
+        employeeName: 'NAME',
+        position: 'Position',
+        joiningDate: 'Joining\nDate',
+        basicSalary: 'Basic\nSalary',
+        totalDayOfMonth: 'Total Day\nof Month',
+        unpaidLeave: 'Unpaid\nLeave',
+        daysWorked: 'Days\nWorked',
+        overtime: 'OT',
+        sumTotal: 'Sum\nTotal',
+        pfEmployee: 'PF Employee\nContribution',
+        pfEmployer: 'PF Employer\nContribution',
+        esicEmployee: 'ESIC Employee\nContribution',
+        esicEmployer: 'ESIC Employer\nContribution',
+        tds: 'TDS',
+        pt: 'PT',
+        netSalary: 'Net\nSalary'
+      },
+      payslip: {
+        title: 'Payroll Payslip',
+        companySection: 'Company information',
+        companyName: 'Company',
+        companyContact: 'Company contact',
+        downloadPdf: 'Download PDF',
+        sendTitle: 'Send payslips',
+        sendRequiresComplete:
+          'Complete “Payroll generation” for the selected pay month before sending. (Uses the pay month in the payroll dialogs.)',
+        sendNoRowsForPayMonth:
+          'No grid rows for the same work month as the pay month used for create/complete. Align the pay month or reset filters.',
+        sendHint:
+          'Send the payslip PDF by email to each employee in the list. Only employees with an email can be selected.',
+        sendEmailNote: 'The server must have mail settings (EMAIL_HOST, EMAIL_USER, EMAIL_PASS).',
+        sendAction: 'Send to selected',
+        sendNoSelection: 'Select recipients (email required).',
+        sendResult: 'Done: {{ok}} sent, {{fail}} failed',
+        sendFailed: 'An error occurred while sending.',
+        colName: 'Name',
+        colEmail: 'Email',
+        colPeriod: 'Pay period',
+        noEmail: '(No email)',
+        employee: 'Employee',
+        birthDate: 'Date of birth',
+        department: 'Department',
+        position: 'Position',
+        email: 'Email',
+        period: 'Pay period',
+        earnings: 'Earnings',
+        deductions: 'Deductions',
+        netPay: 'Net pay',
+        basicSalary: 'Basic salary',
+        overtime: 'Overtime',
+        gross: 'Gross',
+        tds: 'TDS',
+        deductMonth: 'Deductions (this month)',
+        netSalary: 'Net salary',
+        bank: 'Bank',
+        account: 'Account',
+        pfEmployee: 'PF (employee)',
+        pfEmployer: 'PF (employer)',
+        esicEmployee: 'ESIC (employee)',
+        esicEmployer: 'ESIC (employer)',
+        pt: 'PT (professional tax)',
+        bankSection: 'Bank details'
+      },
       summary: {
         totalSalary: 'Total Payroll Amount',
         netSalary: 'Net Salary',
         totalTax: 'Total Tax',
-        pendingPayroll: 'Pending Payroll'
+        pendingPayroll: 'Pending Payroll',
+        scopeForPayMonth: 'Totals include active payroll rows for pay month {{period}} only.',
+        scopeNoMonth: 'Select a pay month to see totals for that month.'
       },
       columns: {
         employeeInfo: 'Employee Info',
@@ -2425,23 +3600,57 @@ const en = {
         print: 'Print',
         downloadPdf: 'Download PDF',
         createPayroll: 'Create Payroll',
+        completePayroll: 'Finalize payroll',
+        exportExcel: 'Export to Excel',
         reset: 'Reset',
         create: 'Create'
       },
       dialog: {
         createTitle: 'Create Payroll',
         editTitle: 'Edit Payroll',
-        enterInfo: 'Please enter payroll information.',
-        underDevelopment: 'Payroll creation is under development.'
+        enterInfo:
+          'Select a payroll period. Base pay and bonus follow a valid e‑contract for that month (signed, in period); work days and overtime come from attendance. If no contract, the employee profile salary is used.',
+        payrollPeriodLabel: 'Payroll period (working month)',
+        underDevelopment: 'Payroll creation is under development.',
+        completeTitle: 'Finalize payroll month',
+        completeMessage:
+          'Finalize payroll for {{period}}. After this, non‑root users cannot edit, delete, approve, or mark as paid for that month. (root is exempt.) Continue?'
+      },
+      hints: {
+        createChooseOtherMonth:
+          'The default pay month may already have payroll or be finalized. Open the dialog, switch the month (e.g. February or March), then run bulk create.'
+      },
+      preview: {
+        title: 'Before bulk payroll',
+        blockedAlreadyExists: 'Payroll already exists for this month. Bulk generation cannot run again.',
+        summary: 'Pay month {{period}} · active employees {{total}}',
+        withAttendance: 'Employees with attendance records this month: {{count}}',
+        withoutAttendance: 'Employees with no attendance records this month: {{count}}',
+        withoutNames: 'No records (sample names): {{names}}',
+        dailyNote: 'Daily workers with no attendance in that month may get bonus calculated as zero.',
+        footnote: 'Payroll rows are still created without records; work days and pay follow system rules.',
+        confirmRun: 'Run bulk payroll'
       },
       confirmDelete: 'Are you sure you want to delete this payroll item?',
       success: {
         deleted: 'Payroll item deleted successfully.',
+        saved: 'Saved.',
+        exportedExcel: 'Excel file saved.',
+        bulkCreated: 'Payroll generated.',
         approved: 'Payroll approved successfully.',
-        paid: 'Payroll paid successfully.'
+        paid: 'Payroll paid successfully.',
+        periodCompleted: 'Payroll month finalized.'
       },
       errors: {
         loadFailed: 'Failed to load payroll data.',
+        saveFailed: 'Failed to save.',
+        periodRequired: 'Please select a payroll period.',
+        periodLocked: 'This payroll month is already finalized; bulk generation is not allowed.',
+        alreadyGenerated: 'Payroll for this month already exists. Bulk generation cannot be run again for the same month.',
+        periodAlreadyFinalized: 'This payroll month is already finalized.',
+        periodCompleteFailed: 'Failed to finalize payroll month.',
+        futurePayMonthNotAllowed: 'Payroll cannot be created or finalized for a future month.',
+        bulkCreateFailed: 'Bulk payroll generation failed.',
         deleteFailed: 'Failed to delete payroll.',
         deleteError: 'An error occurred while deleting.',
         approveFailed: 'Failed to approve payroll.',
@@ -2449,6 +3658,30 @@ const en = {
         payFailed: 'Failed to pay payroll.',
         payError: 'An error occurred while paying payroll.'
       }
+    },
+    departmentManagement: {
+      title: 'Departments',
+      name: 'Department name',
+      code: 'Code',
+      sortOrder: 'Sort order',
+      active: 'Active',
+      inactive: 'Inactive',
+      add: 'Add department',
+      edit: 'Edit',
+      delete: 'Delete',
+      save: 'Save',
+      cancel: 'Cancel',
+      empty: 'No departments yet.',
+      loadFailed: 'Failed to load departments.',
+      saveFailed: 'Failed to save.',
+      deleteFailed: 'Failed to delete.',
+      deleteConfirm: 'Delete this department?',
+      nameRequired: 'Please enter a department name.',
+      selectDepartment: 'Select department',
+      noDepartment: 'None',
+      usersBlockedDelete: 'Cannot delete while users are assigned to this department.',
+      saved: 'Saved.',
+      deleted: 'Deleted.'
     },
     workBoards: {
       title: 'Work Management',
@@ -2466,6 +3699,7 @@ const en = {
         boardName: 'e.g. Q1 Marketing',
         description: 'A short description of the board'
       },
+      noDescription: 'No description',
       empty: {
         noBoards: 'There are no work boards yet. Create a new work board to get started.'
       },
@@ -2474,7 +3708,8 @@ const en = {
       },
       errors: {
         loadListFailed: 'Unable to load the list.',
-        createFailed: 'Failed to create.'
+        createFailed: 'Failed to create.',
+        reorderFailed: 'Could not reorder boards.'
       }
     },
     workStatistics: {
@@ -2532,10 +3767,283 @@ const en = {
         loadStatsFailed: 'Failed to load work card statistics.'
       }
     },
+    inventoryManagement: {
+      pageTitle: 'Basic inventory registration',
+      excelBulkApply: 'Apply Excel (bulk)',
+      downloadTemplate: 'Download template',
+      addItem: 'Add item',
+      manageWarehouseButton: 'Manage warehouses',
+      manageCategoryButton: 'Manage categories',
+      manageUnitButton: 'Manage units',
+      stats: {
+        totalItems: 'Total items',
+        totalValue: 'Total stock value',
+        lowStock: 'Low stock',
+        outOfStock: 'Out of stock'
+      },
+      searchPlaceholder: 'Search by name, SKU, category',
+      category: 'Category',
+      warehouse: 'Warehouse',
+      status: 'Status',
+      all: 'All',
+      stockStatus: {
+        inStock: 'In stock',
+        lowStock: 'Low stock',
+        outOfStock: 'Out of stock',
+        unknown: 'Unknown'
+      },
+      reset: 'Reset',
+      columns: {
+        status: 'Status',
+        productName: 'Product name',
+        sku: 'SKU',
+        category: 'Category',
+        currentStock: 'Current stock',
+        unitPrice: 'Unit price',
+        totalValue: 'Total value',
+        supplier: 'Supplier',
+        location: 'Location',
+        lastUpdated: 'Last updated',
+        actions: 'Actions'
+      },
+      tooltips: {
+        view: 'View',
+        edit: 'Edit',
+        delete: 'Delete'
+      },
+      currency: 'Rs.',
+      dialog: {
+        editTitle: 'Edit item',
+        addTitle: 'Add item',
+        viewTitle: 'Inventory detail',
+        registerCategoryTitle: 'Register category',
+        registerLocationTitle: 'Register storage location',
+        registerWarehouseTitle: 'Register warehouse',
+        manageCategoryTitle: 'Manage categories',
+        manageWarehouseTitle: 'Manage warehouses',
+        manageUnitTitle: 'Manage units',
+        editCategoryTitle: 'Edit category',
+        editWarehouseTitle: 'Edit warehouse',
+        registerUnitTitle: 'Register unit',
+        editUnitTitle: 'Edit unit'
+      },
+      masterRegister: {
+        categoryHint: 'Add categories that can be selected when registering inventory items.',
+        warehouseHint: 'Register storage locations (warehouse, zone, etc.). They appear in the location field when adding items.',
+        unitHint: 'Register units of measure (ea, box, etc.) available when adding inventory items.'
+      },
+      masterManage: {
+        columnName: 'Name',
+        emptyCategory: 'No categories yet. Add one above.',
+        emptyWarehouse: 'No warehouses yet. Add one above.',
+        emptyUnit: 'No units yet. Add one above.'
+      },
+      form: {
+        productName: 'Product name',
+        sku: 'SKU',
+        category: 'Category',
+        supplier: 'Supplier',
+        currentStock: 'Current stock',
+        minStock: 'Min stock',
+        maxStock: 'Max stock',
+        unit: 'Unit',
+        unitPrice: 'Unit price',
+        location: 'Location',
+        required: ' *',
+        productImage: 'Product image',
+        noImage: 'No image',
+        selectImage: 'Choose image',
+        removeImage: 'Remove image',
+        generateSku: 'Generate SKU',
+        barcodeQrSection: 'Barcode (from SKU)',
+        barcodeHint: 'Enter a SKU to show a CODE128 barcode.',
+        registerCategory: 'Register',
+        registerLocation: 'Register',
+        registerUnit: 'Register',
+        selectPartner: 'Select partner',
+        selectCategory: 'Select category',
+        selectLocation: 'Select location',
+        selectUnit: 'Select unit',
+        autocompleteNoOptions: 'No matching items.',
+        noCategoriesHint: 'No categories yet. Use Register to add one.',
+        noPartnersHint: 'No partners in Partner Management.',
+        noLocationsHint: 'No locations yet. Use Register to add one.',
+        noUnitsHint: 'No units yet. Use Register to add one.',
+        categoryName: 'Category name',
+        locationName: 'Location name',
+        warehouseName: 'Warehouse name',
+        unitName: 'Unit name'
+      },
+      detail: {
+        printBarcode: 'Print barcode',
+        noBarcodeForPrint: 'No barcode to display.',
+        barcodeNeedSku: 'A SKU is required to show the barcode.'
+      },
+      validation: {
+        categoryRequired: 'Please select a category.',
+        partnerRequired: 'Please select a supplier (partner).',
+        locationRequired: 'Please select a storage location.',
+        unitRequired: 'Please select a unit.'
+      },
+      actions: {
+        cancel: 'Cancel',
+        add: 'Add',
+        update: 'Update',
+        close: 'Close',
+        edit: 'Edit'
+      },
+      messages: {
+        loadError: 'Failed to load inventory data.',
+        deleteConfirm: 'Are you sure you want to delete this item?',
+        deleteSuccess: 'The item was deleted successfully.',
+        updateSuccess: 'The item was updated successfully.',
+        addSuccess: 'The item was added successfully.',
+        saveError: 'An error occurred while saving.',
+        excelSampleError: 'Failed to download the Excel template.',
+        excelApplyError: 'Failed to apply the Excel file.',
+        deleteError: 'An error occurred while deleting.',
+        excelApplyDone: 'Excel update completed.',
+        rowErrorLine: 'Row {{row}}: {{error}}',
+        masterCategorySaved: 'Category added.',
+        masterWarehouseSaved: 'Warehouse (storage location) added.',
+        masterCategoryUpdated: 'Category updated.',
+        masterWarehouseUpdated: 'Warehouse updated.',
+        masterCategoryDeleted: 'Category deleted.',
+        masterWarehouseDeleted: 'Warehouse deleted.',
+        deleteCategoryConfirm: 'Delete category "{{name}}"?',
+        deleteWarehouseConfirm: 'Delete warehouse "{{name}}"?',
+        masterUnitSaved: 'Unit added.',
+        masterUnitUpdated: 'Unit updated.',
+        masterUnitDeleted: 'Unit deleted.',
+        deleteUnitConfirm: 'Delete unit "{{name}}"?',
+        noPermissionCreate: 'You do not have permission to register inventory items.',
+        noPermissionEdit: 'You do not have permission to edit inventory items.',
+        noPermissionDelete: 'You do not have permission to delete inventory items.',
+        noPermissionView: 'You do not have permission to view inventory items.',
+        noPermissionExcel: 'You do not have permission to apply Excel bulk updates.',
+        noPermissionReadPage: 'You do not have permission to view the basic inventory registration menu.'
+      },
+      excelFilePrefix: 'inventory_bulk_template'
+    },
+    inventoryStatus: {
+      pageTitle: 'Stock status',
+      pageSubtitle:
+        'View registered product stock. Click a row to see inbound and outbound history for that product.',
+      errors: {
+        loadListFailed: 'Could not load stock list.',
+        loadDataError: 'An error occurred while loading stock data.',
+        txLoadFailed: 'Could not load inbound/outbound history.',
+        txLoadError: 'An error occurred while loading transaction history.'
+      },
+      stats: {
+        totalValue: 'Total inventory value',
+        lowStock: 'Low stock',
+        outOfStock: 'Out of stock',
+        totalProducts: 'Total products'
+      },
+      statsCountSuffix: '{{count}}',
+      alertLowOut: '{{low}} low-stock item(s) and {{out}} out-of-stock item(s).',
+      tableTitle: 'Stock status',
+      searchPlaceholder: 'Search by product name or code',
+      emptyTable: 'No stock items to display. Add products in Basic inventory registration.',
+      columns: {
+        productCode: 'Product code',
+        productName: 'Product name',
+        category: 'Category',
+        currentStock: 'Current stock',
+        minStock: 'Min stock',
+        maxStock: 'Max stock',
+        stockRate: 'Stock level %',
+        unitPrice: 'Unit price',
+        totalValue: 'Total value',
+        status: 'Status'
+      },
+      rowStatus: {
+        outOfStock: 'Out of stock',
+        lowStock: 'Low stock',
+        overstock: 'Overstock',
+        normal: 'OK'
+      },
+      pieces: '{{n}} units',
+      txDialog: {
+        title: 'Inbound / outbound history',
+        noRecords: 'No stock movements recorded.',
+        totalShown: 'Total {{total}} (up to 1,000 shown)',
+        close: 'Close'
+      },
+      txColumns: {
+        datetime: 'Date & time',
+        type: 'Type',
+        handler: 'Handled by',
+        quantity: 'Qty',
+        unitPrice: 'Unit price',
+        amount: 'Amount',
+        notes: 'Notes'
+      },
+      txType: {
+        in: 'Stock in',
+        out: 'Stock out',
+        adjustment: 'Adjustment',
+        transfer: 'Transfer'
+      }
+    },
+    inventoryReport: {
+      pageTitle: 'Inventory report',
+      pageSubtitle:
+        'View stock status, statistics, and charts. Click a row in the table below to see inbound/outbound history for that product.',
+      periodLabel: 'Period',
+      periodWeek: 'Week',
+      periodMonth: 'Month',
+      periodQuarter: 'Quarter',
+      periodYear: 'Year',
+      categoryLabel: 'Category',
+      allCategories: 'All',
+      refresh: 'Refresh',
+      print: 'Print',
+      downloadReport: 'Download report',
+      statsTotalProducts: 'Total products',
+      statsActiveProducts: 'Active products',
+      statsTotalValue: 'Total inventory value',
+      statsTotalValueHint: 'Sum of registered products',
+      statsLowStock: 'Low stock',
+      statsLowStockHint: 'Needs attention',
+      statsAvgTurnover: 'Average turnover',
+      statsAvgTurnoverHint: 'Annual basis',
+      chartMonthlyTrend: 'Monthly stock trend',
+      chartCategoryDistribution: 'Stock by category',
+      chartTurnoverByCategory: 'Turnover by category',
+      chartSeriesStock: 'Stock qty',
+      chartSeriesMovements: 'In / out',
+      noData: 'No data',
+      detailTableTitle: 'Detailed stock status',
+      searchPlaceholder: 'Search by product name or code',
+      emptyFiltered: 'No products to show. Change search or filters, or refresh.',
+      colProductCode: 'Product code',
+      colProductName: 'Product name',
+      colCategory: 'Category',
+      colCurrentStock: 'Current stock',
+      colStockRate: 'Stock level %',
+      colMinMax: 'Min–max',
+      colUnitPrice: 'Unit price',
+      colTotalValue: 'Total value',
+      colTurnover: 'Turnover',
+      colStatus: 'Status',
+      colLastUpdated: 'Last updated',
+      minMaxUnits: '{{min}}–{{max}} units',
+      turnoverPerYear: '{{rate}}×/yr',
+      turnoverTooltip: '{{value}} turns',
+      categoryOther: 'Other',
+      errors: {
+        productsLoadFailed: 'Could not load product and stock list.',
+        dataLoadError: 'An error occurred while loading data.'
+      }
+    },
     frontDesk: {
       title: 'Front Desk',
-      description: 'Manage check-in/check-out, room assignments, and guest requests.',
+      description: 'Manage check-in/check-out, reassign rooms for existing reservations, and guest requests.',
       bookingListTitle: 'Reservation / Check-in List',
+      searchPlaceholder: 'Search by booking no., guest, room, type, status, dates…',
+      searchNoResults: 'No reservations match your search.',
       quickActionsTitle: 'Quick Actions',
       summary: {
         todayCheckin: 'Today Check-ins',
@@ -2562,26 +4070,109 @@ const en = {
       actions: {
         checkin: 'Check-in',
         checkout: 'Check-out',
+        noShow: 'No-show',
+        cancelBooking: 'Cancel reservation',
         newCheckin: 'New Check-in',
         processCheckout: 'Process Check-out',
+        processNoShow: 'Mark no-show',
         assignRoom: 'Assign Room',
         process: 'Process'
+      },
+      confirmNoShow: 'Mark this reservation as no-show?',
+      walkIn: {
+        title: 'Walk-in check-in',
+        subtitle: 'Check in a guest who arrived without a prior reservation. Enter room, stay dates, and charges.',
+        hintExisting: 'For existing reservations, use Check-in on the list row.',
+        guestName: 'Guest name',
+        guestPhone: 'Phone',
+        guestEmail: 'Email',
+        roomType: 'Room type',
+        roomTypeHint: 'Choose a registered room type. After type and stay dates are set, only available rooms appear in the room field.',
+        roomNumber: 'Room',
+        checkIn: 'Check-in date',
+        checkOut: 'Check-out date',
+        checkOutAutoHint: 'Defaults to the day after check-in; you can change it. Dates on or before check-in are not allowed.',
+        checkInTime: 'Check-in time',
+        checkOutTime: 'Check-out time',
+        guests: 'Guests',
+        nightlyRate: 'Rate per night',
+        totalHint: 'Estimated total',
+        specialRequests: 'Requests',
+        submit: 'Check in now',
+        success: 'Walk-in check-in completed.',
+        openExistingCheckin: 'Check in existing reservation',
+        errors: {
+          required: 'Please fill in required fields.',
+          roomType: 'Select a room type.',
+          room: 'Select a room.',
+          dates: 'Check-out must be after check-in.',
+          amount: 'Enter nightly rate or verify total.',
+          roomId: 'Invalid room number.',
+          createFailed: 'Could not complete registration.',
+          pastCheckin: 'Check-in date cannot be before today.',
+          checkinFailed: 'Check-in failed. Please try again from the list.'
+        }
+      },
+      assignRoom: {
+        title: 'Room assignment (change room)',
+        subtitle: 'Pick an existing reservation and change only the assigned room within the same room type. Stay dates and guest details stay the same.',
+        selectBooking: 'Reservation',
+        guest: 'Guest',
+        currentRoom: 'Current room',
+        stayPeriod: 'Stay',
+        newRoom: 'New room',
+        submit: 'Update room',
+        success: 'Room assignment updated.',
+        sameRoom: 'This is already the assigned room.',
+        noEligible: 'No reservations can change room (excludes checked-out, cancelled, no-show).',
+        errors: {
+          selectBooking: 'Select a reservation.',
+          selectRoom: 'Select a room.',
+          failed: 'Could not update room assignment.'
+        }
       },
       dialog: {
         checkinTitle: 'Process Check-in',
         checkoutTitle: 'Process Check-out',
+        noShowTitle: 'Mark no-show',
+        noShowHint: 'Only reservations that have not checked in yet can be marked as no-show.',
+        cancelTitle: 'Cancel reservation',
+        cancelHint: 'Only pending or confirmed reservations can be cancelled.',
+        confirmCancel: 'Cancel this reservation?',
         selectBooking: 'Select Reservation'
+      },
+      invoice: {
+        title: 'Invoice · Payment',
+        subtitle: 'Review charges and select payment method before checkout. (GST-inclusive display)',
+        bookingRef: 'Booking ref.',
+        guest: 'Guest',
+        room: 'Room',
+        nights: 'night(s)',
+        lineAccommodation: 'Accommodation (taxable value)',
+        gstLabel: 'GST 18%',
+        grandTotal: 'Amount payable',
+        paymentMethod: 'Payment method',
+        cash: 'Cash',
+        card: 'Card',
+        upi: 'UPI',
+        bank: 'Bank transfer',
+        confirmPay: 'Pay & check out',
+        currency: 'Rs.'
       },
       empty: {
         noData: 'No data to display yet.'
       },
       messages: {
         checkinDone: 'Check-in completed.',
-        checkoutDone: 'Check-out completed.'
+        checkoutDone: 'Check-out completed.',
+        noShowDone: 'Marked as no-show.',
+        cancelDone: 'Reservation cancelled.',
+        noEligibleBookings: 'No reservations available for this action. Check the list status.'
       },
       errors: {
         loadBookingsFailed: 'Failed to load reservation list.',
-        processFailed: 'An error occurred while processing.'
+        processFailed: 'An error occurred while processing.',
+        cancelFailed: 'Could not cancel the reservation.'
       }
     },
     reservationStatus: {
@@ -2712,7 +4303,7 @@ const en = {
         all: 'All'
       },
       placeholders: {
-        search: 'Search guest name, booking number, email',
+        search: 'Search guest name, company, room',
         bookingNo: 'Booking No.',
         roomType: 'Room Type',
         roomNo: 'Room No.',
@@ -2843,7 +4434,7 @@ const en = {
     },
     eInvoiceManagement: {
       title: 'E-Invoice',
-      description: 'Create and manage e-invoices compliant with Indian GST regulations.',
+      description: 'Indian GST e-invoice: save draft, then submit NIC JSON to IRP (or GSP) to obtain IRN and signed QR.',
       defaults: {
         item: 'Item',
         unspecified: 'Unspecified',
@@ -2893,9 +4484,19 @@ const en = {
         reset: 'Reset',
         newEInvoice: 'New E-Invoice',
         createEInvoice: 'Create E-Invoice',
+        generateIrn: 'Submit to NIC IRP for IRN',
         view: 'View',
         qrCode: 'QR Code',
         upload: 'Upload'
+      },
+      irp: {
+        pendingIrn: 'No IRN yet'
+      },
+      irpStatus: {
+        draft: 'Draft',
+        submitted: 'Submitted to IRP',
+        irn_generated: 'IRN issued',
+        failed: 'IRP error'
       },
       list: {
         title: 'E-Invoice List ({{count}})'
@@ -2906,6 +4507,8 @@ const en = {
       },
       columns: {
         invoiceNumber: 'Invoice Number',
+        irn: 'IRN',
+        irp: 'NIC IRP',
         buyer: 'Buyer',
         transactionType: 'Transaction Type',
         amount: 'Amount',
@@ -2930,6 +4533,8 @@ const en = {
       },
       gst: {
         title: 'GST Compliance Status',
+        irpWorkflow:
+          'A legal IRN is issued by the Invoice Registration Portal (IRP). MVS builds NIC-schema JSON and submits it. Default (GST_IRP_MODE=mock) simulates the response. For production, contract a GSP and set GST_GSP_BASE_URL and related env vars.',
         checklist: {
           title: 'GST Compliance Checklist',
           gstinValidationPrimary: 'GSTIN Validation',
@@ -2989,9 +4594,24 @@ const en = {
       errors: {
         loadData: 'Failed to load data.',
         selectProformaOrCustomer: 'Please select a proforma invoice or customer.',
+        selectApprover: 'Please select an approver.',
         createEInvoice: 'Failed to create e-invoice.',
         updateStatus: 'Failed to update status.',
-        createEWayBill: 'Failed to create e-way bill.'
+        createEWayBill: 'Failed to create e-way bill.',
+        generateIrn: 'Failed to generate IRN (IRP).'
+      },
+      approval: {
+        tabRequested: 'My requested e-invoices',
+        tabPending: 'Pending my approval',
+        approver: 'Approver',
+        selectApprover: 'Select approver',
+        approve: 'Approve',
+        reject: 'Reject',
+        pendingChip: 'Pending approval',
+        approvedChip: 'Internally approved',
+        rejectedChip: 'Rejected',
+        needApprovalForIrn: 'IRN can be generated after internal approval.',
+        needApprovalForPrint: 'Print/download is available after internal approval.'
       }
     },
     eWayBillManagement: {
@@ -3071,6 +4691,7 @@ const en = {
       },
       dialog: {
         createTitle: 'Create New E-Way Bill',
+        editTitle: 'Edit E-Way Bill',
         selectEInvoice: 'Select E-Invoice',
         vehicleNo: 'Vehicle Number',
         vehicleType: 'Vehicle Type',
@@ -3081,7 +4702,36 @@ const en = {
         toAddress: 'To Address',
         distance: 'Transport Distance (km)',
         transportDate: 'Transport Date',
-        transportTime: 'Transport Time'
+        transportTime: 'Transport Time',
+        cancelButton: 'Cancel',
+        submitCreate: 'Create',
+        submitUpdate: 'Save',
+        hintRequired: 'Fill in the required fields, then create.',
+        validationRequired: 'Please fill invoice number, supplier/recipient GSTIN, names, and other required fields.',
+        createSuccess: 'E-Way Bill created.',
+        updateSuccess: 'E-Way Bill updated.',
+        invoiceNumber: 'Invoice number',
+        invoiceDate: 'Invoice date',
+        supplyType: 'Supply type',
+        fromGstin: 'Supplier GSTIN',
+        fromName: 'Supplier name',
+        supplierAddress: 'Supplier address',
+        fromPincode: 'Supplier PIN',
+        fromState: 'Supplier state',
+        fromStateCode: 'Supplier state code',
+        toGstin: 'Recipient GSTIN',
+        toName: 'Recipient name',
+        recipientAddress: 'Recipient address',
+        toPincode: 'Recipient PIN',
+        toState: 'Recipient state',
+        toStateCode: 'Recipient state code',
+        vehicleNumber: 'Vehicle number',
+        distanceKm: 'Distance (km)',
+        itemName: 'Item name',
+        hsnCode: 'HSN',
+        quantity: 'Qty',
+        unitPrice: 'Unit price',
+        notes: 'Notes'
       },
       detail: {
         title: 'E-Way Bill Details',
@@ -3118,6 +4768,33 @@ const en = {
         createEWayBill: 'Failed to create E-Way Bill.',
         updateStatus: 'Failed to update status.'
       }
+    },
+    accountingBasicInfo: {
+      title: 'Basic Accounting Information',
+      description: 'Easily register frequently used accounting information for each company.',
+      sections: {
+        accountCategories: 'Account titles',
+        expenseCategories: 'Expense items',
+        taxCodes: 'Tax codes',
+        paymentMethods: 'Payment methods'
+      },
+      placeholders: {
+        accountCategories: 'e.g. Sales, Purchases, Payroll',
+        expenseCategories: 'e.g. Travel, Transportation',
+        taxCodes: 'e.g. VAT 10%, Tax-exempt',
+        paymentMethods: 'e.g. Bank transfer, Card'
+      },
+      add: 'Add',
+      emptyList: 'No items registered.',
+      readOnlyHint: 'Only users with administrator privileges can make changes.',
+      errors: {
+        loadFailed: 'Could not load accounting basic information.',
+        loadError: 'An error occurred while loading accounting basic information.',
+        saveFailed: 'Save failed.',
+        saveError: 'An error occurred while saving.'
+      },
+      successSaved: 'Saved successfully.',
+      saving: 'Saving...'
     },
     expenseApproval: {
       title: 'Expense Report',
@@ -3248,15 +4925,38 @@ const en = {
       title: 'Quotation Management',
       create: 'Create Quotation',
       editTitle: 'Edit Quotation',
+      detailTitle: 'Quotation detail',
+      backToList: 'Back to list',
+      sendEmail: 'Send email',
       delete: 'Delete',
       save: 'Save',
       cancel: 'Cancel',
       search: 'Search',
       totalQuotations: 'Total Quotations',
       approvedQuotations: 'Approved Quotations',
-      pendingQuotations: 'Pending Quotations',
+      pendingQuotations: 'Pending my approval',
+      tabRequested: 'My requested quotations',
+      tabPendingApproval: 'Pending approval',
+      approver: 'Approver',
+      selectApprover: 'Select approver',
+      itemQtyUnitRequired: 'For each line item, enter quantity (QTY) of at least 1 and a unit price greater than 0.',
+      exportAfterApproval: 'Print/PDF is available only after approval.',
+      emailAfterApproval: 'Email can be sent only after approval.',
+      emailPdfNeedDetail:
+        'Open the quotation detail first so the on-screen layout can be attached as PDF, then try again.',
+      approve: 'Approve',
+      reject: 'Reject',
+      rejectionReason: 'Rejection reason',
+      rejectionReasonRequired: 'Please enter a rejection reason.',
+      rejectionReasonPlaceholder: 'Enter the reason for rejection…',
+      rejectDialogTitle: 'Reject quotation',
+      approveSuccess: 'Quotation approved.',
+      rejectSuccess: 'Quotation rejected.',
+      editLocked: 'Approved, sent, or rejected quotations cannot be edited.',
       searchPlaceholder: 'Search by quotation number, customer name, email',
       customerSearchPlaceholder: 'Search by customer name',
+      customerEmailMultipleHint: 'Separate multiple addresses with commas (,) or semicolons (;).',
+      invalidEmailInList: 'Invalid email in the list: {{part}}',
       quotationNumber: 'Quotation Number',
       customerName: 'Customer Name',
       issueDate: 'Issue Date',
@@ -3267,9 +4967,13 @@ const en = {
       view: 'View',
       edit: 'Edit',
       print: 'Print',
+      savePdf: 'Save as PDF',
+      pdfSaved: 'PDF saved.',
+      pdfSaveFailed: 'Failed to save PDF.',
       email: 'Email',
-      confirmDelete: 'Are you sure you want to delete this quotation?',
-      deleted: 'Quotation deleted successfully.',
+      confirmDelete:
+        'Hide this quotation from the list? It will not be physically deleted; rejection/approval history remains for performance review and audit.',
+      deleted: 'Hidden from the list. (Data retained in the database.)',
       updated: 'Quotation updated successfully.',
       created: 'Quotation created successfully.',
       printed: 'Quotation printed.',
@@ -3279,6 +4983,7 @@ const en = {
       deleteFailed: 'An error occurred while deleting.',
       statusDraft: 'Draft',
       statusSent: 'Sent',
+      statusPendingApproval: 'Pending approval',
       statusApproved: 'Approved',
       statusRejected: 'Rejected',
       statusExpired: 'Expired',
@@ -3326,6 +5031,11 @@ const en = {
       departmentLeaveStatus: 'Department Leave Status',
       departmentLeaveCount: 'Department Leave Request Count',
       departmentLeaveDays: 'Department Leave Days',
+      departmentLeaveCalendar: 'Department leave calendar',
+      departmentFilter: 'Department',
+      allDepartments: 'All departments',
+      calendarStatusLegend: 'Colors: Pending · Approved · Rejected · Cancelled',
+      departmentLeaveCalendarEmpty: 'No department to show. Leave requests need a department.',
       noLeaveRequests: 'No leave requests.',
       noSearchResults: 'No search results.',
       noPendingLeave: 'No pending leave requests.',
@@ -3342,6 +5052,9 @@ const en = {
       leaveRejected: 'Leave has been rejected.',
       leaveDeleted: 'Leave request has been deleted.',
       confirmDelete: 'Are you sure you want to delete this leave request?',
+      noPermissionCreate: 'You do not have leave menu “Create” permission to apply.',
+      noPermissionExport: 'Export requires leave menu “View” or “Edit” permission.',
+      noPermissionEditRequest: 'You do not have leave menu “Edit” permission to modify this request.',
       enterRejectionReasonPrompt: 'Enter rejection reason:',
       annual: 'Annual Leave',
       sick: 'Sick Leave',
@@ -3390,8 +5103,59 @@ const en = {
       excelDownloadSuccess: 'Excel file has been downloaded.',
       excelExportError: 'An error occurred while exporting to Excel.'
     },
+    attendanceStatistics: {
+      title: 'Attendance statistics',
+      description: 'Summarize attendance by employee for the selected period.',
+      startDate: 'Start date',
+      endDate: 'End date',
+      refresh: 'Apply',
+      loadError: 'Failed to load attendance data.',
+      empty: 'No data to display.',
+      cards: {
+        people: 'Employees',
+        records: 'Records',
+        totalHours: 'Total hours (h)',
+        late: 'Late (count)',
+        absent: 'Absent (count)'
+      },
+      table: {
+        name: 'Name',
+        department: 'Department',
+        records: 'Records',
+        totalHours: 'Total (h)',
+        normal: 'Normal',
+        late: 'Late',
+        absent: 'Absent'
+      },
+      detail: {
+        dialogTitle: '{{name}} — Clock in/out records',
+        close: 'Close',
+        date: 'Date',
+        checkIn: 'Check-in',
+        checkOut: 'Check-out',
+        workHours: 'Hours (h)',
+        status: 'Status',
+        empty: 'No clock in/out records to show.'
+      }
+    },
     approval: {
       title: 'Electronic Approval',
+      pageTitle: 'Electronic Approval',
+      formHeroTitle: 'Electronic Approval',
+      newDocument: 'New document',
+      editDocument: 'Edit document',
+      writtenDate: 'Date',
+      autoGenerated: 'Auto-generated',
+      flowDraft: 'Draft',
+      flowReview: 'Review',
+      flowApprove: 'Approve',
+      departmentRole: 'Department / Role',
+      approverSectionTitle: 'Approver',
+      approverFieldLabel: 'Approver **',
+      categoryGeneral: 'General',
+      companyLogoAlt: 'Company logo',
+      detailPageTitle: 'Approval document',
+      backToList: 'Back to list',
       myRequests: 'My Requested Approvals',
       received: 'Received Approvals',
       createDocument: 'Create Approval Document',
@@ -3401,13 +5165,19 @@ const en = {
       category: 'Category',
       priority: 'Priority',
       approver: 'Approver',
+      nextApprover: 'Next approver',
       description: 'Description',
       type: 'Type',
       amount: 'Amount',
       deadline: 'Deadline',
       attachments: 'Attachments',
+      selectFiles: 'Choose files',
+      multipleFilesHint: 'You can select multiple files',
       selectApprover: 'Select approver',
       enterDescription: 'Enter approval document description',
+      linkPrompt: 'Enter link URL',
+      signatureDialogTitle: 'Sign',
+      unknownUser: 'Unknown',
       expense: 'Expense Application',
       vacation: 'Vacation Application',
       purchase: 'Purchase Application',
@@ -3437,6 +5207,10 @@ const en = {
       saving: 'Saving...',
       create: 'Create',
       update: 'Update',
+      escalate: 'Escalate',
+      escalateTo: 'Escalate to',
+      escalationReason: 'Escalation reason',
+      escalationCount: 'Escalation {{current}}/{{max}}',
       searchPlaceholder: 'Search by title, document number, requester',
       status: 'Status',
       all: 'All',
@@ -3451,7 +5225,34 @@ const en = {
       validation: {
         titleRequired: 'Please enter title and description.',
         approverRequired: 'Please select at least one approver.',
-        rejectionReasonPrompt: 'Enter rejection reason:'
+        rejectionReasonPrompt: 'Enter rejection reason:',
+        descriptionRequired: 'Description is required.'
+      },
+      errors: {
+        loadList: 'Unable to load approval list.',
+        loadListFailed: 'Failed to load approval list.',
+        saveFailed: 'Failed to save approval document.',
+        saveError: 'An error occurred while saving the approval document.',
+        deleteFailed: 'Failed to delete approval document.',
+        deleteError: 'An error occurred while deleting.',
+        approveFailed: 'Failed to approve.',
+        approveError: 'An error occurred while approving.',
+        rejectFailed: 'Failed to reject.',
+        rejectError: 'An error occurred while rejecting.',
+        escalateFailed: 'Escalation failed.',
+        escalateError: 'An error occurred during escalation.',
+        commentAddFailed: 'Failed to add comment.',
+        commentAddError: 'An error occurred while adding a comment.'
+      },
+      toast: {
+        documentCreated: 'Approval document created.',
+        documentUpdated: 'Approval document updated.',
+        documentDeleted: 'Approval document deleted.',
+        documentApproved: 'Approval document approved.',
+        documentRejected: 'Approval document rejected.',
+        documentEscalated: 'Approval document escalated.',
+        commentAdded: 'Comment added.',
+        replyAdded: 'Reply added.'
       },
       toolbar: {
         body: 'Body',
@@ -3461,23 +5262,45 @@ const en = {
         list: 'List',
         numberedList: 'Numbered List',
         image: 'Image',
-        table: 'Table'
+        table: 'Table',
+        quote: 'Quote',
+        link: 'Link',
+        clear: 'Clear',
+        alignLeft: 'Align left',
+        alignCenter: 'Align center',
+        alignRight: 'Align right'
+      },
+      tableDialog: {
+        title: 'Insert table',
+        rows: 'Rows',
+        cols: 'Columns',
+        headerRow: 'Header row',
+        yes: 'Yes',
+        no: 'No',
+        create: 'Insert'
+      },
+      detail: {
+        documentContent: 'Document content',
+        attachmentsLabel: 'Attachments:',
+        approvalFlow: 'Approval flow',
+        stepApproved: 'Approved',
+        stepPending: 'Pending',
+        stepRejected: 'Rejected',
+        stepSkipped: 'Skipped',
+        escalationChip: 'Escalation',
+        signatureAlt: 'Signature',
+        noSignature: 'No signature',
+        escalationSection: 'Escalation',
+        replyPlaceholder: 'Write a reply...',
+        commentPlaceholder: 'Write a comment...',
+        approvalDate: 'Approved',
+        commentLabel: 'Comment'
       }
     }
   }
 };
 
-// 언어 변경 시 localStorage에 저장
-const getInitialLanguage = (): string => {
-  if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('i18n_language');
-    if (saved === 'ko' || saved === 'en') {
-      return saved;
-    }
-  }
-  return 'ko';
-};
-
+// 언어는 사용자 UI 설정(API users.settings.ui) 또는 메뉴 스토어에서 동기화 — 브라우저 저장소 사용 안 함
 i18n
   .use(initReactI18next)
   .init({
@@ -3485,7 +5308,7 @@ i18n
       ko: ko,
       en: en
     },
-    lng: getInitialLanguage(), // localStorage에서 불러온 언어 또는 기본값
+    lng: 'ko',
     fallbackLng: 'en',
     interpolation: {
       escapeValue: false
@@ -3494,12 +5317,5 @@ i18n
       useSuspense: false
     }
   });
-
-// 언어 변경 이벤트 리스너
-i18n.on('languageChanged', (lng) => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('i18n_language', lng);
-  }
-});
 
 export default i18n;

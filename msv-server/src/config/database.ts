@@ -7,7 +7,8 @@ const databaseUrl = process.env.DATABASE_URL;
 
 const sequelize = databaseUrl 
   ? new Sequelize(databaseUrl, {
-      logging: env.NODE_ENV === 'development' ? console.log : false,
+      /** SQL 쿼리 로그는 기본 비활성. 필요 시 `SEQUELIZE_LOG=1` 로 켤 수 있음 */
+      logging: process.env.SEQUELIZE_LOG === '1' ? console.log : false,
       pool: {
         max: SYSTEM_CONSTANTS.DB_POOL.MAX,
         min: SYSTEM_CONSTANTS.DB_POOL.MIN,
@@ -34,7 +35,7 @@ const sequelize = databaseUrl
       database: env.DB_NAME,
       username: env.DB_USER,
       password: env.DB_PASSWORD,
-      logging: env.NODE_ENV === 'development' ? console.log : false,
+      logging: process.env.SEQUELIZE_LOG === '1' ? console.log : false,
       pool: {
         max: SYSTEM_CONSTANTS.DB_POOL.MAX,
         min: SYSTEM_CONSTANTS.DB_POOL.MIN,

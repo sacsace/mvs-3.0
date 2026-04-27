@@ -5,11 +5,14 @@ interface LoginInfoAttributes {
   id: number;
   tenant_id: number;
   company_id: number;
+  tab_id: number;
   division: string;
   login_id: string;
   password: string;
   open_file_returns?: string;
   url?: string;
+  /** 커스텀 열 값 (열 id → 문자열) */
+  extra_fields?: Record<string, string> | null;
   created_by?: number;
   updated_by?: number;
   created_at?: Date;
@@ -17,17 +20,22 @@ interface LoginInfoAttributes {
 }
 
 interface LoginInfoCreationAttributes
-  extends Optional<LoginInfoAttributes, 'id' | 'open_file_returns' | 'url' | 'created_by' | 'updated_by' | 'created_at' | 'updated_at'> {}
+  extends Optional<
+    LoginInfoAttributes,
+    'id' | 'open_file_returns' | 'url' | 'extra_fields' | 'created_by' | 'updated_by' | 'created_at' | 'updated_at'
+  > {}
 
 class LoginInfo extends Model<LoginInfoAttributes, LoginInfoCreationAttributes> implements LoginInfoAttributes {
   public id!: number;
   public tenant_id!: number;
   public company_id!: number;
+  public tab_id!: number;
   public division!: string;
   public login_id!: string;
   public password!: string;
   public open_file_returns?: string;
   public url?: string;
+  public extra_fields?: Record<string, string> | null;
   public created_by?: number;
   public updated_by?: number;
   public readonly created_at!: Date;
@@ -49,6 +57,16 @@ LoginInfo.init(
       type: DataTypes.INTEGER,
       allowNull: false
     },
+    tab_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'login_info_tabs',
+        key: 'id'
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'CASCADE'
+    },
     division: {
       type: DataTypes.STRING(255),
       allowNull: false
@@ -69,6 +87,10 @@ LoginInfo.init(
       type: DataTypes.STRING(500),
       allowNull: true
     },
+    extra_fields: {
+      type: DataTypes.JSON,
+      allowNull: true
+    },
     created_by: {
       type: DataTypes.INTEGER,
       allowNull: true
@@ -81,10 +103,7 @@ LoginInfo.init(
   {
     sequelize,
     tableName: 'login_infos',
-    indexes: [
-      { fields: ['tenant_id'] },
-      { fields: ['company_id'] }
-    ]
+    indexes: [{ fields: ['tenant_id'] }, { fields: ['company_id'] }, { fields: ['tab_id'] }]
   }
 );
 

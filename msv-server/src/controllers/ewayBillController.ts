@@ -2,6 +2,12 @@ import { Response } from 'express';
 import { RequestWithUser } from '../types';
 import { EWayBill, EWayBillItem, User, Company, Invoice } from '../models';
 import { Op } from 'sequelize';
+import { env } from '../config/env';
+import {
+  assertLiveEWayConfig,
+  buildNicStyleEWayBillPayload,
+  submitEWayBillToGstn
+} from '../services/gstEWayBillService';
 
 // E-Way Bill 번호 생성 함수
 const generateEwayBillNumber = async (companyId: number): Promise<string> => {
@@ -557,7 +563,10 @@ export const generateEWayBill = async (req: RequestWithUser, res: Response) => {
       whereClause.company_id = companyId;
     }
 
-    const ewayBill = await (EWayBill as any).findOne({ where: whereClause });
+    const ewayBill = await (EWayBill as any).findOne({
+      where: whereClause,
+      include: [{ model: EWayBillItem, as: 'items', required: false }]
+    });
 
     if (!ewayBill) {
       return res.status(404).json({
@@ -573,28 +582,56 @@ export const generateEWayBill = async (req: RequestWithUser, res: Response) => {
       });
     }
 
-    // 유효기간 계산 (생성일로부터 7일)
+    const items = (ewayBill as any).items as Array<Record<string, unknown>> | undefined;
+    if (!items || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: '품목이 없으면 E-Way Bill을 발급할 수 없습니다.'
+      });
+    }
+
+    const cfgErr = assertLiveEWayConfig();
+    if (cfgErr) {
+      return res.status(400).json({
+        success: false,
+        message: cfgErr
+      });
+    }
+
+    const billRow = ewayBill.get({ plain: true }) as Record<string, unknown>;
+    const payload = buildNicStyleEWayBillPayload(billRow as any, items as any);
+    const isLive = (env.GST_EWAY_MODE || 'mock').toLowerCase() === 'live';
+
+    let result;
+    try {
+      result = await submitEWayBillToGstn(payload);
+    } catch (err: any) {
+      const msg = err?.message || 'GSTN E-Way Bill 발급 실패';
+      await ewayBill.update({ gstn_last_error: String(msg).slice(0, 2000) });
+      return res.status(502).json({
+        success: false,
+        message: isLive ? msg : `E-Way Bill 처리 실패: ${msg}`,
+        error: process.env.NODE_ENV === 'development' ? msg : undefined
+      });
+    }
+
     const generatedAt = new Date();
-    const validUntil = new Date(generatedAt);
-    validUntil.setDate(validUntil.getDate() + 7);
+    let validUntil = new Date(generatedAt);
+    if (isLive) {
+      validUntil = result.validUpto;
+    } else {
+      validUntil.setDate(validUntil.getDate() + 7);
+    }
 
     await ewayBill.update({
       status: 'generated',
       generated_at: generatedAt,
-      valid_until: validUntil
+      valid_until: validUntil,
+      gstn_eway_bill_no: isLive ? result.ewayBillNo : null,
+      gstn_valid_upto: isLive ? result.validUpto : null,
+      gstn_last_error: null,
+      qr_code: result.qrCode
     });
-
-    // QR 코드 생성 (간단한 형태)
-    const qrData = JSON.stringify({
-      ewayBillNumber: ewayBill.eway_bill_number,
-      invoiceNumber: ewayBill.invoice_number,
-      fromGstin: ewayBill.from_gstin,
-      toGstin: ewayBill.to_gstin,
-      totalAmount: ewayBill.total_amount,
-      generatedAt: generatedAt.toISOString()
-    });
-
-    await ewayBill.update({ qr_code: qrData });
 
     const updatedEWayBill = await (EWayBill as any).findByPk(ewayBill.id, {
       include: [

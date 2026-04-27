@@ -36,6 +36,9 @@ import {
   Search as SearchIcon,
 } from '@mui/icons-material';
 import { accountingService } from '../../services/api';
+import { UTILS } from '../../constants';
+import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 type AssetStatus = 'active' | 'maintenance' | 'disposed' | 'lost' | 'transferred';
 
@@ -95,7 +98,7 @@ const emptyForm = {
   depreciation_method: 'straight_line' as 'straight_line' | 'declining_balance' | 'units_of_production',
 };
 
-const formatCurrency = (value: number) => `Rs. ${Number(value || 0).toLocaleString()}`;
+const formatCurrency = (value: number) => UTILS.formatCurrency(value);
 
 const calculateDepreciationValues = (
   purchasePrice: number,
@@ -125,6 +128,7 @@ const calculateDepreciationValues = (
 };
 
 const AssetManagement: React.FC = () => {
+  const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -303,19 +307,26 @@ const AssetManagement: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm('이 자산을 삭제하시겠습니까?')) return;
-    try {
-      const response = await accountingService.deleteAsset(id);
-      if (!response.success) {
-        throw new Error(response.message || 'Delete failed');
-      }
-      setSuccess('자산을 삭제했습니다.');
-      await loadAssets();
-    } catch (err) {
-      console.error('asset delete error:', err);
-      setError('자산 삭제에 실패했습니다.');
-    }
+  const handleDelete = (id: number) => {
+    showConfirm(
+      '이 자산을 삭제하시겠습니까?',
+      () => {
+        void (async () => {
+          try {
+            const response = await accountingService.deleteAsset(id);
+            if (!response.success) {
+              throw new Error(response.message || 'Delete failed');
+            }
+            setSuccess('자산을 삭제했습니다.');
+            await loadAssets();
+          } catch (err) {
+            console.error('asset delete error:', err);
+            setError('자산 삭제에 실패했습니다.');
+          }
+        })();
+      },
+      { title: '삭제 확인', confirmColor: 'error', confirmText: '삭제', cancelText: '취소' }
+    );
   };
 
   const getStatusLabel = (status: AssetStatus) => {
@@ -475,7 +486,25 @@ const AssetManagement: React.FC = () => {
           ) : (
             <TableContainer>
               <Table>
-                <TableHead>
+                <TableHead
+                  sx={{
+                    bgcolor: 'background.paper',
+                    '& .MuiTableCell-head': {
+                      bgcolor: 'background.paper',
+                      color: 'text.primary',
+                      fontWeight: 600,
+                      fontSize: '0.875rem',
+                      textTransform: 'none',
+                      letterSpacing: 'normal',
+                      borderBottom: '2px solid',
+                      borderColor: 'primary.main',
+                      py: 1.25
+                    },
+                    '& .MuiTableCell-head:last-of-type': {
+                      textAlign: 'center'
+                    }
+                  }}
+                >
                   <TableRow>
                     <TableCell>코드</TableCell>
                     <TableCell>자산명</TableCell>
@@ -689,6 +718,17 @@ const AssetManagement: React.FC = () => {
       <Snackbar open={!!success} autoHideDuration={3000} onClose={() => setSuccess('')}>
         <Alert onClose={() => setSuccess('')} severity="success">{success}</Alert>
       </Snackbar>
+
+      <ConfirmDialog
+        open={dialogState.open}
+        title={dialogState.title}
+        message={dialogState.message}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+        confirmColor={dialogState.confirmColor}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
     </Box>
   );
 };

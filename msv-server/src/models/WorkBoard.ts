@@ -8,12 +8,14 @@ interface WorkBoardAttributes {
   name: string;
   description?: string;
   board_color?: string | null;
+  position: number;
   created_by: number;
   created_at?: Date;
   updated_at?: Date;
 }
 
-interface WorkBoardCreationAttributes extends Optional<WorkBoardAttributes, 'id' | 'created_at' | 'updated_at' | 'description'> {}
+interface WorkBoardCreationAttributes
+  extends Optional<WorkBoardAttributes, 'id' | 'created_at' | 'updated_at' | 'description' | 'position'> {}
 
 class WorkBoard extends Model<WorkBoardAttributes, WorkBoardCreationAttributes> implements WorkBoardAttributes {
   public id!: number;
@@ -22,6 +24,7 @@ class WorkBoard extends Model<WorkBoardAttributes, WorkBoardCreationAttributes> 
   public name!: string;
   public description?: string;
   public board_color?: string | null;
+  public position!: number;
   public created_by!: number;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
@@ -39,6 +42,7 @@ WorkBoard.init(
     name: { type: DataTypes.STRING(200), allowNull: false },
     description: { type: DataTypes.TEXT, allowNull: true },
     board_color: { type: DataTypes.STRING(7), allowNull: true, defaultValue: null },
+    position: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     created_by: { type: DataTypes.INTEGER, allowNull: false }
   },
   {
