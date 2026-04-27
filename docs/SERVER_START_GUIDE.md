@@ -193,6 +193,45 @@ Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 3. **로그 확인**: 각 서버는 별도의 PowerShell 창에서 실행되며, 로그를 확인할 수 있습니다.
 4. **데이터베이스**: 서버 시작 전에 PostgreSQL이 실행 중이어야 합니다.
 
+## ☁️ Railway에 DB 덤프 복원하기
+
+Railway Postgres에는 **파일 업로드 UI가 없습니다.** 로컬 PC에서 `DATABASE_URL`로 접속해 `pg_restore` / `psql`로 넣습니다.
+
+### 1. 준비
+- [PostgreSQL 클라이언트](https://www.postgresql.org/download/windows/) 설치 → `pg_restore`, `psql`이 **PATH**에 있어야 합니다.
+- Railway → Postgres 서비스 → **Variables** → `DATABASE_URL` 복사
+
+### 2. 복원 실행 (저장소 루트 `MVS/` 기준)
+
+**기본 경로** `backup/mvs_db.dump` (pg_dump 커스텀 포맷 `-Fc`) 를 Railway DB에 넣습니다.
+
+```powershell
+cd msv-server
+$env:DATABASE_URL = "postgresql://...."   # Railway에서 복사한 값 전체
+npm run db:restore:railway
+```
+
+다른 덤프 파일을 지정:
+
+```powershell
+npm run db:restore:railway -- ..\backup\mvs_db.dump
+```
+
+**기존 스키마·데이터를 비우고** 덤프 내용으로 맞추려면 (운영 DB에서는 신중히):
+
+```powershell
+npm run db:restore:railway -- ..\backup\mvs_db.dump --clean
+```
+
+**평문 `.sql` 파일**이면 스크립트가 자동으로 `psql -f`를 사용합니다.
+
+### 3. 스키마만 맞추고 데이터는 마이그레이션만 쓰는 경우
+- 빈 Railway DB에 먼저 `npm run db:migrate:railway` (또는 배포 시 자동 마이그레이션)로 스키마를 올린 뒤,
+- 데이터만 필요하면 덤프에 **데이터만** 포함되도록 별도 `pg_dump`를 만드는 편이 안전합니다.
+
+### 4. SSL
+- Railway가 준 `DATABASE_URL`에 `sslmode=require` 등이 없으면 연결 오류가 날 수 있습니다. Railway 대시보드에 표시된 문자열을 그대로 사용하세요.
+
 ## 🔗 관련 문서
 
 - [QUICK_START.md](./QUICK_START.md) - 빠른 시작 가이드

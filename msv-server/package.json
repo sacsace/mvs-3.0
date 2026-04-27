@@ -15,6 +15,7 @@
     "test:all": "npm run test && npm run test:coverage",
     "db:migrate": "npx sequelize-cli db:migrate",
     "db:migrate:railway": "node scripts/run-migrations.cjs",
+    "db:restore:railway": "node scripts/restore-railway-db.cjs",
     "db:migrate:undo": "npx sequelize-cli db:migrate:undo",
     "db:migrate:undo:all": "npx sequelize-cli db:migrate:undo:all",
     "db:seed": "npx sequelize-cli db:seed:all",
