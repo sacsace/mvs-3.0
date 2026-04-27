@@ -1034,6 +1034,7 @@ MVS은 **현대적이고 확장 가능한 기업용 통합 업무 관리 시스�
   - API가 **별도 Railway 서비스/도메인**이면 빌드 시 **`REACT_APP_API_URL`** = `https://<백엔드 호스트>/api` 형태로 설정(끝에 `/api` 없으면 `api.ts`에서 보정).  
   - 미설정 시 **동일 오리진의 `/api`**로 요청하며 콘솔에 경고가 출력된다(같은 서비스에서 리버스 프록시로 `/api`만 넘기는 구성용).
 - **DB 덤프 복원**: 로컬에 PostgreSQL 클라이언트(`pg_restore`/`psql`) 설치 후, Railway `DATABASE_URL`을 설정하고 `cd msv-server && npm run db:restore:railway` (기본 `backup/mvs_db.dump`). 자세한 절차는 **`docs/SERVER_START_GUIDE.md`** 의 「Railway에 DB 덤프 복원하기」절.
+- **백엔드 배포 절차·설정 표**: **`docs/RAILWAY_BACKEND_DEPLOY.md`**
 
 ### 백엔드 테스트(Jest)
 - `config/env`·`database` 로드 전에 환경이 필요하므로 **`src/__tests__/jest-preset-env.cjs`**가 `jest.config.js`의 `setupFiles`로 먼저 실행된다(`DATABASE_URL`·`JWT_SECRET` 등 최소값). 새 테스트가 DB를 켜면 로컬/CI에서 해당 URL 접근 가능 여부를 확인한다.
