@@ -1,6 +1,7 @@
 # MVS 개발 프롬프트
 
-> **문서 갱신**: 2026-04-27 — 보안·Railway·환경 변수·UI 반영 사항 추가
+> **문서 갱신**: 2026-04-27 — 보안·Railway·환경 변수·UI 반영 사항 추가  
+> **권장 후속**: PostgreSQL SSL CA 검증 강화, Helmet CSP 점진 도입, DB RLS(민감 테이블) 검토
 
 ## 프로젝트 개요
 MVS은 React + Node.js + PostgreSQL 기반의 **차세대 기업용 통합 업무 관리 시스템**입니다.
@@ -1076,7 +1077,7 @@ MVS/
 
 | 구분 | 내용 |
 |------|------|
-| 고객 지원 | **페이지·라우트 제거** (`CustomerSupport.tsx` 삭제, `/customers/support` 라우트 없음). DB 메뉴 제거는 마이그레이션 `20260427103000-remove-customer-support-menu.js` 실행. 사이드바 등에서는 **`isRemovedNavMenuRoute`**(`customers/support`)로 남은 DB 메뉴를 네비에서 숨길 수 있음. |
+| 고객 지원 | **페이지·라우트 제거** (`CustomerSupport.tsx` 삭제, `/customers/support` 라우트 없음). DB 메뉴 제거는 마이그레이션 `20260427103000-remove-customer-support-menu.js` 실행. 사이드바·**대시보드 바로가기**에서는 **`isRemovedNavMenuRoute`**로 남은 DB 메뉴 항목을 숨김. |
 | 협력업체 목록 | 연락처 열: **이메일만** 표시(전화번호 목록 비표시). |
 | 투숙객 명단 | 목록 테이블: **예약번호·이메일 열 비표시**. 검색은 고객명·회사명·호실 중심 문구(`i18n`); 키워드로 예약번호·이메일 검색은 백엔드 필터에서 유지 가능. |
 

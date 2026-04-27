@@ -93,6 +93,7 @@ import {
   departmentService
 } from '../../services/api';
 import { showErrorPopup } from '../../utils/errorHandler';
+import { isRemovedNavMenuRoute } from '../../utils/isRemovedNavMenuRoute';
 import { useTranslation } from 'react-i18next';
 import DepartmentLeaveCalendar, { CALENDAR_DEPARTMENT_ALL_VALUE } from '../HR/DepartmentLeaveCalendar';
 
@@ -393,6 +394,7 @@ const Dashboard: React.FC = () => {
     flattenedMenus.forEach((menu) => {
       const route = String(menu.route || '').trim();
       if (!route || !route.startsWith('/') || route === '/dashboard' || route === '/login') return;
+      if (isRemovedNavMenuRoute(route)) return;
 
       const hasChildren = Array.isArray(menu.children) && menu.children.length > 0;
       if (hasChildren) return;
