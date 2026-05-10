@@ -1711,21 +1711,12 @@ const VacationManagement: React.FC = () => {
   };
 
   return (
-    <Box sx={{ 
-      width: '100%',
-      px: 2,
-      py: 3
-    }}>
+    <Box sx={{ width: '100%', p: 0 }}>
       {/* 헤더 */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <CalendarIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-          <Typography component="h1" sx={{ 
-            fontSize: '16px !important',
-            fontWeight: 600,
-            color: 'text.primary',
-            lineHeight: 1.5
-          }}>
+          <Typography component="h1" variant="pageTitle">
             {t('vacationManagement.title')}
           </Typography>
         </Box>

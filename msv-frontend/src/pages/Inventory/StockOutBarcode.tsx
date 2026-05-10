@@ -13,8 +13,8 @@ import {
   CircularProgress,
   Tooltip
 } from '@mui/material';
-import { Outbox as OutboxIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { alpha, useTheme } from '@mui/material/styles';
 import { api, inventoryService } from '../../services/api';
 import { useMenuStore } from '../../store';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
@@ -98,6 +98,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 
 /** 재고 출고 — 바코드·품목코드·제품명으로 품목 특정 후 수량 출고 */
 const StockOutBarcode: React.FC = () => {
+  const theme = useTheme();
   const { t } = useTranslation();
   const { language } = useMenuStore();
   const perm = useMenuRoutePermissionFlags(STOCK_OUT_MENU_ROUTES);
@@ -242,23 +243,48 @@ const StockOutBarcode: React.FC = () => {
     }
   }, [barcode, quantity, releaseReason, txt, language, perm.canMutate, t]);
 
+  const inputOutlineSx = {
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '12px',
+      '& fieldset': {
+        borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.12)' : 'divider',
+      },
+    },
+  };
+
   return (
     <Box sx={{ p: 2, maxWidth: 920, mx: 'auto', width: '100%' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <OutboxIcon color="primary" />
-        <Typography variant="h6" component="h1">
-          {txt('출고 관리', 'Outbound management')}
-        </Typography>
-      </Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography
+        component="h1"
+        variant="pageTitle"
+        sx={{
+          fontWeight: 600,
+          fontSize: { xs: '1.125rem', sm: '1.3125rem' },
+          letterSpacing: '-0.022em',
+          lineHeight: 1.28,
+          color: 'text.primary',
+          mb: 1,
+        }}
+      >
+        {txt('출고 관리', 'Outbound management')}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.55, maxWidth: 720 }}>
         {txt(
           '재고(제품) 관리에서 등록된 품목만 출고할 수 있습니다. 바코드·품목코드·제품명으로 검색한 뒤 수량을 입력해 출고합니다.',
           'Only products registered in inventory can be shipped out. Find the item by barcode, item code, or name, then enter the quantity.'
         )}
       </Typography>
 
-      <Card variant="outlined">
-        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Card
+        elevation={0}
+        sx={{
+          border: '1px solid',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+          borderRadius: '20px',
+          boxShadow: theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
+        }}
+      >
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: { xs: 2.5, sm: 3 } }}>
           <TextField
             disabled={perm.menusLoading || !perm.canMutate}
             inputRef={barcodeRef}
@@ -271,6 +297,7 @@ const StockOutBarcode: React.FC = () => {
             autoFocus
             fullWidth
             size="medium"
+            sx={inputOutlineSx}
           />
           <TextField
             label={txt('수량', 'Quantity')}
@@ -281,6 +308,7 @@ const StockOutBarcode: React.FC = () => {
             fullWidth
             size="medium"
             disabled={perm.menusLoading || !perm.canMutate}
+            sx={inputOutlineSx}
           />
           <TextField
             label={txt('출고 이유', 'Reason (optional)')}
@@ -298,6 +326,7 @@ const StockOutBarcode: React.FC = () => {
               '입력 시 재고 거래 내역 비고에 함께 저장됩니다.',
               'If set, it is saved with the inventory transaction notes.'
             )}
+            sx={inputOutlineSx}
           />
 
           <Divider sx={{ my: 0.5 }} />
@@ -308,10 +337,10 @@ const StockOutBarcode: React.FC = () => {
             sx={{
               minHeight: 120,
               border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 1,
+              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+              borderRadius: '14px',
               p: 1.5,
-              bgcolor: 'action.hover'
+              bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
             }}
           >
             {previewLoading && (
@@ -375,7 +404,7 @@ const StockOutBarcode: React.FC = () => {
                   </Box>
                 ) : null}
                 <Stack spacing={0.75} sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="subtitle2" color="primary.main">
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary' }}>
                     {previewProduct.name || '—'}
                   </Typography>
                   <DetailRow label={txt('품목코드', 'Item code')} value={previewProduct.product_code || '—'} />
@@ -433,6 +462,7 @@ const StockOutBarcode: React.FC = () => {
             <span style={{ display: 'block' }}>
               <Button
                 variant="contained"
+                disableElevation
                 size="large"
                 disabled={
                   loading ||
@@ -444,6 +474,7 @@ const StockOutBarcode: React.FC = () => {
                 }
                 onClick={submit}
                 fullWidth
+                sx={{ borderRadius: '12px', py: 1.25, textTransform: 'none', fontWeight: 600 }}
               >
                 {txt('출고', 'Ship out')}
               </Button>

@@ -156,7 +156,7 @@ const InvoiceManagement: React.FC = () => {
       {/* 헤더 */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
         <ReceiptIcon sx={{ mr: 2, fontSize: '2rem', color: 'primary.main' }} />
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
+        <Typography variant="pageTitle" component="h1" sx={{ fontWeight: 'bold' }}>
           일반 인보이스 관리
         </Typography>
       </Box>

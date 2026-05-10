@@ -45,7 +45,6 @@ import {
   Delete as DeleteIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
-  Assignment as AssignmentIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   Person as PersonIcon,
@@ -63,6 +62,7 @@ import {
 import { useStore } from '../../store';
 import { approvalService, api } from '../../services/api';
 import { useTranslation } from 'react-i18next';
+import { useTheme, alpha } from '@mui/material/styles';
 import SignaturePad from '../../components/Common/SignaturePad';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -81,6 +81,7 @@ import PromptDialog from '../../components/Common/PromptDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { usePromptDialog } from '../../hooks/usePromptDialog';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+import { mvsPageTitleSx } from '../../theme/mvsLayout';
 
 const WORK_APPROVAL_MENU_ROUTES = ['/work/approval', '/work'] as const;
 
@@ -200,6 +201,7 @@ const ResizableImage = Image.extend({
 });
 
 const ElectronicApproval: React.FC = () => {
+  const theme = useTheme();
   const { user } = useStore();
   const approvalMenuFlags = useMenuRoutePermissionFlags(WORK_APPROVAL_MENU_ROUTES);
   const { t, i18n } = useTranslation();
@@ -1170,37 +1172,92 @@ const ElectronicApproval: React.FC = () => {
     setTimeout(() => filterDocuments(), 0);
   };
 
+  const pillChip = (label: string, tone: 'neutral' | 'info' | 'warn' | 'ok' | 'bad' | 'teal') => {
+    const light = theme.palette.mode === 'light';
+    const tones: Record<
+      'neutral' | 'info' | 'warn' | 'ok' | 'bad' | 'teal',
+      { border: string; bg: string; color: string }
+    > = {
+      neutral: {
+        border: light ? 'rgba(15, 23, 42, 0.12)' : String(theme.palette.divider),
+        bg: light ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.06),
+        color: theme.palette.text.secondary,
+      },
+      info: {
+        border: alpha(theme.palette.info.main, light ? 0.22 : 0.4),
+        bg: alpha(theme.palette.info.main, light ? 0.06 : 0.1),
+        color: theme.palette.info.dark,
+      },
+      warn: {
+        border: alpha(theme.palette.warning.main, light ? 0.32 : 0.45),
+        bg: alpha(theme.palette.warning.main, light ? 0.07 : 0.12),
+        color: theme.palette.warning.dark,
+      },
+      ok: {
+        border: alpha(theme.palette.success.main, light ? 0.28 : 0.4),
+        bg: alpha(theme.palette.success.main, light ? 0.06 : 0.1),
+        color: theme.palette.success.dark,
+      },
+      bad: {
+        border: alpha(theme.palette.error.main, light ? 0.28 : 0.4),
+        bg: alpha(theme.palette.error.main, light ? 0.06 : 0.1),
+        color: theme.palette.error.dark,
+      },
+      teal: {
+        border: alpha(theme.palette.primary.main, light ? 0.22 : 0.38),
+        bg: alpha(theme.palette.primary.main, light ? 0.06 : 0.1),
+        color: theme.palette.primary.dark,
+      },
+    };
+    const { border, bg, color } = tones[tone];
+    return (
+      <Chip
+        label={label}
+        size="small"
+        sx={{
+          height: 26,
+          borderRadius: '8px',
+          fontWeight: 600,
+          fontSize: '0.6875rem',
+          border: `1px solid ${border}`,
+          bgcolor: bg,
+          color,
+        }}
+      />
+    );
+  };
+
   const getStatusChip = (status: string) => {
     switch (status) {
       case 'draft':
-        return <Chip label={t('approval.draft')} color="default" size="small" />;
+        return pillChip(t('approval.draft'), 'neutral');
       case 'submitted':
-        return <Chip label={t('approval.submitted')} color="info" size="small" />;
+        return pillChip(t('approval.submitted'), 'info');
       case 'in_review':
-        return <Chip label={t('approval.inReview')} color="warning" size="small" />;
+        return pillChip(t('approval.inReview'), 'warn');
       case 'approved':
-        return <Chip label={t('approval.approved')} color="success" size="small" />;
+        return pillChip(t('approval.approved'), 'ok');
       case 'rejected':
-        return <Chip label={t('approval.rejected')} color="error" size="small" />;
+        return pillChip(t('approval.rejected'), 'bad');
       case 'cancelled':
-        return <Chip label={t('approval.cancelled')} color="default" size="small" />;
+        return pillChip(t('approval.cancelled'), 'neutral');
       default:
-        return <Chip label="Unknown" color="default" size="small" />;
+        return pillChip('Unknown', 'neutral');
     }
   };
 
   const getPriorityChip = (priority: string) => {
     switch (priority) {
       case 'low':
-        return <Chip label={t('approval.low')} color="default" size="small" />;
+        return pillChip(t('approval.low'), 'neutral');
       case 'medium':
-        return <Chip label={t('approval.normal')} color="info" size="small" />;
+        return pillChip(t('approval.normal'), 'info');
       case 'high':
-        return <Chip label={t('approval.high')} color="warning" size="small" />;
+        return pillChip(t('approval.high'), 'warn');
       case 'urgent':
-        return <Chip label={t('approval.urgent')} color="error" size="small" />;
+        return pillChip(t('approval.urgent'), 'bad');
       default:
-        return <Chip label="Unknown" color="default" size="small" />;
+        return pillChip('Unknown', 'neutral');
     }
   };
 
@@ -1224,16 +1281,16 @@ const ElectronicApproval: React.FC = () => {
   const getTypeChip = (type: string) => {
     switch (type) {
       case 'expense':
-        return <Chip label={getTypeLabel(type)} color="success" size="small" />;
+        return pillChip(getTypeLabel(type), 'ok');
       case 'purchase':
-        return <Chip label={getTypeLabel(type)} color="info" size="small" />;
+        return pillChip(getTypeLabel(type), 'info');
       case 'contract':
-        return <Chip label={getTypeLabel(type)} color="warning" size="small" />;
+        return pillChip(getTypeLabel(type), 'warn');
       case 'vacation':
-        return <Chip label={getTypeLabel(type)} color="secondary" size="small" />;
+        return pillChip(getTypeLabel(type), 'teal');
       case 'other':
       default:
-        return <Chip label={getTypeLabel(type)} color="default" size="small" />;
+        return pillChip(getTypeLabel(type), 'neutral');
     }
   };
 
@@ -1669,7 +1726,7 @@ const ElectronicApproval: React.FC = () => {
 
     return (
       <Box sx={{ 
-        p: 3, 
+        p: 0,
         backgroundColor: 'workArea.main',
         borderRadius: 2,
         minHeight: '100%',
@@ -1682,24 +1739,40 @@ const ElectronicApproval: React.FC = () => {
           '&:hover .MuiOutlinedInput-notchedOutline': {
             borderColor: 'text.secondary'
           },
-          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'primary.main',
-            borderWidth: 1
-          }
+      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+          borderColor: 'primary.main',
+          borderWidth: 1,
+        }
         },
         '& .MuiInputBase-input::placeholder': {
           color: 'text.secondary',
           opacity: 0.75
         }
       }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <AssignmentIcon />
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+          <Typography
+            variant="pageTitle"
+            component="h1"
+            sx={{
+              fontSize: { xs: '1.125rem', sm: '1.3125rem' },
+              fontWeight: 600,
+              letterSpacing: '-0.022em',
+              lineHeight: 1.28,
+            }}
+          >
             {t('approval.detailPageTitle')}
           </Typography>
           <Button
             variant="outlined"
             onClick={() => setViewMode('list')}
+            sx={{
+              borderRadius: '12px',
+              textTransform: 'none',
+              fontWeight: 600,
+              borderColor: 'divider',
+              color: 'text.secondary',
+              '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+            }}
           >
             {t('approval.backToList')}
           </Button>
@@ -2182,45 +2255,50 @@ const ElectronicApproval: React.FC = () => {
 
   return (
     <Box sx={{ 
-      p: 3, 
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
+      width: '100%',
       minHeight: '100%',
+      maxWidth: '100%',
+      boxSizing: 'border-box',
       '& .MuiOutlinedInput-root': {
-        borderRadius: 2,
+        borderRadius: '12px',
         backgroundColor: 'background.paper',
         '& .MuiOutlinedInput-notchedOutline': {
-          borderColor: 'divider'
+          borderColor: alpha(theme.palette.divider, 0.9),
+        },
+        '&:hover': {
+          bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
         },
         '&:hover .MuiOutlinedInput-notchedOutline': {
-          borderColor: 'text.secondary'
+          borderColor: alpha(theme.palette.text.primary, 0.12),
         },
         '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
           borderColor: 'primary.main',
-          borderWidth: 1
-        }
+          borderWidth: 1,
+        },
       },
       '& .MuiInputBase-input::placeholder': {
-        color: 'text.secondary',
-        opacity: 0.75
-      }
+        color: '#9CA3AF',
+        opacity: 1,
+      },
     }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <AssignmentIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-          <Typography component="h1" sx={{ 
-            fontSize: '16px !important',
-            fontWeight: 600,
-            color: 'text.primary',
-            lineHeight: 1.5
-          }}>
-            {t('approval.pageTitle')}
-          </Typography>
-        </Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+        <Typography component="h1" sx={{ ...mvsPageTitleSx, color: 'text.primary' }}>
+          {t('approval.pageTitle')}
+        </Typography>
       </Box>
 
       {/* 탭 네비게이션 */}
-      <Card sx={{ mb: 3 }}>
+      <Card
+        elevation={0}
+        sx={{
+          mb: 3,
+          borderRadius: '16px',
+          overflow: 'hidden',
+          border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'light' ? 0.1 : 0.35)}`,
+          boxShadow:
+            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 2px 12px rgba(0,0,0,0.25)',
+        }}
+      >
         <Tabs 
           value={activeTab} 
           onChange={(e, newValue) => {
@@ -2237,79 +2315,69 @@ const ElectronicApproval: React.FC = () => {
             }
           }}
           sx={{
+            px: 1,
+            minHeight: 48,
             '& .MuiTabs-indicator': {
-              height: 4,
-              borderRadius: 2,
-              bgcolor: 'primary.main'
-            }
+              height: 2,
+              borderRadius: '2px 2px 0 0',
+              bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.85)' : theme.palette.grey[300],
+            },
+            '& .MuiTab-root': {
+              textTransform: 'none',
+              fontWeight: 500,
+              fontSize: '0.875rem',
+              color: 'text.secondary',
+              minHeight: 48,
+            },
+            '& .MuiTab-root.Mui-selected': {
+              color: 'text.primary',
+              fontWeight: 600,
+            },
           }}
         >
           <Tab
             label={t('approval.myRequests')}
             disabled={approvalMenuFlags.menusLoading || !approvalMenuFlags.canRead}
-            sx={{
-              fontWeight: 600,
-              '&.Mui-selected': {
-                color: 'primary.main',
-                bgcolor: 'primary.50',
-                borderRadius: 1
-              }
-            }}
           />
           <Tab
             label={t('approval.received')}
             disabled={approvalMenuFlags.menusLoading || !approvalMenuFlags.canRead}
-            sx={{
-              fontWeight: 600,
-              '&.Mui-selected': {
-                color: 'primary.main',
-                bgcolor: 'primary.50',
-                borderRadius: 1
-              }
-            }}
           />
           <Tab
             label={t('approval.createDocument')}
             disabled={approvalMenuFlags.menusLoading || !approvalMenuFlags.canCreate}
-            sx={{
-              fontWeight: 600,
-              '&.Mui-selected': {
-                color: 'primary.main',
-                bgcolor: 'primary.50',
-                borderRadius: 1
-              }
-            }}
           />
         </Tabs>
       </Card>
 
       {(viewMode === 'create' || viewMode === 'edit') && (
         <Card sx={{ 
-          mb: 3, 
-          boxShadow: '0 1px 4px rgba(0,0,0,0.08)', 
-          bgcolor: 'grey.50',
-          borderRadius: 1.5,
+          mb: 3,
+          elevation: 0,
+          boxShadow: '0 4px 24px rgba(15, 23, 42, 0.06)', 
+          bgcolor: 'background.paper',
+          borderRadius: '20px',
           overflow: 'hidden',
-          border: '1px solid',
-          borderColor: 'grey.200'
+          border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'dark' ? 0.35 : 0.1)}`,
+          maxWidth: '100%',
         }}>
           {/* 문서 헤더 */}
           <Box sx={{ 
-            bgcolor: 'grey.100', 
+            bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.045),
             color: 'text.primary', 
-            p: 2,
+            p: { xs: 2, sm: 2.75 },
             borderBottom: '1px solid',
-            borderColor: 'grey.200'
+            borderColor: alpha(theme.palette.divider, 0.85),
           }}>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 320px' }, gap: 2 }}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 320px' }, gap: 2.5 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
                 <Typography
                   variant="h6"
-                  sx={{ fontWeight: 700, letterSpacing: 0.2, fontSize: '44px', lineHeight: 1.1 }}
+                  sx={{ fontWeight: 700, letterSpacing: '-0.03em', fontSize: { xs: '1.75rem', sm: '2rem' }, lineHeight: 1.12, color: 'text.primary' }}
                 >
                   {t('approval.formHeroTitle')}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', lineHeight: 1.5 }}>
                   {selectedDocument ? t('approval.editDocument') : t('approval.newDocument')}
                 </Typography>
                 {companyLogo && (
@@ -2325,23 +2393,23 @@ const ElectronicApproval: React.FC = () => {
               </Box>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                 <Box sx={{ 
-                  border: '1px solid',
-                  borderColor: 'grey.300',
-                  borderRadius: 1,
-                  p: 1.25,
-                  bgcolor: 'white'
+                  border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+                  borderRadius: '14px',
+                  p: 1.5,
+                  bgcolor: 'background.paper',
+                  boxShadow: '0 1px 6px rgba(15, 23, 42, 0.04)',
                 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 500 }}>
                     {t('approval.documentNumber')}
                   </Typography>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
                     {selectedDocument?.documentId || draftDocumentId || t('approval.autoGenerated')}
                   </Typography>
                   <Box sx={{ mt: 0.75 }}>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 500 }}>
                       {t('approval.writtenDate')}
                     </Typography>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
                       {selectedDocument?.createdAt || new Date().toLocaleDateString(dateLocale)}
                     </Typography>
                   </Box>
@@ -2350,23 +2418,23 @@ const ElectronicApproval: React.FC = () => {
                   display: 'grid',
                   gridTemplateColumns: 'repeat(3, 1fr)',
                   gap: 1,
-                  border: '1px solid',
-                  borderColor: 'grey.300',
-                  borderRadius: 1,
-                  p: 1,
-                  bgcolor: 'white'
+                  border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+                  borderRadius: '14px',
+                  p: 1.25,
+                  bgcolor: 'background.paper',
+                  boxShadow: '0 1px 6px rgba(15, 23, 42, 0.04)',
                 }}>
                   {approvalFlowLabels.map((label, flowIdx) => (
                     <Box key={label} sx={{ 
-                      border: '1px dashed',
-                      borderColor: 'grey.300',
-                      borderRadius: 1,
-                      minHeight: 56,
+                      border: `1px dashed ${alpha(theme.palette.divider, 0.95)}`,
+                      borderRadius: '12px',
+                      minHeight: 58,
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       flexDirection: 'column',
-                      gap: 0.5
+                      gap: 0.5,
+                      bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
                     }}>
                       <Typography variant="caption" color="text.secondary">
                         {label}
@@ -2383,19 +2451,20 @@ const ElectronicApproval: React.FC = () => {
             </Box>
           </Box>
 
-          <CardContent sx={{ p: 3, bgcolor: 'white' }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          <CardContent sx={{ p: { xs: 2.5, sm: 3.5 }, bgcolor: 'background.paper' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               {/* 신청자 정보 섹션 */}
               {user && (
                 <Box>
                   <Typography variant="subtitle2" sx={{ 
                     fontWeight: 700, 
+                    fontSize: '15px',
                     mb: 1.5,
                     color: 'text.primary',
-                    pb: 0.5,
+                    pb: 1,
                     borderBottom: '1px solid',
-                    borderColor: 'grey.300',
-                    letterSpacing: 0.2
+                    borderColor: alpha(theme.palette.divider, 0.9),
+                    letterSpacing: '-0.01em',
                   }}>
                     {t('approval.applicantInfo')}
                   </Typography>
@@ -2421,15 +2490,21 @@ const ElectronicApproval: React.FC = () => {
               )}
 
               {/* 다음 결재 대상 */}
-              <Box sx={{ p: 1.5, borderRadius: 1, bgcolor: '#e3f2fd', border: '1px solid', borderColor: 'primary.main' }}>
+              <Box sx={{ 
+                p: 2, 
+                borderRadius: '14px', 
+                bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.12 : 0.06), 
+                border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+              }}>
                   <Typography variant="subtitle2" sx={{ 
-                    fontWeight: 700, 
+                    fontWeight: 700,
+                    fontSize: '15px',
                     mb: 1.5,
                     color: 'text.primary',
-                    pb: 0.5,
+                    pb: 1,
                     borderBottom: '1px solid',
-                    borderColor: 'grey.300',
-                    letterSpacing: 0.2
+                    borderColor: alpha(theme.palette.divider, 0.75),
+                    letterSpacing: '-0.01em',
                   }}>
                   {t('approval.approverSectionTitle')}
                 </Typography>
@@ -2454,14 +2529,14 @@ const ElectronicApproval: React.FC = () => {
                         inputRef={approverInputRef}
                         sx={{
                           '& .MuiOutlinedInput-root': {
-                            borderRadius: 1,
-                            bgcolor: '#f1f7ff',
+                            borderRadius: '12px',
+                            bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.1 : 0.05),
                             '&:hover': {
                               '& .MuiOutlinedInput-notchedOutline': {
-                                borderColor: 'primary.main'
-                              }
-                            }
-                          }
+                                borderColor: alpha(theme.palette.primary.main, 0.45),
+                              },
+                            },
+                          },
                         }}
                       />
                     )}
@@ -2474,13 +2549,14 @@ const ElectronicApproval: React.FC = () => {
               {/* 결재 내용 섹션 */}
                 <Box>
                   <Typography variant="subtitle2" sx={{ 
-                    fontWeight: 700, 
+                    fontWeight: 700,
+                    fontSize: '15px',
                     mb: 2,
                     color: 'text.primary',
-                    pb: 0.5,
+                    pb: 1,
                     borderBottom: '1px solid',
-                    borderColor: 'grey.300',
-                    letterSpacing: 0.2
+                    borderColor: alpha(theme.palette.divider, 0.9),
+                    letterSpacing: '-0.01em',
                   }}>
                   {t('approval.paymentDetails')}
                 </Typography>
@@ -2662,25 +2738,24 @@ const ElectronicApproval: React.FC = () => {
 
                 {/* 설명 섹션 - 전체 너비 */}
                 <Box sx={{ mt: 3 }}>
-                  <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, color: 'text.primary', letterSpacing: 0.2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1.25, fontWeight: 700, fontSize: '15px', color: 'text.primary', letterSpacing: '-0.01em' }}>
                     {t('approval.description')} **
                   </Typography>
                   <Box sx={{
-                    border: '1px solid',
-                    borderColor: 'grey.300',
-                    borderRadius: 1,
-                    bgcolor: 'grey.50',
+                    border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+                    borderRadius: '14px',
+                    bgcolor: 'background.paper',
                     display: 'flex',
                     flexDirection: 'column',
                     minHeight: 280,
-                    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.04)',
+                    boxShadow: `inset 0 0 0 1px ${alpha(theme.palette.divider, 0.06)}`,
                     '& .tiptap': {
                       flex: 1,
                       minHeight: 230,
-                      p: 2,
+                      p: 2.25,
                       outline: 'none',
                       fontSize: '0.875rem',
-                      backgroundImage: 'repeating-linear-gradient(to bottom, #ffffff, #ffffff 28px, #f2f4f7 29px)',
+                      backgroundImage: `repeating-linear-gradient(to bottom, ${theme.palette.background.paper}, ${theme.palette.background.paper} 27px, ${alpha(theme.palette.divider, 0.35)} 28px)`,
                       '& p.is-editor-empty:first-child::before': {
                         content: `"${t('approval.enterDescription')}"`,
                         color: 'rgba(0, 0, 0, 0.38)',
@@ -2790,21 +2865,22 @@ const ElectronicApproval: React.FC = () => {
                           {/* 툴바 */}
                           {editor && (
                             <Box sx={{
-                              borderBottom: '1px solid',
-                              borderColor: 'grey.300',
-                              bgcolor: 'grey.50',
-                              p: 1,
+                              borderBottom: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+                              bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.05),
+                              p: 1.25,
                               display: 'flex',
                               flexWrap: 'wrap',
-                              gap: 0.5,
-                              borderTopLeftRadius: 4,
-                              borderTopRightRadius: 4
+                              gap: 0.65,
+                              alignItems: 'center',
+                              borderTopLeftRadius: 13,
+                              borderTopRightRadius: 13,
                             }}>
                               <Button
                                 size="small"
                                 variant={editor.isActive('bold') ? 'contained' : 'text'}
+                                disableElevation
                                 onClick={() => editor.chain().focus().toggleBold().run()}
-                                sx={{ minWidth: 'auto', px: 1 }}
+                                sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px', textTransform: 'none' }}
                               >
                                 <strong>B</strong>
                               </Button>
@@ -2812,7 +2888,7 @@ const ElectronicApproval: React.FC = () => {
                                 size="small"
                                 variant={editor.isActive('italic') ? 'contained' : 'text'}
                                 onClick={() => editor.chain().focus().toggleItalic().run()}
-                                sx={{ minWidth: 'auto', px: 1 }}
+                                sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px', textTransform: 'none' }}
                               >
                                 <em>I</em>
                               </Button>
@@ -2820,7 +2896,7 @@ const ElectronicApproval: React.FC = () => {
                                 size="small"
                                 variant={editor.isActive('underline') ? 'contained' : 'text'}
                                 onClick={() => editor.chain().focus().toggleUnderline().run()}
-                                sx={{ minWidth: 'auto', px: 1 }}
+                                sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px', textTransform: 'none' }}
                               >
                                 <u>U</u>
                               </Button>
@@ -2828,7 +2904,7 @@ const ElectronicApproval: React.FC = () => {
                                 size="small"
                                 variant={editor.isActive('strike') ? 'contained' : 'text'}
                                 onClick={() => editor.chain().focus().toggleStrike().run()}
-                                sx={{ minWidth: 'auto', px: 1 }}
+                                sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px', textTransform: 'none' }}
                               >
                                 <s>S</s>
                               </Button>
@@ -2929,7 +3005,7 @@ const ElectronicApproval: React.FC = () => {
                                 size="small"
                                 variant={editor.isActive('bulletList') ? 'contained' : 'text'}
                                 onClick={() => editor.chain().focus().toggleBulletList().run()}
-                                sx={{ minWidth: 'auto', px: 1 }}
+                                sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px', textTransform: 'none' }}
                               >
                                 {t('approval.toolbar.list')}
                               </Button>
@@ -2937,7 +3013,7 @@ const ElectronicApproval: React.FC = () => {
                                 size="small"
                                 variant={editor.isActive('orderedList') ? 'contained' : 'text'}
                                 onClick={() => editor.chain().focus().toggleOrderedList().run()}
-                                sx={{ minWidth: 'auto', px: 1 }}
+                                sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px', textTransform: 'none' }}
                               >
                                 {t('approval.toolbar.numberedList')}
                               </Button>
@@ -2947,7 +3023,7 @@ const ElectronicApproval: React.FC = () => {
                                   size="small"
                                   variant={editor.isActive({ textAlign: 'left' }) ? 'contained' : 'text'}
                                   onClick={() => editor.chain().focus().setTextAlign('left').run()}
-                                  sx={{ minWidth: 'auto', px: 1 }}
+                                  sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px', textTransform: 'none' }}
                                 >
                                   <FormatAlignLeftIcon fontSize="small" />
                                 </Button>
@@ -2957,7 +3033,7 @@ const ElectronicApproval: React.FC = () => {
                                   size="small"
                                   variant={editor.isActive({ textAlign: 'center' }) ? 'contained' : 'text'}
                                   onClick={() => editor.chain().focus().setTextAlign('center').run()}
-                                  sx={{ minWidth: 'auto', px: 1 }}
+                                  sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px', textTransform: 'none' }}
                                 >
                                   <FormatAlignCenterIcon fontSize="small" />
                                 </Button>
@@ -2967,7 +3043,7 @@ const ElectronicApproval: React.FC = () => {
                                   size="small"
                                   variant={editor.isActive({ textAlign: 'right' }) ? 'contained' : 'text'}
                                   onClick={() => editor.chain().focus().setTextAlign('right').run()}
-                                  sx={{ minWidth: 'auto', px: 1 }}
+                                  sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px', textTransform: 'none' }}
                                 >
                                   <FormatAlignRightIcon fontSize="small" />
                                 </Button>
@@ -2977,7 +3053,7 @@ const ElectronicApproval: React.FC = () => {
                                 size="small"
                                 variant={editor.isActive('blockquote') ? 'contained' : 'text'}
                                 onClick={() => editor.chain().focus().toggleBlockquote().run()}
-                                sx={{ minWidth: 'auto', px: 1 }}
+                                sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px', textTransform: 'none' }}
                               >
                                 {t('approval.toolbar.quote')}
                               </Button>
@@ -2985,7 +3061,7 @@ const ElectronicApproval: React.FC = () => {
                                 size="small"
                                 variant={editor.isActive('codeBlock') ? 'contained' : 'text'}
                                 onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-                                sx={{ minWidth: 'auto', px: 1 }}
+                                sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px', textTransform: 'none' }}
                               >
                                 {'</>'}
                               </Button>
@@ -3015,7 +3091,7 @@ const ElectronicApproval: React.FC = () => {
                                     }
                                   );
                                 }}
-                                sx={{ minWidth: 'auto', px: 1 }}
+                                sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px', textTransform: 'none' }}
                               >
                                 {t('approval.toolbar.link')}
                               </Button>
@@ -3044,21 +3120,21 @@ const ElectronicApproval: React.FC = () => {
                                     }
                                   };
                                 }}
-                                sx={{ minWidth: 'auto', px: 1 }}
+                                sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px', textTransform: 'none' }}
                               >
                                 {t('approval.toolbar.image')}
                               </Button>
                               <Button
                                 size="small"
                                 onClick={() => setTableDialogOpen(true)}
-                                sx={{ minWidth: 'auto', px: 1 }}
+                                sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px', textTransform: 'none' }}
                               >
                                 {t('approval.toolbar.table')}
                               </Button>
                               <Button
                                 size="small"
                                 onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()}
-                                sx={{ minWidth: 'auto', px: 1 }}
+                                sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px', textTransform: 'none' }}
                               >
                                 {t('approval.toolbar.clear')}
                               </Button>
@@ -3141,12 +3217,14 @@ const ElectronicApproval: React.FC = () => {
               {/* 파일 첨부 섹션 */}
               <Box>
                 <Typography variant="subtitle1" sx={{ 
-                  fontWeight: 600, 
+                  fontWeight: 700,
+                  fontSize: '15px',
                   mb: 2,
                   color: 'text.primary',
                   pb: 1,
-                  borderBottom: '2px solid',
-                  borderColor: 'primary.main'
+                  borderBottom: '1px solid',
+                  borderColor: alpha(theme.palette.divider, 0.9),
+                  letterSpacing: '-0.01em',
                 }}>
                   {t('approval.attachments')}
                 </Typography>
@@ -3165,16 +3243,17 @@ const ElectronicApproval: React.FC = () => {
                       component="span"
                       startIcon={<AttachFileIcon />}
                       sx={{
-                        borderRadius: 1,
+                        borderRadius: '12px',
                         textTransform: 'none',
+                        fontWeight: 600,
                         borderStyle: 'dashed',
-                        borderColor: 'grey.300',
+                        borderColor: alpha(theme.palette.divider, 0.95),
                         color: 'text.secondary',
                         '&:hover': {
-                          borderColor: 'primary.main',
-                          bgcolor: 'primary.50',
-                          color: 'primary.main'
-                        }
+                          borderColor: alpha(theme.palette.primary.main, 0.5),
+                          bgcolor: alpha(theme.palette.primary.main, 0.06),
+                          color: 'primary.main',
+                        },
                       }}
                     >
                       {t('approval.selectFiles')}
@@ -3197,13 +3276,12 @@ const ElectronicApproval: React.FC = () => {
                             justifyContent: 'space-between',
                             p: 1.5,
                             mb: 1,
-                            bgcolor: 'grey.50',
-                            borderRadius: 1,
-                            border: '1px solid',
-                            borderColor: 'grey.200',
+                            borderRadius: '12px',
+                            bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.05),
+                            border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
                             '&:hover': {
-                              bgcolor: 'grey.100'
-                            }
+                              bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.12 : 0.08),
+                            },
                           }}
                         >
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
@@ -3258,10 +3336,9 @@ const ElectronicApproval: React.FC = () => {
                           justifyContent: 'space-between',
                           p: 1.5,
                           mb: 1,
-                          bgcolor: 'grey.50',
-                          borderRadius: 1,
-                          border: '1px solid',
-                          borderColor: 'grey.200'
+                          borderRadius: '12px',
+                          border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+                          bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
                         }}
                       >
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
@@ -3297,8 +3374,9 @@ const ElectronicApproval: React.FC = () => {
               <Box sx={{ 
                 display: 'flex', 
                 justifyContent: 'flex-end', 
-                gap: 2,
-                pt: 2
+                gap: 1.5,
+                pt: 2.5,
+                flexWrap: 'wrap',
               }}>
                 <Button
                   variant="outlined"
@@ -3309,38 +3387,35 @@ const ElectronicApproval: React.FC = () => {
                   }}
                   disabled={saving}
                   sx={{
-                    borderRadius: 1,
-                    px: 4,
-                    py: 1.5,
+                    borderRadius: '12px',
+                    px: 3,
+                    py: 1.25,
                     textTransform: 'none',
                     fontWeight: 600,
-                    minWidth: 120,
-                    borderColor: 'grey.300',
+                    minWidth: 100,
+                    borderColor: alpha(theme.palette.divider, 0.95),
                     color: 'text.primary',
                     '&:hover': {
-                      borderColor: 'grey.400',
-                      bgcolor: 'grey.50'
-                    }
+                      borderColor: alpha(theme.palette.text.primary, 0.2),
+                      bgcolor: alpha(theme.palette.grey[500], 0.06),
+                    },
                   }}
                 >
                   {t('approval.cancel')}
                 </Button>
                 <Button
                   variant="contained"
+                  disableElevation
                   onClick={handleSave}
                   disabled={saving}
                   startIcon={saving ? <CircularProgress size={20} color="inherit" /> : null}
                   sx={{
-                    borderRadius: 1,
-                    px: 4,
-                    py: 1.5,
+                    borderRadius: '12px',
+                    px: 3,
+                    py: 1.25,
                     textTransform: 'none',
                     fontWeight: 600,
                     minWidth: 120,
-                    boxShadow: 2,
-                    '&:hover': {
-                      boxShadow: 4
-                    }
                   }}
                 >
                   {saving ? t('approval.saving') : (selectedDocument ? t('approval.update') : t('approval.create'))}
@@ -3353,59 +3428,63 @@ const ElectronicApproval: React.FC = () => {
 
       {/* 통계 카드 - 목록 모드일 때만 표시 */}
       {viewMode === 'list' && activeTab !== 2 && (
-        <Box sx={{ 
-        display: 'grid', 
-        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
-        gap: 2, 
-        mb: 3 
-      }}>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              {t('approval.statistics.pending')}
-            </Typography>
-            <Typography variant="h4" color="warning.main">
-              {pendingCount}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              {t('approval.statistics.approved')}
-            </Typography>
-            <Typography variant="h4" color="success.main">
-              {approvedCount}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              {t('approval.statistics.rejected')}
-            </Typography>
-            <Typography variant="h4" color="error.main">
-              {rejectedCount}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              {t('approval.statistics.totalAmount')}
-            </Typography>
-            <Typography variant="h4">
-              {totalAmount.toLocaleString()}
-            </Typography>
-          </CardContent>
-        </Card>
-      </Box>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+            gap: 2,
+            mb: 3,
+          }}
+        >
+          {(
+            [
+              { label: t('approval.statistics.pending'), value: pendingCount, color: 'warning.dark' as const },
+              { label: t('approval.statistics.approved'), value: approvedCount, color: 'success.dark' as const },
+              { label: t('approval.statistics.rejected'), value: rejectedCount, color: 'error.dark' as const },
+              { label: t('approval.statistics.totalAmount'), value: totalAmount.toLocaleString(), color: 'text.primary' as const },
+            ] as const
+          ).map((stat) => (
+            <Card
+              key={stat.label}
+              elevation={0}
+              sx={{
+                borderRadius: '16px',
+                border: '1px solid',
+                borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+                boxShadow:
+                  theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
+                bgcolor: 'background.paper',
+              }}
+            >
+              <CardContent sx={{ py: 2, px: 2.5 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em', color: 'text.secondary' }}
+                >
+                  {stat.label}
+                </Typography>
+                <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: stat.color }}>
+                  {stat.value}
+                </Typography>
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
       )}
 
       {/* 필터 및 검색 - 목록 모드일 때만 표시 */}
       {viewMode === 'list' && activeTab !== 2 && (
-        <Card sx={{ mb: 3 }}>
-        <CardContent>
+        <Card
+          elevation={0}
+          sx={{
+            mb: 3,
+            borderRadius: '16px',
+            border: 'none',
+            boxShadow: 'none',
+            bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.06) : alpha(theme.palette.common.black, 0.03),
+          }}
+        >
+        <CardContent sx={{ py: 2, px: 2.5 }}>
           <Box sx={{ 
             display: 'grid', 
             gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr 1fr' },
@@ -3420,9 +3499,19 @@ const ElectronicApproval: React.FC = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon />
+                    <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
                   </InputAdornment>
                 ),
+              }}
+              sx={{
+                bgcolor: 'background.paper',
+                borderRadius: '12px',
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '12px',
+                  '& fieldset': {
+                    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : undefined,
+                  },
+                },
               }}
             />
             <FormControl fullWidth>
@@ -3469,12 +3558,24 @@ const ElectronicApproval: React.FC = () => {
             <Button
               fullWidth
               variant="outlined"
-              startIcon={<FilterIcon />}
+              startIcon={<FilterIcon sx={{ fontSize: 18 }} />}
               onClick={() => {
                 setSearchTerm('');
                 setStatusFilter('');
                 setTypeFilter('');
                 setPriorityFilter('');
+              }}
+              sx={{
+                borderRadius: '12px',
+                textTransform: 'none',
+                fontWeight: 600,
+                borderColor: 'divider',
+                color: 'text.secondary',
+                '&:hover': {
+                  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
+                  bgcolor: 'action.hover',
+                  color: 'text.primary',
+                },
               }}
             >
               {t('approval.reset')}
@@ -3486,24 +3587,48 @@ const ElectronicApproval: React.FC = () => {
 
       {/* 결재 문서 목록 테이블 - 목록 모드일 때만 표시 */}
       {viewMode === 'list' && activeTab !== 2 && (
-        <Card>
-        <TableContainer>
-          <Table>
+        <Card
+          elevation={0}
+          sx={{
+            borderRadius: '20px',
+            overflow: 'hidden',
+            border: '1px solid',
+            borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+            boxShadow:
+              theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
+            bgcolor: 'background.paper',
+          }}
+        >
+        <TableContainer sx={{ bgcolor: 'transparent' }}>
+          <Table
+            sx={{
+              borderCollapse: 'collapse',
+              '& .MuiTableCell-root': {
+                borderLeft: 'none',
+                borderRight: 'none',
+                borderTop: 'none',
+              },
+            }}
+          >
             <TableHead
               sx={{
-                bgcolor: 'background.paper',
                 '& .MuiTableCell-head': {
-                  bgcolor: 'background.paper',
-                  color: 'text.primary',
+                  bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
+                  color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
                   fontWeight: 600,
-                  fontSize: '0.875rem',
+                  fontSize: '0.75rem',
                   textTransform: 'none',
-                  letterSpacing: 'normal',
-                  borderBottom: '2px solid',
-                  borderColor: 'primary.main',
-                  py: 1.25,
-                  '& .MuiTableSortLabel-root': { color: 'inherit' }
-                }
+                  letterSpacing: '0.01em',
+                  borderBottom: `1px solid ${
+                    theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
+                  }`,
+                  py: 1.5,
+                  px: 2,
+                  '& .MuiTableSortLabel-root': { color: 'inherit' },
+                  '& .MuiTableSortLabel-root.Mui-active': {
+                    color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.92)' : theme.palette.grey[100],
+                  },
+                },
               }}
             >
               <TableRow>
@@ -3564,12 +3689,30 @@ const ElectronicApproval: React.FC = () => {
                 <TableCell>{t('approval.actions')}</TableCell>
               </TableRow>
             </TableHead>
-            <TableBody>
+            <TableBody
+              sx={{
+                '& .MuiTableCell-body': {
+                  py: 1.5,
+                  px: 2,
+                  fontSize: '0.875rem',
+                  borderBottom: `1px solid ${
+                    theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
+                  }`,
+                },
+                '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
+                  borderBottom: 'none',
+                },
+              }}
+            >
               {paginatedDocuments.map((document) => (
                 <TableRow 
                   key={document.id} 
                   hover 
-                  sx={{ cursor: 'pointer' }}
+                  sx={{
+                    cursor: 'pointer',
+                    transition: 'background-color 0.15s ease',
+                    '&:hover': { bgcolor: 'action.hover' },
+                  }}
                   onClick={() => handleViewDocument(document)}
                 >
                   <TableCell>
@@ -3584,8 +3727,16 @@ const ElectronicApproval: React.FC = () => {
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Avatar sx={{ mr: 1, width: 32, height: 32 }}>
-                        <PersonIcon />
+                      <Avatar
+                        sx={{
+                          mr: 1.5,
+                          width: 36,
+                          height: 36,
+                          bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.12),
+                          color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.55)' : theme.palette.grey[300],
+                        }}
+                      >
+                        <PersonIcon sx={{ fontSize: 20 }} />
                       </Avatar>
                       <Box>
                         <Typography variant="body2" fontWeight="bold">
@@ -3640,8 +3791,13 @@ const ElectronicApproval: React.FC = () => {
                             event.stopPropagation();
                             handleDeleteDocument(document.id);
                           }}
+                          sx={{
+                            color: 'text.secondary',
+                            borderRadius: '10px',
+                            '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.08) },
+                          }}
                         >
-                          <DeleteIcon />
+                          <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                     </Box>
@@ -3653,12 +3809,29 @@ const ElectronicApproval: React.FC = () => {
         </TableContainer>
 
         {/* 페이지네이션 */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 2.5, px: 2 }}>
           <Pagination
             count={Math.ceil(filteredDocuments.length / itemsPerPage)}
             page={page}
             onChange={(_, value) => setPage(value)}
-            color="primary"
+            shape="rounded"
+            siblingCount={1}
+            boundaryCount={1}
+            sx={{
+              '& .MuiPaginationItem-root': {
+                borderRadius: '10px',
+                fontWeight: 600,
+                minWidth: 36,
+                height: 36,
+              },
+              '& .Mui-selected': {
+                bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.12),
+                color: 'text.primary',
+                '&:hover': {
+                  bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.12)' : alpha(theme.palette.common.white, 0.16),
+                },
+              },
+            }}
           />
         </Box>
       </Card>

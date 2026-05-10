@@ -400,13 +400,13 @@ const ProformaInvoice: React.FC = () => {
   if (viewMode === 'view' && selectedProformaInvoice) {
     return (
       <Box sx={{ 
-        p: 3, 
+        p: 0,
         backgroundColor: 'workArea.main',
         borderRadius: 2,
         minHeight: '100%'
       }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="pageTitle" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <ReceiptIcon />
             프로포마 인보이스 상세
           </Typography>
@@ -661,13 +661,13 @@ const ProformaInvoice: React.FC = () => {
 
   return (
     <Box sx={{ 
-      p: 3, 
+      p: 0,
       backgroundColor: 'workArea.main',
       borderRadius: 2,
       minHeight: '100%'
     }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Typography variant="pageTitle" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <ReceiptIcon />
           프로포마 인보이스
         </Typography>

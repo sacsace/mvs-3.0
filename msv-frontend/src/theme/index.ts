@@ -8,19 +8,19 @@ injectStitchesGlobalStyles();
 const theme = createTheme({
   palette: {
     primary: {
-      50: '#ecf8f9',
-      100: '#d6f0f3',
-      200: '#a8dde3',
-      300: '#6ec0cb',
-      400: '#3a9daa',
-      500: '#156372',
-      600: '#125560',
-      700: '#0f4a52',
-      800: '#0c3d44',
-      900: '#082f35',
-      main: '#156372',
-      light: '#3a9daa',
-      dark: '#0f4a52',
+      50: '#E8F6F7',
+      100: '#C5E8EB',
+      200: '#8FD0D6',
+      300: '#52B0BA',
+      400: '#2A939E',
+      500: '#007A83',
+      600: '#006B74',
+      700: '#00656D',
+      800: '#004F55',
+      900: '#00363A',
+      main: '#007A83',
+      light: '#2A939E',
+      dark: '#00656D',
       contrastText: '#ffffff',
     },
     secondary: {
@@ -50,29 +50,29 @@ const theme = createTheme({
       dark: '#d97706',
     },
     info: {
-      main: '#3b82f6',
-      light: '#60a5fa',
-      dark: '#2563eb',
+      main: '#2563EB',
+      light: '#60A5FA',
+      dark: '#1D4ED8',
     },
     success: {
       main: '#22c55e',
       light: '#4ade80',
       dark: '#16a34a',
     },
-    divider: '#E5E7EB',
+    divider: '#EEF2F7',
     background: {
-      default: '#F3F4F6',
+      default: '#F5F6F8',
       paper: '#FFFFFF',
     },
     workArea: {
       main: '#FFFFFF',
-      light: '#FAFAFA',
-      dark: '#F4F4F5',
+      light: '#F8FAFC',
+      dark: '#F1F5F9',
     },
     bodyArea: {
-      main: '#F3F4F6',
-      light: '#F9FAFB',
-      dark: '#E5E7EB',
+      main: '#F5F6F8',
+      light: '#F7F8FA',
+      dark: '#EEF2F7',
     },
     text: {
       primary: '#111827',
@@ -92,102 +92,149 @@ const theme = createTheme({
     },
   },
   typography: {
-    fontFamily: '"Lato", "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-    /** 페이지/카드/본문/캡션 계층 (모던 ERP 대시보드 느낌) */
+    fontFamily:
+      'Pretendard, "Pretendard Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif',
+    /** 페이지 메인 타이틀 — 전 화면 동일 */
     h1: {
-      fontSize: '1.75rem',
+      fontSize: '22px',
       fontWeight: 700,
-      lineHeight: 1.2,
-      letterSpacing: '-0.03em',
-    },
-    h2: {
-      fontSize: '1.5rem',
-      fontWeight: 700,
-      lineHeight: 1.25,
-      letterSpacing: '-0.025em',
-    },
-    h3: {
-      fontSize: '1.25rem',
-      fontWeight: 600,
       lineHeight: 1.3,
       letterSpacing: '-0.02em',
+      color: '#111827',
     },
-    h4: {
-      fontSize: '1.125rem',
-      fontWeight: 600,
-      lineHeight: 1.35,
+    pageTitle: {
+      fontSize: '22px',
+      fontWeight: 700,
+      lineHeight: 1.3,
       letterSpacing: '-0.02em',
+      color: '#111827',
+      marginBottom: '6px',
     },
-    h5: {
-      fontSize: '1rem',
+    /** 섹션 제목 */
+    sectionTitle: {
+      fontSize: '16px',
       fontWeight: 600,
       lineHeight: 1.4,
       letterSpacing: '-0.015em',
+      color: '#111827',
     },
-    h6: {
-      fontSize: '0.9375rem',
+    /** 카드·위젯 헤더 타이틀 */
+    cardTitle: {
+      fontSize: '14px',
       fontWeight: 600,
+      lineHeight: 1.4,
+      letterSpacing: '-0.01em',
+      color: '#111827',
+    },
+    /** 페이지 설명 문단 */
+    pageDescription: {
+      fontSize: '13px',
+      lineHeight: 1.6,
+      color: '#6B7280',
+    },
+    /** KPI 숫자 */
+    kpiNumber: {
+      fontSize: '22px',
+      fontWeight: 700,
+      lineHeight: 1.3,
+      letterSpacing: '-0.02em',
+      color: '#111827',
+    },
+    h2: {
+      fontSize: '16px',
+      fontWeight: 600,
+      lineHeight: 1.4,
+      letterSpacing: '-0.015em',
+      marginBottom: '12px',
+      color: '#111827',
+    },
+    h3: {
+      fontSize: '1.0625rem',
+      fontWeight: 500,
       lineHeight: 1.45,
       letterSpacing: '-0.01em',
     },
-    body1: {
+    h4: {
+      fontSize: '1rem',
+      fontWeight: 500,
+      lineHeight: 1.45,
+      letterSpacing: '-0.01em',
+    },
+    h5: {
+      fontSize: '1.0625rem',
+      fontWeight: 600,
+      lineHeight: 1.35,
+      letterSpacing: '-0.01em',
+    },
+    h6: {
       fontSize: '0.875rem',
-      lineHeight: 1.65,
-      letterSpacing: '0.01em',
+      fontWeight: 500,
+      lineHeight: 1.5,
+      letterSpacing: '0',
+    },
+    body1: {
+      fontSize: '13.5px',
+      fontWeight: 400,
+      lineHeight: 1.6,
+      letterSpacing: '0',
+      color: '#111827',
     },
     body2: {
       fontSize: '0.8125rem',
-      lineHeight: 1.55,
-      letterSpacing: '0.01em',
+      lineHeight: 1.45,
+      letterSpacing: '0',
     },
     caption: {
-      fontSize: '0.75rem',
+      fontSize: '12px',
+      fontWeight: 400,
       lineHeight: 1.5,
-      letterSpacing: '0.01em',
+      letterSpacing: '0',
+      color: '#6B7280',
     },
     subtitle1: {
-      fontSize: '0.9375rem',
+      fontSize: '14px',
       fontWeight: 600,
-      lineHeight: 1.5,
+      lineHeight: 1.4,
       letterSpacing: '-0.01em',
+      color: '#111827',
     },
     subtitle2: {
       fontSize: '0.875rem',
       fontWeight: 500,
-      lineHeight: 1.5,
-      letterSpacing: '0.005em',
+      lineHeight: 1.45,
+      letterSpacing: '0',
     },
   },
   shape: {
-    borderRadius: 12,
+    borderRadius: 16,
   },
   spacing: 8, // 8px 그리드 시스템
   shadows: [
     'none',
-    '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-    '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
-    '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-    '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-    '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+    '0 2px 8px rgba(0, 0, 0, 0.03)',
+    '0 6px 20px rgba(0, 0, 0, 0.04)',
+    '0 6px 20px rgba(0, 0, 0, 0.05)',
+    '0 8px 24px rgba(0, 0, 0, 0.06)',
+    '0 10px 28px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 12px 32px rgba(0, 0, 0, 0.06)',
+    '0 24px 104px rgba(0, 0, 0, 0.1)',
   ],
   components: {
     MuiCssBaseline: {
@@ -195,22 +242,36 @@ const theme = createTheme({
         body: {
           WebkitFontSmoothing: 'antialiased',
           MozOsxFontSmoothing: 'grayscale',
+          backgroundColor: '#F5F6F8',
+          color: '#111827',
+          fontSize: '13.5px',
+        },
+      },
+    },
+    MuiTypography: {
+      defaultProps: {
+        variantMapping: {
+          pageTitle: 'h1',
+          sectionTitle: 'h2',
+          cardTitle: 'h3',
+          pageDescription: 'p',
+          kpiNumber: 'div',
         },
       },
     },
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 10,
+          borderRadius: 12,
           textTransform: 'none',
           fontWeight: 600,
-          fontSize: '0.875rem',
+          fontSize: '13.5px',
+          minHeight: 40,
           padding: '8px 16px',
           boxShadow: 'none',
-          transition: 'background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease',
-          '&:hover': {
-            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.08)',
-            transform: 'none',
+          transition: 'all 0.2s ease',
+          '&.Mui-disabled': {
+            opacity: 0.5,
           },
         },
         outlined: {
@@ -221,52 +282,90 @@ const theme = createTheme({
           },
         },
         contained: {
-          boxShadow: '0 1px 2px rgba(15, 23, 42, 0.06)',
+          backgroundColor: '#007A83',
+          color: '#FFFFFF',
+          boxShadow: '0 4px 12px rgba(0, 122, 131, 0.2)',
           '&:hover': {
-            boxShadow: '0 2px 6px rgba(15, 23, 42, 0.1)',
-            transform: 'none',
+            backgroundColor: '#00656D',
+            boxShadow: '0 6px 16px rgba(0, 122, 131, 0.26)',
           },
         },
         sizeSmall: {
           fontSize: '0.8125rem',
-          padding: '4px 8px',
+          minHeight: 34,
+          padding: '6px 14px',
         },
         sizeLarge: {
           fontSize: '0.9375rem',
-          padding: '8px 16px',
+          minHeight: 44,
+          padding: '10px 22px',
         },
       },
     },
     MuiCard: {
       styleOverrides: {
-        root: {
-          borderRadius: 12,
-          boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
-          border: '1px solid #E5E7EB',
-          transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
-          '&:hover': {
-            boxShadow: '0 4px 12px rgba(15, 23, 42, 0.06)',
-            transform: 'none',
-            borderColor: '#E5E7EB',
-          },
+        root: ({ ownerState }) => {
+          const outlined = ownerState.variant === 'outlined';
+          return {
+            backgroundColor: '#FFFFFF',
+            transition: 'box-shadow 0.2s ease, background-color 0.2s ease',
+            ...(outlined
+              ? {
+                  borderRadius: '16px',
+                  boxShadow: '0 2px 10px rgba(15, 23, 42, 0.035)',
+                  border: '1px solid rgba(15, 23, 42, 0.04)',
+                  '&:hover': {
+                    boxShadow: '0 4px 16px rgba(15, 23, 42, 0.05)',
+                  },
+                }
+              : {
+                  borderRadius: '18px',
+                  border: 'none',
+                  boxShadow: '0 4px 18px rgba(15, 23, 42, 0.045)',
+                  '&:hover': {
+                    boxShadow: '0 6px 22px rgba(15, 23, 42, 0.06)',
+                  },
+                }),
+          };
         },
       },
     },
     MuiCardContent: {
       styleOverrides: {
         root: {
-          padding: 24,
+          padding: '20px',
           '&:last-child': {
-            paddingBottom: 24,
+            paddingBottom: '20px',
           },
         },
       },
     },
     MuiPaper: {
       styleOverrides: {
-        root: {
-          borderRadius: 12,
-          backgroundImage: 'none',
+        root: ({ ownerState }) => {
+          const outlined = ownerState.variant === 'outlined';
+          const elev =
+            ownerState.variant === 'elevation' && typeof ownerState.elevation === 'number'
+              ? ownerState.elevation
+              : 0;
+          /** 메뉴·다이얼로그 등 고 elevation — MUI 기본 그림자 유지 */
+          if (ownerState.variant === 'elevation' && elev >= 8) {
+            return { backgroundImage: 'none' };
+          }
+          return {
+            backgroundImage: 'none',
+            ...(outlined
+              ? {
+                  borderRadius: '16px',
+                  boxShadow: '0 2px 10px rgba(15, 23, 42, 0.035)',
+                  border: '1px solid rgba(15, 23, 42, 0.04)',
+                }
+              : {
+                  borderRadius: '18px',
+                  boxShadow: '0 4px 18px rgba(15, 23, 42, 0.045)',
+                  border: 'none',
+                }),
+          };
         },
       },
     },
@@ -290,15 +389,24 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiOutlinedInput-root': {
-            borderRadius: 10,
+            borderRadius: '14px',
             backgroundColor: '#FFFFFF',
+            minHeight: 44,
+            '& .MuiOutlinedInput-input': {
+              paddingTop: '12px',
+              paddingBottom: '12px',
+            },
             '&:hover .MuiOutlinedInput-notchedOutline': {
               borderColor: '#D1D5DB',
             },
             '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#156372',
-              borderWidth: 1,
+              borderColor: '#007A83',
+              borderWidth: 2,
             },
+          },
+          '& .MuiInputBase-input::placeholder': {
+            color: '#9CA3AF',
+            opacity: 1,
           },
         },
       },
@@ -306,18 +414,19 @@ const theme = createTheme({
     MuiSelect: {
       styleOverrides: {
         root: {
-          borderRadius: 10,
+          borderRadius: '14px',
         },
       },
     },
     MuiFab: {
       styleOverrides: {
         root: {
-          borderRadius: 16,
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+          borderRadius: 12,
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.06)',
+          transition: 'background-color 0.15s ease, box-shadow 0.15s ease',
           '&:hover': {
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-            transform: 'translateY(-2px)',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.08)',
+            transform: 'none',
           },
         },
       },
@@ -325,19 +434,20 @@ const theme = createTheme({
     MuiDrawer: {
       styleOverrides: {
         paper: {
-          borderRight: '1px solid #E5E7EB',
+          borderRight: '1px solid rgba(15, 23, 42, 0.04)',
           boxShadow: 'none',
-          backgroundColor: '#FAFAFA',
+          backgroundColor: '#F7F8FA',
         },
       },
     },
     MuiAppBar: {
       styleOverrides: {
         root: {
-          backgroundColor: '#FFFFFF',
+          backgroundColor: 'rgba(255, 255, 255, 0.88)',
           color: '#111827',
-          boxShadow: '0 4px 12px -2px rgba(15, 23, 42, 0.08)',
-          borderBottom: '1px solid #D1D5DB',
+          boxShadow: 'none',
+          borderBottom: '1px solid rgba(15, 23, 42, 0.04)',
+          backdropFilter: 'blur(14px)',
         },
       },
     },
@@ -345,18 +455,50 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: '10px',
-          margin: '2px 10px',
+          margin: '4px 8px',
           padding: '10px 12px',
-          borderLeft: '3px solid transparent',
+          borderLeft: 'none',
+          fontSize: '13px',
+          color: '#4B5563',
+          transition: 'all 0.2s ease',
           '&:hover': {
-            backgroundColor: '#F3F4F6',
+            backgroundColor: 'rgba(15, 23, 42, 0.04)',
+            transform: 'translateY(-1px)',
           },
           '&.Mui-selected': {
-            backgroundColor: 'rgba(21, 99, 114, 0.08)',
-            borderLeftColor: '#156372',
+            backgroundColor: '#EAF2FF',
+            color: '#007A83',
+            fontWeight: 500,
             '&:hover': {
-              backgroundColor: 'rgba(21, 99, 114, 0.12)',
+              backgroundColor: '#E0EBFA',
             },
+          },
+        },
+      },
+    },
+    MuiTable: {
+      styleOverrides: {
+        root: {
+          '& .MuiTableHead-root': {
+            backgroundColor: '#F8FAFC',
+          },
+          '& .MuiTableCell-head': {
+            fontSize: '12px',
+            fontWeight: 600,
+            color: '#475569',
+            lineHeight: 1.4,
+          },
+          '& .MuiTableRow-root': {
+            height: 56,
+          },
+          '& .MuiTableRow-root:hover': {
+            backgroundColor: '#F8FAFC',
+          },
+          '& .MuiTableCell-root': {
+            borderBottom: '1px solid #EEF2F7',
+            fontSize: '13.5px',
+            lineHeight: 1.5,
+            color: '#111827',
           },
         },
       },
@@ -364,14 +506,14 @@ const theme = createTheme({
     MuiTableHead: {
       styleOverrides: {
         root: {
-          backgroundColor: '#F9FAFB',
+          backgroundColor: '#F8FAFC',
           '& .MuiTableCell-head': {
-            fontSize: '0.75rem',
+            fontSize: '12px',
             fontWeight: 600,
-            color: '#6B7280',
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-            borderBottom: '1px solid #E5E7EB',
+            color: '#475569',
+            textTransform: 'none',
+            letterSpacing: '0.02em',
+            borderBottom: '1px solid #EEF2F7',
           },
         },
       },
@@ -379,9 +521,29 @@ const theme = createTheme({
     MuiTableCell: {
       styleOverrides: {
         root: {
-          fontSize: '0.875rem',
-          borderBottom: '1px solid #F3F4F6',
-          padding: '12px 16px',
+          fontSize: '13.5px',
+          borderBottom: '1px solid #EEF2F7',
+          padding: '14px 16px',
+          color: '#111827',
+          lineHeight: 1.5,
+        },
+        head: {
+          color: '#475569',
+          fontWeight: 600,
+          fontSize: '12px',
+          lineHeight: 1.4,
+          borderBottom: '1px solid #EEF2F7',
+        },
+      },
+    },
+    MuiTableRow: {
+      styleOverrides: {
+        root: {
+          height: 56,
+          transition: 'all 0.2s ease',
+          '&:hover': {
+            backgroundColor: '#F8FAFC',
+          },
         },
       },
     },
@@ -390,18 +552,67 @@ const theme = createTheme({
         root: {
           fontSize: '0.75rem',
           height: 26,
-          borderRadius: 8,
-          fontWeight: 500,
+          borderRadius: 9999,
+          fontWeight: 600,
+        },
+        colorSuccess: {
+          backgroundColor: 'rgba(22, 163, 74, 0.12)',
+          color: '#15803D',
+        },
+        colorWarning: {
+          backgroundColor: 'rgba(245, 158, 11, 0.14)',
+          color: '#B45309',
+        },
+        colorError: {
+          backgroundColor: 'rgba(239, 68, 68, 0.12)',
+          color: '#DC2626',
+        },
+        colorInfo: {
+          backgroundColor: 'rgba(37, 99, 235, 0.12)',
+          color: '#1D4ED8',
+        },
+        colorDefault: {
+          backgroundColor: '#F3F4F6',
+          color: '#4B5563',
+        },
+        colorPrimary: {
+          backgroundColor: 'rgba(0, 122, 131, 0.12)',
+          color: '#00656D',
         },
       },
     },
     MuiIconButton: {
       styleOverrides: {
         root: {
-          borderRadius: 10,
+          borderRadius: 12,
           padding: '6px',
+          transition: 'all 0.2s ease',
+          color: '#64748B',
           '&:hover': {
-            backgroundColor: '#F3F4F6',
+            backgroundColor: 'rgba(15, 23, 42, 0.06)',
+            color: '#007A83',
+            transform: 'translateY(-1px)',
+          },
+        },
+        colorPrimary: {
+          color: '#64748B',
+          '&:hover': {
+            color: '#007A83',
+            backgroundColor: 'rgba(0, 122, 131, 0.08)',
+          },
+        },
+        colorSuccess: {
+          color: '#64748B',
+          '&:hover': {
+            color: '#16A34A',
+            backgroundColor: 'rgba(22, 163, 74, 0.1)',
+          },
+        },
+        colorError: {
+          color: '#94A3B8',
+          '&:hover': {
+            color: '#DC2626',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
           },
         },
       },

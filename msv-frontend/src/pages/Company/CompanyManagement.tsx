@@ -92,7 +92,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`simple-tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ pt: 2 }}>{children}</Box>}
     </div>
   );
 }
@@ -1470,33 +1470,49 @@ const CompanyManagement: React.FC = () => {
     </Dialog>
   );
 
+  const sortLabelSx = {
+    fontWeight: 600,
+    fontSize: '0.75rem',
+    letterSpacing: '0.01em',
+    color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.55)' : theme.palette.grey[400],
+    '&.Mui-active': {
+      color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.92)' : theme.palette.grey[100],
+    },
+    '& .MuiTableSortLabel-icon': {
+      color: 'inherit',
+      opacity: 0.85,
+    },
+  } as const;
+
   return (
-    <Box sx={{ 
-      p: 3, 
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%'
-    }}>
+    <Box sx={{ p: 0, width: '100%', maxWidth: '100%', bgcolor: 'transparent', minHeight: '100%' }}>
       {/* 헤더 */}
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        mb: 3 
-      }}>
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <BusinessIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-            <Typography component="h1" sx={{
-              fontSize: '16px !important',
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          flexWrap: 'wrap',
+          gap: 2,
+          mb: 3,
+        }}
+      >
+        <Box sx={{ minWidth: 0 }}>
+          <Typography
+            component="h1"
+            variant="pageTitle"
+            sx={{
+              mb: 0.75,
+              fontSize: { xs: '1.125rem', sm: '1.3125rem' },
               fontWeight: 600,
-              color: 'text.primary',
-              lineHeight: 1.5
-            }}>
-              {t('companyManagement.pageTitle')}
-            </Typography>
-          </Box>
-          <Typography variant="body2" sx={{ fontSize: '0.875rem', color: pageMutedFg }}>
+              letterSpacing: '-0.022em',
+              lineHeight: 1.28,
+              color: tablePrimaryFg,
+            }}
+          >
+            {t('companyManagement.pageTitle')}
+          </Typography>
+          <Typography variant="body2" sx={{ fontSize: '0.8125rem', lineHeight: 1.55, color: pageMutedFg, maxWidth: 640 }}>
             {t('companyManagement.description')}
           </Typography>
         </Box>
@@ -1505,10 +1521,12 @@ const CompanyManagement: React.FC = () => {
             <span style={{ display: 'inline-flex' }}>
               <Button
                 variant="contained"
-                startIcon={<AddIcon />}
+                color="primary"
+                disableElevation
+                startIcon={<AddIcon sx={{ fontSize: 20 }} />}
                 onClick={handleAdd}
                 disabled={menuFlags.menusLoading || !menuFlags.canCreate}
-                sx={{ borderRadius: 2 }}
+                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
               >
                 {t('companyManagement.addCompany')}
               </Button>
@@ -1537,57 +1555,85 @@ const CompanyManagement: React.FC = () => {
       {/* 통계 카드 및 검색 필터 - root 사용자만 표시 */}
       {user?.role === 'root' && (
         <>
-          <Box sx={{ 
-            display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-            gap: 2, 
-            mb: 3 
-          }}>
-            <Card>
-              <CardContent>
-                <Typography sx={{ color: pageMutedFg }} gutterBottom>
-                  {t('companyManagement.mvsUsageCompanies')}
-                </Typography>
-                <Typography variant="h4" color="primary.main">
-                  {filteredCompanies.length}
-                </Typography>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent>
-                <Typography sx={{ color: pageMutedFg }} gutterBottom>
-                  {t('companyManagement.totalCompanies')}
-                </Typography>
-                <Typography variant="h4" color="text.primary">
-                  {companies.length}
-                </Typography>
-              </CardContent>
-            </Card>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+              gap: 2,
+              mb: 3,
+            }}
+          >
+            {[filteredCompanies.length, companies.length].map((value, idx) => (
+              <Card
+                key={idx === 0 ? 'mvs' : 'total'}
+                elevation={0}
+                sx={{
+                  borderRadius: '16px',
+                  border: '1px solid',
+                  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+                  boxShadow:
+                    theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
+                  bgcolor: 'background.paper',
+                }}
+              >
+                <CardContent sx={{ py: 2, px: 2.5 }}>
+                  <Typography
+                    sx={{
+                      color: pageMutedFg,
+                      display: 'block',
+                      fontWeight: 600,
+                      letterSpacing: '0.02em',
+                      fontSize: '0.75rem',
+                      mb: 1,
+                    }}
+                  >
+                    {idx === 0 ? t('companyManagement.mvsUsageCompanies') : t('companyManagement.totalCompanies')}
+                  </Typography>
+                  <Typography variant="kpiNumber" sx={{ color: tablePrimaryFg, fontWeight: 600 }}>
+                    {value}
+                  </Typography>
+                </CardContent>
+              </Card>
+            ))}
           </Box>
 
-          {/* 검색 및 필터 */}
-          <Card sx={{ mb: 3 }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-                <TextField
-                  placeholder={t('companyManagement.searchPlaceholder')}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  variant="outlined"
-                  size="small"
-                  disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon sx={{ fontSize: '1.1rem' }} />
-                      </InputAdornment>
-                    )
-                  }}
-                  sx={{ minWidth: 300, flex: 1, maxWidth: 480 }}
-                />
-              </Box>
-            </CardContent>
-          </Card>
+          {/* 검색 */}
+          <Box
+            sx={{
+              mb: 3,
+              p: 2,
+              borderRadius: '14px',
+              bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.06) : alpha(theme.palette.common.black, 0.03),
+            }}
+          >
+            <TextField
+              fullWidth
+              placeholder={t('companyManagement.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              variant="outlined"
+              size="small"
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              hiddenLabel
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                maxWidth: 560,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '12px',
+                  bgcolor: 'background.paper',
+                  '& fieldset': {
+                    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : undefined,
+                  },
+                },
+              }}
+            />
+          </Box>
         </>
       )}
 
@@ -1599,14 +1645,29 @@ const CompanyManagement: React.FC = () => {
         </Box>
       ) : user?.role === 'root' ? (
         // root 사용자: 회사 리스트 표시
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Card
+          elevation={0}
+          sx={{
+            borderRadius: '20px',
+            border: '1px solid',
+            borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+            boxShadow:
+              theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
+            bgcolor: 'background.paper',
+            overflow: 'hidden',
+          }}
+        >
+          <CardContent sx={{ py: 3, px: 3 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 2.5 }}>
               <Typography
-                variant="h6"
-                sx={{ display: 'flex', alignItems: 'center', gap: 1, color: tablePrimaryFg, fontWeight: 600 }}
+                variant="subtitle1"
+                sx={{
+                  color: tablePrimaryFg,
+                  fontWeight: 600,
+                  letterSpacing: '-0.02em',
+                  fontSize: '1rem',
+                }}
               >
-                <BusinessIcon color="primary" />
                 {t('companyManagement.companyListTitle', { count: filteredCompanies.length })}
               </Typography>
               <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
@@ -1614,10 +1675,21 @@ const CompanyManagement: React.FC = () => {
                   <Button
                     variant="outlined"
                     size="small"
-                    startIcon={<AddIcon />}
+                    startIcon={<AddIcon sx={{ fontSize: 18 }} />}
                     onClick={handleAdd}
                     disabled={menuFlags.menusLoading || !menuFlags.canCreate}
-                    sx={{ borderRadius: 2 }}
+                    sx={{
+                      borderRadius: '12px',
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      borderColor: 'divider',
+                      color: 'text.secondary',
+                      '&:hover': {
+                        borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
+                        bgcolor: 'action.hover',
+                        color: 'text.primary',
+                      },
+                    }}
                   >
                     {t('companyManagement.addCompany')}
                   </Button>
@@ -1625,21 +1697,44 @@ const CompanyManagement: React.FC = () => {
               </Tooltip>
             </Box>
             {filteredCompanies.length > 0 ? (
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow sx={{ backgroundColor: 'grey.50' }}>
+              <TableContainer sx={{ bgcolor: 'transparent', boxShadow: 'none', border: 'none' }}>
+                <Table
+                  size="small"
+                  sx={{
+                    borderCollapse: 'collapse',
+                    '& .MuiTableCell-root': {
+                      borderLeft: 'none',
+                      borderRight: 'none',
+                      borderTop: 'none',
+                    },
+                  }}
+                >
+                  <TableHead
+                    sx={{
+                      '& .MuiTableCell-head': {
+                        bgcolor:
+                          theme.palette.mode === 'light'
+                            ? 'rgba(0, 0, 0, 0.02)'
+                            : alpha(theme.palette.common.white, 0.04),
+                        color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
+                        fontWeight: 600,
+                        fontSize: '0.75rem',
+                        letterSpacing: '0.01em',
+                        borderBottom: `1px solid ${
+                          theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
+                        }`,
+                        py: 1.5,
+                        px: 2,
+                      },
+                    }}
+                  >
+                    <TableRow>
                       <TableCell sortDirection={orderBy === 'name' ? order : false}>
                         <TableSortLabel
                           active={orderBy === 'name'}
                           direction={orderBy === 'name' ? order : 'asc'}
                           onClick={() => handleRequestSort('name')}
-                          sx={{
-                            fontWeight: 700,
-                            color: pageMutedFg,
-                            '&.Mui-active': { color: pageMutedFg },
-                            '& .MuiTableSortLabel-icon': { color: pageMutedFg, opacity: 0.95 }
-                          }}
+                          sx={sortLabelSx}
                         >
                           {t('companyManagement.companyInfo')}
                         </TableSortLabel>
@@ -1649,12 +1744,7 @@ const CompanyManagement: React.FC = () => {
                           active={orderBy === 'ceo_name'}
                           direction={orderBy === 'ceo_name' ? order : 'asc'}
                           onClick={() => handleRequestSort('ceo_name')}
-                          sx={{
-                            fontWeight: 700,
-                            color: pageMutedFg,
-                            '&.Mui-active': { color: pageMutedFg },
-                            '& .MuiTableSortLabel-icon': { color: pageMutedFg, opacity: 0.95 }
-                          }}
+                          sx={sortLabelSx}
                         >
                           {t('companyManagement.representative')}
                         </TableSortLabel>
@@ -1664,12 +1754,7 @@ const CompanyManagement: React.FC = () => {
                           active={orderBy === 'industry'}
                           direction={orderBy === 'industry' ? order : 'asc'}
                           onClick={() => handleRequestSort('industry')}
-                          sx={{
-                            fontWeight: 700,
-                            color: pageMutedFg,
-                            '&.Mui-active': { color: pageMutedFg },
-                            '& .MuiTableSortLabel-icon': { color: pageMutedFg, opacity: 0.95 }
-                          }}
+                          sx={sortLabelSx}
                         >
                           {t('companyManagement.industry')}
                         </TableSortLabel>
@@ -1679,12 +1764,7 @@ const CompanyManagement: React.FC = () => {
                           active={orderBy === 'employee_count'}
                           direction={orderBy === 'employee_count' ? order : 'asc'}
                           onClick={() => handleRequestSort('employee_count')}
-                          sx={{
-                            fontWeight: 700,
-                            color: pageMutedFg,
-                            '&.Mui-active': { color: pageMutedFg },
-                            '& .MuiTableSortLabel-icon': { color: pageMutedFg, opacity: 0.95 }
-                          }}
+                          sx={sortLabelSx}
                         >
                           {t('companyManagement.employeeCount')}
                         </TableSortLabel>
@@ -1694,36 +1774,60 @@ const CompanyManagement: React.FC = () => {
                           active={orderBy === 'mvs_start'}
                           direction={orderBy === 'mvs_start' ? order : 'asc'}
                           onClick={() => handleRequestSort('mvs_start')}
-                          sx={{
-                            fontWeight: 700,
-                            color: pageMutedFg,
-                            '&.Mui-active': { color: pageMutedFg },
-                            '& .MuiTableSortLabel-icon': { color: pageMutedFg, opacity: 0.95 }
-                          }}
+                          sx={sortLabelSx}
                         >
                           {t('companyManagement.mvsUsagePeriod')}
                         </TableSortLabel>
                       </TableCell>
-                      <TableCell sx={{ fontWeight: 700, textAlign: 'center', color: pageMutedFg }}>
+                      <TableCell sx={{ fontWeight: 600, textAlign: 'center', color: 'text.secondary', fontSize: '0.75rem' }}>
                         {t('companyManagement.actions')}
                       </TableCell>
                     </TableRow>
                   </TableHead>
-                  <TableBody>
+                  <TableBody
+                    sx={{
+                      '& .MuiTableCell-body': {
+                        py: 1.5,
+                        px: 2,
+                        fontSize: '0.875rem',
+                        borderBottom: `1px solid ${
+                          theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
+                        }`,
+                      },
+                      '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
+                        borderBottom: 'none',
+                      },
+                    }}
+                  >
                     {sortedCompanies.map((company) => (
-                      <TableRow 
-                        key={company.id} 
-                        hover 
+                      <TableRow
+                        key={company.id}
+                        hover
                         onClick={() => {
                           if (!menuFlags.menusLoading && menuFlags.canRead) handleView(company);
                         }}
                         sx={{
-                          cursor: menuFlags.menusLoading || !menuFlags.canRead ? 'default' : 'pointer'
+                          cursor: menuFlags.menusLoading || !menuFlags.canRead ? 'default' : 'pointer',
+                          transition: 'background-color 0.15s ease',
+                          '&:hover': { bgcolor: 'action.hover' },
                         }}
                       >
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <Avatar sx={{ mr: 2, bgcolor: 'primary.main', width: 40, height: 40 }}>
+                            <Avatar
+                              sx={{
+                                mr: 2,
+                                width: 40,
+                                height: 40,
+                                fontSize: '1rem',
+                                fontWeight: 600,
+                                bgcolor:
+                                  theme.palette.mode === 'light'
+                                    ? 'rgba(15, 23, 42, 0.08)'
+                                    : alpha(theme.palette.common.white, 0.12),
+                                color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.75)' : theme.palette.grey[200],
+                              }}
+                            >
                               {company.name.charAt(0)}
                             </Avatar>
                             <Typography variant="body1" sx={{ fontWeight: 600, color: tablePrimaryFg }}>
@@ -1743,7 +1847,7 @@ const CompanyManagement: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <PeopleIcon sx={{ mr: 1, fontSize: '1rem', color: pageMutedFg }} />
+                            <PeopleIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary', opacity: 0.7 }} />
                             <Typography variant="body2" sx={{ color: tablePrimaryFg, fontWeight: 500 }}>
                               {t('companyManagement.employeesCount', { count: company.employee_count })}
                             </Typography>
@@ -1760,16 +1864,23 @@ const CompanyManagement: React.FC = () => {
                           <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
                             <Tooltip title={menuFlags.menusLoading || !menuFlags.canDelete ? t('common.menuNoDelete') : t('companyManagement.delete')}>
                               <span style={{ display: 'inline-flex' }}>
-                                <IconButton 
-                                  size="small" 
+                                <IconButton
+                                  size="small"
                                   disabled={menuFlags.menusLoading || !menuFlags.canDelete}
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     handleDelete(company.id);
-                                  }} 
-                                  color="error"
+                                  }}
+                                  sx={{
+                                    color: 'text.secondary',
+                                    borderRadius: '10px',
+                                    '&:hover': {
+                                      color: 'error.main',
+                                      bgcolor: alpha(theme.palette.error.main, 0.08),
+                                    },
+                                  }}
                                 >
-                                  <DeleteIcon />
+                                  <DeleteIcon fontSize="small" />
                                 </IconButton>
                               </span>
                             </Tooltip>
@@ -1798,11 +1909,20 @@ const CompanyManagement: React.FC = () => {
       ) : (
         // 일반 사용자: 본인 회사 정보만 view 모드로 표시
         companies.length > 0 ? (
-          <Card>
-            <CardContent sx={{ p: 4 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-                <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '0.75rem', fontWeight: 600 }}>
-                  <BusinessIcon color="primary" />
+          <Card
+            elevation={0}
+            sx={{
+              borderRadius: '20px',
+              border: '1px solid',
+              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+              boxShadow:
+                theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
+              bgcolor: 'background.paper',
+            }}
+          >
+            <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 4 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, letterSpacing: '-0.02em', color: tablePrimaryFg }}>
                   {t('companyManagement.companyInfo')}
                 </Typography>
                 {(user?.role === 'admin' || user?.role === 'root') && (
@@ -1810,10 +1930,21 @@ const CompanyManagement: React.FC = () => {
                     <span style={{ display: 'inline-flex' }}>
                       <Button
                         variant="outlined"
-                        startIcon={<EditIcon />}
+                        startIcon={<EditIcon sx={{ fontSize: 18 }} />}
                         onClick={() => handleEdit(companies[0])}
                         disabled={menuFlags.menusLoading || !menuFlags.canEdit}
-                        sx={{ borderRadius: 2, fontSize: '0.75rem' }}
+                        sx={{
+                          borderRadius: '12px',
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          borderColor: 'divider',
+                          color: 'text.secondary',
+                          '&:hover': {
+                            borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
+                            bgcolor: 'action.hover',
+                            color: 'text.primary',
+                          },
+                        }}
                       >
                         수정
                       </Button>
@@ -1821,18 +1952,38 @@ const CompanyManagement: React.FC = () => {
                   </Tooltip>
                 )}
               </Box>
-              
+
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                   {companies[0].company_logo ? (
-                    <Avatar 
-                      src={companies[0].company_logo} 
-                      sx={{ bgcolor: 'primary.main', width: 100, height: 100, fontSize: '2.5rem' }}
+                    <Avatar
+                      src={companies[0].company_logo}
+                      sx={{
+                        width: 100,
+                        height: 100,
+                        fontSize: '2.5rem',
+                        bgcolor:
+                          theme.palette.mode === 'light'
+                            ? 'rgba(15, 23, 42, 0.08)'
+                            : alpha(theme.palette.common.white, 0.12),
+                        color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.75)' : theme.palette.grey[200],
+                      }}
                     >
                       {companies[0].name.charAt(0)}
                     </Avatar>
                   ) : (
-                    <Avatar sx={{ bgcolor: 'primary.main', width: 100, height: 100, fontSize: '2.5rem' }}>
+                    <Avatar
+                      sx={{
+                        width: 100,
+                        height: 100,
+                        fontSize: '2.5rem',
+                        bgcolor:
+                          theme.palette.mode === 'light'
+                            ? 'rgba(15, 23, 42, 0.08)'
+                            : alpha(theme.palette.common.white, 0.12),
+                        color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.75)' : theme.palette.grey[200],
+                      }}
+                    >
                       {companies[0].name.charAt(0)}
                     </Avatar>
                   )}

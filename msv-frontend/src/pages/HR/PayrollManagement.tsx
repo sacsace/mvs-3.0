@@ -448,7 +448,7 @@ const PayrollManagement: React.FC = () => {
   return (
     <Box
       sx={{
-        p: 3,
+        p: 0,
         backgroundColor: 'workArea.main',
         borderRadius: 2,
         display: 'flex',
@@ -461,15 +461,7 @@ const PayrollManagement: React.FC = () => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexShrink: 0 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <MoneyIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-          <Typography
-            component="h1"
-            sx={{
-              fontSize: '16px !important',
-              fontWeight: 600,
-              color: 'text.primary',
-              lineHeight: 1.5
-            }}
-          >
+          <Typography component="h1" variant="pageTitle">
             {t('payrollManagement.title')}
           </Typography>
         </Box>

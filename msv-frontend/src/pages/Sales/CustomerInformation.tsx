@@ -321,11 +321,21 @@ const CustomerInformation: React.FC = () => {
   };
 
   const getStatusChip = (status: string) => {
-    const value =
-      status === 'active'
-        ? { label: txt('활성', 'Active'), color: 'success' as const }
-        : { label: txt('비활성', 'Inactive'), color: 'default' as const };
-    return <Chip size="small" label={value.label} color={value.color} />;
+    const active = status === 'active';
+    return (
+      <Chip
+        size="small"
+        label={active ? txt('활성', 'Active') : txt('비활성', 'Inactive')}
+        sx={{
+          height: 26,
+          borderRadius: 9999,
+          fontWeight: 600,
+          fontSize: '0.75rem',
+          bgcolor: active ? 'rgba(22, 163, 74, 0.12)' : '#F3F4F6',
+          color: active ? '#15803D' : '#6B7280',
+        }}
+      />
+    );
   };
 
   const formatDate = (value?: string) => {
@@ -336,51 +346,51 @@ const CustomerInformation: React.FC = () => {
   };
 
   return (
-    <Box sx={{ width: '100%', px: 2, py: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <CustomerIcon sx={{ mr: 2, fontSize: '2rem', color: 'primary.main' }} />
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
+    <Box sx={{ width: '100%', maxWidth: '100%' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
+        <CustomerIcon sx={{ fontSize: 28, color: 'primary.main' }} />
+        <Typography component="h1" variant="pageTitle">
           {txt('고객 정보 관리', 'Customer information')}
         </Typography>
       </Box>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2, mb: 3 }}>
-        <Card>
-          <CardContent>
-            <Typography color="text.secondary" gutterBottom>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2.5, mb: 3 }}>
+        <Card variant="outlined" sx={{ borderRadius: '18px' }}>
+          <CardContent sx={{ py: 2.5, px: 2.5 }}>
+            <Typography color="text.secondary" variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>
               {txt('총 고객', 'Total customers')}
             </Typography>
-            <Typography variant="h4" fontWeight="bold">{stats.total}</Typography>
+            <Typography sx={{ fontSize: '1.375rem', fontWeight: 700 }}>{stats.total}</Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography color="text.secondary" gutterBottom>
+        <Card variant="outlined" sx={{ borderRadius: '18px' }}>
+          <CardContent sx={{ py: 2.5, px: 2.5 }}>
+            <Typography color="text.secondary" variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>
               {txt('활성 고객', 'Active customers')}
             </Typography>
-            <Typography variant="h4" fontWeight="bold" color="success.main">{stats.active}</Typography>
+            <Typography sx={{ fontSize: '1.375rem', fontWeight: 700, color: '#15803D' }}>{stats.active}</Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography color="text.secondary" gutterBottom>
+        <Card variant="outlined" sx={{ borderRadius: '18px' }}>
+          <CardContent sx={{ py: 2.5, px: 2.5 }}>
+            <Typography color="text.secondary" variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>
               {txt('비활성 고객', 'Inactive customers')}
             </Typography>
-            <Typography variant="h4" fontWeight="bold" color="warning.main">{stats.inactive}</Typography>
+            <Typography sx={{ fontSize: '1.375rem', fontWeight: 700, color: '#B45309' }}>{stats.inactive}</Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography color="text.secondary" gutterBottom>
+        <Card variant="outlined" sx={{ borderRadius: '18px' }}>
+          <CardContent sx={{ py: 2.5, px: 2.5 }}>
+            <Typography color="text.secondary" variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>
               {txt('이메일 등록 고객', 'With email on file')}
             </Typography>
-            <Typography variant="h4" fontWeight="bold" color="info.main">{stats.withEmail}</Typography>
+            <Typography sx={{ fontSize: '1.375rem', fontWeight: 700, color: '#1D4ED8' }}>{stats.withEmail}</Typography>
           </CardContent>
         </Card>
       </Box>
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
+      <Card sx={{ mb: 3, borderRadius: '18px', bgcolor: '#F8FAFC', borderColor: 'rgba(15, 23, 42, 0.06)' }} variant="outlined">
+        <CardContent sx={{ py: 2.5, px: 2.5 }}>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '3fr 1fr auto' }, gap: 2, alignItems: 'center' }}>
             <TextField
               fullWidth
@@ -393,10 +403,11 @@ const CustomerInformation: React.FC = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon />
+                    <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
                   </InputAdornment>
                 )
               }}
+              sx={{ bgcolor: '#fff', borderRadius: '14px', '& .MuiInputBase-input::placeholder': { color: '#9CA3AF', opacity: 1 } }}
             />
             <FormControl fullWidth>
               <InputLabel>{txt('상태', 'Status')}</InputLabel>
@@ -433,22 +444,23 @@ const CustomerInformation: React.FC = () => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card sx={{ borderRadius: '20px', overflow: 'hidden' }}>
         <TableContainer>
           <Table>
             <TableHead
               sx={{
-                bgcolor: 'background.paper',
+                bgcolor: '#F8FAFC',
                 '& .MuiTableCell-head': {
-                  bgcolor: 'background.paper',
-                  color: 'text.primary',
+                  bgcolor: '#F8FAFC',
+                  color: '#475569',
                   fontWeight: 600,
-                  fontSize: '0.875rem',
+                  fontSize: '0.8125rem',
                   textTransform: 'none',
-                  letterSpacing: 'normal',
-                  borderBottom: '2px solid',
-                  borderColor: 'primary.main',
-                  py: 1.25
+                  letterSpacing: '0.02em',
+                  borderBottom: '1px solid #EEF2F7',
+                  borderTop: '2px solid',
+                  borderTopColor: 'primary.main',
+                  py: 1.5
                 },
                 '& .MuiTableCell-head:last-of-type': {
                   textAlign: 'center'
@@ -501,13 +513,13 @@ const CustomerInformation: React.FC = () => {
                     <TableCell>{customer.ceo_name || '-'}</TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <PhoneIcon sx={{ fontSize: '0.95rem', color: 'text.secondary' }} />
-                          <Typography variant="body2">{customer.phone || '-'}</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <PhoneIcon sx={{ fontSize: '1rem', color: 'text.secondary', flexShrink: 0 }} />
+                          <Typography variant="body2" sx={{ color: 'text.primary' }}>{customer.phone || '-'}</Typography>
                         </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <EmailIcon sx={{ fontSize: '0.95rem', color: 'text.secondary' }} />
-                          <Typography variant="body2">{customer.email || '-'}</Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <EmailIcon sx={{ fontSize: '1rem', color: 'text.secondary', flexShrink: 0 }} />
+                          <Typography variant="body2" sx={{ color: 'text.primary' }}>{customer.email || '-'}</Typography>
                         </Box>
                       </Box>
                     </TableCell>
@@ -552,9 +564,12 @@ const CustomerInformation: React.FC = () => {
                             <span>
                               <IconButton
                                 size="small"
-                                color="error"
                                 disabled={menusLoading || !customerMenuFlags.canDelete}
                                 onClick={() => handleDelete(customer.id)}
+                                sx={{
+                                  color: '#94A3B8',
+                                  '&:hover': { color: 'error.main', bgcolor: 'rgba(239, 68, 68, 0.08)' },
+                                }}
                               >
                                 <DeleteIcon />
                               </IconButton>

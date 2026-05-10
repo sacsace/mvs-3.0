@@ -29,8 +29,10 @@ import {
   InputAdornment,
   Divider,
   Stack,
-  CircularProgress
+  CircularProgress,
+  useTheme
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -38,7 +40,6 @@ import {
   Visibility as ViewIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
-  LocalShipping as LocalShippingIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   Print as PrintIcon,
@@ -283,6 +284,7 @@ function validateEWayBillForm(form: EWayBillFormValues): boolean {
 
 const EWayBillComponent: React.FC = () => {
   const { t } = useTranslation();
+  const theme = useTheme();
   const {
     dialogState: promptDialogState,
     showPrompt,
@@ -306,6 +308,36 @@ const EWayBillComponent: React.FC = () => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+
+  const statCardSx = useMemo(
+    () => ({
+      borderRadius: '16px',
+      border: `1px solid ${alpha(theme.palette.text.primary, 0.06)}`,
+      boxShadow: '0 2px 16px rgba(0,0,0,0.05)',
+      bgcolor: theme.palette.background.paper,
+    }),
+    [theme]
+  );
+  const shellCardSx = useMemo(
+    () => ({
+      mb: 3,
+      borderRadius: '18px',
+      border: `1px solid ${alpha(theme.palette.text.primary, 0.06)}`,
+      boxShadow: '0 2px 20px rgba(0,0,0,0.05)',
+      overflow: 'hidden',
+    }),
+    [theme]
+  );
+  const softFieldSx = useMemo(
+    () => ({
+      '& .MuiOutlinedInput-root': {
+        borderRadius: '12px',
+        bgcolor: alpha(theme.palette.text.primary, 0.03),
+        '& fieldset': { borderColor: alpha(theme.palette.text.primary, 0.08) },
+      },
+    }),
+    [theme]
+  );
 
   // 샘플 데이터
   const sampleData = useMemo<EWayBill[]>(() => [
@@ -478,48 +510,46 @@ const EWayBillComponent: React.FC = () => {
   }, [filterEwayBills]);
 
   const getStatusChip = (status: string) => {
+    const labels: Record<string, string> = {
+      draft: t('eWayBillManagement.status.draft'),
+      generated: t('eWayBillManagement.status.generated'),
+      active: t('eWayBillManagement.status.active'),
+      expired: t('eWayBillManagement.status.expired'),
+      cancelled: t('eWayBillManagement.status.cancelled'),
+      rejected: t('eWayBillManagement.status.rejected'),
+    };
+    const label = labels[status] || t('eWayBillManagement.status.unknown');
+    const chipSx = { fontWeight: 500, borderRadius: '8px' } as const;
     switch (status) {
       case 'draft':
-        return <Chip label="초안" color="default" size="small" />;
+        return <Chip label={label} color="default" size="small" sx={chipSx} />;
       case 'generated':
-        return <Chip label="생성됨" color="info" size="small" />;
+        return <Chip label={label} color="info" size="small" variant="outlined" sx={chipSx} />;
       case 'active':
-        return <Chip label="활성" color="success" size="small" />;
+        return <Chip label={label} color="success" size="small" variant="outlined" sx={chipSx} />;
       case 'expired':
-        return <Chip label="만료됨" color="warning" size="small" />;
+        return <Chip label={label} color="warning" size="small" variant="outlined" sx={chipSx} />;
       case 'cancelled':
-        return <Chip label="취소됨" color="error" size="small" />;
+        return <Chip label={label} color="error" size="small" variant="outlined" sx={chipSx} />;
       case 'rejected':
-        return <Chip label="거부됨" color="error" size="small" />;
+        return <Chip label={label} color="error" size="small" variant="outlined" sx={chipSx} />;
       default:
-        return <Chip label="알 수 없음" color="default" size="small" />;
+        return <Chip label={label} color="default" size="small" sx={chipSx} />;
     }
   };
 
   const getSupplyTypeLabel = (type: string) => {
-    switch (type) {
-      case 'outward':
-        return '송장';
-      case 'inward':
-        return '입장';
-      default:
-        return '알 수 없음';
-    }
+    if (type === 'outward') return t('eWayBillManagement.supply.outward');
+    if (type === 'inward') return t('eWayBillManagement.supply.inward');
+    return t('eWayBillManagement.supply.unknown');
   };
 
   const getTransportModeLabel = (mode: string) => {
-    switch (mode) {
-      case 'road':
-        return '도로';
-      case 'rail':
-        return '철도';
-      case 'air':
-        return '항공';
-      case 'ship':
-        return '선박';
-      default:
-        return '알 수 없음';
+    const key = `eWayBillManagement.transportMode.${mode}` as const;
+    if (mode === 'road' || mode === 'rail' || mode === 'air' || mode === 'ship') {
+      return t(key as 'eWayBillManagement.transportMode.road');
     }
+    return t('eWayBillManagement.transportMode.unknown');
   };
 
   const handleViewEwayBill = (ewayBill: EWayBill) => {
@@ -683,21 +713,21 @@ const EWayBillComponent: React.FC = () => {
     return (
       <>
       <Box sx={{ 
-        p: 3, 
+        p: 0,
         backgroundColor: 'workArea.main',
         borderRadius: 2,
         minHeight: '100%'
       }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <LocalShippingIcon />
-            E-Way Bill 상세
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 1.5 }}>
+          <Typography variant="pageTitle" component="h1" sx={{ fontWeight: 600, letterSpacing: '-0.022em' }}>
+            {t('eWayBillManagement.detail.title')}
           </Typography>
           <Button
             variant="outlined"
             onClick={() => setViewMode('list')}
+            sx={{ textTransform: 'none', borderRadius: '12px' }}
           >
-            목록으로
+            {t('eWayBillManagement.detail.backToList')}
           </Button>
         </Box>
 
@@ -981,69 +1011,69 @@ const EWayBillComponent: React.FC = () => {
   return (
     <>
     <Box sx={{ 
-      p: 3, 
+      p: 0,
       backgroundColor: 'workArea.main',
       borderRadius: 2,
       minHeight: '100%'
     }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <LocalShippingIcon />
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+        <Typography variant="pageTitle" component="h1" sx={{ fontWeight: 600, letterSpacing: '-0.022em' }}>
           {t('eWayBillManagement.title')}
         </Typography>
         <Button
           variant="contained"
+          disableElevation
           startIcon={<AddIcon />}
           onClick={handleOpenCreate}
-          sx={{ borderRadius: 2 }}
+          sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}
         >
           {t('eWayBillManagement.actions.createEWayBill')}
         </Button>
       </Box>
 
       {/* 통계 카드 */}
-      <Box sx={{ 
-        display: 'grid', 
+      <Box sx={{
+        display: 'grid',
         gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
-        gap: 2, 
-        mb: 3 
+        gap: 2.5,
+        mb: 3,
       }}>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              총 E-Way Bill
+        <Card elevation={0} sx={statCardSx}>
+          <CardContent sx={{ py: 2.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.04em' }} gutterBottom display="block">
+              {t('eWayBillManagement.analytics.totalEWayBills')}
             </Typography>
-            <Typography variant="h4">
+            <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: '-0.03em' }}>
               {totalBills}
             </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              활성 E-Way Bill
+        <Card elevation={0} sx={statCardSx}>
+          <CardContent sx={{ py: 2.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.04em' }} gutterBottom display="block">
+              {t('eWayBillManagement.analytics.activeEWayBills')}
             </Typography>
-            <Typography variant="h4" color="success.main">
+            <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: '-0.03em', color: 'success.main' }}>
               {activeBills}
             </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              만료된 E-Way Bill
+        <Card elevation={0} sx={statCardSx}>
+          <CardContent sx={{ py: 2.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.04em' }} gutterBottom display="block">
+              {t('eWayBillManagement.analytics.expiredEWayBills')}
             </Typography>
-            <Typography variant="h4" color="warning.main">
+            <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: '-0.03em', color: 'warning.main' }}>
               {expiredBills}
             </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
-              총 상품가액
+        <Card elevation={0} sx={statCardSx}>
+          <CardContent sx={{ py: 2.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.04em' }} gutterBottom display="block">
+              {t('eWayBillManagement.analytics.totalItemValue')}
             </Typography>
-            <Typography variant="h4">
+            <Typography variant="h4" sx={{ fontWeight: 700, letterSpacing: '-0.03em' }}>
               Rs. {totalValue.toLocaleString()}
             </Typography>
           </CardContent>
@@ -1051,51 +1081,64 @@ const EWayBillComponent: React.FC = () => {
       </Box>
 
       {/* 필터 및 검색 */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box sx={{ 
-            display: 'grid', 
+      <Card elevation={0} sx={shellCardSx}>
+        <CardContent sx={{ py: 2.5 }}>
+          <Box sx={{
+            display: 'grid',
             gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr' },
-            gap: 2, 
-            alignItems: 'center' 
+            gap: 2,
+            alignItems: 'center',
           }}>
             <TextField
               fullWidth
-              placeholder="E-Way Bill 번호, 인보이스 번호, 고객명, 차량번호 검색"
+              placeholder={t('eWayBillManagement.filters.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              sx={softFieldSx}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon />
+                    <SearchIcon color="action" />
                   </InputAdornment>
                 ),
               }}
             />
             <FormControl fullWidth>
-              <InputLabel>상태</InputLabel>
+              <InputLabel>{t('eWayBillManagement.filters.status')}</InputLabel>
               <Select
+                label={t('eWayBillManagement.filters.status')}
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
+                sx={{
+                  borderRadius: '12px',
+                  bgcolor: alpha(theme.palette.text.primary, 0.03),
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: alpha(theme.palette.text.primary, 0.08) },
+                }}
               >
-                <MenuItem value="">전체</MenuItem>
-                <MenuItem value="draft">초안</MenuItem>
-                <MenuItem value="generated">생성됨</MenuItem>
-                <MenuItem value="active">활성</MenuItem>
-                <MenuItem value="expired">만료됨</MenuItem>
-                <MenuItem value="cancelled">취소됨</MenuItem>
-                <MenuItem value="rejected">거부됨</MenuItem>
+                <MenuItem value="">{t('eWayBillManagement.filters.all')}</MenuItem>
+                <MenuItem value="draft">{t('eWayBillManagement.status.draft')}</MenuItem>
+                <MenuItem value="generated">{t('eWayBillManagement.status.generated')}</MenuItem>
+                <MenuItem value="active">{t('eWayBillManagement.status.active')}</MenuItem>
+                <MenuItem value="expired">{t('eWayBillManagement.status.expired')}</MenuItem>
+                <MenuItem value="cancelled">{t('eWayBillManagement.status.cancelled')}</MenuItem>
+                <MenuItem value="rejected">{t('eWayBillManagement.status.rejected')}</MenuItem>
               </Select>
             </FormControl>
             <FormControl fullWidth>
-              <InputLabel>송장/입장</InputLabel>
+              <InputLabel>{t('eWayBillManagement.filters.supplyType')}</InputLabel>
               <Select
+                label={t('eWayBillManagement.filters.supplyType')}
                 value={supplyTypeFilter}
                 onChange={(e) => setSupplyTypeFilter(e.target.value)}
+                sx={{
+                  borderRadius: '12px',
+                  bgcolor: alpha(theme.palette.text.primary, 0.03),
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: alpha(theme.palette.text.primary, 0.08) },
+                }}
               >
-                <MenuItem value="">전체</MenuItem>
-                <MenuItem value="outward">송장</MenuItem>
-                <MenuItem value="inward">입장</MenuItem>
+                <MenuItem value="">{t('eWayBillManagement.filters.all')}</MenuItem>
+                <MenuItem value="outward">{t('eWayBillManagement.supply.outward')}</MenuItem>
+                <MenuItem value="inward">{t('eWayBillManagement.supply.inward')}</MenuItem>
               </Select>
             </FormControl>
             <Button
@@ -1107,17 +1150,18 @@ const EWayBillComponent: React.FC = () => {
                 setStatusFilter('');
                 setSupplyTypeFilter('');
               }}
+              sx={{ textTransform: 'none', borderRadius: '12px', height: '56px' }}
             >
-              초기화
+              {t('eWayBillManagement.actions.reset')}
             </Button>
           </Box>
         </CardContent>
       </Card>
 
       {/* E-Way Bill 목록 테이블 */}
-      <Card>
-        <Box sx={{ px: 2, pt: 2, pb: 0.5 }}>
-          <Typography variant="h6" component="h2">
+      <Card elevation={0} sx={shellCardSx}>
+        <Box sx={{ px: 2.5, pt: 2.5, pb: 1 }}>
+          <Typography variant="subtitle1" component="h2" sx={{ fontWeight: 600, letterSpacing: '-0.02em' }}>
             {t('eWayBillManagement.tabs.list')}
           </Typography>
         </Box>
@@ -1125,32 +1169,31 @@ const EWayBillComponent: React.FC = () => {
           <Table>
             <TableHead
               sx={{
-                bgcolor: 'background.paper',
+                bgcolor: alpha(theme.palette.text.primary, 0.03),
                 '& .MuiTableCell-head': {
-                  bgcolor: 'background.paper',
-                  color: 'text.primary',
+                  color: 'text.secondary',
                   fontWeight: 600,
-                  fontSize: '0.875rem',
+                  fontSize: '0.75rem',
+                  letterSpacing: '0.04em',
                   textTransform: 'none',
-                  letterSpacing: 'normal',
-                  borderBottom: '2px solid',
-                  borderColor: 'primary.main',
-                  py: 1.25
+                  borderBottom: '1px solid',
+                  borderColor: alpha(theme.palette.text.primary, 0.08),
+                  py: 1.25,
                 },
                 '& .MuiTableCell-head:last-of-type': {
-                  textAlign: 'center'
-                }
+                  textAlign: 'center',
+                },
               }}
             >
               <TableRow>
-                <TableCell>E-Way Bill 정보</TableCell>
-                <TableCell>송장/입장</TableCell>
-                <TableCell>발송처</TableCell>
-                <TableCell>수신처</TableCell>
-                <TableCell>운송 수단</TableCell>
-                <TableCell>금액</TableCell>
-                <TableCell>상태</TableCell>
-                <TableCell>작업</TableCell>
+                <TableCell>{t('eWayBillManagement.listTable.eWayBillInfo')}</TableCell>
+                <TableCell>{t('eWayBillManagement.listTable.supply')}</TableCell>
+                <TableCell>{t('eWayBillManagement.listTable.from')}</TableCell>
+                <TableCell>{t('eWayBillManagement.listTable.to')}</TableCell>
+                <TableCell>{t('eWayBillManagement.listTable.transport')}</TableCell>
+                <TableCell>{t('eWayBillManagement.listTable.amount')}</TableCell>
+                <TableCell>{t('eWayBillManagement.listTable.status')}</TableCell>
+                <TableCell>{t('eWayBillManagement.listTable.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1172,7 +1215,7 @@ const EWayBillComponent: React.FC = () => {
                     </Box>
                   </TableCell>
                   <TableCell>
-                    <Chip label={getSupplyTypeLabel(ewayBill.supplyType)} color="primary" size="small" />
+                    <Chip label={getSupplyTypeLabel(ewayBill.supplyType)} size="small" variant="outlined" sx={{ fontWeight: 500, borderRadius: '8px' }} />
                   </TableCell>
                   <TableCell>
                     <Box>
@@ -1214,41 +1257,43 @@ const EWayBillComponent: React.FC = () => {
                   <TableCell>{getStatusChip(ewayBill.status)}</TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Tooltip title="보기">
-                        <IconButton size="small" onClick={() => handleViewEwayBill(ewayBill)}>
-                          <ViewIcon />
+                      <Tooltip title={t('eWayBillManagement.actions.view')}>
+                        <IconButton size="small" onClick={() => handleViewEwayBill(ewayBill)} sx={{ borderRadius: '10px' }}>
+                          <ViewIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="수정">
-                        <IconButton size="small" onClick={() => handleEditEwayBill(ewayBill)}>
-                          <EditIcon />
+                      <Tooltip title={t('eWayBillManagement.actions.edit')}>
+                        <IconButton size="small" onClick={() => handleEditEwayBill(ewayBill)} sx={{ borderRadius: '10px' }}>
+                          <EditIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                       {ewayBill.status === 'draft' && (
-                        <Tooltip title="생성">
-                          <IconButton 
-                            size="small" 
+                        <Tooltip title={t('eWayBillManagement.actions.generate')}>
+                          <IconButton
+                            size="small"
                             onClick={() => handleGenerateEwayBill(ewayBill.id)}
                             color="success"
+                            sx={{ borderRadius: '10px' }}
                           >
-                            <CheckCircleIcon />
+                            <CheckCircleIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                       )}
                       {ewayBill.status === 'active' && (
-                        <Tooltip title="취소">
-                          <IconButton 
-                            size="small" 
+                        <Tooltip title={t('eWayBillManagement.actions.cancelBill')}>
+                          <IconButton
+                            size="small"
                             onClick={() => handleCancelEwayBill(ewayBill.id)}
                             color="error"
+                            sx={{ borderRadius: '10px' }}
                           >
-                            <CancelIcon />
+                            <CancelIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                       )}
-                      <Tooltip title="삭제">
-                        <IconButton size="small" onClick={() => openDeleteDialog(ewayBill.id)}>
-                          <DeleteIcon />
+                      <Tooltip title={t('eWayBillManagement.actions.delete')}>
+                        <IconButton size="small" onClick={() => openDeleteDialog(ewayBill.id)} sx={{ borderRadius: '10px' }}>
+                          <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                     </Box>

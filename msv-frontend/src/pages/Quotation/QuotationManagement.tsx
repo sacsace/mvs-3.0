@@ -782,37 +782,66 @@ const QuotationManagement: React.FC = () => {
   return (
     <Box
       sx={{
-        p: { xs: 1.5, sm: 3 },
+        p: 0,
         backgroundColor: 'workArea.main',
-        borderRadius: 2,
         minHeight: '100%',
         maxWidth: '100%',
-        overflowX: 'hidden',
+        overflowX: 'visible',
+        overflowY: 'visible',
         boxSizing: 'border-box'
       }}
     >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <QuotationIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-          <Typography component="h1" sx={{ 
-            fontSize: '16px !important',
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 2,
+          mb: 3,
+          rowGap: 1.5
+        }}
+      >
+        <Typography
+          component="h1"
+          variant="pageTitle"
+          sx={{
+            lineHeight: 1.28,
             fontWeight: 600,
-            color: 'red',
-            lineHeight: 1.5
-          }}>
-            {t('quotationManagement.title')}
-          </Typography>
-        </Box>
+            letterSpacing: '-0.022em',
+            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
+            minWidth: 0,
+            flex: '1 1 200px',
+            pr: 1
+          }}
+        >
+          {t('quotationManagement.title')}
+        </Typography>
         {isCreating || isEditing ? (
-          <Button variant="outlined" onClick={handleCancelForm} sx={{ borderRadius: 2 }}>
+          <Button
+            variant="outlined"
+            onClick={handleCancelForm}
+            sx={{
+              borderRadius: '12px',
+              textTransform: 'none',
+              flexShrink: 0,
+              overflow: 'visible'
+            }}
+          >
             {t('common.back')}
           </Button>
         ) : (
           <Button
             variant="contained"
-            startIcon={<AddIcon />}
+            disableElevation
+            startIcon={<AddIcon fontSize="small" />}
             onClick={handleAddQuotation}
-            sx={{ borderRadius: 2 }}
+            sx={{
+              borderRadius: '12px',
+              textTransform: 'none',
+              flexShrink: 0,
+              overflow: 'visible'
+            }}
           >
             {t('quotationManagement.create')}
           </Button>
@@ -1001,12 +1030,14 @@ const QuotationManagement: React.FC = () => {
           {/* 필터 및 검색 */}
           <Card sx={{ mb: 3 }}>
             <CardContent>
-              <Box sx={{ 
-                display: 'grid', 
-                gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr' },
-                gap: 2, 
-                alignItems: 'center' 
-              }}>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr auto' },
+                  gap: 2,
+                  alignItems: 'center'
+                }}
+              >
                 <TextField
                   fullWidth
                   placeholder={t('quotationManagement.searchPlaceholder')}
@@ -1042,13 +1073,21 @@ const QuotationManagement: React.FC = () => {
                   onChange={(e) => setCustomerFilter(e.target.value)}
                 />
                 <Button
-                  fullWidth
                   variant="outlined"
                   startIcon={<FilterIcon />}
                   onClick={() => {
                     setSearchTerm('');
                     setStatusFilter('');
                     setCustomerFilter('');
+                  }}
+                  sx={{
+                    width: { xs: '100%', sm: 'auto' },
+                    minWidth: { sm: 120 },
+                    flexShrink: 0,
+                    borderRadius: '12px',
+                    textTransform: 'none',
+                    justifySelf: { xs: 'stretch', sm: 'end' },
+                    whiteSpace: 'nowrap'
                   }}
                 >
                   {t('common.reset')}

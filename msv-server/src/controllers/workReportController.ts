@@ -344,6 +344,13 @@ export const createWorkReport = async (req: RequestWithUser, res: Response) => {
       });
     }
 
+    if (Number(recipient_id) === Number(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: '본인에게는 보고서를 보낼 수 없습니다.'
+      });
+    }
+
     const recipientUser = await User.findOne({
       where: {
         id: Number(recipient_id),
@@ -610,6 +617,21 @@ export const updateWorkReport = async (req: RequestWithUser, res: Response) => {
         }
         nextRecipientId = rid;
       }
+    }
+
+    const authorIdNum = Number((report as any).author_id);
+    const resolvedRecipientId =
+      recipient_id !== undefined ? nextRecipientId : (report as any).recipient_id;
+    if (
+      resolvedRecipientId != null &&
+      Number.isInteger(Number(resolvedRecipientId)) &&
+      Number(resolvedRecipientId) > 0 &&
+      Number(resolvedRecipientId) === authorIdNum
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: '본인에게는 보고서를 보낼 수 없습니다.'
+      });
     }
 
     let ccIdsNext: number[] | undefined;

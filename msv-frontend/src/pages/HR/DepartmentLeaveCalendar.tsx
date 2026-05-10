@@ -7,6 +7,7 @@ import {
   Tooltip,
   useTheme,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import type { Theme } from '@mui/material/styles';
 import ChevronLeft from '@mui/icons-material/ChevronLeft';
 import ChevronRight from '@mui/icons-material/ChevronRight';
@@ -60,11 +61,11 @@ function dayInVacation(day: Date, v: CalendarVacationItem): boolean {
 const statusColor = (status: CalendarVacationItem['status'], theme: Theme): string => {
   switch (status) {
     case 'pending':
-      return theme.palette.warning.main;
+      return alpha(theme.palette.warning.main, 0.75);
     case 'approved':
-      return theme.palette.success.main;
+      return alpha(theme.palette.success.main, 0.75);
     case 'rejected':
-      return theme.palette.error.main;
+      return alpha(theme.palette.error.main, 0.65);
     default:
       return theme.palette.grey[400];
   }
@@ -129,7 +130,7 @@ const DepartmentLeaveCalendar: React.FC<DepartmentLeaveCalendarProps> = ({
           >
             <ChevronLeft />
           </IconButton>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600, minWidth: 140, textAlign: 'center' }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 500, minWidth: 140, textAlign: 'center' }}>
             {format(viewMonth, language === 'ko' ? 'yyyy년 M월' : 'MMMM yyyy', { locale })}
           </Typography>
           <IconButton
@@ -146,25 +147,24 @@ const DepartmentLeaveCalendar: React.FC<DepartmentLeaveCalendarProps> = ({
         sx={{
           display: 'grid',
           gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
-          gap: 0.5,
-          border: `1px solid ${theme.palette.divider}`,
-          borderRadius: 1,
-          overflow: 'hidden',
-          bgcolor: 'background.paper',
+          gap: 1,
+          p: 0.5,
+          borderRadius: '12px',
+          bgcolor: 'transparent',
         }}
       >
         {weekdayLabels.map((label, idx) => (
           <Box
             key={`wd-${idx}-${label}`}
             sx={{
-              py: 1,
+              py: 1.1,
               textAlign: 'center',
-              bgcolor: '#F5F6F8',
-              borderBottom: '2px solid #E2E8F0',
+              bgcolor: '#F5F5F7',
+              borderRadius: '8px',
               fontSize: '0.8125rem',
-              fontWeight: 700,
-              color: '#64748B',
-              letterSpacing: '0.02em',
+              fontWeight: 500,
+              color: 'text.secondary',
+              letterSpacing: '0.01em',
             }}
           >
             {label}
@@ -183,11 +183,14 @@ const DepartmentLeaveCalendar: React.FC<DepartmentLeaveCalendarProps> = ({
               key={key}
               sx={{
                 minHeight: { xs: 72, sm: 88 },
-                p: 0.4,
-                borderRight: `1px solid ${theme.palette.divider}`,
-                borderBottom: `1px solid ${theme.palette.divider}`,
-                bgcolor: inMonth ? 'background.paper' : 'action.hover',
-                '&:nth-of-type(7n)': { borderRight: 'none' },
+                p: 0.75,
+                borderRadius: '10px',
+                bgcolor: inMonth ? 'background.paper' : alpha(theme.palette.action.hover, 0.65),
+                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+                transition: 'background-color 0.2s ease, box-shadow 0.2s ease',
+                '&:hover': {
+                  bgcolor: inMonth ? alpha(theme.palette.primary.main, 0.04) : undefined,
+                },
               }}
             >
               <Typography

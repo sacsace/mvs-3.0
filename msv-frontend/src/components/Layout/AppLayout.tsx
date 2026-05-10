@@ -7,6 +7,7 @@ import Sidebar from './Sidebar';
 import { useStore, useMenuStore } from '../../store';
 import { userUiPreferencesService } from '../../services/api';
 import i18n from '../../locales/i18n';
+import { mvsPageShellSx } from '../../theme/mvsLayout';
 
 /** 서버 prefs의 ko가 클라이언트 영어 선택보다 늦게 도착할 때 UI 언어를 덮어쓰지 않음 */
 function shouldApplyPrefsLanguage(prefsLang: 'ko' | 'en', current: 'ko' | 'en'): boolean {
@@ -23,7 +24,7 @@ const WORK_AREA_OUTSET = 16;
 /** Sidebar.tsx `HEADER_MENU_GAP_PX` 와 동일 — 헤더~좌측메뉴 / 헤더~본문 상단 회색 띠 */
 const HEADER_MENU_GAP_PX = 8;
 /** Toolbar와 동일 — 고정 헤더용 레이아웃 스페이서 높이 */
-const HEADER_LAYOUT_HEIGHT = 52;
+const HEADER_LAYOUT_HEIGHT = 60;
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [sidebarOpen] = useState(true);
@@ -253,7 +254,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             // 사이드바 너비 + 카드와의 간격(회색 띠가 보이도록)
             paddingLeft: `${(autoCollapseEnabled && isSidebarCollapsed ? collapsedWidth : sidebarWidth) + WORK_AREA_OUTSET}px`,
             paddingRight: `${WORK_AREA_OUTSET + 8}px`,
-            paddingTop: `${HEADER_MENU_GAP_PX}px`,
+            paddingTop: `${HEADER_MENU_GAP_PX + 4}px`,
             paddingBottom: `${WORK_AREA_OUTSET + 16}px`,
             // 반응형 패딩
             '@media (max-width: 600px)': {
@@ -279,19 +280,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           <Box
             sx={{
               width: '100%',
-              // 브라우저 크기에 따라 자동 조정되는 최대 너비 (모든 페이지 2배 크기)
-              maxWidth: { 
-                xs: '100%',    // 모바일: 전체 너비
-                sm: '100%',    // 태블릿: 전체 너비
-                md: '100%',    // 데스크톱: 전체 너비 (사이드바 고려)
-                lg: '2400px',  // 큰 화면: 최대 2400px (2배)
-                xl: '2800px'   // 매우 큰 화면: 최대 2800px (2배)
-              },
+              maxWidth: '100%',
+              mx: 0,
               backgroundColor: 'workArea.main',
-              borderRadius: '12px',
-              boxShadow: '0 1px 3px rgba(15, 23, 42, 0.06)',
-              border: '1px solid',
-              borderColor: 'divider',
+              borderRadius: '24px',
+              boxShadow: '0 8px 30px rgba(15, 23, 42, 0.04)',
+              border: 'none',
               outline: 'none',
               overflow: 'hidden',
               position: 'relative',
@@ -318,22 +312,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 overflowX: 'hidden',
                 overflowY: 'auto',
                 color: 'text.primary',
-                /* 14px — 본문 가독성(테마 body1과 동일). 사이드바는 자체 폰트 유지 */
-                fontSize: '0.875rem',
-                // 좌우 공백을 동일하게 유지하는 반응형 패딩
-                px: { 
-                  xs: 2, // 모바일: 16px
-                  sm: 3, // 태블릿: 24px
-                  md: 4, // 데스크톱: 32px
-                  lg: 5, // 큰 화면: 40px
-                  xl: 6  // 매우 큰 화면: 48px
-                },
-                py: { xs: 2, sm: 3, md: 4 }, // 내부 상하 패딩
+                fontSize: '13.5px',
+                lineHeight: 1.6,
                 display: 'flex',
                 flexDirection: 'column',
                 border: 'none',
                 outline: 'none',
                 boxShadow: 'none',
+                ...mvsPageShellSx,
                 '&::before': {
                   display: 'none'
                 },
@@ -364,8 +350,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                   width: '100%',
                   maxWidth: '100%',
                 },
-                /* 본문 전역 텍스트 톤: 기본은 진하게, 보조 텍스트도 한 톤 업 */
-                '& .MuiTypography-colorTextSecondary, & .MuiFormHelperText-root, & .MuiInputBase-input::placeholder, & .MuiTableSortLabel-root, & .MuiTableCell-head, & .MuiInputAdornment-root, & .MuiFormLabel-root': {
+                /* 보조 텍스트·플레이스홀더 등 (테이블 헤더 색은 테마 MuiTableCell head 유지) */
+                '& .MuiTypography-colorTextSecondary, & .MuiFormHelperText-root, & .MuiInputBase-input::placeholder, & .MuiTableSortLabel-root, & .MuiInputAdornment-root, & .MuiFormLabel-root': {
                   color: (theme) => alpha(theme.palette.text.primary, 0.84),
                 },
                 '& .MuiTableSortLabel-root.Mui-active': {

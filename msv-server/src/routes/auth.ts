@@ -13,7 +13,7 @@ router.post('/login', validateBody({
 
 // 회사+관리자 가입 (요금제/사용기간 포함)
 router.post('/signup/payment-order', validateBody({
-  planType: { required: true, type: 'string', oneOf: ['free_day_1', 'month_5000', 'year_50000'] },
+  planType: { required: true, type: 'string', oneOf: ['free_week_7', 'free_day_1', 'month_5000', 'year_50000'] },
   companyName: { type: 'string', maxLength: 200 },
   businessNumber: { type: 'string', maxLength: 50 },
   adminEmail: { type: 'string', maxLength: 255 }
@@ -27,7 +27,7 @@ router.post('/register', validateBody({
   adminUserid: { required: true, type: 'string', minLength: 2, maxLength: 50 },
   adminEmail: { required: true, type: 'string', minLength: 5, maxLength: 255 },
   adminPassword: { required: true, type: 'string', minLength: 6, maxLength: 128 },
-  planType: { required: true, type: 'string', oneOf: ['free_day_1', 'month_5000', 'year_50000'] },
+  planType: { required: true, type: 'string', oneOf: ['free_week_7', 'free_day_1', 'month_5000', 'year_50000'] },
   startDate: { type: 'string', maxLength: 20 },
   phone: { type: 'string', maxLength: 50 },
   address: { type: 'string', maxLength: 500 },

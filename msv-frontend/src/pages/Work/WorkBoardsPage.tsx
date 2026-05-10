@@ -17,12 +17,7 @@ import {
   IconButton
 } from '@mui/material';
 import FormFieldLabeled from '../../components/Common/FormFieldLabeled';
-import {
-  Add as AddIcon,
-  DragIndicator as DragIndicatorIcon,
-  Edit as EditIcon,
-  ViewKanban as ViewKanbanIcon
-} from '@mui/icons-material';
+import { Add as AddIcon, DragIndicator as DragIndicatorIcon } from '@mui/icons-material';
 import {
   DndContext,
   DragEndEvent,
@@ -40,23 +35,25 @@ import {
   useSortable
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { workBoardService } from '../../services/api';
 import { showErrorPopup } from '../../utils/errorHandler';
 import { useMenuStore, useStore } from '../../store';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
+import { mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
 
+/** 보드 색상 — 채도를 낮춘 시스템 톤에 가깝게 */
 const BOARD_COLOR_OPTIONS = [
-  '#1E88E5',
-  '#43A047',
-  '#FB8C00',
-  '#8E24AA',
-  '#E53935',
-  '#00897B',
-  '#5E35B1',
-  '#546E7A'
+  '#0A84FF',
+  '#34C759',
+  '#FF9F0A',
+  '#BF5AF2',
+  '#FF453A',
+  '#64D2FF',
+  '#5E5CE6',
+  '#8E8E93'
 ] as const;
 
 const isHexColor = (value?: string | null) => Boolean(value && /^#[0-9a-fA-F]{6}$/.test(value));
@@ -88,6 +85,8 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
   onEdit,
   canEdit
 }) => {
+  const theme = useTheme();
+  const accent = getBoardAccentColor(board, themePrimaryColor);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: board.id,
     disabled: !canEdit
@@ -99,18 +98,35 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
     zIndex: isDragging ? 2 : undefined
   };
 
+  const cardBg = theme.palette.mode === 'light' ? '#FFFFFF' : alpha(theme.palette.grey[900], 0.92);
+
   return (
     <Card
       ref={setNodeRef}
       style={style}
-      variant="outlined"
+      elevation={0}
       sx={{
         width: '100%',
-        minHeight: 118,
-        borderColor: 'divider',
-        backgroundColor: 'background.paper',
-        borderRadius: 0.5,
-        borderTop: `8px solid ${getBoardAccentColor(board, themePrimaryColor)}`
+        minHeight: 148,
+        borderRadius: '16px',
+        border: '1px solid',
+        borderColor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.08)' : alpha(theme.palette.common.white, 0.1),
+        borderTop: `4px solid ${accent}`,
+        backgroundColor: cardBg,
+        boxShadow:
+          theme.palette.mode === 'light'
+            ? '0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.06)'
+            : '0 2px 8px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.04)',
+        overflow: 'hidden',
+        transition: 'box-shadow 0.22s ease, transform 0.22s ease, border-color 0.22s ease',
+        '&:hover': {
+          boxShadow:
+            theme.palette.mode === 'light'
+              ? '0 2px 4px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.09)'
+              : '0 8px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.06)',
+          transform: 'translateY(-2px)',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.1)' : alpha(theme.palette.common.white, 0.12),
+        },
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'stretch' }}>
@@ -123,14 +139,17 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
             sx={{
               cursor: 'grab',
               alignSelf: 'stretch',
-              borderRadius: 0,
-              px: 0.25,
-              color: 'text.secondary',
-              touchAction: 'none'
+              borderRadius: '10px 0 0 10px',
+              px: 0.5,
+              color: alpha(theme.palette.text.secondary, 0.45),
+              touchAction: 'none',
+              borderRight: '1px solid',
+              borderColor: theme.palette.mode === 'light' ? 'rgba(0,0,0,0.06)' : alpha(theme.palette.common.white, 0.06),
+              '&:hover': { bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.12 : 0.06) },
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <DragIndicatorIcon fontSize="small" />
+            <DragIndicatorIcon sx={{ fontSize: '1.125rem' }} />
           </IconButton>
         ) : (
           <Box sx={{ width: 8, flexShrink: 0 }} aria-hidden />
@@ -140,51 +159,94 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
             onClick={() => navigate(`/work/projects/${board.id}`)}
             sx={{
               height: '100%',
+              borderRadius: 0,
               '&:hover': {
-                backgroundColor: 'action.hover'
-              }
+                backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.07 : 0.035),
+              },
             }}
           >
             <CardContent
               sx={{
-                p: 1,
+                py: 2,
+                px: 2,
                 height: '100%',
                 display: 'flex',
                 flexDirection: 'column',
-                '&:last-child': { pb: 1 }
+                '&:last-child': { pb: 2 },
               }}
             >
-              <Typography variant="body2" sx={{ fontWeight: 700, lineHeight: 1.2 }} gutterBottom noWrap>
+              <Typography
+                variant="subtitle1"
+                sx={{
+                  fontWeight: 600,
+                  lineHeight: 1.28,
+                  letterSpacing: '-0.022em',
+                  fontSize: '0.9375rem',
+                  color: 'text.primary',
+                }}
+                gutterBottom
+                noWrap
+              >
                 {board.name}
               </Typography>
               <Typography
-                variant="caption"
+                variant="body2"
                 color="text.secondary"
                 sx={{
-                  mb: 0.5,
+                  mb: 1.25,
                   display: 'block',
                   minHeight: '1.35em',
-                  lineHeight: 1.35,
-                  opacity: String(board.description || '').trim() ? 1 : 0.55
+                  lineHeight: 1.4,
+                  fontSize: '0.8125rem',
+                  fontWeight: 400,
+                  opacity: String(board.description || '').trim() ? 0.92 : 0.5,
                 }}
                 noWrap
               >
                 {String(board.description || '').trim() ? board.description : t('workBoards.noDescription')}
               </Typography>
-              <Box sx={{ display: 'flex', gap: 0.4, flexWrap: 'wrap', mt: 0.2 }}>
+              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.25 }}>
                 <Chip
                   size="small"
+                  variant="outlined"
                   label={t('workBoards.memberCount', { count: board.members?.length ?? 0 })}
-                  sx={{ height: 18, '& .MuiChip-label': { px: 0.75, fontSize: '0.64rem' } }}
+                  sx={{
+                    height: 24,
+                    fontWeight: 500,
+                    fontSize: '0.6875rem',
+                    letterSpacing: '-0.01em',
+                    borderColor: theme.palette.mode === 'light' ? 'rgba(0,0,0,0.1)' : alpha(theme.palette.common.white, 0.14),
+                    bgcolor: theme.palette.mode === 'light' ? 'rgba(0,0,0,0.04)' : alpha(theme.palette.common.black, 0.2),
+                    color: 'text.secondary',
+                    '& .MuiChip-label': { px: 1 },
+                  }}
                 />
               </Box>
               {canEdit && (
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 'auto' }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    mt: 'auto',
+                    pt: 1.25,
+                    borderTop: '1px solid',
+                    borderColor: theme.palette.mode === 'light' ? 'rgba(0,0,0,0.06)' : alpha(theme.palette.common.white, 0.08),
+                  }}
+                >
                   <Button
                     size="small"
                     variant="text"
-                    startIcon={<EditIcon fontSize="small" />}
-                    sx={{ minWidth: 'auto', px: 0.5, py: 0.2, fontSize: '0.68rem' }}
+                    color="primary"
+                    sx={{
+                      minWidth: 'auto',
+                      px: 1,
+                      py: 0.5,
+                      fontSize: '0.8125rem',
+                      fontWeight: 600,
+                      textTransform: 'none',
+                      borderRadius: '10px',
+                      color: 'primary.main',
+                    }}
                     onClick={(event) => {
                       event.stopPropagation();
                       onEdit(board);
@@ -351,17 +413,64 @@ const WorkBoardsPage: React.FC = () => {
     }
   };
 
+  const pageCanvasBg =
+    theme.palette.mode === 'light'
+      ? 'linear-gradient(180deg, #F4F5F8 0%, #F0F2F5 100%)'
+      : alpha(theme.palette.background.default, 1);
+  const pageCanvasSolid = theme.palette.mode === 'light' ? '#F2F3F7' : theme.palette.background.default;
+
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <ViewKanbanIcon color="primary" sx={{ fontSize: 32 }} />
-          <Typography variant="h5" fontWeight={700}>
+    <Box
+      sx={{
+        p: 0,
+        width: '100%',
+        maxWidth: '100%',
+        bgcolor: pageCanvasSolid,
+        backgroundImage: theme.palette.mode === 'light' ? pageCanvasBg : 'none',
+        borderRadius: { xs: 0, sm: '18px' },
+        px: { xs: 2, sm: 2.5 },
+        py: { xs: 2, sm: 2.5 },
+        boxSizing: 'border-box',
+      }}
+    >
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 2,
+          flexWrap: 'wrap',
+          mb: 2.75,
+          pb: 2,
+          borderBottom: '1px solid',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(0,0,0,0.07)' : alpha(theme.palette.common.white, 0.08),
+        }}
+      >
+        <Box sx={{ flex: '1 1 260px', minWidth: 0 }}>
+          <Typography component="h1" sx={{ ...mvsPageTitleSx, mb: 0.75 }}>
             {t('workBoards.title')}
+          </Typography>
+          <Typography sx={{ ...mvsPageDescriptionSx, maxWidth: 560 }}>
+            {t('workBoards.description')}
           </Typography>
         </Box>
         {canCreateBoard && (
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateDialog}>
+          <Button
+            variant="contained"
+            disableElevation
+            startIcon={<AddIcon sx={{ fontSize: '1.125rem' }} />}
+            onClick={openCreateDialog}
+            sx={{
+              flexShrink: 0,
+              alignSelf: { xs: 'stretch', sm: 'flex-start' },
+              borderRadius: '14px',
+              px: 2.5,
+              py: 1.05,
+              textTransform: 'none',
+              fontWeight: 600,
+              boxShadow: theme.palette.mode === 'light' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+            }}
+          >
             {t('workBoards.actions.newBoard')}
           </Button>
         )}
@@ -382,8 +491,8 @@ const WorkBoardsPage: React.FC = () => {
               sx={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))',
-                gap: 1.2,
-                alignItems: 'start'
+                gap: { xs: 2, sm: 2.25 },
+                alignItems: 'start',
               }}
             >
               {boards.map((b) => (
@@ -399,8 +508,20 @@ const WorkBoardsPage: React.FC = () => {
                 />
               ))}
               {boards.length === 0 && (
-                <Box sx={{ gridColumn: '1 / -1' }}>
-                  <Typography color="text.secondary">{t('workBoards.empty.noBoards')}</Typography>
+                <Box
+                  sx={{
+                    gridColumn: '1 / -1',
+                    py: 5,
+                    px: 2,
+                    textAlign: 'center',
+                    borderRadius: '16px',
+                    border: `1px dashed ${theme.palette.mode === 'light' ? 'rgba(0,0,0,0.14)' : alpha(theme.palette.common.white, 0.2)}`,
+                    bgcolor: theme.palette.mode === 'light' ? 'rgba(255,255,255,0.55)' : alpha(theme.palette.common.black, 0.25),
+                  }}
+                >
+                  <Typography color="text.secondary" sx={{ fontSize: '0.9375rem', lineHeight: 1.6 }}>
+                    {t('workBoards.empty.noBoards')}
+                  </Typography>
                 </Box>
               )}
             </Box>
@@ -417,9 +538,12 @@ const WorkBoardsPage: React.FC = () => {
         }}
         maxWidth="sm"
         fullWidth
+        PaperProps={{ sx: { borderRadius: '20px' } }}
       >
-        <DialogTitle>{editingBoardId ? (isEn ? 'Edit Board' : '보드 수정') : t('workBoards.dialog.newBoardTitle')}</DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
+        <DialogTitle sx={{ pt: 2.5, px: 3, pb: 1, fontSize: '1.125rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
+          {editingBoardId ? (isEn ? 'Edit Board' : '보드 수정') : t('workBoards.dialog.newBoardTitle')}
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1, px: 3, pb: 1 }}>
           <Stack spacing={2.5}>
             <FormFieldLabeled
               autoFocus
@@ -450,13 +574,14 @@ const WorkBoardsPage: React.FC = () => {
                         onClick={() => setBoardColor(color)}
                         sx={{
                           minWidth: 0,
-                          width: 32,
-                          height: 32,
+                          width: 34,
+                          height: 34,
                           borderRadius: '50%',
                           p: 0,
-                          border: selected ? '2px solid #111827' : '1px solid',
-                          borderColor: selected ? '#111827' : 'divider',
-                          backgroundColor: color
+                          border: selected ? `2px solid ${theme.palette.text.primary}` : '1px solid',
+                          borderColor: selected ? theme.palette.text.primary : alpha(theme.palette.divider, 0.9),
+                          backgroundColor: color,
+                          boxShadow: selected ? `0 0 0 3px ${alpha(color, 0.35)}` : 'none',
                         }}
                       />
                     </Tooltip>
@@ -466,17 +591,24 @@ const WorkBoardsPage: React.FC = () => {
             </Box>
           </Stack>
         </DialogContent>
-        <DialogActions>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
           <Button
             onClick={() => {
               setOpen(false);
               setEditingBoardId(null);
             }}
             disabled={saving}
+            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
           >
             {t('common.cancel')}
           </Button>
-          <Button onClick={handleSubmitBoard} variant="contained" disabled={saving || !name.trim()}>
+          <Button
+            onClick={handleSubmitBoard}
+            variant="contained"
+            disableElevation
+            disabled={saving || !name.trim()}
+            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+          >
             {saving ? <CircularProgress size={22} /> : editingBoardId ? (isEn ? 'Save' : '저장') : t('workBoards.actions.create')}
           </Button>
         </DialogActions>

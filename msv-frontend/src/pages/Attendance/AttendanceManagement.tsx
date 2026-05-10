@@ -21,14 +21,17 @@ import {
   CircularProgress
 } from '@mui/material';
 import {
-  Schedule as ScheduleIcon,
   Login as CheckInIcon,
   Logout as CheckOutIcon,
-  Refresh as RefreshIcon,
-  AccessTime as AccessTimeIcon
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
+import {
+  mvsFilterToolbarSx,
+  mvsInnerCardSx,
+  mvsTitleBlockSx,
+} from '../../theme/mvsLayout';
 import { attendanceService, officeLocationService, vacationService, api } from '../../services/api';
 import { useStore } from '../../store';
 
@@ -467,17 +470,24 @@ const AttendanceManagement: React.FC = () => {
     }
   };
 
-  const getDisplayStatus = (attendance: Attendance) => {
+  type DisplayStatus = {
+    label: string;
+    color: 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning';
+    holiday?: boolean;
+  };
+
+  const getDisplayStatus = (attendance: Attendance): DisplayStatus => {
     const ymd = toYmd(attendance.date);
     if (isWeekendYmd(ymd)) {
       return {
         label: t('attendanceManagement.statusHolidayWork'),
-        color: 'primary' as const
+        color: 'default',
+        holiday: true
       };
     }
     return {
       label: getStatusLabel(attendance.status),
-      color: getStatusColor(attendance.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'
+      color: getStatusColor(attendance.status) as DisplayStatus['color']
     };
   };
 
@@ -563,16 +573,31 @@ const AttendanceManagement: React.FC = () => {
   const todayYmd = getClientDate();
   const todayIsWeekend = isWeekendYmd(todayYmd);
 
+  const labelColor = theme.palette.mode === 'dark' ? inkFg : 'text.secondary';
+  const valueColor = theme.palette.mode === 'dark' ? inkFg : 'text.primary';
+
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
-        <ScheduleIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-        <Typography component="h1" sx={{ 
-          fontSize: '16px !important',
-          fontWeight: 600,
-          color: inkFg,
-          lineHeight: 1.5
-        }}>
+    <Box sx={{ width: '100%', maxWidth: '100%' }}>
+      <Box
+        sx={{
+          ...mvsTitleBlockSx,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+        }}
+      >
+        <Typography
+          component="h1"
+          variant="pageTitle"
+          sx={{
+            color: valueColor,
+            mb: 0,
+            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
+            fontWeight: 600,
+            letterSpacing: '-0.022em',
+            lineHeight: 1.28,
+          }}
+        >
           {t('attendanceManagement.pageTitle')}
         </Typography>
       </Box>
@@ -589,73 +614,125 @@ const AttendanceManagement: React.FC = () => {
         </Alert>
       )}
 
-      <Paper
-        variant="outlined"
+      <Box
         sx={{
-          p: 2,
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
+          gap: 2,
           mb: 3,
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 3,
-          justifyContent: 'space-around',
-          alignItems: 'center'
         }}
       >
-        <Box sx={{ textAlign: 'center', minWidth: 100 }}>
-          <Typography variant="caption" sx={{ color: inkFg, display: 'block' }}>
-            {t('attendanceManagement.statWorkingDays')}
-          </Typography>
-          <Typography variant="h5" fontWeight={700} sx={{ color: inkFg }}>
-            {myMonthStats.workingDays}
-          </Typography>
-        </Box>
-        <Box sx={{ textAlign: 'center', minWidth: 100 }}>
-          <Typography variant="caption" sx={{ color: inkFg, display: 'block' }}>
-            {t('attendanceManagement.statVacationDays')}
-          </Typography>
-          <Typography variant="h5" fontWeight={700} sx={{ color: inkFg }}>
-            {vacationDaysInMonth}
-          </Typography>
-        </Box>
-        <Box sx={{ textAlign: 'center', minWidth: 100 }}>
-          <Typography variant="caption" sx={{ color: inkFg, display: 'block' }}>
-            {t('attendanceManagement.statLateDays')}
-          </Typography>
-          <Typography variant="h5" fontWeight={700} sx={{ color: inkFg }}>
-            {myMonthStats.lateDays}
-          </Typography>
-        </Box>
-      </Paper>
+        <Card
+          elevation={0}
+          sx={{
+            ...mvsInnerCardSx,
+            p: 0,
+            overflow: 'hidden',
+            bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : '#FFFFFF',
+          }}
+        >
+          <CardContent sx={{ py: 2, px: 2.5 }}>
+            <Typography variant="caption" sx={{ color: labelColor, display: 'block', fontWeight: 600, letterSpacing: '0.02em', mb: 1 }}>
+              {t('attendanceManagement.statWorkingDays')}
+            </Typography>
+            <Typography variant="kpiNumber" sx={{ color: valueColor }}>
+              {myMonthStats.workingDays}
+            </Typography>
+          </CardContent>
+        </Card>
+        <Card
+          elevation={0}
+          sx={{
+            ...mvsInnerCardSx,
+            p: 0,
+            overflow: 'hidden',
+            bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : '#FFFFFF',
+          }}
+        >
+          <CardContent sx={{ py: 2, px: 2.5 }}>
+            <Typography variant="caption" sx={{ color: labelColor, display: 'block', fontWeight: 600, letterSpacing: '0.02em', mb: 1 }}>
+              {t('attendanceManagement.statVacationDays')}
+            </Typography>
+            <Typography variant="kpiNumber" sx={{ color: valueColor }}>
+              {vacationDaysInMonth}
+            </Typography>
+          </CardContent>
+        </Card>
+        <Card
+          elevation={0}
+          sx={{
+            ...mvsInnerCardSx,
+            p: 0,
+            overflow: 'hidden',
+            bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : '#FFFFFF',
+          }}
+        >
+          <CardContent sx={{ py: 2, px: 2.5 }}>
+            <Typography variant="caption" sx={{ color: labelColor, display: 'block', fontWeight: 600, letterSpacing: '0.02em', mb: 1 }}>
+              {t('attendanceManagement.statLateDays')}
+            </Typography>
+            <Typography variant="kpiNumber" sx={{ color: 'warning.dark' }}>
+              {myMonthStats.lateDays}
+            </Typography>
+          </CardContent>
+        </Card>
+      </Box>
 
-      {/* 오늘의 근태 카드 */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+      {/* 오늘의 근태 카드 — 레이아웃 서피스와 동일 톤, 장식 스트립 없음 */}
+      <Card
+        elevation={0}
+        sx={{
+          mb: 3,
+          borderRadius: '20px',
+          border: '1px solid',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+          boxShadow:
+            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
+          bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'background.paper',
+        }}
+      >
+        <CardContent sx={{ py: 3, px: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2, mb: 2.5 }}>
             <Typography
-              variant="h6"
-              sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 600, color: inkFg }}
+              variant="sectionTitle"
+              sx={{
+                color: valueColor,
+                fontWeight: 600,
+                letterSpacing: '-0.02em',
+              }}
             >
-              <AccessTimeIcon color="primary" />
               {t('attendanceManagement.todayAttendance')}
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1 }}>
+            <Box sx={{ display: 'flex', gap: 1, flexShrink: 0, '& .MuiButton-root': { minHeight: 40, textTransform: 'none', borderRadius: '12px', fontWeight: 600 } }}>
               <Button
                 variant="contained"
                 color="primary"
-                startIcon={<CheckInIcon />}
+                disableElevation
+                startIcon={<CheckInIcon sx={{ fontSize: 18 }} />}
                 onClick={handleCheckIn}
                 disabled={checkInLoading || !!todayAttendance?.check_in}
-                size="small"
+                size="medium"
               >
-                {checkInLoading ? <CircularProgress size={16} /> : t('attendanceManagement.checkIn')}
+                {checkInLoading ? <CircularProgress size={16} color="inherit" /> : t('attendanceManagement.checkIn')}
               </Button>
               <Button
-                variant="contained"
-                color="secondary"
-                startIcon={<CheckOutIcon />}
+                variant="outlined"
+                disableElevation
+                startIcon={<CheckOutIcon sx={{ fontSize: 18 }} />}
                 onClick={handleCheckOut}
                 disabled={checkOutLoading || !todayAttendance?.check_in || !!todayAttendance?.check_out}
-                size="small"
+                size="medium"
+                sx={{
+                  borderColor: 'divider',
+                  color: 'text.primary',
+                  '&:hover': {
+                    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.18)' : undefined,
+                    bgcolor: 'action.hover',
+                  },
+                  '&.Mui-disabled': {
+                    borderColor: 'divider',
+                  },
+                }}
               >
                 {checkOutLoading ? <CircularProgress size={16} /> : t('attendanceManagement.checkOut')}
               </Button>
@@ -663,10 +740,22 @@ const AttendanceManagement: React.FC = () => {
           </Box>
           
           {todayAttendance ? (
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(4, 1fr)' }, gap: 2 }}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+                gap: 2.5,
+                p: 2.5,
+                borderRadius: '14px',
+                border: '1px solid',
+                borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : 'divider',
+                bgcolor: (th) =>
+                  th.palette.mode === 'dark' ? alpha(th.palette.common.white, 0.04) : alpha(th.palette.common.black, 0.02),
+              }}
+            >
               <Box>
-                <Typography variant="caption" sx={{ color: inkFg }}>{t('attendanceManagement.checkInTime')}</Typography>
-                <Typography variant="body1" fontWeight="bold" sx={{ color: inkFg }}>
+                <Typography variant="caption" sx={{ color: labelColor, display: 'block', mb: 0.5 }}>{t('attendanceManagement.checkInTime')}</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600, color: valueColor, fontSize: '0.9375rem' }}>
                   {displayTime(
                     todayAttendance.check_in,
                     todayAttendance.check_in_local,
@@ -676,8 +765,8 @@ const AttendanceManagement: React.FC = () => {
                 </Typography>
               </Box>
               <Box>
-                <Typography variant="caption" sx={{ color: inkFg }}>{t('attendanceManagement.checkOutTime')}</Typography>
-                <Typography variant="body1" fontWeight="bold" sx={{ color: inkFg }}>
+                <Typography variant="caption" sx={{ color: labelColor, display: 'block', mb: 0.5 }}>{t('attendanceManagement.checkOutTime')}</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600, color: valueColor, fontSize: '0.9375rem' }}>
                   {displayTime(
                     todayAttendance.check_out,
                     todayAttendance.check_out_local,
@@ -687,8 +776,8 @@ const AttendanceManagement: React.FC = () => {
                 </Typography>
               </Box>
               <Box>
-                <Typography variant="caption" sx={{ color: inkFg }}>{t('attendanceManagement.workHours')}</Typography>
-                <Typography variant="body1" fontWeight="bold" sx={{ color: inkFg }}>
+                <Typography variant="caption" sx={{ color: labelColor, display: 'block', mb: 0.5 }}>{t('attendanceManagement.workHours')}</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600, color: valueColor, fontSize: '0.9375rem' }}>
                   {todayAttendance.work_hours != null ? `${todayAttendance.work_hours}${t('attendanceManagement.hoursUnit')}` : '-'}
                 </Typography>
               </Box>
@@ -700,7 +789,7 @@ const AttendanceManagement: React.FC = () => {
                   gap: 0.75
                 }}
               >
-                <Typography variant="caption" component="span" display="block" sx={{ color: inkFg }}>
+                <Typography variant="caption" component="span" display="block" sx={{ color: labelColor, mb: 0.5 }}>
                   {t('attendanceManagement.status')}
                 </Typography>
                 <Chip
@@ -709,13 +798,26 @@ const AttendanceManagement: React.FC = () => {
                       ? t('attendanceManagement.statusHolidayWork')
                       : getStatusLabel(todayAttendance.status)
                   }
-                  color={(todayIsWeekend ? 'primary' : getStatusColor(todayAttendance.status)) as any}
+                  color={(todayIsWeekend ? 'default' : getStatusColor(todayAttendance.status)) as any}
                   size="small"
+                  variant={todayIsWeekend ? 'outlined' : 'filled'}
+                  sx={
+                    todayIsWeekend
+                      ? {
+                          height: 26,
+                          fontWeight: 600,
+                          fontSize: '0.75rem',
+                          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.12)' : theme.palette.divider,
+                          bgcolor: theme.palette.mode === 'light' ? 'rgba(255,255,255,0.8)' : alpha(theme.palette.common.white, 0.06),
+                          color: 'text.primary',
+                        }
+                      : { height: 26, fontWeight: 600, fontSize: '0.75rem' }
+                  }
                 />
               </Box>
             </Box>
           ) : (
-            <Typography variant="body2" sx={{ color: inkFg }}>
+            <Typography variant="body2" sx={{ color: labelColor }}>
               {t('attendanceManagement.noTodayAttendance')}
             </Typography>
           )}
@@ -723,46 +825,79 @@ const AttendanceManagement: React.FC = () => {
       </Card>
 
       {/* 근태 현황 */}
-      <Card>
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6" sx={{ fontWeight: 600, color: inkFg }}>
+      <Card
+        elevation={0}
+        sx={{
+          borderRadius: '20px',
+          border: '1px solid',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+          boxShadow:
+            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
+          bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'background.paper',
+        }}
+      >
+        <CardContent sx={{ py: 3, px: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
+            <Typography variant="sectionTitle" sx={{ color: valueColor }}>
               {t('attendanceManagement.attendanceStatus')}
             </Typography>
             <Button
               variant="outlined"
-              startIcon={<RefreshIcon />}
+              startIcon={<RefreshIcon sx={{ fontSize: 18 }} />}
               size="small"
               onClick={fetchAttendances}
               disabled={loading}
+              sx={{
+                textTransform: 'none',
+                fontWeight: 600,
+                borderRadius: '12px',
+                borderColor: 'divider',
+                color: 'text.secondary',
+                '&:hover': {
+                  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
+                  bgcolor: 'action.hover',
+                  color: 'text.primary',
+                },
+              }}
             >
               {t('attendanceManagement.refresh')}
             </Button>
           </Box>
 
-          {/* 필터 (당월 고정) */}
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 2, mb: 3 }}>
+          {/* 필터 (당월 고정) — 테이블 헤더 톤과 구분되도록 살짝 다른 서피스 */}
+          <Box
+            sx={{
+              ...mvsFilterToolbarSx,
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'flex-end',
+              gap: 2,
+              marginBottom: 0,
+              backgroundColor:
+                theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.06) : alpha(theme.palette.common.black, 0.03),
+            }}
+          >
             <Box sx={{ flex: '1 1 200px' }}>
-              <Typography variant="body2" sx={{ mb: 0.5, color: inkFg, fontSize: '0.875rem' }}>
+              <Typography variant="body2" sx={{ mb: 0.5, color: labelColor, fontSize: '0.8125rem', fontWeight: 600 }}>
                 {t('attendanceManagement.currentMonthRange')}
               </Typography>
-              <Typography variant="body1" fontWeight={600} sx={{ color: inkFg }}>
+              <Typography variant="body1" fontWeight={600} sx={{ color: valueColor }}>
                 {monthPeriodLabel}
               </Typography>
-              <Typography variant="caption" sx={{ color: inkFg }}>
+              <Typography variant="caption" sx={{ color: labelColor }}>
                 {boundsThisMonth.start_date} ~ {boundsThisMonth.end_date}
               </Typography>
             </Box>
             {canListCompanyAttendance && (
               <FormControl sx={{ flex: '1 1 180px', minWidth: 160 }} size="small">
-                <Typography variant="body2" sx={{ mb: 0.5, color: inkFg, fontSize: '0.875rem' }}>
+                <Typography variant="body2" sx={{ mb: 0.5, color: labelColor, fontSize: '0.8125rem', fontWeight: 600 }}>
                   {t('attendanceManagement.department')}
                 </Typography>
                 <Select
                   value={filter.department}
                   onChange={(e) => setFilter({ ...filter, department: e.target.value })}
                   displayEmpty
-                  sx={{ height: '40px' }}
+                  sx={{ height: 44, borderRadius: '14px' }}
                 >
                   <MenuItem value="all">{t('attendanceManagement.all')}</MenuItem>
                   {departments.map((dept) => (
@@ -774,14 +909,14 @@ const AttendanceManagement: React.FC = () => {
               </FormControl>
             )}
             <FormControl sx={{ flex: '1 1 180px', minWidth: 160 }} size="small">
-              <Typography variant="body2" sx={{ mb: 0.5, color: inkFg, fontSize: '0.875rem' }}>
+              <Typography variant="body2" sx={{ mb: 0.5, color: labelColor, fontSize: '0.8125rem', fontWeight: 600 }}>
                 {t('attendanceManagement.status')}
               </Typography>
               <Select
                 value={filter.status}
                 onChange={(e) => setFilter({ ...filter, status: e.target.value })}
                 displayEmpty
-                sx={{ height: '40px' }}
+                sx={{ height: 44, borderRadius: '14px' }}
               >
                 <MenuItem value="all">{t('attendanceManagement.all')}</MenuItem>
                 <MenuItem value="normal">{t('attendanceManagement.statusNormal')}</MenuItem>
@@ -799,86 +934,148 @@ const AttendanceManagement: React.FC = () => {
             </Box>
           ) : filteredAttendances.length === 0 ? (
             <Box sx={{ textAlign: 'center', py: 4 }}>
-              <Typography variant="body2" sx={{ color: inkFg }}>
+              <Typography variant="body2" sx={{ color: labelColor }}>
                 {t('attendanceManagement.noRecords')}
               </Typography>
             </Box>
           ) : (
-            <TableContainer
-              component={Paper}
-              variant="outlined"
-              sx={{
-                borderTopLeftRadius: 8,
-                borderTopRightRadius: 8,
-                overflow: 'hidden'
-              }}
-            >
-              <Table size="small" sx={{ borderCollapse: 'collapse' }}>
-                <TableHead>
-                  <TableRow
+            <Box sx={{ mt: 2.5 }}>
+              <TableContainer
+                component={Paper}
+                elevation={0}
+                sx={{
+                  borderRadius: 0,
+                  overflow: 'visible',
+                  border: 'none',
+                  boxShadow: 'none',
+                  bgcolor: 'transparent',
+                }}
+              >
+                <Table
+                  size="medium"
+                  sx={{
+                    borderCollapse: 'collapse',
+                    '& .MuiTableCell-root': {
+                      borderLeft: 'none',
+                      borderRight: 'none',
+                      borderTop: 'none',
+                    },
+                  }}
+                >
+                  <TableHead
                     sx={{
+                      bgcolor:
+                        theme.palette.mode === 'light'
+                          ? 'rgba(0, 0, 0, 0.02)'
+                          : alpha(theme.palette.common.white, 0.04),
                       '& .MuiTableCell-head': {
-                        backgroundColor: 'grey.50',
-                        color: inkFg,
-                        fontWeight: 700,
-                        fontSize: '0.8125rem',
-                        py: 1.25,
-                        borderBottom: '1px solid',
-                        borderColor: 'divider',
-                        borderRight: 'none',
-                        borderLeft: 'none',
-                        borderTop: 'none',
-                        whiteSpace: 'nowrap'
-                      }
+                        bgcolor:
+                          theme.palette.mode === 'light'
+                            ? 'rgba(0, 0, 0, 0.02)'
+                            : alpha(theme.palette.common.white, 0.04),
+                        color:
+                          theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
+                        fontWeight: 600,
+                        fontSize: '0.75rem',
+                        letterSpacing: '0.01em',
+                        borderBottom: `1px solid ${
+                          theme.palette.mode === 'light'
+                            ? 'rgba(15, 23, 42, 0.06)'
+                            : theme.palette.divider
+                        }`,
+                        py: 1.5,
+                        px: 2,
+                      },
                     }}
                   >
-                    <TableCell>{t('attendanceManagement.employeeId')}</TableCell>
-                    <TableCell>{t('attendanceManagement.employeeName')}</TableCell>
-                    <TableCell>{t('attendanceManagement.department')}</TableCell>
-                    <TableCell>{t('attendanceManagement.date')}</TableCell>
-                    <TableCell>{t('attendanceManagement.checkInTimeShort')}</TableCell>
-                    <TableCell>{t('attendanceManagement.checkOutTimeShort')}</TableCell>
-                    <TableCell>{t('attendanceManagement.workHoursShort')}</TableCell>
-                    <TableCell>{t('attendanceManagement.status')}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody sx={{ '& .MuiTableCell-body': { color: inkFg } }}>
-                  {filteredAttendances.map((attendance) => {
-                    const disp = getDisplayStatus(attendance);
-                    return (
-                      <TableRow key={attendance.id} hover>
-                        <TableCell>{attendance.user?.employee_number || '-'}</TableCell>
-                        <TableCell>{attendance.user?.username || '-'}</TableCell>
-                        <TableCell>{attendance.user?.department || '-'}</TableCell>
-                        <TableCell>{formatDate(attendance.date)}</TableCell>
-                        <TableCell>{displayTime(
-                          attendance.check_in,
-                          attendance.check_in_local,
-                          attendance.check_in_display,
-                          attendance.check_in_client_time
-                        )}</TableCell>
-                        <TableCell>{displayTime(
-                          attendance.check_out,
-                          attendance.check_out_local,
-                          attendance.check_out_display,
-                          attendance.check_out_client_time
-                        )}</TableCell>
-                        <TableCell>
-                          {attendance.work_hours != null ? `${attendance.work_hours}${t('attendanceManagement.hoursUnit')}` : '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={disp.label}
-                            color={disp.color as any}
-                            size="small"
-                          />
-                        </TableCell>
+                      <TableRow>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('attendanceManagement.employeeId')}</TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('attendanceManagement.employeeName')}</TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('attendanceManagement.department')}</TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('attendanceManagement.date')}</TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('attendanceManagement.checkInTimeShort')}</TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('attendanceManagement.checkOutTimeShort')}</TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('attendanceManagement.workHoursShort')}</TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('attendanceManagement.status')}</TableCell>
                       </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                    </TableHead>
+                    <TableBody
+                      sx={{
+                        '& .MuiTableCell-body': {
+                          color: valueColor,
+                          py: 1.5,
+                          px: 2,
+                          fontSize: '0.875rem',
+                          borderBottom: `1px solid ${
+                            theme.palette.mode === 'light'
+                              ? 'rgba(15, 23, 42, 0.06)'
+                              : theme.palette.divider
+                          }`,
+                        },
+                        '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
+                          borderBottom: 'none',
+                        },
+                      }}
+                    >
+                      {filteredAttendances.map((attendance) => {
+                        const disp = getDisplayStatus(attendance);
+                        return (
+                          <TableRow
+                            key={attendance.id}
+                            hover
+                            sx={{
+                              transition: 'background-color 0.15s ease',
+                              '&:hover': {
+                                bgcolor: theme.palette.action.hover,
+                              },
+                            }}
+                          >
+                            <TableCell>{attendance.user?.employee_number || '-'}</TableCell>
+                            <TableCell sx={{ fontWeight: 500 }}>{attendance.user?.username || '-'}</TableCell>
+                            <TableCell>{attendance.user?.department || '-'}</TableCell>
+                            <TableCell>{formatDate(attendance.date)}</TableCell>
+                            <TableCell>{displayTime(
+                              attendance.check_in,
+                              attendance.check_in_local,
+                              attendance.check_in_display,
+                              attendance.check_in_client_time
+                            )}</TableCell>
+                            <TableCell>{displayTime(
+                              attendance.check_out,
+                              attendance.check_out_local,
+                              attendance.check_out_display,
+                              attendance.check_out_client_time
+                            )}</TableCell>
+                            <TableCell>
+                              {attendance.work_hours != null ? `${attendance.work_hours}${t('attendanceManagement.hoursUnit')}` : '-'}
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={disp.label}
+                                color={disp.color as any}
+                                size="small"
+                                variant={disp.holiday ? 'outlined' : 'filled'}
+                                sx={{
+                                  height: 26,
+                                  fontWeight: 600,
+                                  fontSize: '0.75rem',
+                                  ...(disp.holiday
+                                    ? {
+                                        borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.12)' : theme.palette.divider,
+                                        bgcolor: theme.palette.mode === 'light' ? 'rgba(255,255,255,0.9)' : alpha(theme.palette.common.white, 0.06),
+                                        color: 'text.primary',
+                                      }
+                                    : {}),
+                                }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+            </Box>
           )}
         </CardContent>
       </Card>

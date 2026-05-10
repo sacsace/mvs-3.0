@@ -349,7 +349,7 @@ const VacationRequest: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 3, backgroundColor: 'workArea.main', borderRadius: 2, minHeight: '100%' }}>
+    <Box sx={{ p: 0, backgroundColor: 'workArea.main', borderRadius: 2, minHeight: '100%' }}>
       {/* 헤더 */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
         <Button

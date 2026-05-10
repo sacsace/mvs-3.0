@@ -10,7 +10,6 @@ import {
   TextField,
   Chip,
   Avatar,
-  InputAdornment,
   Divider,
   List,
   ListItemButton,
@@ -30,18 +29,13 @@ import {
   DialogActions,
   CircularProgress
 } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import {
   Security as SecurityIcon,
-  Person as PersonIcon,
   Business as BusinessIcon,
-  Search as SearchIcon,
   ExpandMore as ExpandMoreIcon,
-  Folder as FolderIcon,
-  FolderOpen as FolderOpenIcon,
-  Description as DescriptionIcon,
   Save as SaveIcon,
   PersonAdd as PersonAddIcon,
-  Info as InfoIcon,
   AutoAwesome as AutoAwesomeIcon,
   VisibilityOff as VisibilityOffIcon,
   EditNote as EditNoteIcon,
@@ -53,6 +47,7 @@ import { Menu } from '../../services/menuService';
 import { api } from '../../services/api';
 import { showErrorPopup, showSuccessPopup } from '../../utils/errorHandler';
 import { useTranslation } from 'react-i18next';
+import { mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
 
 interface User {
   id: number;
@@ -229,51 +224,52 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
             pl: level === 0 ? 2 : 0.5,
             '& .MuiAccordionSummary-content': {
               margin: '0 !important',
-              my: 0
+              my: 0,
+              minWidth: 0,
+              flexGrow: 1,
+              overflow: 'visible',
             },
             '& .MuiAccordionSummary-content.Mui-expanded': {
-              margin: '0 !important'
+              margin: '0 !important',
+              minWidth: 0,
             },
             '& .MuiAccordionSummary-expandIconWrapper': {
               padding: 0
             }
           }}
         >
-          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', pr: 0.5, gap: 1.5, justifyContent: 'flex-start' }}>
-            {/* 아이콘 */}
-            <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-              {hasChildren ? (
-                isExpanded ? (
-                  <FolderOpenIcon sx={{ color: level === 0 ? 'primary.main' : 'text.secondary', fontSize: 16 }} />
-                ) : (
-                  <FolderIcon sx={{ color: level === 0 ? 'primary.main' : 'text.secondary', fontSize: 16 }} />
-                )
-              ) : (
-                <DescriptionIcon sx={{ color: level === 0 ? 'primary.main' : 'text.secondary', fontSize: 14 }} />
-              )}
-            </Box>
-            
-            {/* 1. 메뉴명 (읽기 전용) */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'auto 76px auto',
+              columnGap: 2,
+              alignItems: 'center',
+              width: '100%',
+              minWidth: 0,
+              pr: 0.5,
+            }}
+          >
+            {/* 1. 메뉴명 */}
             <Typography
               variant="body2"
               sx={{
-                minWidth: '250px',
-                maxWidth: '300px',
-                flex: 1,
-                padding: '2.56px 8px',
-                fontSize: level === 0 ? '0.89375rem' : level === 1 ? '0.825rem' : '0.75625rem',
+                minWidth: '12ch',
+                py: 0.35,
+                fontSize: level === 0 ? '0.875rem' : level === 1 ? '0.8125rem' : '0.75rem',
                 fontWeight: level === 0 ? 600 : level === 1 ? 500 : 400,
-                color: level === 0 ? (hasAnyPermission ? 'primary.main' : 'primary.dark') : (hasAnyPermission ? 'primary.main' : 'text.primary'),
+                color: hasAnyPermission ? 'text.primary' : 'text.secondary',
+                maxWidth: 380,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                lineHeight: 0.8448
+                lineHeight: 1.35,
+                letterSpacing: '-0.01em',
               }}
             >
               {language === 'ko' ? menu.name_ko : menu.name_en}
             </Typography>
-            
-            {/* 2. 메뉴 번호 (순서) 입력 필드 */}
+
+            {/* 2. 메뉴 순서 */}
             <TextField
               type="number"
               value={orderValue}
@@ -286,34 +282,47 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
                 max: totalCount,
                 style: {
                   textAlign: 'center',
-                  padding: '4px 8px',
-                  fontSize: '0.75rem',
-                  width: '35px'
-                }
+                  padding: '6px 4px',
+                  fontSize: '0.8125rem',
+                },
               }}
               sx={{
-                width: '60px',
-                flexShrink: 0,
-                ml: 2, // 메뉴명과의 간격 추가
+                width: '100%',
+                maxWidth: 76,
+                justifySelf: 'end',
                 '& .MuiOutlinedInput-root': {
-                  height: '26px',
+                  height: 32,
+                  borderRadius: '10px',
+                  bgcolor: (theme) => alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.12 : 0.06),
+                  '& fieldset': {
+                    borderColor: (theme) => alpha(theme.palette.divider, 0.9),
+                  },
+                  '&:hover fieldset': {
+                    borderColor: (theme) => alpha(theme.palette.text.primary, 0.15),
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderWidth: 1,
+                  },
                   '& input': {
-                    padding: '4px 6px',
-                    fontSize: '0.75rem'
-                  }
-                }
+                    padding: '6px 4px',
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                  },
+                },
               }}
             />
-            
-            {/* 3. 메뉴 권한 체크박스 영역 */}
-            <Box sx={{ 
-              display: 'flex',
-              gap: 0.25,
-              alignItems: 'center',
-              flexShrink: 0,
-              justifyContent: 'flex-end',
-              marginLeft: 'auto'
-            }}>
+
+            {/* 3. 권한 체크박스 */}
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'nowrap',
+                gap: 0.5,
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                minWidth: 'min-content',
+              }}
+            >
               <Tooltip title="모든 권한 선택/해제" arrow>
                 <Box
                   onClick={(e) => {
@@ -438,6 +447,7 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
 };
 
 const MenuPermissionManagement: React.FC = () => {
+  const theme = useTheme();
   const { t } = useTranslation();
   const { user } = useStore();
   const { menus, language, userPermissions, hasMenuPermission } = useMenuStore();
@@ -1382,11 +1392,37 @@ const MenuPermissionManagement: React.FC = () => {
     return matchesCompanySearch;
   });
 
+  const cardShellSx = {
+    borderRadius: '20px',
+    border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'dark' ? 0.35 : 0.65)}`,
+    boxShadow: '0 4px 24px rgba(15, 23, 42, 0.06)',
+    bgcolor: 'background.paper',
+    overflow: 'hidden' as const,
+  };
+
+  const listSectionTitleSx = {
+    fontSize: '13px',
+    fontWeight: 600,
+    letterSpacing: '-0.01em',
+    color: 'text.primary',
+    mb: 1.25,
+  };
+
+  const listItemSelectedSx = {
+    '&.Mui-selected': {
+      bgcolor: alpha(theme.palette.primary.main, 0.1),
+      color: 'text.primary',
+      '&:hover': {
+        bgcolor: alpha(theme.palette.primary.main, 0.16),
+      },
+    },
+  };
+
   // 권한이 없으면 접근 불가 메시지 표시
   if (!canManagePermissionPage) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">
+      <Box sx={{ p: 0, width: '100%' }}>
+        <Alert severity="error" sx={{ borderRadius: '14px' }}>
           이 페이지는 메뉴 권한 관리 권한이 필요합니다.
         </Alert>
       </Box>
@@ -1395,12 +1431,12 @@ const MenuPermissionManagement: React.FC = () => {
 
   return (
     <Box sx={{ 
-      p: 3, 
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
+      p: 0,
+      backgroundColor: 'transparent',
+      borderRadius: 0,
       minHeight: '100%',
       width: '100%',
-      maxWidth: 'none',
+      maxWidth: '100%',
       marginLeft: { xs: -2, sm: -2, md: -3, lg: -3, xl: -3 },
       marginRight: { xs: -2, sm: -2, md: -3, lg: -3, xl: -3 },
       paddingLeft: { xs: 2, sm: 2, md: 3, lg: 3, xl: 3 },
@@ -1412,26 +1448,20 @@ const MenuPermissionManagement: React.FC = () => {
       <Box sx={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
-        alignItems: 'center', 
-        mb: 3 
+        alignItems: 'flex-start', 
+        gap: 2,
+        mb: 3,
+        flexWrap: 'wrap',
       }}>
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <SecurityIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-            <Typography component="h1" sx={{ 
-              fontSize: '16px !important',
-              fontWeight: 600,
-              color: 'text.primary',
-              lineHeight: 1.5
-            }}>
-              {t('menuPermissionManagement.title')}
-            </Typography>
-          </Box>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+        <Box sx={{ minWidth: 0, flex: '1 1 240px' }}>
+          <Typography component="h1" sx={{ ...mvsPageTitleSx, mb: 0.75 }}>
+            {t('menuPermissionManagement.title')}
+          </Typography>
+          <Typography sx={mvsPageDescriptionSx}>
             {t('menuPermissionManagement.description')}
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', gap: 1.25, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }}>
           {(selectedUserId || selectedCompanyId) && (
             <>
               {selectedUserId && (
@@ -1440,8 +1470,14 @@ const MenuPermissionManagement: React.FC = () => {
                     variant="outlined"
                     startIcon={<AutoAwesomeIcon />}
                     onClick={() => setDefaultPermissionDialogOpen(true)}
-                    sx={{ borderRadius: 2 }}
                     size="small"
+                    sx={{
+                      borderRadius: '12px',
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      px: 2,
+                      borderColor: alpha(theme.palette.divider, 0.95),
+                    }}
                   >
                     {t('menuPermissionManagement.defaultPermissions')}
                   </Button>
@@ -1449,8 +1485,14 @@ const MenuPermissionManagement: React.FC = () => {
                     variant="outlined"
                     startIcon={<PersonAddIcon />}
                     onClick={() => setDelegationDialogOpen(true)}
-                    sx={{ borderRadius: 2 }}
                     size="small"
+                    sx={{
+                      borderRadius: '12px',
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      px: 2,
+                      borderColor: alpha(theme.palette.divider, 0.95),
+                    }}
                   >
                     {t('menuPermissionManagement.permissionDelegation')}
                   </Button>
@@ -1458,11 +1500,12 @@ const MenuPermissionManagement: React.FC = () => {
               )}
               <Button
                 variant="contained"
-                startIcon={saving ? <CircularProgress size={16} /> : <SaveIcon />}
+                disableElevation
+                startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
                 onClick={handleSave}
                 disabled={saving}
-                sx={{ borderRadius: 2 }}
                 size="small"
+                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.25 }}
               >
                 {saving ? t('menuPermissionManagement.saving') : t('menuPermissionManagement.save')}
               </Button>
@@ -1486,16 +1529,15 @@ const MenuPermissionManagement: React.FC = () => {
           flexShrink: 0,
           position: 'relative'
         }}>
-          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', mr: 0 }}>
-            <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
-                <SearchIcon />
+          <Card elevation={0} sx={{ height: '100%', display: 'flex', flexDirection: 'column', mr: 0, ...cardShellSx }}>
+            <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', py: 2.75, px: { xs: 2.25, sm: 2.75 }, '&:last-child': { pb: 2.75 } }}>
+              <Typography component="h2" variant="subtitle1" sx={{ ...listSectionTitleSx, fontSize: '15px', mb: 2 }}>
                 {t('menuPermissionManagement.select')}
               </Typography>
               
               {/* 사용자 검색 */}
               <Box sx={{ mb: 2 }}>
-                <Typography variant="caption" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                <Typography variant="caption" sx={{ mb: 0.75, color: 'text.secondary', fontSize: '0.75rem', fontWeight: 500, display: 'block' }}>
                   {t('menuPermissionManagement.userSearch')}
                 </Typography>
                 <TextField
@@ -1504,19 +1546,13 @@ const MenuPermissionManagement: React.FC = () => {
                   placeholder={t('menuPermissionManagement.userSearchPlaceholder')}
                   value={userSearchTerm}
                   onChange={(e) => setUserSearchTerm(e.target.value)}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <PersonIcon fontSize="small" />
-                      </InputAdornment>
-                    ),
-                  }}
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
                 />
               </Box>
 
               {/* 회사 검색 */}
               <Box sx={{ mb: 2 }}>
-                <Typography variant="caption" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                <Typography variant="caption" sx={{ mb: 0.75, color: 'text.secondary', fontSize: '0.75rem', fontWeight: 500, display: 'block' }}>
                   {t('menuPermissionManagement.companySearch')}
                 </Typography>
                 <TextField
@@ -1525,13 +1561,7 @@ const MenuPermissionManagement: React.FC = () => {
                   placeholder={t('menuPermissionManagement.companySearchPlaceholder')}
                   value={companySearchTerm}
                   onChange={(e) => setCompanySearchTerm(e.target.value)}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <BusinessIcon fontSize="small" />
-                      </InputAdornment>
-                    ),
-                  }}
+                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
                 />
               </Box>
 
@@ -1543,8 +1573,7 @@ const MenuPermissionManagement: React.FC = () => {
                 flexDirection: 'column',
                 overflow: 'hidden'
               }}>
-                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <PersonIcon fontSize="small" />
+                <Typography component="h3" variant="subtitle2" sx={listSectionTitleSx}>
                   {t('menuPermissionManagement.users')}
                 </Typography>
                 {dataLoading ? (
@@ -1556,7 +1585,7 @@ const MenuPermissionManagement: React.FC = () => {
                     {userSearchTerm || companySearchTerm ? t('common.search') : t('menuPermissionManagement.noUsers')}
                   </Typography>
                 ) : (
-                  <List dense sx={{ flex: 1, overflow: 'auto' }}>
+                  <List dense sx={{ flex: 1, overflow: 'auto', py: 0.5 }}>
                     {filteredUsers.map((u) => (
                       <ListItemButton
                         key={u.id}
@@ -1567,33 +1596,52 @@ const MenuPermissionManagement: React.FC = () => {
                         }}
                         sx={{
                           mb: 0.5,
-                          borderRadius: 1,
-                          '&.Mui-selected': {
-                            backgroundColor: 'primary.main',
-                            color: 'white',
-                            '&:hover': {
-                              backgroundColor: 'primary.dark',
-                            }
-                          }
+                          borderRadius: '12px',
+                          py: 1,
+                          ...listItemSelectedSx,
                         }}
                       >
-                        <ListItemIcon sx={{ minWidth: 36 }}>
-                          <Avatar sx={{ width: 28, height: 28, bgcolor: selectedUserId === u.id ? 'white' : 'primary.main' }}>
+                        <ListItemIcon sx={{ minWidth: 40 }}>
+                          <Avatar
+                            sx={{
+                              width: 32,
+                              height: 32,
+                              fontSize: '0.8125rem',
+                              fontWeight: 600,
+                              bgcolor:
+                                selectedUserId === u.id
+                                  ? alpha(theme.palette.primary.main, 0.22)
+                                  : theme.palette.primary.main,
+                              color: selectedUserId === u.id ? 'primary.dark' : theme.palette.primary.contrastText,
+                            }}
+                          >
                             {u.name.charAt(0)}
                           </Avatar>
                         </ListItemIcon>
                         <ListItemText
                           primary={u.name}
                           secondary={
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
-                              <Chip label={u.role} size="small" sx={{ height: 18, fontSize: '0.7rem' }} />
-                              <Typography variant="caption" sx={{ ml: 0.5 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, mt: 0.5, flexWrap: 'wrap' }}>
+                              <Chip
+                                label={u.role}
+                                size="small"
+                                sx={{
+                                  height: 22,
+                                  fontSize: '0.6875rem',
+                                  fontWeight: 600,
+                                  bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                  color: 'primary.dark',
+                                  border: 'none',
+                                  '& .MuiChip-label': { px: 1 },
+                                }}
+                              />
+                              <Typography variant="caption" color="text.secondary" sx={{ ml: 0 }}>
                                 {u.company}
                               </Typography>
                             </Box>
                           }
-                          primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 500 }}
-                          secondaryTypographyProps={{ fontSize: '0.75rem' }}
+                          primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: 600, letterSpacing: '-0.01em' }}
+                          secondaryTypographyProps={{ component: 'div' }}
                         />
                       </ListItemButton>
                     ))}
@@ -1607,9 +1655,10 @@ const MenuPermissionManagement: React.FC = () => {
                 sx={{
                   height: '4px',
                   cursor: 'row-resize',
-                  backgroundColor: isVerticalResizing ? 'primary.main' : 'divider',
+                  backgroundColor: isVerticalResizing ? alpha(theme.palette.primary.main, 0.35) : alpha(theme.palette.divider, 0.9),
+                  borderRadius: '4px',
                   '&:hover': {
-                    backgroundColor: 'primary.light'
+                    backgroundColor: alpha(theme.palette.primary.main, 0.2),
                   },
                   position: 'relative',
                   flexShrink: 0,
@@ -1636,8 +1685,7 @@ const MenuPermissionManagement: React.FC = () => {
                 flexDirection: 'column',
                 overflow: 'hidden'
               }}>
-                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <BusinessIcon fontSize="small" />
+                <Typography component="h3" variant="subtitle2" sx={listSectionTitleSx}>
                   {t('menuPermissionManagement.companies')}
                 </Typography>
                 {dataLoading ? (
@@ -1649,7 +1697,7 @@ const MenuPermissionManagement: React.FC = () => {
                     {companySearchTerm ? t('common.search') : t('menuPermissionManagement.noCompanies')}
                   </Typography>
                 ) : (
-                  <List dense sx={{ flex: 1, overflow: 'auto' }}>
+                  <List dense sx={{ flex: 1, overflow: 'auto', py: 0.5 }}>
                     {filteredCompanies.map((c) => (
                       <ListItemButton
                         key={c.id}
@@ -1660,18 +1708,18 @@ const MenuPermissionManagement: React.FC = () => {
                         }}
                         sx={{
                           mb: 0.5,
-                          borderRadius: 1,
-                          '&.Mui-selected': {
-                            backgroundColor: 'primary.main',
-                            color: 'white',
-                            '&:hover': {
-                              backgroundColor: 'primary.dark',
-                            }
-                          }
+                          borderRadius: '12px',
+                          py: 1,
+                          ...listItemSelectedSx,
                         }}
                       >
-                        <ListItemIcon sx={{ minWidth: 36 }}>
-                          <BusinessIcon sx={{ color: selectedCompanyId === c.id ? 'white' : 'primary.main' }} />
+                        <ListItemIcon sx={{ minWidth: 40 }}>
+                          <BusinessIcon
+                            sx={{
+                              fontSize: '1.25rem',
+                              color: selectedCompanyId === c.id ? 'primary.main' : alpha(theme.palette.text.secondary, 0.85),
+                            }}
+                          />
                         </ListItemIcon>
                         <ListItemText
                           primary={c.name}
@@ -1693,9 +1741,10 @@ const MenuPermissionManagement: React.FC = () => {
           sx={{
             width: '4px',
             cursor: 'col-resize',
-            backgroundColor: isResizing ? 'primary.main' : 'divider',
+            backgroundColor: isResizing ? alpha(theme.palette.primary.main, 0.35) : alpha(theme.palette.divider, 0.9),
+            borderRadius: '4px',
             '&:hover': {
-              backgroundColor: 'primary.light'
+              backgroundColor: alpha(theme.palette.primary.main, 0.2),
             },
             position: 'relative',
             flexShrink: 0,
@@ -1715,19 +1764,30 @@ const MenuPermissionManagement: React.FC = () => {
 
         {/* 오른쪽: 메뉴 권한 트리 */}
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column', ml: 0 }}>
-            <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <Card elevation={0} sx={{ height: '100%', display: 'flex', flexDirection: 'column', ml: 0, ...cardShellSx }}>
+            <CardContent
+              sx={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                minWidth: 0,
+                py: 2.75,
+                px: { xs: 2.25, sm: 2.75 },
+                '&:last-child': { pb: 2.75 },
+              }}
+            >
               <Box sx={{ 
                 display: 'flex', 
                 justifyContent: 'space-between', 
-                alignItems: 'center', 
-                mb: 3,
+                alignItems: 'flex-start', 
+                mb: 2.5,
                 pb: 2,
-                borderBottom: '2px solid',
-                borderColor: 'divider'
+                borderBottom: '1px solid',
+                borderColor: alpha(theme.palette.divider, 0.85),
               }}>
-                <Box>
-                  <Typography variant="h5" sx={{ fontWeight: 600, mb: 0.5 }}>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5, fontSize: '1.0625rem', letterSpacing: '-0.02em' }}>
                     {selectedUserId
                       ? `${users.find(u => u.id === selectedUserId)?.name}의 메뉴 권한`
                       : selectedCompanyId
@@ -1735,12 +1795,9 @@ const MenuPermissionManagement: React.FC = () => {
                       : t('menuPermissionManagement.selectUserOrCompany')}
                   </Typography>
                   {(selectedUserId || selectedCompanyId) && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
-                      <InfoIcon fontSize="small" color="primary" />
-                      <Typography variant="body2" color="text.secondary">
-                        각 권한 박스를 클릭하여 설정하세요
-                      </Typography>
-                    </Box>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, fontSize: '0.8125rem', lineHeight: 1.55 }}>
+                      각 권한 박스를 클릭하여 설정하세요
+                    </Typography>
                   )}
                 </Box>
               </Box>
@@ -1750,51 +1807,95 @@ const MenuPermissionManagement: React.FC = () => {
                   <CircularProgress />
                 </Box>
               ) : menuList.length > 0 && (selectedUserId || selectedCompanyId) ? (
-                <Box sx={{ flex: 1, overflowY: 'auto', pr: 1, maxHeight: 'calc(100vh - 350px)' }}>
-                  {/* 헤더 */}
-                  <Box sx={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    width: '100%', 
-                    pr: 0.5, 
-                    gap: 1.5, 
-                    mb: 1.5,
+                <Box
+                  sx={{
+                    flex: 1,
+                    minWidth: 0,
+                    width: '100%',
+                    maxWidth: '100%',
+                    boxSizing: 'border-box',
+                    overflow: 'auto',
+                    pr: 1.5,
                     pb: 1,
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                    px: 0.5
-                  }}>
-                    <Box sx={{ width: '24px', flexShrink: 0 }} /> {/* 아이콘 공간 */}
-                    <Typography variant="body2" sx={{ minWidth: '250px', maxWidth: '300px', flex: 1, fontWeight: 600, fontSize: '0.8125rem' }}>
-                      {t('menuPermissionManagement.menuName')}
-                    </Typography>
-                    <Typography variant="body2" sx={{ width: '60px', flexShrink: 0, fontWeight: 600, fontSize: '0.8125rem', ml: 2 }}>
-                      {t('menuPermissionManagement.menuOrder')}
-                    </Typography>
-                    <Box sx={{ 
-                      display: 'flex',
-                      gap: 0.25,
-                      alignItems: 'center',
-                      flexShrink: 0,
-                      justifyContent: 'center',
-                      flex: 1,
-                      position: 'relative'
-                    }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8125rem', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
+                    maxHeight: 'calc(100vh - 350px)',
+                  }}
+                >
+                  <Box sx={{ minWidth: 'max-content', width: '100%' }}>
+                    {/* 헤더 — 행과 동일 그리드로 정렬 */}
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: 'auto 76px auto',
+                        columnGap: 2,
+                        alignItems: 'center',
+                        width: '100%',
+                        mb: 1.5,
+                        pb: 1.25,
+                        pr: 0.5,
+                        borderBottom: '1px solid',
+                        borderColor: alpha(theme.palette.divider, 0.75),
+                      }}
+                    >
+                      <Typography
+                        variant="body2"
+                        sx={{ minWidth: '12ch', fontWeight: 600, fontSize: '0.8125rem', letterSpacing: '-0.01em', color: 'text.secondary' }}
+                      >
+                        {t('menuPermissionManagement.menuName')}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          justifySelf: 'end',
+                          width: '100%',
+                          maxWidth: 76,
+                          textAlign: 'center',
+                          fontWeight: 600,
+                          fontSize: '0.8125rem',
+                          letterSpacing: '-0.01em',
+                          color: 'text.secondary',
+                        }}
+                      >
+                        {t('menuPermissionManagement.menuOrder')}
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          justifySelf: 'end',
+                          fontWeight: 600,
+                          fontSize: '0.8125rem',
+                          letterSpacing: '-0.01em',
+                          color: 'text.secondary',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
                         {t('menuPermissionManagement.permissions')}
                       </Typography>
                     </Box>
+                    {renderMenuTree(menuList)}
                   </Box>
-                  {renderMenuTree(menuList)}
                 </Box>
               ) : (
-                <Box sx={{ textAlign: 'center', py: 8, color: 'text.secondary', flex: 1 }}>
-                  <SecurityIcon sx={{ fontSize: 64, mb: 2, opacity: 0.3 }} />
-                  <Typography variant="body1" sx={{ mb: 1, fontWeight: 500 }}>
+                <Box
+                  sx={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
+                    py: 6,
+                    px: 3,
+                    borderRadius: '16px',
+                    border: `1px dashed ${alpha(theme.palette.divider, 0.9)}`,
+                    bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
+                  }}
+                >
+                  <SecurityIcon sx={{ fontSize: 40, mb: 2, opacity: 0.22, color: 'text.secondary' }} />
+                  <Typography variant="body1" sx={{ mb: 0.75, fontWeight: 600, letterSpacing: '-0.01em', color: 'text.primary' }}>
                     {t('menuPermissionManagement.selectUserOrCompany')}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('menuPermissionManagement.selectUserOrCompany')}
+                  <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 320, lineHeight: 1.6, fontSize: '0.8125rem' }}>
+                    {t('menuPermissionManagement.emptyPanelHint')}
                   </Typography>
                 </Box>
               )}
@@ -1809,9 +1910,9 @@ const MenuPermissionManagement: React.FC = () => {
         onClose={() => setDefaultPermissionDialogOpen(false)} 
         maxWidth="sm" 
         fullWidth
+        PaperProps={{ sx: { borderRadius: '20px' } }}
       >
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <AutoAwesomeIcon sx={{ color: 'primary.main' }} />
+        <DialogTitle sx={{ fontSize: '1.125rem', fontWeight: 700, letterSpacing: '-0.02em', pt: 2.5, px: 3 }}>
           기본 권한 설정
         </DialogTitle>
         <DialogContent>
@@ -1834,7 +1935,9 @@ const MenuPermissionManagement: React.FC = () => {
                   mb: 1,
                   justifyContent: 'flex-start',
                   textTransform: 'none',
-                  py: 1.5
+                  py: 1.5,
+                  borderRadius: '12px',
+                  borderColor: alpha(theme.palette.divider, 0.95),
                 }}
               >
                 {users.find(u => u.id === selectedUserId)?.role} 역할 기본 권한 적용
@@ -1868,6 +1971,7 @@ const MenuPermissionManagement: React.FC = () => {
                 justifyContent: 'flex-start',
                 textTransform: 'none',
                 py: 1.5,
+                borderRadius: '12px',
                 borderColor: 'success.main',
                 color: 'success.main',
                 '&:hover': {
@@ -1895,6 +1999,7 @@ const MenuPermissionManagement: React.FC = () => {
                 justifyContent: 'flex-start',
                 textTransform: 'none',
                 py: 1.5,
+                borderRadius: '12px',
                 borderColor: 'info.main',
                 color: 'info.main',
                 '&:hover': {
@@ -1922,6 +2027,7 @@ const MenuPermissionManagement: React.FC = () => {
                 justifyContent: 'flex-start',
                 textTransform: 'none',
                 py: 1.5,
+                borderRadius: '12px',
                 borderColor: 'primary.main',
                 color: 'primary.main',
                 '&:hover': {
@@ -1941,16 +2047,24 @@ const MenuPermissionManagement: React.FC = () => {
             </Button>
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDefaultPermissionDialogOpen(false)}>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDefaultPermissionDialogOpen(false)} sx={{ borderRadius: '12px', textTransform: 'none' }}>
             닫기
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* 권한 위임 다이얼로그 */}
-      <Dialog open={delegationDialogOpen} onClose={() => setDelegationDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>권한 위임</DialogTitle>
+      <Dialog
+        open={delegationDialogOpen}
+        onClose={() => setDelegationDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: '20px' } }}
+      >
+        <DialogTitle sx={{ fontSize: '1.125rem', fontWeight: 700, letterSpacing: '-0.02em', pt: 2.5, px: 3 }}>
+          권한 위임
+        </DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>
             현재 선택된 사용자({users.find(u => u.id === selectedUserId)?.name})의 권한을 다른 사용자에게 위임합니다.
@@ -1963,6 +2077,7 @@ const MenuPermissionManagement: React.FC = () => {
               value={delegationTargetId || ''}
               onChange={(e) => setDelegationTargetId(e.target.value as number)}
               displayEmpty
+              sx={{ borderRadius: '12px' }}
             >
               <MenuItem value="">선택하세요</MenuItem>
               {users.filter(u => u.id !== selectedUserId && u.status === 'active').map((u) => (
@@ -1973,13 +2088,17 @@ const MenuPermissionManagement: React.FC = () => {
             </Select>
           </FormControl>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDelegationDialogOpen(false)}>취소</Button>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button onClick={() => setDelegationDialogOpen(false)} sx={{ borderRadius: '12px', textTransform: 'none' }}>
+            취소
+          </Button>
           <Button
             onClick={handleDelegation}
             variant="contained"
+            disableElevation
             disabled={!delegationTargetId || saving}
-            startIcon={saving ? <CircularProgress size={16} /> : <PersonAddIcon />}
+            startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <PersonAddIcon />}
+            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
           >
             {saving ? '위임 중...' : '위임'}
           </Button>

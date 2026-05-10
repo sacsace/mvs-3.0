@@ -39,21 +39,21 @@ import {
   DialogActions,
   CircularProgress
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import {
-  Receipt as ReceiptIcon,
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Print as PrintIcon,
   TaskAlt as TaskAltIcon,
-  Visibility as VisibilityIcon,
   Send as SendIcon,
   Download as DownloadIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
   ThumbUp as ThumbUpIcon,
-  ThumbDown as ThumbDownIcon
+  ThumbDown as ThumbDownIcon,
+  ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../../store';
@@ -790,8 +790,9 @@ const RegularInvoice: React.FC = () => {
               word-break: keep-all !important;
             }
             .invoice-page .tax-summary-table td {
-              padding-top: 2px !important;
-              padding-bottom: 2px !important;
+              padding-top: 0 !important;
+              padding-bottom: 0 !important;
+              line-height: 1.12 !important;
             }
         `;
         clonedDoc.head.appendChild(style);
@@ -1213,6 +1214,14 @@ const RegularInvoice: React.FC = () => {
     });
   };
 
+  const handleBackToList = () => {
+    if (isCreating || isEditing) {
+      handleCancelEdit();
+      return;
+    }
+    setIsViewing(false);
+  };
+
   const handleDeleteInvoice = (id: number, invoiceNumber?: string, paymentStatus?: string) => {
     if (paymentStatus === 'paid') {
       showSnackbar(tr('정산 완료된 인보이스는 삭제 요청할 수 없습니다.', 'Paid invoices cannot be requested for deletion.'), 'error');
@@ -1491,20 +1500,36 @@ const RegularInvoice: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 0 }}>
+      {isInvoicePageMode && (
+        <Box sx={{ mb: 1.25 }}>
+          <Button
+            variant="text"
+            size="small"
+            startIcon={<ArrowBackIcon fontSize="small" />}
+            onClick={handleBackToList}
+            sx={{ textTransform: 'none', px: 0.5, ml: -0.75, color: 'primary.main', fontWeight: 600 }}
+          >
+            {tr('목록으로', 'Back to list')}
+          </Button>
+        </Box>
+      )}
       {/* ?? */}
       <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <ReceiptIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-          <Typography component="h1" sx={{
-            fontSize: '16px !important',
+        <Typography
+          component="h1"
+          variant="pageTitle"
+          sx={{
             fontWeight: 600,
-            color: 'red',
-            lineHeight: 1.5
-          }}>
-            {tr('일반 세금계산서', 'Regular Tax Invoice')}
-          </Typography>
-        </Box>
+            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
+            letterSpacing: '-0.022em',
+            lineHeight: 1.28,
+            color: 'text.primary',
+            mb: 0.75,
+          }}
+        >
+          {tr('일반 세금계산서', 'Regular Tax Invoice')}
+        </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
           {tr('일반 세금계산서를 생성하고 관리합니다.', 'Create and manage regular invoices.')}
         </Typography>
@@ -1655,8 +1680,9 @@ const RegularInvoice: React.FC = () => {
                                 <Stack spacing={0.4}>
                                   <Typography variant="body2" fontWeight={600}>{issuerCompany.name}</Typography>
                                   <Typography variant="caption" color="text.secondary">{tr('사업자번호', 'Business No.')}: {issuerCompany.business_number || '-'}</Typography>
-                                  <Typography variant="caption" color="text.secondary">GSTIN: {issuerGst || '-'}</Typography>
-                                  <Typography variant="caption" color="text.secondary">PAN: {issuerCompany.pan_number || '-'}</Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    GSTIN: {issuerGst || '-'}, PAN: {issuerCompany.pan_number || '-'}
+                                  </Typography>
                                   {issuerCompany.address && (
                                     <Typography variant="caption" color="text.secondary">{tr('주소', 'Address')}: {issuerCompany.address}</Typography>
                                   )}
@@ -1773,8 +1799,22 @@ const RegularInvoice: React.FC = () => {
                   {isLast && (
                     <>
                       <Card variant="outlined" sx={{ borderColor: 'grey.400' }}>
-                        <CardContent sx={{ p: 2 }}>
-                          <Table size="small" sx={{ width: '100%' }} className="tax-summary-table">
+                        <CardContent sx={{ py: 0.5, px: 1.25, '&:last-child': { pb: 0.5 } }}>
+                          <Table
+                            size="small"
+                            className="tax-summary-table"
+                            sx={{
+                              width: '100%',
+                              borderCollapse: 'collapse',
+                              tableLayout: 'fixed',
+                              '& .MuiTableCell-root': {
+                                py: 0,
+                                px: 1,
+                                fontSize: '0.75rem',
+                                lineHeight: 1.12,
+                              },
+                            }}
+                          >
                             <TableBody>
                               <TableRow sx={{ bgcolor: 'grey.100' }}>
                                 {summaryColumnSx.map((col, idx) => {
@@ -1959,9 +1999,6 @@ const RegularInvoice: React.FC = () => {
             </Box>
 
             <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-              <Button variant="outlined" onClick={() => setIsViewing(false)}>
-                {tr('목록으로', 'Back to list')}
-              </Button>
               {selectedInvoice.payment_status !== 'paid' && (
                 <Button variant="outlined" startIcon={<EditIcon />} onClick={() => handleEditInvoice(selectedInvoice)}>
                   {tr('수정', 'Edit')}
@@ -2100,8 +2137,18 @@ const RegularInvoice: React.FC = () => {
                               Business No.: {issuerCompany.business_number || '-'}
                             </Typography>
                             {issuerGstNumbers.length > 1 ? (
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                <Typography variant="caption" color="text.secondary">GSTIN:</Typography>
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  flexWrap: 'wrap',
+                                  alignItems: 'center',
+                                  columnGap: 0.75,
+                                  rowGap: 0.5,
+                                }}
+                              >
+                                <Typography component="span" variant="caption" color="text.secondary">
+                                  GSTIN:
+                                </Typography>
                                 <FormControl size="small" sx={{ minWidth: 180 }}>
                                   <Select
                                     value={issuerGst || issuerGstNumbers[0]}
@@ -2114,15 +2161,15 @@ const RegularInvoice: React.FC = () => {
                                     ))}
                                   </Select>
                                 </FormControl>
+                                <Typography component="span" variant="caption" color="text.secondary">
+                                  , PAN: {issuerCompany.pan_number || '-'}
+                                </Typography>
                               </Box>
                             ) : (
                               <Typography variant="caption" color="text.secondary">
-                                GSTIN: {issuerGstNumbers[0] || '-'}
+                                GSTIN: {issuerGstNumbers[0] || '-'}, PAN: {issuerCompany.pan_number || '-'}
                               </Typography>
                             )}
-                            <Typography variant="caption" color="text.secondary">
-                              PAN: {issuerCompany.pan_number || '-'}
-                            </Typography>
                             {issuerCompany.address && (
                               <Typography variant="caption" color="text.secondary">Address: {issuerCompany.address}</Typography>
                             )}
@@ -2705,44 +2752,35 @@ const RegularInvoice: React.FC = () => {
 
               {isCreating && (
                 <Grid size={{ xs: 12 }}>
-                  <FormControl fullWidth size="small">
-                    <Typography
-                      variant="body2"
-                      sx={{ mb: 0.5, color: 'text.primary', fontWeight: 600, fontSize: '0.875rem' }}
-                    >
-                      {tr('승인자', 'Approver')} *
-                    </Typography>
-                    <Select<number | ''>
-                      displayEmpty
-                      value={approverUserId === '' ? '' : approverUserId}
-                      onChange={(e: SelectChangeEvent<number | ''>) => {
-                        const raw = e.target.value as string | number | '';
-                        setApproverUserId(raw === '' ? '' : Number(raw));
-                      }}
-                      renderValue={(selected: number | '' | undefined) => {
-                        if (selected === '' || selected === undefined) {
-                          return (
-                            <Typography sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                              {tr('승인자를 선택하세요', 'Select an approver')}
-                            </Typography>
-                          );
-                        }
-                        const u = companyUsers.find((x) => x.id === selected);
-                        return u ? `${u.username} (${u.email})` : String(selected);
-                      }}
-                    >
-                      <MenuItem value="">
-                        <Typography sx={{ color: 'text.secondary', fontWeight: 500 }}>
-                          {tr('승인자를 선택하세요', 'Select an approver')}
-                        </Typography>
-                      </MenuItem>
-                      {companyUsers.map((u) => (
-                        <MenuItem key={u.id} value={u.id}>
-                          {u.username} ({u.email})
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <Typography
+                    variant="body2"
+                    sx={{ mb: 0.5, color: 'text.primary', fontWeight: 600, fontSize: '0.875rem' }}
+                  >
+                    {tr('승인자', 'Approver')} *
+                  </Typography>
+                  <Autocomplete
+                    size="small"
+                    fullWidth
+                    options={companyUsers}
+                    value={
+                      approverUserId === ''
+                        ? null
+                        : companyUsers.find((x) => x.id === approverUserId) ?? null
+                    }
+                    onChange={(_, newValue) => setApproverUserId(newValue?.id ?? '')}
+                    getOptionLabel={(option) =>
+                      option.email ? `${option.username} (${option.email})` : option.username
+                    }
+                    isOptionEqualToValue={(a, b) => a.id === b.id}
+                    noOptionsText={tr('일치하는 사용자가 없습니다.', 'No matching users')}
+                    clearOnEscape
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        placeholder={tr('이름 또는 이메일로 검색', 'Search by name or email')}
+                      />
+                    )}
+                  />
                 </Grid>
               )}
 
@@ -2829,12 +2867,29 @@ const RegularInvoice: React.FC = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {pagedInvoices.map((invoice) => (
+                    {pagedInvoices.map((invoice, rowIdx) => (
                       <TableRow
                         key={invoice.id}
-                        hover
+                        hover={false}
                         onClick={() => handleViewInvoice(invoice)}
-                        sx={{ cursor: 'pointer' }}
+                        sx={(theme) => ({
+                          cursor: 'pointer',
+                          bgcolor:
+                            rowIdx % 2 === 1
+                              ? theme.palette.mode === 'light'
+                                ? alpha(theme.palette.common.black, 0.028)
+                                : alpha(theme.palette.common.white, 0.045)
+                              : 'transparent',
+                          transition: theme.transitions.create('background-color', {
+                            duration: theme.transitions.duration.shorter,
+                          }),
+                          '&:hover': {
+                            bgcolor:
+                              theme.palette.mode === 'light'
+                                ? alpha(theme.palette.primary.main, 0.07)
+                                : alpha(theme.palette.common.white, 0.09),
+                          },
+                        })}
                       >
                         <TableCell>
                           <Typography variant="body2" fontWeight={500}>
@@ -2873,17 +2928,6 @@ const RegularInvoice: React.FC = () => {
                         </TableCell>
                         <TableCell align="center">
                           <Stack direction="row" spacing={0.5} justifyContent="center">
-                            <Tooltip title={tr('보기', 'View')}>
-                              <IconButton
-                                size="small"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void handleViewInvoice(invoice);
-                                }}
-                              >
-                                <VisibilityIcon />
-                              </IconButton>
-                            </Tooltip>
                             {invoice.payment_status !== 'paid' && (
                               <Tooltip
                                 disableHoverListener={isRegularInvoiceExportAllowed(invoice)}
@@ -3031,30 +3075,39 @@ const RegularInvoice: React.FC = () => {
                   'Deletion is not immediate. It will be processed after the approver approves.'
                 )}
           </Typography>
-          <FormControl fullWidth size="small" sx={{ mb: 2 }} required>
-            <InputLabel id="delete-approver-label">{tr('승인 대상', 'Approver')}</InputLabel>
-            <Select
-              labelId="delete-approver-label"
-              label={tr('승인 대상', 'Approver')}
-              value={deleteDialog.approverUserId === '' ? '' : deleteDialog.approverUserId}
-              onChange={(e: SelectChangeEvent<number | ''>) =>
-                setDeleteDialog((d) => ({ ...d, approverUserId: e.target.value as number | '' }))
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 600 }}>
+              {tr('승인 대상', 'Approver')} *
+            </Typography>
+            <Autocomplete
+              size="small"
+              fullWidth
+              options={companyUsers}
+              value={
+                deleteDialog.approverUserId === ''
+                  ? null
+                  : companyUsers.find((x) => x.id === deleteDialog.approverUserId) ?? null
               }
-            >
-              <MenuItem value="">
-                <em>{tr('승인자를 선택하세요', 'Select approver')}</em>
-              </MenuItem>
-              {companyUsers.map((u) => (
-                <MenuItem key={u.id} value={u.id}>
-                  {u.username}
-                  {u.email ? ` (${u.email})` : ''}
-                </MenuItem>
-              ))}
-            </Select>
-            <FormHelperText>
+              onChange={(_, newValue) =>
+                setDeleteDialog((d) => ({ ...d, approverUserId: newValue?.id ?? '' }))
+              }
+              getOptionLabel={(option) =>
+                option.email ? `${option.username} (${option.email})` : option.username
+              }
+              isOptionEqualToValue={(a, b) => a.id === b.id}
+              noOptionsText={tr('일치하는 사용자가 없습니다.', 'No matching users')}
+              clearOnEscape
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  placeholder={tr('이름 또는 이메일로 검색', 'Search by name or email')}
+                />
+              )}
+            />
+            <FormHelperText sx={{ mx: 0 }}>
               {tr('이 요청을 검토·승인할 사용자를 선택하세요.', 'Choose who will review and approve this request.')}
             </FormHelperText>
-          </FormControl>
+          </Box>
           <TextField
             fullWidth
             multiline

@@ -359,17 +359,12 @@ const ProjectManagement: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 0 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
             <FolderIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-            <Typography component="h1" sx={{
-              fontSize: '16px !important',
-              fontWeight: 600,
-              color: 'text.primary',
-              lineHeight: 1.5
-            }}>
+            <Typography component="h1" variant="pageTitle">
               프로젝트 관리
             </Typography>
           </Box>

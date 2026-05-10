@@ -24,11 +24,8 @@ import {
   TableRow,
 } from '@mui/material';
 import {
-  Assessment as AssessmentIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
-  AttachMoney as MoneyIcon,
-  Receipt as ReceiptIcon,
   Download as DownloadIcon,
   Refresh as RefreshIcon,
   AccountBalance as AccountBalanceIcon,
@@ -53,6 +50,7 @@ import {
   ComposedChart,
 } from 'recharts';
 import * as XLSX from 'xlsx';
+import { alpha, useTheme } from '@mui/material/styles';
 import { useStore } from '../../store';
 import { accountingService } from '../../services/api';
 import { UTILS } from '../../constants';
@@ -115,6 +113,7 @@ function TabPanel(props: TabPanelProps) {
 }
 
 const AccountingStatistics: React.FC = () => {
+  const theme = useTheme();
   const { user } = useStore();
   const canSelectCompany = user?.role === 'root' || user?.role === 'audit';
   const [stats, setStats] = useState<AccountingStats>({
@@ -400,38 +399,37 @@ const AccountingStatistics: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 0 }}>
       {/* 헤더 */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <AssessmentIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-            <Typography component="h1" sx={{
-              fontSize: '16px !important',
-              fontWeight: 600,
-              color: 'text.primary',
-              lineHeight: 1.5
-            }}>
-              회계 통계
-            </Typography>
-          </Box>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+          <Typography component="h1" variant="pageTitle" sx={{ fontWeight: 600, letterSpacing: '-0.022em', fontSize: { xs: '1.125rem', sm: '1.3125rem' }, mb: 0.75 }}>
+            회계 통계
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', lineHeight: 1.5, maxWidth: 720 }}>
             수익, 비용, 수익성 등 회계 관련 통계를 종합적으로 분석하세요.
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Button
             variant="outlined"
-            startIcon={<RefreshIcon />}
+            startIcon={<RefreshIcon fontSize="small" />}
             onClick={loadStatistics}
             disabled={loading}
+            sx={{
+              textTransform: 'none',
+              borderRadius: '12px',
+              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.14)' : 'divider',
+            }}
           >
             새로고침
           </Button>
           <Button
             variant="contained"
-            startIcon={<DownloadIcon />}
+            disableElevation
+            startIcon={<DownloadIcon fontSize="small" />}
             onClick={handleDownloadReport}
+            sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}
           >
             보고서 다운로드
           </Button>
@@ -445,8 +443,18 @@ const AccountingStatistics: React.FC = () => {
       )}
 
       {/* 필터 섹션 */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
+      <Card
+        elevation={0}
+        sx={{
+          mb: 3,
+          borderRadius: '16px',
+          border: '1px solid',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+          bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.03),
+          boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : 'none',
+        }}
+      >
+        <CardContent sx={{ py: 2.5, px: 2.5 }}>
           <Grid container spacing={2} alignItems="flex-end">
             {canSelectCompany && (
               <Grid size={{ xs: 12, sm: 6, md: 2 }}>
@@ -555,97 +563,108 @@ const AccountingStatistics: React.FC = () => {
       </Card>
 
       {/* 주요 지표 카드 */}
-      <Grid container spacing={2} sx={{ mb: 3 }} alignItems="stretch">
+      <Grid container spacing={2.5} sx={{ mb: 3 }} alignItems="stretch">
         <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-          <Card sx={{ width: '100%', height: '100%' }}>
-            <CardContent sx={{ height: '100%' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    총 매출 (인보이스 기준)
-                  </Typography>
-                  <Typography variant="h5" fontWeight={600} color="success.main">
-                    {formatCurrency(stats.totalRevenue)}
-                  </Typography>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: 'flex', alignItems: 'center', mt: 0.5, fontSize: '0.72rem', lineHeight: 1.3 }}
-                  >
-                    <TrendingUpIcon sx={{ fontSize: '1rem', mr: 0.5 }} />
-                    수금액 {formatCurrency(stats.collectedRevenue || 0)} | 미수금 {formatCurrency(stats.outstandingRevenue || 0)}
-                  </Typography>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: 'block', mt: 0.25, fontSize: '0.72rem', lineHeight: 1.3 }}
-                  >
-                    참고: 객실예약 {formatCurrency(stats.roomBookingRevenue || 0)} 포함 통합매출은 {formatCurrency(stats.combinedRevenue || stats.totalRevenue)}
-                  </Typography>
-                </Box>
-                <MoneyIcon sx={{ fontSize: 40, color: 'success.main', opacity: 0.3 }} />
-              </Box>
+          <Card
+            elevation={0}
+            sx={{
+              width: '100%',
+              height: '100%',
+              borderRadius: '16px',
+              border: '1px solid',
+              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+              boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
+            }}
+          >
+            <CardContent sx={{ py: 2.25, px: 2.5, height: '100%' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                총 매출 (인보이스 기준)
+              </Typography>
+              <Typography variant="h5" fontWeight={600} color="success.main" sx={{ mt: 0.75, letterSpacing: '-0.02em' }}>
+                {formatCurrency(stats.totalRevenue)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75, fontSize: '0.72rem', lineHeight: 1.35 }}>
+                수금액 {formatCurrency(stats.collectedRevenue || 0)} | 미수금 {formatCurrency(stats.outstandingRevenue || 0)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.35, fontSize: '0.72rem', lineHeight: 1.35 }}>
+                참고: 객실예약 {formatCurrency(stats.roomBookingRevenue || 0)} 포함 통합매출은 {formatCurrency(stats.combinedRevenue || stats.totalRevenue)}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-          <Card sx={{ width: '100%', height: '100%' }}>
-            <CardContent sx={{ height: '100%' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    총 지출
-                  </Typography>
-                  <Typography variant="h5" fontWeight={600} color="error.main">
-                    {formatCurrency(stats.totalExpenses)}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-                    <TrendingDownIcon sx={{ fontSize: '1rem', mr: 0.5 }} />
-                    {stats.expenseGrowth > 0 ? '+' : ''}{stats.expenseGrowth}% 전월 대비
-                  </Typography>
-                </Box>
-                <TrendingDownIcon sx={{ fontSize: 40, color: 'error.main', opacity: 0.3 }} />
-              </Box>
+          <Card
+            elevation={0}
+            sx={{
+              width: '100%',
+              height: '100%',
+              borderRadius: '16px',
+              border: '1px solid',
+              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+              boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
+            }}
+          >
+            <CardContent sx={{ py: 2.25, px: 2.5, height: '100%' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                총 지출
+              </Typography>
+              <Typography variant="h5" fontWeight={600} color="error.main" sx={{ mt: 0.75, letterSpacing: '-0.02em' }}>
+                {formatCurrency(stats.totalExpenses)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                {stats.expenseGrowth > 0 ? '+' : ''}
+                {stats.expenseGrowth}% 전월 대비
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-          <Card sx={{ width: '100%', height: '100%' }}>
-            <CardContent sx={{ height: '100%' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    순이익
-                  </Typography>
-                  <Typography variant="h5" fontWeight={600} color="info.main">
-                    {formatCurrency(stats.netProfit)}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    수익률: {getProfitMargin()}%
-                  </Typography>
-                </Box>
-                <TrendingUpIcon sx={{ fontSize: 40, color: 'info.main', opacity: 0.3 }} />
-              </Box>
+          <Card
+            elevation={0}
+            sx={{
+              width: '100%',
+              height: '100%',
+              borderRadius: '16px',
+              border: '1px solid',
+              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+              boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
+            }}
+          >
+            <CardContent sx={{ py: 2.25, px: 2.5, height: '100%' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                순이익
+              </Typography>
+              <Typography variant="h5" fontWeight={600} color="info.main" sx={{ mt: 0.75, letterSpacing: '-0.02em' }}>
+                {formatCurrency(stats.netProfit)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                수익률: {getProfitMargin()}%
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-          <Card sx={{ width: '100%', height: '100%' }}>
-            <CardContent sx={{ height: '100%' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="body2" color="text.secondary" gutterBottom>
-                    총 인보이스
-                  </Typography>
-                  <Typography variant="h5" fontWeight={600}>
-                    {stats.totalInvoices}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    평균: {formatCurrency(stats.averageInvoiceAmount)}
-                  </Typography>
-                </Box>
-                <ReceiptIcon sx={{ fontSize: 40, color: 'primary.main', opacity: 0.3 }} />
-              </Box>
+          <Card
+            elevation={0}
+            sx={{
+              width: '100%',
+              height: '100%',
+              borderRadius: '16px',
+              border: '1px solid',
+              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+              boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
+            }}
+          >
+            <CardContent sx={{ py: 2.25, px: 2.5, height: '100%' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                총 인보이스
+              </Typography>
+              <Typography variant="h5" fontWeight={600} sx={{ mt: 0.75, letterSpacing: '-0.02em' }}>
+                {stats.totalInvoices}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
+                평균: {formatCurrency(stats.averageInvoiceAmount)}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>

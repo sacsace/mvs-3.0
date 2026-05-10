@@ -16,7 +16,6 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
-  Paper,
   Chip,
   Stack,
   LinearProgress,
@@ -31,9 +30,6 @@ import {
   Alert
 } from '@mui/material';
 import {
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  Inventory as InventoryIcon,
   Warning as WarningIcon,
   CheckCircle as CheckCircleIcon,
   Download as DownloadIcon,
@@ -58,6 +54,7 @@ import {
   Legend
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
+import { alpha, useTheme } from '@mui/material/styles';
 import { inventoryService } from '../../services/api';
 import { UTILS } from '../../constants';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
@@ -178,24 +175,42 @@ function formatTransactionCreator(tx: TxRow): string {
 
 const InventoryReport: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const theme = useTheme();
   const locale = i18n.language?.startsWith('en') ? 'en-US' : 'ko-KR';
   const sortLocale = i18n.language?.startsWith('en') ? 'en' : 'ko';
   const menuFlags = useMenuRoutePermissionFlags(INVENTORY_REPORT_MENU_ROUTES);
 
   const getStatusInfo = useCallback(
     (product: ProductReport) => {
+      const is = { fontSize: '0.875rem' as const };
       if (product.currentStock === 0) {
-        return { label: t('inventoryStatus.rowStatus.outOfStock'), color: 'error' as const, icon: <ErrorIcon /> };
+        return {
+          label: t('inventoryStatus.rowStatus.outOfStock'),
+          chipTone: 'error' as const,
+          icon: <ErrorIcon sx={{ ...is, color: alpha(theme.palette.error.main, 0.85) }} />,
+        };
       }
       if (product.minStock > 0 && product.currentStock <= product.minStock) {
-        return { label: t('inventoryStatus.rowStatus.lowStock'), color: 'warning' as const, icon: <WarningIcon /> };
+        return {
+          label: t('inventoryStatus.rowStatus.lowStock'),
+          chipTone: 'warning' as const,
+          icon: <WarningIcon sx={{ ...is, color: alpha(theme.palette.warning.main, 0.9) }} />,
+        };
       }
       if (product.maxStock > 0 && product.currentStock >= product.maxStock * 0.9) {
-        return { label: t('inventoryStatus.rowStatus.overstock'), color: 'info' as const, icon: <WarningIcon /> };
+        return {
+          label: t('inventoryStatus.rowStatus.overstock'),
+          chipTone: 'info' as const,
+          icon: <WarningIcon sx={{ ...is, color: alpha(theme.palette.info.main, 0.88) }} />,
+        };
       }
-      return { label: t('inventoryStatus.rowStatus.normal'), color: 'success' as const, icon: <CheckCircleIcon /> };
+      return {
+        label: t('inventoryStatus.rowStatus.normal'),
+        chipTone: 'success' as const,
+        icon: <CheckCircleIcon sx={{ ...is, color: alpha(theme.palette.success.main, 0.85) }} />,
+      };
     },
-    [t]
+    [t, theme]
   );
 
   const formatTxTypeChip = useCallback(
@@ -423,22 +438,89 @@ const InventoryReport: React.FC = () => {
     return { level: 'normal' as const, barValue, displayPercent: rawPct };
   };
 
+  const softChipSx = (tone: 'default' | 'info' | 'warning' | 'success' | 'error' | 'primary' | 'secondary') => {
+    const light = theme.palette.mode === 'light';
+    if (tone === 'default') {
+      return {
+        height: 26,
+        borderRadius: '8px',
+        fontWeight: 600,
+        fontSize: '0.6875rem',
+        border: `1px solid ${light ? 'rgba(15, 23, 42, 0.12)' : theme.palette.divider}`,
+        bgcolor: light ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.06),
+        color: 'text.secondary',
+      } as const;
+    }
+    const main =
+      tone === 'primary'
+        ? theme.palette.primary.main
+        : tone === 'secondary'
+          ? theme.palette.secondary.main
+          : theme.palette[tone].main;
+    const dark =
+      tone === 'primary'
+        ? theme.palette.primary.dark
+        : tone === 'secondary'
+          ? theme.palette.secondary.dark
+          : theme.palette[tone].dark;
+    return {
+      height: 26,
+      borderRadius: '8px',
+      fontWeight: 600,
+      fontSize: '0.6875rem',
+      border: `1px solid ${alpha(main, light ? 0.3 : 0.42)}`,
+      bgcolor: alpha(main, light ? 0.08 : 0.12),
+      color: dark,
+    } as const;
+  };
+
+  const txTypeChipSx = (c: 'default' | 'success' | 'error' | 'warning' | 'info') => {
+    if (c === 'success') return softChipSx('success');
+    if (c === 'error') return softChipSx('error');
+    if (c === 'warning') return softChipSx('warning');
+    if (c === 'info') return softChipSx('info');
+    return softChipSx('default');
+  };
+
+  const kpiCardSx = {
+    borderRadius: '16px',
+    border: '1px solid',
+    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+    boxShadow:
+      theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
+    bgcolor: 'background.paper',
+  } as const;
+
+  const outlineToolbarBtnSx = {
+    textTransform: 'none' as const,
+    borderRadius: '12px',
+    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.14)' : 'divider',
+    color: 'text.primary',
+    '&:hover': {
+      borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.22)' : theme.palette.grey[500],
+      bgcolor: 'action.hover',
+    },
+  };
+
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 0 }}>
       {/* 헤더 */}
       <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <InventoryIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-          <Typography component="h1" sx={{
-            fontSize: '16px !important',
+        <Typography
+          component="h1"
+          variant="pageTitle"
+          sx={{
             fontWeight: 600,
+            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
+            letterSpacing: '-0.022em',
+            lineHeight: 1.28,
             color: 'text.primary',
-            lineHeight: 1.5
-          }}>
-            {t('inventoryReport.pageTitle')}
-          </Typography>
-        </Box>
-        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+            mb: 0.75,
+          }}
+        >
+          {t('inventoryReport.pageTitle')}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', lineHeight: 1.5, maxWidth: 720 }}>
           {t('inventoryReport.pageSubtitle')}
         </Typography>
       </Box>
@@ -456,10 +538,20 @@ const InventoryReport: React.FC = () => {
       ) : null}
 
       {/* 필터 및 액션 */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
-            <Stack direction="row" spacing={2}>
+      <Card
+        elevation={0}
+        sx={{
+          mb: 3,
+          borderRadius: '16px',
+          border: '1px solid',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+          bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.03),
+          boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : 'none',
+        }}
+      >
+        <CardContent sx={{ py: 2.5, px: 2.5 }}>
+          <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
+            <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
               <FormControl size="small" sx={{ minWidth: 120 }} disabled={menuFlags.menusLoading || !menuFlags.canRead}>
                 <InputLabel>{t('inventoryReport.periodLabel')}</InputLabel>
                 <Select
@@ -489,26 +581,30 @@ const InventoryReport: React.FC = () => {
                 </Select>
               </FormControl>
             </Stack>
-            <Stack direction="row" spacing={1}>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               <Button
                 variant="outlined"
-                startIcon={<RefreshIcon />}
+                startIcon={<RefreshIcon fontSize="small" />}
                 onClick={loadReportData}
                 disabled={loading || menuFlags.menusLoading || !menuFlags.canRead}
+                sx={outlineToolbarBtnSx}
               >
                 {t('inventoryReport.refresh')}
               </Button>
               <Button
                 variant="outlined"
-                startIcon={<PrintIcon />}
+                startIcon={<PrintIcon fontSize="small" />}
                 disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                sx={outlineToolbarBtnSx}
               >
                 {t('inventoryReport.print')}
               </Button>
               <Button
                 variant="contained"
-                startIcon={<DownloadIcon />}
+                disableElevation
+                startIcon={<DownloadIcon fontSize="small" />}
                 disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}
               >
                 {t('inventoryReport.downloadReport')}
               </Button>
@@ -518,88 +614,67 @@ const InventoryReport: React.FC = () => {
       </Card>
 
       {/* 주요 지표 카드 */}
-      <Box sx={{ 
-        display: 'grid',
-        gridTemplateColumns: {
-          xs: '1fr',
-          md: 'repeat(4, 1fr)'
-        },
-        gap: 3,
-        mb: 3
-      }}>
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Box>
-                <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                  {t('inventoryReport.statsTotalProducts')}
-                </Typography>
-                <Typography variant="h4" fontWeight={600}>
-                  {loading ? '…' : stats.totalProducts}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  <CheckCircleIcon sx={{ fontSize: '1rem', mr: 0.5 }} />
-                  {t('inventoryReport.statsActiveProducts')}
-                </Typography>
-              </Box>
-              <InventoryIcon sx={{ fontSize: '2rem', color: 'primary.main', opacity: 0.7 }} />
-            </Box>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: {
+            xs: '1fr',
+            md: 'repeat(4, 1fr)',
+          },
+          gap: 2.5,
+          mb: 3,
+        }}
+      >
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+              {t('inventoryReport.statsTotalProducts')}
+            </Typography>
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
+              {loading ? '…' : stats.totalProducts}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              {t('inventoryReport.statsActiveProducts')}
+            </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Box>
-                <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                  {t('inventoryReport.statsTotalValue')}
-                </Typography>
-                <Typography variant="h4" fontWeight={600} color="success.main">
-                  {loading ? '…' : formatCurrency(stats.totalValue)}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  <TrendingUpIcon sx={{ fontSize: '1rem', mr: 0.5 }} />
-                  {t('inventoryReport.statsTotalValueHint')}
-                </Typography>
-              </Box>
-              <TrendingUpIcon sx={{ fontSize: '2rem', color: 'success.main', opacity: 0.7 }} />
-            </Box>
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+              {t('inventoryReport.statsTotalValue')}
+            </Typography>
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
+              {loading ? '…' : formatCurrency(stats.totalValue)}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              {t('inventoryReport.statsTotalValueHint')}
+            </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Box>
-                <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                  {t('inventoryReport.statsLowStock')}
-                </Typography>
-                <Typography variant="h4" fontWeight={600} color="warning.main">
-                  {loading ? '…' : stats.lowStockItems}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  <WarningIcon sx={{ fontSize: '1rem', mr: 0.5 }} />
-                  {t('inventoryReport.statsLowStockHint')}
-                </Typography>
-              </Box>
-              <WarningIcon sx={{ fontSize: '2rem', color: 'warning.main', opacity: 0.7 }} />
-            </Box>
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+              {t('inventoryReport.statsLowStock')}
+            </Typography>
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'warning.main' }}>
+              {loading ? '…' : stats.lowStockItems}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              {t('inventoryReport.statsLowStockHint')}
+            </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Box>
-                <Typography color="text.secondary" gutterBottom variant="subtitle2">
-                  {t('inventoryReport.statsAvgTurnover')}
-                </Typography>
-                <Typography variant="h4" fontWeight={600} color="info.main">
-                  {loading ? '…' : `${stats.averageTurnover}x`}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {t('inventoryReport.statsAvgTurnoverHint')}
-                </Typography>
-              </Box>
-              <TrendingDownIcon sx={{ fontSize: '2rem', color: 'info.main', opacity: 0.7 }} />
-            </Box>
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+              {t('inventoryReport.statsAvgTurnover')}
+            </Typography>
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'info.main' }}>
+              {loading ? '…' : `${stats.averageTurnover}x`}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              {t('inventoryReport.statsAvgTurnoverHint')}
+            </Typography>
           </CardContent>
         </Card>
       </Box>
@@ -713,10 +788,36 @@ const InventoryReport: React.FC = () => {
       </Grid>
 
       {/* 상세 재고 현황 테이블 */}
-      <Card>
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 2 }}>
-            <Typography variant="h6">{t('inventoryReport.detailTableTitle')}</Typography>
+      <Card
+        elevation={0}
+        sx={{
+          borderRadius: '20px',
+          border: '1px solid',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+          boxShadow:
+            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
+          bgcolor: 'background.paper',
+          overflow: 'hidden',
+        }}
+      >
+        <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 2,
+              px: 2.5,
+              pt: 2.5,
+              pb: 2,
+              borderBottom: '1px solid',
+              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : 'divider',
+            }}
+          >
+            <Typography variant="subtitle1" sx={{ fontWeight: 600, letterSpacing: '-0.01em', color: 'text.primary' }}>
+              {t('inventoryReport.detailTableTitle')}
+            </Typography>
             <TextField
               size="small"
               placeholder={t('inventoryReport.searchPlaceholder')}
@@ -726,11 +827,20 @@ const InventoryReport: React.FC = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon sx={{ color: 'text.secondary' }} />
+                    <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
                   </InputAdornment>
-                )
+                ),
               }}
-              sx={{ minWidth: 260 }}
+              sx={{
+                minWidth: 260,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '12px',
+                  bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.03)' : alpha(theme.palette.common.white, 0.04),
+                  '& fieldset': {
+                    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : 'divider',
+                  },
+                },
+              }}
             />
           </Box>
           {loading ? (
@@ -738,26 +848,38 @@ const InventoryReport: React.FC = () => {
               <CircularProgress />
             </Box>
           ) : filteredProducts.length === 0 ? (
-            <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
+            <Typography color="text.secondary" sx={{ py: 4, px: 2.5, textAlign: 'center' }}>
               {t('inventoryReport.emptyFiltered')}
             </Typography>
           ) : (
-            <TableContainer component={Paper} variant="outlined">
-              <Table size="small">
+            <TableContainer sx={{ bgcolor: 'transparent' }}>
+              <Table
+                size="small"
+                sx={{
+                  borderCollapse: 'collapse',
+                  '& .MuiTableCell-root': {
+                    borderLeft: 'none',
+                    borderRight: 'none',
+                    borderTop: 'none',
+                  },
+                }}
+              >
                 <TableHead
                   sx={{
-                    bgcolor: 'background.paper',
                     '& .MuiTableCell-head': {
-                      bgcolor: 'background.paper',
-                      color: 'text.primary',
+                      bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
+                      color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
                       fontWeight: 600,
-                      fontSize: '0.875rem',
+                      fontSize: '0.75rem',
                       textTransform: 'none',
-                      letterSpacing: 'normal',
-                      borderBottom: '2px solid',
-                      borderColor: 'primary.main',
-                      py: 1.25
-                    }
+                      letterSpacing: '0.01em',
+                      borderBottom: `1px solid ${
+                        theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
+                      }`,
+                      py: 1.5,
+                      px: 2,
+                      '& .MuiTableSortLabel-root': { color: 'inherit' },
+                    },
                   }}
                 >
                   <TableRow>
@@ -873,7 +995,21 @@ const InventoryReport: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 </TableHead>
-                <TableBody>
+                <TableBody
+                  sx={{
+                    '& .MuiTableCell-body': {
+                      py: 1.5,
+                      px: 2,
+                      fontSize: '0.875rem',
+                      borderBottom: `1px solid ${
+                        theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
+                      }`,
+                    },
+                    '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
+                      borderBottom: 'none',
+                    },
+                  }}
+                >
                   {sortedFilteredProducts.map((product) => {
                     const stockLevel = getStockLevel(product.currentStock, product.minStock, product.maxStock);
                     const statusInfo = getStatusInfo(product);
@@ -887,7 +1023,9 @@ const InventoryReport: React.FC = () => {
                         onClick={menuFlags.canRead ? () => void openTxDialog(product) : undefined}
                         sx={{
                           cursor: menuFlags.canRead ? 'pointer' : 'default',
-                          '&:active': { bgcolor: menuFlags.canRead ? 'action.selected' : undefined }
+                          transition: 'background-color 0.15s ease',
+                          '&:hover': { bgcolor: 'action.hover' },
+                          '&:active': { bgcolor: menuFlags.canRead ? 'action.selected' : undefined },
                         }}
                       >
                         <TableCell>
@@ -922,7 +1060,14 @@ const InventoryReport: React.FC = () => {
                                     ? 'warning'
                                     : 'success'
                               }
-                              sx={{ mb: 0.5 }}
+                              sx={{
+                                mb: 0.5,
+                                height: 6,
+                                borderRadius: '4px',
+                                bgcolor:
+                                  theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.08),
+                                '& .MuiLinearProgress-bar': { borderRadius: '4px' },
+                              }}
                             />
                             <Typography variant="caption">
                               {stockLevel.displayPercent == null
@@ -948,7 +1093,15 @@ const InventoryReport: React.FC = () => {
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          <Chip icon={statusInfo.icon} label={statusInfo.label} color={statusInfo.color} size="small" />
+                          <Chip
+                            icon={statusInfo.icon}
+                            label={statusInfo.label}
+                            size="small"
+                            sx={{
+                              ...softChipSx(statusInfo.chipTone),
+                              '& .MuiChip-icon': { color: 'inherit', opacity: 0.92, ml: '6px' },
+                            }}
+                          />
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
@@ -997,22 +1150,23 @@ const InventoryReport: React.FC = () => {
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
                 {t('inventoryStatus.txDialog.totalShown', { total: txTotal })}
               </Typography>
-              <TableContainer component={Paper} variant="outlined">
+              <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '12px', overflow: 'hidden' }}>
                 <Table size="small">
                   <TableHead
                     sx={{
-                      bgcolor: 'background.paper',
                       '& .MuiTableCell-head': {
-                        bgcolor: 'background.paper',
-                        color: 'text.primary',
+                        bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
+                        color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
                         fontWeight: 600,
-                        fontSize: '0.875rem',
+                        fontSize: '0.75rem',
                         textTransform: 'none',
-                        letterSpacing: 'normal',
-                        borderBottom: '2px solid',
-                        borderColor: 'primary.main',
-                        py: 1.25
-                      }
+                        letterSpacing: '0.01em',
+                        borderBottom: `1px solid ${
+                          theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
+                        }`,
+                        py: 1.25,
+                        px: 1.5,
+                      },
                     }}
                   >
                     <TableRow>
@@ -1038,7 +1192,7 @@ const InventoryReport: React.FC = () => {
                               : '—'}
                           </TableCell>
                           <TableCell>
-                            <Chip size="small" label={tinfo.label} color={tinfo.color} variant="outlined" />
+                            <Chip size="small" label={tinfo.label} sx={txTypeChipSx(tinfo.color)} />
                           </TableCell>
                           <TableCell sx={{ whiteSpace: 'nowrap' }}>{formatTransactionCreator(tx)}</TableCell>
                           <TableCell align="right">{qty.toLocaleString(locale)}</TableCell>
@@ -1055,7 +1209,12 @@ const InventoryReport: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={closeTxDialog} variant="contained">
+          <Button
+            onClick={closeTxDialog}
+            variant="contained"
+            disableElevation
+            sx={{ textTransform: 'none', borderRadius: '12px', px: 2.5 }}
+          >
             {t('inventoryStatus.txDialog.close')}
           </Button>
         </DialogActions>

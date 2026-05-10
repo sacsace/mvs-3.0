@@ -22,8 +22,14 @@ import {
   DialogActions,
   Link
 } from '@mui/material';
-import { Assessment as AssessmentIcon, Refresh as RefreshIcon } from '@mui/icons-material';
+import { Refresh as RefreshIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { useTheme, alpha } from '@mui/material/styles';
+import {
+  mvsFilterToolbarSx,
+  mvsInnerCardSx,
+  mvsTitleBlockSx,
+} from '../../theme/mvsLayout';
 import { attendanceService } from '../../services/api';
 import { useStore } from '../../store';
 
@@ -99,8 +105,12 @@ function displayClockCell(
 }
 
 const AttendanceStatistics: React.FC = () => {
+  const theme = useTheme();
   const { t } = useTranslation();
   const { user } = useStore();
+  const inkFg = theme.palette.mode === 'dark' ? theme.palette.common.white : theme.palette.common.black;
+  const labelColor = theme.palette.mode === 'dark' ? inkFg : 'text.secondary';
+  const valueColor = theme.palette.mode === 'dark' ? inkFg : 'text.primary';
   const canSeeCompanyAttendance = ['admin', 'root', 'audit'].includes(String(user?.role || ''));
   const now = new Date();
   const [startDate, setStartDate] = useState(formatYmd(startOfMonth(now)));
@@ -221,259 +231,445 @@ const AttendanceStatistics: React.FC = () => {
     };
   }, [aggregates, rows.length]);
 
+  const fieldPaperSx = {
+    borderRadius: '12px',
+    bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'background.paper',
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '12px',
+      minHeight: 44,
+      '& fieldset': {
+        borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : undefined,
+      },
+    },
+  };
+
+  const kpiCards = [
+    { key: 'people', label: t('attendanceStatistics.cards.people'), value: totals.people, valueSx: { color: valueColor } },
+    { key: 'records', label: t('attendanceStatistics.cards.records'), value: totals.records, valueSx: { color: valueColor } },
+    {
+      key: 'hours',
+      label: t('attendanceStatistics.cards.totalHours'),
+      value: totals.totalHours.toFixed(1),
+      valueSx: { color: valueColor },
+    },
+    {
+      key: 'late',
+      label: t('attendanceStatistics.cards.late'),
+      value: totals.late,
+      valueSx: { color: 'warning.dark' },
+    },
+    {
+      key: 'absent',
+      label: t('attendanceStatistics.cards.absent'),
+      value: totals.absent,
+      valueSx: { color: 'error.dark' },
+    },
+  ] as const;
+
+  const softTableHeadSx = {
+    bgcolor:
+      theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
+    '& .MuiTableCell-head': {
+      bgcolor:
+        theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
+      color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
+      fontWeight: 600,
+      fontSize: '0.75rem',
+      letterSpacing: '0.01em',
+      borderBottom: `1px solid ${
+        theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
+      }`,
+      borderTop: 'none',
+      py: 1.5,
+      px: 2,
+    },
+  };
+
   return (
-    <Box sx={{ p: 3, maxWidth: 1400, mx: 'auto' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-        <AssessmentIcon color="primary" />
-        <Typography variant="h6" component="h1">
-          {t('attendanceStatistics.title')}
-        </Typography>
-      </Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        {t('attendanceStatistics.description')}
-      </Typography>
-
-      <Card variant="outlined" sx={{ mb: 3 }}>
-        <CardContent>
-          <Grid container spacing={2} alignItems="center">
-            <Grid size={{ xs: 12, sm: 4 }}>
-              <TextField
-                fullWidth
-                type="date"
-                label={t('attendanceStatistics.startDate')}
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 4 }}>
-              <TextField
-                fullWidth
-                type="date"
-                label={t('attendanceStatistics.endDate')}
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 4 }}>
-              <Button
-                variant="contained"
-                startIcon={<RefreshIcon />}
-                onClick={load}
-                disabled={loading}
-                fullWidth
-              >
-                {t('attendanceStatistics.refresh')}
-              </Button>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
+    <Box sx={{ width: '100%', maxWidth: '100%' }}>
       <Box
         sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(3, 1fr)', md: 'repeat(5, 1fr)' },
-          gap: 2,
-          mb: 3
+          ...mvsTitleBlockSx,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 0.75,
         }}
       >
-        <Card>
-          <CardContent>
-            <Typography color="text.secondary" variant="body2">
-              {t('attendanceStatistics.cards.people')}
-            </Typography>
-            <Typography variant="h5">{totals.people}</Typography>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <Typography color="text.secondary" variant="body2">
-              {t('attendanceStatistics.cards.records')}
-            </Typography>
-            <Typography variant="h5">{totals.records}</Typography>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <Typography color="text.secondary" variant="body2">
-              {t('attendanceStatistics.cards.totalHours')}
-            </Typography>
-            <Typography variant="h5">{totals.totalHours.toFixed(1)}</Typography>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <Typography color="text.secondary" variant="body2">
-              {t('attendanceStatistics.cards.late')}
-            </Typography>
-            <Typography variant="h5" color="warning.main">
-              {totals.late}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent>
-            <Typography color="text.secondary" variant="body2">
-              {t('attendanceStatistics.cards.absent')}
-            </Typography>
-            <Typography variant="h5" color="error.main">
-              {totals.absent}
-            </Typography>
-          </CardContent>
-        </Card>
+        <Typography
+          component="h1"
+          variant="pageTitle"
+          sx={{
+            color: valueColor,
+            mb: 0,
+            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
+            fontWeight: 600,
+            letterSpacing: '-0.022em',
+            lineHeight: 1.28,
+          }}
+        >
+          {t('attendanceStatistics.title')}
+        </Typography>
+        <Typography
+          variant="body2"
+          sx={{
+            fontSize: '0.8125rem',
+            lineHeight: 1.55,
+            color: labelColor,
+            maxWidth: 720,
+          }}
+        >
+          {t('attendanceStatistics.description')}
+        </Typography>
       </Box>
 
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <>
-          <TableContainer
-            component={Paper}
-            variant="outlined"
+      <Card
+        elevation={0}
+        sx={{
+          borderRadius: '20px',
+          border: '1px solid',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+          boxShadow:
+            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
+          bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'background.paper',
+          overflow: 'hidden',
+        }}
+      >
+        <CardContent sx={{ py: 3, px: 3, display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2.5 }} onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
+
+          <Box
             sx={{
-              borderTopLeftRadius: 8,
-              borderTopRightRadius: 8,
-              overflow: 'hidden'
+              ...mvsFilterToolbarSx,
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'flex-end',
+              gap: 2,
+              marginBottom: 0,
+              backgroundColor:
+                theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.06) : alpha(theme.palette.common.black, 0.03),
             }}
           >
-            <Table size="small" sx={{ borderCollapse: 'collapse' }}>
-              <TableHead>
-                <TableRow
+            <Grid container spacing={2} alignItems="flex-end" sx={{ width: '100%', m: 0 }}>
+              <Grid size={{ xs: 12, sm: 6, md: 'grow' }}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label={t('attendanceStatistics.startDate')}
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  size="small"
+                  sx={fieldPaperSx}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 'grow' }}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label={t('attendanceStatistics.endDate')}
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  size="small"
+                  sx={fieldPaperSx}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 'auto' }} sx={{ display: 'flex', justifyContent: { xs: 'stretch', md: 'flex-end' } }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  disableElevation
+                  startIcon={<RefreshIcon sx={{ fontSize: 18 }} />}
+                  onClick={load}
+                  disabled={loading}
                   sx={{
-                    '& .MuiTableCell-head': {
-                      backgroundColor: '#F5F6F8',
-                      color: '#64748B',
-                      fontWeight: 700,
-                      fontSize: '0.8125rem',
-                      py: 1.25,
-                      borderBottom: '1px solid #E2E8F0',
-                      borderRight: 'none',
-                      borderLeft: 'none',
-                      borderTop: 'none',
-                      whiteSpace: 'nowrap'
-                    }
+                    minHeight: 44,
+                    px: 3,
+                    borderRadius: '12px',
+                    fontWeight: 600,
+                    textTransform: 'none',
+                    boxShadow: 'none',
+                    width: { xs: '100%', md: 'auto' },
                   }}
                 >
-                  <TableCell>{t('attendanceStatistics.table.name')}</TableCell>
-                  <TableCell>{t('attendanceStatistics.table.department')}</TableCell>
-                  <TableCell align="right">{t('attendanceStatistics.table.records')}</TableCell>
-                  <TableCell align="right">{t('attendanceStatistics.table.totalHours')}</TableCell>
-                  <TableCell align="right">{t('attendanceStatistics.table.normal')}</TableCell>
-                  <TableCell align="right">{t('attendanceStatistics.table.late')}</TableCell>
-                  <TableCell align="right">{t('attendanceStatistics.table.absent')}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {aggregates.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} align="center">
-                      {t('attendanceStatistics.empty')}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  aggregates.map((r) => (
-                    <TableRow key={r.userId} hover>
-                      <TableCell>
-                        <Link
-                          component="button"
-                          type="button"
-                          variant="body2"
-                          onClick={() => openDetail(r)}
-                          sx={{
-                            cursor: 'pointer',
-                            fontWeight: 600,
-                            textAlign: 'left',
-                            verticalAlign: 'baseline',
-                            border: 'none',
-                            background: 'none',
-                            p: 0,
-                            '&:hover': { textDecoration: 'underline' }
-                          }}
-                        >
-                          {r.name}
-                        </Link>
-                      </TableCell>
-                      <TableCell>{r.department}</TableCell>
-                      <TableCell align="right">{r.recordCount}</TableCell>
-                      <TableCell align="right">{r.totalHours.toFixed(2)}</TableCell>
-                      <TableCell align="right">{r.normalCount}</TableCell>
-                      <TableCell align="right">{r.lateCount}</TableCell>
-                      <TableCell align="right">{r.absentCount}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                  {t('attendanceStatistics.refresh')}
+                </Button>
+              </Grid>
+            </Grid>
+          </Box>
 
-          <Dialog open={detailOpen} onClose={closeDetail} maxWidth="md" fullWidth scroll="paper">
-            <DialogTitle>
-              {t('attendanceStatistics.detail.dialogTitle', { name: detailUserName || '—' })}
-            </DialogTitle>
-            <DialogContent dividers>
-              {detailRows.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  {t('attendanceStatistics.detail.empty')}
-                </Typography>
-              ) : (
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
+          <Box
+            sx={{
+              mt: 2.5,
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(3, 1fr)', md: 'repeat(5, 1fr)' },
+              gap: 2,
+            }}
+          >
+            {kpiCards.map((item) => (
+              <Card
+                key={item.key}
+                elevation={0}
+                sx={{
+                  ...mvsInnerCardSx,
+                  p: 0,
+                  overflow: 'hidden',
+                  bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'background.paper',
+                  border: '1px solid',
+                  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+                  boxShadow:
+                    theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
+                }}
+              >
+                <CardContent sx={{ py: 2, px: 2.25 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: labelColor,
+                      display: 'block',
+                      fontWeight: 600,
+                      letterSpacing: '0.02em',
+                      mb: 1,
+                    }}
+                  >
+                    {item.label}
+                  </Typography>
+                  <Typography variant="kpiNumber" sx={item.valueSx}>
+                    {item.value}
+                  </Typography>
+                </CardContent>
+              </Card>
+            ))}
+          </Box>
+
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6, mt: 2.5 }}>
+              <CircularProgress size={32} />
+            </Box>
+          ) : (
+            <>
+              <Box sx={{ mt: 2.5 }}>
+                <TableContainer
+                  component={Paper}
+                  elevation={0}
+                  sx={{
+                    borderRadius: 0,
+                    overflow: 'visible',
+                    border: 'none',
+                    boxShadow: 'none',
+                    bgcolor: 'transparent',
+                  }}
+                >
+                  <Table
+                    size="small"
+                    sx={{
+                      borderCollapse: 'collapse',
+                      '& .MuiTableCell-root': {
+                        borderLeft: 'none',
+                        borderRight: 'none',
+                        borderTop: 'none',
+                      },
+                    }}
+                  >
+                    <TableHead sx={softTableHeadSx}>
                       <TableRow>
-                        <TableCell>{t('attendanceStatistics.detail.date')}</TableCell>
-                        <TableCell>{t('attendanceStatistics.detail.checkIn')}</TableCell>
-                        <TableCell>{t('attendanceStatistics.detail.checkOut')}</TableCell>
-                        <TableCell align="right">{t('attendanceStatistics.detail.workHours')}</TableCell>
-                        <TableCell>{t('attendanceStatistics.detail.status')}</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {detailRows.map((row) => (
-                        <TableRow key={row.id}>
-                          <TableCell>{rowDateYmd(row.date)}</TableCell>
-                          <TableCell>
-                            {displayClockCell(
-                              row.check_in_display,
-                              row.check_in_local,
-                              row.check_in ?? null
-                            )}
+                          <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('attendanceStatistics.table.name')}</TableCell>
+                          <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('attendanceStatistics.table.department')}</TableCell>
+                          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                            {t('attendanceStatistics.table.records')}
                           </TableCell>
-                          <TableCell>
-                            {displayClockCell(
-                              row.check_out_display,
-                              row.check_out_local,
-                              row.check_out ?? null
-                            )}
+                          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                            {t('attendanceStatistics.table.totalHours')}
                           </TableCell>
-                          <TableCell align="right">
-                            {row.work_hours != null ? Number(row.work_hours).toFixed(2) : '—'}
+                          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                            {t('attendanceStatistics.table.normal')}
                           </TableCell>
-                          <TableCell>{statusLabel(row.status)}</TableCell>
+                          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                            {t('attendanceStatistics.table.late')}
+                          </TableCell>
+                          <TableCell align="right" sx={{ whiteSpace: 'nowrap' }}>
+                            {t('attendanceStatistics.table.absent')}
+                          </TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
+                    </TableHead>
+                      <TableBody
+                        sx={{
+                          '& .MuiTableCell-body': {
+                            color: valueColor,
+                            py: 1.5,
+                            px: 2,
+                            fontSize: '0.875rem',
+                            borderBottom: `1px solid ${
+                              theme.palette.mode === 'light'
+                                ? 'rgba(15, 23, 42, 0.06)'
+                                : theme.palette.divider
+                            }`,
+                          },
+                          '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
+                            borderBottom: 'none',
+                          },
+                        }}
+                      >
+                        {aggregates.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                              <Typography variant="body2" sx={{ color: labelColor }}>
+                                {t('attendanceStatistics.empty')}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          aggregates.map((r) => (
+                            <TableRow
+                              key={r.userId}
+                              hover
+                              sx={{
+                                '&:hover': { bgcolor: 'action.hover' },
+                              }}
+                            >
+                              <TableCell>
+                                <Link
+                                  component="button"
+                                  type="button"
+                                  variant="body2"
+                                  onClick={() => openDetail(r)}
+                                  sx={{
+                                    cursor: 'pointer',
+                                    fontWeight: 600,
+                                    textAlign: 'left',
+                                    verticalAlign: 'baseline',
+                                    border: 'none',
+                                    background: 'none',
+                                    p: '2px 6px',
+                                    m: '-2px -6px',
+                                    borderRadius: '8px',
+                                    color: 'text.primary',
+                                    textDecoration: 'none',
+                                    '&:hover': {
+                                      textDecoration: 'underline',
+                                      textDecorationColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.35)' : undefined,
+                                      textUnderlineOffset: '3px',
+                                      bgcolor: 'transparent',
+                                    },
+                                  }}
+                                >
+                                  {r.name}
+                                </Link>
+                              </TableCell>
+                              <TableCell>{r.department}</TableCell>
+                              <TableCell align="right">{r.recordCount}</TableCell>
+                              <TableCell align="right">{r.totalHours.toFixed(2)}</TableCell>
+                              <TableCell align="right">{r.normalCount}</TableCell>
+                              <TableCell align="right">{r.lateCount}</TableCell>
+                              <TableCell align="right">{r.absentCount}</TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
                   </Table>
                 </TableContainer>
-              )}
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={closeDetail} variant="contained" color="inherit">
-                {t('attendanceStatistics.detail.close')}
-              </Button>
-            </DialogActions>
-          </Dialog>
-        </>
-      )}
+              </Box>
+
+              <Dialog open={detailOpen} onClose={closeDetail} maxWidth="md" fullWidth scroll="paper">
+                <DialogTitle sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
+                  {t('attendanceStatistics.detail.dialogTitle', { name: detailUserName || '—' })}
+                </DialogTitle>
+                <DialogContent dividers>
+                  {detailRows.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      {t('attendanceStatistics.detail.empty')}
+                    </Typography>
+                  ) : (
+                    <TableContainer
+                      component={Paper}
+                      elevation={0}
+                      sx={{
+                        borderRadius: 0,
+                        overflow: 'visible',
+                        border: 'none',
+                        boxShadow: 'none',
+                        bgcolor: 'transparent',
+                      }}
+                    >
+                      <Table
+                        size="small"
+                        sx={{
+                          borderCollapse: 'collapse',
+                          '& .MuiTableCell-root': {
+                            borderLeft: 'none',
+                            borderRight: 'none',
+                            borderTop: 'none',
+                          },
+                        }}
+                      >
+                        <TableHead sx={softTableHeadSx}>
+                          <TableRow>
+                            <TableCell>{t('attendanceStatistics.detail.date')}</TableCell>
+                            <TableCell>{t('attendanceStatistics.detail.checkIn')}</TableCell>
+                            <TableCell>{t('attendanceStatistics.detail.checkOut')}</TableCell>
+                            <TableCell align="right">{t('attendanceStatistics.detail.workHours')}</TableCell>
+                            <TableCell>{t('attendanceStatistics.detail.status')}</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody
+                          sx={{
+                            '& .MuiTableCell-body': {
+                              py: 1.5,
+                              px: 2,
+                              fontSize: '0.875rem',
+                              borderBottom: `1px solid ${
+                                theme.palette.mode === 'light'
+                                  ? 'rgba(15, 23, 42, 0.06)'
+                                  : theme.palette.divider
+                              }`,
+                            },
+                            '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
+                              borderBottom: 'none',
+                            },
+                          }}
+                        >
+                          {detailRows.map((row) => (
+                            <TableRow key={row.id} hover sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
+                              <TableCell>{rowDateYmd(row.date)}</TableCell>
+                              <TableCell>
+                                {displayClockCell(
+                                  row.check_in_display,
+                                  row.check_in_local,
+                                  row.check_in ?? null
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {displayClockCell(
+                                  row.check_out_display,
+                                  row.check_out_local,
+                                  row.check_out ?? null
+                                )}
+                              </TableCell>
+                              <TableCell align="right">
+                                {row.work_hours != null ? Number(row.work_hours).toFixed(2) : '—'}
+                              </TableCell>
+                              <TableCell>{statusLabel(row.status)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
+                </DialogContent>
+                <DialogActions sx={{ px: 3, py: 2 }}>
+                  <Button onClick={closeDetail} variant="outlined" color="inherit" sx={{ borderRadius: '12px', textTransform: 'none' }}>
+                    {t('attendanceStatistics.detail.close')}
+                  </Button>
+                </DialogActions>
+              </Dialog>
+            </>
+          )}
+        </CardContent>
+      </Card>
     </Box>
   );
 };

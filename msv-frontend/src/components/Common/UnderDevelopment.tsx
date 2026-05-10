@@ -72,7 +72,7 @@ const UnderDevelopment: React.FC<UnderDevelopmentProps> = ({
   return (
     <Box sx={{ 
       width: '100%',
-      p: 3
+      p: 0
     }}>
       <Card sx={{ 
         background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',

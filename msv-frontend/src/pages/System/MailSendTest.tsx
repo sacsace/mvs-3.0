@@ -91,7 +91,7 @@ const MailSendTest: React.FC = () => {
         minHeight: '100%'
       }}
     >
-      <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+      <Typography component="h1" variant="pageTitle" sx={{ mb: 2 }}>
         {t('mailSendTest.title')}
       </Typography>
 

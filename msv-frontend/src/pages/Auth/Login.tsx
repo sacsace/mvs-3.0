@@ -12,21 +12,26 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Checkbox
+  Checkbox,
+  ToggleButton,
+  ToggleButtonGroup
 } from '@mui/material';
 import {
   Visibility,
   VisibilityOff
 } from '@mui/icons-material';
 import jsPDF from 'jspdf';
-import { useStore } from '../../store';
+import { useStore, useMenuStore } from '../../store';
 import { useNavigate } from 'react-router-dom';
 import { api, API_BASE_URL } from '../../services/api';
 import { useTranslation } from 'react-i18next';
+import { alpha, useTheme } from '@mui/material/styles';
 
 const Login: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const theme = useTheme();
   const { login } = useStore();
+  const setMenuLanguage = useMenuStore((s) => s.setLanguage);
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     userid: '',
@@ -75,9 +80,9 @@ const Login: React.FC = () => {
   };
 
   const getPlanLabel = (planType: string): string => {
-    if (planType === 'year_50000') return 'Rs.50000 /year';
-    if (planType === 'month_5000') return 'Rs.5000 /month';
-    return '무료 1일 체험';
+    if (planType === 'year_50000') return t('login.signup.planYearly');
+    if (planType === 'month_5000') return t('login.signup.planMonthly');
+    return t('login.signup.planFreeTrial');
   };
 
   const loadRazorpayScript = (): Promise<boolean> => {
@@ -118,7 +123,8 @@ const Login: React.FC = () => {
   const getPeriodEndDate = (startDate: string, planType: string): string => {
     const start = new Date(startDate);
     if (Number.isNaN(start.getTime())) return '-';
-    const days = planType === 'year_50000' ? 365 : planType === 'free_day_1' ? 1 : 30;
+    const days =
+      planType === 'year_50000' ? 365 : planType === 'free_week_7' || planType === 'free_day_1' ? 7 : 30;
     start.setDate(start.getDate() + days - 1);
     return start.toISOString().slice(0, 10);
   };
@@ -177,11 +183,13 @@ const Login: React.FC = () => {
       let errorMessage = '';
       
       if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error') || err.message?.includes('network')) {
-        errorMessage = `네트워크 오류: 백엔드 서버(${API_BASE_URL})에 연결할 수 없습니다. 서버가 실행 중인지 확인해주세요.`;
+        errorMessage = t('login.networkError', { url: API_BASE_URL });
       } else if (err.response?.status === 404) {
-        errorMessage = `API 엔드포인트를 찾을 수 없습니다: ${err.config?.baseURL || API_BASE_URL}${err.config?.url || '/auth/login'}`;
+        errorMessage = t('login.apiNotFound', {
+          path: `${err.config?.baseURL || API_BASE_URL}${err.config?.url || '/auth/login'}`
+        });
       } else if (err.response?.status === 0) {
-        errorMessage = 'CORS 오류: 백엔드 서버의 CORS 설정을 확인해주세요.';
+        errorMessage = t('login.corsError');
       } else {
         errorMessage = err.response?.data?.message || err.message || t('login.loginFailed');
       }
@@ -201,12 +209,12 @@ const Login: React.FC = () => {
     setPaymentBlockedReason('');
 
     if (signupData.adminPassword !== signupData.adminPasswordConfirm) {
-      setSignupError('비밀번호 확인이 일치하지 않습니다.');
+      setSignupError(t('login.signup.passwordMismatch'));
       return;
     }
 
     setSignupStep('payment');
-    if (signupData.planType !== 'free_day_1') {
+    if (signupData.planType !== 'free_week_7') {
       // 유료 플랜은 "결제창으로" 클릭 즉시 Razorpay 결제창을 오픈
       setTimeout(() => {
         void handleSignupPaymentComplete();
@@ -250,7 +258,10 @@ const Login: React.FC = () => {
         plan: String(resultData.plan || signupData.planType)
       });
       setSignupSuccess(
-        `결제 완료: ${signupData.startDate} ~ ${getPeriodEndDate(signupData.startDate, signupData.planType)}`
+        t('login.signup.paymentSuccessAlert', {
+          start: signupData.startDate,
+          end: getPeriodEndDate(signupData.startDate, signupData.planType)
+        })
       );
       setSignupStep('done');
       setFormData((prev) => ({
@@ -259,19 +270,19 @@ const Login: React.FC = () => {
         password: signupData.adminPassword
       }));
     } else {
-      setSignupError(response.data?.message || '가입에 실패했습니다.');
+      setSignupError(response.data?.message || t('login.signup.registerFailed'));
     }
   };
 
   const handleSignupPaymentComplete = async () => {
-    if (signupData.planType !== 'free_day_1' && paymentBlockedReason) {
+    if (signupData.planType !== 'free_week_7' && paymentBlockedReason) {
       return;
     }
     setSignupError('');
     setSignupSuccess('');
     setSignupLoading(true);
     try {
-      if (signupData.planType === 'free_day_1') {
+      if (signupData.planType === 'free_week_7') {
         await submitSignupRegistration();
         return;
       }
@@ -289,7 +300,7 @@ const Login: React.FC = () => {
 
       const orderData = orderResponse.data?.data;
       if (!orderResponse.data?.success || !orderData?.orderId || !orderData?.keyId) {
-        const message = orderResponse.data?.message || '결제 주문 생성에 실패했습니다.';
+        const message = orderResponse.data?.message || t('login.signup.paymentOrderFailed');
         setSignupError(message);
         if (message.includes('환경 변수를 확인')) {
           setPaymentBlockedReason(message);
@@ -299,13 +310,13 @@ const Login: React.FC = () => {
 
       const scriptLoaded = await loadRazorpayScript();
       if (!scriptLoaded) {
-        setSignupError('Razorpay 스크립트를 불러오지 못했습니다. 네트워크 상태를 확인해주세요.');
+        setSignupError(t('login.signup.razorpayScriptError'));
         return;
       }
 
       const RazorpayCtor = (window as any).Razorpay;
       if (!RazorpayCtor) {
-        setSignupError('Razorpay 결제창을 초기화하지 못했습니다.');
+        setSignupError(t('login.signup.razorpayInitError'));
         return;
       }
 
@@ -319,7 +330,7 @@ const Login: React.FC = () => {
           amount: orderData.amount,
           currency: orderData.currency || 'INR',
           name: 'Minsub Ventures Private Limited',
-          description: `${getPlanLabel(signupData.planType)} 가입 결제`,
+          description: t('login.signup.razorpayDescription', { plan: getPlanLabel(signupData.planType) }),
           order_id: orderData.orderId,
           prefill: {
             name: signupData.adminName,
@@ -334,12 +345,12 @@ const Login: React.FC = () => {
             color: '#3b82f6'
           },
           modal: {
-            ondismiss: () => reject(new Error('결제가 취소되었습니다.'))
+            ondismiss: () => reject(new Error(t('login.signup.paymentCanceled')))
           },
           handler: (response: any) => resolve(response)
         });
         rzp.on('payment.failed', (failure: any) => {
-          const reason = failure?.error?.description || '결제에 실패했습니다.';
+          const reason = failure?.error?.description || t('login.signup.paymentFailedGeneric');
           reject(new Error(reason));
         });
         rzp.open();
@@ -351,7 +362,7 @@ const Login: React.FC = () => {
         razorpaySignature: paymentResult.razorpay_signature
       });
     } catch (err: any) {
-      const message = err?.response?.data?.message || err?.message || '결제/가입 처리 중 오류가 발생했습니다.';
+      const message = err?.response?.data?.message || err?.message || t('login.signup.paymentRegisterGeneric');
       setSignupError(message);
       if (String(message).includes('환경 변수를 확인')) {
         setPaymentBlockedReason(String(message));
@@ -456,78 +467,202 @@ const Login: React.FC = () => {
     setPaymentBlockedReason('');
   };
 
-  const inputSx = {
+  const loginInputSx = {
     '& .MuiOutlinedInput-root': {
-      height: 42,
-      borderRadius: '10px',
-      backgroundColor: '#ffffff !important',
-      transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+      minHeight: 48,
+      borderRadius: '12px',
+      bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.12 : 0.07),
+      transition: theme.transitions.create(['background-color', 'box-shadow'], { duration: 180 }),
       '& fieldset': {
-        borderColor: '#d0d7e2 !important',
-        borderWidth: '1px'
+        borderColor: alpha(theme.palette.divider, 0.9),
+        borderWidth: 1,
       },
-      '&:hover fieldset': {
-        borderColor: '#9fb0c6 !important'
-      },
-      '&.Mui-focused fieldset': {
-        borderColor: '#3b82f6 !important',
-        borderWidth: '1px'
+      '&:hover': {
+        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.16 : 0.1),
+        '& fieldset': {
+          borderColor: alpha(theme.palette.divider, 1),
+        },
       },
       '&.Mui-focused': {
-        boxShadow: '0 0 0 3px rgba(59, 130, 246, 0.15)'
-      }
+        bgcolor: 'background.paper',
+        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.22)}`,
+        '& fieldset': {
+          borderColor: alpha(theme.palette.divider, 0.95),
+          borderWidth: 1,
+        },
+      },
     },
     '& .MuiInputBase-input': {
-      py: 1,
+      py: 1.35,
       px: 1.5,
-      fontSize: '14px !important',
-      color: '#0f172a !important',
+      fontSize: '0.9375rem',
+      letterSpacing: '-0.02em',
       '&::placeholder': {
-        color: '#94a3b8 !important',
-        opacity: 1
-      }
-    }
+        color: alpha(theme.palette.text.secondary, 0.85),
+        opacity: 1,
+      },
+    },
+  } as const;
+
+  const loginFieldLabelSx = {
+    display: 'block',
+    mb: 0.75,
+    color: 'text.secondary',
+    fontSize: '0.8125rem',
+    fontWeight: 600,
+    letterSpacing: '-0.01em',
+  } as const;
+
+  const signupFieldSx = {
+    '& .MuiOutlinedInput-root': {
+      minHeight: 44,
+      borderRadius: '12px',
+      bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.12 : 0.06),
+      transition: theme.transitions.create(['background-color', 'box-shadow'], { duration: 150 }),
+      '& fieldset': {
+        borderColor: alpha(theme.palette.divider, 0.9),
+      },
+      '&:hover': {
+        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.16 : 0.09),
+      },
+      '&.Mui-focused': {
+        bgcolor: 'background.paper',
+        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.2)}`,
+        '& fieldset': {
+          borderColor: alpha(theme.palette.divider, 0.95),
+        },
+      },
+    },
+    '& .MuiInputBase-input': {
+      fontSize: '0.875rem',
+      py: 1.05,
+      letterSpacing: '-0.015em',
+    },
+    '& .MuiOutlinedInput-input::placeholder': {
+      color: alpha(theme.palette.text.secondary, 0.72),
+      opacity: 1,
+    },
+  } as const;
+
+  const signupLabelSx = {
+    display: 'block',
+    mb: 0.65,
+    color: 'text.secondary',
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    letterSpacing: '-0.01em',
+  } as const;
+
+  const signupSectionTitleSx = {
+    fontSize: '0.875rem',
+    fontWeight: 700,
+    letterSpacing: '-0.02em',
+    color: 'text.primary',
+    lineHeight: 1.35,
+  } as const;
+
+  const handleLoginLanguage = (_event: React.MouseEvent<HTMLElement>, newLang: 'ko' | 'en' | null) => {
+    if (newLang === null) return;
+    void i18n.changeLanguage(newLang);
+    setMenuLanguage(newLang);
   };
 
   return (
     <Box
       sx={{
         minHeight: '100vh',
-        background: 'linear-gradient(145deg, #f8fbff 0%, #eef4ff 45%, #f9fbff 100%)',
+        background:
+          theme.palette.mode === 'light'
+            ? 'radial-gradient(100% 70% at 50% -10%, rgba(99, 102, 241, 0.08) 0%, transparent 55%), linear-gradient(180deg, #f1f5f9 0%, #f8fafc 40%, #f1f5f9 100%)'
+            : `linear-gradient(180deg, ${theme.palette.grey[900]} 0%, ${alpha(theme.palette.common.black, 0.92)} 100%)`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 2,
-        position: 'relative'
+        padding: { xs: 2, sm: 3 },
+        position: 'relative',
       }}
     >
+      <Box
+        sx={{
+          position: 'absolute',
+          top: { xs: 14, sm: 22 },
+          right: { xs: 14, sm: 22 },
+          zIndex: 2,
+        }}
+      >
+        <ToggleButtonGroup
+          exclusive
+          value={i18n.language?.startsWith('en') ? 'en' : 'ko'}
+          onChange={handleLoginLanguage}
+          aria-label={t('login.languageToggleAria')}
+          sx={{
+            bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'light' ? 0.1 : 0.2),
+            p: 0.4,
+            borderRadius: '999px',
+            border: `1px solid ${alpha(theme.palette.divider, 0.35)}`,
+            '& .MuiToggleButtonGroup-grouped': {
+              border: 0,
+              mx: 0.2,
+              borderRadius: '999px !important',
+              px: 1.85,
+              py: 0.55,
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              letterSpacing: '-0.01em',
+              textTransform: 'none',
+              color: 'text.secondary',
+              '&:hover': {
+                bgcolor: alpha(theme.palette.primary.main, 0.06),
+              },
+              '&.Mui-selected': {
+                bgcolor: 'background.paper',
+                color: 'primary.main',
+                boxShadow: `0 1px 4px ${alpha(theme.palette.common.black, 0.1)}`,
+                '&:hover': {
+                  bgcolor: 'background.paper',
+                },
+              },
+            },
+          }}
+        >
+          <ToggleButton value="en" disableRipple>
+            {t('login.langEn')}
+          </ToggleButton>
+          <ToggleButton value="ko" disableRipple>
+            {t('login.langKo')}
+          </ToggleButton>
+        </ToggleButtonGroup>
+      </Box>
       <Container maxWidth="xs">
         <Paper
           elevation={0}
           sx={{
-            px: 2.6,
-            py: 2.5,
-            borderRadius: '12px',
-            backgroundColor: '#ffffff !important',
-            border: '1px solid #e2e8f0 !important',
-            boxShadow: '0 14px 34px rgba(15, 23, 42, 0.08)',
+            px: { xs: 3, sm: 3.5 },
+            py: { xs: 3.25, sm: 3.5 },
+            borderRadius: '20px',
+            bgcolor: 'background.paper',
+            border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'light' ? 0.12 : 0.35)}`,
+            boxShadow:
+              theme.palette.mode === 'light'
+                ? '0 20px 50px rgba(15, 23, 42, 0.07)'
+                : '0 20px 50px rgba(0,0,0,0.45)',
             width: `min(100%, ${cardWidth}px)`,
-            mx: 'auto'
+            mx: 'auto',
           }}
         >
-          <Box sx={{ textAlign: 'left', mb: 2, width: `min(100%, ${controlWidth}px)`, mx: 'auto' }}>
+          <Box sx={{ textAlign: 'left', mb: 2.5, width: `min(100%, ${controlWidth}px)`, mx: 'auto' }}>
             <Typography
-              component="div"
-              variant="h6"
+              component="h1"
               sx={{
                 fontWeight: 700,
-                fontSize: '1.8rem',
-                color: '#0f172a !important',
-                letterSpacing: '-0.005em',
-                mb: 0
+                fontSize: { xs: '1.5rem', sm: '1.625rem' },
+                color: 'text.primary',
+                letterSpacing: '-0.025em',
+                lineHeight: 1.25,
+                mb: 0,
               }}
             >
-              Log in
+              {t('login.cardTitle')}
             </Typography>
           </Box>
 
@@ -535,16 +670,18 @@ const Login: React.FC = () => {
             {error && (
               <Alert
                 severity="error"
+                variant="outlined"
                 sx={{
-                  mb: 1.5,
-                  fontSize: '0.82rem',
-                  borderRadius: '10px',
-                  backgroundColor: '#3f1d2e',
-                  color: '#fecdd3',
-                  border: '1px solid #7f1d1d',
+                  mb: 2,
+                  borderRadius: '12px',
+                  fontSize: '0.8125rem',
+                  lineHeight: 1.45,
+                  bgcolor: alpha(theme.palette.error.main, theme.palette.mode === 'light' ? 0.06 : 0.12),
+                  color: theme.palette.mode === 'light' ? 'error.dark' : theme.palette.error.light,
+                  borderColor: alpha(theme.palette.error.main, 0.35),
                   '& .MuiAlert-icon': {
-                    color: '#f87171'
-                  }
+                    color: 'error.main',
+                  },
                 }}
               >
                 {error}
@@ -552,20 +689,9 @@ const Login: React.FC = () => {
             )}
 
             <Box component="form" onSubmit={handleSubmit}>
-              <Box sx={{ mb: 1.25 }}>
-                <Typography
-                  component="label"
-                  htmlFor="userid"
-                  sx={{
-                    display: 'block',
-                    mb: 0.5,
-                    color: '#334155 !important',
-                    fontSize: '14px !important',
-                    fontWeight: 500,
-                    letterSpacing: '0.01em'
-                  }}
-                >
-                  Email
+              <Box sx={{ mb: 2 }}>
+                <Typography component="label" htmlFor="userid" sx={loginFieldLabelSx}>
+                  {t('login.emailLabel')}
                 </Typography>
                 <TextField
                   fullWidth
@@ -577,24 +703,13 @@ const Login: React.FC = () => {
                   value={formData.userid}
                   onChange={handleChange}
                   inputProps={{ 'aria-label': t('login.userID') }}
-                  sx={inputSx}
+                  sx={loginInputSx}
                 />
               </Box>
 
-              <Box sx={{ mb: 1.75 }}>
-                <Typography
-                  component="label"
-                  htmlFor="password"
-                  sx={{
-                    display: 'block',
-                    mb: 0.5,
-                    color: '#334155 !important',
-                    fontSize: '14px !important',
-                    fontWeight: 500,
-                    letterSpacing: '0.01em'
-                  }}
-                >
-                  Password
+              <Box sx={{ mb: 2.25 }}>
+                <Typography component="label" htmlFor="password" sx={loginFieldLabelSx}>
+                  {t('login.password')}
                 </Typography>
                 <TextField
                   fullWidth
@@ -616,11 +731,12 @@ const Login: React.FC = () => {
                             showPassword ? t('login.hidePassword') : t('login.showPassword')
                           }
                           sx={{
-                            color: '#64748b !important',
+                            color: 'text.secondary',
+                            borderRadius: '10px',
                             '&:hover': {
-                              color: '#1e293b !important',
-                              backgroundColor: 'rgba(148, 163, 184, 0.14)'
-                            }
+                              color: 'text.primary',
+                              bgcolor: alpha(theme.palette.action.hover, 1),
+                            },
                           }}
                         >
                           {showPassword ? <VisibilityOff sx={{ fontSize: '1rem' }} /> : <Visibility sx={{ fontSize: '1rem' }} />}
@@ -628,7 +744,7 @@ const Login: React.FC = () => {
                       </Box>
                     )
                   }}
-                  sx={inputSx}
+                  sx={loginInputSx}
                 />
               </Box>
 
@@ -636,29 +752,25 @@ const Login: React.FC = () => {
                 type="submit"
                 fullWidth
                 variant="contained"
+                color="primary"
+                disableElevation
                 disabled={loading}
                 sx={{
-                  py: 1.2,
-                  mt: 0.4,
-                  minHeight: '42px',
-                  fontSize: '14px !important',
-                  fontWeight: 700,
-                  borderRadius: '10px',
-                  backgroundColor: '#2563eb',
-                  boxShadow: 'none',
+                  py: 1.35,
+                  mt: 0.5,
+                  minHeight: 48,
+                  fontSize: '0.9375rem',
+                  fontWeight: 600,
+                  borderRadius: '12px',
                   textTransform: 'none',
-                  color: '#ffffff !important',
-                  '&:hover': {
-                    backgroundColor: '#1d4ed8',
-                    boxShadow: 'none'
-                  },
+                  letterSpacing: '-0.01em',
                   '&:disabled': {
-                    backgroundColor: '#cbd5e1 !important',
-                    color: '#64748b !important'
-                  }
+                    bgcolor: alpha(theme.palette.action.disabledBackground, 1),
+                    color: 'text.disabled',
+                  },
                 }}
               >
-                {loading ? t('common.loading') : 'Log in'}
+                {loading ? t('common.loading') : t('login.loginButton')}
               </Button>
 
               <Button
@@ -673,24 +785,26 @@ const Login: React.FC = () => {
                   setSignupResult(null);
                 }}
                 sx={{
-                  mt: 0.7,
-                  py: 0.2,
+                  mt: 1.25,
+                  py: 0.5,
                   minHeight: 'auto',
-                  fontSize: '13px !important',
-                  fontWeight: 500,
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
                   border: 'none',
-                  color: '#2563eb !important',
-                  backgroundColor: 'transparent',
+                  color: 'primary.main',
+                  bgcolor: 'transparent',
                   textTransform: 'none',
+                  letterSpacing: '-0.01em',
+                  borderRadius: '10px',
                   '&:hover': {
                     border: 'none',
-                    backgroundColor: 'transparent',
-                    color: '#1d4ed8 !important',
-                    textDecoration: 'underline'
-                  }
+                    bgcolor: alpha(theme.palette.primary.main, 0.06),
+                    color: 'primary.dark',
+                    textDecoration: 'none',
+                  },
                 }}
               >
-                Sign up
+                {t('login.signUpCta')}
               </Button>
             </Box>
           </Box>
@@ -704,10 +818,10 @@ const Login: React.FC = () => {
           left: '50%',
           bottom: 14,
           transform: 'translateX(-50%)',
-          color: '#94a3b8 !important',
-          letterSpacing: '0.04em',
+          color: alpha(theme.palette.text.secondary, 0.85),
+          letterSpacing: '0.06em',
           textTransform: 'lowercase',
-          fontSize: '0.68rem'
+          fontSize: '0.6875rem',
         }}
       >
         minsub ventures private limited
@@ -720,15 +834,32 @@ const Login: React.FC = () => {
         fullWidth
         PaperProps={{
           sx: {
-            width: 'min(96vw, 980px)',
-            maxHeight: '92vh'
-          }
+            width: 'min(96vw, 1176px)',
+            maxHeight: '92vh',
+            borderRadius: '20px',
+            overflow: 'hidden',
+            border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'light' ? 0.12 : 0.35)}`,
+            boxShadow:
+              theme.palette.mode === 'light'
+                ? '0 24px 60px rgba(15, 23, 42, 0.1)'
+                : '0 24px 60px rgba(0,0,0,0.5)',
+          },
         }}
       >
-        <DialogTitle>
-          {signupStep === 'form' && '신규 가입'}
-          {signupStep === 'payment' && '결제 진행'}
-          {signupStep === 'done' && '가입 완료'}
+        <DialogTitle
+          sx={{
+            pt: 2.5,
+            px: 3,
+            pb: 1.25,
+            fontSize: '1.125rem',
+            fontWeight: 700,
+            letterSpacing: '-0.02em',
+            color: 'text.primary',
+          }}
+        >
+          {signupStep === 'form' && t('login.signup.titleForm')}
+          {signupStep === 'payment' && t('login.signup.titlePayment')}
+          {signupStep === 'done' && t('login.signup.titleDone')}
         </DialogTitle>
         <Box component="form" onSubmit={handleSignupSubmit}>
           <DialogContent
@@ -736,134 +867,383 @@ const Login: React.FC = () => {
             sx={{
               display: signupStep === 'form' ? 'grid' : 'block',
               gridTemplateColumns: signupStep === 'form' ? { xs: '1fr', md: '1.45fr 1fr' } : undefined,
-              gap: signupStep === 'form' ? 1.25 : 0,
-              py: 1.2,
-              overflow: 'hidden'
+              gap: signupStep === 'form' ? { xs: 2, md: 2.5 } : 0,
+              px: { xs: 2.5, sm: 3 },
+              py: { xs: 2, sm: 2.5 },
+              overflowY: 'auto',
+              borderColor: alpha(theme.palette.divider, 0.85),
             }}
           >
             {signupError && (
-              <Alert severity="error" sx={{ gridColumn: '1 / -1' }}>
+              <Alert
+                severity="error"
+                variant="outlined"
+                sx={{ gridColumn: '1 / -1', borderRadius: '12px', fontSize: '0.8125rem' }}
+              >
                 {signupError}
               </Alert>
             )}
             {signupSuccess && (
-              <Alert severity="success" sx={{ gridColumn: '1 / -1' }}>
+              <Alert
+                severity="success"
+                variant="outlined"
+                sx={{ gridColumn: '1 / -1', borderRadius: '12px', fontSize: '0.8125rem' }}
+              >
                 {signupSuccess}
               </Alert>
             )}
 
             {signupStep === 'form' && (
               <>
-                <Box sx={{ display: 'grid', gap: 1 }}>
-              <Typography variant="subtitle2">초기 데이터</Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.9 }}>
-                <Box>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 0.35, color: 'text.secondary', fontWeight: 600 }}>회사명 *</Typography>
-                  <TextField hiddenLabel placeholder="회사명" size="small" fullWidth value={signupData.companyName} onChange={(e) => handleSignupChange('companyName', e.target.value)} required />
-                </Box>
-                <Box>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 0.35, color: 'text.secondary', fontWeight: 600 }}>사업자번호 *</Typography>
-                  <TextField hiddenLabel placeholder="사업자번호" size="small" fullWidth value={signupData.businessNumber} onChange={(e) => handleSignupChange('businessNumber', e.target.value)} required />
-                </Box>
-                <Box>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 0.35, color: 'text.secondary', fontWeight: 600 }}>GST 번호 *</Typography>
-                  <TextField hiddenLabel placeholder="15자리 GST 번호" size="small" fullWidth value={signupData.gstNumber} onChange={(e) => handleSignupChange('gstNumber', e.target.value.toUpperCase())} inputProps={{ maxLength: 15 }} required />
-                </Box>
-                <Box>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 0.35, color: 'text.secondary', fontWeight: 600 }}>전화번호</Typography>
-                  <TextField hiddenLabel placeholder="전화번호" size="small" fullWidth value={signupData.phone} onChange={(e) => handleSignupChange('phone', e.target.value)} />
-                </Box>
-                <Box sx={{ gridColumn: '1 / -1' }}>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 0.35, color: 'text.secondary', fontWeight: 600 }}>주소</Typography>
-                  <TextField hiddenLabel placeholder="주소" size="small" fullWidth value={signupData.address} onChange={(e) => handleSignupChange('address', e.target.value)} />
-                </Box>
-              </Box>
+                <Box sx={{ display: 'grid', gap: 1.75 }}>
+                  <Typography variant="subtitle2" sx={signupSectionTitleSx}>
+                    {t('login.signup.sectionInitial')}
+                  </Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.25 }}>
+                    <Box>
+                      <Typography variant="caption" sx={signupLabelSx}>
+                        {t('login.signup.labelCompanyName')}
+                      </Typography>
+                      <TextField
+                        hiddenLabel
+                        sx={signupFieldSx}
+                        placeholder={t('login.signup.phCompanyName')}
+                        size="small"
+                        fullWidth
+                        value={signupData.companyName}
+                        onChange={(e) => handleSignupChange('companyName', e.target.value)}
+                        required
+                      />
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" sx={signupLabelSx}>
+                        {t('login.signup.labelBusinessNumber')}
+                      </Typography>
+                      <TextField
+                        hiddenLabel
+                        sx={signupFieldSx}
+                        placeholder={t('login.signup.phBusinessNumber')}
+                        size="small"
+                        fullWidth
+                        value={signupData.businessNumber}
+                        onChange={(e) => handleSignupChange('businessNumber', e.target.value)}
+                        required
+                      />
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" sx={signupLabelSx}>
+                        {t('login.signup.labelGst')}
+                      </Typography>
+                      <TextField
+                        hiddenLabel
+                        sx={signupFieldSx}
+                        placeholder={t('login.signup.phGst')}
+                        size="small"
+                        fullWidth
+                        value={signupData.gstNumber}
+                        onChange={(e) => handleSignupChange('gstNumber', e.target.value.toUpperCase())}
+                        inputProps={{ maxLength: 15 }}
+                        required
+                      />
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" sx={signupLabelSx}>
+                        {t('login.signup.labelPhone')}
+                      </Typography>
+                      <TextField
+                        hiddenLabel
+                        sx={signupFieldSx}
+                        placeholder={t('login.signup.phPhone')}
+                        size="small"
+                        fullWidth
+                        value={signupData.phone}
+                        onChange={(e) => handleSignupChange('phone', e.target.value)}
+                      />
+                    </Box>
+                    <Box sx={{ gridColumn: '1 / -1' }}>
+                      <Typography variant="caption" sx={signupLabelSx}>
+                        {t('login.signup.labelAddress')}
+                      </Typography>
+                      <TextField
+                        hiddenLabel
+                        sx={signupFieldSx}
+                        placeholder={t('login.signup.phAddress')}
+                        size="small"
+                        fullWidth
+                        value={signupData.address}
+                        onChange={(e) => handleSignupChange('address', e.target.value)}
+                      />
+                    </Box>
+                  </Box>
 
-              <Typography variant="subtitle2" sx={{ mt: 0.4 }}>관리자 계정</Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0.9 }}>
-                <Box>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 0.35, color: 'text.secondary', fontWeight: 600 }}>관리자 이름 *</Typography>
-                  <TextField hiddenLabel placeholder="관리자 이름" size="small" fullWidth value={signupData.adminName} onChange={(e) => handleSignupChange('adminName', e.target.value)} required />
-                </Box>
-                <Box>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 0.35, color: 'text.secondary', fontWeight: 600 }}>관리자 ID *</Typography>
-                  <TextField hiddenLabel placeholder="관리자 ID" size="small" fullWidth value={signupData.adminUserid} onChange={(e) => handleSignupChange('adminUserid', e.target.value)} required />
-                </Box>
-                <Box sx={{ gridColumn: '1 / -1' }}>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 0.35, color: 'text.secondary', fontWeight: 600 }}>관리자 이메일 *</Typography>
-                  <TextField hiddenLabel placeholder="관리자 이메일" size="small" fullWidth type="email" value={signupData.adminEmail} onChange={(e) => handleSignupChange('adminEmail', e.target.value)} required />
-                </Box>
-                <Box>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 0.35, color: 'text.secondary', fontWeight: 600 }}>비밀번호 *</Typography>
-                  <TextField hiddenLabel placeholder="비밀번호" size="small" fullWidth type="password" value={signupData.adminPassword} onChange={(e) => handleSignupChange('adminPassword', e.target.value)} required />
-                </Box>
-                <Box>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 0.35, color: 'text.secondary', fontWeight: 600 }}>비밀번호 확인 *</Typography>
-                  <TextField hiddenLabel placeholder="비밀번호 확인" size="small" fullWidth type="password" value={signupData.adminPasswordConfirm} onChange={(e) => handleSignupChange('adminPasswordConfirm', e.target.value)} required />
-                </Box>
-              </Box>
+                  <Typography variant="subtitle2" sx={{ ...signupSectionTitleSx, mt: 0.5 }}>
+                    {t('login.signup.sectionAdmin')}
+                  </Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1.25 }}>
+                    <Box>
+                      <Typography variant="caption" sx={signupLabelSx}>
+                        {t('login.signup.labelAdminName')}
+                      </Typography>
+                      <TextField
+                        hiddenLabel
+                        sx={signupFieldSx}
+                        placeholder={t('login.signup.phAdminName')}
+                        size="small"
+                        fullWidth
+                        value={signupData.adminName}
+                        onChange={(e) => handleSignupChange('adminName', e.target.value)}
+                        required
+                      />
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" sx={signupLabelSx}>
+                        {t('login.signup.labelAdminId')}
+                      </Typography>
+                      <TextField
+                        hiddenLabel
+                        sx={signupFieldSx}
+                        placeholder={t('login.signup.phAdminId')}
+                        size="small"
+                        fullWidth
+                        value={signupData.adminUserid}
+                        onChange={(e) => handleSignupChange('adminUserid', e.target.value)}
+                        required
+                      />
+                    </Box>
+                    <Box sx={{ gridColumn: '1 / -1' }}>
+                      <Typography variant="caption" sx={signupLabelSx}>
+                        {t('login.signup.labelAdminEmail')}
+                      </Typography>
+                      <TextField
+                        hiddenLabel
+                        sx={signupFieldSx}
+                        placeholder={t('login.signup.phAdminEmail')}
+                        size="small"
+                        fullWidth
+                        type="email"
+                        value={signupData.adminEmail}
+                        onChange={(e) => handleSignupChange('adminEmail', e.target.value)}
+                        required
+                      />
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" sx={signupLabelSx}>
+                        {t('login.signup.labelPassword')}
+                      </Typography>
+                      <TextField
+                        hiddenLabel
+                        sx={signupFieldSx}
+                        placeholder={t('login.signup.phPassword')}
+                        size="small"
+                        fullWidth
+                        type="password"
+                        value={signupData.adminPassword}
+                        onChange={(e) => handleSignupChange('adminPassword', e.target.value)}
+                        required
+                      />
+                    </Box>
+                    <Box>
+                      <Typography variant="caption" sx={signupLabelSx}>
+                        {t('login.signup.labelPasswordConfirm')}
+                      </Typography>
+                      <TextField
+                        hiddenLabel
+                        sx={signupFieldSx}
+                        placeholder={t('login.signup.phPasswordConfirm')}
+                        size="small"
+                        fullWidth
+                        type="password"
+                        value={signupData.adminPasswordConfirm}
+                        onChange={(e) => handleSignupChange('adminPasswordConfirm', e.target.value)}
+                        required
+                      />
+                    </Box>
+                  </Box>
                 </Box>
 
-                <Box sx={{ display: 'grid', gap: 0.9, alignContent: 'start' }}>
-              <Typography variant="subtitle2">요금제 / 사용기간</Typography>
-              <Box>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.35, color: 'text.secondary', fontWeight: 600 }}>요금제</Typography>
-                <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, px: 1, py: 0.35 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', py: 0.1, cursor: 'pointer' }} onClick={() => handleSignupChange('planType', 'free_day_1')}>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Checkbox size="small" checked={signupData.planType === 'free_day_1'} onChange={() => handleSignupChange('planType', 'free_day_1')} />
-                      <Typography variant="body2">무료 1일 체험</Typography>
+                <Box sx={{ display: 'grid', gap: 1.25, alignContent: 'start' }}>
+                  <Typography variant="subtitle2" sx={signupSectionTitleSx}>
+                    {t('login.signup.sectionPlan')}
+                  </Typography>
+                  <Box>
+                    <Typography variant="caption" sx={signupLabelSx}>
+                      {t('login.signup.labelPlan')}
+                    </Typography>
+                    <Box
+                      sx={{
+                        border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+                        borderRadius: '14px',
+                        px: 1.25,
+                        py: 0.5,
+                        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
+                        boxShadow: `inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.04 : 0.4)}`,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          py: 0.65,
+                          cursor: 'pointer',
+                          borderRadius: '10px',
+                          px: 0.5,
+                          mx: -0.5,
+                          '&:hover': { bgcolor: alpha(theme.palette.action.hover, 0.6) },
+                        }}
+                        onClick={() => handleSignupChange('planType', 'free_week_7')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Checkbox
+                            size="small"
+                            checked={signupData.planType === 'free_week_7'}
+                            onChange={() => handleSignupChange('planType', 'free_week_7')}
+                            sx={{ borderRadius: '6px' }}
+                          />
+                          <Typography variant="body2" sx={{ fontWeight: 500, letterSpacing: '-0.01em' }}>
+                            {t('login.signup.planFreeTrial')}
+                          </Typography>
+                        </Box>
+                        <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 700 }}>
+                          {t('login.signup.oncePerCompany')}
+                        </Typography>
+                      </Box>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          py: 0.65,
+                          cursor: 'pointer',
+                          borderRadius: '10px',
+                          px: 0.5,
+                          mx: -0.5,
+                          '&:hover': { bgcolor: alpha(theme.palette.action.hover, 0.6) },
+                        }}
+                        onClick={() => handleSignupChange('planType', 'month_5000')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Checkbox
+                            size="small"
+                            checked={signupData.planType === 'month_5000'}
+                            onChange={() => handleSignupChange('planType', 'month_5000')}
+                            sx={{ borderRadius: '6px' }}
+                          />
+                          <Typography variant="body2" sx={{ fontWeight: 500, letterSpacing: '-0.01em' }}>
+                            {getPlanLabel('month_5000')}
+                          </Typography>
+                        </Box>
+                        <Typography variant="caption" color="text.secondary">
+                          {t('login.signup.regularPrice')}
+                        </Typography>
+                      </Box>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          py: 0.65,
+                          cursor: 'pointer',
+                          borderRadius: '10px',
+                          px: 0.5,
+                          mx: -0.5,
+                          '&:hover': { bgcolor: alpha(theme.palette.action.hover, 0.6) },
+                        }}
+                        onClick={() => handleSignupChange('planType', 'year_50000')}
+                      >
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Checkbox
+                            size="small"
+                            checked={signupData.planType === 'year_50000'}
+                            onChange={() => handleSignupChange('planType', 'year_50000')}
+                            sx={{ borderRadius: '6px' }}
+                          />
+                          <Typography variant="body2" sx={{ fontWeight: 500, letterSpacing: '-0.01em' }}>
+                            {getPlanLabel('year_50000')}
+                          </Typography>
+                        </Box>
+                        <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 700 }}>
+                          {t('login.signup.discountOff', { rate: yearlyDiscountRate })}
+                        </Typography>
+                      </Box>
                     </Box>
-                    <Typography variant="caption" sx={{ color: 'warning.main', fontWeight: 700 }}>회사당 1회</Typography>
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', py: 0.1, cursor: 'pointer' }} onClick={() => handleSignupChange('planType', 'month_5000')}>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Checkbox size="small" checked={signupData.planType === 'month_5000'} onChange={() => handleSignupChange('planType', 'month_5000')} />
-                      <Typography variant="body2">Rs.5000 /month</Typography>
-                    </Box>
-                    <Typography variant="caption" color="text.secondary">정가</Typography>
+                  <Box>
+                    <Typography variant="caption" sx={signupLabelSx}>
+                      {t('login.signup.labelStartDate')}
+                    </Typography>
+                    <TextField
+                      hiddenLabel
+                      sx={signupFieldSx}
+                      type="date"
+                      size="small"
+                      fullWidth
+                      value={signupData.startDate}
+                      onChange={(e) => handleSignupChange('startDate', e.target.value)}
+                    />
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', py: 0.1, cursor: 'pointer' }} onClick={() => handleSignupChange('planType', 'year_50000')}>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Checkbox size="small" checked={signupData.planType === 'year_50000'} onChange={() => handleSignupChange('planType', 'year_50000')} />
-                      <Typography variant="body2">Rs.50000 /year</Typography>
-                    </Box>
-                    <Typography variant="caption" sx={{ color: 'success.main', fontWeight: 700 }}>{yearlyDiscountRate}% 할인</Typography>
-                  </Box>
-                </Box>
-              </Box>
-              <Box>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.35, color: 'text.secondary', fontWeight: 600 }}>사용 시작일</Typography>
-                <TextField hiddenLabel type="date" size="small" fullWidth value={signupData.startDate} onChange={(e) => handleSignupChange('startDate', e.target.value)} />
-              </Box>
-              <Alert severity="info" sx={{ py: 0.6, '& .MuiAlert-message': { fontSize: '0.78rem' } }}>
-                사용 기간: {signupData.startDate} ~ {getPeriodEndDate(signupData.startDate, signupData.planType)}
-                <br />
-                무료 1일 체험은 동일 회사 기준 1회만 가능합니다.
-                <br />
-                가입 시 기본 `admin` 권한 + 결제 처리 권한이 자동 부여됩니다.
-              </Alert>
+                  <Alert
+                    severity="info"
+                    variant="outlined"
+                    sx={{
+                      borderRadius: '12px',
+                      py: 1,
+                      bgcolor: alpha(theme.palette.info.main, theme.palette.mode === 'light' ? 0.06 : 0.12),
+                      borderColor: alpha(theme.palette.info.main, 0.28),
+                      '& .MuiAlert-message': { fontSize: '0.8125rem', lineHeight: 1.55, letterSpacing: '-0.01em' },
+                    }}
+                  >
+                    {t('login.signup.infoUsageLine', {
+                      start: signupData.startDate,
+                      end: getPeriodEndDate(signupData.startDate, signupData.planType)
+                    })}
+                    <br />
+                    {t('login.signup.infoFreeTrialPolicy')}
+                    <br />
+                    {t('login.signup.infoAdminGrant')}
+                  </Alert>
                 </Box>
               </>
             )}
 
             {signupStep === 'payment' && (
-              <Box sx={{ maxWidth: 640, mx: 'auto' }}>
-                <Alert severity="info" sx={{ mb: 2 }}>
-                  결제 완료 후 세금계산서 다운로드를 진행하고, 마지막으로 가입 완료 버튼을 눌러 종료합니다.
+              <Box sx={{ maxWidth: 768, mx: 'auto' }}>
+                <Alert severity="info" variant="outlined" sx={{ mb: 2, borderRadius: '12px', fontSize: '0.875rem' }}>
+                  {t('login.signup.paymentHint')}
                 </Alert>
-                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>결제 정보</Typography>
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2.5,
+                    borderRadius: '16px',
+                    borderColor: alpha(theme.palette.divider, 0.9),
+                    bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.04 : 0.02),
+                  }}
+                >
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.25, letterSpacing: '-0.02em' }}>
+                    {t('login.signup.paymentInfoTitle')}
+                  </Typography>
                   <Box sx={{ display: 'grid', gap: 0.8 }}>
-                    <Typography variant="body2">회사명: {signupData.companyName || '-'}</Typography>
-                    <Typography variant="body2">요금제: {getPlanLabel(signupData.planType)}</Typography>
-                    <Typography variant="body2">사용 기간: {signupData.startDate} ~ {getPeriodEndDate(signupData.startDate, signupData.planType)}</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                      결제 금액: Rs.{getPlanAmount(signupData.planType).toLocaleString()}
+                    <Typography variant="body2">
+                      {t('login.signup.lineCompany', { name: signupData.companyName || '-' })}
                     </Typography>
-                    {signupData.planType === 'free_day_1' && (
+                    <Typography variant="body2">
+                      {t('login.signup.linePlan', { plan: getPlanLabel(signupData.planType) })}
+                    </Typography>
+                    <Typography variant="body2">
+                      {t('login.signup.lineUsage', {
+                        start: signupData.startDate,
+                        end: getPeriodEndDate(signupData.startDate, signupData.planType)
+                      })}
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      {t('login.signup.lineAmount', {
+                        amount: getPlanAmount(signupData.planType).toLocaleString('en-IN')
+                      })}
+                    </Typography>
+                    {signupData.planType === 'free_week_7' && (
                       <Typography variant="caption" color="text.secondary">
-                        무료 체험도 동일 절차로 확인 후 가입이 완료됩니다.
+                        {t('login.signup.freeTrialSameFlow')}
                       </Typography>
                     )}
                   </Box>
@@ -872,63 +1252,125 @@ const Login: React.FC = () => {
             )}
 
             {signupStep === 'done' && (
-              <Box sx={{ maxWidth: 640, mx: 'auto' }}>
-                <Alert severity="success" sx={{ mb: 2 }}>
-                  결제 처리 및 가입 데이터 생성이 완료되었습니다.
+              <Box sx={{ maxWidth: 768, mx: 'auto' }}>
+                <Alert severity="success" variant="outlined" sx={{ mb: 2, borderRadius: '12px', fontSize: '0.875rem' }}>
+                  {t('login.signup.doneSuccess')}
                 </Alert>
-                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>세금계산서</Typography>
-                  <Typography variant="body2">
-                    인보이스 번호: {signupResult?.taxInvoiceNumber || `FREE-${signupData.businessNumber || 'TRIAL'}`}
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2.5,
+                    borderRadius: '16px',
+                    borderColor: alpha(theme.palette.divider, 0.9),
+                    bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.04 : 0.02),
+                  }}
+                >
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.25, letterSpacing: '-0.02em' }}>
+                    {t('login.signup.taxInvoiceTitle')}
                   </Typography>
                   <Typography variant="body2">
-                    사용 기간: {signupResult?.usageStartDate || signupData.startDate} ~ {signupResult?.usageEndDate || getPeriodEndDate(signupData.startDate, signupData.planType)}
+                    {t('login.signup.lineInvoiceNo', {
+                      no: signupResult?.taxInvoiceNumber || `FREE-${signupData.businessNumber || 'TRIAL'}`
+                    })}
+                  </Typography>
+                  <Typography variant="body2">
+                    {t('login.signup.lineUsage', {
+                      start: signupResult?.usageStartDate || signupData.startDate,
+                      end:
+                        signupResult?.usageEndDate ||
+                        getPeriodEndDate(signupData.startDate, signupData.planType)
+                    })}
                   </Typography>
                   <Typography variant="body2" sx={{ mb: 1.4 }}>
-                    결제 금액: Rs.{(signupResult?.billingAmount ?? getPlanAmount(signupData.planType)).toLocaleString()}
+                    {t('login.signup.lineAmount', {
+                      amount: (signupResult?.billingAmount ?? getPlanAmount(signupData.planType)).toLocaleString(
+                        'en-IN'
+                      )
+                    })}
                   </Typography>
-                  <Button variant="outlined" onClick={handleDownloadTaxInvoice}>
-                    Tax Invoice 다운로드
+                  <Button
+                    variant="outlined"
+                    onClick={handleDownloadTaxInvoice}
+                    sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
+                  >
+                    {t('login.signup.downloadTaxInvoice')}
                   </Button>
                   {!invoiceDownloaded && (
                     <Typography variant="caption" sx={{ display: 'block', mt: 1, color: 'text.secondary' }}>
-                      가입 완료 버튼 활성화를 위해 먼저 세금계산서를 다운로드해 주세요.
+                      {t('login.signup.downloadFirstHint')}
                     </Typography>
                   )}
                 </Paper>
               </Box>
             )}
           </DialogContent>
-          <DialogActions sx={{ py: 0.8 }}>
-            <Button onClick={closeSignupDialog} disabled={signupLoading}>취소</Button>
+          <DialogActions
+            sx={{
+              px: 3,
+              py: 2.25,
+              gap: 1,
+              borderTop: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+              bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
+            }}
+          >
+            <Box sx={{ flex: 1 }} />
+            <Button
+              onClick={closeSignupDialog}
+              disabled={signupLoading}
+              sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '12px', px: 2 }}
+            >
+              {t('common.cancel')}
+            </Button>
             {signupStep === 'form' && (
-              <Button type="submit" variant="contained" disabled={signupLoading}>
-                {signupData.planType === 'free_day_1' ? '다음' : '즉시 결제'}
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                disableElevation
+                disabled={signupLoading}
+                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+              >
+                {signupData.planType === 'free_week_7' ? t('login.signup.next') : t('login.signup.payNow')}
               </Button>
             )}
             {signupStep === 'payment' && (
               <>
-                <Button onClick={() => setSignupStep('form')} disabled={signupLoading} variant="outlined">
-                  이전
+                <Button
+                  onClick={() => setSignupStep('form')}
+                  disabled={signupLoading}
+                  variant="outlined"
+                  sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2 }}
+                >
+                  {t('login.signup.previous')}
                 </Button>
                 <Button
                   onClick={handleSignupPaymentComplete}
                   variant="contained"
-                  disabled={signupLoading || (signupData.planType !== 'free_day_1' && Boolean(paymentBlockedReason))}
+                  color="primary"
+                  disableElevation
+                  disabled={signupLoading || (signupData.planType !== 'free_week_7' && Boolean(paymentBlockedReason))}
+                  sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
                 >
-                  {signupLoading ? '처리 중...' : (signupData.planType === 'free_day_1' ? '무료가입 확인' : '결제 완료')}
+                  {signupLoading
+                    ? t('login.signup.processing')
+                    : signupData.planType === 'free_week_7'
+                      ? t('login.signup.confirmFreeSignup')
+                      : t('login.signup.paymentComplete')}
                 </Button>
               </>
             )}
             {signupStep === 'done' && (
               <Button
                 variant="contained"
+                color="primary"
+                disableElevation
                 disabled={signupLoading || !invoiceDownloaded}
                 onClick={() => {
                   closeSignupDialog();
                 }}
+                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
               >
-                가입 완료
+                {t('login.signup.finishSignup')}
               </Button>
             )}
           </DialogActions>

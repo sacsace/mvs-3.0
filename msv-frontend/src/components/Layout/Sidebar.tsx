@@ -60,7 +60,7 @@ interface SidebarProps {
 }
 
 /** AppBar Toolbar 높이와 동일 */
-const HEADER_HEIGHT_PX = 52;
+const HEADER_HEIGHT_PX = 60;
 /** 헤더 하단과 좌측 메뉴 패널 사이 여백 */
 const HEADER_MENU_GAP_PX = 8;
 const SIDEBAR_TOP_PX = HEADER_HEIGHT_PX + HEADER_MENU_GAP_PX;
@@ -68,7 +68,7 @@ const SIDEBAR_TOP_PX = HEADER_HEIGHT_PX + HEADER_MENU_GAP_PX;
 const SIDEBAR_BOTTOM_GAP_PX = 12;
 const SIDEBAR_HEIGHT_CALC = `calc(100vh - ${SIDEBAR_TOP_PX + SIDEBAR_BOTTOM_GAP_PX}px)`;
 /** 선택 영역·좌측 강조선 모서리 직각 */
-const MENU_ITEM_RADIUS_PX = 0;
+const MENU_ITEM_RADIUS_PX = 10;
 
 const normalizeMenuPath = (path: string) => {
   const [pathname] = String(path || '').trim().split(/[?#]/);
@@ -510,8 +510,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         })();
     const isCompact = autoCollapseEnabled && isCollapsed;
     const isEnglish = language === 'en';
-    const itemPaddingY = level === 0 ? (isEnglish ? 0.33 : 0.18) : (isEnglish ? 0.66 : 0.5);
-    const activePaddingBoost = level === 0 ? 0.09 : 0.14;
+    const itemPaddingY = level === 0 ? (isEnglish ? 0.5 : 0.4) : (isEnglish ? 0.72 : 0.58);
+    const activePaddingBoost = level === 0 ? 0.06 : 0.1;
     const activePaddingY = itemPaddingY + activePaddingBoost;
     const topLevelMinHeight = isEnglish ? 42 : 41;
     const labelText =
@@ -538,22 +538,25 @@ const Sidebar: React.FC<SidebarProps> = ({
                   py: isActive ? activePaddingY : itemPaddingY,
                   justifyContent: 'center',
                   borderRadius: MENU_ITEM_RADIUS_PX,
-                  borderLeft: '3px solid',
-                  borderColor: isActive ? 'primary.main' : 'transparent',
-                  backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
-                  color: isActive ? 'primary.dark' : 'text.primary',
+                  borderLeft: 'none',
+                  backgroundColor: isActive ? '#EAF2FF' : 'transparent',
+                  color: isActive ? '#007A83' : '#4B5563',
+                  transition: 'all 0.2s ease',
                   '&:hover': {
-                    backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.14) : 'action.hover',
+                    backgroundColor: isActive ? '#E0EBFA' : theme.palette.action.hover,
+                    transform: 'translateY(-1px)',
                   },
                 })}
               >
-                <ListItemIcon sx={{ 
-                  color: isActive ? 'primary.main' : 'inherit',
-                  minWidth: '24px',
-                  '& .MuiSvgIcon-root': {
-                    fontSize: '1.1rem'
-                  }
-                }}>
+                <ListItemIcon
+                  sx={(theme) => ({
+                    color: isActive ? 'primary.main' : alpha(theme.palette.text.primary, 0.45),
+                    minWidth: '24px',
+                    '& .MuiSvgIcon-root': {
+                      fontSize: '1rem',
+                    },
+                  })}
+                >
                   {getContextualMenuIcon(menu, level)}
                 </ListItemIcon>
               </ListItemButton>
@@ -566,22 +569,25 @@ const Sidebar: React.FC<SidebarProps> = ({
                 py: isActive ? activePaddingY : itemPaddingY,
                 minHeight: level === 0 ? topLevelMinHeight : 'auto',
                 borderRadius: MENU_ITEM_RADIUS_PX,
-                borderLeft: '3px solid',
-                borderColor: isActive ? 'primary.main' : 'transparent',
-                backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.1) : 'transparent',
-                color: isActive ? 'primary.dark' : 'text.primary',
+                borderLeft: 'none',
+                backgroundColor: isActive ? '#EAF2FF' : 'transparent',
+                color: isActive ? '#007A83' : '#4B5563',
+                transition: 'all 0.2s ease',
                 '&:hover': {
-                  backgroundColor: isActive ? alpha(theme.palette.primary.main, 0.14) : 'action.hover',
+                  backgroundColor: isActive ? '#E0EBFA' : theme.palette.action.hover,
+                  transform: 'translateY(-1px)',
                 },
               })}
             >
-              <ListItemIcon sx={{ 
-                color: isActive ? 'primary.main' : 'inherit',
-                minWidth: '36px', // 아이콘 영역 축소
-                '& .MuiSvgIcon-root': {
-                  fontSize: '1.1rem' // 아이콘 크기 축소
-                }
-              }}>
+              <ListItemIcon
+                sx={(theme) => ({
+                  color: isActive ? 'primary.main' : alpha(theme.palette.text.primary, 0.45),
+                  minWidth: '36px',
+                  '& .MuiSvgIcon-root': {
+                    fontSize: '1rem',
+                  },
+                })}
+              >
                 {getContextualMenuIcon(menu, level)}
               </ListItemIcon>
               <ListItemText 
@@ -590,8 +596,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                 sx={{ 
                   my: level === 0 ? (isEnglish ? 0.08 : 0) : (isEnglish ? 0.14 : 0.08),
                   '& .MuiListItemText-primary': {
-                    fontSize: '0.8rem',
-                    fontWeight: isActive ? 600 : 400,
+                    fontSize: '13px',
+                    fontWeight: isActive ? 500 : 400,
                     lineHeight: level === 0 ? (isEnglish ? 1.2 : 0.94) : (isEnglish ? 1.28 : 1.12)
                   },
                   '& .MuiListItemText-secondary': {
@@ -641,9 +647,9 @@ const Sidebar: React.FC<SidebarProps> = ({
               top: `${SIDEBAR_TOP_PX}px`,
               left: 0,
               height: SIDEBAR_HEIGHT_CALC,
-              backgroundColor: 'grey.50',
-              borderRight: '1px solid',
-              borderColor: 'divider',
+              backgroundColor: '#F7F8FA',
+              borderRight: '1px solid rgba(15, 23, 42, 0.06)',
+              boxShadow: 'none',
               transition: 'none',
             }
           }}
@@ -672,9 +678,9 @@ const Sidebar: React.FC<SidebarProps> = ({
               top: `${SIDEBAR_TOP_PX}px`,
               left: 0,
               height: SIDEBAR_HEIGHT_CALC,
-              backgroundColor: 'grey.50',
-              borderRight: '1px solid',
-              borderColor: 'divider',
+              backgroundColor: '#F7F8FA',
+              borderRight: '1px solid rgba(15, 23, 42, 0.06)',
+              boxShadow: 'none',
               transition: 'none',
             }
           }}
@@ -733,9 +739,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             left: 0,
             height: SIDEBAR_HEIGHT_CALC,
             minHeight: SIDEBAR_HEIGHT_CALC,
-            backgroundColor: 'grey.50',
-              borderRight: '1px solid',
-              borderColor: 'divider',
+            backgroundColor: '#F7F8FA',
+              borderRight: '1px solid rgba(15, 23, 42, 0.06)',
               boxShadow: 'none',
               zIndex: 1200, // 헤더보다 낮은 z-index
             willChange: 'width',
@@ -747,13 +752,13 @@ const Sidebar: React.FC<SidebarProps> = ({
       <Box sx={{ 
         flexGrow: 1, 
         overflow: 'auto',
-        backgroundColor: 'grey.50',
-        pt: 1,
+        backgroundColor: '#F7F8FA',
+        p: 1.5,
         height: '100%',
         display: 'flex',
         flexDirection: 'column'
       }}>
-        <List sx={{ flexGrow: 1, px: 1 }}>
+        <List sx={{ flexGrow: 1, p: 0 }}>
           {menusWithoutNotice
             .filter((menu: Menu) => {
               // 시스템관리 메뉴 제외 (기본정보관리의 시스템 설정과 동일한 기능)
@@ -768,7 +773,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           mt: 'auto', 
           p: 2, 
           textAlign: 'center',
-          backgroundColor: 'grey.50',
+          backgroundColor: '#F7F8FA',
           flexShrink: 0,
           position: 'relative'
         }}>
@@ -814,7 +819,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             }
           },
           ...(isResizing && {
-            backgroundColor: 'rgba(25, 118, 210, 0.1)',
+            backgroundColor: 'rgba(10, 110, 125, 0.1)',
             '&::after': {
               content: '""',
               position: 'absolute',

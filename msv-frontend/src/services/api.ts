@@ -2421,7 +2421,13 @@ export const workStatisticService = {
 // 전자 결제 API 서비스
 export const approvalService = {
   // 전자 결제 목록 조회
-  getApprovals: async (params?: { requester_id?: number; status?: string; type?: string; priority?: string }) => {
+  getApprovals: async (params?: {
+    requester_id?: number;
+    current_approver_id?: number;
+    status?: string;
+    type?: string;
+    priority?: string;
+  }) => {
     try {
       const response = await api.get('/work/approvals', { params });
       return response.data;

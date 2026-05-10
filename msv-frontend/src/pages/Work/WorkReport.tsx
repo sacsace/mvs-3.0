@@ -46,7 +46,6 @@ import {
   Delete as DeleteIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
-  Assignment as AssignmentIcon,
   CheckCircle as CheckCircleIcon,
   Pending as PendingIcon,
   Feedback as FeedbackIcon,
@@ -62,10 +61,12 @@ import QuillResize from 'quill-resize-module';
 import 'quill-resize-module/dist/resize.css';
 import { workReportService, api } from '../../services/api';
 import { useTranslation } from 'react-i18next';
+import { useTheme, alpha } from '@mui/material/styles';
 import { useStore } from '../../store';
 import { useSearchParams } from 'react-router-dom';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import { mvsPageTitleSx } from '../../theme/mvsLayout';
 
 try {
   Quill.register('modules/resize', QuillResize);
@@ -268,6 +269,7 @@ const WorkReport: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const isEnglish = i18n.language.startsWith('en');
   const tr = useCallback((ko: string, en: string) => (isEnglish ? en : ko), [isEnglish]);
+  const theme = useTheme();
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
 
   const [reports, setReports] = useState<WorkReportItem[]>([]);
@@ -403,11 +405,13 @@ const WorkReport: React.FC = () => {
         if (!res.data?.success || cancelled) return;
         const cid = user?.company_id != null ? Number(user.company_id) : NaN;
         const tid = user?.tenant_id != null ? Number(user.tenant_id) : null;
+        const myId = user?.id != null ? Number(user.id) : NaN;
         const list = (res.data.data || [])
           .filter((u: any) => {
             if (u.status !== 'active') return false;
             if (Number.isInteger(cid) && cid > 0 && Number(u.company_id) !== cid) return false;
             if (tid != null && Number.isInteger(tid) && u.tenant_id != null && Number(u.tenant_id) !== tid) return false;
+            if (Number.isInteger(myId) && myId > 0 && Number(u.id) === myId) return false;
             return true;
           })
           .map((u: any) => ({
@@ -424,7 +428,7 @@ const WorkReport: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [openDialog, user?.company_id, user?.tenant_id]);
+  }, [openDialog, user?.company_id, user?.tenant_id, user?.id]);
 
   const loadReportData = useCallback(async () => {
     setError('');
@@ -544,35 +548,78 @@ const WorkReport: React.FC = () => {
     };
   }, [reportDeepLink, listDeepLink, setSearchParams, tr]);
 
+  const softChipSx = (tone: 'default' | 'info' | 'warning' | 'success' | 'error' | 'primary') => {
+    const light = theme.palette.mode === 'light';
+    if (tone === 'default') {
+      return {
+        height: 26,
+        borderRadius: '8px',
+        fontWeight: 600,
+        fontSize: '0.6875rem',
+        border: `1px solid ${light ? 'rgba(15, 23, 42, 0.12)' : theme.palette.divider}`,
+        bgcolor: light ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.06),
+        color: 'text.secondary',
+      } as const;
+    }
+    const main = tone === 'primary' ? theme.palette.primary.main : theme.palette[tone].main;
+    const dark = tone === 'primary' ? theme.palette.primary.dark : theme.palette[tone].dark;
+    return {
+      height: 26,
+      borderRadius: '8px',
+      fontWeight: 600,
+      fontSize: '0.6875rem',
+      border: `1px solid ${alpha(main, light ? 0.3 : 0.42)}`,
+      bgcolor: alpha(main, light ? 0.08 : 0.12),
+      color: dark,
+    } as const;
+  };
+
   const getStatusChip = (status: string) => {
     switch (status) {
       case 'draft':
-        return <Chip label={tr('초안', 'Draft')} color="default" size="small" />;
+        return <Chip label={tr('초안', 'Draft')} size="small" sx={softChipSx('default')} />;
       case 'submitted':
-        return <Chip label={tr('제출됨', 'Submitted')} color="info" size="small" />;
+        return <Chip label={tr('제출됨', 'Submitted')} size="small" sx={softChipSx('info')} />;
       case 'reviewed':
-        return <Chip label={tr('검토됨', 'Reviewed')} color="warning" size="small" />;
+        return <Chip label={tr('검토됨', 'Reviewed')} size="small" sx={softChipSx('warning')} />;
       case 'approved':
-        return <Chip label={tr('승인됨', 'Approved')} color="success" size="small" />;
+        return <Chip label={tr('승인됨', 'Approved')} size="small" sx={softChipSx('success')} />;
       case 'rejected':
-        return <Chip label={tr('피드백', 'Feedback')} color="warning" size="small" />;
+        return <Chip label={tr('피드백', 'Feedback')} size="small" sx={softChipSx('warning')} />;
       default:
-        return <Chip label={tr('알 수 없음', 'Unknown')} color="default" size="small" />;
+        return <Chip label={tr('알 수 없음', 'Unknown')} size="small" sx={softChipSx('default')} />;
     }
   };
 
   const getPriorityChip = (priority: string) => {
     switch (priority) {
       case 'low':
-        return <Chip label={tr('낮음', 'Low')} color="default" size="small" />;
+        return <Chip label={tr('낮음', 'Low')} size="small" sx={softChipSx('default')} />;
       case 'medium':
-        return <Chip label={tr('보통', 'Medium')} color="info" size="small" />;
+        return <Chip label={tr('보통', 'Medium')} size="small" sx={softChipSx('info')} />;
       case 'high':
-        return <Chip label={tr('높음', 'High')} color="warning" size="small" />;
+        return <Chip label={tr('높음', 'High')} size="small" sx={softChipSx('warning')} />;
       case 'urgent':
-        return <Chip label={tr('긴급', 'Urgent')} color="error" size="small" />;
+        return <Chip label={tr('긴급', 'Urgent')} size="small" sx={softChipSx('error')} />;
       default:
-        return <Chip label={tr('알 수 없음', 'Unknown')} color="default" size="small" />;
+        return <Chip label={tr('알 수 없음', 'Unknown')} size="small" sx={softChipSx('default')} />;
+    }
+  };
+
+  const getTypeChipSx = (type: string) => {
+    switch (type) {
+      case 'daily':
+        return softChipSx('primary');
+      case 'weekly':
+      case 'monthly':
+        return softChipSx('info');
+      case 'project':
+        return softChipSx('success');
+      case 'incident':
+        return softChipSx('warning');
+      case 'other':
+      default:
+        return softChipSx('default');
     }
   };
 
@@ -603,14 +650,22 @@ const WorkReport: React.FC = () => {
 
   const handleEditReport = (report: WorkReportItem) => {
     setSelectedReport(report);
+    const uid = user?.id != null ? Number(user.id) : NaN;
+    const safeRecipient =
+      report.recipientId != null &&
+      report.recipientId > 0 &&
+      (!Number.isInteger(uid) || uid <= 0 || Number(report.recipientId) !== uid)
+        ? report.recipientId
+        : null;
+    const safeCc = (report.ccUserIds || []).filter((id) => !Number.isInteger(uid) || uid <= 0 || Number(id) !== uid);
     setFormState({
       title: report.title,
       type: report.type,
       priority: report.priority,
       reportDate: report.reportDate,
       content: report.content,
-      recipientUserId: report.recipientId != null && report.recipientId > 0 ? report.recipientId : null,
-      ccUserIds: report.ccUserIds?.length ? [...report.ccUserIds] : [],
+      recipientUserId: safeRecipient,
+      ccUserIds: safeCc.length ? [...safeCc] : [],
       challenges: report.challenges.join('\n'),
       nextSteps: report.nextSteps.join('\n'),
       tags: report.tags.join(', '),
@@ -711,6 +766,11 @@ const WorkReport: React.FC = () => {
       setError(tr('보고서를 받는 사람을 선택해주세요.', 'Please select a report recipient.'));
       return;
     }
+    const myId = user?.id != null ? Number(user.id) : NaN;
+    if (Number.isInteger(myId) && myId > 0 && Number(formState.recipientUserId) === myId) {
+      setError(tr('본인에게는 보고서를 보낼 수 없습니다.', 'You cannot send a report to yourself.'));
+      return;
+    }
 
     const toList = (value: string) =>
       value
@@ -734,7 +794,11 @@ const WorkReport: React.FC = () => {
       summary: '',
       recipient_id: formState.recipientUserId,
       cc_user_ids: formState.ccUserIds.filter(
-        (id) => Number.isInteger(id) && id > 0 && id !== formState.recipientUserId
+        (id) =>
+          Number.isInteger(id) &&
+          id > 0 &&
+          id !== formState.recipientUserId &&
+          !(Number.isInteger(myId) && myId > 0 && id === myId)
       ),
       achievements: [],
       challenges: toList(formState.challenges),
@@ -902,6 +966,23 @@ const WorkReport: React.FC = () => {
     page * itemsPerPage
   );
 
+  /** 업무 보고서 상세 — 본문 카드 대비 섹션 영역을 한 단계 진하게 */
+  const workReportDetailSectionSx = useMemo(
+    () => ({
+      bgcolor:
+        theme.palette.mode === 'light'
+          ? theme.palette.grey[100]
+          : alpha(theme.palette.common.white, 0.08),
+      border: '1px solid',
+      borderColor:
+        theme.palette.mode === 'light'
+          ? alpha(theme.palette.common.black, 0.08)
+          : alpha(theme.palette.common.white, 0.1),
+      borderRadius: 2,
+    }),
+    [theme]
+  );
+
   const feedbackDialog = (
     <Dialog
       open={feedbackOpen}
@@ -982,20 +1063,37 @@ const WorkReport: React.FC = () => {
       <>
         <Box
           sx={{
-            p: 3,
-            backgroundColor: 'workArea.main',
-            borderRadius: 2,
-            minHeight: '100%'
+            p: 0,
+            width: '100%',
+            maxWidth: '100%',
+            bgcolor: 'transparent',
+            minHeight: '100%',
           }}
         >
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <AssignmentIcon />
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+          <Typography
+            variant="pageTitle"
+            component="h1"
+            sx={{
+              fontSize: { xs: '1.125rem', sm: '1.3125rem' },
+              fontWeight: 600,
+              letterSpacing: '-0.022em',
+              lineHeight: 1.28,
+            }}
+          >
             {tr('업무 보고서 상세', 'Work Report Detail')}
           </Typography>
           <Button
             variant="outlined"
             onClick={() => setViewMode('list')}
+            sx={{
+              borderRadius: '12px',
+              textTransform: 'none',
+              fontWeight: 600,
+              borderColor: 'divider',
+              color: 'text.secondary',
+              '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+            }}
           >
             {tr('목록으로', 'Back to List')}
           </Button>
@@ -1034,8 +1132,10 @@ const WorkReport: React.FC = () => {
                 <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
                   {getStatusChip(selectedReport.status)}
                   {getPriorityChip(selectedReport.priority)}
-                  <Chip label={getTypeLabel(selectedReport.type)} color="primary" size="small" />
-                  {selectedReport.isPublic && <Chip label={tr('공개', 'Public')} color="info" size="small" />}
+                  <Chip label={getTypeLabel(selectedReport.type)} size="small" sx={getTypeChipSx(selectedReport.type)} />
+                  {selectedReport.isPublic && (
+                    <Chip label={tr('공개', 'Public')} size="small" sx={softChipSx('info')} />
+                  )}
                 </Box>
               </Box>
               <Box sx={{ textAlign: 'right' }}>
@@ -1050,7 +1150,7 @@ const WorkReport: React.FC = () => {
             {/* 작성자 정보 */}
             <Box sx={{ mb: 4 }}>
               <Typography variant="h6" gutterBottom>{tr('작성자 정보', 'Author Info')}</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', p: 2, ...workReportDetailSectionSx }}>
                 <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
                   <PersonIcon />
                 </Avatar>
@@ -1068,7 +1168,7 @@ const WorkReport: React.FC = () => {
             {selectedReport.recipientName && (
               <Box sx={{ mb: 4 }}>
                 <Typography variant="h6" gutterBottom>{tr('보고서 수신자', 'Report recipient')}</Typography>
-                <Card sx={{ p: 2, bgcolor: 'grey.50' }}>
+                <Card sx={{ p: 2, boxShadow: 'none', ...workReportDetailSectionSx }}>
                   <Typography variant="body1">{selectedReport.recipientName}</Typography>
                 </Card>
               </Box>
@@ -1079,7 +1179,7 @@ const WorkReport: React.FC = () => {
                 <Typography variant="h6" gutterBottom>
                   {tr('참조', 'CC')}
                 </Typography>
-                <Card sx={{ p: 2, bgcolor: 'grey.50' }}>
+                <Card sx={{ p: 2, boxShadow: 'none', ...workReportDetailSectionSx }}>
                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
                     {(selectedReport.ccUsers || []).map((u) => (
                       <Chip key={u.id} size="small" label={u.username || String(u.id)} variant="outlined" />
@@ -1092,41 +1192,45 @@ const WorkReport: React.FC = () => {
             {/* 도전과제 */}
             <Box sx={{ mb: 4 }}>
               <Typography variant="h6" gutterBottom>{tr('도전과제', 'Challenges')}</Typography>
-              <List>
-                {selectedReport.challenges.map((challenge, index) => (
-                  <ListItem key={index}>
-                    <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: 'warning.main', width: 32, height: 32 }}>
-                        <PendingIcon />
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText primary={challenge} />
-                  </ListItem>
-                ))}
-              </List>
+              <Box sx={{ p: 2, ...workReportDetailSectionSx }}>
+                <List disablePadding>
+                  {selectedReport.challenges.map((challenge, index) => (
+                    <ListItem key={index} disableGutters sx={{ py: 0.5 }}>
+                      <ListItemAvatar>
+                        <Avatar sx={{ bgcolor: 'warning.main', width: 32, height: 32 }}>
+                          <PendingIcon />
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText primary={challenge} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
             </Box>
 
             {/* 다음 단계 */}
             <Box sx={{ mb: 4 }}>
               <Typography variant="h6" gutterBottom>{tr('다음 단계', 'Next Steps')}</Typography>
-              <List>
-                {selectedReport.nextSteps.map((step, index) => (
-                  <ListItem key={index}>
-                    <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: 'info.main', width: 32, height: 32 }}>
-                        <ScheduleIcon />
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText primary={step} />
-                  </ListItem>
-                ))}
-              </List>
+              <Box sx={{ p: 2, ...workReportDetailSectionSx }}>
+                <List disablePadding>
+                  {selectedReport.nextSteps.map((step, index) => (
+                    <ListItem key={index} disableGutters sx={{ py: 0.5 }}>
+                      <ListItemAvatar>
+                        <Avatar sx={{ bgcolor: 'info.main', width: 32, height: 32 }}>
+                          <ScheduleIcon />
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText primary={step} />
+                    </ListItem>
+                  ))}
+                </List>
+              </Box>
             </Box>
 
             {/* 상세 내용 */}
             <Box sx={{ mb: 4 }}>
               <Typography variant="h6" gutterBottom>{tr('상세 내용', 'Details')}</Typography>
-              <Card sx={{ p: 2, bgcolor: 'grey.50' }}>
+              <Card sx={{ p: 2, boxShadow: 'none', ...workReportDetailSectionSx }}>
                 <Box
                   className="work-report-html-content"
                   sx={{ '& img': { maxWidth: '100%', height: 'auto' }, '& p': { mb: 1 } }}
@@ -1139,36 +1243,38 @@ const WorkReport: React.FC = () => {
             {selectedReport.attachments.length > 0 && (
               <Box sx={{ mb: 4 }}>
                 <Typography variant="h6" gutterBottom>{tr('첨부파일', 'Attachments')}</Typography>
-                <List>
-                  {selectedReport.attachments.map((att) => (
-                    <ListItem key={att.id}>
-                      <ListItemAvatar>
-                        <Avatar sx={{ bgcolor: 'primary.main' }}>
-                          <AttachFileIcon />
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary={
-                          att.dataUrl && att.dataUrl.startsWith('data:') ? (
-                            <Link href={att.dataUrl} download={att.name} underline="hover">
-                              {att.name}
-                            </Link>
-                          ) : (
-                            att.name
-                          )
-                        }
-                        secondary={att.size > 0 ? formatFileSize(att.size, tr) : undefined}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
+                <Box sx={{ p: 2, ...workReportDetailSectionSx }}>
+                  <List disablePadding>
+                    {selectedReport.attachments.map((att) => (
+                      <ListItem key={att.id} disableGutters sx={{ py: 0.5 }}>
+                        <ListItemAvatar>
+                          <Avatar sx={{ bgcolor: 'primary.main' }}>
+                            <AttachFileIcon />
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={
+                            att.dataUrl && att.dataUrl.startsWith('data:') ? (
+                              <Link href={att.dataUrl} download={att.name} underline="hover">
+                                {att.name}
+                              </Link>
+                            ) : (
+                              att.name
+                            )
+                          }
+                          secondary={att.size > 0 ? formatFileSize(att.size, tr) : undefined}
+                        />
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
               </Box>
             )}
 
             {/* 태그 */}
             <Box sx={{ mb: 4 }}>
               <Typography variant="h6" gutterBottom>{tr('태그', 'Tags')}</Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              <Box sx={{ p: 2, ...workReportDetailSectionSx, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                 {selectedReport.tags.map((tag, index) => (
                   <Chip key={index} label={tag} variant="outlined" />
                 ))}
@@ -1179,7 +1285,7 @@ const WorkReport: React.FC = () => {
             {selectedReport.reviewerName && (
               <Box sx={{ mb: 4 }}>
                 <Typography variant="h6" gutterBottom>{tr('검토 정보', 'Review Info')}</Typography>
-                <Card sx={{ p: 2, bgcolor: 'grey.50' }}>
+                <Card sx={{ p: 2, boxShadow: 'none', ...workReportDetailSectionSx }}>
                   <Typography variant="body1" gutterBottom>
                     <strong>{tr('검토자', 'Reviewer')}:</strong> {selectedReport.reviewerName}
                   </Typography>
@@ -1243,90 +1349,129 @@ const WorkReport: React.FC = () => {
     );
   }
 
+  const kpiCardSx = {
+    borderRadius: '16px',
+    border: '1px solid',
+    borderColor: alpha(theme.palette.divider, theme.palette.mode === 'light' ? 0.1 : 0.35),
+    boxShadow:
+      theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 2px 12px rgba(0,0,0,0.25)',
+    bgcolor: 'background.paper',
+  } as const;
+
+  const reportDialogFieldLabelSx = {
+    mb: 0.75,
+    fontSize: '0.8125rem',
+    fontWeight: 600,
+    letterSpacing: '-0.01em',
+    color: 'text.secondary',
+  } as const;
+
   return (
-    <Box sx={{ 
-      p: 3, 
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%'
-    }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <AssignmentIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-          <Typography component="h1" sx={{ 
-            fontSize: '16px !important',
-            fontWeight: 600,
-            color: 'text.primary',
-            lineHeight: 1.5
-          }}>
-            {tr('업무 보고서', 'Work Reports')}
-          </Typography>
-        </Box>
+    <Box sx={{ p: 0, width: '100%', maxWidth: '100%', bgcolor: 'transparent', minHeight: '100%' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+        <Typography component="h1" sx={{ ...mvsPageTitleSx, color: 'text.primary' }}>
+          {tr('업무 보고서', 'Work Reports')}
+        </Typography>
         <Button
           variant="contained"
-          startIcon={<AddIcon />}
+          color="primary"
+          disableElevation
+          startIcon={<AddIcon sx={{ fontSize: 20 }} />}
           onClick={handleOpenCreate}
-          sx={{ borderRadius: 2 }}
+          sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
         >
           {tr('보고서 제출', 'Submit report')}
         </Button>
       </Box>
 
-      <Tabs
-        value={listTab}
-        onChange={(_, v) => {
-          setListTab(v as 'authored' | 'received');
-          setPage(1);
+      <Card
+        elevation={0}
+        sx={{
+          mb: 2,
+          borderRadius: '16px',
+          overflow: 'hidden',
+          border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'light' ? 0.1 : 0.35)}`,
+          boxShadow:
+            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 2px 12px rgba(0,0,0,0.25)',
         }}
-        sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
       >
-        <Tab label={tr('작성한 보고서', 'My reports')} value="authored" />
-        <Tab label={tr('받은 보고서', 'Inbox')} value="received" />
-      </Tabs>
+        <Tabs
+          value={listTab}
+          onChange={(_, v) => {
+            setListTab(v as 'authored' | 'received');
+            setPage(1);
+          }}
+          sx={{
+            minHeight: 48,
+            px: 1,
+            '& .MuiTabs-indicator': {
+              height: 2,
+              borderRadius: '2px 2px 0 0',
+              bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.85)' : theme.palette.grey[300],
+            },
+            '& .MuiTab-root': {
+              textTransform: 'none',
+              fontWeight: 500,
+              fontSize: '0.875rem',
+              color: 'text.secondary',
+              minHeight: 48,
+            },
+            '& .MuiTab-root.Mui-selected': {
+              color: 'text.primary',
+              fontWeight: 600,
+            },
+          }}
+        >
+          <Tab label={tr('작성한 보고서', 'My reports')} value="authored" />
+          <Tab label={tr('받은 보고서', 'Inbox')} value="received" />
+        </Tabs>
+      </Card>
 
       {/* 통계 카드 */}
-      <Box sx={{ 
-        display: 'grid', 
-        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
-        gap: 2, 
-        mb: 3 
-      }}>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+          gap: 2,
+          mb: 3,
+        }}
+      >
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2, px: 2.5 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {tr('대기중인 보고서', 'Pending Reports')}
             </Typography>
-            <Typography variant="h4" color="warning.main">
+            <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: 'warning.dark' }}>
               {pendingCount}
             </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2, px: 2.5 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {tr('승인된 보고서', 'Approved Reports')}
             </Typography>
-            <Typography variant="h4" color="success.main">
+            <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: 'success.dark' }}>
               {approvedCount}
             </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2, px: 2.5 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {tr('피드백 보고서', 'Reports with feedback')}
             </Typography>
-            <Typography variant="h4" color="error.main">
+            <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: 'error.dark' }}>
               {rejectedCount}
             </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2, px: 2.5 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {tr('긴급 보고서', 'Urgent Reports')}
             </Typography>
-            <Typography variant="h4" color="error.main">
+            <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: 'error.dark' }}>
               {urgentCount}
             </Typography>
           </CardContent>
@@ -1334,8 +1479,17 @@ const WorkReport: React.FC = () => {
       </Box>
 
       {/* 필터 및 검색 */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
+      <Card
+        elevation={0}
+        sx={{
+          mb: 3,
+          borderRadius: '16px',
+          border: 'none',
+          boxShadow: 'none',
+          bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.06) : alpha(theme.palette.common.black, 0.03),
+        }}
+      >
+        <CardContent sx={{ py: 2, px: 2.5 }}>
           <Box sx={{ 
             display: 'grid', 
             gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr 1fr' },
@@ -1351,9 +1505,19 @@ const WorkReport: React.FC = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon />
+                    <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
                   </InputAdornment>
                 ),
+              }}
+              sx={{
+                bgcolor: 'background.paper',
+                borderRadius: '12px',
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '12px',
+                  '& fieldset': {
+                    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : undefined,
+                  },
+                },
               }}
             />
             <FormControl fullWidth size="small" variant="outlined">
@@ -1418,12 +1582,24 @@ const WorkReport: React.FC = () => {
               fullWidth
               size="small"
               variant="outlined"
-              startIcon={<FilterIcon />}
+              startIcon={<FilterIcon sx={{ fontSize: 18 }} />}
               onClick={() => {
                 setSearchTerm('');
                 setStatusFilter('');
                 setTypeFilter('');
                 setPriorityFilter('');
+              }}
+              sx={{
+                borderRadius: '12px',
+                textTransform: 'none',
+                fontWeight: 600,
+                borderColor: 'divider',
+                color: 'text.secondary',
+                '&:hover': {
+                  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
+                  bgcolor: 'action.hover',
+                  color: 'text.primary',
+                },
               }}
             >
               {tr('초기화', 'Reset')}
@@ -1433,22 +1609,43 @@ const WorkReport: React.FC = () => {
       </Card>
 
       {/* 보고서 목록 테이블 */}
-      <Card>
-        <TableContainer>
-          <Table>
+      <Card
+        elevation={0}
+        sx={{
+          borderRadius: '20px',
+          overflow: 'hidden',
+          border: '1px solid',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+          boxShadow:
+            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
+          bgcolor: 'background.paper',
+        }}
+      >
+        <TableContainer sx={{ bgcolor: 'transparent' }}>
+          <Table
+            sx={{
+              borderCollapse: 'collapse',
+              '& .MuiTableCell-root': {
+                borderLeft: 'none',
+                borderRight: 'none',
+                borderTop: 'none',
+              },
+            }}
+          >
             <TableHead
               sx={{
-                bgcolor: 'background.paper',
                 '& .MuiTableCell-head': {
-                  bgcolor: 'background.paper',
-                  color: 'text.primary',
+                  bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
+                  color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
                   fontWeight: 600,
-                  fontSize: '0.875rem',
+                  fontSize: '0.75rem',
                   textTransform: 'none',
-                  letterSpacing: 'normal',
-                  borderBottom: '2px solid',
-                  borderColor: 'primary.main',
-                  py: 1.25
+                  letterSpacing: '0.01em',
+                  borderBottom: `1px solid ${
+                    theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
+                  }`,
+                  py: 1.5,
+                  px: 2,
                 },
               }}
             >
@@ -1461,13 +1658,31 @@ const WorkReport: React.FC = () => {
                 <TableCell>{tr('작성일', 'Date')}</TableCell>
               </TableRow>
             </TableHead>
-            <TableBody>
+            <TableBody
+              sx={{
+                '& .MuiTableCell-body': {
+                  py: 1.5,
+                  px: 2,
+                  fontSize: '0.875rem',
+                  borderBottom: `1px solid ${
+                    theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
+                  }`,
+                },
+                '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
+                  borderBottom: 'none',
+                },
+              }}
+            >
               {paginatedReports.map((report) => (
                 <TableRow
                   key={report.id}
                   hover
                   onClick={() => handleViewReport(report)}
-                  sx={{ cursor: 'pointer' }}
+                  sx={{
+                    cursor: 'pointer',
+                    transition: 'background-color 0.15s ease',
+                    '&:hover': { bgcolor: 'action.hover' },
+                  }}
                 >
                   <TableCell>
                     <Box>
@@ -1502,10 +1717,7 @@ const WorkReport: React.FC = () => {
                             {tr('수정', 'Edit')}
                           </Link>
                         )}
-                      <Typography variant="body2" color="text.secondary">
-                        {report.reportId}
-                      </Typography>
-                      <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
+                      <Box sx={{ display: 'flex', gap: 0.5, mt: 0.75 }}>
                         {report.tags.slice(0, 2).map((tag, index) => (
                           <Chip key={index} label={tag} size="small" variant="outlined" />
                         ))}
@@ -1526,7 +1738,7 @@ const WorkReport: React.FC = () => {
                     </Box>
                   </TableCell>
                   <TableCell>
-                    <Chip label={getTypeLabel(report.type)} color="primary" size="small" />
+                    <Chip label={getTypeLabel(report.type)} size="small" sx={getTypeChipSx(report.type)} />
                   </TableCell>
                   <TableCell>{getPriorityChip(report.priority)}</TableCell>
                   <TableCell>{getStatusChip(report.status)}</TableCell>
@@ -1538,39 +1750,93 @@ const WorkReport: React.FC = () => {
         </TableContainer>
 
         {/* 페이지네이션 */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 2.5, px: 2 }}>
           <Pagination
             count={Math.ceil(filteredReports.length / itemsPerPage)}
             page={page}
             onChange={(_, value) => setPage(value)}
-            color="primary"
+            shape="rounded"
+            sx={{
+              '& .MuiPaginationItem-root': {
+                borderRadius: '10px',
+                fontWeight: 600,
+                minWidth: 36,
+                height: 36,
+              },
+              '& .Mui-selected': {
+                bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.12),
+                color: 'text.primary',
+                '&:hover': {
+                  bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.12)' : alpha(theme.palette.common.white, 0.16),
+                },
+              },
+            }}
           />
         </Box>
       </Card>
 
       {/* 보고서 제출(신규) / 수정 다이얼로그 */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ color: '#000' }}>
+      <Dialog
+        open={openDialog}
+        onClose={() => setOpenDialog(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: '20px', overflow: 'hidden' } }}
+      >
+        <DialogTitle
+          sx={{
+            pt: 2.5,
+            px: 3,
+            pb: 1.25,
+            fontSize: '1.125rem',
+            fontWeight: 700,
+            letterSpacing: '-0.02em',
+            color: 'text.primary',
+          }}
+        >
           {selectedReport ? tr('보고서 수정', 'Edit Report') : tr('보고서 제출', 'Submit report')}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ px: 3, pt: 0, pb: 1 }}>
           <Box
             sx={{
-              mt: 2,
               display: 'grid',
               gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-              gap: 2,
-              color: '#000',
-              '& .MuiOutlinedInput-root': { color: '#000' },
-              '& .MuiOutlinedInput-input::placeholder': { color: 'rgba(0,0,0,0.55)', opacity: 1 },
-              '& .MuiSelect-select': { color: '#000' },
-              '& .MuiAutocomplete-input': { color: '#000' },
-              '& .ql-editor': { color: '#000' },
-              '& .ql-editor.ql-blank::before': { color: 'rgba(0,0,0,0.55)' }
+              gap: { xs: 2.25, sm: 2.75 },
+              color: 'text.primary',
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '12px',
+                bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.05),
+                transition: theme.transitions.create(['background-color', 'box-shadow'], { duration: 150 }),
+                '&:hover': {
+                  bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.14 : 0.08),
+                },
+                '&.Mui-focused': {
+                  bgcolor: 'background.paper',
+                  boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.2)}`,
+                },
+                '& fieldset': {
+                  borderColor: alpha(theme.palette.divider, 0.9),
+                },
+              },
+              '& .MuiOutlinedInput-input::placeholder': {
+                color: theme.palette.text.secondary,
+                opacity: 1,
+              },
+              '& .MuiInputLabel-root': { fontSize: '0.8125rem' },
+              '& .ql-toolbar': {
+                borderTopLeftRadius: 13,
+                borderTopRightRadius: 13,
+              },
+              '& .ql-container': {
+                borderBottomLeftRadius: 13,
+                borderBottomRightRadius: 13,
+              },
+              '& .ql-editor': { color: 'text.primary' },
+              '& .ql-editor.ql-blank::before': { color: theme.palette.text.secondary },
             }}
           >
             <Box>
-              <Typography variant="body2" sx={{ mb: 0.5, color: '#000', fontSize: '0.875rem' }}>
+              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
                 {tr('제목', 'Title')} *
               </Typography>
               <TextField
@@ -1581,7 +1847,7 @@ const WorkReport: React.FC = () => {
               />
             </Box>
             <Box>
-              <Typography variant="body2" sx={{ mb: 0.5, color: '#000', fontSize: '0.875rem' }}>
+              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
                 {tr('유형', 'Type')}
               </Typography>
               <FormControl fullWidth>
@@ -1599,7 +1865,7 @@ const WorkReport: React.FC = () => {
               </FormControl>
             </Box>
             <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
-              <Typography variant="body2" sx={{ mb: 0.5, color: '#000', fontSize: '0.875rem' }}>
+              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
                 {tr('보고서 수신자', 'Report recipient')} *
               </Typography>
               <Autocomplete
@@ -1628,7 +1894,7 @@ const WorkReport: React.FC = () => {
               />
             </Box>
             <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
-              <Typography variant="body2" sx={{ mb: 0.5, color: '#000', fontSize: '0.875rem' }}>
+              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
                 {tr('참조 (열람·피드백만, 승인 불가)', 'CC (view & feedback only; cannot approve)')}
               </Typography>
               <Autocomplete
@@ -1653,7 +1919,7 @@ const WorkReport: React.FC = () => {
               />
             </Box>
             <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / 2' } }}>
-              <Typography variant="body2" sx={{ mb: 0.5, color: '#000', fontSize: '0.875rem' }}>
+              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
                 {tr('우선순위', 'Priority')}
               </Typography>
               <FormControl fullWidth>
@@ -1671,7 +1937,7 @@ const WorkReport: React.FC = () => {
               </FormControl>
             </Box>
             <Box sx={{ gridColumn: { xs: '1 / -1', sm: '2 / 3' } }}>
-              <Typography variant="body2" sx={{ mb: 0.5, color: '#000', fontSize: '0.875rem' }}>
+              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
                 {tr('작성일', 'Report Date')}
               </Typography>
               <TextField
@@ -1682,19 +1948,23 @@ const WorkReport: React.FC = () => {
               />
             </Box>
             <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
-              <Typography variant="body2" sx={{ mb: 0.5, color: '#000', fontSize: '0.875rem' }}>
+              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
                 {tr('내용', 'Content')} *
               </Typography>
               <Box
                 sx={{
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  borderRadius: 1,
+                  border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+                  borderRadius: '14px',
                   overflow: 'hidden',
-                  bgcolor: 'background.paper',
-                  '& .ql-toolbar': { border: 'none', borderBottom: '1px solid', borderColor: 'divider' },
-                  '& .ql-container': { border: 'none', minHeight: 220, fontSize: '0.95rem' },
-                  '& .ql-editor img': { maxWidth: '100%', height: 'auto', display: 'block' }
+                  bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
+                  boxShadow: `inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.04 : 0.5)}`,
+                  '& .ql-toolbar': {
+                    border: 'none',
+                    borderBottom: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+                    bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.06),
+                  },
+                  '& .ql-container': { border: 'none', minHeight: 240, fontSize: '0.9375rem' },
+                  '& .ql-editor img': { maxWidth: '100%', height: 'auto', display: 'block' },
                 }}
               >
                 <ReactQuill
@@ -1708,7 +1978,7 @@ const WorkReport: React.FC = () => {
               </Box>
             </Box>
             <Box>
-              <Typography variant="body2" sx={{ mb: 0.5, color: '#000', fontSize: '0.875rem' }}>
+              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
                 {tr('이슈/도전 과제 (한 줄에 하나씩)', 'Issues/Challenges (one per line)')}
               </Typography>
               <TextField
@@ -1720,7 +1990,7 @@ const WorkReport: React.FC = () => {
               />
             </Box>
             <Box>
-              <Typography variant="body2" sx={{ mb: 0.5, color: '#000', fontSize: '0.875rem' }}>
+              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
                 {tr('다음 계획 (한 줄에 하나씩)', 'Next plans (one per line)')}
               </Typography>
               <TextField
@@ -1732,10 +2002,10 @@ const WorkReport: React.FC = () => {
               />
             </Box>
             <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
-              <Typography variant="body2" sx={{ mb: 0.5, color: '#000', fontSize: '0.875rem' }}>
+              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
                 {tr('첨부파일', 'Attachments')}
               </Typography>
-              <Typography variant="caption" display="block" sx={{ mb: 1, color: '#000' }}>
+              <Typography variant="caption" display="block" sx={{ mb: 1.25, color: 'text.secondary', letterSpacing: '-0.01em' }}>
                 {tr(
                   `최대 ${WORK_REPORT_MAX_ATTACHMENTS}개, 파일당 ${WORK_REPORT_MAX_FILE_BYTES / (1024 * 1024)}MB 이하`,
                   `Up to ${WORK_REPORT_MAX_ATTACHMENTS} files, max ${WORK_REPORT_MAX_FILE_BYTES / (1024 * 1024)} MB each`
@@ -1746,14 +2016,35 @@ const WorkReport: React.FC = () => {
                 color="inherit"
                 component="label"
                 size="small"
-                startIcon={<AttachFileIcon />}
-                sx={{ color: '#000', borderColor: 'rgba(0,0,0,0.35)', '&:hover': { borderColor: '#000', bgcolor: 'rgba(0,0,0,0.04)' } }}
+                startIcon={<AttachFileIcon sx={{ fontSize: 18 }} />}
+                sx={{
+                  borderRadius: '12px',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  borderStyle: 'dashed',
+                  borderColor: alpha(theme.palette.text.primary, 0.22),
+                  color: 'text.primary',
+                  bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.04),
+                  '&:hover': {
+                    borderColor: alpha(theme.palette.primary.main, 0.45),
+                    bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.1 : 0.06),
+                  },
+                }}
               >
                 {tr('파일 선택', 'Choose files')}
                 <input type="file" hidden multiple onChange={handleAttachmentInputChange} />
               </Button>
               {formState.attachments.length > 0 && (
-                <List dense sx={{ mt: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+                <List
+                  dense
+                  sx={{
+                    mt: 1.25,
+                    border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
+                  }}
+                >
                   {formState.attachments.map((att) => (
                     <ListItem
                       key={att.id}
@@ -1771,8 +2062,14 @@ const WorkReport: React.FC = () => {
                       }
                     >
                       <ListItemAvatar>
-                        <Avatar sx={{ width: 32, height: 32, bgcolor: 'grey.200' }}>
-                          <AttachFileIcon fontSize="small" sx={{ color: '#000' }} />
+                        <Avatar
+                          sx={{
+                            width: 32,
+                            height: 32,
+                            bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.2 : 0.14),
+                          }}
+                        >
+                          <AttachFileIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                         </Avatar>
                       </ListItemAvatar>
                       <ListItemText
@@ -1785,7 +2082,7 @@ const WorkReport: React.FC = () => {
               )}
             </Box>
             <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
-              <Typography variant="body2" sx={{ mb: 0.5, color: '#000', fontSize: '0.875rem' }}>
+              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
                 {tr('태그 (쉼표로 구분)', 'Tags (comma separated)')}
               </Typography>
               <TextField
@@ -1796,24 +2093,52 @@ const WorkReport: React.FC = () => {
               />
             </Box>
             <FormControlLabel
-              sx={{ color: '#000', '& .MuiFormControlLabel-label': { color: '#000' } }}
+              sx={{
+                gridColumn: { xs: '1 / -1' },
+                mt: 0.25,
+                alignItems: 'flex-start',
+                '& .MuiFormControlLabel-label': {
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  letterSpacing: '-0.01em',
+                  color: 'text.primary',
+                  pt: 0.25,
+                },
+              }}
               control={
                 <Checkbox
                   checked={formState.isPublic}
                   onChange={(e) => setFormState((prev) => ({ ...prev, isPublic: e.target.checked }))}
+                  sx={{ borderRadius: '6px' }}
                 />
               }
               label={tr('공개 보고서', 'Public report')}
             />
           </Box>
         </DialogContent>
-        <DialogActions sx={{ '& .MuiButton-text': { color: '#000' } }}>
-          <Button onClick={() => setOpenDialog(false)}>{tr('취소', 'Cancel')}</Button>
+        <DialogActions
+          sx={{
+            px: 3,
+            py: 2.5,
+            gap: 1,
+            borderTop: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+            bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
+          }}
+        >
+          <Box sx={{ flex: 1 }} />
+          <Button
+            onClick={() => setOpenDialog(false)}
+            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '12px', px: 2 }}
+          >
+            {tr('취소', 'Cancel')}
+          </Button>
           <Button
             variant="contained"
+            disableElevation
             onClick={handleSaveReport}
             disabled={saving}
-            startIcon={selectedReport ? <EditIcon /> : <SendIcon />}
+            startIcon={selectedReport ? <EditIcon sx={{ fontSize: 20 }} /> : <SendIcon sx={{ fontSize: 20 }} />}
+            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
           >
             {selectedReport ? tr('수정', 'Update') : tr('제출', 'Submit')}
           </Button>

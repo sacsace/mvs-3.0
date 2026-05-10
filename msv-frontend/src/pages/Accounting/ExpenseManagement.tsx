@@ -5,7 +5,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, InputAdornment, Divider
 } from '@mui/material';
 import {
-  Receipt as ReceiptIcon, Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon,
+  Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon,
   Search as SearchIcon, Download as DownloadIcon, Print as PrintIcon, CheckCircle as ApproveIcon,
   Cancel as RejectIcon, Business as BusinessIcon, Person as PersonIcon, AttachMoney as MoneyIcon,
   CalendarToday as CalendarIcon, Description as DescriptionIcon, Category as CategoryIcon
@@ -184,17 +184,9 @@ const ExpenseManagement: React.FC = () => {
       {/* 헤더 */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <ReceiptIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-            <Typography component="h1" sx={{
-              fontSize: '16px !important',
-              fontWeight: 600,
-              color: 'red',
-              lineHeight: 1.5
-            }}>
-              지출결의서
-            </Typography>
-          </Box>
+          <Typography component="h1" variant="pageTitle" sx={{ fontWeight: 600, letterSpacing: '-0.022em', mb: 0.75 }}>
+            지출결의서
+          </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
             지출결의서를 관리하는 페이지입니다.
           </Typography>

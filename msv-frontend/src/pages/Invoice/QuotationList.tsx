@@ -29,7 +29,6 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Description as DescriptionIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
   Download as DownloadIcon
@@ -124,24 +123,12 @@ const QuotationList: React.FC = () => {
   });
 
   return (
-    <Box sx={{ 
-      width: '100%',
-      px: 2,
-      py: 3
-    }}>
+    <Box sx={{ width: '100%', p: 0 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <DescriptionIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-            <Typography component="h1" sx={{
-              fontSize: '16px !important',
-              fontWeight: 600,
-              color: 'red',
-              lineHeight: 1.5
-            }}>
-              견적서
-            </Typography>
-          </Box>
+          <Typography component="h1" variant="pageTitle" sx={{ fontWeight: 600, letterSpacing: '-0.022em', mb: 0.75 }}>
+            견적서
+          </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
             견적서를 관리하고 조회하는 페이지입니다.
           </Typography>

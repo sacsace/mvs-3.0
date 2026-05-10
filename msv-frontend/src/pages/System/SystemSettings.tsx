@@ -497,7 +497,7 @@ const SystemSettings: React.FC = () => {
   if (loading) {
     return (
       <Box sx={{ 
-        p: 2, 
+        p: 0, 
         backgroundColor: 'workArea.main',
         borderRadius: 2,
         minHeight: '100%',
@@ -517,7 +517,7 @@ const SystemSettings: React.FC = () => {
 
   return (
     <Box sx={{ 
-      p: 2, 
+      p: 0, 
       backgroundColor: 'workArea.main',
       borderRadius: 2,
       minHeight: '100%'
@@ -530,17 +530,9 @@ const SystemSettings: React.FC = () => {
         mb: 2 
       }}>
         <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
-            <SettingsIcon sx={{ fontSize: '15px !important', color: 'primary.main' }} />
-            <Typography component="h1" sx={{
-              fontSize: '15px !important',
-              fontWeight: 600,
-              color: 'text.primary',
-              lineHeight: 1.35
-            }}>
-              시스템 설정
-            </Typography>
-          </Box>
+          <Typography component="h1" variant="pageTitle" sx={{ mb: 0.5 }}>
+            시스템 설정
+          </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem', lineHeight: 1.45 }}>
             시스템 전반의 설정을 관리하는 페이지입니다.
           </Typography>

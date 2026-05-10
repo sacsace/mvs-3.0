@@ -406,7 +406,7 @@ const LoginInfoManagement: React.FC = () => {
   return (
     <Box
       sx={{
-        p: 3,
+        p: 0,
         color: 'text.primary',
         '& .MuiCard-root': isDark
           ? {
@@ -426,7 +426,7 @@ const LoginInfoManagement: React.FC = () => {
       }}
     >
       <Box sx={{ mb: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>
+        <Typography component="h1" variant="pageTitle">
           {t('loginInfoManagement.title')}
         </Typography>
         <Typography

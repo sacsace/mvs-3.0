@@ -25,27 +25,19 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
   TextField,
-  Typography
+  Typography,
+  Paper
 } from '@mui/material';
-import { Assignment as AssignmentIcon, Add as AddIcon, Edit as EditIcon, Draw as DrawIcon, PictureAsPdf as PictureAsPdfIcon } from '@mui/icons-material';
+import { useTheme, alpha } from '@mui/material/styles';
+import { Add as AddIcon, Edit as EditIcon, Draw as DrawIcon, PictureAsPdf as PictureAsPdfIcon } from '@mui/icons-material';
 import { API_BASE_URL, companyService, employmentContractService, userService } from '../../services/api';
 import { useStore, useMenuStore } from '../../store';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
-
-const employmentContractTableHeadRowSx = {
-  '& > .MuiTableCell-root': {
-    bgcolor: 'primary.100',
-    fontWeight: 600,
-    color: 'text.primary',
-    borderBottom: '2px solid',
-    borderColor: 'primary.main',
-    py: 1.25
-  }
-} as const;
 
 type TabMode = 'templates' | 'contracts' | 'my';
 type MyContractFilterMode = 'all' | 'in_progress' | 'completed';
@@ -68,6 +60,7 @@ interface UserOption {
 }
 
 const EmploymentContractManagement: React.FC = () => {
+  const theme = useTheme();
   const { user } = useStore();
   const { language } = useMenuStore();
   const txt = useCallback((ko: string, en: string) => (language === 'en' ? en : ko), [language]);
@@ -593,30 +586,114 @@ const EmploymentContractManagement: React.FC = () => {
     }
   };
 
-  const statusChip = (status: string) => {
-    const color: any =
-      status === 'signed' || status === 'active'
-        ? 'success'
-        : status.includes('awaiting')
-          ? 'warning'
-          : status === 'expired'
-            ? 'error'
-            : 'default';
-    return <Chip size="small" label={contractStatusLabel(status)} color={color} />;
-  };
+  const employmentContractTableHeadRowSx = useMemo(
+    () => ({
+      '& > .MuiTableCell-root': {
+        bgcolor: theme.palette.mode === 'light' ? '#F2F4F7' : alpha(theme.palette.common.white, 0.06),
+        fontWeight: 600,
+        fontSize: '0.75rem',
+        letterSpacing: '0.02em',
+        color: theme.palette.mode === 'light' ? '#64748B' : theme.palette.grey[300],
+        borderBottom: `1px solid ${
+          theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.07)' : theme.palette.divider
+        }`,
+        borderTop: 'none',
+        py: 1.75,
+        px: 2,
+      },
+    }),
+    [theme]
+  );
+
+  const statusChip = useCallback(
+    (status: string) => {
+      const s = String(status || 'draft').toLowerCase();
+      const colorType =
+        s === 'signed' || s === 'active'
+          ? 'success'
+          : s.includes('awaiting')
+            ? 'warning'
+            : s === 'expired'
+              ? 'error'
+              : 'default';
+      const main =
+        colorType === 'success'
+          ? theme.palette.success.main
+          : colorType === 'warning'
+            ? theme.palette.warning.main
+            : colorType === 'error'
+              ? theme.palette.error.main
+              : theme.palette.grey[500];
+      const fg =
+        colorType === 'success'
+          ? theme.palette.success.dark
+          : colorType === 'warning'
+            ? theme.palette.warning.dark
+            : colorType === 'error'
+              ? theme.palette.error.dark
+              : theme.palette.text.secondary;
+      return (
+        <Chip
+          size="small"
+          label={contractStatusLabel(status)}
+          variant="outlined"
+          sx={{
+            height: 26,
+            fontWeight: 600,
+            fontSize: '0.75rem',
+            borderColor: alpha(main, 0.35),
+            bgcolor: alpha(main, 0.1),
+            color: fg,
+          }}
+        />
+      );
+    },
+    [theme, contractStatusLabel]
+  );
+
+  const tableWrapSx = useMemo(
+    () => ({
+      borderRadius: '16px',
+      overflow: 'hidden',
+      border:
+        theme.palette.mode === 'light'
+          ? '1px solid rgba(15, 23, 42, 0.06)'
+          : `1px solid ${theme.palette.divider}`,
+      boxShadow:
+        theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.35)',
+      bgcolor: 'background.paper',
+    }),
+    [theme]
+  );
 
   return (
-    <Box sx={{ p: 3, backgroundColor: 'workArea.main', borderRadius: 2, minHeight: '100%' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <AssignmentIcon color="primary" />
-          <Typography variant="h6" fontWeight={700}>
-            {txt('전자근로계약 관리', 'Employment contract management')}
-          </Typography>
-        </Box>
+    <Box sx={{ p: 0, backgroundColor: 'workArea.main', borderRadius: 2, minHeight: '100%', width: '100%', maxWidth: '100%' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          mb: 2.5,
+          flexWrap: 'wrap',
+          gap: 2,
+        }}
+      >
+        <Typography
+          component="h1"
+          variant="pageTitle"
+          sx={{
+            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
+            fontWeight: 600,
+            letterSpacing: '-0.022em',
+            lineHeight: 1.28,
+            color: theme.palette.mode === 'dark' ? 'common.white' : 'text.primary',
+          }}
+        >
+          {txt('전자근로계약 관리', 'Employment contract management')}
+        </Typography>
         {isRoot && (
-          <Box sx={{ minWidth: 260, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary', ml: 1, mb: 0.25, lineHeight: 1 }}>
+          <Box sx={{ minWidth: { xs: '100%', sm: 280 }, maxWidth: 360, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 600, fontSize: '0.75rem' }}>
               {txt('회사', 'Company')}
             </Typography>
             <FormControl size="small" fullWidth>
@@ -624,6 +701,7 @@ const EmploymentContractManagement: React.FC = () => {
                 value={selectedCompanyId}
                 onChange={(e) => setSelectedCompanyId(Number(e.target.value))}
                 displayEmpty
+                sx={{ borderRadius: '14px', minHeight: 44, bgcolor: 'background.paper' }}
               >
                 {companies.map((company) => (
                   <MenuItem key={company.id} value={company.id}>{company.name}</MenuItem>
@@ -634,12 +712,33 @@ const EmploymentContractManagement: React.FC = () => {
         )}
       </Box>
 
-      <Card>
-        <CardContent>
+      <Card
+        elevation={0}
+        sx={{
+          borderRadius: '20px',
+          border: 'none',
+          boxShadow: '0 4px 18px rgba(15, 23, 42, 0.045)',
+          overflow: 'hidden',
+        }}
+      >
+        <CardContent sx={{ py: 3, px: { xs: 2, sm: 3 } }}>
           <Tabs
             value={tab}
             onChange={(_, next) => setTab(next)}
-            sx={{ mb: 2 }}
+            sx={{
+              mb: 2.5,
+              minHeight: 44,
+              '& .MuiTab-root': {
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '0.9375rem',
+                minHeight: 44,
+                py: 1,
+                color: 'text.secondary',
+              },
+              '& .Mui-selected': { color: 'primary.main', fontWeight: 700 },
+              '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' },
+            }}
           >
             <Tab value="contracts" label={txt('계약 목록', 'Contracts')} />
             <Tab value="templates" label={txt('템플릿', 'Templates')} />
@@ -647,35 +746,79 @@ const EmploymentContractManagement: React.FC = () => {
           </Tabs>
 
           {tab === 'contracts' && (
-            <Stack spacing={1.5}>
+            <Stack spacing={2.5}>
               {canManage && (
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateContract}>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon sx={{ fontSize: 18 }} />}
+                    onClick={openCreateContract}
+                    sx={{
+                      borderRadius: '14px',
+                      px: 2.5,
+                      py: 1,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      boxShadow: 'none',
+                      background: `linear-gradient(180deg, ${alpha(theme.palette.primary.main, 0.92)} 0%, ${theme.palette.primary.main} 100%)`,
+                      '&:hover': { boxShadow: 'none' },
+                    }}
+                  >
                     {txt('계약 생성', 'Create contract')}
                   </Button>
                 </Box>
               )}
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={employmentContractTableHeadRowSx}>
-                    <TableCell>ID</TableCell>
-                    <TableCell>{txt('제목', 'Title')}</TableCell>
-                    <TableCell>{txt('직원', 'Employee')}</TableCell>
-                    <TableCell>{txt('기간', 'Period')}</TableCell>
-                    <TableCell>{txt('상태', 'Status')}</TableCell>
-                    <TableCell>{txt('작업', 'Actions')}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
+              <TableContainer component={Paper} elevation={0} sx={tableWrapSx}>
+                <Table
+                  size="medium"
+                  sx={{
+                    '& .MuiTableCell-body': {
+                      py: 1.75,
+                      px: 2,
+                      fontSize: '0.875rem',
+                      borderColor:
+                        theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : undefined,
+                    },
+                  }}
+                >
+                  <TableHead>
+                    <TableRow sx={employmentContractTableHeadRowSx}>
+                      <TableCell>ID</TableCell>
+                      <TableCell>{txt('제목', 'Title')}</TableCell>
+                      <TableCell>{txt('직원', 'Employee')}</TableCell>
+                      <TableCell>{txt('기간', 'Period')}</TableCell>
+                      <TableCell>{txt('상태', 'Status')}</TableCell>
+                      <TableCell>{txt('작업', 'Actions')}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
                   {contracts.map((row) => (
-                    <TableRow key={row.id} hover>
+                    <TableRow
+                      key={row.id}
+                      hover
+                      sx={{
+                        transition: 'background-color 0.15s ease',
+                        '&:hover': {
+                          bgcolor:
+                            theme.palette.mode === 'light'
+                              ? alpha(theme.palette.primary.main, 0.04)
+                              : alpha(theme.palette.common.white, 0.04),
+                        },
+                      }}
+                    >
                       <TableCell>{row.id}</TableCell>
-                      <TableCell>{row.title}</TableCell>
+                      <TableCell sx={{ fontWeight: 500 }}>{row.title}</TableCell>
                       <TableCell>{row.employee?.username || row.employee_id}</TableCell>
                       <TableCell>{row.start_date} ~ {row.end_date}</TableCell>
                       <TableCell>{statusChip(String(row.status || 'draft'))}</TableCell>
                       <TableCell>
-                        <Stack direction="row" spacing={1}>
+                        <Stack
+                          direction="row"
+                          spacing={0.75}
+                          flexWrap="wrap"
+                          useFlexGap
+                          sx={{ '& .MuiButton-root': { textTransform: 'none', borderRadius: '10px', fontWeight: 600 } }}
+                        >
                           <Button size="small" onClick={() => openMyContractDetail(Number(row.id))}>
                             {txt('상세', 'Details')}
                           </Button>
@@ -766,19 +909,31 @@ const EmploymentContractManagement: React.FC = () => {
                   ))}
                 </TableBody>
               </Table>
+              </TableContainer>
               {!loading && contracts.length === 0 && (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
                   {txt('등록된 계약이 없습니다.', 'No contracts yet.')}
                 </Typography>
               )}
-              <Box>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              <Box
+                sx={{
+                  mt: 1,
+                  pt: 2.5,
+                  borderTop: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: '16px',
+                  bgcolor: theme.palette.mode === 'light' ? alpha(theme.palette.common.black, 0.02) : alpha(theme.palette.common.white, 0.03),
+                  px: 2,
+                  py: 2,
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700, letterSpacing: '-0.01em', fontSize: '0.9375rem' }}>
                   {txt('PDF 파일 목록', 'PDF files')}
                 </Typography>
-                <Stack spacing={0.75}>
+                <Stack spacing={1}>
                   {contractPdfFiles.map((row) => (
                     <Box key={`pdf-contract-${row.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <PictureAsPdfIcon fontSize="small" color="error" />
+                      <PictureAsPdfIcon fontSize="small" sx={{ color: 'error.main', opacity: 0.85 }} />
                       <Link href={toPdfFileUrl(String(row.pdf_url || ''))} target="_blank" rel="noopener noreferrer" underline="hover">
                         {String(row.title || `Contract ${row.id}`)}.pdf
                       </Link>
@@ -795,36 +950,80 @@ const EmploymentContractManagement: React.FC = () => {
           )}
 
           {tab === 'templates' && (
-            <Stack spacing={1.5}>
+            <Stack spacing={2.5}>
               {canManage && (
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <Button variant="contained" startIcon={<AddIcon />} onClick={openCreateTemplate}>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon sx={{ fontSize: 18 }} />}
+                    onClick={openCreateTemplate}
+                    sx={{
+                      borderRadius: '14px',
+                      px: 2.5,
+                      py: 1,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      boxShadow: 'none',
+                      background: `linear-gradient(180deg, ${alpha(theme.palette.primary.main, 0.92)} 0%, ${theme.palette.primary.main} 100%)`,
+                      '&:hover': { boxShadow: 'none' },
+                    }}
+                  >
                     {txt('템플릿 생성', 'Create template')}
                   </Button>
                 </Box>
               )}
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={employmentContractTableHeadRowSx}>
-                    <TableCell>ID</TableCell>
-                    <TableCell>{txt('템플릿명', 'Template name')}</TableCell>
-                    <TableCell>{txt('유형', 'Type')}</TableCell>
-                    <TableCell>{txt('언어', 'Language')}</TableCell>
-                    <TableCell>{txt('버전', 'Version')}</TableCell>
-                    <TableCell>{txt('작업', 'Actions')}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
+              <TableContainer component={Paper} elevation={0} sx={tableWrapSx}>
+                <Table
+                  size="medium"
+                  sx={{
+                    '& .MuiTableCell-body': {
+                      py: 1.75,
+                      px: 2,
+                      fontSize: '0.875rem',
+                      borderColor:
+                        theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : undefined,
+                    },
+                  }}
+                >
+                  <TableHead>
+                    <TableRow sx={employmentContractTableHeadRowSx}>
+                      <TableCell>ID</TableCell>
+                      <TableCell>{txt('템플릿명', 'Template name')}</TableCell>
+                      <TableCell>{txt('유형', 'Type')}</TableCell>
+                      <TableCell>{txt('언어', 'Language')}</TableCell>
+                      <TableCell>{txt('버전', 'Version')}</TableCell>
+                      <TableCell>{txt('작업', 'Actions')}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
                   {templates.map((row) => (
-                    <TableRow key={row.id} hover>
+                    <TableRow
+                      key={row.id}
+                      hover
+                      sx={{
+                        transition: 'background-color 0.15s ease',
+                        '&:hover': {
+                          bgcolor:
+                            theme.palette.mode === 'light'
+                              ? alpha(theme.palette.primary.main, 0.04)
+                              : alpha(theme.palette.common.white, 0.04),
+                        },
+                      }}
+                    >
                       <TableCell>{row.id}</TableCell>
-                      <TableCell>{row.name}</TableCell>
+                      <TableCell sx={{ fontWeight: 500 }}>{row.name}</TableCell>
                       <TableCell>{row.contract_type}</TableCell>
                       <TableCell>{row.language}</TableCell>
                       <TableCell>{row.version}</TableCell>
                       <TableCell>
                         {canManage && (
-                          <Stack direction="row" spacing={1}>
+                          <Stack
+                            direction="row"
+                            spacing={0.75}
+                            flexWrap="wrap"
+                            useFlexGap
+                            sx={{ '& .MuiButton-root': { textTransform: 'none', borderRadius: '10px', fontWeight: 600 } }}
+                          >
                             <Button size="small" startIcon={<EditIcon />} onClick={() => openEditTemplate(row)}>
                               {txt('수정', 'Edit')}
                             </Button>
@@ -842,8 +1041,9 @@ const EmploymentContractManagement: React.FC = () => {
                   ))}
                 </TableBody>
               </Table>
+              </TableContainer>
               {!loading && templates.length === 0 && (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
                   {txt('등록된 템플릿이 없습니다.', 'No templates yet.')}
                 </Typography>
               )}
@@ -851,12 +1051,13 @@ const EmploymentContractManagement: React.FC = () => {
           )}
 
           {tab === 'my' && (
-            <Stack spacing={1.5}>
-              <Box sx={{ display: 'flex', gap: 1 }}>
+            <Stack spacing={2.5}>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 <Button
                   size="small"
                   variant={myContractFilter === 'all' ? 'contained' : 'outlined'}
                   onClick={() => setMyContractFilter('all')}
+                  sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 600, px: 2 }}
                 >
                   {txt('전체', 'All')}
                 </Button>
@@ -864,6 +1065,7 @@ const EmploymentContractManagement: React.FC = () => {
                   size="small"
                   variant={myContractFilter === 'in_progress' ? 'contained' : 'outlined'}
                   onClick={() => setMyContractFilter('in_progress')}
+                  sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 600, px: 2 }}
                 >
                   {txt('진행중', 'In progress')}
                 </Button>
@@ -871,30 +1073,52 @@ const EmploymentContractManagement: React.FC = () => {
                   size="small"
                   variant={myContractFilter === 'completed' ? 'contained' : 'outlined'}
                   onClick={() => setMyContractFilter('completed')}
+                  sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 600, px: 2 }}
                 >
                   {txt('완료', 'Completed')}
                 </Button>
               </Box>
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={employmentContractTableHeadRowSx}>
-                    <TableCell>ID</TableCell>
-                    <TableCell>{txt('제목', 'Title')}</TableCell>
-                    <TableCell>{txt('기간', 'Period')}</TableCell>
-                    <TableCell>{txt('상태', 'Status')}</TableCell>
-                    <TableCell>{txt('작업', 'Actions')}</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
+              <TableContainer component={Paper} elevation={0} sx={tableWrapSx}>
+                <Table
+                  size="medium"
+                  sx={{
+                    '& .MuiTableCell-body': {
+                      py: 1.75,
+                      px: 2,
+                      fontSize: '0.875rem',
+                      borderColor:
+                        theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : undefined,
+                    },
+                  }}
+                >
+                  <TableHead>
+                    <TableRow sx={employmentContractTableHeadRowSx}>
+                      <TableCell>ID</TableCell>
+                      <TableCell>{txt('제목', 'Title')}</TableCell>
+                      <TableCell>{txt('기간', 'Period')}</TableCell>
+                      <TableCell>{txt('상태', 'Status')}</TableCell>
+                      <TableCell>{txt('작업', 'Actions')}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
                   {visibleMyContracts.map((row) => (
                     <TableRow
                       key={row.id}
                       hover
                       onClick={() => openMyContractDetail(Number(row.id))}
-                      sx={{ cursor: 'pointer' }}
+                      sx={{
+                        cursor: 'pointer',
+                        transition: 'background-color 0.15s ease',
+                        '&:hover': {
+                          bgcolor:
+                            theme.palette.mode === 'light'
+                              ? alpha(theme.palette.primary.main, 0.04)
+                              : alpha(theme.palette.common.white, 0.04),
+                        },
+                      }}
                     >
                       <TableCell>{row.id}</TableCell>
-                      <TableCell>{row.title}</TableCell>
+                      <TableCell sx={{ fontWeight: 500 }}>{row.title}</TableCell>
                       <TableCell>{row.start_date} ~ {row.end_date}</TableCell>
                       <TableCell>{statusChip(String(row.status || 'draft'))}</TableCell>
                       <TableCell>
@@ -906,6 +1130,7 @@ const EmploymentContractManagement: React.FC = () => {
                               e.stopPropagation();
                               openSignDialog(Number(row.id), 'employee');
                             }}
+                            sx={{ textTransform: 'none', borderRadius: '10px', fontWeight: 600 }}
                           >
                             {txt('직원 서명', 'Sign as employee')}
                           </Button>
@@ -923,21 +1148,33 @@ const EmploymentContractManagement: React.FC = () => {
                   ))}
                 </TableBody>
               </Table>
+              </TableContainer>
               {!loading && visibleMyContracts.length === 0 && (
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
                   {myContractFilter === 'completed'
                     ? txt('완료된 계약서가 없습니다.', 'No completed contracts.')
                     : txt('내 계약서가 없습니다.', 'You have no contracts yet.')}
                 </Typography>
               )}
-              <Box>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              <Box
+                sx={{
+                  mt: 1,
+                  pt: 2.5,
+                  borderTop: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: '16px',
+                  bgcolor: theme.palette.mode === 'light' ? alpha(theme.palette.common.black, 0.02) : alpha(theme.palette.common.white, 0.03),
+                  px: 2,
+                  py: 2,
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700, letterSpacing: '-0.01em', fontSize: '0.9375rem' }}>
                   {txt('내 PDF 파일 목록', 'My PDF files')}
                 </Typography>
-                <Stack spacing={0.75}>
+                <Stack spacing={1}>
                   {myContractPdfFiles.map((row) => (
                     <Box key={`pdf-my-contract-${row.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <PictureAsPdfIcon fontSize="small" color="error" />
+                      <PictureAsPdfIcon fontSize="small" sx={{ color: 'error.main', opacity: 0.85 }} />
                       <Link href={toPdfFileUrl(String(row.pdf_url || ''))} target="_blank" rel="noopener noreferrer" underline="hover">
                         {String(row.title || `Contract ${row.id}`)}.pdf
                       </Link>

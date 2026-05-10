@@ -26,16 +26,13 @@ import {
   Typography
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { useTheme, alpha } from '@mui/material/styles';
 import {
-  BarChart as BarChartIcon,
   Download as DownloadIcon,
   FilterList as FilterIcon,
   Person as PersonIcon,
-  PieChart as PieChartIcon,
   Refresh as RefreshIcon,
-  Search as SearchIcon,
-  Timeline as TimelineIcon,
-  TrendingUp as TrendingUpIcon
+  Search as SearchIcon
 } from '@mui/icons-material';
 import {
   Bar,
@@ -109,6 +106,7 @@ const listStatusForStats = (
 };
 
 const WorkStatistics: React.FC = () => {
+  const theme = useTheme();
   const { t } = useTranslation();
   const [statistics, setStatistics] = useState<WorkStatistic[]>([]);
   const [filteredStatistics, setFilteredStatistics] = useState<WorkStatistic[]>([]);
@@ -322,6 +320,13 @@ const WorkStatistics: React.FC = () => {
     return 'error';
   };
 
+  const softMetricColor = (kind: 'success' | 'warning' | 'error') =>
+    kind === 'success'
+      ? '#15803D'
+      : kind === 'warning'
+        ? '#B45309'
+        : '#DC2626';
+
   const safeAvg = (arr: number[]) => {
     if (arr.length === 0) return 0;
     return arr.reduce((sum, n) => sum + n, 0) / arr.length;
@@ -344,10 +349,10 @@ const WorkStatistics: React.FC = () => {
   }));
 
   const timeDistributionData = [
-    { name: t('workStatistics.status.todo'), value: statusSummary.todo, color: '#94a3b8' },
-    { name: t('workStatistics.status.inProgress'), value: statusSummary.progress, color: '#3b82f6' },
-    { name: t('workStatistics.status.done'), value: statusSummary.done, color: '#22c55e' },
-    { name: t('workStatistics.status.unassigned'), value: statusSummary.unassigned, color: '#f59e0b' }
+    { name: t('workStatistics.status.todo'), value: statusSummary.todo, color: '#94A3B8' },
+    { name: t('workStatistics.status.inProgress'), value: statusSummary.progress, color: '#2563EB' },
+    { name: t('workStatistics.status.done'), value: statusSummary.done, color: '#16A34A' },
+    { name: t('workStatistics.status.unassigned'), value: statusSummary.unassigned, color: '#F59E0B' }
   ];
 
   const efficiencyTrendData = statistics.slice(0, 10).map((s) => ({
@@ -357,74 +362,134 @@ const WorkStatistics: React.FC = () => {
 
   const TabPanel = ({ children, value, index, ...other }: any) => (
     <div role="tabpanel" hidden={value !== index} id={`tabpanel-${index}`} aria-labelledby={`tab-${index}`} {...other}>
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ pt: 2 }}>{children}</Box>}
     </div>
   );
 
+  const kpiCardSx = {
+    borderRadius: '16px',
+    border: '1px solid',
+    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+    boxShadow:
+      theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
+    bgcolor: 'background.paper',
+  } as const;
+
   return (
-    <Box sx={{ p: 3, backgroundColor: 'workArea.main', borderRadius: 2, minHeight: '100%' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <BarChartIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-          <Typography component="h1" sx={{ fontSize: '16px !important', fontWeight: 600, color: 'text.primary', lineHeight: 1.5 }}>
-            {t('workStatistics.title')}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadStatisticsData} sx={{ borderRadius: 2 }}>
+    <Box sx={{ width: '100%', maxWidth: '100%', minHeight: '100%', bgcolor: 'transparent' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+        <Typography
+          component="h1"
+          variant="pageTitle"
+          sx={{
+            color: 'text.primary',
+            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
+            fontWeight: 600,
+            letterSpacing: '-0.022em',
+            lineHeight: 1.28,
+          }}
+        >
+          {t('workStatistics.title')}
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshIcon sx={{ fontSize: 18 }} />}
+            onClick={loadStatisticsData}
+            sx={{
+              borderRadius: '12px',
+              textTransform: 'none',
+              fontWeight: 600,
+              borderColor: 'divider',
+              color: 'text.secondary',
+              '&:hover': {
+                borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
+                bgcolor: 'action.hover',
+                color: 'text.primary',
+              },
+            }}
+          >
             {t('workStatistics.actions.refresh')}
           </Button>
-          <Button variant="outlined" startIcon={<DownloadIcon />} sx={{ borderRadius: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon sx={{ fontSize: 18 }} />}
+            sx={{
+              borderRadius: '12px',
+              textTransform: 'none',
+              fontWeight: 600,
+              borderColor: 'divider',
+              color: 'text.secondary',
+              '&:hover': {
+                borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
+                bgcolor: 'action.hover',
+                color: 'text.primary',
+              },
+            }}
+          >
             {t('workStatistics.actions.export')}
           </Button>
         </Box>
       </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' }, gap: 2, mb: 3 }}>
-        <Card>
-          <CardContent>
-            <Typography variant="body2" gutterBottom sx={{ color: 'text.primary', opacity: 0.72, fontWeight: 500 }}>
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2, px: 2.5 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {t('workStatistics.summary.avgEfficiency')}
             </Typography>
-            <Typography variant="h4" color={getEfficiencyColor(averageEfficiency) + '.main'}>{averageEfficiency.toFixed(1)}%</Typography>
+            <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: softMetricColor(getEfficiencyColor(averageEfficiency) as 'success' | 'warning' | 'error') }}>
+              {averageEfficiency.toFixed(1)}%
+            </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography variant="body2" gutterBottom sx={{ color: 'text.primary', opacity: 0.72, fontWeight: 500 }}>
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2, px: 2.5 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {t('workStatistics.summary.avgCompletionRate')}
             </Typography>
-            <Typography variant="h4" color={getProductivityColor(averageProductivity) + '.main'}>{averageProductivity.toFixed(1)}%</Typography>
+            <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: softMetricColor(getProductivityColor(averageProductivity) as 'success' | 'warning' | 'error') }}>
+              {averageProductivity.toFixed(1)}%
+            </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography variant="body2" gutterBottom sx={{ color: 'text.primary', opacity: 0.72, fontWeight: 500 }}>
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2, px: 2.5 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {t('workStatistics.summary.totalAssignedCards')}
             </Typography>
-            <Typography variant="h4">{totalAssigned}</Typography>
+            <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: 'text.primary' }}>{totalAssigned}</Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography variant="body2" gutterBottom sx={{ color: 'text.primary', opacity: 0.72, fontWeight: 500 }}>
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2, px: 2.5 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {t('workStatistics.summary.completedCards')}
             </Typography>
-            <Typography variant="h4">{totalTasksCompleted}</Typography>
+            <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: 'text.primary' }}>{totalTasksCompleted}</Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography variant="body2" gutterBottom sx={{ color: 'text.primary', opacity: 0.72, fontWeight: 500 }}>
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2, px: 2.5 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {t('workStatistics.summary.overallCompletionRate')}
             </Typography>
-            <Typography variant="h4" color="success.main">{completionRate.toFixed(1)}%</Typography>
+            <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: softMetricColor('success') }}>{completionRate.toFixed(1)}%</Typography>
           </CardContent>
         </Card>
       </Box>
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
+      <Card
+        elevation={0}
+        sx={{
+          mb: 3,
+          borderRadius: '16px',
+          border: 'none',
+          boxShadow: 'none',
+          bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.06) : alpha(theme.palette.common.black, 0.03),
+        }}
+      >
+        <CardContent sx={{ py: 2, px: 2.5 }}>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr' }, gap: 2, alignItems: 'center' }}>
             <TextField
               fullWidth
@@ -434,15 +499,23 @@ const WorkStatistics: React.FC = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon sx={{ color: 'text.primary', opacity: 0.55 }} />
+                    <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
                   </InputAdornment>
                 )
               }}
               sx={{
+                bgcolor: 'background.paper',
+                borderRadius: '12px',
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '12px',
+                  '& fieldset': {
+                    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : undefined,
+                  },
+                },
                 '& .MuiInputBase-input::placeholder': {
-                  color: 'text.primary',
-                  opacity: 0.5
-                }
+                  color: 'text.secondary',
+                  opacity: 0.85,
+                },
               }}
             />
             <FormControl fullWidth>
@@ -466,11 +539,23 @@ const WorkStatistics: React.FC = () => {
             <Button
               fullWidth
               variant="outlined"
-              startIcon={<FilterIcon />}
+              startIcon={<FilterIcon sx={{ fontSize: 18 }} />}
               onClick={() => {
                 setSearchTerm('');
                 setDepartmentFilter('');
                 setPeriodFilter('');
+              }}
+              sx={{
+                borderRadius: '12px',
+                textTransform: 'none',
+                fontWeight: 600,
+                borderColor: 'divider',
+                color: 'text.secondary',
+                '&:hover': {
+                  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
+                  bgcolor: 'action.hover',
+                  color: 'text.primary',
+                },
               }}
             >
               {t('workStatistics.actions.reset')}
@@ -479,48 +564,78 @@ const WorkStatistics: React.FC = () => {
         </CardContent>
       </Card>
 
-      <Card sx={{ mb: 3 }}>
+      <Card
+        elevation={0}
+        sx={{
+          mb: 3,
+          borderRadius: '20px',
+          overflow: 'hidden',
+          border: '1px solid',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+          boxShadow:
+            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
+          bgcolor: 'background.paper',
+        }}
+      >
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs
             value={tabValue}
             onChange={(_e, newValue) => setTabValue(newValue)}
             sx={{
+              px: 1,
+              minHeight: 48,
+              '& .MuiTabs-indicator': {
+                height: 2,
+                borderRadius: '2px 2px 0 0',
+                bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.85)' : theme.palette.grey[300],
+              },
               '& .MuiTab-root': {
-                color: 'text.primary',
-                opacity: 0.62,
-                fontWeight: 500
+                color: 'text.secondary',
+                fontWeight: 500,
+                fontSize: '0.875rem',
+                textTransform: 'none',
+                minHeight: 48,
               },
               '& .MuiTab-root.Mui-selected': {
-                opacity: 1,
-                fontWeight: 600
-              }
+                color: 'text.primary',
+                fontWeight: 600,
+              },
             }}
           >
-            <Tab label={t('workStatistics.tabs.assigneeStats')} icon={<PersonIcon />} />
-            <Tab label={t('workStatistics.tabs.completionComparison')} icon={<TrendingUpIcon />} />
-            <Tab label={t('workStatistics.tabs.cardStatusDistribution')} icon={<PieChartIcon />} />
-            <Tab label={t('workStatistics.tabs.efficiencyAnalysis')} icon={<TimelineIcon />} />
+            <Tab label={t('workStatistics.tabs.assigneeStats')} />
+            <Tab label={t('workStatistics.tabs.completionComparison')} />
+            <Tab label={t('workStatistics.tabs.cardStatusDistribution')} />
+            <Tab label={t('workStatistics.tabs.efficiencyAnalysis')} />
           </Tabs>
         </Box>
 
         <TabPanel value={tabValue} index={0}>
-          <TableContainer>
-            <Table>
+          <TableContainer sx={{ bgcolor: 'transparent' }}>
+            <Table
+              sx={{
+                borderCollapse: 'collapse',
+                '& .MuiTableCell-root': {
+                  borderLeft: 'none',
+                  borderRight: 'none',
+                  borderTop: 'none',
+                },
+              }}
+            >
               <TableHead
                 sx={{
-                  bgcolor: 'background.paper',
                   '& .MuiTableCell-head': {
-                    bgcolor: 'background.paper',
-                    color: 'text.primary',
-                    opacity: 0.92,
+                    bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
+                    color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
                     fontWeight: 600,
-                    fontSize: '0.875rem',
+                    fontSize: '0.75rem',
                     textTransform: 'none',
-                    letterSpacing: 'normal',
-                    borderBottom: '2px solid',
-                    borderColor: 'primary.main',
-                    py: 1.25
-                  }
+                    letterSpacing: '0.01em',
+                    borderBottom: `1px solid ${
+                      theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
+                    }`,
+                    py: 1.5,
+                    px: 2,
+                  },
                 }}
               >
                 <TableRow>
@@ -533,13 +648,42 @@ const WorkStatistics: React.FC = () => {
                   <TableCell>{t('workStatistics.columns.completionRate')}</TableCell>
                 </TableRow>
               </TableHead>
-              <TableBody>
+              <TableBody
+                sx={{
+                  '& .MuiTableCell-body': {
+                    py: 1.5,
+                    px: 2,
+                    fontSize: '0.875rem',
+                    borderBottom: `1px solid ${
+                      theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
+                    }`,
+                  },
+                  '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
+                    borderBottom: 'none',
+                  },
+                }}
+              >
                 {paginatedStatistics.map((stat) => (
-                  <TableRow key={stat.id} hover>
+                  <TableRow
+                    key={stat.id}
+                    hover
+                    sx={{
+                      transition: 'background-color 0.15s ease',
+                      '&:hover': { bgcolor: 'action.hover' },
+                    }}
+                  >
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Avatar sx={{ mr: 2, bgcolor: 'primary.main' }}>
-                          <PersonIcon />
+                        <Avatar
+                          sx={{
+                            mr: 2,
+                            width: 40,
+                            height: 40,
+                            bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.12),
+                            color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.55)' : theme.palette.grey[300],
+                          }}
+                        >
+                          <PersonIcon sx={{ fontSize: 20 }} />
                         </Avatar>
                         <Box>
                           <Typography variant="subtitle2" fontWeight="bold" sx={{ color: 'text.primary' }}>
@@ -556,10 +700,56 @@ const WorkStatistics: React.FC = () => {
                     <TableCell sx={{ color: 'text.primary', opacity: 0.88, fontWeight: 500 }}>{stat.tasksInProgress}</TableCell>
                     <TableCell sx={{ color: 'text.primary', opacity: 0.88, fontWeight: 500 }}>{stat.tasksCompleted}</TableCell>
                     <TableCell>
-                      <Chip label={`${stat.efficiency.toFixed(1)}%`} color={getEfficiencyColor(stat.efficiency)} size="small" />
+                      <Chip
+                        label={`${stat.efficiency.toFixed(1)}%`}
+                        size="small"
+                        sx={{
+                          height: 26,
+                          borderRadius: '8px',
+                          fontWeight: 600,
+                          fontSize: '0.6875rem',
+                          border: '1px solid',
+                          borderColor:
+                            getEfficiencyColor(stat.efficiency) === 'success'
+                              ? alpha(theme.palette.success.main, 0.35)
+                              : getEfficiencyColor(stat.efficiency) === 'warning'
+                                ? alpha(theme.palette.warning.main, 0.4)
+                                : alpha(theme.palette.error.main, 0.35),
+                          bgcolor:
+                            getEfficiencyColor(stat.efficiency) === 'success'
+                              ? alpha(theme.palette.success.main, 0.08)
+                              : getEfficiencyColor(stat.efficiency) === 'warning'
+                                ? alpha(theme.palette.warning.main, 0.1)
+                                : alpha(theme.palette.error.main, 0.08),
+                          color: softMetricColor(getEfficiencyColor(stat.efficiency) as 'success' | 'warning' | 'error'),
+                        }}
+                      />
                     </TableCell>
                     <TableCell>
-                      <Chip label={`${stat.productivity.toFixed(1)}%`} color={getProductivityColor(stat.productivity)} size="small" />
+                      <Chip
+                        label={`${stat.productivity.toFixed(1)}%`}
+                        size="small"
+                        sx={{
+                          height: 26,
+                          borderRadius: '8px',
+                          fontWeight: 600,
+                          fontSize: '0.6875rem',
+                          border: '1px solid',
+                          borderColor:
+                            getProductivityColor(stat.productivity) === 'success'
+                              ? alpha(theme.palette.success.main, 0.35)
+                              : getProductivityColor(stat.productivity) === 'warning'
+                                ? alpha(theme.palette.warning.main, 0.4)
+                                : alpha(theme.palette.error.main, 0.35),
+                          bgcolor:
+                            getProductivityColor(stat.productivity) === 'success'
+                              ? alpha(theme.palette.success.main, 0.08)
+                              : getProductivityColor(stat.productivity) === 'warning'
+                                ? alpha(theme.palette.warning.main, 0.1)
+                                : alpha(theme.palette.error.main, 0.08),
+                          color: softMetricColor(getProductivityColor(stat.productivity) as 'success' | 'warning' | 'error'),
+                        }}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -576,12 +766,28 @@ const WorkStatistics: React.FC = () => {
             </Table>
           </TableContainer>
 
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2.5, px: 2 }}>
             <Pagination
               count={Math.max(1, Math.ceil(filteredStatistics.length / itemsPerPage))}
               page={page}
               onChange={(_, value) => setPage(value)}
-              color="primary"
+              shape="rounded"
+              siblingCount={1}
+              sx={{
+                '& .MuiPaginationItem-root': {
+                  borderRadius: '10px',
+                  fontWeight: 600,
+                  minWidth: 36,
+                  height: 36,
+                },
+                '& .Mui-selected': {
+                  bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.12),
+                  color: 'text.primary',
+                  '&:hover': {
+                    bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.12)' : alpha(theme.palette.common.white, 0.16),
+                  },
+                },
+              }}
             />
           </Box>
         </TabPanel>
@@ -597,8 +803,8 @@ const WorkStatistics: React.FC = () => {
                 <XAxis dataKey="name" />
                 <YAxis />
                 <RechartsTooltip />
-                <Line type="monotone" dataKey="productivity" name={t('workStatistics.columns.completionRate')} stroke="#3b82f6" strokeWidth={2} />
-                <Line type="monotone" dataKey="efficiency" name={t('workStatistics.columns.efficiency')} stroke="#22c55e" strokeWidth={2} />
+                <Line type="monotone" dataKey="productivity" name={t('workStatistics.columns.completionRate')} stroke="#2563EB" strokeWidth={2} />
+                <Line type="monotone" dataKey="efficiency" name={t('workStatistics.columns.efficiency')} stroke="#007A83" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           </Box>
@@ -642,7 +848,7 @@ const WorkStatistics: React.FC = () => {
                 <XAxis dataKey="name" />
                 <YAxis />
                 <RechartsTooltip />
-                <Bar dataKey="completionRate" name={t('workStatistics.columns.completionRate')} fill="#0d8aff" />
+                <Bar dataKey="completionRate" name={t('workStatistics.columns.completionRate')} fill="#007A83" />
               </BarChart>
             </ResponsiveContainer>
           </Box>

@@ -12,6 +12,7 @@ import {
   Alert
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { alpha, useTheme } from '@mui/material/styles';
 import { accountingBasicInfoService } from '../../services/api';
 import { useStore } from '../../store';
 
@@ -30,6 +31,7 @@ const emptyState: BasicInfoState = {
 };
 
 const AccountingBasicInfo: React.FC = () => {
+  const theme = useTheme();
   const { t } = useTranslation();
   const { user } = useStore();
   const [data, setData] = useState<BasicInfoState>(emptyState);
@@ -107,12 +109,21 @@ const AccountingBasicInfo: React.FC = () => {
     key: keyof BasicInfoState,
     placeholder: string
   ) => (
-    <Card variant="outlined" sx={{ height: '100%' }}>
-      <CardContent>
-        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
+    <Card
+      elevation={0}
+      sx={{
+        height: '100%',
+        borderRadius: '16px',
+        border: '1px solid',
+        borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+        boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
+      }}
+    >
+      <CardContent sx={{ py: 2.25, px: 2.5 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2, letterSpacing: '-0.01em' }}>
           {title}
         </Typography>
-        <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
+        <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
           <TextField
             fullWidth
             placeholder={placeholder}
@@ -126,12 +137,19 @@ const AccountingBasicInfo: React.FC = () => {
                 updateList(key, inputs[key]);
               }
             }}
+            sx={{
+              flex: 1,
+              minWidth: 160,
+              '& .MuiOutlinedInput-root': { borderRadius: '12px' },
+            }}
           />
           <Button
             variant="contained"
-            startIcon={<AddIcon />}
+            disableElevation
+            startIcon={<AddIcon fontSize="small" />}
             onClick={() => updateList(key, inputs[key])}
             disabled={!canEdit || !inputs[key].trim()}
+            sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}
           >
             {t('accountingBasicInfo.add')}
           </Button>
@@ -149,18 +167,24 @@ const AccountingBasicInfo: React.FC = () => {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  border: '1px solid #e0e0e0',
-                  borderRadius: 1,
+                  border: '1px solid',
+                  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+                  borderRadius: '12px',
                   px: 1.5,
-                  py: 1
+                  py: 1,
+                  bgcolor: theme.palette.mode === 'light' ? 'rgba(0,0,0,0.02)' : alpha(theme.palette.common.white, 0.04),
                 }}
               >
                 <Typography variant="body2">{item}</Typography>
                 <IconButton
                   size="small"
-                  color="error"
                   onClick={() => removeItem(key, idx)}
                   disabled={!canEdit}
+                  sx={{
+                    color: 'text.secondary',
+                    borderRadius: '10px',
+                    '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.08) },
+                  }}
                 >
                   <DeleteIcon fontSize="small" />
                 </IconButton>
@@ -173,12 +197,16 @@ const AccountingBasicInfo: React.FC = () => {
   );
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 0 }}>
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+        <Typography
+          component="h1"
+          variant="pageTitle"
+          sx={{ fontWeight: 600, letterSpacing: '-0.022em', fontSize: { xs: '1.125rem', sm: '1.3125rem' }, mb: 0.75 }}
+        >
           {t('accountingBasicInfo.title')}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5, maxWidth: 720 }}>
           {t('accountingBasicInfo.description')}
         </Typography>
       </Box>
@@ -225,14 +253,25 @@ const AccountingBasicInfo: React.FC = () => {
 
       <Divider sx={{ my: 3 }} />
 
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-        <Button variant="outlined" onClick={() => setData(emptyState)} disabled={!canEdit || loading}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, flexWrap: 'wrap' }}>
+        <Button
+          variant="outlined"
+          onClick={() => setData(emptyState)}
+          disabled={!canEdit || loading}
+          sx={{
+            textTransform: 'none',
+            borderRadius: '12px',
+            borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.14)' : 'divider',
+          }}
+        >
           {t('common.reset')}
         </Button>
         <Button
           variant="contained"
+          disableElevation
           onClick={handleSave}
           disabled={!canEdit || saving || loading}
+          sx={{ textTransform: 'none', borderRadius: '12px', px: 2.5 }}
         >
           {saving ? t('accountingBasicInfo.saving') : t('common.save')}
         </Button>

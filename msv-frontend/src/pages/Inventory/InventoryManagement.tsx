@@ -53,7 +53,7 @@ import {
   Scale as ScaleIcon
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { alpha } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
 import { api, inventoryService, partnerService } from '../../services/api';
 import { useMenuStore, useStore } from '../../store';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
@@ -101,6 +101,27 @@ function invColWidthPct(key: string): string {
   return `${(w / INV_COL_TOTAL) * 100}%`;
 }
 
+/** 헤더·본문 동일 정렬 — 재고·단가·총액은 좌측, 날짜는 우측, 상태·작업은 중앙 */
+const INV_COL_ALIGN: Record<string, 'left' | 'right' | 'center'> = {
+  status: 'center',
+  name: 'left',
+  sku: 'left',
+  category: 'left',
+  currentStock: 'left',
+  unitPrice: 'left',
+  totalValue: 'left',
+  supplier: 'left',
+  location: 'left',
+  lastUpdated: 'right',
+  actions: 'center',
+};
+
+function invColTableAlign(key: string): 'left' | 'right' | 'center' {
+  return INV_COL_ALIGN[key] ?? 'left';
+}
+
+const INV_TD_ELLIPSIS_KEYS = new Set(['name', 'sku', 'category', 'supplier', 'location']);
+
 interface InventoryItem {
   id: number;
   name: string;
@@ -131,6 +152,7 @@ interface InventoryStats {
 
 const InventoryManagement: React.FC = () => {
   const { t } = useTranslation();
+  const theme = useTheme();
   const { user } = useStore();
   const { menus, hasMenuPermission, loading: menusLoading } = useMenuStore();
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
@@ -253,7 +275,7 @@ const InventoryManagement: React.FC = () => {
             partnerId: product.partner_id != null ? Number(product.partner_id) : '',
             location: product.location || '',
             imageUrl: product.image_url || '',
-            unit: product.unit || '개'
+            unit: product.unit || 'Piece'
           };
         });
         setInventoryItems(transformedData);
@@ -322,29 +344,17 @@ const InventoryManagement: React.FC = () => {
     setFilteredItems(filtered);
   };
 
-  const getStatusChip = (status: string) => {
-    switch (status) {
-      case 'in_stock':
-        return <Chip label={t('inventoryManagement.stockStatus.inStock')} color="success" size="small" />;
-      case 'low_stock':
-        return <Chip label={t('inventoryManagement.stockStatus.lowStock')} color="warning" size="small" />;
-      case 'out_of_stock':
-        return <Chip label={t('inventoryManagement.stockStatus.outOfStock')} color="error" size="small" />;
-      default:
-        return <Chip label={t('inventoryManagement.stockStatus.unknown')} color="default" size="small" />;
-    }
-  };
-
   const getStatusIcon = (status: string) => {
+    const sx = { fontSize: '1.125rem' as const };
     switch (status) {
       case 'in_stock':
-        return <TrendingUpIcon color="success" />;
+        return <TrendingUpIcon sx={{ ...sx, color: alpha(theme.palette.success.main, 0.85) }} />;
       case 'low_stock':
-        return <WarningIcon color="warning" />;
+        return <WarningIcon sx={{ ...sx, color: alpha(theme.palette.warning.main, 0.9) }} />;
       case 'out_of_stock':
-        return <TrendingDownIcon color="error" />;
+        return <TrendingDownIcon sx={{ ...sx, color: alpha(theme.palette.error.main, 0.85) }} />;
       default:
-        return <InventoryIcon />;
+        return <InventoryIcon sx={{ ...sx, color: 'text.disabled' }} />;
     }
   };
 
@@ -753,7 +763,7 @@ const InventoryManagement: React.FC = () => {
         location: itemData.location,
         image_url: itemData.imageUrl || undefined,
         cost_price: 0,
-        unit: (itemData.unit && String(itemData.unit).trim()) || '개',
+        unit: (itemData.unit && String(itemData.unit).trim()) || 'Piece',
         tax_rate: 0
       };
       if (itemData.partnerId !== '' && itemData.partnerId != null) {
@@ -818,27 +828,106 @@ const InventoryManagement: React.FC = () => {
     setOrderBy(property);
   };
 
-  const thSx = (key: string) => ({
-    width: invColWidthPct(key),
-    minWidth: 0,
-    position: 'relative' as const,
-    overflow: 'hidden',
-    verticalAlign: 'middle' as const,
-    boxSizing: 'border-box' as const
-  });
+  const thSx = (key: string) => {
+    const align = invColTableAlign(key);
+    const sortLabelLayout =
+      align === 'right'
+        ? { width: '100%', justifyContent: 'flex-end' as const }
+        : align === 'center'
+          ? { width: '100%', justifyContent: 'center' as const }
+          : {};
+    return {
+      width: invColWidthPct(key),
+      minWidth: 0,
+      position: 'relative' as const,
+      overflow: 'visible',
+      verticalAlign: 'middle' as const,
+      boxSizing: 'border-box' as const,
+      '& .MuiTableSortLabel-root': { color: 'inherit', ...sortLabelLayout },
+    };
+  };
 
   const tdSx = (key: string) => ({
     width: invColWidthPct(key),
     minWidth: 0,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
+    overflow: INV_TD_ELLIPSIS_KEYS.has(key) ? ('hidden' as const) : ('visible' as const),
+    textOverflow: INV_TD_ELLIPSIS_KEYS.has(key) ? ('ellipsis' as const) : undefined,
     verticalAlign: 'middle' as const,
-    boxSizing: 'border-box' as const
+    boxSizing: 'border-box' as const,
   });
+
+  const softChipSx = (tone: 'default' | 'info' | 'warning' | 'success' | 'error' | 'primary' | 'secondary') => {
+    const light = theme.palette.mode === 'light';
+    if (tone === 'default') {
+      return {
+        height: 26,
+        borderRadius: '8px',
+        fontWeight: 600,
+        fontSize: '0.6875rem',
+        border: `1px solid ${light ? 'rgba(15, 23, 42, 0.12)' : theme.palette.divider}`,
+        bgcolor: light ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.06),
+        color: 'text.secondary',
+      } as const;
+    }
+    const main =
+      tone === 'primary'
+        ? theme.palette.primary.main
+        : tone === 'secondary'
+          ? theme.palette.secondary.main
+          : theme.palette[tone].main;
+    const dark =
+      tone === 'primary'
+        ? theme.palette.primary.dark
+        : tone === 'secondary'
+          ? theme.palette.secondary.dark
+          : theme.palette[tone].dark;
+    return {
+      height: 26,
+      borderRadius: '8px',
+      fontWeight: 600,
+      fontSize: '0.6875rem',
+      border: `1px solid ${alpha(main, light ? 0.3 : 0.42)}`,
+      bgcolor: alpha(main, light ? 0.08 : 0.12),
+      color: dark,
+    } as const;
+  };
+
+  const getStatusChip = (status: string) => {
+    switch (status) {
+      case 'in_stock':
+        return <Chip label={t('inventoryManagement.stockStatus.inStock')} size="small" sx={softChipSx('success')} />;
+      case 'low_stock':
+        return <Chip label={t('inventoryManagement.stockStatus.lowStock')} size="small" sx={softChipSx('warning')} />;
+      case 'out_of_stock':
+        return <Chip label={t('inventoryManagement.stockStatus.outOfStock')} size="small" sx={softChipSx('error')} />;
+      default:
+        return <Chip label={t('inventoryManagement.stockStatus.unknown')} size="small" sx={softChipSx('default')} />;
+    }
+  };
+
+  const kpiCardSx = {
+    borderRadius: '16px',
+    border: '1px solid',
+    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+    boxShadow:
+      theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
+    bgcolor: 'background.paper',
+  } as const;
+
+  const outlineToolbarBtnSx = {
+    textTransform: 'none' as const,
+    borderRadius: '12px',
+    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.14)' : 'divider',
+    color: 'text.primary',
+    '&:hover': {
+      borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.22)' : theme.palette.grey[500],
+      bgcolor: 'action.hover',
+    },
+  };
 
   return (
     <Box sx={{
-      p: 3,
+      p: 0,
       backgroundColor: 'workArea.main',
       borderRadius: 2,
       minHeight: '100%',
@@ -847,19 +936,21 @@ const InventoryManagement: React.FC = () => {
       minWidth: 0,
       boxSizing: 'border-box'
     }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <InventoryIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-          <Typography component="h1" sx={{
-            fontSize: '16px !important',
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+        <Typography
+          component="h1"
+          variant="pageTitle"
+          sx={{
             fontWeight: 600,
+            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
+            letterSpacing: '-0.022em',
+            lineHeight: 1.28,
             color: 'text.primary',
-            lineHeight: 1.5
-          }}>
-            {t('inventoryManagement.pageTitle')}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+          }}
+        >
+          {t('inventoryManagement.pageTitle')}
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
           <input
             ref={excelFileInputRef}
             type="file"
@@ -871,14 +962,14 @@ const InventoryManagement: React.FC = () => {
             <span style={{ display: 'inline-flex' }}>
               <Button
                 variant="outlined"
-                startIcon={<WarehouseIcon />}
+                startIcon={<WarehouseIcon fontSize="small" />}
                 disabled={menusLoading || !basicMenuFlags.canMutate}
                 onClick={() => {
                   setNewWarehouseInput('');
                   setWarehouseManageOpen(true);
                   loadWarehouseManageList();
                 }}
-                sx={{ borderRadius: 2 }}
+                sx={outlineToolbarBtnSx}
               >
                 {t('inventoryManagement.manageWarehouseButton')}
               </Button>
@@ -888,14 +979,14 @@ const InventoryManagement: React.FC = () => {
             <span style={{ display: 'inline-flex' }}>
               <Button
                 variant="outlined"
-                startIcon={<CategoryIcon />}
+                startIcon={<CategoryIcon fontSize="small" />}
                 disabled={menusLoading || !basicMenuFlags.canMutate}
                 onClick={() => {
                   setNewCategoryInput('');
                   setCategoryManageOpen(true);
                   loadCategoryManageList();
                 }}
-                sx={{ borderRadius: 2 }}
+                sx={outlineToolbarBtnSx}
               >
                 {t('inventoryManagement.manageCategoryButton')}
               </Button>
@@ -905,14 +996,14 @@ const InventoryManagement: React.FC = () => {
             <span style={{ display: 'inline-flex' }}>
               <Button
                 variant="outlined"
-                startIcon={<ScaleIcon />}
+                startIcon={<ScaleIcon fontSize="small" />}
                 disabled={menusLoading || !basicMenuFlags.canMutate}
                 onClick={() => {
                   setNewUnitInput('');
                   setUnitManageOpen(true);
                   loadUnitManageList();
                 }}
-                sx={{ borderRadius: 2 }}
+                sx={outlineToolbarBtnSx}
               >
                 {t('inventoryManagement.manageUnitButton')}
               </Button>
@@ -922,10 +1013,10 @@ const InventoryManagement: React.FC = () => {
             <span style={{ display: 'inline-flex' }}>
               <Button
                 variant="outlined"
-                startIcon={<UploadFileIcon />}
+                startIcon={<UploadFileIcon fontSize="small" />}
                 disabled={excelUploading || menusLoading || !basicMenuFlags.canMutate}
                 onClick={() => excelFileInputRef.current?.click()}
-                sx={{ borderRadius: 2 }}
+                sx={outlineToolbarBtnSx}
               >
                 {t('inventoryManagement.excelBulkApply')}
               </Button>
@@ -937,7 +1028,7 @@ const InventoryManagement: React.FC = () => {
                 variant="outlined"
                 disabled={menusLoading || !basicMenuFlags.canRead}
                 onClick={handleDownloadInventoryExcelSample}
-                sx={{ borderRadius: 2 }}
+                sx={outlineToolbarBtnSx}
               >
                 {t('inventoryManagement.downloadTemplate')}
               </Button>
@@ -947,10 +1038,15 @@ const InventoryManagement: React.FC = () => {
             <span style={{ display: 'inline-flex' }}>
               <Button
                 variant="contained"
-                startIcon={<AddIcon />}
+                disableElevation
+                startIcon={<AddIcon fontSize="small" />}
                 disabled={menusLoading || !basicMenuFlags.canCreate}
                 onClick={handleAddItem}
-                sx={{ borderRadius: 2 }}
+                sx={{
+                  textTransform: 'none',
+                  borderRadius: '12px',
+                  px: 2,
+                }}
               >
                 {t('inventoryManagement.addItem')}
               </Button>
@@ -966,26 +1062,26 @@ const InventoryManagement: React.FC = () => {
       ) : null}
 
       {/* 통계 카드 */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
+      <Grid container spacing={2.5} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
+          <Card elevation={0} sx={kpiCardSx}>
+            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
                 {t('inventoryManagement.stats.totalItems')}
               </Typography>
-              <Typography variant="h4">
+              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
                 {inventoryStats.totalProducts}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
+          <Card elevation={0} sx={kpiCardSx}>
+            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
                 {t('inventoryManagement.stats.totalValue')}
               </Typography>
-              <Typography variant="h4">
+              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
                 {t('inventoryManagement.currency')}{' '}
                 {inventoryStats.totalValue.toLocaleString()}
               </Typography>
@@ -993,24 +1089,24 @@ const InventoryManagement: React.FC = () => {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
+          <Card elevation={0} sx={kpiCardSx}>
+            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
                 {t('inventoryManagement.stats.lowStock')}
               </Typography>
-              <Typography variant="h4" color="warning.main">
+              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'warning.main' }}>
                 {inventoryStats.lowStockItems}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
+          <Card elevation={0} sx={kpiCardSx}>
+            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
                 {t('inventoryManagement.stats.outOfStock')}
               </Typography>
-              <Typography variant="h4" color="error.main">
+              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'error.main' }}>
                 {inventoryStats.outOfStockItems}
               </Typography>
             </CardContent>
@@ -1019,8 +1115,18 @@ const InventoryManagement: React.FC = () => {
       </Grid>
 
       {/* 필터 및 검색 */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
+      <Card
+        elevation={0}
+        sx={{
+          mb: 3,
+          borderRadius: '16px',
+          border: '1px solid',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+          bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.03),
+          boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : 'none',
+        }}
+      >
+        <CardContent sx={{ py: 2.5, px: 2.5 }}>
           <Grid container spacing={2} alignItems="center">
             <Grid size={{ xs: 12, md: 3 }}>
               <TextField
@@ -1031,9 +1137,18 @@ const InventoryManagement: React.FC = () => {
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon />
+                      <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
                     </InputAdornment>
                   ),
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '12px',
+                    bgcolor: 'background.paper',
+                    '& fieldset': {
+                      borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : 'divider',
+                    },
+                  },
                 }}
               />
             </Grid>
@@ -1088,13 +1203,14 @@ const InventoryManagement: React.FC = () => {
               <Button
                 fullWidth
                 variant="outlined"
-                startIcon={<FilterIcon />}
+                startIcon={<FilterIcon fontSize="small" />}
                 onClick={() => {
                   setSearchTerm('');
                   setCategoryFilter('');
                   setWarehouseFilter('');
                   setStatusFilter('');
                 }}
+                sx={outlineToolbarBtnSx}
               >
                 {t('inventoryManagement.reset')}
               </Button>
@@ -1104,31 +1220,54 @@ const InventoryManagement: React.FC = () => {
       </Card>
 
       {/* 재고 목록 테이블 — 열 너비는 뷰포트에 맞게 비율(%)로 자동 분배 */}
-      <Card sx={{ width: '100%', minWidth: 0, overflow: 'hidden' }}>
-        <TableContainer sx={{ width: '100%', maxWidth: '100%', overflowX: 'hidden' }}>
-          <Table size="small" sx={{ tableLayout: 'fixed', width: '100%', minWidth: 0 }}>
+      <Card
+        elevation={0}
+        sx={{
+          width: '100%',
+          minWidth: 0,
+          overflow: 'hidden',
+          borderRadius: '20px',
+          border: '1px solid',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+          boxShadow:
+            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
+          bgcolor: 'background.paper',
+        }}
+      >
+        <TableContainer sx={{ width: '100%', maxWidth: '100%', overflowX: 'hidden', bgcolor: 'transparent' }}>
+          <Table
+            size="small"
+            sx={{
+              tableLayout: 'fixed',
+              width: '100%',
+              minWidth: 0,
+              borderCollapse: 'collapse',
+              '& .MuiTableCell-root': {
+                borderLeft: 'none',
+                borderRight: 'none',
+                borderTop: 'none',
+              },
+            }}
+          >
             <TableHead
               sx={{
-                bgcolor: 'background.paper',
                 '& .MuiTableCell-head': {
-                  bgcolor: 'background.paper',
-                  color: 'text.primary',
+                  bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
+                  color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
                   fontWeight: 600,
-                  fontSize: '0.875rem',
+                  fontSize: '0.75rem',
                   textTransform: 'none',
-                  letterSpacing: 'normal',
-                  borderBottom: '2px solid',
-                  borderColor: 'primary.main',
-                  py: 1.25,
-                  '& .MuiTableSortLabel-root': { color: 'inherit' }
+                  letterSpacing: '0.01em',
+                  borderBottom: `1px solid ${
+                    theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
+                  }`,
+                  py: 1.5,
+                  px: 2,
                 },
-                '& .MuiTableCell-head:last-of-type': {
-                  textAlign: 'center'
-                }
               }}
             >
               <TableRow>
-                <TableCell sx={thSx('status')}>
+                <TableCell align={invColTableAlign('status')} sx={thSx('status')}>
                   <TableSortLabel
                     active={orderBy === 'status'}
                     direction={orderBy === 'status' ? order : 'asc'}
@@ -1137,7 +1276,7 @@ const InventoryManagement: React.FC = () => {
                     {t('inventoryManagement.columns.status')}
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={thSx('name')}>
+                <TableCell align={invColTableAlign('name')} sx={thSx('name')}>
                   <TableSortLabel
                     active={orderBy === 'name'}
                     direction={orderBy === 'name' ? order : 'asc'}
@@ -1146,7 +1285,7 @@ const InventoryManagement: React.FC = () => {
                     {t('inventoryManagement.columns.productName')}
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={thSx('sku')}>
+                <TableCell align={invColTableAlign('sku')} sx={thSx('sku')}>
                   <TableSortLabel
                     active={orderBy === 'sku'}
                     direction={orderBy === 'sku' ? order : 'asc'}
@@ -1155,7 +1294,7 @@ const InventoryManagement: React.FC = () => {
                     {t('inventoryManagement.columns.sku')}
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={thSx('category')}>
+                <TableCell align={invColTableAlign('category')} sx={thSx('category')}>
                   <TableSortLabel
                     active={orderBy === 'category'}
                     direction={orderBy === 'category' ? order : 'asc'}
@@ -1164,7 +1303,7 @@ const InventoryManagement: React.FC = () => {
                     {t('inventoryManagement.columns.category')}
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={thSx('currentStock')}>
+                <TableCell align={invColTableAlign('currentStock')} sx={thSx('currentStock')}>
                   <TableSortLabel
                     active={orderBy === 'currentStock'}
                     direction={orderBy === 'currentStock' ? order : 'asc'}
@@ -1173,7 +1312,7 @@ const InventoryManagement: React.FC = () => {
                     {t('inventoryManagement.columns.currentStock')}
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={thSx('unitPrice')}>
+                <TableCell align={invColTableAlign('unitPrice')} sx={thSx('unitPrice')}>
                   <TableSortLabel
                     active={orderBy === 'unitPrice'}
                     direction={orderBy === 'unitPrice' ? order : 'asc'}
@@ -1182,7 +1321,7 @@ const InventoryManagement: React.FC = () => {
                     {t('inventoryManagement.columns.unitPrice')}
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={thSx('totalValue')}>
+                <TableCell align={invColTableAlign('totalValue')} sx={thSx('totalValue')}>
                   <TableSortLabel
                     active={orderBy === 'totalValue'}
                     direction={orderBy === 'totalValue' ? order : 'asc'}
@@ -1191,7 +1330,7 @@ const InventoryManagement: React.FC = () => {
                     {t('inventoryManagement.columns.totalValue')}
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={thSx('supplier')}>
+                <TableCell align={invColTableAlign('supplier')} sx={thSx('supplier')}>
                   <TableSortLabel
                     active={orderBy === 'supplier'}
                     direction={orderBy === 'supplier' ? order : 'asc'}
@@ -1200,7 +1339,7 @@ const InventoryManagement: React.FC = () => {
                     {t('inventoryManagement.columns.supplier')}
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={thSx('location')}>
+                <TableCell align={invColTableAlign('location')} sx={thSx('location')}>
                   <TableSortLabel
                     active={orderBy === 'location'}
                     direction={orderBy === 'location' ? order : 'asc'}
@@ -1209,7 +1348,7 @@ const InventoryManagement: React.FC = () => {
                     {t('inventoryManagement.columns.location')}
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={thSx('lastUpdated')}>
+                <TableCell align={invColTableAlign('lastUpdated')} sx={thSx('lastUpdated')}>
                   <TableSortLabel
                     active={orderBy === 'lastUpdated'}
                     direction={orderBy === 'lastUpdated' ? order : 'asc'}
@@ -1218,105 +1357,148 @@ const InventoryManagement: React.FC = () => {
                     {t('inventoryManagement.columns.lastUpdated')}
                   </TableSortLabel>
                 </TableCell>
-                <TableCell sx={thSx('actions')}>
+                <TableCell align={invColTableAlign('actions')} sx={thSx('actions')}>
                   {t('inventoryManagement.columns.actions')}
                 </TableCell>
               </TableRow>
             </TableHead>
-            <TableBody>
+            <TableBody
+              sx={{
+                '& .MuiTableCell-body': {
+                  py: 1.5,
+                  px: 2,
+                  fontSize: '0.875rem',
+                  borderBottom: `1px solid ${
+                    theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
+                  }`,
+                },
+                '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
+                  borderBottom: 'none',
+                },
+              }}
+            >
               {paginatedItems.map((item) => (
                 <TableRow
                   key={item.id}
                   hover
                   onClick={basicMenuFlags.canRead || basicMenuFlags.canEdit ? () => handleOpenView(item) : undefined}
-                  sx={{ cursor: basicMenuFlags.canRead || basicMenuFlags.canEdit ? 'pointer' : 'default' }}
+                  sx={{
+                    cursor: basicMenuFlags.canRead || basicMenuFlags.canEdit ? 'pointer' : 'default',
+                    transition: 'background-color 0.15s ease',
+                    '&:hover': { bgcolor: 'action.hover' },
+                  }}
                 >
-                  <TableCell sx={tdSx('status')}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                  <TableCell align={invColTableAlign('status')} sx={tdSx('status')}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 1,
+                        minWidth: 0,
+                        width: '100%',
+                      }}
+                    >
                       {getStatusIcon(item.status)}
                       {getStatusChip(item.status)}
                     </Box>
                   </TableCell>
-                  <TableCell sx={{ ...tdSx('name'), whiteSpace: 'normal' }}>
+                  <TableCell align={invColTableAlign('name')} sx={{ ...tdSx('name'), whiteSpace: 'normal' }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
                       {item.imageUrl ? (
                         <Box
                           component="img"
                           src={resolveProductImageUrl(item.imageUrl)}
                           alt=""
-                          sx={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 1, flexShrink: 0 }}
+                          sx={{
+                            width: 36,
+                            height: 36,
+                            objectFit: 'cover',
+                            borderRadius: '10px',
+                            flexShrink: 0,
+                            border: '1px solid',
+                            borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+                          }}
                         />
                       ) : null}
-                      <Typography variant="subtitle2" fontWeight="bold" sx={{ wordBreak: 'break-word' }}>
+                      <Typography variant="subtitle2" fontWeight={600} sx={{ wordBreak: 'break-word' }}>
                         {item.name}
                       </Typography>
                     </Box>
                   </TableCell>
-                  <TableCell sx={tdSx('sku')}>
+                  <TableCell align={invColTableAlign('sku')} sx={tdSx('sku')}>
                     <Typography variant="body2" color="text.secondary" noWrap>
                       {item.sku}
                     </Typography>
                   </TableCell>
-                  <TableCell sx={tdSx('category')}>
+                  <TableCell align={invColTableAlign('category')} sx={tdSx('category')}>
                     <Typography variant="body2" noWrap title={item.category}>
                       {item.category}
                     </Typography>
                   </TableCell>
-                  <TableCell sx={tdSx('currentStock')}>
+                  <TableCell align={invColTableAlign('currentStock')} sx={tdSx('currentStock')}>
                     <Typography
                       variant="body2"
                       color={item.currentStock <= item.minStock ? 'error.main' : 'text.primary'}
-                      fontWeight={item.currentStock <= item.minStock ? 'bold' : 'normal'}
+                      fontWeight={item.currentStock <= item.minStock ? 600 : 500}
                       noWrap
+                      sx={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}
                     >
                       {item.currentStock} / {item.maxStock}
                     </Typography>
                   </TableCell>
-                  <TableCell sx={tdSx('unitPrice')}>
-                    <Typography variant="body2" noWrap>
+                  <TableCell align={invColTableAlign('unitPrice')} sx={tdSx('unitPrice')}>
+                    <Typography variant="body2" noWrap sx={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
                       {t('inventoryManagement.currency')} {item.unitPrice.toLocaleString()}
                     </Typography>
                   </TableCell>
-                  <TableCell sx={tdSx('totalValue')}>
-                    <Typography variant="body2" noWrap>
+                  <TableCell align={invColTableAlign('totalValue')} sx={tdSx('totalValue')}>
+                    <Typography variant="body2" noWrap sx={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
                       {t('inventoryManagement.currency')} {item.totalValue.toLocaleString()}
                     </Typography>
                   </TableCell>
-                  <TableCell sx={tdSx('supplier')}>
+                  <TableCell align={invColTableAlign('supplier')} sx={tdSx('supplier')}>
                     <Typography variant="body2" noWrap title={item.supplier}>
                       {item.supplier}
                     </Typography>
                   </TableCell>
-                  <TableCell sx={tdSx('location')}>
+                  <TableCell align={invColTableAlign('location')} sx={tdSx('location')}>
                     <Typography variant="body2" noWrap title={item.location}>
                       {item.location}
                     </Typography>
                   </TableCell>
-                  <TableCell sx={tdSx('lastUpdated')}>
-                    <Typography variant="body2" noWrap>
+                  <TableCell align={invColTableAlign('lastUpdated')} sx={tdSx('lastUpdated')}>
+                    <Typography variant="body2" noWrap sx={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>
                       {item.lastUpdated}
                     </Typography>
                   </TableCell>
-                  <TableCell sx={tdSx('actions')} onClick={(e) => e.stopPropagation()}>
-                    <Tooltip
-                      title={
-                        !basicMenuFlags.canDelete && !menusLoading
-                          ? t('common.menuNoDelete')
-                          : t('inventoryManagement.tooltips.delete')
-                      }
-                      disableHoverListener={menusLoading || basicMenuFlags.canDelete}
-                    >
-                      <span>
-                        <IconButton
-                          size="small"
-                          disabled={menusLoading || !basicMenuFlags.canDelete}
-                          onClick={() => handleDeleteItem(item.id)}
-                          aria-label={t('inventoryManagement.tooltips.delete')}
-                        >
-                          <DeleteIcon />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
+                  <TableCell align={invColTableAlign('actions')} sx={tdSx('actions')} onClick={(e) => e.stopPropagation()}>
+                    <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                      <Tooltip
+                        title={
+                          !basicMenuFlags.canDelete && !menusLoading
+                            ? t('common.menuNoDelete')
+                            : t('inventoryManagement.tooltips.delete')
+                        }
+                        disableHoverListener={menusLoading || basicMenuFlags.canDelete}
+                      >
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={menusLoading || !basicMenuFlags.canDelete}
+                            onClick={() => handleDeleteItem(item.id)}
+                            aria-label={t('inventoryManagement.tooltips.delete')}
+                            sx={{
+                              color: 'text.secondary',
+                              borderRadius: '10px',
+                              '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.08) },
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </Box>
                   </TableCell>
                 </TableRow>
               ))}
@@ -1325,26 +1507,49 @@ const InventoryManagement: React.FC = () => {
         </TableContainer>
 
         {/* 페이지네이션 */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
           <Pagination
             count={totalPages}
             page={page}
             onChange={(_, value) => setPage(value)}
             color="primary"
+            shape="rounded"
+            sx={{
+              '& .MuiPaginationItem-root': {
+                borderRadius: '10px',
+                fontWeight: 500,
+              },
+            }}
           />
         </Box>
       </Card>
 
       {/* 재고 보기 / 추가·수정 다이얼로그 */}
-      <Dialog open={openDialog} onClose={handleCloseInventoryDialog} maxWidth="md" fullWidth>
-        <DialogTitle>
+      <Dialog
+        open={openDialog}
+        onClose={handleCloseInventoryDialog}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: '20px' } }}
+      >
+        <DialogTitle
+          sx={{
+            pt: 2.5,
+            px: 3,
+            pb: 1.25,
+            fontSize: '1.125rem',
+            fontWeight: 700,
+            letterSpacing: '-0.02em',
+            color: 'text.primary',
+          }}
+        >
           {inventoryDialogMode === 'view' && selectedItem
             ? t('inventoryManagement.dialog.viewTitle')
             : selectedItem
               ? t('inventoryManagement.dialog.editTitle')
               : t('inventoryManagement.dialog.addTitle')}
         </DialogTitle>
-        <DialogContent>
+        <DialogContent sx={{ px: 3, pt: 2.5, pb: 1 }}>
           {inventoryDialogMode === 'view' && selectedItem ? (
             <InventoryDetailView item={selectedItem} getStatusChip={getStatusChip} />
           ) : (
@@ -1366,11 +1571,31 @@ const InventoryManagement: React.FC = () => {
           )}
         </DialogContent>
         {inventoryDialogMode === 'view' && selectedItem ? (
-          <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={handleCloseInventoryDialog}>{t('inventoryManagement.actions.close')}</Button>
+          <DialogActions
+            sx={{
+              px: 3,
+              py: 2.5,
+              gap: 1,
+              borderTop: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+              bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
+            }}
+          >
+            <Box sx={{ flex: 1 }} />
+            <Button
+              onClick={handleCloseInventoryDialog}
+              sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '12px', px: 2 }}
+            >
+              {t('inventoryManagement.actions.close')}
+            </Button>
             <Tooltip title={t('common.menuNoEdit')} disableHoverListener={basicMenuFlags.canEdit}>
               <span style={{ display: 'inline-flex' }}>
-                <Button variant="contained" disabled={!basicMenuFlags.canEdit} onClick={() => setInventoryDialogMode('edit')}>
+                <Button
+                  variant="contained"
+                  disableElevation
+                  disabled={!basicMenuFlags.canEdit}
+                  onClick={() => setInventoryDialogMode('edit')}
+                  sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+                >
                   {t('inventoryManagement.actions.edit')}
                 </Button>
               </span>
@@ -2152,6 +2377,7 @@ type MasterRow = { id: number; name: string };
 
 const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, canCreate, canEdit, canMutate }) => {
   const { t } = useTranslation();
+  const theme = useTheme();
   const formFieldsDisabled = item ? !canEdit : !canCreate;
   const canSubmit = item ? canEdit : canCreate;
   const barcodeRef = useRef<SVGSVGElement | null>(null);
@@ -2178,7 +2404,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
     name: item?.name || '',
     sku: item?.sku || '',
     category: item?.category || '',
-    unit: item?.unit || '개',
+    unit: item?.unit || 'Piece',
     currentStock: item?.currentStock || 0,
     minStock: item?.minStock || 0,
     maxStock: item?.maxStock || 0,
@@ -2229,7 +2455,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
       name: item?.name || '',
       sku: item?.sku || '',
       category: item?.category || '',
-      unit: item?.unit || '개',
+      unit: item?.unit || 'Piece',
       currentStock: item?.currentStock || 0,
       minStock: item?.minStock || 0,
       maxStock: item?.maxStock || 0,
@@ -2325,11 +2551,33 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
     }
   };
 
-  /** 짧은 회사 규칙: PRD- + 시간(5) + 랜덤(3), 예 PRD-3K9ZQ7AB */
+  /** SKU 자동: 총 8자 이하 — base36 시간 꼬리 5자 + 랜덤 3자 (바코드·입력 부담 최소화) */
+  const makeSku8 = () => {
+    const timePart = Date.now()
+      .toString(36)
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(-5)
+      .padStart(5, '0');
+    const rand = Math.random()
+      .toString(36)
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(2, 5)
+      .padEnd(3, 'X');
+    return `${timePart}${rand}`.slice(0, 8);
+  };
   const generateSku = () => {
-    const t = Date.now().toString(36).toUpperCase().slice(-5);
-    const r = Math.random().toString(36).slice(2, 5).toUpperCase();
-    setFormData((prev) => ({ ...prev, sku: `PRD-${t}${r}` }));
+    setFormData((prev) => ({ ...prev, sku: makeSku8() }));
+  };
+
+  /** 신규 추가 시: 제품명 입력 후 포커스가 나가면 SKU·바코드가 비어 있을 때만 자동 채움 */
+  const handleProductNameBlur = () => {
+    if (item || formFieldsDisabled) return;
+    setFormData((prev) => {
+      if (!prev.name.trim() || prev.sku.trim()) return prev;
+      return { ...prev, sku: makeSku8() };
+    });
   };
 
   const handleAddCategory = async () => {
@@ -2415,25 +2663,56 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
     onSave(formData);
   };
 
-  /** 라벨은 위쪽 Typography만 사용 — 입력 높이 통일 (medium + hiddenLabel) */
-  const fieldLabelSx = { mb: 0.75, color: 'text.secondary', fontSize: '0.8125rem', fontWeight: 500 };
-  const outlinedControlSx = {
-    borderRadius: 1,
-    '& .MuiOutlinedInput-notchedOutline': { borderRadius: 1 },
-    '& .MuiOutlinedInput-input': { py: 1.25 }
+  /** 라벨은 위쪽 Typography만 사용 — 입력 높이 통일 (medium + hiddenLabel), Apple 계열 필 톤 */
+  const fieldLabelSx = {
+    mb: 0.75,
+    color: 'text.secondary',
+    fontSize: '0.8125rem',
+    fontWeight: 600,
+    letterSpacing: '-0.01em',
   };
-  const registerBtnSx = { minWidth: 88, height: 40, flexShrink: 0, whiteSpace: 'nowrap' as const };
+  const outlinedControlSx = {
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '12px',
+      minHeight: 40,
+      bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.05),
+      transition: theme.transitions.create(['background-color', 'box-shadow'], { duration: 150 }),
+      '&:hover': {
+        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.14 : 0.08),
+      },
+      '&.Mui-focused': {
+        bgcolor: 'background.paper',
+        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.2)}`,
+      },
+      '& fieldset': {
+        borderColor: alpha(theme.palette.divider, 0.9),
+      },
+      '&.Mui-disabled': {
+        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
+      },
+    },
+    '& .MuiOutlinedInput-input': { py: 1.15 },
+  };
+  const registerBtnSx = {
+    minWidth: 88,
+    height: 40,
+    flexShrink: 0,
+    whiteSpace: 'nowrap' as const,
+    borderRadius: '12px',
+    textTransform: 'none' as const,
+    fontWeight: 600,
+  };
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
+    <Box component="form" onSubmit={handleSubmit} sx={{ mt: 0 }}>
       {formError ? (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setFormError('')}>
           {formError}
         </Alert>
       ) : null}
-      <Grid container spacing={2}>
+      <Grid container spacing={{ xs: 2.25, sm: 2.75 }}>
         <Grid size={{ xs: 12 }}>
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1, fontWeight: 600 }}>
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1.25, fontWeight: 600, letterSpacing: '-0.01em' }}>
             {t('inventoryManagement.form.productImage')}
           </Typography>
           <Stack direction="row" spacing={1.75} alignItems="center" flexWrap="wrap">
@@ -2441,15 +2720,14 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
               sx={{
                 width: 104,
                 height: 104,
-                border: '1px dashed',
-                borderColor: 'divider',
-                borderRadius: 1,
+                border: `1px dashed ${alpha(theme.palette.text.primary, 0.18)}`,
+                borderRadius: '14px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 overflow: 'hidden',
-                bgcolor: 'action.hover',
-                flexShrink: 0
+                bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.06),
+                flexShrink: 0,
               }}
             >
               {formData.imageUrl ? (
@@ -2460,7 +2738,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
                   sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
               ) : (
-                <Typography variant="caption" color="text.secondary" sx={{ px: 1, textAlign: 'center' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ px: 1.25, textAlign: 'center', lineHeight: 1.35 }}>
                   {t('inventoryManagement.form.noImage')}
                 </Typography>
               )}
@@ -2468,11 +2746,25 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
             <Stack spacing={1}>
               <Button
                 variant="outlined"
+                color="inherit"
                 component="label"
                 size="medium"
-                sx={{ height: 40 }}
+                sx={{
+                  height: 40,
+                  borderRadius: '12px',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  borderStyle: 'dashed',
+                  borderColor: alpha(theme.palette.text.primary, 0.22),
+                  color: 'text.primary',
+                  bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.04),
+                  '&:hover': {
+                    borderColor: alpha(theme.palette.primary.main, 0.45),
+                    bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.1 : 0.06),
+                  },
+                }}
                 disabled={!canMutate || imageUploading}
-                startIcon={imageUploading ? <CircularProgress size={16} /> : <UploadFileIcon />}
+                startIcon={imageUploading ? <CircularProgress size={16} /> : <UploadFileIcon sx={{ fontSize: 18 }} />}
               >
                 {t('inventoryManagement.form.selectImage')}
                 <input type="file" hidden accept="image/*" onChange={handleImageFile} />
@@ -2483,6 +2775,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
                   type="button"
                   disabled={!canMutate}
                   onClick={() => setFormData((p) => ({ ...p, imageUrl: '' }))}
+                  sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '10px' }}
                 >
                   {t('inventoryManagement.form.removeImage')}
                 </Button>
@@ -2492,7 +2785,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
         </Grid>
 
         <Grid size={{ xs: 12 }}>
-          <Stack spacing={2}>
+          <Stack spacing={2.25}>
             <Box>
               <Typography sx={fieldLabelSx}>
                 {t('inventoryManagement.form.productName')}
@@ -2504,6 +2797,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
                 fullWidth
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onBlur={handleProductNameBlur}
                 required
                 disabled={formFieldsDisabled}
                 sx={outlinedControlSx}
@@ -2548,22 +2842,32 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
         <Grid size={{ xs: 12 }}>
           <Box
             sx={{
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 1,
-              bgcolor: 'action.hover',
-              px: { xs: 1.5, sm: 2 },
-              py: 1.25,
+              border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+              borderRadius: '14px',
+              bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.04),
+              boxShadow: `inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.04 : 0.45)}`,
+              px: { xs: 2, sm: 2.5 },
+              py: { xs: 2, sm: 2 },
               display: 'flex',
               flexDirection: { xs: 'column', sm: 'row' },
-              alignItems: { xs: 'flex-start', sm: 'center' },
-              gap: { xs: 1, sm: 2 }
+              alignItems: { xs: 'stretch', sm: 'center' },
+              gap: { xs: 1.5, sm: 2.5 },
+              minHeight: { xs: 'auto', sm: 96 },
             }}
           >
             <Typography
               variant="caption"
               color="text.secondary"
-              sx={{ fontWeight: 600, flexShrink: 0, lineHeight: 1.2, pt: { sm: 0.25 } }}
+              sx={{
+                fontWeight: 600,
+                flexShrink: 0,
+                lineHeight: 1.45,
+                letterSpacing: '-0.01em',
+                maxWidth: { sm: 200 },
+                wordBreak: 'keep-all',
+                overflowWrap: 'break-word',
+                alignSelf: { xs: 'flex-start', sm: 'center' },
+              }}
             >
               {t('inventoryManagement.form.barcodeQrSection')}
             </Typography>
@@ -2571,11 +2875,14 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
               sx={{
                 flex: 1,
                 width: '100%',
+                minWidth: 0,
                 display: 'flex',
                 justifyContent: 'flex-start',
+                alignItems: 'center',
                 overflowX: 'auto',
-                overflowY: 'hidden',
-                minHeight: 48
+                overflowY: 'visible',
+                minHeight: 56,
+                py: 0.5,
               }}
             >
               <svg ref={barcodeRef} style={{ maxWidth: 'min(100%, 360px)', width: 320, height: 'auto', display: 'block' }} />
@@ -2618,10 +2925,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
                     ...params.inputProps,
                     'aria-label': t('inventoryManagement.form.category')
                   }}
-                  sx={{
-                    ...outlinedControlSx,
-                    '& .MuiOutlinedInput-root': { minHeight: 40, py: 0.25 }
-                  }}
+                  sx={outlinedControlSx}
                 />
               )}
             />
@@ -2686,10 +2990,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
                     ...params.inputProps,
                     'aria-label': t('inventoryManagement.form.supplier')
                   }}
-                  sx={{
-                    ...outlinedControlSx,
-                    '& .MuiOutlinedInput-root': { minHeight: 40, py: 0.25 }
-                  }}
+                  sx={outlinedControlSx}
                 />
               )}
             />
@@ -2785,10 +3086,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
                     ...params.inputProps,
                     'aria-label': t('inventoryManagement.form.unit')
                   }}
-                  sx={{
-                    ...outlinedControlSx,
-                    '& .MuiOutlinedInput-root': { minHeight: 40, py: 0.25 }
-                  }}
+                  sx={outlinedControlSx}
                 />
               )}
             />
@@ -2843,9 +3141,8 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
                 onChange={(e) => setFormData({ ...formData, location: String(e.target.value) })}
                 inputProps={{ 'aria-label': t('inventoryManagement.form.location') }}
                 sx={{
-                  height: 40,
                   ...outlinedControlSx,
-                  '& .MuiSelect-select': { display: 'flex', alignItems: 'center', py: 1.25 }
+                  '& .MuiSelect-select': { display: 'flex', alignItems: 'center', py: 1.1 },
                 }}
               >
                 <MenuItem value="">
@@ -2880,9 +3177,15 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
         </Grid>
       </Grid>
 
-      <Dialog open={categoryDialogOpen} onClose={() => !masterSaving && setCategoryDialogOpen(false)}>
-        <DialogTitle>{t('inventoryManagement.dialog.registerCategoryTitle')}</DialogTitle>
-        <DialogContent>
+      <Dialog
+        open={categoryDialogOpen}
+        onClose={() => !masterSaving && setCategoryDialogOpen(false)}
+        PaperProps={{ sx: { borderRadius: '16px' } }}
+      >
+        <DialogTitle sx={{ pt: 2.25, px: 2.5, pb: 1, fontWeight: 700, letterSpacing: '-0.02em' }}>
+          {t('inventoryManagement.dialog.registerCategoryTitle')}
+        </DialogTitle>
+        <DialogContent sx={{ px: 2.5, pt: 2.5, pb: 1 }}>
           <TextField
             autoFocus
             margin="dense"
@@ -2890,25 +3193,39 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
             label={t('inventoryManagement.form.categoryName')}
             value={newCategoryName}
             onChange={(e) => setNewCategoryName(e.target.value)}
+            sx={outlinedControlSx}
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCategoryDialogOpen(false)} disabled={masterSaving}>
+        <DialogActions sx={{ px: 2.5, py: 2, gap: 1 }}>
+          <Box sx={{ flex: 1 }} />
+          <Button
+            onClick={() => setCategoryDialogOpen(false)}
+            disabled={masterSaving}
+            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '12px', px: 2 }}
+          >
             {t('inventoryManagement.actions.cancel')}
           </Button>
           <Button
             variant="contained"
+            disableElevation
             onClick={handleAddCategory}
             disabled={!canMutate || masterSaving || !newCategoryName.trim()}
+            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
           >
             {t('inventoryManagement.actions.add')}
           </Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={locationDialogOpen} onClose={() => !masterSaving && setLocationDialogOpen(false)}>
-        <DialogTitle>{t('inventoryManagement.dialog.registerLocationTitle')}</DialogTitle>
-        <DialogContent>
+      <Dialog
+        open={locationDialogOpen}
+        onClose={() => !masterSaving && setLocationDialogOpen(false)}
+        PaperProps={{ sx: { borderRadius: '16px' } }}
+      >
+        <DialogTitle sx={{ pt: 2.25, px: 2.5, pb: 1, fontWeight: 700, letterSpacing: '-0.02em' }}>
+          {t('inventoryManagement.dialog.registerLocationTitle')}
+        </DialogTitle>
+        <DialogContent sx={{ px: 2.5, pt: 2.5, pb: 1 }}>
           <TextField
             autoFocus
             margin="dense"
@@ -2916,25 +3233,39 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
             label={t('inventoryManagement.form.locationName')}
             value={newLocationName}
             onChange={(e) => setNewLocationName(e.target.value)}
+            sx={outlinedControlSx}
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setLocationDialogOpen(false)} disabled={masterSaving}>
+        <DialogActions sx={{ px: 2.5, py: 2, gap: 1 }}>
+          <Box sx={{ flex: 1 }} />
+          <Button
+            onClick={() => setLocationDialogOpen(false)}
+            disabled={masterSaving}
+            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '12px', px: 2 }}
+          >
             {t('inventoryManagement.actions.cancel')}
           </Button>
           <Button
             variant="contained"
+            disableElevation
             onClick={handleAddLocation}
             disabled={!canMutate || masterSaving || !newLocationName.trim()}
+            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
           >
             {t('inventoryManagement.actions.add')}
           </Button>
         </DialogActions>
       </Dialog>
 
-      <Dialog open={unitDialogOpen} onClose={() => !masterSaving && setUnitDialogOpen(false)}>
-        <DialogTitle>{t('inventoryManagement.dialog.registerUnitTitle')}</DialogTitle>
-        <DialogContent>
+      <Dialog
+        open={unitDialogOpen}
+        onClose={() => !masterSaving && setUnitDialogOpen(false)}
+        PaperProps={{ sx: { borderRadius: '16px' } }}
+      >
+        <DialogTitle sx={{ pt: 2.25, px: 2.5, pb: 1, fontWeight: 700, letterSpacing: '-0.02em' }}>
+          {t('inventoryManagement.dialog.registerUnitTitle')}
+        </DialogTitle>
+        <DialogContent sx={{ px: 2.5, pt: 2.5, pb: 1 }}>
           <TextField
             autoFocus
             margin="dense"
@@ -2942,25 +3273,53 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
             label={t('inventoryManagement.form.unitName')}
             value={newUnitName}
             onChange={(e) => setNewUnitName(e.target.value)}
+            sx={outlinedControlSx}
           />
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setUnitDialogOpen(false)} disabled={masterSaving}>
+        <DialogActions sx={{ px: 2.5, py: 2, gap: 1 }}>
+          <Box sx={{ flex: 1 }} />
+          <Button
+            onClick={() => setUnitDialogOpen(false)}
+            disabled={masterSaving}
+            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '12px', px: 2 }}
+          >
             {t('inventoryManagement.actions.cancel')}
           </Button>
           <Button
             variant="contained"
+            disableElevation
             onClick={handleAddUnit}
             disabled={!canMutate || masterSaving || !newUnitName.trim()}
+            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
           >
             {t('inventoryManagement.actions.add')}
           </Button>
         </DialogActions>
       </Dialog>
 
-      <DialogActions sx={{ mt: 3 }}>
-        <Button onClick={onCancel}>{t('inventoryManagement.actions.cancel')}</Button>
-        <Button type="submit" variant="contained" disabled={!canSubmit}>
+      <DialogActions
+        sx={{
+          mt: 2.5,
+          pt: 2.5,
+          mx: -3,
+          px: 3,
+          pb: 2,
+          gap: 1,
+          borderTop: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+          bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
+        }}
+      >
+        <Box sx={{ flex: 1 }} />
+        <Button onClick={onCancel} sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '12px', px: 2 }}>
+          {t('inventoryManagement.actions.cancel')}
+        </Button>
+        <Button
+          type="submit"
+          variant="contained"
+          disableElevation
+          disabled={!canSubmit}
+          sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+        >
           {item ? t('inventoryManagement.actions.update') : t('inventoryManagement.actions.add')}
         </Button>
       </DialogActions>

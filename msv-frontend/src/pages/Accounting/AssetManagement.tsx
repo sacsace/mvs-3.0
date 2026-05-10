@@ -35,6 +35,7 @@ import {
   Delete as DeleteIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
 import { accountingService } from '../../services/api';
 import { UTILS } from '../../constants';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
@@ -128,6 +129,7 @@ const calculateDepreciationValues = (
 };
 
 const AssetManagement: React.FC = () => {
+  const theme = useTheme();
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(false);
@@ -364,15 +366,17 @@ const AssetManagement: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+    <Box sx={{ p: 0 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2, mb: 3 }}>
         <Box>
-          <Typography variant="h6">자산 관리</Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography component="h1" variant="pageTitle" sx={{ fontWeight: 600, letterSpacing: '-0.022em', fontSize: { xs: '1.125rem', sm: '1.3125rem' }, mb: 0.75 }}>
+            자산 관리
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5, maxWidth: 560 }}>
             자산 등록, 감가상각, 상태 관리를 한 번에 처리합니다.
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleCreate}>
+        <Button variant="contained" disableElevation startIcon={<AddIcon fontSize="small" />} onClick={handleCreate} sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}>
           자산 등록
         </Button>
       </Box>
@@ -388,38 +392,38 @@ const AssetManagement: React.FC = () => {
         </Alert>
       )}
 
-      <Card sx={{ mb: 3 }}>
+      <Card elevation={0} sx={{ mb: 3, borderRadius: '20px', border: '1px solid', borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider', boxShadow: theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)' }}>
         <CardContent>
           <Grid container spacing={2} sx={{ mb: 2 }}>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card variant="outlined">
-                <CardContent>
-                  <Typography variant="body2" color="text.secondary">자산 수</Typography>
-                  <Typography variant="h6">{summary.totalCount}건</Typography>
+              <Card elevation={0} sx={{ borderRadius: '14px', border: '1px solid', borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider' }}>
+                <CardContent sx={{ py: 2, px: 2 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>자산 수</Typography>
+                  <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600 }}>{summary.totalCount}건</Typography>
                 </CardContent>
               </Card>
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card variant="outlined">
-                <CardContent>
-                  <Typography variant="body2" color="text.secondary">사용중 자산</Typography>
-                  <Typography variant="h6" color="success.main">{summary.activeCount}건</Typography>
+              <Card elevation={0} sx={{ borderRadius: '14px', border: '1px solid', borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider' }}>
+                <CardContent sx={{ py: 2, px: 2 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>사용중 자산</Typography>
+                  <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600 }} color="success.main">{summary.activeCount}건</Typography>
                 </CardContent>
               </Card>
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card variant="outlined">
-                <CardContent>
-                  <Typography variant="body2" color="text.secondary">총 취득가</Typography>
-                  <Typography variant="h6">{formatCurrency(summary.totalPurchase)}</Typography>
+              <Card elevation={0} sx={{ borderRadius: '14px', border: '1px solid', borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider' }}>
+                <CardContent sx={{ py: 2, px: 2 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>총 취득가</Typography>
+                  <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600 }}>{formatCurrency(summary.totalPurchase)}</Typography>
                 </CardContent>
               </Card>
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card variant="outlined">
-                <CardContent>
-                  <Typography variant="body2" color="text.secondary">총 현재가</Typography>
-                  <Typography variant="h6" color="primary.main">{formatCurrency(summary.totalCurrent)}</Typography>
+              <Card elevation={0} sx={{ borderRadius: '14px', border: '1px solid', borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider' }}>
+                <CardContent sx={{ py: 2, px: 2 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>총 현재가</Typography>
+                  <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600 }} color="text.primary">{formatCurrency(summary.totalCurrent)}</Typography>
                 </CardContent>
               </Card>
             </Grid>

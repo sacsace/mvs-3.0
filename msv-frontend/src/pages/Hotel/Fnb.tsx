@@ -10,7 +10,7 @@ const summaryCards = [
 
 const Fnb: React.FC = () => {
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 0 }}>
       <Box sx={{ mb: 2 }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>F&amp;B</Typography>
         <Typography variant="body2" color="text.secondary">

@@ -273,10 +273,10 @@ const NoticeBoard: React.FC = () => {
   const getUnreadCount = () => notices.filter(n => !n.isRead).length;
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 0 }}>
       {/* 헤더 */}
       <Box sx={{ mb: 3 }}>
-        <Typography variant="h4" component="h1" gutterBottom sx={{ 
+        <Typography variant="pageTitle" component="h1" gutterBottom sx={{ 
           display: 'flex', 
           alignItems: 'center', 
           gap: 1.5,

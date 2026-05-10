@@ -39,13 +39,9 @@ import {
   Delete as DeleteIcon,
   Person as PersonIcon,
   ExpandMore as ExpandMoreIcon,
-  AccountCircle as AccountCircleIcon,
-  Work as WorkIcon,
-  Security as SecurityIcon,
   Download as DownloadIcon,
   FileDownload as FileDownloadIcon,
-  Upload as UploadIcon,
-  AccountBalance as AccountBalanceIcon
+  Upload as UploadIcon
 } from '@mui/icons-material';
 import { useSearchParams } from 'react-router-dom';
 import { useStore, useMenuStore } from '../../store';
@@ -57,6 +53,7 @@ import { useTranslation } from 'react-i18next';
 import { alpha, useTheme } from '@mui/material/styles';
 import type { Theme } from '@mui/material/styles';
 import { DepartmentManagementPanel } from '../HR/DepartmentManagement';
+import { mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
 
 const USER_MGMT_MENU_ROUTES = ['/hr/users', '/users'];
 
@@ -139,38 +136,46 @@ function formatIfscDisplay(stored: string): string {
   return parts.join(' ');
 }
 
-/** 생성/수정 폼 아코디언 — 줄 간격·테두리 정리 */
-const accordionDenseSx = {
-  '&:before': { display: 'none' },
-  boxShadow: 'none',
-  border: '1px solid',
-  borderColor: 'divider',
-  borderRadius: 1,
-  mb: 1,
-  '& .MuiAccordionSummary-root': { minHeight: 44, py: 0.5 },
-  '& .MuiAccordionDetails-root': { pt: 1, pb: 1.25, px: 2 }
-} as const;
+/** 생성/수정 폼 아코디언 — 카드형 셸 */
+function getAccordionFormSx(theme: Theme) {
+  return {
+    '&:before': { display: 'none' },
+    boxShadow: '0 4px 22px rgba(15, 23, 42, 0.06)',
+    border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'dark' ? 0.35 : 0.1)}`,
+    borderRadius: '16px',
+    mb: 1.75,
+    bgcolor: 'background.paper',
+    overflow: 'hidden' as const,
+    '& .MuiAccordionSummary-root': {
+      minHeight: 52,
+      py: 1.25,
+      px: 1.25,
+    },
+    '& .MuiAccordionDetails-root': {
+      pt: 0.5,
+      pb: 2.5,
+      px: { xs: 2, sm: 2.75 },
+    },
+  };
+}
 
 const highlightPayrollFieldsSx = {
-  p: 1,
-  borderRadius: 1,
+  p: { xs: 1.5, sm: 2 },
+  borderRadius: '14px',
   border: '1px solid',
-  borderColor: 'divider',
-  bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, 0.04),
-  borderLeft: '3px solid',
-  borderLeftColor: 'primary.main'
-} as const;
+  borderColor: (theme: Theme) => alpha(theme.palette.divider, 0.85),
+  bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, 0.035),
+  boxSizing: 'border-box' as const,
+};
 
 /** 부서·직책 행 강조 */
 const highlightDeptPositionRowSx = {
-  p: { xs: 0.875, sm: 1 },
-  borderRadius: 1,
-  bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, 0.09),
+  p: { xs: 1.5, sm: 1.75 },
+  borderRadius: '14px',
+  bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, 0.06),
   border: '1px solid',
-  borderColor: (theme: Theme) => alpha(theme.palette.divider, 0.85),
-  borderLeft: '3px solid',
-  borderLeftColor: 'primary.main',
-  boxSizing: 'border-box' as const
+  borderColor: (theme: Theme) => alpha(theme.palette.divider, 0.75),
+  boxSizing: 'border-box' as const,
 };
 
 /** 인사 정보 필드 라벨 — 한 단계 작게 */
@@ -190,14 +195,44 @@ const hrHintSx = {
 } as const;
 
 const highlightBankFieldsSx = {
-  p: 1,
-  borderRadius: 1,
+  p: { xs: 1.5, sm: 2 },
+  borderRadius: '14px',
   border: '1px solid',
-  borderColor: 'divider',
-  bgcolor: 'grey.50',
-  borderLeft: '3px solid',
-  borderLeftColor: 'success.main'
-} as const;
+  borderColor: (theme: Theme) => alpha(theme.palette.divider, 0.85),
+  bgcolor: (theme: Theme) => alpha(theme.palette.success.main, theme.palette.mode === 'dark' ? 0.08 : 0.04),
+  boxSizing: 'border-box' as const,
+};
+
+/** 폼 내 TextField·Select 공통 — 라운드·연한 필 배경 */
+function getFormControlSurfaceSx(theme: Theme) {
+  const fill = alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.12 : 0.07);
+  const fillHover = alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.16 : 0.1);
+  return {
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '12px',
+      bgcolor: fill,
+      transition: theme.transitions.create(['background-color', 'box-shadow'], { duration: 150 }),
+      '&:hover': { bgcolor: fillHover },
+      '&.Mui-focused': {
+        bgcolor: theme.palette.background.paper,
+        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}`,
+      },
+      '& fieldset': {
+        borderColor: alpha(theme.palette.divider, 0.9),
+      },
+      '&:hover fieldset': {
+        borderColor: alpha(theme.palette.text.primary, 0.12),
+      },
+    },
+    '& .MuiOutlinedInput-notchedOutline': {
+      borderWidth: '1px',
+    },
+    '& .MuiInputBase-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+      borderWidth: '1px',
+    },
+    '& .MuiFormControl-root': { width: '100%' },
+  };
+}
 
 const UserManagement: React.FC = () => {
   const theme = useTheme();
@@ -837,65 +872,110 @@ const UserManagement: React.FC = () => {
 
   return (
     <Box sx={{ 
-      p: 3, 
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%'
+      p: 0,
+      backgroundColor: 'transparent',
+      borderRadius: 0,
+      minHeight: '100%',
+      width: '100%',
+      maxWidth: '100%',
+      boxSizing: 'border-box',
     }}>
       {/* 상단 네비게이션 탭 */}
       {/* 헤더 */}
       <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Box>
-            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            gap: 2,
+            mb: 2,
+            minHeight: 40
+          }}
+        >
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography component="h1" sx={{ ...mvsPageTitleSx, mb: 0.75 }}>
+              {t('userManagement.title')}
+            </Typography>
+            <Typography sx={mvsPageDescriptionSx}>
               {t('userManagement.description')}
             </Typography>
           </Box>
-          {pageTab === 0 && viewMode === 'list' && (
-            <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 1,
+              justifyContent: 'flex-end',
+              flexShrink: 0,
+              maxWidth: { xs: '100%', sm: '55%' },
+              visibility: pageTab === 0 && viewMode === 'list' ? 'visible' : 'hidden',
+              pointerEvents: pageTab === 0 && viewMode === 'list' ? 'auto' : 'none'
+            }}
+          >
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleDownloadSample}
+              sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, borderColor: alpha(theme.palette.divider, 0.95) }}
+            >
+              {t('userManagement.excelSample')}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<FileDownloadIcon />}
+              onClick={handleExportExcel}
+              sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, borderColor: alpha(theme.palette.divider, 0.95) }}
+            >
+              {t('userManagement.excelExport')}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<UploadIcon />}
+              onClick={() => setImportDialogOpen(true)}
+              sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, borderColor: alpha(theme.palette.divider, 0.95) }}
+            >
+              {t('userManagement.excelImport')}
+            </Button>
+            {selectedUsers.length > 0 && (
               <Button
-                variant="outlined"
-                startIcon={<DownloadIcon />}
-                onClick={handleDownloadSample}
-                sx={{ borderRadius: 2 }}
+                variant="contained"
+                color="error"
+                disableElevation
+                startIcon={<DeleteIcon />}
+                onClick={handleDeleteSelected}
+                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
               >
-                {t('userManagement.excelSample')}
+                {t('userManagement.deleteSelected')} ({selectedUsers.length})
               </Button>
-              <Button
-                variant="outlined"
-                startIcon={<FileDownloadIcon />}
-                onClick={handleExportExcel}
-                sx={{ borderRadius: 2 }}
-              >
-                {t('userManagement.excelExport')}
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<UploadIcon />}
-                onClick={() => setImportDialogOpen(true)}
-                sx={{ borderRadius: 2 }}
-              >
-                {t('userManagement.excelImport')}
-              </Button>
-              {selectedUsers.length > 0 && (
-                <Button
-                  variant="contained"
-                  color="error"
-                  startIcon={<DeleteIcon />}
-                  onClick={handleDeleteSelected}
-                  sx={{ borderRadius: 2 }}
-                >
-                  {t('userManagement.deleteSelected')} ({selectedUsers.length})
-                </Button>
-              )}
-            </Box>
-          )}
+            )}
+          </Box>
         </Box>
 
         {/* 탭 네비게이션 */}
-        <Card sx={{ mb: 3 }}>
+        <Card
+          elevation={0}
+          sx={{
+            mb: 3,
+            borderRadius: '14px',
+            border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'dark' ? 0.35 : 0.1)}`,
+            boxShadow: '0 2px 14px rgba(15, 23, 42, 0.05)',
+            overflow: 'hidden',
+          }}
+        >
           <Tabs
             value={pageTab}
+            sx={{
+              minHeight: 48,
+              px: 0.5,
+              '& .MuiTab-root': {
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                minHeight: 48,
+                letterSpacing: '-0.01em',
+              },
+            }}
             onChange={(e, newValue) => {
               const v = newValue as 0 | 1 | 2;
               if (v === 0 && !menusLoading && !hrElevated && !userMgmtMenuFlags.canView) {
@@ -952,51 +1032,60 @@ const UserManagement: React.FC = () => {
         </Card>
       </Box>
 
-      {/* 검색 및 필터 */}
-      {pageTab === 0 && viewMode === 'list' && (
-        <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-        <TextField
-          placeholder={t('userManagement.search')}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          size="small"
-          sx={{ flex: 1 }}
-          InputProps={{
-            startAdornment: (
-              <Box sx={{ mr: 1, display: 'flex', alignItems: 'center' }}>
-                <PersonIcon fontSize="small" color="action" />
-              </Box>
-            )
+      {/* 검색 및 필터 — 탭 전환 시 높이 유지(공간 예약) */}
+      <Box sx={{ mb: 3, minHeight: 48 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 2,
+            flexWrap: { xs: 'wrap', md: 'nowrap' },
+            alignItems: 'center',
+            visibility: pageTab === 0 && viewMode === 'list' ? 'visible' : 'hidden',
+            pointerEvents: pageTab === 0 && viewMode === 'list' ? 'auto' : 'none'
           }}
-        />
-        {user?.role === 'root' && (
-          <FormControl sx={{ minWidth: 200 }} size="small">
-            <Select
-              value={selectedCompanyId}
-              onChange={(e) => setSelectedCompanyId(e.target.value as number | '')}
-              displayEmpty
-            >
-              <MenuItem value="">{t('userManagement.allCompanies')}</MenuItem>
-              {companies.map((company) => (
-                <MenuItem key={company.id} value={company.id}>
-                  {company.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        )}
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Checkbox
-            checked={showInactive}
-            onChange={(e) => setShowInactive(e.target.checked)}
+        >
+          <TextField
+            placeholder={t('userManagement.search')}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             size="small"
+            sx={{ flex: 1, minWidth: { xs: '100%', sm: 200 } }}
+            InputProps={{
+              startAdornment: (
+                <Box sx={{ mr: 1, display: 'flex', alignItems: 'center' }}>
+                  <PersonIcon fontSize="small" color="action" />
+                </Box>
+              )
+            }}
           />
-          <Typography variant="body2" sx={{ ml: -1, mr: 1 }}>
-            {t('userManagement.includeInactive')}
-          </Typography>
+          {user?.role === 'root' && (
+            <FormControl sx={{ minWidth: 200 }} size="small">
+              <Select
+                value={selectedCompanyId}
+                onChange={(e) => setSelectedCompanyId(e.target.value as number | '')}
+                displayEmpty
+              >
+                <MenuItem value="">{t('userManagement.allCompanies')}</MenuItem>
+                {companies.map((company) => (
+                  <MenuItem key={company.id} value={company.id}>
+                    {company.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+          <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+            <Checkbox
+              checked={showInactive}
+              onChange={(e) => setShowInactive(e.target.checked)}
+              size="small"
+            />
+            <Typography variant="body2" sx={{ ml: -1, mr: 1 }}>
+              {t('userManagement.includeInactive')}
+            </Typography>
+          </Box>
         </Box>
       </Box>
-      )}
 
       {/* 알림 */}
       {error && (
@@ -1264,35 +1353,48 @@ const UserManagement: React.FC = () => {
 
       {/* 사용자 생성/편집 폼 (본문에 표시) */}
       {pageTab === 1 && (viewMode === 'create' || viewMode === 'edit') && (
-        <Card sx={{ mt: 2 }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-              <Typography variant="h6">
+        <Card
+          elevation={0}
+          sx={{
+            borderRadius: '20px',
+            border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'dark' ? 0.35 : 0.1)}`,
+            boxShadow: '0 4px 24px rgba(15, 23, 42, 0.06)',
+            overflow: 'hidden',
+            maxWidth: '100%',
+            boxSizing: 'border-box',
+          }}
+        >
+          <CardContent sx={{ py: 2.75, px: { xs: 2, sm: 3 }, '&:last-child': { pb: 2.75 } }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 2.5, flexWrap: 'wrap' }}>
+              <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'text.primary' }}>
                 {editingUser ? t('userManagement.editUserTitle') : t('userManagement.createUserTitle')}
               </Typography>
-              <Button onClick={() => {
-                setPageTab(0);
-                setViewMode('list');
-                setEditingUser(null);
-              }}>
+              <Button
+                variant="text"
+                onClick={() => {
+                  setPageTab(0);
+                  setViewMode('list');
+                  setEditingUser(null);
+                }}
+                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, color: 'primary.main' }}
+              >
                 {t('userManagement.backToList')}
               </Button>
             </Box>
             <form onSubmit={handleSubmit}>
-              <Box sx={{ p: 2 }}>
+              <Box sx={{ p: { xs: 0, sm: 0.5 }, pt: 0, ...getFormControlSurfaceSx(theme) }}>
               {/* 기본 정보 섹션 */}
-              <Accordion defaultExpanded sx={accordionDenseSx}>
+              <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <AccountCircleIcon color="primary" />
-                    <Typography variant="h6">{t('userManagement.sectionBasic')}</Typography>
-                  </Box>
+                  <Typography component="h3" sx={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                    {t('userManagement.sectionBasic')}
+                  </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Box sx={{ 
                     display: 'grid', 
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 1.5 
+                    gap: 2.25,
                   }}>
                     <Box>
                       <Box sx={{ mb: 1.25 }}>
@@ -1441,14 +1543,13 @@ const UserManagement: React.FC = () => {
               </Accordion>
 
               {/* 인사 정보 섹션 */}
-              <Accordion defaultExpanded sx={accordionDenseSx}>
+              <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <WorkIcon color="primary" />
-                    <Typography variant="h6">{t('userManagement.sectionHr')}</Typography>
-                  </Box>
+                  <Typography component="h3" sx={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                    {t('userManagement.sectionHr')}
+                  </Typography>
                 </AccordionSummary>
-                <AccordionDetails sx={{ pt: 1, pb: 1.125, px: 2 }}>
+                <AccordionDetails>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
                     <Box sx={{ width: '100%' }}>
                       <Typography sx={hrFieldLabelSx}>{t('userManagement.hireDate')}</Typography>
@@ -1613,12 +1714,11 @@ const UserManagement: React.FC = () => {
               </Accordion>
 
               {/* 개인 은행 계좌 */}
-              <Accordion defaultExpanded sx={accordionDenseSx}>
+              <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <AccountBalanceIcon color="primary" />
-                    <Typography variant="h6">{t('userManagement.sectionBank')}</Typography>
-                  </Box>
+                  <Typography component="h3" sx={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                    {t('userManagement.sectionBank')}
+                  </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Box
@@ -1684,18 +1784,17 @@ const UserManagement: React.FC = () => {
               </Accordion>
 
               {/* 계정 정보 섹션 */}
-              <Accordion defaultExpanded sx={accordionDenseSx}>
+              <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <SecurityIcon color="primary" />
-                    <Typography variant="h6">{t('userManagement.sectionAccount')}</Typography>
-                  </Box>
+                  <Typography component="h3" sx={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                    {t('userManagement.sectionAccount')}
+                  </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Box sx={{ 
                     display: 'grid', 
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 1.5 
+                    gap: 2.25,
                   }}>
                     {user?.role === 'root' && !editingUser && (
                       <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
@@ -1809,15 +1908,18 @@ const UserManagement: React.FC = () => {
                 </AccordionDetails>
               </Accordion>
             </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
-                <Button onClick={() => {
-                  setPageTab(0);
-                  setViewMode('list');
-                  setEditingUser(null);
-                }}>
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, mt: 3, pt: 2.5, borderTop: 1, borderColor: alpha(theme.palette.divider, 0.85) }}>
+                <Button
+                  onClick={() => {
+                    setPageTab(0);
+                    setViewMode('list');
+                    setEditingUser(null);
+                  }}
+                  sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.25 }}
+                >
                   {t('common.cancel')}
                 </Button>
-                <Button type="submit" variant="contained" size="large">
+                <Button type="submit" variant="contained" disableElevation size="large" sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 3 }}>
                   {editingUser ? t('userManagement.submitEdit') : t('userManagement.submitRegister')}
                 </Button>
               </Box>
@@ -1833,43 +1935,40 @@ const UserManagement: React.FC = () => {
         maxWidth="md" 
         fullWidth
         PaperProps={{
-          sx: { maxHeight: '90vh' }
+          sx: { maxHeight: '90vh', borderRadius: '20px' }
         }}
       >
-        <DialogTitle>
-          <Box
+        <DialogTitle sx={{ pt: 2.5, px: 3, pb: 1.5 }}>
+          <Typography
+            component="span"
             sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              fontWeight: 600,
+              fontWeight: 700,
               fontSize: '1.125rem',
+              letterSpacing: '-0.02em',
               color:
                 theme.palette.mode === 'dark'
                   ? alpha(theme.palette.common.white, 0.95)
-                  : theme.palette.grey[900]
+                  : theme.palette.grey[900],
             }}
           >
-            <PersonIcon color="primary" />
             {t('userManagement.userDetailTitle')}
-          </Box>
+          </Typography>
         </DialogTitle>
         <DialogContent dividers>
           {selectedUser && (
             <Box>
               {/* 기본 정보 */}
-              <Accordion defaultExpanded>
+              <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <AccountCircleIcon color="primary" />
-                    <Typography variant="h6" sx={userDetailSectionTitleSx}>{t('userManagement.sectionBasic')}</Typography>
-                  </Box>
+                  <Typography variant="h6" sx={userDetailSectionTitleSx}>
+                    {t('userManagement.sectionBasic')}
+                  </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Box sx={{ 
                     display: 'grid', 
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 1.5 
+                    gap: 2.25,
                   }}>
                     <Box>
                       <Typography variant="body2" sx={userDetailLabelSx}>
@@ -1964,18 +2063,17 @@ const UserManagement: React.FC = () => {
               </Accordion>
 
               {/* 인사 정보 */}
-              <Accordion defaultExpanded>
+              <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <WorkIcon color="primary" />
-                    <Typography variant="h6" sx={userDetailSectionTitleSx}>{t('userManagement.sectionHr')}</Typography>
-                  </Box>
+                  <Typography variant="h6" sx={userDetailSectionTitleSx}>
+                    {t('userManagement.sectionHr')}
+                  </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Box sx={{ 
                     display: 'grid', 
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 1.5 
+                    gap: 2.25,
                   }}>
                     <Box>
                       <Typography variant="body2" sx={userDetailLabelSx}>
@@ -2026,19 +2124,18 @@ const UserManagement: React.FC = () => {
               </Accordion>
 
               {/* 개인 은행 계좌 */}
-              <Accordion defaultExpanded>
+              <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <AccountBalanceIcon color="primary" />
-                    <Typography variant="h6" sx={userDetailSectionTitleSx}>{t('userManagement.sectionBank')}</Typography>
-                  </Box>
+                  <Typography variant="h6" sx={userDetailSectionTitleSx}>
+                    {t('userManagement.sectionBank')}
+                  </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Box
                     sx={{
                       display: 'grid',
                       gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                      gap: 1.5
+                      gap: 2.25,
                     }}
                   >
                     <Box>
@@ -2072,18 +2169,17 @@ const UserManagement: React.FC = () => {
               </Accordion>
 
               {/* 계정 정보 */}
-              <Accordion defaultExpanded>
+              <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <SecurityIcon color="primary" />
-                    <Typography variant="h6" sx={userDetailSectionTitleSx}>{t('userManagement.sectionAccount')}</Typography>
-                  </Box>
+                  <Typography variant="h6" sx={userDetailSectionTitleSx}>
+                    {t('userManagement.sectionAccount')}
+                  </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
                   <Box sx={{ 
                     display: 'grid', 
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 1.5 
+                    gap: 2.25,
                   }}>
                     <Box>
                       <Typography variant="body2" sx={userDetailLabelSx}>
@@ -2127,16 +2223,20 @@ const UserManagement: React.FC = () => {
             </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setOpenViewDialog(false)}>{t('common.close')}</Button>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button onClick={() => setOpenViewDialog(false)} sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}>
+            {t('common.close')}
+          </Button>
           {selectedUser && (
             <Button 
-              variant="contained" 
+              variant="contained"
+              disableElevation
               startIcon={<EditIcon />}
               onClick={() => {
                 setOpenViewDialog(false);
                 handleEditUser(selectedUser);
               }}
+              sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
             >
               {t('userManagement.edit')}
             </Button>

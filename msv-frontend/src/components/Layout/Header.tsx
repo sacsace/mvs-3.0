@@ -461,10 +461,9 @@ const Header: React.FC = () => {
         backgroundColor: 'background.paper',
         backgroundImage: 'none',
         backdropFilter: 'blur(12px)',
-        /* 본문(body) 회색 영역과 단절되도록 하단 에지 강조 */
         borderBottom: '1px solid',
-        borderColor: '#D1D5DB',
-        boxShadow: '0 4px 12px -2px rgba(15, 23, 42, 0.08)',
+        borderColor: '#E5E7EB',
+        boxShadow: 'none',
         zIndex: (theme) => theme.zIndex.drawer + 1,
         '&::after': {
           display: 'none'
@@ -473,8 +472,8 @@ const Header: React.FC = () => {
     >
       <Toolbar
         sx={{
-          minHeight: '52px !important',
-          px: 2.5,
+          minHeight: { xs: '56px !important', sm: '60px !important' },
+          px: { xs: 2, sm: 3 },
           borderBottom: 'none !important',
           boxShadow: 'none !important',
           '&::before, &::after': {
@@ -528,11 +527,11 @@ const Header: React.FC = () => {
             )}
             <Box>
               <Typography variant="h6" component="div" sx={{ 
-                fontWeight: '700', 
+                fontWeight: 500, 
                 color: 'text.primary', 
-                fontSize: '1.125rem',
-                letterSpacing: '-0.05em',
-                lineHeight: 1.2
+                fontSize: '1.0625rem',
+                letterSpacing: '-0.02em',
+                lineHeight: 1.25
               }}>
                 {cleanCompanyName(companyInfo.name) || t('common.companyNameFallback')}
               </Typography>
@@ -544,7 +543,7 @@ const Header: React.FC = () => {
         <Box sx={{ flexGrow: 1 }} />
         
         {/* 알림 및 사용자 메뉴 */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Tooltip title={language === 'en' ? 'Notices' : '공지사항'}>
             <Button
               variant="text"
@@ -558,7 +557,7 @@ const Header: React.FC = () => {
                 py: 0.5,
                 textTransform: 'none',
                 fontSize: '0.75rem',
-                fontWeight: 600,
+                fontWeight: 500,
                 color: isNoticeRoute ? 'primary.main' : 'text.secondary',
                 '& .MuiButton-startIcon': {
                   mr: 0.35,
@@ -589,7 +588,7 @@ const Header: React.FC = () => {
                 py: 0.5,
                 textTransform: 'none',
                 fontSize: '0.75rem',
-                fontWeight: 600,
+                fontWeight: 500,
                 color: isAiRoute ? 'primary.main' : 'text.secondary',
                 '& .MuiButton-startIcon': {
                   mr: 0.35,
@@ -613,9 +612,11 @@ const Header: React.FC = () => {
             onClick={handleLanguageMenu}
             sx={{ 
               color: 'text.secondary',
+              transition: 'all 0.2s ease',
               '&:hover': {
                 bgcolor: 'action.hover',
-                color: 'text.primary'
+                color: 'text.primary',
+                transform: 'translateY(-1px)',
               }
             }}
           >
@@ -627,9 +628,11 @@ const Header: React.FC = () => {
             onClick={handleNotificationMenu}
             sx={{ 
               color: 'text.secondary',
+              transition: 'all 0.2s ease',
               '&:hover': {
                 bgcolor: 'action.hover',
-                color: 'text.primary'
+                color: 'text.primary',
+                transform: 'translateY(-1px)',
               }
             }}
           >
@@ -638,10 +641,10 @@ const Header: React.FC = () => {
               invisible={unreadCount === 0}
               sx={{
                 '& .MuiBadge-badge': {
-                  bgcolor: '#ef4444',
+                  bgcolor: 'rgba(220, 80, 80, 0.92)',
                   color: 'white',
                   fontSize: '0.625rem',
-                  fontWeight: '600',
+                  fontWeight: 500,
                   minWidth: '16px',
                   height: '16px'
                 }
@@ -656,7 +659,7 @@ const Header: React.FC = () => {
             <Typography 
               variant="body2" 
               sx={{ 
-                fontWeight: '600', 
+                fontWeight: 500, 
                 color: 'text.primary',
                 fontSize: '0.875rem',
                 whiteSpace: 'nowrap'
@@ -674,18 +677,20 @@ const Header: React.FC = () => {
             onClick={handleMenu}
             sx={{ 
               color: 'text.secondary',
+              transition: 'all 0.2s ease',
               '&:hover': {
-                bgcolor: 'action.hover'
+                bgcolor: 'action.hover',
+                transform: 'translateY(-1px)',
               }
             }}
           >
             <Avatar sx={{ 
-              width: 32, 
-              height: 32, 
-              bgcolor: '#667eea',
+              width: 28, 
+              height: 28, 
+              bgcolor: 'rgba(102, 126, 234, 0.88)',
               color: 'white',
-              fontWeight: '600',
-              fontSize: '0.75rem'
+              fontWeight: 500,
+              fontSize: '0.7rem'
             }}>
               {user?.username?.charAt(0).toUpperCase() || 'U'}
             </Avatar>

@@ -32,6 +32,7 @@ import SocketService from './services/socketService';
 import aiService from './services/aiService';
 import { createServer } from 'http';
 import path from 'path';
+import { isCorsAllowLanEnabled, isPrivateLanHttpOrigin } from './utils/corsPrivateLan';
 
 // 환경 변수 로드 (시스템 환경변수보다 .env 우선)
 config({ override: true });
@@ -131,6 +132,11 @@ app.use(cors({
 
     // 개발 환경에서는 모든 origin 허용 (편의상)
     if (process.env.NODE_ENV === 'development') {
+      return callback(null, true);
+    }
+
+    // 프로덕션 등: CORS_ALLOW_LAN=1 이면 사설망 IP로 접속한 프론트 오리진 허용
+    if (isCorsAllowLanEnabled() && isPrivateLanHttpOrigin(origin)) {
       return callback(null, true);
     }
 

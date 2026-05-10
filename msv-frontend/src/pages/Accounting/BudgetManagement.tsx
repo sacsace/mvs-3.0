@@ -42,6 +42,7 @@ import {
   Step,
   StepLabel,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -117,12 +118,13 @@ function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
   return (
     <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ pt: 2 }}>{children}</Box>}
     </div>
   );
 }
 
 const BudgetManagement: React.FC = () => {
+  const theme = useTheme();
   const { user } = useStore();
   const canSelectCompany = user?.role === 'root' || user?.role === 'audit';
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
@@ -600,20 +602,12 @@ const BudgetManagement: React.FC = () => {
   // 상세 보기 모드
   if (viewMode === 'view' && selectedBudget) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: 0 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <AccountBalanceIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-              <Typography component="h1" sx={{
-                fontSize: '16px !important',
-                fontWeight: 600,
-                color: 'text.primary',
-                lineHeight: 1.5
-              }}>
-                예산 상세
-              </Typography>
-            </Box>
+            <Typography component="h1" variant="pageTitle" sx={{ fontWeight: 600, letterSpacing: '-0.022em', mb: 0.75 }}>
+              예산 상세
+            </Typography>
             <Typography variant="body2" color="text.secondary">
               {selectedBudget.budgetId}
             </Typography>
@@ -822,28 +816,22 @@ const BudgetManagement: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 0 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <AccountBalanceIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-            <Typography component="h1" sx={{
-              fontSize: '16px !important',
-              fontWeight: 600,
-              color: 'text.primary',
-              lineHeight: 1.5
-            }}>
-              예산 관리
-            </Typography>
-          </Box>
+          <Typography component="h1" variant="pageTitle" sx={{ fontWeight: 600, letterSpacing: '-0.022em', mb: 0.75 }}>
+            예산 관리
+          </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
             예산을 계획하고, 승인하며, 실시간으로 모니터링하세요.
           </Typography>
         </Box>
         <Button
           variant="contained"
-          startIcon={<AddIcon />}
+          disableElevation
+          startIcon={<AddIcon fontSize="small" />}
           onClick={handleCreateBudget}
+          sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}
         >
           예산 생성
         </Button>
@@ -865,72 +853,52 @@ const BudgetManagement: React.FC = () => {
       <Box sx={{ 
         display: 'grid', 
         gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
-        gap: 2, 
+        gap: 2.5, 
         mb: 3 
       }}>
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Box>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  총 계획 금액
-                </Typography>
-                <Typography variant="h5">
-                  Rs. {totalPlanned.toLocaleString()}
-                </Typography>
-              </Box>
-              <AccountBalanceIcon sx={{ fontSize: 40, color: 'primary.main', opacity: 0.3 }} />
-            </Box>
+        <Card elevation={0} sx={{ borderRadius: '16px', border: '1px solid', borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider', boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)' }}>
+          <CardContent sx={{ py: 2.25, px: 2.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+              총 계획 금액
+            </Typography>
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em' }}>
+              Rs. {totalPlanned.toLocaleString()}
+            </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Box>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  총 실제 금액
-                </Typography>
-                <Typography variant="h5">
-                  Rs. {totalActual.toLocaleString()}
-                </Typography>
-              </Box>
-              <TrendingUpIcon sx={{ fontSize: 40, color: 'info.main', opacity: 0.3 }} />
-            </Box>
+        <Card elevation={0} sx={{ borderRadius: '16px', border: '1px solid', borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider', boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)' }}>
+          <CardContent sx={{ py: 2.25, px: 2.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+              총 실제 금액
+            </Typography>
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em' }}>
+              Rs. {totalActual.toLocaleString()}
+            </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Box>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  총 차이
-                </Typography>
-                <Typography variant="h5" color={getVarianceColor(totalVariance)}>
-                  Rs. {Math.abs(totalVariance).toLocaleString()}
-                </Typography>
-              </Box>
-              <TrendingDownIcon sx={{ fontSize: 40, color: totalVariance >= 0 ? 'error.main' : 'success.main', opacity: 0.3 }} />
-            </Box>
+        <Card elevation={0} sx={{ borderRadius: '16px', border: '1px solid', borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider', boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)' }}>
+          <CardContent sx={{ py: 2.25, px: 2.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+              총 차이
+            </Typography>
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em' }} color={getVarianceColor(totalVariance)}>
+              Rs. {Math.abs(totalVariance).toLocaleString()}
+            </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Box>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  활성 예산
-                </Typography>
-                <Typography variant="h5" color="success.main">
-                  {activeBudgets}
-                </Typography>
-                {pendingBudgets > 0 && (
-                  <Typography variant="caption" color="warning.main">
-                    승인 대기: {pendingBudgets}
-                  </Typography>
-                )}
-              </Box>
-              <CheckCircleIcon sx={{ fontSize: 40, color: 'success.main', opacity: 0.3 }} />
-            </Box>
+        <Card elevation={0} sx={{ borderRadius: '16px', border: '1px solid', borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider', boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)' }}>
+          <CardContent sx={{ py: 2.25, px: 2.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+              활성 예산
+            </Typography>
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em' }} color="success.main">
+              {activeBudgets}
+            </Typography>
+            {pendingBudgets > 0 && (
+              <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>
+                승인 대기: {pendingBudgets}
+              </Typography>
+            )}
           </CardContent>
         </Card>
       </Box>

@@ -43,13 +43,15 @@ import {
   Checkbox,
   Tabs,
   Tab,
-  Autocomplete
+  Autocomplete,
+  Collapse,
+  useTheme
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Visibility as ViewIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
   Receipt as ReceiptIcon,
@@ -65,7 +67,7 @@ import {
 } from '@mui/icons-material';
 import { useStore } from '../../store';
 import { useNavigate } from 'react-router-dom';
-import { accountingService, API_BASE_URL, userService, partnerService, companyService } from '../../services/api';
+import { accountingService, API_BASE_URL, userService, partnerService } from '../../services/api';
 import QRCode from 'qrcode';
 import { useTranslation } from 'react-i18next';
 
@@ -152,8 +154,18 @@ interface ApprovalStep {
   comment?: string;
 }
 
+const sectionTitleSx = {
+  display: 'block',
+  letterSpacing: '0.1em',
+  fontWeight: 600,
+  color: 'text.secondary',
+  fontSize: '0.68rem',
+  mb: 2,
+} as const;
+
 const ExpenseApproval: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const theme = useTheme();
   const { user } = useStore();
   const navigate = useNavigate();
   const hasTransferAccess = Boolean(
@@ -165,7 +177,8 @@ const ExpenseApproval: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [saving, setSaving] = useState(false);
-  const [autoSaveStatus, setAutoSaveStatus] = useState('');
+  /** '' | draftCreated | autoSaved | autoSaveFailed — render with t() for i18n */
+  const [headerStatusBanner, setHeaderStatusBanner] = useState<'' | 'draftCreated' | 'autoSaved' | 'autoSaveFailed'>('');
   const [isInitializingDraft, setIsInitializingDraft] = useState(false);
   const [draftId, setDraftId] = useState<number | null>(null);
   const [selectedExpense, setSelectedExpense] = useState<ExpenseApproval | null>(null);
@@ -225,8 +238,6 @@ const ExpenseApproval: React.FC = () => {
   const [reasonDialogType, setReasonDialogType] = useState<'payment-approve' | 'payment-reject'>('payment-approve');
   const [reasonText, setReasonText] = useState('');
   const [reasonTargetId, setReasonTargetId] = useState<number | null>(null);
-  const [companyLogo, setCompanyLogo] = useState<string>('');
-
   const parseExpenseItems = (value: any) => {
     if (!value) return { rows: [], meta: {} };
     let parsed = value;
@@ -298,21 +309,28 @@ const ExpenseApproval: React.FC = () => {
 
   useEffect(() => {
     const loadApprovers = async () => {
+      if (!user?.company_id) {
+        setApprovers([]);
+        return;
+      }
       try {
-        const response = await userService.getUsers();
+        const response = await userService.getUsers({ company_id: Number(user.company_id) });
         if (response?.success && Array.isArray(response.data)) {
           const options = response.data.map((item: any) => ({
             id: item.id,
             name: item.username || item.userid || `User ${item.id}`
           }));
           setApprovers(options);
+        } else {
+          setApprovers([]);
         }
       } catch (loadError) {
         console.error('승인자 목록 로드 오류:', loadError);
+        setApprovers([]);
       }
     };
     loadApprovers();
-  }, []);
+  }, [user?.company_id]);
 
   useEffect(() => {
     const loadPartners = async () => {
@@ -327,21 +345,6 @@ const ExpenseApproval: React.FC = () => {
     };
     loadPartners();
   }, []);
-
-  useEffect(() => {
-    const loadCompanyLogo = async () => {
-      if (!user?.company_id) return;
-      try {
-        const response = await companyService.getCompany(user.company_id);
-        if (response?.success && response.data?.company_logo) {
-          setCompanyLogo(response.data.company_logo);
-        }
-      } catch (error) {
-        console.error('회사 로고 로드 오류:', error);
-      }
-    };
-    loadCompanyLogo();
-  }, [user?.company_id]);
 
   useEffect(() => {
     filterExpenses();
@@ -397,7 +400,7 @@ const ExpenseApproval: React.FC = () => {
       .then((url: string) => setQrImage(url))
       .catch((error: unknown) => {
         console.error('QR 생성 오류:', error);
-        setQrImageError('QR 코드를 생성하지 못했습니다.');
+        setQrImageError(t('expenseApproval.errors.qrGenerateFailed'));
       });
   }, [qrUrl]);
 
@@ -452,7 +455,7 @@ const ExpenseApproval: React.FC = () => {
       }
       setDraftId(response.data?.id || null);
       setCurrentAttachments(parseExpenseItems(response.data?.attachments).rows);
-      setAutoSaveStatus(t('expenseApproval.success.draftCreated'));
+      setHeaderStatusBanner('draftCreated');
     } catch (createError) {
       console.error('지출결의서 초안 생성 오류:', createError);
       setError(t('expenseApproval.errors.createDraftFailed'));
@@ -482,12 +485,12 @@ const ExpenseApproval: React.FC = () => {
         const response = await accountingService.updateExpenseReport(activeExpenseId, payload);
         if (response?.success) {
           setCurrentAttachments(parseExpenseItems(response.data?.attachments).rows);
-          setAutoSaveStatus('자동 저장됨');
+          setHeaderStatusBanner('autoSaved');
           lastSavedPayloadRef.current = payloadString;
         }
       } catch (autoSaveError) {
         console.error('자동 저장 오류:', autoSaveError);
-        setAutoSaveStatus('자동 저장 실패');
+        setHeaderStatusBanner('autoSaveFailed');
       } finally {
         setSaving(false);
       }
@@ -644,7 +647,7 @@ const ExpenseApproval: React.FC = () => {
       tdsRate: 0
     });
     setDraftId(null);
-    setAutoSaveStatus('');
+    setHeaderStatusBanner('');
     setViewMode('create');
   };
 
@@ -663,7 +666,7 @@ const ExpenseApproval: React.FC = () => {
       const payload = buildExpensePayload('submitted');
       const response = await accountingService.updateExpenseReport(activeExpenseId, payload);
       if (!response?.success) {
-        throw new Error(response?.message || '제출 실패');
+        throw new Error(response?.message || t('expenseApproval.errors.submitResponseFailed'));
       }
       setSuccess(t('expenseApproval.success.submitted'));
       await loadExpenseData();
@@ -754,7 +757,7 @@ const ExpenseApproval: React.FC = () => {
     try {
       const response = await accountingService.getReceiptUploadToken(activeExpenseId);
       if (!response?.success) {
-        throw new Error(response?.message || '토큰 발급 실패');
+        throw new Error(response?.message || t('expenseApproval.errors.qrTokenFailed'));
       }
       setQrToken(response.token);
       setQrOpen(true);
@@ -777,7 +780,7 @@ const ExpenseApproval: React.FC = () => {
       setUploadingReceipts(true);
       const response = await accountingService.uploadExpenseReceiptById(activeExpenseId, Array.from(files));
       if (!response?.success) {
-        throw new Error(response?.message || '영수증 업로드 실패');
+        throw new Error(response?.message || t('expenseApproval.errors.receiptUploadFailed'));
       }
       setCurrentAttachments(parseExpenseItems(response.data?.attachments).rows);
       setSuccess(t('expenseApproval.success.receiptAttached'));
@@ -798,7 +801,7 @@ const ExpenseApproval: React.FC = () => {
     try {
       const response = await accountingService.deleteExpenseReport(deleteTargetId);
       if (!response.success) {
-        throw new Error(response.message || '삭제 실패');
+        throw new Error(response.message || t('expenseApproval.errors.deleteFailed'));
       }
       await loadExpenseData();
       setSuccess(t('expenseApproval.success.deleted'));
@@ -847,7 +850,7 @@ const ExpenseApproval: React.FC = () => {
     try {
       const response = await accountingService.requestExpensePayment(id);
       if (!response?.success) {
-        throw new Error(response?.message || '결제 요청 실패');
+        throw new Error(response?.message || t('expenseApproval.errors.paymentRequestFailed'));
       }
       await loadExpenseData();
       setSuccess(t('expenseApproval.success.paymentRequested'));
@@ -861,7 +864,7 @@ const ExpenseApproval: React.FC = () => {
     try {
       const response = await accountingService.completeExpensePayment(id, bankProvider);
       if (!response?.success) {
-        throw new Error(response?.message || '결제 완료 처리 실패');
+        throw new Error(response?.message || t('expenseApproval.errors.paymentCompleteFailed'));
       }
       await loadExpenseData();
       setSuccess(t('expenseApproval.success.paymentCompleted'));
@@ -875,7 +878,7 @@ const ExpenseApproval: React.FC = () => {
     try {
       const response = await accountingService.retryExpenseTransfer(id, bankProvider);
       if (!response?.success) {
-        throw new Error(response?.message || '송금 재시도 실패');
+        throw new Error(response?.message || t('expenseApproval.errors.transferRetryFailed'));
       }
       await loadExpenseData();
       setSuccess(t('expenseApproval.success.transferRetried'));
@@ -889,7 +892,7 @@ const ExpenseApproval: React.FC = () => {
     try {
       const response = await accountingService.approveExpensePayment(id, reason);
       if (!response?.success) {
-        throw new Error(response?.message || '최종 승인 실패');
+        throw new Error(response?.message || t('expenseApproval.errors.finalApproveFailed'));
       }
       await loadExpenseData();
       setSuccess(t('expenseApproval.success.finalApproved'));
@@ -903,7 +906,7 @@ const ExpenseApproval: React.FC = () => {
     try {
       const response = await accountingService.rejectExpensePayment(id, reason);
       if (!response?.success) {
-        throw new Error(response?.message || '반려 실패');
+        throw new Error(response?.message || t('expenseApproval.errors.paymentRejectResponseFailed'));
       }
       await loadExpenseData();
       setSuccess(t('expenseApproval.success.paymentRejected'));
@@ -933,6 +936,55 @@ const ExpenseApproval: React.FC = () => {
     return approvers.find((item) => item.id === id)?.name || `User ${id}`;
   };
 
+  const dateLocale = useMemo(() => (i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US'), [i18n.language]);
+  const formLangAttr = i18n.language?.startsWith('ko') ? 'ko' : 'en';
+
+  const expenseFormPaperSx = useMemo(
+    () => ({
+      p: { xs: 2.5, sm: 3.5 },
+      borderRadius: '20px',
+      border: '1px solid',
+      borderColor: alpha(theme.palette.text.primary, 0.06),
+      boxShadow: '0 4px 32px rgba(0,0,0,0.06)',
+      bgcolor: theme.palette.background.paper,
+    }),
+    [theme]
+  );
+
+  const sectionShellSx = useMemo(
+    () => ({
+      mb: 2.5,
+      p: { xs: 2, sm: 2.5 },
+      borderRadius: '16px',
+      border: '1px solid',
+      borderColor: alpha(theme.palette.text.primary, 0.06),
+      bgcolor: alpha(theme.palette.text.primary, 0.02),
+    }),
+    [theme]
+  );
+
+  const softFieldSx = useMemo(
+    () => ({
+      '& .MuiOutlinedInput-root': {
+        borderRadius: '12px',
+        bgcolor: alpha(theme.palette.text.primary, 0.03),
+        '& fieldset': { borderColor: alpha(theme.palette.text.primary, 0.08) },
+      },
+    }),
+    [theme]
+  );
+
+  const prepCellSx = useMemo(
+    () => ({
+      p: 1.5,
+      borderRadius: '14px',
+      bgcolor: alpha(theme.palette.text.primary, 0.035),
+      border: '1px solid',
+      borderColor: alpha(theme.palette.text.primary, 0.08),
+    }),
+    [theme]
+  );
+
   const generateVoucherNumber = () => {
     const year = new Date().getFullYear();
     const suffix = String(Date.now()).slice(-6);
@@ -957,20 +1009,29 @@ const ExpenseApproval: React.FC = () => {
     const isEdit = viewMode === 'edit';
     return (
       <Box sx={{
-        p: 3,
+        p: 0,
         backgroundColor: 'workArea.main',
         borderRadius: 2,
         minHeight: '100%'
       }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <ReceiptIcon />
+          <Typography variant="pageTitle" component="h1" sx={{ fontWeight: 600, letterSpacing: '-0.022em' }}>
             {isEdit ? t('expenseApproval.form.editTitle') : t('expenseApproval.form.createTitle')}
           </Typography>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            {autoSaveStatus && (
+            {headerStatusBanner === 'draftCreated' && (
               <Typography variant="body2" color="text.secondary">
-                {autoSaveStatus}
+                {t('expenseApproval.success.draftCreated')}
+              </Typography>
+            )}
+            {headerStatusBanner === 'autoSaved' && (
+              <Typography variant="body2" color="text.secondary">
+                {t('expenseApproval.voucher.autoSaveSaved')}
+              </Typography>
+            )}
+            {headerStatusBanner === 'autoSaveFailed' && (
+              <Typography variant="body2" color="error">
+                {t('expenseApproval.voucher.autoSaveFailed')}
               </Typography>
             )}
             <Button variant="outlined" onClick={() => setViewMode('list')}>
@@ -979,75 +1040,75 @@ const ExpenseApproval: React.FC = () => {
           </Box>
         </Box>
 
-        <Paper variant="outlined" sx={{ p: 3, borderRadius: 2, borderColor: 'divider', bgcolor: 'background.paper' }}>
-            {saving && <LinearProgress sx={{ mb: 2 }} />}
+        <Paper variant="outlined" component="section" lang={formLangAttr} sx={expenseFormPaperSx}>
+            {saving && <LinearProgress sx={{ mb: 2, borderRadius: '4px' }} />}
 
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-              <Box>
-                <Typography variant="h5" fontWeight={700}>{t('expenseApproval.title')}</Typography>
-                <Typography variant="body2" color="text.secondary">Payment Voucher</Typography>
-                <Box sx={{ mt: 1 }}>
-                  <img
-                    src={companyLogo}
-                    alt="Company logo"
-                    style={{ height: 32, objectFit: 'contain' }}
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: 3, mb: 4 }}>
+              <Box sx={{ minWidth: 0, flex: '1 1 220px' }}>
+                <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: '-0.03em' }}>{t('expenseApproval.title')}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                  {t('expenseApproval.voucher.subtitle')}
+                </Typography>
+              </Box>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                  gap: 1.5,
+                  width: { xs: '100%', sm: 'auto' },
+                  minWidth: { sm: 320 },
+                  maxWidth: { sm: 420 },
+                }}
+              >
+                <Box sx={prepCellSx}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.04em' }}>
+                    {t('expenseApproval.voucher.prepared')}
+                  </Typography>
+                  <TextField
+                    value={user?.username || ''}
+                    size="small"
+                    inputProps={{ readOnly: true }}
+                    fullWidth
+                    sx={{ mt: 0.75, ...softFieldSx }}
                   />
                 </Box>
-              </Box>
-              <Box sx={{ minWidth: 360 }}>
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(2, 1fr)',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                    overflow: 'hidden'
-                  }}
-                >
-                  <Box sx={{ p: 1, borderRight: '1px solid', borderColor: 'divider' }}>
-                    <Typography variant="caption" color="text.secondary">PREPARED</Typography>
-                    <TextField
-                      value={user?.username || ''}
-                      size="small"
-                      inputProps={{ readOnly: true }}
-                      fullWidth
-                    />
-                  </Box>
-                  <Box sx={{ p: 1 }}>
-                    <Typography variant="caption" color="text.secondary">APPROVED</Typography>
-                    <Autocomplete
-                      options={approvers}
-                      getOptionLabel={(option) => option.name}
-                      value={approvers.find((item) => String(item.id) === String(voucherData.approvedById)) || null}
-                      onChange={(_, value) =>
-                        setVoucherData({ ...voucherData, approvedById: value ? String(value.id) : '' })
-                      }
-                      renderInput={(params) => (
-                        <TextField {...params} placeholder={t('expenseApproval.placeholders.searchSimple')} size="small" />
-                      )}
-                    />
-                  </Box>
+                <Box sx={prepCellSx}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.04em' }}>
+                    {t('expenseApproval.voucher.approved')}
+                  </Typography>
+                  <Autocomplete
+                    sx={{ mt: 0.75, ...softFieldSx }}
+                    options={approvers}
+                    getOptionLabel={(option) => option.name}
+                    value={approvers.find((item) => String(item.id) === String(voucherData.approvedById)) || null}
+                    onChange={(_, value) =>
+                      setVoucherData({ ...voucherData, approvedById: value ? String(value.id) : '' })
+                    }
+                    renderInput={(params) => (
+                      <TextField {...params} placeholder={t('expenseApproval.placeholders.searchSimple')} size="small" />
+                    )}
+                  />
                 </Box>
               </Box>
             </Box>
 
-            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 2, mb: 2 }}>
-              <Box sx={{ bgcolor: 'grey.100', px: 1.5, py: 0.75, borderRadius: 1, mb: 2 }}>
-                <Typography variant="subtitle2" fontWeight={700}>기본 정보</Typography>
-              </Box>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
+            <Box sx={sectionShellSx}>
+              <Typography variant="overline" sx={sectionTitleSx}>
+                {t('expenseApproval.voucher.sectionBasic')}
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
                 <Box>
-                  <Typography variant="caption">제목</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>{t('expenseApproval.voucher.labelTitle')}</Typography>
                   <TextField
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     required
                     fullWidth
+                    sx={{ mt: 0.5, ...softFieldSx }}
                   />
                 </Box>
                 <Box>
-                  <Typography variant="caption">지출 목적</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>{t('expenseApproval.voucher.labelPurpose')}</Typography>
                   <TextField
                     value={formData.purpose}
                     onChange={(e) => setFormData({ ...formData, purpose: e.target.value })}
@@ -1055,48 +1116,58 @@ const ExpenseApproval: React.FC = () => {
                     fullWidth
                     multiline
                     minRows={2}
+                    sx={{ mt: 0.5, ...softFieldSx }}
                   />
                 </Box>
-                <Box sx={{ display: 'grid', gap: 1.5 }}>
+                <Box sx={{ display: 'grid', gap: 2, gridColumn: { md: '1 / -1' }, gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' } }}>
                   <Box>
-                    <Typography variant="caption">{t('expenseApproval.filters.priority')}</Typography>
-                    <FormControl fullWidth>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>{t('expenseApproval.filters.priority')}</Typography>
+                    <FormControl fullWidth sx={{ mt: 0.5 }}>
                       <Select
                         value={formData.priority}
                         onChange={(e) => setFormData({ ...formData, priority: e.target.value as any })}
                         size="small"
+                        sx={{
+                          borderRadius: '12px',
+                          bgcolor: alpha(theme.palette.text.primary, 0.03),
+                          '& .MuiOutlinedInput-notchedOutline': { borderColor: alpha(theme.palette.text.primary, 0.08) },
+                        }}
                       >
-                        <MenuItem value="low">낮음</MenuItem>
-                        <MenuItem value="medium">보통</MenuItem>
-                        <MenuItem value="high">높음</MenuItem>
-                        <MenuItem value="urgent">긴급</MenuItem>
+                        <MenuItem value="low">{t('expenseApproval.priority.low')}</MenuItem>
+                        <MenuItem value="medium">{t('expenseApproval.priority.medium')}</MenuItem>
+                        <MenuItem value="high">{t('expenseApproval.priority.high')}</MenuItem>
+                        <MenuItem value="urgent">{t('expenseApproval.priority.urgent')}</MenuItem>
                       </Select>
                     </FormControl>
                   </Box>
                   <Box>
-                    <Typography variant="caption">작성날자</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>{t('expenseApproval.voucher.labelDateCreated')}</Typography>
                     <TextField
                       type="date"
                       value={formData.dueDate}
                       onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
                       InputLabelProps={{ shrink: true }}
                       fullWidth
+                      inputProps={{ lang: formLangAttr }}
+                      sx={{ mt: 0.5, ...softFieldSx }}
                     />
                   </Box>
                 </Box>
               </Box>
             </Box>
 
-            <Divider sx={{ my: 2 }} />
-
-            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 2, mb: 2 }}>
-              <Box sx={{ bgcolor: 'grey.100', px: 1.5, py: 0.75, borderRadius: 1, mb: 2 }}>
-                <Typography variant="subtitle2" fontWeight={700}>대금을 받는 협력업체</Typography>
-              </Box>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 1.5 }}>
+            <Box sx={sectionShellSx}>
+              <Typography variant="overline" sx={sectionTitleSx}>
+                {t('expenseApproval.voucher.sectionVendor')}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.06em', display: 'block', mb: 1.5 }}>
+                {t('expenseApproval.voucher.vendorGroupDoc')}
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 2.5 }}>
                 <Box>
-                  <Typography variant="caption">협력업체</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>{t('expenseApproval.voucher.labelPartner')}</Typography>
                   <Autocomplete
+                    sx={{ mt: 0.5, ...softFieldSx }}
                     options={partners}
                     getOptionLabel={(option) => option.company_name}
                     value={partners.find((item) => String(item.id) === String(voucherData.partnerId)) || null}
@@ -1107,24 +1178,24 @@ const ExpenseApproval: React.FC = () => {
                           partnerId: '',
                           department: '',
                           gstNumber: '',
-                        bank: '',
-                        accountNumber: '',
-                        ifsc: '',
-                        acHolder: ''
+                          bank: '',
+                          accountNumber: '',
+                          ifsc: '',
+                          acHolder: ''
                         });
                         return;
                       }
                       const gstNumber = value.gstNumbers && value.gstNumbers.length > 0 ? value.gstNumbers[0] : '';
-                    setVoucherData({
-                      ...voucherData,
-                      partnerId: String(value.id),
-                      department: value.company_name || '',
-                      gstNumber,
-                      bank: value.bank_name || '',
-                      accountNumber: value.account_number || '',
-                      ifsc: value.bank_ifsc || '',
-                      acHolder: value.account_holder || value.representative || value.company_name || ''
-                    });
+                      setVoucherData({
+                        ...voucherData,
+                        partnerId: String(value.id),
+                        department: value.company_name || '',
+                        gstNumber,
+                        bank: value.bank_name || '',
+                        accountNumber: value.account_number || '',
+                        ifsc: value.bank_ifsc || '',
+                        acHolder: value.account_holder || value.representative || value.company_name || ''
+                      });
                     }}
                     renderInput={(params) => (
                       <TextField {...params} placeholder={t('expenseApproval.placeholders.searchCompany')} />
@@ -1132,95 +1203,116 @@ const ExpenseApproval: React.FC = () => {
                   />
                 </Box>
                 <Box>
-                  <Typography variant="caption">Payment Voucher Number</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>{t('expenseApproval.voucher.labelVoucherNumber')}</Typography>
                   <TextField
                     value={voucherData.voucherNo}
                     onChange={(e) => setVoucherData({ ...voucherData, voucherNo: e.target.value })}
                     fullWidth
+                    sx={{ mt: 0.5, ...softFieldSx }}
                   />
                 </Box>
                 <Box>
-                  <Typography variant="caption">GST 번호</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>{t('expenseApproval.voucher.labelGstNumber')}</Typography>
                   <TextField
                     value={voucherData.gstNumber}
                     onChange={(e) => setVoucherData({ ...voucherData, gstNumber: e.target.value })}
                     fullWidth
+                    sx={{ mt: 0.5, ...softFieldSx }}
                   />
                 </Box>
                 <Box>
-                  <Typography variant="caption">전표 일자</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>{t('expenseApproval.voucher.labelVoucherDate')}</Typography>
                   <TextField
                     type="date"
                     value={voucherData.voucherDate}
                     onChange={(e) => setVoucherData({ ...voucherData, voucherDate: e.target.value })}
                     InputLabelProps={{ shrink: true }}
                     fullWidth
+                    inputProps={{ lang: formLangAttr }}
+                    sx={{ mt: 0.5, ...softFieldSx }}
                   />
                 </Box>
+              </Box>
+              <Divider sx={{ borderColor: alpha(theme.palette.text.primary, 0.08), my: 1 }} />
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.06em', display: 'block', mb: 1.5 }}>
+                {t('expenseApproval.voucher.vendorGroupPayout')}
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
                 <Box>
-                  <Typography variant="caption">계좌 예금주</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>{t('expenseApproval.voucher.labelAccountHolder')}</Typography>
                   <TextField
                     value={voucherData.acHolder}
                     onChange={(e) => setVoucherData({ ...voucherData, acHolder: e.target.value })}
                     fullWidth
+                    sx={{ mt: 0.5, ...softFieldSx }}
                   />
                 </Box>
                 <Box>
-                  <Typography variant="caption">은행명</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>{t('expenseApproval.voucher.labelBankName')}</Typography>
                   <TextField
                     value={voucherData.bank}
                     onChange={(e) => setVoucherData({ ...voucherData, bank: e.target.value })}
                     fullWidth
+                    sx={{ mt: 0.5, ...softFieldSx }}
                   />
                 </Box>
                 <Box>
-                  <Typography variant="caption">계좌 번호</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>{t('expenseApproval.voucher.labelAccountNumber')}</Typography>
                   <TextField
                     value={voucherData.accountNumber}
                     onChange={(e) => setVoucherData({ ...voucherData, accountNumber: e.target.value })}
                     fullWidth
+                    sx={{ mt: 0.5, ...softFieldSx }}
                   />
                 </Box>
                 <Box>
-                  <Typography variant="caption">IFSC 코드</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>{t('expenseApproval.voucher.labelIfsc')}</Typography>
                   <TextField
                     value={voucherData.ifsc}
                     onChange={(e) => setVoucherData({ ...voucherData, ifsc: e.target.value })}
                     fullWidth
+                    sx={{ mt: 0.5, ...softFieldSx }}
                   />
                 </Box>
               </Box>
             </Box>
 
-            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 2, mb: 2 }}>
-              <Box sx={{ bgcolor: 'grey.100', px: 1.5, py: 0.75, borderRadius: 1, mb: 2 }}>
-                <Typography variant="subtitle2" fontWeight={700}>항목</Typography>
-              </Box>
-              <TableContainer component={Paper} sx={{ mb: 1.5 }}>
+            <Box sx={sectionShellSx}>
+              <Typography variant="overline" sx={sectionTitleSx}>
+                {t('expenseApproval.voucher.sectionItems')}
+              </Typography>
+              <TableContainer
+                sx={{
+                  mb: 1.5,
+                  borderRadius: '14px',
+                  border: '1px solid',
+                  borderColor: alpha(theme.palette.text.primary, 0.08),
+                  overflow: 'hidden',
+                }}
+              >
               <Table size="small">
                 <TableHead
                   sx={{
-                    bgcolor: 'background.paper',
+                    bgcolor: alpha(theme.palette.text.primary, 0.03),
                     '& .MuiTableCell-head': {
-                      bgcolor: 'background.paper',
-                      color: 'text.primary',
+                      color: 'text.secondary',
                       fontWeight: 600,
-                      fontSize: '0.875rem',
+                      fontSize: '0.75rem',
+                      letterSpacing: '0.04em',
                       textTransform: 'none',
-                      letterSpacing: 'normal',
-                      borderBottom: '2px solid',
-                      borderColor: 'primary.main',
-                      py: 1.25
-                    }
+                      borderBottom: '1px solid',
+                      borderColor: alpha(theme.palette.text.primary, 0.08),
+                      py: 1.25,
+                    },
                   }}
                 >
                   <TableRow>
-                    <TableCell>No.</TableCell>
-                    <TableCell>Invoice Date</TableCell>
-                    <TableCell>Description</TableCell>
-                    <TableCell align="right">Qty</TableCell>
-                    <TableCell align="right">Unit Price</TableCell>
-                    <TableCell align="right">Total</TableCell>
+                    <TableCell>{t('expenseApproval.voucher.tableNo')}</TableCell>
+                    <TableCell>{t('expenseApproval.voucher.tableInvoiceDate')}</TableCell>
+                    <TableCell>{t('expenseApproval.voucher.tableDescription')}</TableCell>
+                    <TableCell align="right">{t('expenseApproval.voucher.tableQty')}</TableCell>
+                    <TableCell align="right">{t('expenseApproval.voucher.tableUnitPrice')}</TableCell>
+                    <TableCell align="right">{t('expenseApproval.voucher.tableTotal')}</TableCell>
                     <TableCell />
                   </TableRow>
                 </TableHead>
@@ -1236,7 +1328,9 @@ const ExpenseApproval: React.FC = () => {
                           onKeyDown={handleLineItemKeyDown(item.id, 'invoiceDate', index)}
                           size="small"
                           fullWidth
+                          inputProps={{ lang: formLangAttr }}
                           inputRef={setInputRef(item.id, 'invoiceDate')}
+                          sx={softFieldSx}
                         />
                       </TableCell>
                       <TableCell>
@@ -1246,8 +1340,9 @@ const ExpenseApproval: React.FC = () => {
                           onKeyDown={handleLineItemKeyDown(item.id, 'description', index)}
                           size="small"
                           fullWidth
-                          placeholder="Description"
+                          placeholder={t('expenseApproval.voucher.placeholderDescription')}
                           inputRef={setInputRef(item.id, 'description')}
+                          sx={softFieldSx}
                         />
                       </TableCell>
                       <TableCell align="right">
@@ -1259,8 +1354,9 @@ const ExpenseApproval: React.FC = () => {
                           size="small"
                           inputProps={{ min: 0 }}
                           fullWidth
-                          placeholder="Qty"
+                          placeholder={t('expenseApproval.voucher.placeholderQty')}
                           inputRef={setInputRef(item.id, 'qty')}
+                          sx={softFieldSx}
                         />
                       </TableCell>
                       <TableCell align="right">
@@ -1272,8 +1368,9 @@ const ExpenseApproval: React.FC = () => {
                           size="small"
                           inputProps={{ min: 0 }}
                           fullWidth
-                          placeholder="Unit Price"
+                          placeholder={t('expenseApproval.voucher.placeholderUnitPrice')}
                           inputRef={setInputRef(item.id, 'unitPrice')}
+                          sx={softFieldSx}
                         />
                       </TableCell>
                       <TableCell align="right">{item.total.toLocaleString()}</TableCell>
@@ -1287,154 +1384,266 @@ const ExpenseApproval: React.FC = () => {
                   {lineItems.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={7} align="center">
-                        항목을 추가해주세요.
+                        {t('expenseApproval.voucher.lineItemsEmpty')}
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
               </TableContainer>
-              <Button variant="outlined" startIcon={<AddIcon />} onClick={handleAddLineItem}>
-                항목 추가
+              <Button
+                variant="outlined"
+                startIcon={<AddIcon />}
+                onClick={handleAddLineItem}
+                sx={{ mt: 1, textTransform: 'none', borderRadius: '12px' }}
+              >
+                {t('expenseApproval.voucher.addItem')}
               </Button>
             </Box>
 
-            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 2, mb: 2 }}>
-              <Box sx={{ bgcolor: 'grey.100', px: 1.5, py: 0.75, borderRadius: 1, mb: 2 }}>
-                <Typography variant="subtitle2" fontWeight={700}>세금/합계</Typography>
+            <Box
+              sx={{
+                mb: 2,
+                borderRadius: '16px',
+                p: { xs: 2, sm: 2.5 },
+                bgcolor: 'background.paper',
+                border: '1px solid',
+                borderColor: (theme) => alpha(theme.palette.text.primary, 0.06),
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 8px 32px rgba(0,0,0,0.06)',
+              }}
+            >
+              <Typography
+                variant="overline"
+                sx={{
+                  display: 'block',
+                  letterSpacing: '0.12em',
+                  fontWeight: 600,
+                  color: 'text.secondary',
+                  fontSize: '0.68rem',
+                  mb: 2,
+                }}
+              >
+                {t('expenseApproval.voucher.sectionTax')}
+              </Typography>
+
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'baseline',
+                  gap: 2,
+                  py: 1.25,
+                  px: 1.5,
+                  mb: 1.5,
+                  borderRadius: '12px',
+                  bgcolor: (theme) => alpha(theme.palette.text.primary, 0.04),
+                }}
+              >
+                <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                  {t('expenseApproval.voucher.taxSubtotal')}
+                </Typography>
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                  {subtotalAmount.toFixed(2)}
+                </Typography>
               </Box>
-              <Box sx={{ display: 'grid', gap: 1 }}>
-                <Box>
-                  <Typography variant="caption">Total Amount (A)</Typography>
+
+              <Box
+                sx={{
+                  display: { xs: 'none', sm: 'grid' },
+                  gridTemplateColumns: 'minmax(88px,auto) 108px 1fr',
+                  gap: 1.5,
+                  alignItems: 'center',
+                  py: 0.5,
+                  borderBottom: '1px solid',
+                  borderColor: (theme) => alpha(theme.palette.text.primary, 0.06),
+                  mb: 1,
+                }}
+              >
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, letterSpacing: '0.06em' }}>
+                  {t('expenseApproval.voucher.taxColItem')}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, letterSpacing: '0.06em', textAlign: 'center' }}>
+                  {t('expenseApproval.voucher.taxColRate')}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, letterSpacing: '0.06em', textAlign: 'right' }}>
+                  {t('expenseApproval.voucher.taxColAmount')}
+                </Typography>
+              </Box>
+
+              {([
+                { key: 'igst', label: 'IGST (B)', rate: voucherData.igstRate, setRate: (v: number) => setVoucherData({ ...voucherData, igstRate: v }), amount: igstAmount },
+                { key: 'cgst', label: 'CGST (C)', rate: voucherData.cgstRate, setRate: (v: number) => setVoucherData({ ...voucherData, cgstRate: v }), amount: cgstAmount },
+                { key: 'sgst', label: 'SGST (D)', rate: voucherData.sgstRate, setRate: (v: number) => setVoucherData({ ...voucherData, sgstRate: v }), amount: sgstAmount },
+              ] as const).map((row) => (
+                <Box
+                  key={row.key}
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr auto', sm: 'minmax(88px,auto) 108px 1fr' },
+                    gap: { xs: 1.5, sm: 1.5 },
+                    alignItems: 'center',
+                    py: 1.25,
+                    borderBottom: '1px solid',
+                    borderColor: (theme) => alpha(theme.palette.text.primary, 0.06),
+                    '&:last-of-type': { borderBottom: 'none', pb: 0 },
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 500, gridColumn: { xs: '1 / -1', sm: 'auto' } }}>
+                    {row.label}
+                  </Typography>
                   <TextField
-                    value={subtotalAmount.toFixed(2)}
-                    InputProps={{ readOnly: true }}
-                    fullWidth
-                  />
-                </Box>
-                <Box>
-                  <Typography variant="caption">IGST (B) %</Typography>
-                  <TextField
+                    size="small"
                     type="number"
-                    value={voucherData.igstRate}
-                    onChange={(e) => setVoucherData({ ...voucherData, igstRate: Number(e.target.value || 0) })}
-                    fullWidth
+                    value={row.rate}
+                    onChange={(e) => row.setRate(Number(e.target.value || 0))}
+                    InputProps={{
+                      endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                    }}
+                    inputProps={{ min: 0, step: 0.01 }}
+                    sx={{
+                      width: { xs: '100%', sm: 'auto' },
+                      maxWidth: { xs: 120, sm: 'none' },
+                      gridColumn: { xs: '1', sm: 'auto' },
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '10px',
+                        bgcolor: (theme) => alpha(theme.palette.text.primary, 0.03),
+                        '& fieldset': { borderColor: (theme) => alpha(theme.palette.text.primary, 0.08) },
+                      },
+                    }}
                   />
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      textAlign: { xs: 'right', sm: 'right' },
+                      fontVariantNumeric: 'tabular-nums',
+                      color: 'text.secondary',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {row.amount.toFixed(2)}
+                  </Typography>
                 </Box>
-                <Box>
-                  <Typography variant="caption">IGST (B) Amount</Typography>
-                  <TextField
-                    value={igstAmount.toFixed(2)}
-                    InputProps={{ readOnly: true }}
-                    fullWidth
-                  />
-                </Box>
-                <Box>
-                  <Typography variant="caption">CGST (C) %</Typography>
-                  <TextField
-                    type="number"
-                    value={voucherData.cgstRate}
-                    onChange={(e) => setVoucherData({ ...voucherData, cgstRate: Number(e.target.value || 0) })}
-                    fullWidth
-                  />
-                </Box>
-                <Box>
-                  <Typography variant="caption">CGST (C) Amount</Typography>
-                  <TextField
-                    value={cgstAmount.toFixed(2)}
-                    InputProps={{ readOnly: true }}
-                    fullWidth
-                  />
-                </Box>
-                <Box>
-                  <Typography variant="caption">SGST (D) %</Typography>
-                  <TextField
-                    type="number"
-                    value={voucherData.sgstRate}
-                    onChange={(e) => setVoucherData({ ...voucherData, sgstRate: Number(e.target.value || 0) })}
-                    fullWidth
-                  />
-                </Box>
-                <Box>
-                  <Typography variant="caption">SGST (D) Amount</Typography>
-                  <TextField
-                    value={sgstAmount.toFixed(2)}
-                    InputProps={{ readOnly: true }}
-                    fullWidth
-                  />
-                </Box>
+              ))}
+
+              <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: (theme) => alpha(theme.palette.text.primary, 0.08) }}>
                 <FormControlLabel
                   control={
                     <Checkbox
                       checked={voucherData.tdsEnabled}
                       onChange={(e) => setVoucherData({ ...voucherData, tdsEnabled: e.target.checked })}
+                      size="small"
+                      sx={{ borderRadius: '8px' }}
                     />
                   }
-                  label="TDS 적용"
+                  label={<Typography variant="body2" sx={{ fontWeight: 500 }}>{t('expenseApproval.voucher.tdsApply')}</Typography>}
+                  sx={{ ml: -0.5, mb: 0.5 }}
                 />
-                <Box>
-                  <Typography variant="caption">TDS (E) %</Typography>
-                  <TextField
-                    type="number"
-                    value={voucherData.tdsRate}
-                    onChange={(e) => setVoucherData({ ...voucherData, tdsRate: Number(e.target.value || 0) })}
-                    disabled={!voucherData.tdsEnabled}
-                    fullWidth
-                  />
-                </Box>
-                <Box>
-                  <Typography variant="caption">TOTAL (A+B+C+D)-E</Typography>
-                  <TextField
-                    value={totalAmount.toFixed(2)}
-                    InputProps={{ readOnly: true }}
-                    fullWidth
-                  />
-                </Box>
+                <Collapse in={voucherData.tdsEnabled} timeout="auto" unmountOnExit>
+                  <Box sx={{ mt: 1 }}>
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr auto', sm: 'minmax(88px,auto) 108px 1fr' },
+                        gap: 1.5,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ fontWeight: 500, gridColumn: { xs: '1 / -1', sm: 'auto' } }}>
+                        TDS (E)
+                      </Typography>
+                      <TextField
+                        size="small"
+                        type="number"
+                        value={voucherData.tdsRate}
+                        onChange={(e) => setVoucherData({ ...voucherData, tdsRate: Number(e.target.value || 0) })}
+                        InputProps={{
+                          endAdornment: <InputAdornment position="end">%</InputAdornment>,
+                        }}
+                        inputProps={{ min: 0, step: 0.01 }}
+                        sx={{
+                          width: { xs: '100%', sm: 'auto' },
+                          maxWidth: { xs: 120, sm: 'none' },
+                          '& .MuiOutlinedInput-root': {
+                            borderRadius: '10px',
+                            bgcolor: (theme) => alpha(theme.palette.text.primary, 0.03),
+                            '& fieldset': { borderColor: (theme) => alpha(theme.palette.text.primary, 0.08) },
+                          },
+                        }}
+                      />
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          textAlign: 'right',
+                          fontVariantNumeric: 'tabular-nums',
+                          color: 'text.secondary',
+                          fontWeight: 500,
+                        }}
+                      >
+                        −{tdsAmount.toFixed(2)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Collapse>
+              </Box>
+
+              <Box
+                sx={{
+                  mt: 2.5,
+                  pt: 2,
+                  px: 2,
+                  pb: 2,
+                  borderRadius: '14px',
+                  bgcolor: (theme) => alpha(theme.palette.primary.main, 0.06),
+                  border: '1px solid',
+                  borderColor: (theme) => alpha(theme.palette.primary.main, 0.12),
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 1,
+                }}
+              >
+                <Typography variant="body1" sx={{ fontWeight: 600, letterSpacing: '-0.02em' }}>
+                  {t('expenseApproval.voucher.grandTotal')}
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }}>
+                  {totalAmount.toFixed(2)}
+                </Typography>
               </Box>
             </Box>
 
             <TextField
-              label="Remarks if any"
+              label={t('expenseApproval.voucher.remarksIfAny')}
               value={voucherData.remarks}
               onChange={(e) => setVoucherData({ ...voucherData, remarks: e.target.value })}
               fullWidth
               multiline
               minRows={3}
-              sx={{ mt: 2 }}
+              sx={{ mt: 2, ...softFieldSx }}
             />
 
             <TextField
-              label="비고"
+              label={t('expenseApproval.voucher.remarksInternal')}
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               fullWidth
               multiline
               minRows={2}
-              sx={{ mt: 1.5 }}
+              sx={{ mt: 1.5, ...softFieldSx }}
             />
 
-            {companyLogo && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                <img
-                  src={companyLogo}
-                  alt="Company logo"
-                  style={{ height: 40, objectFit: 'contain' }}
-                />
-              </Box>
-            )}
+            <Divider sx={{ my: 3, borderColor: alpha(theme.palette.text.primary, 0.08) }} />
 
-            <Divider sx={{ my: 3 }} />
-
-            <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 2, mb: 2 }}>
-              <Box sx={{ bgcolor: 'grey.100', px: 1.5, py: 0.75, borderRadius: 1, mb: 2 }}>
-                <Typography variant="subtitle2" fontWeight={700}>영수증 첨부</Typography>
-              </Box>
+            <Box sx={sectionShellSx}>
+              <Typography variant="overline" sx={sectionTitleSx}>
+                {t('expenseApproval.voucher.sectionReceipts')}
+              </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
-                <Button variant="outlined" startIcon={<QrCodeIcon />} onClick={handleOpenQr} disabled={qrLoading}>
-                  {qrLoading ? 'QR 생성 중...' : '휴대폰으로 영수증 올리기'}
+                <Button variant="outlined" startIcon={<QrCodeIcon />} onClick={handleOpenQr} disabled={qrLoading} sx={{ textTransform: 'none', borderRadius: '12px' }}>
+                  {qrLoading ? t('expenseApproval.voucher.receiptQrLoading') : t('expenseApproval.voucher.receiptQr')}
                 </Button>
-                <Button variant="outlined" component="label" disabled={uploadingReceipts}>
-                  {uploadingReceipts ? '업로드 중...' : '파일 첨부'}
+                <Button variant="outlined" component="label" disabled={uploadingReceipts} sx={{ textTransform: 'none', borderRadius: '12px' }}>
+                  {uploadingReceipts ? t('expenseApproval.voucher.receiptUploading') : t('expenseApproval.voucher.receiptUpload')}
                   <input
                     hidden
                     multiple
@@ -1443,8 +1652,8 @@ const ExpenseApproval: React.FC = () => {
                     onChange={(e) => handleUploadReceipts(e.target.files)}
                   />
                 </Button>
-                <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadExpenseData}>
-                  새로고침
+                <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadExpenseData} sx={{ textTransform: 'none', borderRadius: '12px' }}>
+                  {t('expenseApproval.voucher.refresh')}
                 </Button>
               </Box>
               {currentAttachments.length ? (
@@ -1464,17 +1673,17 @@ const ExpenseApproval: React.FC = () => {
                 </List>
               ) : (
                 <Typography variant="body2" color="text.secondary">
-                  첨부된 영수증이 없습니다.
+                  {t('expenseApproval.voucher.receiptNone')}
                 </Typography>
               )}
             </Box>
 
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 3 }}>
               <Button variant="outlined" onClick={() => setViewMode('list')}>
-                취소
+                {t('common.cancel')}
               </Button>
               <Button variant="contained" onClick={handleSaveExpense} disabled={saving || isInitializingDraft}>
-                {saving ? '제출 중...' : (isEdit ? '제출' : '작성')}
+                {saving ? t('expenseApproval.voucher.submitSaving') : (isEdit ? t('expenseApproval.voucher.submit') : t('expenseApproval.voucher.create'))}
               </Button>
             </Box>
         </Paper>
@@ -1483,7 +1692,7 @@ const ExpenseApproval: React.FC = () => {
           <DialogTitle>{t('expenseApproval.dialog.uploadByPhoneTitle')}</DialogTitle>
           <DialogContent>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              휴대폰에서 QR 코드를 스캔하고 영수증 사진을 업로드하세요.
+              {t('expenseApproval.voucher.qrDialogHint')}
             </Typography>
             {qrImage && (
               <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
@@ -1495,7 +1704,7 @@ const ExpenseApproval: React.FC = () => {
             )}
             {!qrImage && !qrImageError && (
               <Typography variant="body2" color="text.secondary">
-                QR 코드 생성 중...
+                {t('expenseApproval.voucher.qrGenerating')}
               </Typography>
             )}
             {qrImageError && (
@@ -1510,7 +1719,7 @@ const ExpenseApproval: React.FC = () => {
             )}
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setQrOpen(false)}>닫기</Button>
+            <Button onClick={() => setQrOpen(false)}>{t('common.close')}</Button>
           </DialogActions>
         </Dialog>
       </Box>
@@ -1533,22 +1742,33 @@ const ExpenseApproval: React.FC = () => {
 
     return (
       <Box sx={{ 
-        p: 3, 
+        p: 0,
         backgroundColor: 'workArea.main',
         borderRadius: 2,
         minHeight: '100%'
       }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <ReceiptIcon />
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5, mb: 3 }}>
+          <Typography variant="pageTitle" component="h1" sx={{ fontWeight: 600, letterSpacing: '-0.022em' }}>
             {t('expenseApproval.detail.title')}
           </Typography>
-          <Button
-            variant="outlined"
-            onClick={() => setViewMode('list')}
-          >
-            {t('expenseApproval.actions.backToList')}
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              onClick={() => setViewMode('list')}
+              sx={{ textTransform: 'none', borderRadius: '12px' }}
+            >
+              {t('expenseApproval.actions.backToList')}
+            </Button>
+            <Button
+              variant="contained"
+              disableElevation
+              startIcon={<EditIcon fontSize="small" />}
+              onClick={() => handleEditExpense(selectedExpense)}
+              sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}
+            >
+              {t('expenseApproval.actions.editDetail')}
+            </Button>
+          </Box>
         </Box>
 
         <Card>
@@ -1628,7 +1848,7 @@ const ExpenseApproval: React.FC = () => {
                     }}
                   >
                     <TableRow>
-                      <TableCell>Invoice Date</TableCell>
+                      <TableCell>{t('expenseApproval.detail.columns.invoiceDate')}</TableCell>
                       <TableCell>{t('expenseApproval.detail.columns.description')}</TableCell>
                       <TableCell align="right">{t('expenseApproval.detail.columns.qty')}</TableCell>
                       <TableCell align="right">{t('expenseApproval.detail.columns.unitPrice')}</TableCell>
@@ -1689,7 +1909,7 @@ const ExpenseApproval: React.FC = () => {
             {/* 첨부파일 */}
             {selectedExpense.attachments.length > 0 && (
               <Box sx={{ mb: 4 }}>
-                <Typography variant="h6" gutterBottom>첨부파일</Typography>
+                <Typography variant="h6" gutterBottom>{t('expenseApproval.detail.attachments')}</Typography>
                 <List>
                   {selectedExpense.attachments.map((file, index) => (
                     <ListItem key={index}>
@@ -1708,7 +1928,7 @@ const ExpenseApproval: React.FC = () => {
             {/* 메모 */}
             {selectedExpense.notes && (
               <Box sx={{ mb: 4 }}>
-                <Typography variant="h6" gutterBottom>메모</Typography>
+                <Typography variant="h6" gutterBottom>{t('expenseApproval.detail.notes')}</Typography>
                 <Card sx={{ p: 2, bgcolor: 'grey.50' }}>
                   <Typography variant="body1">
                     {selectedExpense.notes}
@@ -1722,26 +1942,32 @@ const ExpenseApproval: React.FC = () => {
               selectedExpense.paymentApprovedAt ||
               selectedExpense.paymentRejectedAt) && (
               <Box sx={{ mb: 4 }}>
-                <Typography variant="h6" gutterBottom>결제 처리 사유</Typography>
+                <Typography variant="h6" gutterBottom>{t('expenseApproval.detail.paymentProcessing')}</Typography>
                 <Card sx={{ p: 2, bgcolor: 'grey.50' }}>
                   {selectedExpense.paymentApprovedAt && (
                     <Typography variant="body2" sx={{ mb: 1 }}>
-                      승인: {new Date(selectedExpense.paymentApprovedAt).toLocaleString('ko-KR')} · {getUserNameById(selectedExpense.paymentApprovedBy)}
+                      {t('expenseApproval.detail.paymentApprovedLine', {
+                        datetime: new Date(selectedExpense.paymentApprovedAt).toLocaleString(dateLocale),
+                        user: getUserNameById(selectedExpense.paymentApprovedBy),
+                      })}
                     </Typography>
                   )}
                   {selectedExpense.paymentApprovedReason && (
                     <Typography variant="body2" sx={{ mb: 2 }}>
-                      승인 사유: {selectedExpense.paymentApprovedReason}
+                      {t('expenseApproval.detail.paymentApprovedReason', { reason: selectedExpense.paymentApprovedReason })}
                     </Typography>
                   )}
                   {selectedExpense.paymentRejectedAt && (
                     <Typography variant="body2" sx={{ mb: 1 }}>
-                      반려: {new Date(selectedExpense.paymentRejectedAt).toLocaleString('ko-KR')} · {getUserNameById(selectedExpense.paymentRejectedBy)}
+                      {t('expenseApproval.detail.paymentRejectedLine', {
+                        datetime: new Date(selectedExpense.paymentRejectedAt).toLocaleString(dateLocale),
+                        user: getUserNameById(selectedExpense.paymentRejectedBy),
+                      })}
                     </Typography>
                   )}
                   {selectedExpense.paymentRejectedReason && (
                     <Typography variant="body2">
-                      반려 사유: {selectedExpense.paymentRejectedReason}
+                      {t('expenseApproval.detail.paymentRejectedReason', { reason: selectedExpense.paymentRejectedReason })}
                     </Typography>
                   )}
                 </Card>
@@ -1750,9 +1976,9 @@ const ExpenseApproval: React.FC = () => {
 
             <Box sx={{ mt: 3, display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
               <FormControl size="small" sx={{ minWidth: 140 }}>
-                <InputLabel>송금 은행</InputLabel>
+                <InputLabel>{t('expenseApproval.detailActions.transferBank')}</InputLabel>
                 <Select
-                  label="송금 은행"
+                  label={t('expenseApproval.detailActions.transferBank')}
                   value={bankProvider}
                   onChange={(e) => setBankProvider(e.target.value as 'icici' | 'kotak')}
                 >
@@ -1766,7 +1992,7 @@ const ExpenseApproval: React.FC = () => {
                   startIcon={<SendIcon />}
                   onClick={() => handleRequestPayment(selectedExpense.id)}
                 >
-                  결제 요청
+                  {t('expenseApproval.detailActions.requestPayment')}
                 </Button>
               )}
               {isFinalApprover && isPaymentRequested && (
@@ -1775,7 +2001,7 @@ const ExpenseApproval: React.FC = () => {
                   color="error"
                   onClick={() => openReasonDialog('payment-reject', selectedExpense.id)}
                 >
-                  반려
+                  {t('expenseApproval.actions.reject')}
                 </Button>
               )}
               {isFinalApprover && isPaymentRequested && (
@@ -1784,7 +2010,7 @@ const ExpenseApproval: React.FC = () => {
                   color="success"
                   onClick={() => openReasonDialog('payment-approve', selectedExpense.id)}
                 >
-                  최종 승인
+                  {t('expenseApproval.detailActions.finalApprove')}
                 </Button>
               )}
               {isPaymentOfficer && isPaymentApproved && (
@@ -1793,7 +2019,7 @@ const ExpenseApproval: React.FC = () => {
                   color="primary"
                   onClick={() => handleCompletePayment(selectedExpense.id)}
                 >
-                  결제 실행
+                  {t('expenseApproval.detailActions.executePayment')}
                 </Button>
               )}
               {isPaymentOfficer && selectedExpense.bankTransferStatus === 'failed' && (
@@ -1802,7 +2028,7 @@ const ExpenseApproval: React.FC = () => {
                   color="warning"
                   onClick={() => handleRetryTransfer(selectedExpense.id)}
                 >
-                  송금 재시도
+                  {t('expenseApproval.detailActions.retryTransfer')}
                 </Button>
               )}
               {(selectedExpense.bankTransferStatus || (selectedExpense.bankTransferLogs || []).length > 0) && (
@@ -1811,27 +2037,20 @@ const ExpenseApproval: React.FC = () => {
                   color="info"
                   onClick={() => navigate(`/accounting/expense/transfer-log/${selectedExpense.id}`)}
                 >
-                  송금 로그
+                  {t('expenseApproval.actions.transferLog')}
                 </Button>
               )}
               <Button
                 variant="outlined"
-                startIcon={<EditIcon />}
-                onClick={() => handleEditExpense(selectedExpense)}
-              >
-                수정
-              </Button>
-              <Button
-                variant="outlined"
                 startIcon={<PrintIcon />}
               >
-                인쇄
+                {t('expenseApproval.detailActions.print')}
               </Button>
               <Button
                 variant="outlined"
                 startIcon={<DownloadIcon />}
               >
-                PDF 다운로드
+                {t('expenseApproval.detailActions.pdfDownload')}
               </Button>
               {selectedExpense.status === 'in_review' && (
                 <>
@@ -1841,7 +2060,7 @@ const ExpenseApproval: React.FC = () => {
                     startIcon={<CheckCircleIcon />}
                     onClick={() => handleApproveExpense(selectedExpense.id)}
                   >
-                    승인
+                    {t('expenseApproval.actions.approve')}
                   </Button>
                   <Button
                     variant="contained"
@@ -1849,7 +2068,7 @@ const ExpenseApproval: React.FC = () => {
                     startIcon={<CancelIcon />}
                     onClick={() => handleRejectExpense(selectedExpense.id)}
                   >
-                    반려
+                    {t('expenseApproval.actions.reject')}
                   </Button>
                 </>
               )}
@@ -1891,21 +2110,21 @@ const ExpenseApproval: React.FC = () => {
 
   return (
     <Box sx={{ 
-      p: 3, 
+      p: 0,
       backgroundColor: 'workArea.main',
       borderRadius: 2,
       minHeight: '100%'
     }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <ReceiptIcon />
+        <Typography variant="pageTitle" component="h1" sx={{ fontWeight: 600, letterSpacing: '-0.022em' }}>
           {t('expenseApproval.title')}
         </Typography>
         <Button
           variant="contained"
-          startIcon={<AddIcon />}
+          disableElevation
+          startIcon={<AddIcon fontSize="small" />}
           onClick={handleCreateExpense}
-          sx={{ borderRadius: 2 }}
+          sx={{ borderRadius: '12px', textTransform: 'none' }}
         >
           {t('expenseApproval.actions.requestExpense')}
         </Button>
@@ -2128,7 +2347,12 @@ const ExpenseApproval: React.FC = () => {
             </TableHead>
             <TableBody>
               {paginatedExpenses.map((expense) => (
-                <TableRow key={expense.id} hover>
+                <TableRow
+                  key={expense.id}
+                  hover
+                  onClick={() => handleViewExpense(expense)}
+                  sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
+                >
                   <TableCell>
                     <Box>
                       <Typography variant="subtitle2" fontWeight="bold">
@@ -2162,53 +2386,54 @@ const ExpenseApproval: React.FC = () => {
                   <TableCell>{getStatusChip(expense.status)}</TableCell>
                   <TableCell>{getPriorityChip(expense.priority)}</TableCell>
                   <TableCell>{expense.submittedAt}</TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Tooltip title={t('expenseApproval.actions.view')}>
-                        <IconButton size="small" onClick={() => handleViewExpense(expense)}>
-                          <ViewIcon />
-                        </IconButton>
-                      </Tooltip>
+                  <TableCell onClick={(e) => e.stopPropagation()} sx={{ textAlign: 'center' }}>
+                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center', flexWrap: 'wrap' }}>
                       {listTab === 'transfer' && (
                         <Tooltip title={t('expenseApproval.actions.transferLog')}>
                           <IconButton
                             size="small"
                             onClick={() => navigate(`/accounting/expense/transfer-log/${expense.id}`)}
+                            sx={{ color: 'text.secondary', borderRadius: '10px', '&:hover': { bgcolor: 'action.hover' } }}
                           >
-                            <PendingIcon />
+                            <PendingIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                       )}
-                      <Tooltip title={t('common.edit')}>
-                        <IconButton size="small" onClick={() => handleEditExpense(expense)}>
-                          <EditIcon />
-                        </IconButton>
-                      </Tooltip>
                       {expense.status === 'in_review' && (
                         <>
                           <Tooltip title={t('expenseApproval.actions.approve')}>
-                            <IconButton 
-                              size="small" 
+                            <IconButton
+                              size="small"
                               onClick={() => handleApproveExpense(expense.id)}
                               color="success"
+                              sx={{ borderRadius: '10px' }}
                             >
-                              <CheckCircleIcon />
+                              <CheckCircleIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title={t('expenseApproval.actions.reject')}>
-                            <IconButton 
-                              size="small" 
+                            <IconButton
+                              size="small"
                               onClick={() => handleRejectExpense(expense.id)}
                               color="error"
+                              sx={{ borderRadius: '10px' }}
                             >
-                              <CancelIcon />
+                              <CancelIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                         </>
                       )}
                       <Tooltip title={t('common.delete')}>
-                        <IconButton size="small" onClick={() => handleDeleteExpense(expense.id)}>
-                          <DeleteIcon />
+                        <IconButton
+                          size="small"
+                          onClick={() => handleDeleteExpense(expense.id)}
+                          sx={{
+                            color: 'text.secondary',
+                            borderRadius: '10px',
+                            '&:hover': { color: 'error.main', bgcolor: (theme) => `${theme.palette.error.main}14` },
+                          }}
+                        >
+                          <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
                     </Box>

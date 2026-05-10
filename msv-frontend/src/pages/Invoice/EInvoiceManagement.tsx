@@ -52,6 +52,7 @@ import {
   ThumbUp as ThumbUpIcon,
   ThumbDown as ThumbDownIcon
 } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
 import { useStore } from '../../store';
 import { api, userService, accountingService } from '../../services/api';
 import { AxiosResponse } from 'axios';
@@ -74,7 +75,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`simple-tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ pt: 2 }}>{children}</Box>}
     </div>
   );
 }
@@ -160,6 +161,7 @@ interface ProformaInvoice {
 }
 
 const EInvoiceManagement: React.FC = () => {
+  const theme = useTheme();
   const { t, i18n } = useTranslation();
   const { user } = useStore();
   const [einvoices, setEinvoices] = useState<EInvoice[]>([]);
@@ -672,19 +674,22 @@ const EInvoiceManagement: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-        <ReceiptLongIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-        <Typography component="h1" sx={{
-          fontSize: '16px !important',
+    <Box sx={{ p: 0 }}>
+      <Typography
+        component="h1"
+        variant="pageTitle"
+        sx={{
           fontWeight: 600,
+          fontSize: { xs: '1.125rem', sm: '1.3125rem' },
+          letterSpacing: '-0.022em',
+          lineHeight: 1.28,
           color: 'text.primary',
-          lineHeight: 1.5
-        }}>
-          {t('eInvoiceManagement.title')}
-        </Typography>
-      </Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          mb: 0.75,
+        }}
+      >
+        {t('eInvoiceManagement.title')}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3, lineHeight: 1.5, maxWidth: 720 }}>
         {t('eInvoiceManagement.description')}
       </Typography>
 
@@ -694,8 +699,17 @@ const EInvoiceManagement: React.FC = () => {
         </Alert>
       )}
 
-      <Card>
-        <CardContent>
+      <Card
+        elevation={0}
+        sx={{
+          borderRadius: '20px',
+          border: '1px solid',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+          boxShadow:
+            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
+        }}
+      >
+        <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
           <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
             <Tabs value={activeTab} onChange={handleTabChange}>
               <Tab label={t('eInvoiceManagement.tabs.list')} />

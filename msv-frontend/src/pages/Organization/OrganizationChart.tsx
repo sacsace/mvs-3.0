@@ -26,8 +26,7 @@ import {
   Person as PersonIcon,
   Group as GroupIcon,
   Business as BusinessIcon,
-  Refresh as RefreshIcon,
-  AccountTree as TreeIcon
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import ReactFlow, {
   Edge,
@@ -442,7 +441,7 @@ const OrganizationChart: React.FC = () => {
 
   return (
     <Box sx={{ 
-      p: 3, 
+      p: 0,
       backgroundColor: 'workArea.main',
       borderRadius: 2,
       minHeight: '100%',
@@ -451,17 +450,9 @@ const OrganizationChart: React.FC = () => {
       {/* 헤더 */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <TreeIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-            <Typography component="h1" sx={{
-              fontSize: '16px !important',
-              fontWeight: 600,
-              color: 'text.primary',
-              lineHeight: 1.5
-            }}>
-              조직도 관리
-            </Typography>
-          </Box>
+          <Typography component="h1" variant="pageTitle" sx={{ mb: 1 }}>
+            조직도 관리
+          </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
             회사 조직 구조를 시각화하고 관리하는 페이지입니다.
           </Typography>

@@ -413,7 +413,7 @@ const PartnerManagement: React.FC = () => {
 
   return (
     <Box sx={{ 
-      p: 3, 
+      p: 0,
       backgroundColor: 'workArea.main',
       borderRadius: 2,
       minHeight: '100%'
@@ -426,17 +426,9 @@ const PartnerManagement: React.FC = () => {
         mb: 3 
       }}>
         <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <HandshakeIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-            <Typography component="h1" sx={{ 
-              fontSize: '16px !important',
-              fontWeight: 600,
-              color: 'text.primary',
-              lineHeight: 1.5
-            }}>
-              {t('partnerManagement.pageTitle')}
-            </Typography>
-          </Box>
+          <Typography component="h1" variant="pageTitle" sx={{ mb: 1 }}>
+            {t('partnerManagement.pageTitle')}
+          </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
             {t('partnerManagement.description')}
           </Typography>

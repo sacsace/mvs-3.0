@@ -3,6 +3,13 @@ import { RequestWithUser } from '../types';
 import { Approval, User } from '../models';
 import { Op } from 'sequelize';
 
+const parseQueryInt = (value: unknown): number | null => {
+  if (value == null || value === '') return null;
+  const raw = Array.isArray(value) ? value[0] : value;
+  const n = parseInt(String(raw), 10);
+  return Number.isFinite(n) ? n : null;
+};
+
 // 전자 결제 목록 조회
 export const getApprovals = async (req: RequestWithUser, res: Response) => {
   try {
@@ -10,7 +17,7 @@ export const getApprovals = async (req: RequestWithUser, res: Response) => {
     const companyId = req.user?.company_id;
     const userRole = req.user?.role;
     const userId = req.user?.id;
-    const { requester_id, status, type, priority, company_id } = req.query;
+    const { requester_id, status, type, priority, company_id, current_approver_id } = req.query;
 
     const whereClause: any = {};
     
@@ -18,11 +25,6 @@ export const getApprovals = async (req: RequestWithUser, res: Response) => {
     if (userRole !== 'root' && userRole !== 'audit') {
       whereClause.tenant_id = tenantId;
       whereClause.company_id = companyId;
-      
-      // 일반 사용자는 자신이 요청한 결제만 조회
-      if (userRole === 'user') {
-        whereClause.requester_id = userId;
-      }
     } else {
       // root는 company_id 쿼리 파라미터로 회사별 필터링 가능
       if (userRole === 'root' && company_id) {
@@ -36,12 +38,37 @@ export const getApprovals = async (req: RequestWithUser, res: Response) => {
       }
     }
 
-    if (requester_id) {
-      whereClause.requester_id = requester_id;
+    const rid = parseQueryInt(requester_id);
+    const curAppr = parseQueryInt(current_approver_id);
+
+    // 일반 사용자: 기본은 본인이 요청한 건만. current_approver_id가 본인이면 결재 대기함(다른 사람이 올린 건) 조회
+    if (userRole === 'user' && userId != null) {
+      if (curAppr != null && curAppr === userId) {
+        whereClause.current_approver_id = userId;
+      } else {
+        whereClause.requester_id = userId;
+      }
+    } else {
+      if (rid != null) {
+        whereClause.requester_id = rid;
+      }
+      if (curAppr != null) {
+        whereClause.current_approver_id = curAppr;
+      }
     }
 
     if (status) {
-      whereClause.status = status;
+      const s = String(status);
+      if (s.includes(',')) {
+        const parts = s.split(',').map((x) => x.trim()).filter(Boolean);
+        if (parts.length > 1) {
+          whereClause.status = { [Op.in]: parts };
+        } else if (parts.length === 1) {
+          whereClause.status = parts[0];
+        }
+      } else {
+        whereClause.status = status;
+      }
     }
 
     if (type) {
@@ -102,8 +129,8 @@ export const getApproval = async (req: RequestWithUser, res: Response) => {
       whereClause.tenant_id = tenantId;
       whereClause.company_id = companyId;
       
-      if (userRole === 'user') {
-        whereClause.requester_id = userId;
+      if (userRole === 'user' && userId != null) {
+        whereClause[Op.or] = [{ requester_id: userId }, { current_approver_id: userId }];
       }
     }
 

@@ -50,7 +50,7 @@ const ExpenseTransferLog: React.FC = () => {
 
   if (loading) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: 0 }}>
         <CircularProgress />
       </Box>
     );
@@ -58,7 +58,7 @@ const ExpenseTransferLog: React.FC = () => {
 
   if (error) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: 0 }}>
         <Typography color="error" sx={{ mb: 2 }}>
           {error}
         </Typography>
@@ -71,7 +71,7 @@ const ExpenseTransferLog: React.FC = () => {
 
   if (!expense) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: 0 }}>
         <Typography>데이터가 없습니다.</Typography>
         <Button variant="outlined" onClick={() => navigate(-1)} sx={{ mt: 2 }}>
           돌아가기
@@ -83,7 +83,7 @@ const ExpenseTransferLog: React.FC = () => {
   const logs = Array.isArray(expense.bank_transfer_logs) ? expense.bank_transfer_logs : [];
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 0 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h5">송금 실행 로그 상세</Typography>
         <Button variant="outlined" onClick={() => navigate(-1)}>

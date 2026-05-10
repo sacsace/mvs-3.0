@@ -27,7 +27,8 @@ import {
   DragIndicator as DragIndicatorIcon,
   DeleteOutline as DeleteIcon,
   EditOutlined as EditOutlinedIcon,
-  PersonAdd as PersonAddIcon
+  PersonAdd as PersonAddIcon,
+  LibraryAddOutlined as LibraryAddOutlinedIcon
 } from '@mui/icons-material';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
@@ -471,6 +472,7 @@ const DraggableCard = memo(function DraggableCard({
   txt: (ko: string, en: string) => string;
   dragDisabled?: boolean;
 }) {
+  const theme = useTheme();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `card-${card.id}`,
     data: { card },
@@ -496,28 +498,49 @@ const DraggableCard = memo(function DraggableCard({
   const descPlain =
     card.description && !isRichTextEmpty(card.description) ? getPlainTextFromHtml(card.description) : '';
 
+  const cardAccent = isHexColor(card.color) ? String(card.color) : null;
+  /** 카드 본문은 중립 톤, 색은 상단 바·호버 테두리에만 사용 */
+  const barColor = cardAccent || theme.palette.primary.main;
+  const cardBg =
+    theme.palette.mode === 'light' ? '#FFFFFF' : alpha(theme.palette.grey[900], 0.88);
+  const cardBorderColor =
+    theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : alpha(theme.palette.common.white, 0.12);
+  const baseShadow =
+    theme.palette.mode === 'light' ? '0 1px 3px rgba(0, 0, 0, 0.05), 0 2px 8px rgba(15, 23, 42, 0.06)' : '0 2px 8px rgba(0,0,0,0.35)';
+  const shadowWithBar = `${baseShadow}, inset 0 3px 0 0 ${barColor}`;
+  const hoverShadow =
+    theme.palette.mode === 'light' ? '0 2px 6px rgba(0, 0, 0, 0.06), 0 6px 16px rgba(15, 23, 42, 0.1)' : '0 4px 14px rgba(0,0,0,0.45)';
+  const hoverWithBar = `${hoverShadow}, inset 0 3px 0 0 ${barColor}`;
+  const hoverBorder =
+    theme.palette.mode === 'light' ? alpha(barColor, 0.35) : alpha(theme.palette.common.white, 0.16);
+
   return (
     <Card
       ref={setCardNodeRef}
-      square
-      variant="outlined"
+      elevation={0}
       sx={{
         width: '100%',
         height: WORK_BOARD_CARD_HEIGHT_PX,
         display: 'flex',
         flexDirection: 'column',
-        mb: 1,
+        mb: 1.25,
         cursor: dragDisabled ? 'pointer' : 'grab',
         touchAction: dragDisabled ? undefined : 'none',
         userSelect: 'none',
-        bgcolor: 'background.paper',
-        borderColor: 'divider',
-        borderRadius: 0,
+        bgcolor: cardBg,
+        border: '1px solid',
+        borderColor: cardBorderColor,
+        borderRadius: '14px',
         overflow: 'hidden',
-        transition: isDragging ? 'none' : DRAG_TRANSITION,
+        boxShadow: shadowWithBar,
+        transition: isDragging ? 'none' : `${DRAG_TRANSITION}, box-shadow 0.2s ease, border-color 0.2s ease`,
         willChange: isDragging ? 'transform' : 'auto',
         zIndex: isDragging ? 20 : 1,
-        ...style
+        '&:hover': {
+          boxShadow: hoverWithBar,
+          borderColor: hoverBorder,
+        },
+        ...style,
       }}
       {...(dragDisabled ? {} : listeners)}
       {...(dragDisabled ? {} : attributes)}
@@ -525,24 +548,16 @@ const DraggableCard = memo(function DraggableCard({
         if (!isDragging) onOpenDetail(card);
       }}
     >
-      <Box
-        sx={{
-          height: 8,
-          width: '100%',
-          flexShrink: 0,
-          bgcolor: card.color || 'transparent'
-        }}
-      />
       <CardContent
         sx={{
           flex: 1,
           minHeight: 0,
-          py: 1,
-          px: 1.5,
+          py: 1.25,
+          px: 1.75,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
-          '&:last-child': { pb: 1 }
+          '&:last-child': { pb: 1.25 },
         }}
       >
         <Typography
@@ -556,7 +571,10 @@ const DraggableCard = memo(function DraggableCard({
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
             wordBreak: 'break-word',
-            lineHeight: 1.35
+            lineHeight: 1.4,
+            fontWeight: 600,
+            fontSize: '0.8125rem',
+            letterSpacing: '-0.01em',
           }}
         >
           {card.title || '\u00a0'}
@@ -571,7 +589,8 @@ const DraggableCard = memo(function DraggableCard({
               WebkitLineClamp: 3,
               WebkitBoxOrient: 'vertical',
               wordBreak: 'break-word',
-              lineHeight: 1.35
+              lineHeight: 1.45,
+              fontSize: '0.75rem',
             }}
           >
             {descPlain || '\u200b'}
@@ -581,21 +600,45 @@ const DraggableCard = memo(function DraggableCard({
           sx={{
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 0.5,
+            gap: 0.65,
             alignItems: 'center',
             mt: 'auto',
-            pt: 0.5,
+            pt: 0.85,
             flexShrink: 0,
             maxHeight: 52,
-            overflow: 'hidden'
+            overflow: 'hidden',
+            borderTop: '1px solid',
+            borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.14)' : alpha(theme.palette.common.white, 0.14),
           }}
         >
-          {card.assignee && <Chip size="small" label={card.assignee.username} variant="outlined" />}
+          {card.assignee && (
+            <Chip
+              size="small"
+              label={card.assignee.username}
+              variant="outlined"
+              sx={{
+                height: 22,
+                fontWeight: 600,
+                fontSize: '0.68rem',
+                borderRadius: '8px',
+                borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.2)' : alpha(theme.palette.common.white, 0.22),
+                bgcolor: theme.palette.mode === 'light' ? 'rgba(0,0,0,0.04)' : alpha(theme.palette.common.black, 0.25),
+              }}
+            />
+          )}
           {card.due_date && (
             <Chip
               size="small"
               label={`${txt('만료', 'Due')}: ${formatDueDate(card.due_date)}`}
               variant="outlined"
+              sx={{
+                height: 22,
+                fontWeight: 600,
+                fontSize: '0.68rem',
+                borderRadius: '8px',
+                borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.2)' : alpha(theme.palette.common.white, 0.22),
+                bgcolor: theme.palette.mode === 'light' ? 'rgba(0,0,0,0.04)' : alpha(theme.palette.common.black, 0.25),
+              }}
             />
           )}
         </Box>
@@ -657,6 +700,7 @@ const ListColumn = memo(function ListColumn({
   allowListDelete: boolean;
   allowAddCard: boolean;
 }) {
+  const theme = useTheme();
   const { setNodeRef: setCardDropRef, isOver } = useDroppable({ id: `list-${list.id}` });
   const { setNodeRef: setListDropRef } = useDroppable({ id: `listcol-${list.id}` });
   const {
@@ -701,12 +745,12 @@ const ListColumn = memo(function ListColumn({
         width: { xs: '100%', sm: `${WORK_BOARD_COLUMN_WIDTH_PX}px` },
         minWidth: { xs: 0, sm: WORK_BOARD_COLUMN_WIDTH_PX },
         maxWidth: { xs: '100%', sm: `${WORK_BOARD_COLUMN_WIDTH_PX}px` },
-        bgcolor: 'background.paper',
-        outline: isOver ? '2px dashed' : 'none',
-        outlineColor: 'primary.main',
-        outlineOffset: -2,
-        p: 1.25,
-        borderRadius: 1.5,
+        bgcolor: theme.palette.mode === 'light' ? alpha(theme.palette.grey[500], 0.06) : alpha(theme.palette.common.black, 0.22),
+        outline: isOver ? '2px solid' : 'none',
+        outlineColor: alpha(theme.palette.primary.main, 0.45),
+        outlineOffset: 0,
+        p: 1.5,
+        borderRadius: '16px',
         border: 'none',
         boxShadow: 'none',
         alignSelf: 'flex-start',
@@ -717,7 +761,7 @@ const ListColumn = memo(function ListColumn({
         transition: isListDragging ? 'none' : DRAG_TRANSITION,
         willChange: isListDragging ? 'transform' : 'auto',
         zIndex: isListDragging ? 10 : 1,
-        ...listStyle
+        ...listStyle,
       }}
     >
       <Box
@@ -725,19 +769,25 @@ const ListColumn = memo(function ListColumn({
           display: 'flex',
           alignItems: 'center',
           gap: 0.5,
-          mb: 1.1,
-          px: 0.75,
-          py: 0.55,
-          borderRadius: 1,
+          mb: 1.25,
+          px: 1,
+          py: 0.75,
+          borderRadius: '12px',
           border: '1px solid',
-          borderColor: hexToRgba(accentColor, 0.35),
-          backgroundColor: hexToRgba(accentColor, 0.14)
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : alpha(theme.palette.common.white, 0.16),
+          backgroundColor: hexToRgba(accentColor, theme.palette.mode === 'light' ? 0.1 : 0.14),
+          boxShadow: `inset 4px 0 0 0 ${accentColor}`,
         }}
       >
         <IconButton
           size="small"
           aria-label={txt('대분류 드래그 이동', 'Drag list')}
-          sx={{ cursor: allowListReorder ? 'grab' : 'default' }}
+          sx={{
+            cursor: allowListReorder ? 'grab' : 'default',
+            borderRadius: '10px',
+            color: 'text.secondary',
+            '&:hover': { bgcolor: alpha(theme.palette.action.hover, 0.8) },
+          }}
           {...(allowListReorder ? listDragAttributes : {})}
           {...(allowListReorder ? listDragListeners : {})}
           disabled={!allowListReorder}
@@ -760,7 +810,16 @@ const ListColumn = memo(function ListColumn({
             sx={{ flex: 1 }}
           />
         ) : (
-          <Typography fontWeight={700} sx={{ flex: 1 }} color="text.primary">
+          <Typography
+            sx={{
+              flex: 1,
+              fontWeight: 600,
+              fontSize: '0.875rem',
+              letterSpacing: '-0.015em',
+              lineHeight: 1.35,
+            }}
+            color="text.primary"
+          >
             {displayBoardListTitle(list.title, language)}
           </Typography>
         )}
@@ -825,14 +884,15 @@ const ListColumn = memo(function ListColumn({
 
       {allowAddCard && composerOpen ? (
         <Paper
-          variant="outlined"
+          elevation={0}
           sx={{
-            mt: 1,
-            p: 1,
-            bgcolor: 'background.paper',
-            borderRadius: 1,
-            borderColor: 'divider',
-            boxShadow: 'none'
+            mt: 1.25,
+            p: 1.5,
+            bgcolor: theme.palette.mode === 'light' ? '#F8FAFC' : alpha(theme.palette.common.white, 0.04),
+            borderRadius: '14px',
+            border: '1px solid',
+            borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.14)' : alpha(theme.palette.common.white, 0.14),
+            boxShadow: 'none',
           }}
         >
           <TextField
@@ -862,16 +922,17 @@ const ListColumn = memo(function ListColumn({
             hiddenLabel
             sx={{ mb: 1 }}
           />
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
             <Button
               size="small"
               variant="contained"
               onClick={onSubmitCard}
               disabled={savingCard || !composerTitle.trim()}
+              sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 600, boxShadow: 'none' }}
             >
               {savingCard ? <CircularProgress size={18} color="inherit" /> : txt('카드 추가', 'Add Card')}
             </Button>
-            <IconButton size="small" onClick={onCloseComposer} aria-label={txt('취소', 'Cancel')}>
+            <IconButton size="small" onClick={onCloseComposer} aria-label={txt('취소', 'Cancel')} sx={{ borderRadius: '10px' }}>
               <CloseIcon fontSize="small" />
             </IconButton>
           </Box>
@@ -880,15 +941,17 @@ const ListColumn = memo(function ListColumn({
         <Button
           fullWidth
           size="small"
-          startIcon={<AddIcon />}
+          startIcon={<AddIcon sx={{ fontSize: 18 }} />}
           onClick={() => onOpenComposer(list.id)}
           sx={{
-            mt: 1,
+            mt: 1.25,
             justifyContent: 'flex-start',
             color: 'text.secondary',
             textTransform: 'none',
-            py: 0.75,
-            '&:hover': { bgcolor: 'action.hover' }
+            fontWeight: 600,
+            py: 1,
+            borderRadius: '12px',
+            '&:hover': { bgcolor: alpha(theme.palette.action.hover, 0.9) },
           }}
         >
           {txt('카드 추가', 'Add Card')}
@@ -935,6 +998,7 @@ const WorkBoardDetailPage: React.FC = () => {
   const [listSaving, setListSaving] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
   const [creatingList, setCreatingList] = useState(false);
+  const [addListOpen, setAddListOpen] = useState(false);
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [companyUsers, setCompanyUsers] = useState<any[]>([]);
@@ -965,9 +1029,10 @@ const WorkBoardDetailPage: React.FC = () => {
     })
   );
 
-  const loadBoard = useCallback(async () => {
+  const loadBoard = useCallback(async (options?: { silent?: boolean }) => {
     if (!boardId || Number.isNaN(boardId)) return;
-    setLoading(true);
+    const silent = options?.silent === true;
+    if (!silent) setLoading(true);
     try {
       const res = await workBoardService.getBoard(boardId);
       if (res.success) {
@@ -978,7 +1043,7 @@ const WorkBoardDetailPage: React.FC = () => {
     } catch (e: any) {
       showErrorPopup(e, '작업 보드');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [boardId]);
 
@@ -1161,56 +1226,6 @@ const WorkBoardDetailPage: React.FC = () => {
     }
   };
 
-  const submitCard = useCallback(async () => {
-    if (!composerListId || !composerTitle.trim()) return;
-    if (!menuCanCreate) {
-      showErrorPopup(
-        txt('카드를 추가할 권한이 없습니다.', 'You do not have permission to add cards.'),
-        txt('업무 보드', 'Work board')
-      );
-      return;
-    }
-    setSavingCard(true);
-    try {
-      const res = await workBoardService.createCard(boardId, composerListId, {
-        title: composerTitle.trim(),
-        description: composerDesc.trim() || undefined
-      });
-      if (res.success) {
-        const newId = Number((res.data as { id?: number })?.id);
-        if (Number.isInteger(newId) && newId > 0) {
-          lastQuickCreatedCardIdRef.current = newId;
-        }
-        setComposerListId(null);
-        setComposerTitle('');
-        setComposerDesc('');
-        await loadBoard();
-      } else {
-        showErrorPopup(res.message || '실패', '작업 보드');
-      }
-    } catch (e: any) {
-      showErrorPopup(e, '작업 보드');
-    } finally {
-      setSavingCard(false);
-    }
-  }, [boardId, composerListId, composerTitle, composerDesc, loadBoard, menuCanCreate, txt]);
-
-  const openComposer = useCallback(
-    (listId: number) => {
-      if (!menuCanCreate) return;
-      setComposerListId(listId);
-      setComposerTitle('');
-      setComposerDesc('');
-    },
-    [menuCanCreate]
-  );
-
-  const closeComposer = useCallback(() => {
-    setComposerListId(null);
-    setComposerTitle('');
-    setComposerDesc('');
-  }, []);
-
   const startEditListTitleById = useCallback(
     (listId: number) => {
       if (!menuCanEdit) return;
@@ -1318,6 +1333,7 @@ const WorkBoardDetailPage: React.FC = () => {
         return;
       }
       setNewListTitle('');
+      setAddListOpen(false);
       await loadBoard();
     } catch (error: any) {
       showErrorPopup(error, '업무 보드');
@@ -1352,6 +1368,74 @@ const WorkBoardDetailPage: React.FC = () => {
     setMentionOpen(false);
     setMentionQuery('');
     setMentionHighlightIndex(0);
+  }, []);
+
+  const submitCard = useCallback(async () => {
+    if (!composerListId || !composerTitle.trim()) return;
+    if (!menuCanCreate) {
+      showErrorPopup(
+        txt('카드를 추가할 권한이 없습니다.', 'You do not have permission to add cards.'),
+        txt('업무 보드', 'Work board')
+      );
+      return;
+    }
+    setSavingCard(true);
+    try {
+      const res = await workBoardService.createCard(boardId, composerListId, {
+        title: composerTitle.trim(),
+        description: composerDesc.trim() || undefined
+      });
+      if (res.success) {
+        const payload = res.data as { id?: number } | undefined;
+        const newId = Number(payload?.id);
+        const savedListId = composerListId;
+        const savedTitle = composerTitle.trim();
+        const savedDesc = composerDesc.trim();
+        setComposerListId(null);
+        setComposerTitle('');
+        setComposerDesc('');
+        if (Number.isInteger(newId) && newId > 0) {
+          lastQuickCreatedCardIdRef.current = newId;
+          const list = (board?.lists || []).find((l: BoardList) => l.id === savedListId);
+          openCardDetail(
+            {
+              id: newId,
+              title: savedTitle,
+              description: savedDesc || undefined,
+              position: 0,
+              comments: []
+            },
+            list?.title ?? '',
+            savedListId
+          );
+          await loadBoard({ silent: true });
+        } else {
+          await loadBoard();
+        }
+      } else {
+        showErrorPopup(res.message || '실패', '작업 보드');
+      }
+    } catch (e: any) {
+      showErrorPopup(e, '작업 보드');
+    } finally {
+      setSavingCard(false);
+    }
+  }, [board, boardId, composerListId, composerTitle, composerDesc, loadBoard, menuCanCreate, openCardDetail, txt]);
+
+  const openComposer = useCallback(
+    (listId: number) => {
+      if (!menuCanCreate) return;
+      setComposerListId(listId);
+      setComposerTitle('');
+      setComposerDesc('');
+    },
+    [menuCanCreate]
+  );
+
+  const closeComposer = useCallback(() => {
+    setComposerListId(null);
+    setComposerTitle('');
+    setComposerDesc('');
   }, []);
 
   const loadCardComments = useCallback(
@@ -1790,6 +1874,11 @@ const WorkBoardDetailPage: React.FC = () => {
       })),
     [members]
   );
+  /** 이미 보드 멤버인 사용자는 초대 검색에서 제외 */
+  const inviteUserOptions = useMemo(() => {
+    const memberIds = new Set(members.map((m: any) => Number(m.user_id)));
+    return companyUsers.filter((u: any) => !memberIds.has(Number(u.id)));
+  }, [companyUsers, members]);
   const mentionCandidates = useMemo<MemberOption[]>(() => {
     const keyword = mentionQuery.trim().toLowerCase();
     if (!keyword) return memberOptions.slice(0, 6);
@@ -1851,14 +1940,15 @@ const WorkBoardDetailPage: React.FC = () => {
   return (
     <Box
       sx={{
-        p: 2,
-        pb: 2,
+        p: { xs: 2, sm: 3 },
+        pb: 3,
         width: '100%',
         minWidth: 0,
         display: 'flex',
         flexDirection: 'column',
         overflowX: 'hidden',
-        backgroundColor: 'background.paper',
+        /* AppLayout이 이미 workArea.main(흰 패널)로 감쌈 — 별도 회색 바탕을 두면 사이드·본문과 톤이 어긋남 */
+        backgroundColor: 'transparent',
         '& .MuiOutlinedInput-root': {
           borderRadius: 2,
           backgroundColor: 'background.paper',
@@ -1879,21 +1969,104 @@ const WorkBoardDetailPage: React.FC = () => {
         }
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2, flexWrap: 'wrap' }}>
-        <IconButton onClick={() => navigate('/work/projects')} size="small" aria-label="목록으로">
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.25,
+          mb: 2.5,
+          flexWrap: 'wrap',
+          p: 2,
+          borderRadius: '18px',
+          bgcolor: 'background.paper',
+          border: '1px solid',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+          boxShadow: '0 4px 18px rgba(15, 23, 42, 0.05)',
+        }}
+      >
+        <IconButton
+          onClick={() => navigate('/work/projects')}
+          size="small"
+          aria-label="목록으로"
+          sx={{
+            borderRadius: '12px',
+            color: 'text.secondary',
+            '&:hover': { bgcolor: alpha(theme.palette.action.hover, 0.9) },
+          }}
+        >
           <ArrowBackIcon />
         </IconButton>
-        <Typography variant="h5" fontWeight={700} color="text.primary">
+        <Typography
+          component="h1"
+          variant="pageTitle"
+          sx={{
+            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
+            fontWeight: 600,
+            letterSpacing: '-0.022em',
+            lineHeight: 1.28,
+            flex: '1 1 200px',
+            minWidth: 0,
+          }}
+          color="text.primary"
+        >
           {board.name}
         </Typography>
-        <Box sx={{ flexGrow: 1 }} />
+        <Box sx={{ flexGrow: 1, minWidth: 8 }} />
         {menuCanEdit && (
-          <Button startIcon={<PersonAddIcon />} variant="outlined" onClick={() => { setInviteOpen(true); loadUsers(); }}>
+          <Button
+            startIcon={<PersonAddIcon sx={{ fontSize: 18 }} />}
+            variant="outlined"
+            color="primary"
+            onClick={() => {
+              setSelectedUser(null);
+              setInviteOpen(true);
+              loadUsers();
+            }}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              borderRadius: '12px',
+              px: 2,
+              borderColor: alpha(theme.palette.primary.main, 0.45),
+            }}
+          >
             {txt('멤버 초대', 'Invite Member')}
           </Button>
         )}
+        {menuCanCreate && (
+          <Button
+            startIcon={<LibraryAddOutlinedIcon sx={{ fontSize: 18 }} />}
+            variant="outlined"
+            color="primary"
+            onClick={() => {
+              setNewListTitle('');
+              setAddListOpen(true);
+            }}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              borderRadius: '12px',
+              px: 2,
+              borderColor: alpha(theme.palette.primary.main, 0.45),
+            }}
+          >
+            {txt('대분류 추가', 'Add List')}
+          </Button>
+        )}
         {canDeleteBoard && (
-          <Button color="error" variant="outlined" startIcon={<DeleteIcon />} onClick={handleDeleteBoard}>
+          <Button
+            color="error"
+            variant="outlined"
+            startIcon={<DeleteIcon sx={{ fontSize: 18 }} />}
+            onClick={handleDeleteBoard}
+            sx={{
+              textTransform: 'none',
+              fontWeight: 600,
+              borderRadius: '12px',
+              px: 2,
+              borderColor: alpha(theme.palette.error.main, 0.4),
+            }}
+          >
             {txt('보드 삭제', 'Delete Board')}
           </Button>
         )}
@@ -1903,17 +2076,33 @@ const WorkBoardDetailPage: React.FC = () => {
         elevation={0}
         sx={{
           mb: 2,
-          p: 2,
-          borderRadius: 2,
+          p: { xs: 1.25, sm: 1.5 },
+          borderRadius: '14px',
           border: '1px solid',
-          borderColor: 'divider',
-          bgcolor: 'background.paper'
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+          bgcolor: 'background.paper',
+          boxShadow: '0 2px 12px rgba(15, 23, 42, 0.04)',
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
         }}
       >
-        <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }} color="text.primary">
+        <Typography
+          variant="subtitle2"
+          sx={{ mb: 1, fontWeight: 700, fontSize: '0.8125rem', letterSpacing: '-0.01em' }}
+          color="text.primary"
+        >
           {txt('보드 멤버', 'Board Members')} · {members.length}{txt('명', '')}
         </Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 0.75,
+            alignItems: 'stretch',
+            width: '100%',
+          }}
+        >
           {members.map((m: any) => {
             const name = m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`;
             const initial = name.trim().charAt(0).toUpperCase() || '?';
@@ -1924,34 +2113,54 @@ const WorkBoardDetailPage: React.FC = () => {
               <Box
                 key={m.id}
                 sx={{
+                  boxSizing: 'border-box',
                   display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.25,
+                  flexDirection: 'column',
+                  gap: 0.45,
+                  py: 0.65,
+                  px: 0.85,
                   minWidth: 0,
-                  pr: 1
+                  flex: { xs: '1 1 100%', sm: '1 1 168px' },
+                  maxWidth: { xs: '100%', sm: 220 },
+                  width: { xs: '100%', sm: 'auto' },
+                  borderRadius: '10px',
+                  bgcolor: theme.palette.mode === 'light' ? alpha(theme.palette.common.black, 0.03) : alpha(theme.palette.common.white, 0.04),
+                  border: '1px solid',
+                  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : 'divider',
                 }}
               >
-                <Avatar
-                  sx={{
-                    width: 40,
-                    height: 40,
-                    bgcolor: m.role === 'owner' ? 'primary.main' : 'grey.400',
-                    fontSize: '1rem',
-                    fontWeight: 600
-                  }}
-                >
-                  {initial}
-                </Avatar>
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography variant="body2" fontWeight={600} noWrap color="text.primary">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.65, minWidth: 0 }}>
+                  <Avatar
+                    sx={{
+                      width: 26,
+                      height: 26,
+                      fontSize: '0.7rem',
+                      flexShrink: 0,
+                      bgcolor: m.role === 'owner' ? 'primary.main' : alpha(theme.palette.grey[500], 0.35),
+                      color: m.role === 'owner' ? 'primary.contrastText' : 'text.primary',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {initial}
+                  </Avatar>
+                  <Typography
+                    noWrap
+                    color="text.primary"
+                    sx={{ fontWeight: 600, fontSize: '0.75rem', lineHeight: 1.2, minWidth: 0, flex: 1 }}
+                  >
                     {name}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {m.role === 'owner' ? txt('소유자', 'Owner') : txt('멤버', 'Member')}
-                    {m.user?.userid ? ` · ${m.user.userid}` : ''}
-                  </Typography>
                 </Box>
-                <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Typography
+                  noWrap
+                  color="text.secondary"
+                  title={m.user?.userid ? String(m.user.userid) : undefined}
+                  sx={{ fontSize: '0.625rem', lineHeight: 1.2, pl: 0.1 }}
+                >
+                  {m.role === 'owner' ? txt('소유자', 'Owner') : txt('멤버', 'Member')}
+                  {m.user?.userid ? ` · ${m.user.userid}` : ''}
+                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4, width: '100%', mt: 0.15 }}>
                   <TextField
                     select
                     hiddenLabel
@@ -1964,19 +2173,60 @@ const WorkBoardDetailPage: React.FC = () => {
                         void handleChangeMemberRole(Number(m.user_id), nextRole);
                       }
                     }}
-                    sx={{ minWidth: 94 }}
+                    sx={{
+                      flex: 1,
+                      minWidth: 0,
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '8px',
+                        fontSize: '0.6875rem',
+                        minHeight: 28,
+                        height: 28,
+                        boxSizing: 'border-box',
+                      },
+                      '& .MuiSelect-select': {
+                        py: 0,
+                        px: 0.75,
+                        minHeight: 28,
+                        height: 28,
+                        display: 'flex',
+                        alignItems: 'center',
+                        boxSizing: 'border-box',
+                      },
+                    }}
                   >
-                    <MenuItem value="member">{txt('멤버', 'Member')}</MenuItem>
-                    <MenuItem value="owner">{txt('소유자', 'Owner')}</MenuItem>
+                    <MenuItem value="member" dense sx={{ fontSize: '0.75rem', minHeight: 34 }}>
+                      {txt('멤버', 'Member')}
+                    </MenuItem>
+                    <MenuItem value="owner" dense sx={{ fontSize: '0.75rem', minHeight: 34 }}>
+                      {txt('소유자', 'Owner')}
+                    </MenuItem>
                   </TextField>
                   <Button
+                    variant="outlined"
                     size="small"
                     color="error"
-                    variant="text"
                     disabled={!canRemoveMember || memberRemovingId === Number(m.user_id)}
                     onClick={() => handleRemoveMember(Number(m.user_id), name)}
+                    sx={{
+                      flexShrink: 0,
+                      height: 28,
+                      minHeight: 28,
+                      minWidth: 44,
+                      px: 0.75,
+                      boxSizing: 'border-box',
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      fontSize: '0.6875rem',
+                      lineHeight: 1,
+                      borderRadius: '8px',
+                      py: 0,
+                    }}
                   >
-                    {memberRemovingId === Number(m.user_id) ? txt('삭제 중...', 'Deleting...') : txt('삭제', 'Delete')}
+                    {memberRemovingId === Number(m.user_id) ? (
+                      <CircularProgress size={14} color="inherit" aria-label={txt('삭제 중', 'Deleting')} />
+                    ) : (
+                      txt('삭제', 'Delete')
+                    )}
                   </Button>
                 </Box>
               </Box>
@@ -1986,7 +2236,7 @@ const WorkBoardDetailPage: React.FC = () => {
       </Paper>
 
       {board.description && (
-        <Typography variant="body2" sx={{ mb: 2 }} color="text.secondary">
+        <Typography variant="body2" sx={{ mb: 2.5, maxWidth: 720, lineHeight: 1.55, fontSize: '0.875rem' }} color="text.secondary">
           {board.description}
         </Typography>
       )}
@@ -2024,9 +2274,9 @@ const WorkBoardDetailPage: React.FC = () => {
                 flexWrap: 'wrap',
                 justifyContent: 'flex-start',
                 alignContent: 'flex-start',
-                gap: { xs: 1.5, sm: 2 },
+                gap: { xs: 2, sm: 2.25 },
                 alignItems: 'stretch',
-                pb: 1
+                pb: 1,
               }}
             >
             {lists.map((list) => (
@@ -2059,46 +2309,6 @@ const WorkBoardDetailPage: React.FC = () => {
                 allowAddCard={menuCanCreate}
               />
             ))}
-              {menuCanCreate && (
-              <Paper
-                elevation={0}
-                sx={{
-                  boxSizing: 'border-box',
-                  flex: { xs: '1 1 100%', sm: `0 0 ${WORK_BOARD_COLUMN_WIDTH_PX}px` },
-                  width: { xs: '100%', sm: `${WORK_BOARD_COLUMN_WIDTH_PX}px` },
-                  minWidth: { xs: 0, sm: WORK_BOARD_COLUMN_WIDTH_PX },
-                  maxWidth: { xs: '100%', sm: `${WORK_BOARD_COLUMN_WIDTH_PX}px` },
-                  p: 1.5,
-                  borderRadius: 2,
-                  alignSelf: 'flex-start',
-                  border: '1px dashed',
-                  borderColor: 'divider',
-                  bgcolor: 'background.paper'
-                }}
-              >
-              <Typography fontWeight={700} sx={{ mb: 1 }} color="text.primary">
-                + {txt('대분류 추가', 'Add List')}
-              </Typography>
-              <TextField
-                fullWidth
-                hiddenLabel
-                size="small"
-                value={newListTitle}
-                onChange={(e) => setNewListTitle(e.target.value)}
-                placeholder={txt('예: 검토 대기', 'e.g. Pending Review')}
-                sx={{ mb: 1 }}
-              />
-              <Button
-                fullWidth
-                variant="contained"
-                size="small"
-                onClick={createNewList}
-                disabled={creatingList || !newListTitle.trim()}
-              >
-                {creatingList ? <CircularProgress size={18} color="inherit" /> : txt('대분류 추가', 'Add List')}
-              </Button>
-              </Paper>
-              )}
             </Box>
           </Box>
           <DragOverlay
@@ -2109,33 +2319,33 @@ const WorkBoardDetailPage: React.FC = () => {
           >
             {activeCard ? (
               <Card
-                square
-                variant="outlined"
+                elevation={0}
                 sx={{
                   width: 'min(292px, 85vw)',
                   maxWidth: 292,
                   height: WORK_BOARD_CARD_HEIGHT_PX,
                   display: 'flex',
                   flexDirection: 'column',
-                  boxShadow: 12,
-                  borderRadius: 0,
-                  borderColor: 'divider',
-                  bgcolor: 'background.paper',
+                  borderRadius: '14px',
+                  border: '1px solid',
+                  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : alpha(theme.palette.common.white, 0.12),
+                  bgcolor: theme.palette.mode === 'light' ? '#FFFFFF' : alpha(theme.palette.grey[900], 0.88),
+                  boxShadow: (() => {
+                    const c =
+                      activeCard.color && isHexColor(activeCard.color)
+                        ? String(activeCard.color)
+                        : theme.palette.primary.main;
+                    return theme.palette.mode === 'light'
+                      ? `0 10px 32px rgba(15, 23, 42, 0.18), inset 0 3px 0 0 ${c}`
+                      : `0 10px 32px rgba(0,0,0,0.5), inset 0 3px 0 0 ${c}`;
+                  })(),
                   cursor: 'grabbing',
                   touchAction: 'none',
                   transform: 'translateZ(0)',
                   willChange: 'transform',
-                  overflow: 'hidden'
+                  overflow: 'hidden',
                 }}
               >
-                <Box
-                  sx={{
-                    height: 8,
-                    width: '100%',
-                    flexShrink: 0,
-                    bgcolor: activeCard.color || 'transparent'
-                  }}
-                />
                 <CardContent
                   sx={{
                     flex: 1,
@@ -2934,6 +3144,61 @@ const WorkBoardDetailPage: React.FC = () => {
       </Paper>
       )}
 
+      <Dialog
+        open={addListOpen}
+        onClose={() => {
+          if (!creatingList) {
+            setAddListOpen(false);
+            setNewListTitle('');
+          }
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{txt('대분류 추가', 'Add List')}</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            {txt('새 열(대분류) 이름을 입력하세요.', 'Enter a name for the new list column.')}
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            hiddenLabel
+            size="small"
+            value={newListTitle}
+            onChange={(e) => setNewListTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !creatingList && newListTitle.trim()) {
+                e.preventDefault();
+                void createNewList();
+              }
+            }}
+            placeholder={txt('예: 검토 대기', 'e.g. Pending Review')}
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => {
+              if (!creatingList) {
+                setAddListOpen(false);
+                setNewListTitle('');
+              }
+            }}
+            disabled={creatingList}
+          >
+            {txt('취소', 'Cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => void createNewList()}
+            disabled={creatingList || !newListTitle.trim()}
+          >
+            {creatingList ? <CircularProgress size={22} /> : txt('추가', 'Add')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Dialog open={inviteOpen} onClose={() => !inviteLoading && setInviteOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{txt('같은 회사 사용자 초대', 'Invite a user from same company')}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -2941,7 +3206,7 @@ const WorkBoardDetailPage: React.FC = () => {
             {txt('사용자 검색', 'Search User')}
           </Typography>
           <Autocomplete
-            options={companyUsers}
+            options={inviteUserOptions}
             getOptionLabel={(o) => `${o.username} (${o.userid})`}
             value={selectedUser}
             onChange={(_e, v) => setSelectedUser(v)}
@@ -2951,8 +3216,8 @@ const WorkBoardDetailPage: React.FC = () => {
           />
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
             {txt(
-              '이 보드가 속한 회사의 활성 사용자만 표시됩니다.',
-              'Only active users from the company this board belongs to are shown.'
+              '이 보드가 속한 회사의 활성 사용자 중, 아직 멤버가 아닌 사용자만 표시됩니다.',
+              'Only active users from this board’s company who are not already members are shown.'
             )}
           </Typography>
         </DialogContent>

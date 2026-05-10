@@ -1,4 +1,5 @@
 import '@mui/material/styles';
+import type { CSSProperties } from 'react';
 
 declare module '@mui/material/styles' {
   interface Palette {
@@ -25,5 +26,31 @@ declare module '@mui/material/styles' {
       light?: string;
       dark?: string;
     };
+  }
+
+  interface TypographyVariants {
+    pageTitle: CSSProperties;
+    sectionTitle: CSSProperties;
+    cardTitle: CSSProperties;
+    pageDescription: CSSProperties;
+    kpiNumber: CSSProperties;
+  }
+
+  interface TypographyVariantsOptions {
+    pageTitle?: CSSProperties;
+    sectionTitle?: CSSProperties;
+    cardTitle?: CSSProperties;
+    pageDescription?: CSSProperties;
+    kpiNumber?: CSSProperties;
+  }
+}
+
+declare module '@mui/material/Typography' {
+  interface TypographyPropsVariantOverrides {
+    pageTitle: true;
+    sectionTitle: true;
+    cardTitle: true;
+    pageDescription: true;
+    kpiNumber: true;
   }
 }

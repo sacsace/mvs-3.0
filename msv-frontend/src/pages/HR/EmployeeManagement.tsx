@@ -191,14 +191,10 @@ const EmployeeManagement: React.FC = () => {
   });
 
   return (
-    <Box sx={{ 
-      width: '100%',
-      px: 2,
-      py: 3
-    }}>
+    <Box sx={{ width: '100%', p: 0 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
         <PersonIcon sx={{ mr: 2, fontSize: '2rem', color: 'primary.main' }} />
-        <Typography variant="h4" component="h1" sx={{ fontWeight: 'bold' }}>
+        <Typography variant="pageTitle" component="h1">
           직원 관리
         </Typography>
       </Box>

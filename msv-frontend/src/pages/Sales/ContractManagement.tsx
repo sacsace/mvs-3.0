@@ -29,20 +29,19 @@ import {
   Alert,
   Snackbar
 } from '@mui/material';
+import MuiLink from '@mui/material/Link';
 import {
   Add as AddIcon,
   Search as SearchIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Description as DescriptionIcon,
   CalendarToday as CalendarIcon,
-  AttachMoney as MoneyIcon,
   Refresh as RefreshIcon,
-  CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
   Schedule as ScheduleIcon,
-  FileCopy as FileCopyIcon
+  FileCopy as FileCopyIcon,
+  AttachFile as AttachFileIcon
 } from '@mui/icons-material';
+import { useTheme, alpha } from '@mui/material/styles';
 import { api } from '../../services/api';
 import { useMenuStore, useStore } from '../../store';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
@@ -80,6 +79,7 @@ interface Customer {
 const CONTRACT_MENU_ROUTES = ['/customers/contracts', '/customers'];
 
 const ContractManagement: React.FC = () => {
+  const theme = useTheme();
   const { user } = useStore();
   const { language, menus, hasMenuPermission, loading: menusLoading } = useMenuStore();
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
@@ -454,22 +454,127 @@ const ContractManagement: React.FC = () => {
 
   const uploadBaseUrl = (api.defaults.baseURL || '').replace(/\/api\/?$/, '');
 
+  const softChipSx = (tone: 'default' | 'info' | 'warning' | 'success' | 'error' | 'primary' | 'secondary') => {
+    const light = theme.palette.mode === 'light';
+    if (tone === 'default') {
+      return {
+        height: 26,
+        borderRadius: '8px',
+        fontWeight: 600,
+        fontSize: '0.6875rem',
+        border: `1px solid ${light ? 'rgba(15, 23, 42, 0.12)' : theme.palette.divider}`,
+        bgcolor: light ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.06),
+        color: 'text.secondary',
+      } as const;
+    }
+    const main =
+      tone === 'primary'
+        ? theme.palette.primary.main
+        : tone === 'secondary'
+          ? theme.palette.secondary.main
+          : theme.palette[tone].main;
+    const dark =
+      tone === 'primary'
+        ? theme.palette.primary.dark
+        : tone === 'secondary'
+          ? theme.palette.secondary.dark
+          : theme.palette[tone].dark;
+    return {
+      height: 26,
+      borderRadius: '8px',
+      fontWeight: 600,
+      fontSize: '0.6875rem',
+      border: `1px solid ${alpha(main, light ? 0.3 : 0.42)}`,
+      bgcolor: alpha(main, light ? 0.08 : 0.12),
+      color: dark,
+    } as const;
+  };
+
+  const lifecycleChipSx = (color: string) => {
+    if (color === 'success') return softChipSx('success');
+    if (color === 'warning') return softChipSx('warning');
+    if (color === 'error') return softChipSx('error');
+    if (color === 'info') return softChipSx('info');
+    return softChipSx('default');
+  };
+
+  const kpiCardSx = {
+    borderRadius: '16px',
+    border: '1px solid',
+    borderColor: alpha(theme.palette.divider, theme.palette.mode === 'light' ? 0.1 : 0.35),
+    boxShadow:
+      theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 2px 12px rgba(0,0,0,0.25)',
+    bgcolor: 'background.paper',
+  } as const;
+
+  /** 계약 등록·수정 다이얼로그 — 입력 필 Apple 계열 톤 */
+  const contractDialogFormSx = {
+    color: 'text.primary',
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '12px',
+      bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.05),
+      transition: theme.transitions.create(['background-color', 'box-shadow'], { duration: 150 }),
+      '&:hover': {
+        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.14 : 0.08),
+      },
+      '&.Mui-focused': {
+        bgcolor: 'background.paper',
+        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.2)}`,
+      },
+      '& fieldset': {
+        borderColor: alpha(theme.palette.divider, 0.9),
+      },
+      '&.Mui-disabled': {
+        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
+      },
+    },
+    '& .MuiOutlinedInput-input::placeholder': {
+      color: theme.palette.text.secondary,
+      opacity: 1,
+    },
+    '& .MuiInputLabel-root': { fontSize: '0.8125rem' },
+    '& .MuiFormHelperText-root': {
+      mt: 0.75,
+      letterSpacing: '-0.01em',
+      color: 'text.secondary',
+    },
+  };
+
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ p: 0, width: '100%', maxWidth: '100%', bgcolor: 'transparent' }}>
       {/* 헤더 */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <DescriptionIcon sx={{ fontSize: '2rem', color: 'primary.main' }} />
-          <Typography variant="h4" component="h1" sx={{ fontWeight: 700 }}>
-            {txt('계약 관리', 'Contract management')}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+        <Typography
+          variant="pageTitle"
+          component="h1"
+          sx={{
+            fontWeight: 600,
+            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
+            letterSpacing: '-0.022em',
+            lineHeight: 1.28,
+            color: 'text.primary',
+          }}
+        >
+          {txt('계약 관리', 'Contract management')}
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Button
             variant="outlined"
-            startIcon={<RefreshIcon />}
+            startIcon={<RefreshIcon sx={{ fontSize: 18 }} />}
             onClick={() => void loadContracts()}
             disabled={loading || menusLoading || !contractMenuFlags.canRead}
+            sx={{
+              borderRadius: '12px',
+              textTransform: 'none',
+              fontWeight: 600,
+              borderColor: 'divider',
+              color: 'text.secondary',
+              '&:hover': {
+                borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
+                bgcolor: 'action.hover',
+                color: 'text.primary',
+              },
+            }}
           >
             {txt('새로고침', 'Refresh')}
           </Button>
@@ -483,9 +588,12 @@ const ContractManagement: React.FC = () => {
             <span>
               <Button
                 variant="contained"
-                startIcon={<AddIcon />}
+                color="primary"
+                disableElevation
+                startIcon={<AddIcon sx={{ fontSize: 20 }} />}
                 onClick={handleCreateContract}
                 disabled={menusLoading || !contractMenuFlags.canCreate}
+                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
               >
                 {txt('계약 등록', 'Register contract')}
               </Button>
@@ -495,88 +603,69 @@ const ContractManagement: React.FC = () => {
       </Box>
 
       {/* 통계 카드 */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
+      <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography color="text.secondary" gutterBottom>
-                    {txt('총 계약 수', 'Total contracts')}
-                  </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                    {contracts.length}
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: 'primary.main' }}>
-                  <DescriptionIcon />
-                </Avatar>
-              </Box>
+          <Card elevation={0} sx={kpiCardSx}>
+            <CardContent sx={{ py: 2, px: 2.5 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
+                {txt('총 계약 수', 'Total contracts')}
+              </Typography>
+              <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                {contracts.length}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography color="text.secondary" gutterBottom>
-                    {txt('진행중 계약', 'In progress')}
-                  </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                    {getActiveContracts()}
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: 'success.main' }}>
-                  <CheckCircleIcon />
-                </Avatar>
-              </Box>
+          <Card elevation={0} sx={kpiCardSx}>
+            <CardContent sx={{ py: 2, px: 2.5 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
+                {txt('진행중 계약', 'In progress')}
+              </Typography>
+              <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: 'success.dark' }}>
+                {getActiveContracts()}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography color="text.secondary" gutterBottom>
-                    {txt('만료 임박', 'Expiring soon')}
-                  </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                    {getExpiringSoonContracts()}
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: 'warning.main' }}>
-                  <WarningIcon />
-                </Avatar>
-              </Box>
+          <Card elevation={0} sx={kpiCardSx}>
+            <CardContent sx={{ py: 2, px: 2.5 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
+                {txt('만료 임박', 'Expiring soon')}
+              </Typography>
+              <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: 'warning.dark' }}>
+                {getExpiringSoonContracts()}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography color="text.secondary" gutterBottom>
-                    {txt('총 계약 가치', 'Total contract value')}
-                  </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                    Rs. {getTotalValue().toLocaleString()}
-                  </Typography>
-                </Box>
-                <Avatar sx={{ bgcolor: 'info.main' }}>
-                  <MoneyIcon />
-                </Avatar>
-              </Box>
+          <Card elevation={0} sx={kpiCardSx}>
+            <CardContent sx={{ py: 2, px: 2.5 }}>
+              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
+                {txt('총 계약 가치', 'Total contract value')}
+              </Typography>
+              <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                Rs. {getTotalValue().toLocaleString()}
+              </Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
       {/* 필터 및 검색 */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
+      <Card
+        elevation={0}
+        sx={{
+          mb: 3,
+          borderRadius: '16px',
+          border: 'none',
+          boxShadow: 'none',
+          bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.06) : alpha(theme.palette.common.black, 0.03),
+        }}
+      >
+        <CardContent sx={{ py: 2, px: 2.5 }}>
           <Grid container spacing={2} alignItems="center">
             <Grid size={{ xs: 12, md: 4 }}>
               <TextField
@@ -590,9 +679,19 @@ const ContractManagement: React.FC = () => {
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon />
+                      <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
                     </InputAdornment>
                   ),
+                }}
+                sx={{
+                  bgcolor: 'background.paper',
+                  borderRadius: '12px',
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '12px',
+                    '& fieldset': {
+                      borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : undefined,
+                    },
+                  },
                 }}
               />
             </Grid>
@@ -647,27 +746,48 @@ const ContractManagement: React.FC = () => {
       </Card>
 
       {/* 계약 목록 테이블 */}
-      <Card>
-        <CardContent>
-          <TableContainer>
-            <Table>
+      <Card
+        elevation={0}
+        sx={{
+          borderRadius: '20px',
+          overflow: 'hidden',
+          border: '1px solid',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+          boxShadow:
+            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
+          bgcolor: 'background.paper',
+        }}
+      >
+        <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+          <TableContainer sx={{ bgcolor: 'transparent' }}>
+            <Table
+              sx={{
+                borderCollapse: 'collapse',
+                '& .MuiTableCell-root': {
+                  borderLeft: 'none',
+                  borderRight: 'none',
+                  borderTop: 'none',
+                },
+              }}
+            >
               <TableHead
                 sx={{
-                  bgcolor: 'background.paper',
                   '& .MuiTableCell-head': {
-                    bgcolor: 'background.paper',
-                    color: 'text.primary',
+                    bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
+                    color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
                     fontWeight: 600,
-                    fontSize: '0.875rem',
+                    fontSize: '0.75rem',
                     textTransform: 'none',
-                    letterSpacing: 'normal',
-                    borderBottom: '2px solid',
-                    borderColor: 'primary.main',
-                    py: 1.25
+                    letterSpacing: '0.01em',
+                    borderBottom: `1px solid ${
+                      theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
+                    }`,
+                    py: 1.5,
+                    px: 2,
                   },
                   '& .MuiTableCell-head:last-of-type': {
-                    textAlign: 'center'
-                  }
+                    textAlign: 'center',
+                  },
                 }}
               >
                 <TableRow>
@@ -683,7 +803,21 @@ const ContractManagement: React.FC = () => {
                   <TableCell>{txt('작업', 'Actions')}</TableCell>
                 </TableRow>
               </TableHead>
-              <TableBody>
+              <TableBody
+                sx={{
+                  '& .MuiTableCell-body': {
+                    py: 1.5,
+                    px: 2,
+                    fontSize: '0.875rem',
+                    borderBottom: `1px solid ${
+                      theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
+                    }`,
+                  },
+                  '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
+                    borderBottom: 'none',
+                  },
+                }}
+              >
                 {filteredContracts.map((contract) => {
                   const contractStatus = getContractStatus(contract);
                   return (
@@ -691,7 +825,11 @@ const ContractManagement: React.FC = () => {
                       key={contract.id}
                       hover
                       onClick={contractMenuFlags.canRead ? () => handleViewContract(contract) : undefined}
-                      sx={{ cursor: contractMenuFlags.canRead ? 'pointer' : 'default' }}
+                      sx={{
+                        cursor: contractMenuFlags.canRead ? 'pointer' : 'default',
+                        transition: 'background-color 0.15s ease',
+                        '&:hover': { bgcolor: 'action.hover' },
+                      }}
                     >
                       <TableCell>
                         <Box>
@@ -717,7 +855,16 @@ const ContractManagement: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main' }}>
+                          <Avatar
+                            sx={{
+                              width: 32,
+                              height: 32,
+                              fontSize: '0.875rem',
+                              fontWeight: 600,
+                              bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.12),
+                              color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.75)' : theme.palette.grey[200],
+                            }}
+                          >
                             {contract.customer_name?.charAt(0) || 'C'}
                           </Avatar>
                           <Typography variant="body2" sx={{ fontWeight: 500 }}>
@@ -728,12 +875,16 @@ const ContractManagement: React.FC = () => {
                       <TableCell>
                         <Chip
                           size="small"
-                          color={(contract.contract_type || 'sales') === 'sales' ? 'primary' : 'secondary'}
                           label={contractTypeLabel(contract.contract_type)}
+                          sx={
+                            (contract.contract_type || 'sales') === 'sales'
+                              ? softChipSx('primary')
+                              : softChipSx('secondary')
+                          }
                         />
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
                           Rs. {contract.contract_value.toLocaleString()}
                         </Typography>
                       </TableCell>
@@ -754,17 +905,13 @@ const ContractManagement: React.FC = () => {
                         </Box>
                       </TableCell>
                       <TableCell>
-                        <Chip
-                          label={contractStatus.text}
-                          color={contractStatus.color as any}
-                          size="small"
-                        />
+                        <Chip label={contractStatus.text} size="small" sx={lifecycleChipSx(contractStatus.color)} />
                       </TableCell>
                       <TableCell>
                         <Chip
                           label={getStatusText(contract.status)}
-                          color={getStatusColor(contract.status) as any}
                           size="small"
+                          sx={lifecycleChipSx(getStatusColor(contract.status))}
                         />
                       </TableCell>
                       <TableCell>
@@ -790,8 +937,13 @@ const ContractManagement: React.FC = () => {
                                   event.stopPropagation();
                                   handleEditContract(contract);
                                 }}
+                                sx={{
+                                  color: 'text.secondary',
+                                  borderRadius: '10px',
+                                  '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+                                }}
                               >
-                                <EditIcon />
+                                <EditIcon fontSize="small" />
                               </IconButton>
                             </span>
                           </Tooltip>
@@ -811,9 +963,13 @@ const ContractManagement: React.FC = () => {
                                   event.stopPropagation();
                                   handleDeleteContract(contract);
                                 }}
-                                color="error"
+                                sx={{
+                                  color: 'text.secondary',
+                                  borderRadius: '10px',
+                                  '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.08) },
+                                }}
                               >
-                                <DeleteIcon />
+                                <DeleteIcon fontSize="small" />
                               </IconButton>
                             </span>
                           </Tooltip>
@@ -829,14 +985,41 @@ const ContractManagement: React.FC = () => {
       </Card>
 
       {/* 계약 등록/수정 다이얼로그 */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
+      <Dialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: '20px' } }}
+      >
+        <DialogTitle
+          sx={{
+            pt: 2.5,
+            px: 3,
+            pb: 1.25,
+            fontSize: '1.125rem',
+            fontWeight: 700,
+            letterSpacing: '-0.02em',
+            color: 'text.primary',
+          }}
+        >
           {dialogMode === 'create' && txt('새 계약 등록', 'New contract')}
           {dialogMode === 'edit' && txt('계약 수정', 'Edit contract')}
           {dialogMode === 'view' && txt('계약 보기', 'View contract')}
         </DialogTitle>
-        <DialogContent>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
+        <DialogContent
+          sx={{
+            px: 3,
+            /* DialogTitle 다음 기본 paddingTop:0 을 덮어 라벨 노치 영역 확보 */
+            pt: 2.5,
+            pb: 2,
+          }}
+        >
+          <Grid
+            container
+            spacing={{ xs: 2.25, sm: 2.75 }}
+            sx={{ mt: 0, pt: 0.5, width: '100%', ...contractDialogFormSx }}
+          >
             <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl fullWidth>
                 <InputLabel>{txt('고객(선택)', 'Customer (optional)')}</InputLabel>
@@ -967,12 +1150,27 @@ const ContractManagement: React.FC = () => {
             <Grid size={{ xs: 12 }}>
               <Button
                 variant="outlined"
+                color="inherit"
                 component="label"
+                startIcon={<AttachFileIcon sx={{ fontSize: 18 }} />}
                 disabled={
                   dialogMode === 'view' ||
                   (dialogMode === 'create' && !contractMenuFlags.canCreate) ||
                   (dialogMode === 'edit' && !contractMenuFlags.canEdit)
                 }
+                sx={{
+                  borderRadius: '12px',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  borderStyle: 'dashed',
+                  borderColor: alpha(theme.palette.text.primary, 0.22),
+                  color: 'text.primary',
+                  bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.04),
+                  '&:hover': {
+                    borderColor: alpha(theme.palette.primary.main, 0.45),
+                    bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.1 : 0.06),
+                  },
+                }}
               >
                 {txt('계약서 파일 첨부', 'Attach files')}
                 <input
@@ -986,39 +1184,68 @@ const ContractManagement: React.FC = () => {
                 />
               </Button>
               {selectedFiles.length > 0 && (
-                <Typography variant="body2" sx={{ mt: 1, color: 'text.secondary' }}>
+                <Typography variant="body2" sx={{ mt: 1.25, color: 'text.secondary', letterSpacing: '-0.01em' }}>
                   {txt('선택 파일:', 'Selected:')} {selectedFiles.map((file) => file.name).join(', ')}
                 </Typography>
               )}
               {Array.isArray(formData.attachments) && formData.attachments.length > 0 && (
-                <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                  <Typography variant="caption" color="text.secondary">
+                <Box
+                  sx={{
+                    mt: 1.25,
+                    p: 1.5,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 0.75,
+                    borderRadius: '12px',
+                    border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+                    bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
+                  }}
+                >
+                  <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, letterSpacing: '-0.01em' }}>
                     {txt('기존 첨부파일', 'Existing attachments')}
                   </Typography>
                   {formData.attachments.map((filePath) => (
-                    <a
+                    <MuiLink
                       key={filePath}
                       href={`${uploadBaseUrl}/uploads/${filePath}`}
                       target="_blank"
                       rel="noreferrer"
-                      style={{ fontSize: '0.85rem' }}
+                      underline="hover"
+                      sx={{ fontSize: '0.8125rem', fontWeight: 500, letterSpacing: '-0.01em' }}
                     >
                       {filePath.split('/').pop()}
-                    </a>
+                    </MuiLink>
                   ))}
                 </Box>
               )}
             </Grid>
           </Grid>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>
+        <DialogActions
+          sx={{
+            px: 3,
+            py: 2.5,
+            gap: 1,
+            borderTop: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+            bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
+          }}
+        >
+          <Box sx={{ flex: 1 }} />
+          <Button
+            onClick={() => setDialogOpen(false)}
+            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '12px', px: 2 }}
+          >
             {dialogMode === 'view' ? txt('닫기', 'Close') : txt('취소', 'Cancel')}
           </Button>
           {dialogMode !== 'view' &&
             ((dialogMode === 'create' && contractMenuFlags.canCreate) ||
               (dialogMode === 'edit' && contractMenuFlags.canEdit)) && (
-              <Button onClick={() => void handleSaveContract()} variant="contained">
+              <Button
+                onClick={() => void handleSaveContract()}
+                variant="contained"
+                disableElevation
+                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+              >
                 {dialogMode === 'create' ? txt('등록', 'Register') : txt('수정', 'Update')}
               </Button>
             )}

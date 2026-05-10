@@ -75,7 +75,7 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`recommendation-tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ pt: 2 }}>{children}</Box>}
     </div>
   );
 }
@@ -178,7 +178,7 @@ const RecommendationEngine: React.FC = () => {
 
   if (loading) {
     return (
-      <Box sx={{ p: 3, textAlign: 'center' }}>
+      <Box sx={{ py: 8, px: 0, textAlign: 'center' }}>
         <CircularProgress />
         <Typography sx={{ mt: 2 }}>추천 엔진 분석 중...</Typography>
       </Box>
@@ -189,9 +189,9 @@ const RecommendationEngine: React.FC = () => {
     <Box sx={{ 
       width: '100%',
       maxWidth: '1400px',
-      p: 3
+      p: 0
     }}>
-      <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Typography variant="pageTitle" component="h1" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <PsychologyIcon color="primary" />
         AI 추천 엔진
       </Typography>

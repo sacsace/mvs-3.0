@@ -33,8 +33,10 @@ import {
   InputAdornment
 } from '@mui/material';
 import { Search as SearchIcon } from '@mui/icons-material';
+import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { roomBookingService, roomTypeRoomService, roomTypeService } from '../../services/api';
+import { mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
 import { generateWalkInBookingId } from '../../utils/bookingId';
 
 const formatDate = (value: string | undefined, locale: string) => {
@@ -113,6 +115,7 @@ const getBookingGuestSearchable = (b: any) =>
   String(b?.guest_name ?? b?.guestName ?? b?.user?.username ?? b?.user?.name ?? '').trim();
 
 const FrontDesk: React.FC = () => {
+  const theme = useTheme();
   const { t, i18n } = useTranslation();
 
   const statusLabel = useCallback((status: string) => {
@@ -964,25 +967,60 @@ const FrontDesk: React.FC = () => {
     }
   };
 
+  const shellCardSx = {
+    width: '100%',
+    maxWidth: '100%',
+    borderRadius: '20px',
+    border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+    boxShadow: `0 4px 24px ${alpha('#0f172a', 0.055)}`,
+    bgcolor: 'background.paper',
+    overflow: 'hidden',
+    boxSizing: 'border-box' as const
+  };
+
+  const headBg = alpha(theme.palette.grey[500], 0.08);
+  const headBorder = alpha(theme.palette.divider, 0.9);
+
+  const rowActionBtnSx = {
+    flexShrink: 0,
+    px: 1.25,
+    py: 0.65,
+    fontSize: '0.8125rem',
+    fontWeight: 600,
+    textTransform: 'none' as const,
+    borderRadius: '10px',
+    whiteSpace: 'nowrap' as const,
+    '&.Mui-disabled': {
+      opacity: 1,
+      color: alpha(theme.palette.text.primary, 0.42),
+      borderColor: alpha(theme.palette.divider, 0.75),
+      WebkitTextFillColor: alpha(theme.palette.text.primary, 0.42)
+    }
+  };
+
   return (
-    <Box sx={{ p: 3 }}>
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>{t('frontDesk.title')}</Typography>
-        <Typography variant="body2" color="text.secondary">
-          {t('frontDesk.description')}
+    <Box sx={{ p: 0, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
+      <Box sx={{ mb: 2.5 }}>
+        <Typography component="h1" sx={{ ...mvsPageTitleSx, mb: 0.5 }}>
+          {t('frontDesk.title')}
         </Typography>
+        <Typography sx={mvsPageDescriptionSx}>{t('frontDesk.description')}</Typography>
       </Box>
 
-      <Card variant="outlined" sx={{ mb: 2 }}>
-        <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{t('frontDesk.quickActionsTitle')}</Typography>
-          <Divider sx={{ my: 1.5 }} />
+      <Card elevation={0} sx={{ ...shellCardSx, mb: 2.5 }}>
+        <CardContent sx={{ py: 2.25, px: { xs: 2, sm: 2.5 }, '&:last-child': { pb: 2.25 } }}>
+          <Typography
+            variant="subtitle2"
+            sx={{ fontWeight: 600, letterSpacing: '0.02em', color: 'text.secondary', mb: 1.5 }}
+          >
+            {t('frontDesk.quickActionsTitle')}
+          </Typography>
           <Box
             sx={{
               display: 'flex',
               flexDirection: { xs: 'column', sm: 'row' },
-              flexWrap: { xs: 'wrap', sm: 'nowrap' },
-              gap: 1,
+              flexWrap: { xs: 'wrap', sm: 'wrap' },
+              gap: 1.25,
               alignItems: 'stretch',
               width: '100%'
             }}
@@ -990,21 +1028,51 @@ const FrontDesk: React.FC = () => {
             <Button
               variant="outlined"
               onClick={() => setWalkInOpen(true)}
-              sx={{ flex: { sm: '1 1 0' }, minWidth: 0, minHeight: 40, py: 1, lineHeight: 1.25 }}
+              sx={{
+                flex: { sm: '1 1 140px' },
+                minWidth: { sm: 120 },
+                minHeight: 42,
+                py: 1,
+                lineHeight: 1.25,
+                borderRadius: '12px',
+                textTransform: 'none',
+                fontWeight: 600,
+                borderColor: alpha(theme.palette.divider, 0.95)
+              }}
             >
               {t('frontDesk.actions.newCheckin')}
             </Button>
             <Button
               variant="outlined"
               onClick={() => openQuickActionDialog('checkin')}
-              sx={{ flex: { sm: '1 1 0' }, minWidth: 0, minHeight: 40, py: 1, lineHeight: 1.25 }}
+              sx={{
+                flex: { sm: '1 1 140px' },
+                minWidth: { sm: 120 },
+                minHeight: 42,
+                py: 1,
+                lineHeight: 1.25,
+                borderRadius: '12px',
+                textTransform: 'none',
+                fontWeight: 600,
+                borderColor: alpha(theme.palette.divider, 0.95)
+              }}
             >
               {t('frontDesk.walkIn.openExistingCheckin')}
             </Button>
             <Button
               variant="outlined"
               onClick={() => openQuickActionDialog('checkout')}
-              sx={{ flex: { sm: '1 1 0' }, minWidth: 0, minHeight: 40, py: 1, lineHeight: 1.25 }}
+              sx={{
+                flex: { sm: '1 1 140px' },
+                minWidth: { sm: 120 },
+                minHeight: 42,
+                py: 1,
+                lineHeight: 1.25,
+                borderRadius: '12px',
+                textTransform: 'none',
+                fontWeight: 600,
+                borderColor: alpha(theme.palette.divider, 0.95)
+              }}
             >
               {t('frontDesk.actions.processCheckout')}
             </Button>
@@ -1012,7 +1080,16 @@ const FrontDesk: React.FC = () => {
               variant="outlined"
               color="warning"
               onClick={() => openQuickActionDialog('no_show')}
-              sx={{ flex: { sm: '1 1 0' }, minWidth: 0, minHeight: 40, py: 1, lineHeight: 1.25 }}
+              sx={{
+                flex: { sm: '1 1 140px' },
+                minWidth: { sm: 120 },
+                minHeight: 42,
+                py: 1,
+                lineHeight: 1.25,
+                borderRadius: '12px',
+                textTransform: 'none',
+                fontWeight: 600
+              }}
             >
               {t('frontDesk.actions.processNoShow')}
             </Button>
@@ -1020,14 +1097,33 @@ const FrontDesk: React.FC = () => {
               variant="outlined"
               color="error"
               onClick={() => openQuickActionDialog('cancel')}
-              sx={{ flex: { sm: '1 1 0' }, minWidth: 0, minHeight: 40, py: 1, lineHeight: 1.25 }}
+              sx={{
+                flex: { sm: '1 1 140px' },
+                minWidth: { sm: 120 },
+                minHeight: 42,
+                py: 1,
+                lineHeight: 1.25,
+                borderRadius: '12px',
+                textTransform: 'none',
+                fontWeight: 600
+              }}
             >
               {t('frontDesk.actions.cancelBooking')}
             </Button>
             <Button
               variant="outlined"
               onClick={openAssignRoomDialog}
-              sx={{ flex: { sm: '1 1 0' }, minWidth: 0, minHeight: 40, py: 1, lineHeight: 1.25 }}
+              sx={{
+                flex: { sm: '1 1 140px' },
+                minWidth: { sm: 120 },
+                minHeight: 42,
+                py: 1,
+                lineHeight: 1.25,
+                borderRadius: '12px',
+                textTransform: 'none',
+                fontWeight: 600,
+                borderColor: alpha(theme.palette.divider, 0.95)
+              }}
             >
               {t('frontDesk.actions.assignRoom')}
             </Button>
@@ -1035,13 +1131,20 @@ const FrontDesk: React.FC = () => {
         </CardContent>
       </Card>
 
-      <Grid container spacing={2} sx={{ mb: 2 }}>
+      <Grid container spacing={2} sx={{ mb: 2.5 }}>
         {summaryCards.map((item) => (
           <Grid key={item.label} size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card variant="outlined">
-              <CardContent>
-                <Typography variant="caption" sx={{ color: 'text.primary', opacity: 0.84 }}>{item.label}</Typography>
-                <Typography variant="h6" sx={{ fontWeight: 700 }}>{item.value}</Typography>
+            <Card elevation={0} sx={shellCardSx}>
+              <CardContent sx={{ py: 2, px: 2.25 }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: 'text.secondary', fontWeight: 600, letterSpacing: '0.02em', display: 'block', mb: 0.75 }}
+                >
+                  {item.label}
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
+                  {item.value}
+                </Typography>
               </CardContent>
             </Card>
           </Grid>
@@ -1050,37 +1153,62 @@ const FrontDesk: React.FC = () => {
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12 }}>
-          <Card variant="outlined">
-            <CardContent>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{t('frontDesk.bookingListTitle')}</Typography>
+          <Card elevation={0} sx={shellCardSx}>
+            <CardContent sx={{ py: 2.25, px: { xs: 2, sm: 2.5 }, '&:last-child': { pb: 2.25 } }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, letterSpacing: '-0.01em' }}>
+                {t('frontDesk.bookingListTitle')}
+              </Typography>
               <TextField
                 size="small"
                 placeholder={t('frontDesk.searchPlaceholder')}
                 value={bookingListSearch}
                 onChange={(e) => setBookingListSearch(e.target.value)}
                 fullWidth
-                sx={{ mt: 1.5, mb: 1, maxWidth: { sm: 420 } }}
+                sx={{
+                  mt: 1.75,
+                  mb: 1.5,
+                  maxWidth: '100%',
+                  '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: alpha(theme.palette.grey[500], 0.04) }
+                }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon fontSize="small" color="action" />
+                      <SearchIcon fontSize="small" sx={{ color: 'text.secondary', opacity: 0.85 }} />
                     </InputAdornment>
                   )
                 }}
               />
-              <Divider sx={{ my: 1.5 }} />
-              <TableContainer component={Paper} variant="outlined">
+              <TableContainer
+                component={Paper}
+                elevation={0}
+                sx={{
+                  width: '100%',
+                  maxWidth: '100%',
+                  overflowX: 'auto',
+                  borderRadius: '16px',
+                  border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+                  boxShadow: `0 2px 14px ${alpha('#0f172a', 0.04)}`,
+                  bgcolor: 'background.paper',
+                  boxSizing: 'border-box'
+                }}
+              >
                 <Table
                   size="small"
                   sx={{
+                    minWidth: 720,
+                    width: '100%',
                     '& .MuiTableCell-head': {
-                      color: 'text.primary'
+                      color: 'text.secondary',
+                      fontWeight: 600,
+                      fontSize: '0.75rem',
+                      letterSpacing: '0.02em'
                     },
                     '& .MuiTableCell-body': {
-                      color: 'text.primary'
+                      color: 'text.primary',
+                      borderBottom: `1px solid ${alpha(theme.palette.divider, 0.65)}`
                     },
                     '& .MuiTableSortLabel-root': {
-                      color: 'text.primary'
+                      color: 'inherit'
                     },
                     '& .MuiTableSortLabel-root.Mui-active': {
                       color: 'text.primary'
@@ -1091,10 +1219,10 @@ const FrontDesk: React.FC = () => {
                     <TableRow
                       sx={{
                         '& .MuiTableCell-head': {
-                          bgcolor: 'background.paper',
-                          borderBottom: '2px solid',
-                          borderColor: 'primary.main',
-                          fontWeight: 600
+                          bgcolor: headBg,
+                          borderBottom: `1px solid ${headBorder}`,
+                          fontWeight: 600,
+                          py: 1.25
                         }
                       }}
                     >
@@ -1143,7 +1271,7 @@ const FrontDesk: React.FC = () => {
                           {t('frontDesk.columns.status')}
                         </TableSortLabel>
                       </TableCell>
-                      <TableCell align="right" sx={{ minWidth: 360, width: '28%' }}>
+                      <TableCell align="right" sx={{ minWidth: 280, width: '32%' }}>
                         {t('frontDesk.columns.actions')}
                       </TableCell>
                     </TableRow>
@@ -1173,21 +1301,27 @@ const FrontDesk: React.FC = () => {
                           <TableCell>{formatDate(booking.check_in_date, i18n.language === 'en' ? 'en-US' : 'ko-KR')}</TableCell>
                           <TableCell>{formatDate(booking.check_out_date, i18n.language === 'en' ? 'en-US' : 'ko-KR')}</TableCell>
                           <TableCell>
-                            <Chip label={statusLabel(booking.status)} size="small" color={statusColor(booking.status)} />
+                            <Chip
+                              label={statusLabel(booking.status)}
+                              size="small"
+                              variant="outlined"
+                              color={statusColor(booking.status)}
+                              sx={{ fontWeight: 600, borderRadius: '10px' }}
+                            />
                           </TableCell>
                           <TableCell
                             align="right"
                             sx={{
                               verticalAlign: 'middle',
-                              minWidth: 360,
-                              width: '28%'
+                              minWidth: 280,
+                              width: '32%'
                             }}
                           >
                             <Box
                               sx={{
                                 display: 'flex',
                                 flexWrap: 'wrap',
-                                gap: 0.75,
+                                gap: 1,
                                 justifyContent: 'flex-end',
                                 alignItems: 'center',
                                 width: '100%'
@@ -1198,7 +1332,7 @@ const FrontDesk: React.FC = () => {
                                 variant="outlined"
                                 disabled={!canCheckIn(booking.status)}
                                 onClick={() => void updateStatus(booking.id, 'checked_in')}
-                                sx={{ flexShrink: 0, px: 1.25, py: 0.5, fontSize: '0.8125rem', whiteSpace: 'nowrap' }}
+                                sx={rowActionBtnSx}
                               >
                                 {t('frontDesk.actions.checkin')}
                               </Button>
@@ -1211,7 +1345,7 @@ const FrontDesk: React.FC = () => {
                                   setPaymentMethod('card');
                                   setInvoiceOpen(true);
                                 }}
-                                sx={{ flexShrink: 0, px: 1.25, py: 0.5, fontSize: '0.8125rem', whiteSpace: 'nowrap' }}
+                                sx={rowActionBtnSx}
                               >
                                 {t('frontDesk.actions.checkout')}
                               </Button>
@@ -1221,7 +1355,7 @@ const FrontDesk: React.FC = () => {
                                 color="warning"
                                 disabled={!canMarkNoShow(booking.status)}
                                 onClick={() => openNoShowConfirm(booking.id)}
-                                sx={{ flexShrink: 0, px: 1.25, py: 0.5, fontSize: '0.8125rem', whiteSpace: 'nowrap' }}
+                                sx={rowActionBtnSx}
                               >
                                 {t('frontDesk.actions.noShow')}
                               </Button>
@@ -1231,7 +1365,7 @@ const FrontDesk: React.FC = () => {
                                 color="error"
                                 disabled={!canCancelBooking(booking.status)}
                                 onClick={() => openCancelConfirm(booking.id)}
-                                sx={{ flexShrink: 0, px: 1.25, py: 0.5, fontSize: '0.8125rem', whiteSpace: 'nowrap' }}
+                                sx={rowActionBtnSx}
                               >
                                 {t('frontDesk.actions.cancelBooking')}
                               </Button>

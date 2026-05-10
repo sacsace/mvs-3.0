@@ -40,7 +40,7 @@ import {
   Select,
   MenuItem
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
 import type { SxProps, Theme } from '@mui/material/styles';
 import {
   Dashboard as DashboardIcon,
@@ -95,6 +95,7 @@ import {
 import { showErrorPopup } from '../../utils/errorHandler';
 import { isRemovedNavMenuRoute } from '../../utils/isRemovedNavMenuRoute';
 import { useTranslation } from 'react-i18next';
+import { mvsDashboardWidgetGroupSx } from '../../theme/mvsLayout';
 import DepartmentLeaveCalendar, { CALENDAR_DEPARTMENT_ALL_VALUE } from '../HR/DepartmentLeaveCalendar';
 
 // TabPanel 컴포넌트 정의
@@ -168,14 +169,14 @@ const DASHBOARD_CARD_DEFAULT_IDS = [
   'notice'
 ];
 
-/** 하단 대시보드 카드 밀도 (기존 대비 약 30% 축소) */
-const DASHBOARD_CARD_PAD = 1.1;
-const DASHBOARD_CARD_SPACING = 1.1;
+/** 하단 대시보드 카드 내부 여백 (카드 패딩 +4~8px 목표) */
+const DASHBOARD_CARD_PAD = 2.5;
+const DASHBOARD_CARD_SPACING = 1.5;
 const DASHBOARD_CARD_CHART_MIN = 168;
 
 type DashboardCardTitleAccent = 'primary' | 'error';
 
-/** 하단 대시보드 카드 제목 하이라이트 (직각 + 좌측 액센트 — 사이드바 선택 메뉴와 동일 톤) */
+/** 대시보드 카드 제목 영역 — 보더 최소화, 은은한 톤만 */
 const dashboardCardTitleBar = (
   accent: DashboardCardTitleAccent,
   opts?: { noFlex?: boolean }
@@ -184,26 +185,24 @@ const dashboardCardTitleBar = (
   alignItems: 'center',
   gap: 1,
   ...(opts?.noFlex ? { flex: 'none' as const } : { flex: 1, minWidth: 0 }),
-  px: 1.25,
-  py: 0.85,
-  borderRadius: 0,
-  border: '1px solid',
-  borderColor: alpha(theme.palette[accent].main, 0.28),
-  borderLeft: `3px solid ${theme.palette[accent].main}`,
-  bgcolor: alpha(theme.palette[accent].main, 0.13),
-  boxShadow: `inset 0 -1px 0 ${alpha(theme.palette[accent].main, 0.12)}`
+  px: 1.5,
+  py: 1,
+  borderRadius: '12px',
+  border: 'none',
+  bgcolor: alpha(theme.palette[accent].main, 0.06),
 });
 
-/** 카드·섹션 소제목 (대시보드 카드 헤더 공통) */
+/** 카드·위젯 헤더 — 전역 cardTitle(14px/600)과 동일 */
 const DASHBOARD_CARD_TITLE_TYPO: SxProps<Theme> = {
   fontWeight: 600,
-  fontSize: '0.875rem',
-  lineHeight: 1.42,
-  color: 'text.primary',
-  letterSpacing: '-0.015em'
+  fontSize: '14px',
+  lineHeight: 1.4,
+  color: '#111827',
+  letterSpacing: '-0.01em'
 };
 
 const Dashboard: React.FC = () => {
+  const theme = useTheme();
   const { user } = useStore();
   const { menus, hasMenuPermission, language } = useMenuStore();
   const { t, i18n } = useTranslation();
@@ -243,7 +242,6 @@ const Dashboard: React.FC = () => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
   });
-  const [pendingApprovals, setPendingApprovals] = useState<any[]>([]);
   const [pendingVacations, setPendingVacations] = useState<any[]>([]);
   const [lowStockItems, setLowStockItems] = useState<any[]>([]);
   const [recentInvoices, setRecentInvoices] = useState<any[]>([]);
@@ -1253,20 +1251,6 @@ const Dashboard: React.FC = () => {
         console.error('공지사항 로드 오류:', error);
       }
 
-      // 결재 대기 문서 로드
-      try {
-        const approvalsResponse = await approvalService.getApprovals({ 
-          status: 'pending'
-        });
-        if (approvalsResponse.success) {
-          const approvals = Array.isArray(approvalsResponse.data) ? approvalsResponse.data : [];
-          setPendingApprovals(approvals.slice(0, 5));
-          setStats(prev => ({ ...prev, pendingApprovals: approvals.length }));
-        }
-      } catch (error) {
-        console.error('결재 대기 문서 로드 오류:', error);
-      }
-
       // 휴가 승인 대기 로드
       try {
         const vacationsResponse = await vacationService.getVacations({ 
@@ -1420,17 +1404,23 @@ const Dashboard: React.FC = () => {
     if (!user?.id) return;
 
     try {
-      // 내가 받은 결재 (승인 대기 중)
+      const uid = Number(user.id);
+
+      // 내가 받은 결재 (현재 결재자가 나인 결재 중 진행 건)
       try {
-        const allApprovals = await approvalService.getApprovals({});
-        if (allApprovals.success) {
-          const approvals = Array.isArray(allApprovals.data) ? allApprovals.data : [];
-          // currentApproverId가 현재 사용자이고 상태가 submitted 또는 in_review인 것
-          const received = approvals.filter((approval: any) => 
-            approval.currentApproverId === user.id && 
-            (approval.status === 'submitted' || approval.status === 'in_review')
-          );
+        const receivedRes = await approvalService.getApprovals({
+          current_approver_id: uid,
+          status: 'submitted,in_review'
+        });
+        if (receivedRes.success) {
+          const list = Array.isArray(receivedRes.data) ? receivedRes.data : [];
+          const received = list.filter((approval: any) => {
+            const approverId = Number(approval.current_approver_id ?? approval.currentApproverId);
+            const st = approval.status;
+            return approverId === uid && (st === 'submitted' || st === 'in_review');
+          });
           setMyReceivedApprovals(received.slice(0, 5));
+          setStats((prev) => ({ ...prev, pendingApprovals: received.length }));
         }
       } catch (error) {
         console.error('내가 받은 결재 로드 오류:', error);
@@ -1438,9 +1428,10 @@ const Dashboard: React.FC = () => {
 
       // 내가 신청한 결재
       try {
-        const myApprovals = await approvalService.getApprovals({ requester_id: user.id });
+        const myApprovals = await approvalService.getApprovals({ requester_id: uid });
         if (myApprovals.success) {
-          const approvals = Array.isArray(myApprovals.data) ? myApprovals.data : [];
+          const raw = Array.isArray(myApprovals.data) ? myApprovals.data : [];
+          const approvals = raw.filter((a: any) => Number(a.requester_id) === uid);
           setMyRequestedApprovals(approvals.slice(0, 5));
         }
       } catch (error) {
@@ -1520,19 +1511,17 @@ const Dashboard: React.FC = () => {
           position: 'relative', 
           overflow: 'hidden',
           cursor: onClick ? 'pointer' : 'default',
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 2,
-          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-          '&:hover': onClick ? { 
-            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-            transform: 'translateY(-1px)',
-            borderColor: 'divider'
+          border: '1px solid rgba(0, 0, 0, 0.04)',
+          borderRadius: '18px',
+          boxShadow: '0 10px 28px rgba(0, 0, 0, 0.05)',
+          transition: 'all 0.2s ease',
+          '&:hover': onClick ? {
+            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.06)',
           } : {}
         }}
         onClick={onClick}
       >
-        <CardContent sx={{ p: 3, pl: 2.25 }}>
+        <CardContent sx={{ p: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
             <Box sx={{ flex: 1 }}>
               <Typography 
@@ -1540,9 +1529,10 @@ const Dashboard: React.FC = () => {
                 gutterBottom 
                 variant="subtitle2"
                 sx={{ 
-                  fontSize: '0.8125rem',
+                  fontSize: '0.75rem',
                   fontWeight: 500,
-                  mb: 1
+                  mb: 1,
+                  color: '#6E6E73',
                 }}
               >
                 {title}
@@ -1551,7 +1541,7 @@ const Dashboard: React.FC = () => {
                 variant="h3" 
                 component="div" 
                 sx={{ 
-                  fontWeight: 700,
+                  fontWeight: 500,
                   fontSize: '1.5rem',
                   color: 'text.primary',
                   mb: trend ? 1 : 0
@@ -1581,7 +1571,7 @@ const Dashboard: React.FC = () => {
                     sx={{ 
                       color: trend > 0 ? 'success.main' : 'error.main',
                       fontSize: '0.75rem',
-                      fontWeight: 600
+                      fontWeight: 500
                     }}
                   >
                     {Math.abs(trend)}%
@@ -1589,13 +1579,23 @@ const Dashboard: React.FC = () => {
                 </Box>
               )}
             </Box>
-            <Avatar sx={{ 
-              bgcolor: `${color}.main`, 
-              width: 48, 
-              height: 48,
-              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
-            }}>
-              {React.cloneElement(icon, { sx: { fontSize: '1.25rem' } })}
+            <Avatar
+              sx={(theme) => {
+                const tone = theme.palette[color as keyof typeof theme.palette] as
+                  | typeof theme.palette.primary
+                  | undefined;
+                const main = tone?.main ?? theme.palette.primary.main;
+                const dark = tone?.dark ?? theme.palette.primary.dark;
+                return {
+                  bgcolor: alpha(main, 0.14),
+                  color: dark,
+                  width: 48,
+                  height: 48,
+                  boxShadow: 'none',
+                };
+              }}
+            >
+              {React.cloneElement(icon, { sx: { fontSize: '1.2rem' } })}
             </Avatar>
           </Box>
           {onClick && (
@@ -1613,37 +1613,73 @@ const Dashboard: React.FC = () => {
   };
 
   const QuickActionCard = ({ title, description, icon, color, onClick, disabled = false }: any) => (
-    <Card 
-      sx={{ 
+    <Card
+      sx={{
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.5 : 1,
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        '&:hover': disabled ? {} : { 
-          boxShadow: 6,
-          transform: 'translateY(-2px)',
-          transition: 'all 0.2s ease-in-out'
-        }
+        borderRadius: '16px',
+        border: `1px solid ${alpha(theme.palette.divider, 0.65)}`,
+        boxShadow: `0 4px 18px ${alpha('#0f172a', 0.04)}`,
+        bgcolor: 'background.paper',
+        transition: 'box-shadow 0.2s ease, background-color 0.2s ease',
+        '&:hover': disabled
+          ? {}
+          : {
+              bgcolor: alpha(theme.palette.grey[500], 0.05),
+              boxShadow: `0 8px 26px ${alpha('#0f172a', 0.07)}`,
+            },
       }}
       onClick={disabled ? undefined : onClick}
     >
-      <CardContent sx={{ 
-        p: 1.2,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1.2,
-        flex: 1,
-        '&:last-child': { pb: 1.2 }
-      }}>
-        <Avatar sx={{ bgcolor: `${color}.main`, width: 36, height: 36, flexShrink: 0 }}>
-          {React.cloneElement(icon, { sx: { fontSize: '1rem' } })}
+      <CardContent
+        sx={{
+          p: 2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 2,
+          flex: 1,
+          '&:last-child': { pb: 2 },
+        }}
+      >
+        <Avatar
+          sx={(th) => {
+            const tone = th.palette[color as keyof typeof th.palette] as
+              | typeof th.palette.primary
+              | undefined;
+            const main = tone?.main ?? th.palette.primary.main;
+            const dark = tone?.dark ?? th.palette.primary.dark;
+            return {
+              bgcolor: alpha(main, 0.12),
+              color: dark,
+              width: 44,
+              height: 44,
+              flexShrink: 0,
+            };
+          }}
+        >
+          {React.cloneElement(icon, { sx: { fontSize: '1.1rem' } })}
         </Avatar>
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="subtitle1" sx={{ fontSize: '0.8125rem', fontWeight: 600, mb: 0.25, lineHeight: 1.25 }}>
+          <Typography
+            variant="subtitle1"
+            sx={{
+              fontSize: '0.9375rem',
+              fontWeight: 600,
+              mb: 0.35,
+              lineHeight: 1.35,
+              letterSpacing: '-0.015em',
+            }}
+          >
             {title}
           </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem', lineHeight: 1.2, display: 'block' }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ fontSize: '0.8125rem', lineHeight: 1.45, display: 'block', letterSpacing: '0.01em' }}
+          >
             {description}
           </Typography>
         </Box>
@@ -1652,120 +1688,131 @@ const Dashboard: React.FC = () => {
   );
 
   return (
-    <Box sx={{ 
-      width: '100%',
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%',
-      p: 0 // 패딩 제거
-    }}>
+    <Box
+      sx={{
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+        backgroundColor: 'workArea.main',
+        minHeight: '100%',
+        p: 0,
+      }}
+    >
       {/* 헤더 섹션 */}
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        mb: 4,
-        p: 3,
-        backgroundColor: 'background.paper',
-        borderRadius: 2,
-        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-        border: '1px solid',
-        borderColor: 'divider'
-      }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Box sx={{ 
-            width: 40, 
-            height: 40, 
-            backgroundColor: 'primary.main', 
-            borderRadius: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <DashboardIcon sx={{ color: 'white', fontSize: '1.25rem' }} />
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 2,
+          mb: 3.5,
+          p: { xs: 2.25, sm: 3 },
+          backgroundColor: 'background.paper',
+          borderRadius: '20px',
+          boxShadow: `0 8px 30px ${alpha('#0f172a', 0.045)}`,
+          border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
+          <Box
+            sx={{
+              width: 44,
+              height: 44,
+              backgroundColor: 'primary.main',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.35)}`,
+            }}
+          >
+            <DashboardIcon sx={{ color: 'white', fontSize: '1.35rem' }} />
           </Box>
-          <Box>
-            <Typography variant="h5" sx={{ 
-              fontWeight: 600,
-              color: 'text.primary',
-              mb: 0.5,
-              fontSize: '1.5rem'
-            }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="pageTitle" sx={{ color: 'text.primary', mb: 0.5, letterSpacing: '-0.02em' }}>
               {t('dashboard.pageTitle')}
             </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+            <Typography variant="pageDescription" sx={{ letterSpacing: '0.01em' }}>
               {t('dashboard.welcomeWork', { name: user?.username || t('dashboard.userFallback') })}
             </Typography>
           </Box>
         </Box>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexShrink: 0 }}>
           <Tooltip title={t('dashboard.refresh')}>
-            <IconButton 
-              onClick={handleRefresh} 
+            <IconButton
+              onClick={handleRefresh}
               disabled={loading}
               size="small"
-              sx={{ 
-                backgroundColor: 'action.hover',
-                '&:hover': { backgroundColor: 'action.selected' }
+              sx={{
+                borderRadius: '12px',
+                backgroundColor: alpha(theme.palette.grey[500], 0.1),
+                '&:hover': { backgroundColor: alpha(theme.palette.grey[500], 0.16) },
               }}
             >
               <Refresh sx={{ fontSize: '1.125rem' }} />
             </IconButton>
           </Tooltip>
           <Tooltip title={t('dashboard.notifications')}>
-            <IconButton 
+            <IconButton
               size="small"
-              sx={{ 
-                backgroundColor: 'action.hover',
-                '&:hover': { backgroundColor: 'action.selected' }
+              sx={{
+                borderRadius: '12px',
+                backgroundColor: alpha(theme.palette.grey[500], 0.1),
+                '&:hover': { backgroundColor: alpha(theme.palette.grey[500], 0.16) },
               }}
             >
               <Notifications sx={{ fontSize: '1.125rem' }} />
             </IconButton>
           </Tooltip>
-          <Avatar sx={{ 
-            width: 32, 
-            height: 32, 
-            bgcolor: 'error.main',
-            fontSize: '0.875rem',
-            fontWeight: 600
-          }}>
+          <Avatar
+            sx={{
+              width: 34,
+              height: 34,
+              bgcolor: 'error.main',
+              fontSize: '0.875rem',
+              fontWeight: 600,
+            }}
+          >
             R
           </Avatar>
         </Box>
       </Box>
 
       {/* 대시보드 타입 선택 - 고정 탭 */}
-      <Box sx={{ 
-        mb: 4,
-        backgroundColor: 'background.paper',
-        borderRadius: 2,
-        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-        border: '1px solid',
-        borderColor: 'divider',
-        overflow: 'hidden'
-      }}>
-        <Tabs 
-          value={getDisplayIndex(activeTab)} 
+      <Box
+        sx={{
+          mb: 3.5,
+          backgroundColor: 'background.paper',
+          borderRadius: '20px',
+          boxShadow: `0 8px 30px ${alpha('#0f172a', 0.045)}`,
+          border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+          overflow: 'hidden',
+        }}
+      >
+        <Tabs
+          value={getDisplayIndex(activeTab)}
           onChange={handleTabChange}
           sx={{
             '& .MuiTabs-indicator': {
               backgroundColor: 'primary.main',
               height: 3,
-              borderRadius: '2px 2px 0 0'
+              borderRadius: '3px 3px 0 0',
             },
             '& .MuiTab-root': {
               textTransform: 'none',
               fontSize: '0.875rem',
-              fontWeight: 500,
+              fontWeight: 600,
               minHeight: 56,
               px: 3,
+              letterSpacing: '0.01em',
               color: 'text.secondary',
               '&.Mui-selected': {
-                backgroundColor: 'action.selected',
-                color: 'primary.main'
-              }
-            }
+                backgroundColor: alpha(theme.palette.primary.main, 0.08),
+                color: 'primary.main',
+              },
+            },
           }}
         >
           {availableTabs.map((tab) => (
@@ -1780,31 +1827,55 @@ const Dashboard: React.FC = () => {
       </Box>
 
       {/* 빠른 액션 */}
-      <Card sx={{ mb: 1.2, mx: 0 }}>
-        <CardContent sx={{ p: 1.5 }}>
-          <Box sx={{ mb: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-            <Typography variant="h6" sx={{ fontSize: '1rem' }}>
+      <Card
+        elevation={0}
+        sx={{
+          mb: 2,
+          mx: 0,
+          bgcolor: alpha(theme.palette.grey[500], 0.06),
+          borderRadius: '20px',
+          boxShadow: `0 4px 22px ${alpha('#0f172a', 0.035)}`,
+          border: `1px solid ${alpha(theme.palette.divider, 0.55)}`,
+          overflow: 'hidden',
+        }}
+      >
+        <CardContent sx={{ p: { xs: 2, sm: 2.75 } }}>
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+            <Typography
+              variant="h6"
+              sx={{
+                fontSize: '1.0625rem',
+                fontWeight: 600,
+                letterSpacing: '-0.02em',
+                color: 'text.primary',
+              }}
+            >
               {t('dashboard.quickActions')}
             </Typography>
           </Box>
-          <Box sx={{ 
-            display: 'flex',
-            gap: 1.5,
-            alignItems: 'stretch',
-            flexDirection: { xs: 'column', lg: 'row' }
-          }}>
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 2.5,
+              alignItems: 'stretch',
+              flexDirection: { xs: 'column', md: 'row' },
+            }}
+          >
             {/* 사용자 설정 빠른 액션 카드 */}
-            <Box sx={{ 
-              display: 'grid', 
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: 'repeat(2, 1fr)',
-                md: `repeat(${Math.min(Math.max(selectedQuickActions.length, 1), 4)}, 1fr)`
-              },
-              gap: 1.5,
-              flex: 1,
-              alignItems: 'stretch'
-            }}>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'repeat(2, 1fr)',
+                  md: `repeat(${Math.min(Math.max(selectedQuickActions.length, 1), 4)}, 1fr)`,
+                },
+                gap: 2,
+                flex: 1,
+                minWidth: 0,
+                alignItems: 'stretch',
+              }}
+            >
               {selectedQuickActions.length === 0 ? (
                 <Card variant="outlined" sx={{ borderStyle: 'dashed', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 88 }}>
                   <Typography variant="body2" color="text.secondary">
@@ -1832,28 +1903,38 @@ const Dashboard: React.FC = () => {
               )}
             </Box>
             
-            {/* 우측 제어 버튼 영역 */}
-            <Box sx={{ 
-              display: 'flex', 
-              flexDirection: 'column',
-              gap: 0.75,
-              minWidth: { xs: '100%', lg: '150px' },
-              width: { xs: '100%', lg: '150px' },
-              flexShrink: 0,
-              height: '100%',
-              justifyContent: 'flex-start'
-            }}>
+            {/* 출근·퇴근·빠른 액션 편집 — 좁은 고정폭 제거로 라벨 잘림 방지 */}
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: { xs: 'column', sm: 'row', md: 'column' },
+                flexWrap: { xs: 'nowrap', sm: 'wrap', md: 'nowrap' },
+                gap: 1.25,
+                width: { xs: '100%', md: 'auto' },
+                minWidth: { md: 200, lg: 220 },
+                maxWidth: { md: 280 },
+                flexShrink: 0,
+                alignSelf: { xs: 'stretch', md: 'flex-start' },
+                justifyContent: 'flex-start',
+              }}
+            >
               <Button
                 size="small"
                 variant="outlined"
-                startIcon={<SettingsIcon sx={{ fontSize: '0.9rem' }} />}
+                startIcon={<SettingsIcon sx={{ fontSize: '1rem' }} />}
                 onClick={() => setQuickActionDialogOpen(true)}
                 sx={{
                   textTransform: 'none',
-                  fontSize: '0.75rem',
-                  py: 0.5,
-                  borderRadius: '8px',
-                  justifyContent: 'center'
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  py: 1,
+                  px: 1.5,
+                  borderRadius: '12px',
+                  width: { xs: '100%', sm: 'auto', md: '100%' },
+                  minHeight: 40,
+                  justifyContent: 'center',
+                  borderColor: alpha(theme.palette.divider, 0.95),
+                  whiteSpace: 'nowrap',
                 }}
               >
                 {language === 'en' ? 'Edit quick actions' : '빠른 액션 편집'}
@@ -1861,25 +1942,21 @@ const Dashboard: React.FC = () => {
               <Button
                 variant="contained"
                 size="small"
-                startIcon={<CheckInIcon sx={{ fontSize: '0.75rem' }} />}
+                disableElevation
+                startIcon={<CheckInIcon sx={{ fontSize: '1rem' }} />}
                 onClick={handleCheckIn}
                 disabled={checkInLoading || !!todayAttendance?.check_in}
                 sx={{
-                  width: '100%',
-                  borderRadius: '8px',
+                  width: { xs: '100%', sm: 'auto', md: '100%' },
+                  borderRadius: '12px',
                   textTransform: 'none',
-                  fontWeight: 500,
-                  fontSize: '0.7rem',
-                  py: 0.6,
-                  px: 1.5,
-                  minWidth: 'auto',
-                  minHeight: 'auto',
-                  boxShadow: '0 1px 3px rgba(25, 118, 210, 0.2)',
-                  '&:hover': { boxShadow: '0 2px 6px rgba(25, 118, 210, 0.3)' },
-                  '& .MuiButton-startIcon': {
-                    marginRight: '0.25rem',
-                    marginLeft: 0
-                  }
+                  fontWeight: 600,
+                  fontSize: '0.8125rem',
+                  py: 1,
+                  px: 1.75,
+                  minHeight: 40,
+                  whiteSpace: 'nowrap',
+                  '& .MuiButton-startIcon': { mr: 0.75, ml: 0 },
                 }}
               >
                 {checkInLoading ? t('dashboard.registering') : t('dashboard.checkIn')}
@@ -1887,29 +1964,26 @@ const Dashboard: React.FC = () => {
               <Button
                 variant="outlined"
                 size="small"
-                startIcon={<CheckOutIcon sx={{ fontSize: '0.75rem' }} />}
+                startIcon={<CheckOutIcon sx={{ fontSize: '1rem' }} />}
                 onClick={handleCheckOut}
                 disabled={checkOutLoading || !todayAttendance?.check_in || !!todayAttendance?.check_out}
                 sx={{
-                  width: '100%',
-                  borderRadius: '8px',
+                  width: { xs: '100%', sm: 'auto', md: '100%' },
+                  borderRadius: '12px',
                   textTransform: 'none',
-                  fontWeight: 500,
-                  fontSize: '0.7rem',
-                  py: 0.6,
-                  px: 1.5,
-                  minWidth: 'auto',
-                  minHeight: 'auto',
-                  borderColor: 'text.secondary',
+                  fontWeight: 600,
+                  fontSize: '0.8125rem',
+                  py: 1,
+                  px: 1.75,
+                  minHeight: 40,
+                  whiteSpace: 'nowrap',
+                  borderColor: alpha(theme.palette.text.secondary, 0.35),
                   color: 'text.secondary',
                   '&:hover': {
                     borderColor: 'text.primary',
-                    bgcolor: 'action.hover'
+                    bgcolor: alpha(theme.palette.grey[500], 0.06),
                   },
-                  '& .MuiButton-startIcon': {
-                    marginRight: '0.25rem',
-                    marginLeft: 0
-                  }
+                  '& .MuiButton-startIcon': { mr: 0.75, ml: 0 },
                 }}
               >
                 {checkOutLoading ? t('dashboard.registering') : t('dashboard.checkOut')}
@@ -2481,13 +2555,14 @@ const Dashboard: React.FC = () => {
           variant="outlined"
           startIcon={<SettingsIcon sx={{ fontSize: '0.9rem' }} />}
           onClick={() => setDashboardCardDialogOpen(true)}
-          sx={{ textTransform: 'none', fontSize: '0.75rem', py: 0.4 }}
+          sx={{ textTransform: 'none', fontSize: '0.8125rem', fontWeight: 600, py: 0.65, px: 1.5, borderRadius: '12px' }}
         >
           {language === 'en' ? 'Edit dashboard cards' : '하단 카드 편집'}
         </Button>
       </Box>
 
-      <Box sx={{
+      <Box
+        sx={{
         display: 'grid',
         gridTemplateColumns: {
           xs: '1fr',
@@ -2495,15 +2570,24 @@ const Dashboard: React.FC = () => {
           md: 'repeat(3, 1fr)',
           lg: 'repeat(3, 1fr)'
         },
-        gap: 1.5,
-        px: 0,
-        pb: 2,
+        mb: 3,
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
         gridAutoRows: 'minmax(0, auto)',
         alignItems: 'stretch',
+        ...mvsDashboardWidgetGroupSx,
+        border: `1px solid ${alpha(theme.palette.divider, 0.45)}`,
+        boxShadow: `0 4px 24px ${alpha('#0f172a', 0.04)}`,
         '& > .MuiCard-root': {
           minHeight: 0,
           height: '100%',
           alignSelf: 'stretch'
+        },
+        /* 휴가 달력: 월 그리드 전체가 보이도록 카드 높이를 내용에 맞춤(내부 스크롤 방지) */
+        '& > .MuiCard-root.dashboard-vacation-calendar-card': {
+          height: 'auto',
+          alignSelf: 'start'
         }
       }}>
         {/* 전자결재 */}
@@ -2516,9 +2600,10 @@ const Dashboard: React.FC = () => {
             display: 'flex',
             flexDirection: 'column',
             cursor: 'pointer',
+            transition: 'box-shadow 0.2s ease',
             '&:hover': {
-              boxShadow: 6
-            }
+              boxShadow: '0 12px 32px rgba(0, 0, 0, 0.06)',
+            },
           }}
         >
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
@@ -2645,7 +2730,7 @@ const Dashboard: React.FC = () => {
 
         {/* 내 담당 업무 */}
         {selectedDashboardCards.includes('projects') && (
-        <Card sx={{ order: selectedDashboardCards.indexOf('projects'), height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Card sx={{ order: selectedDashboardCards.indexOf('projects'), height: '100%', display: 'flex', flexDirection: 'column', transition: 'all 0.2s ease', '&:hover': { boxShadow: '0 12px 32px rgba(0, 0, 0, 0.06)' } }}>
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>
               <Box sx={dashboardCardTitleBar('primary')}>
@@ -2731,7 +2816,7 @@ const Dashboard: React.FC = () => {
 
         {/* 재고 부족 알림 */}
         {selectedDashboardCards.includes('lowStock') && (
-        <Card sx={{ order: selectedDashboardCards.indexOf('lowStock'), height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Card sx={{ order: selectedDashboardCards.indexOf('lowStock'), height: '100%', display: 'flex', flexDirection: 'column', transition: 'all 0.2s ease', '&:hover': { boxShadow: '0 12px 32px rgba(0, 0, 0, 0.06)' } }}>
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'hidden', minHeight: 0 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1, flexShrink: 0 }}>
               <Box sx={dashboardCardTitleBar('error')}>
@@ -2804,7 +2889,7 @@ const Dashboard: React.FC = () => {
 
         {/* 최근 거래 */}
         {selectedDashboardCards.includes('recentTransactions') && (
-        <Card sx={{ order: selectedDashboardCards.indexOf('recentTransactions'), height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Card sx={{ order: selectedDashboardCards.indexOf('recentTransactions'), height: '100%', display: 'flex', flexDirection: 'column', transition: 'all 0.2s ease', '&:hover': { boxShadow: '0 12px 32px rgba(0, 0, 0, 0.06)' } }}>
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>
               <Box sx={dashboardCardTitleBar('primary')}>
@@ -2877,7 +2962,7 @@ const Dashboard: React.FC = () => {
 
         {/* 달력 */}
         {selectedDashboardCards.includes('calendar') && (
-        <Card sx={{ order: selectedDashboardCards.indexOf('calendar'), height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Card sx={{ order: selectedDashboardCards.indexOf('calendar'), height: '100%', display: 'flex', flexDirection: 'column', transition: 'all 0.2s ease', '&:hover': { boxShadow: '0 12px 32px rgba(0, 0, 0, 0.06)' } }}>
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
             <Box sx={{ mb: DASHBOARD_CARD_SPACING }}>
               <Box sx={dashboardCardTitleBar('primary', { noFlex: true })}>
@@ -2960,7 +3045,7 @@ const Dashboard: React.FC = () => {
                               : isHolidayDate
                                 ? 'background.paper'
                                 : isWeekendOnly
-                                  ? 'rgba(25, 118, 210, 0.14)'
+                                  ? 'rgba(10, 110, 125, 0.14)'
                                   : 'background.paper',
                             cursor: 'pointer',
                             '&:hover': {
@@ -2969,7 +3054,7 @@ const Dashboard: React.FC = () => {
                                 : isHolidayDate
                                   ? 'action.hover'
                                   : isWeekendOnly
-                                    ? 'rgba(25, 118, 210, 0.22)'
+                                    ? 'rgba(10, 110, 125, 0.22)'
                                     : 'action.hover'
                             }
                           }}
@@ -3080,14 +3165,19 @@ const Dashboard: React.FC = () => {
         {/* 휴가 달력 (부서 일정) */}
         {selectedDashboardCards.includes('vacationCalendar') && (
         <Card
+          className="dashboard-vacation-calendar-card"
           sx={{
             order: selectedDashboardCards.indexOf('vacationCalendar'),
             height: '100%',
             display: 'flex',
             flexDirection: 'column',
+            transition: 'all 0.2s ease',
+            '&:hover': {
+              boxShadow: '0 12px 32px rgba(0, 0, 0, 0.06)',
+            },
           }}
         >
-          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'hidden', minHeight: 0 }}>
+          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'visible', minHeight: 0 }}>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: DASHBOARD_CARD_SPACING, flexShrink: 0 }}>
               <Box sx={dashboardCardTitleBar('primary')}>
                 <WorkIcon color="primary" fontSize="small" />
@@ -3126,7 +3216,7 @@ const Dashboard: React.FC = () => {
                 </Button>
               </Box>
             </Box>
-            <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0, maxHeight: { xs: 360, sm: 420 } }}>
+            <Box sx={{ width: '100%', flex: '1 1 auto', minHeight: 0, overflow: 'visible' }}>
               {(user?.role === 'admin' || user?.role === 'root') &&
               dashboardLeaveDeptOptions.length === 0 &&
               dashboardLeaveMapped.length === 0 ? (
@@ -3157,7 +3247,7 @@ const Dashboard: React.FC = () => {
 
         {/* 공지사항 */}
         {selectedDashboardCards.includes('notice') && (
-        <Card sx={{ order: selectedDashboardCards.indexOf('notice'), height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Card sx={{ order: selectedDashboardCards.indexOf('notice'), height: '100%', display: 'flex', flexDirection: 'column', transition: 'all 0.2s ease', '&:hover': { boxShadow: '0 12px 32px rgba(0, 0, 0, 0.06)' } }}>
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>
               <Box sx={dashboardCardTitleBar('primary')}>

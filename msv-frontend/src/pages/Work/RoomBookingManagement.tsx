@@ -33,8 +33,10 @@ import {
   Paper,
   Pagination,
   Autocomplete,
-  TableSortLabel
+  TableSortLabel,
+  useTheme
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -149,6 +151,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   onCloseDialog
 }) => {
   const { t } = useTranslation();
+  const theme = useTheme();
   const { user } = useStore();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -226,6 +229,45 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const apiBaseUrl = useMemo(() => API_BASE_URL.replace(/\/api$/, ''), []);
+
+  const shellCardSx = useMemo(
+    () => ({
+      mb: 3,
+      borderRadius: '18px',
+      border: `1px solid ${alpha(theme.palette.text.primary, 0.06)}`,
+      boxShadow: '0 2px 20px rgba(0,0,0,0.05)',
+      overflow: 'hidden',
+    }),
+    [theme]
+  );
+  const listTableCardSx = useMemo(
+    () => ({
+      borderRadius: '18px',
+      border: `1px solid ${alpha(theme.palette.text.primary, 0.06)}`,
+      boxShadow: '0 2px 20px rgba(0,0,0,0.05)',
+      overflow: 'hidden',
+    }),
+    [theme]
+  );
+  const softFieldSx = useMemo(
+    () => ({
+      '& .MuiOutlinedInput-root': {
+        borderRadius: '12px',
+        bgcolor: alpha(theme.palette.text.primary, 0.03),
+        '& fieldset': { borderColor: alpha(theme.palette.text.primary, 0.08) },
+      },
+    }),
+    [theme]
+  );
+  const selectFieldSx = useMemo(
+    () => ({
+      borderRadius: '12px',
+      bgcolor: alpha(theme.palette.text.primary, 0.03),
+      '& .MuiOutlinedInput-notchedOutline': { borderColor: alpha(theme.palette.text.primary, 0.08) },
+    }),
+    [theme]
+  );
+
   const billToInputSx = {
     '& .MuiInputBase-root': {
       fontSize: 14,
@@ -783,22 +825,24 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     filterBookings();
   }, [filterBookings]);
 
+  const chipSx = { fontWeight: 500, borderRadius: '8px' } as const;
+
   const getStatusChip = (status: string) => {
     switch (status) {
       case 'confirmed':
-        return <Chip label={t('roomBookingManagement.status.confirmed')} color="success" size="small" />;
+        return <Chip label={t('roomBookingManagement.status.confirmed')} color="success" size="small" variant="outlined" sx={chipSx} />;
       case 'pending':
-        return <Chip label={t('roomBookingManagement.status.pending')} color="warning" size="small" />;
+        return <Chip label={t('roomBookingManagement.status.pending')} color="warning" size="small" variant="outlined" sx={chipSx} />;
       case 'cancelled':
-        return <Chip label={t('roomBookingManagement.status.cancelled')} color="error" size="small" />;
+        return <Chip label={t('roomBookingManagement.status.cancelled')} color="error" size="small" variant="outlined" sx={chipSx} />;
       case 'checked_in':
-        return <Chip label={t('roomBookingManagement.status.checkedIn')} color="info" size="small" />;
+        return <Chip label={t('roomBookingManagement.status.checkedIn')} color="info" size="small" variant="outlined" sx={chipSx} />;
       case 'checked_out':
-        return <Chip label={t('roomBookingManagement.status.checkedOut')} color="default" size="small" />;
+        return <Chip label={t('roomBookingManagement.status.checkedOut')} color="default" size="small" variant="outlined" sx={chipSx} />;
       case 'no_show':
-        return <Chip label={t('roomBookingManagement.status.noShow')} color="error" size="small" />;
+        return <Chip label={t('roomBookingManagement.status.noShow')} color="error" size="small" variant="outlined" sx={chipSx} />;
       default:
-        return <Chip label={t('roomBookingManagement.unknown')} color="default" size="small" />;
+        return <Chip label={t('roomBookingManagement.unknown')} color="default" size="small" variant="outlined" sx={chipSx} />;
     }
   };
 
@@ -837,15 +881,15 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   const getPaymentStatusChip = (status: string) => {
     switch (status) {
       case 'paid':
-        return <Chip label={t('roomBookingManagement.payment.paid')} color="success" size="small" />;
+        return <Chip label={t('roomBookingManagement.payment.paid')} color="success" size="small" variant="outlined" sx={chipSx} />;
       case 'pending':
-        return <Chip label={t('roomBookingManagement.payment.pending')} color="warning" size="small" />;
+        return <Chip label={t('roomBookingManagement.payment.pending')} color="warning" size="small" variant="outlined" sx={chipSx} />;
       case 'refunded':
-        return <Chip label={t('roomBookingManagement.payment.refunded')} color="info" size="small" />;
+        return <Chip label={t('roomBookingManagement.payment.refunded')} color="info" size="small" variant="outlined" sx={chipSx} />;
       case 'partial':
-        return <Chip label={t('roomBookingManagement.payment.partial')} color="default" size="small" />;
+        return <Chip label={t('roomBookingManagement.payment.partial')} color="default" size="small" variant="outlined" sx={chipSx} />;
       default:
-        return <Chip label={t('roomBookingManagement.unknown')} color="default" size="small" />;
+        return <Chip label={t('roomBookingManagement.unknown')} color="default" size="small" variant="outlined" sx={chipSx} />;
     }
   };
 
@@ -1774,7 +1818,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   if (viewMode === 'view' && selectedBooking) {
     return (
       <Box sx={{ 
-        p: 3, 
+        p: 0,
         backgroundColor: 'workArea.main',
         borderRadius: 2,
         minHeight: '100%'
@@ -2242,36 +2286,29 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
 
   return (
     <Box sx={{ 
-      p: 3, 
+      p: 0,
       backgroundColor: 'workArea.main',
       borderRadius: 2,
       minHeight: '100%'
     }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <HotelIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-          <Typography component="h1" sx={{ 
-            fontSize: '16px !important',
-            fontWeight: 600,
-            color: 'text.primary',
-            lineHeight: 1.5
-          }}>
-            {t('roomBookingManagement.title')}
-          </Typography>
-        </Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
+        <Typography component="h1" variant="pageTitle" sx={{ fontWeight: 600, letterSpacing: '-0.022em' }}>
+          {t('roomBookingManagement.title')}
+        </Typography>
         <Button
           variant="contained"
+          disableElevation
           startIcon={<AddIcon />}
           onClick={handleOpenCreate}
-          sx={{ borderRadius: 2 }}
+          sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}
         >
           {t('roomBookingManagement.actions.book')}
         </Button>
       </Box>
 
       {/* 필터 및 검색 */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
+      <Card elevation={0} sx={shellCardSx}>
+        <CardContent sx={{ py: 2.5 }}>
           <Box sx={{ 
             display: 'grid', 
             gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr 1fr 1fr' },
@@ -2283,10 +2320,11 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
               placeholder={t('roomBookingManagement.placeholders.search')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              sx={softFieldSx}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon />
+                    <SearchIcon color="action" />
                   </InputAdornment>
                 ),
               }}
@@ -2301,6 +2339,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                   displayEmpty
                   renderValue={(selected) => (selected ? selected : t('roomBookingManagement.filters.all'))}
                   onChange={(e) => setStatusFilter(e.target.value)}
+                  sx={selectFieldSx}
                 >
                   <MenuItem value="">{t('roomBookingManagement.filters.all')}</MenuItem>
                   <MenuItem value="confirmed">{t('roomBookingManagement.status.confirmed')}</MenuItem>
@@ -2322,6 +2361,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                   displayEmpty
                   renderValue={(selected) => (selected ? selected : t('roomBookingManagement.filters.all'))}
                   onChange={(e) => setRoomTypeFilter(e.target.value)}
+                  sx={selectFieldSx}
                 >
                   <MenuItem value="">{t('roomBookingManagement.filters.all')}</MenuItem>
                   <MenuItem value="standard">{t('roomBookingManagement.roomTypes.standard')}</MenuItem>
@@ -2341,10 +2381,11 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                   displayEmpty
                   renderValue={(selected) => (selected ? selected : t('roomBookingManagement.filters.all'))}
                   onChange={(e) => setPaymentFilter(e.target.value)}
+                  sx={selectFieldSx}
                 >
                   <MenuItem value="">{t('roomBookingManagement.filters.all')}</MenuItem>
-                  <MenuItem value="paid">Y</MenuItem>
-                  <MenuItem value="unpaid">N</MenuItem>
+                  <MenuItem value="paid">{t('roomBookingManagement.filters.paidOption')}</MenuItem>
+                  <MenuItem value="unpaid">{t('roomBookingManagement.filters.unpaidOption')}</MenuItem>
                 </Select>
               </FormControl>
             </Box>
@@ -2358,6 +2399,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
                 size="small"
+                sx={softFieldSx}
               />
             </Box>
             <Button
@@ -2371,6 +2413,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                 setPaymentFilter('');
                 setDateFilter('');
               }}
+              sx={{ textTransform: 'none', borderRadius: '12px', height: '40px' }}
             >
               {t('roomBookingManagement.actions.reset')}
             </Button>
@@ -2379,43 +2422,43 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       </Card>
 
       {/* 예약 목록 테이블 */}
-      <Card>
+      <Card elevation={0} sx={listTableCardSx}>
         <TableContainer
-          component={Paper}
           sx={{
-            borderRadius: 2,
-            border: 'none',
-            boxShadow: 'none',
-            overflow: 'hidden'
+            width: '100%',
+            maxWidth: '100%',
+            overflowX: 'auto',
+            WebkitOverflowScrolling: 'touch',
           }}
         >
           <Table
             size="small"
             stickyHeader
             sx={{
-              tableLayout: 'fixed',
+              width: '100%',
+              tableLayout: 'auto',
+              minWidth: { xs: 720, sm: 960 },
               borderCollapse: 'separate',
-              borderSpacing: 0
+              borderSpacing: 0,
             }}
           >
             <TableHead
               sx={{
-                bgcolor: 'background.paper',
+                bgcolor: alpha(theme.palette.text.primary, 0.03),
                 '& .MuiTableCell-head': {
-                  bgcolor: 'background.paper',
-                  color: 'text.primary',
+                  color: 'text.secondary',
                   fontWeight: 600,
-                  fontSize: '0.875rem',
+                  fontSize: '0.75rem',
+                  letterSpacing: '0.04em',
                   textTransform: 'none',
-                  letterSpacing: 'normal',
-                  borderBottom: '2px solid',
-                  borderColor: 'primary.main',
+                  borderBottom: '1px solid',
+                  borderColor: alpha(theme.palette.text.primary, 0.08),
                   py: 1.25,
-                  '& .MuiTableSortLabel-root': { color: 'inherit' }
+                  '& .MuiTableSortLabel-root': { color: 'inherit' },
                 },
                 '& .MuiTableCell-head:last-of-type': {
-                  textAlign: 'center'
-                }
+                  textAlign: 'center',
+                },
               }}
             >
               <TableRow>
@@ -2440,7 +2483,8 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                       fontSize: 12,
                       whiteSpace: 'nowrap',
                       lineHeight: 1.2,
-                      cursor: col.key ? 'pointer' : 'default'
+                      cursor: col.key ? 'pointer' : 'default',
+                      verticalAlign: 'middle',
                     }}
                     onClick={() => handleSort(col.key)}
                   >
@@ -2485,12 +2529,16 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                       key={`${booking.id}-${index}`}
                       sx={{
                         fontSize: 12,
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        borderBottom: '1px solid #f0f0f0',
-                        lineHeight: 1.2,
-                        py: 0.75
+                        whiteSpace: index === 0 || index === 1 ? 'normal' : 'nowrap',
+                        wordBreak: index === 0 || index === 1 ? 'break-word' : undefined,
+                        maxWidth: index === 0 ? { xs: 140, sm: 180 } : index === 1 ? { xs: 120, sm: 200 } : undefined,
+                        overflow: index === 0 || index === 1 ? 'hidden' : 'hidden',
+                        textOverflow: index === 0 || index === 1 ? 'ellipsis' : 'ellipsis',
+                        borderBottom: '1px solid',
+                        borderColor: alpha(theme.palette.text.primary, 0.08),
+                        lineHeight: 1.35,
+                        py: 1,
+                        verticalAlign: 'middle',
                       }}
                     >
                       {value}
@@ -2499,39 +2547,41 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                   <TableCell
                     sx={{
                       fontSize: 12,
-                      fontWeight: 700,
                       textAlign: 'center',
-                      borderBottom: '1px solid #f0f0f0',
+                      borderBottom: '1px solid',
+                      borderColor: alpha(theme.palette.text.primary, 0.08),
                       lineHeight: 1.2,
-                      py: 0.75,
-                      bgcolor: booking.paymentStatus === 'paid' ? '#e8f5e9' : '#ffebee',
-                      color: booking.paymentStatus === 'paid' ? '#2e7d32' : '#c62828'
+                      py: 1,
+                      verticalAlign: 'middle',
                     }}
                   >
-                    {booking.paymentStatus === 'paid' ? 'Y' : 'N'}
+                    <Box sx={{ display: 'inline-flex', justifyContent: 'center' }}>
+                      {getPaymentStatusChip(booking.paymentStatus)}
+                    </Box>
                   </TableCell>
                   <TableCell
                     sx={{
                       fontSize: 12,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      borderBottom: '1px solid #f0f0f0',
+                      borderBottom: '1px solid',
+                      borderColor: alpha(theme.palette.text.primary, 0.08),
                       lineHeight: 1.2,
-                      py: 0.75
+                      py: 1,
+                      verticalAlign: 'middle',
                     }}
                   >
-                    {booking.status}
+                    {getStatusChip(booking.status)}
                   </TableCell>
                   <TableCell
                     sx={{
                       fontSize: 12,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      borderBottom: '1px solid #f0f0f0',
-                      lineHeight: 1.2,
-                      py: 0.75
+                      whiteSpace: 'normal',
+                      wordBreak: 'break-word',
+                      maxWidth: { xs: 140, sm: 240 },
+                      borderBottom: '1px solid',
+                      borderColor: alpha(theme.palette.text.primary, 0.08),
+                      lineHeight: 1.35,
+                      py: 1,
+                      verticalAlign: 'middle',
                     }}
                   >
                     {booking.specialRequests || '-'}
@@ -2540,18 +2590,21 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     sx={{
                       fontSize: 12,
                       whiteSpace: 'nowrap',
-                      borderBottom: '1px solid #f0f0f0',
-                      py: 0.5
+                      borderBottom: '1px solid',
+                      borderColor: alpha(theme.palette.text.primary, 0.08),
+                      py: 0.75,
+                      verticalAlign: 'middle',
                     }}
                     onClick={(event) => event.stopPropagation()}
                   >
-                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center', flexWrap: 'wrap' }}>
                       {booking.status === 'confirmed' && (
                         <Tooltip title={t('roomBookingManagement.actions.checkin')}>
-                          <IconButton 
-                            size="small" 
+                          <IconButton
+                            size="small"
                             onClick={() => handleCheckIn(booking.id)}
                             color="info"
+                            sx={{ borderRadius: '10px' }}
                           >
                             <CheckCircleIcon fontSize="small" />
                           </IconButton>
@@ -2559,10 +2612,11 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                       )}
                       {booking.status === 'checked_in' && (
                         <Tooltip title={t('roomBookingManagement.actions.checkout')}>
-                          <IconButton 
-                            size="small" 
+                          <IconButton
+                            size="small"
                             onClick={() => handleCheckOut(booking.id)}
                             color="success"
+                            sx={{ borderRadius: '10px' }}
                           >
                             <CheckCircleIcon fontSize="small" />
                           </IconButton>
@@ -2570,17 +2624,18 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                       )}
                       {booking.status !== 'cancelled' && booking.status !== 'checked_out' && (
                         <Tooltip title={t('roomBookingManagement.actions.cancel')}>
-                          <IconButton 
-                            size="small" 
+                          <IconButton
+                            size="small"
                             onClick={() => openCancelDialog(booking.id)}
                             color="error"
+                            sx={{ borderRadius: '10px' }}
                           >
                             <CancelIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                       )}
                       <Tooltip title={t('roomBookingManagement.actions.delete')}>
-                        <IconButton size="small" onClick={() => openDeleteDialog(booking.id)}>
+                        <IconButton size="small" onClick={() => openDeleteDialog(booking.id)} sx={{ borderRadius: '10px' }}>
                           <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>

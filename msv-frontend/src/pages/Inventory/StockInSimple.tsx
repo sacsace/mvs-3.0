@@ -14,14 +14,11 @@ import {
   CircularProgress,
   Tooltip
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
-import type { Theme } from '@mui/material/styles';
-import { PostAdd as PostAddIcon } from '@mui/icons-material';
+import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { api, inventoryService } from '../../services/api';
 import { useMenuStore } from '../../store';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
-
 const STOCK_IN_MENU_ROUTES = ['/inventory/stock-in', '/inventory'] as const;
 
 type ProductLookup = {
@@ -54,14 +51,28 @@ async function findProductByExactCode(code: string): Promise<ProductLookup | nul
   );
 }
 
+/** 통합 입력: 전체 문자열 또는 `이름 · 품목코드`에서 품목코드 접미로 정확 일치 조회 */
+async function findProductFromComboInput(text: string): Promise<ProductLookup | null> {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const direct = await findProductByExactCode(trimmed);
+  if (direct) return direct;
+  if (!trimmed.includes('·')) return null;
+  const suffix = trimmed.split('·').pop()?.trim() ?? '';
+  if (!suffix || suffix === trimmed) return null;
+  return findProductByExactCode(suffix);
+}
+
 /** 입고 관리 — 이미 등록된 품목에 대한 추가 입고만 처리 */
 const StockInSimple: React.FC = () => {
+  const theme = useTheme();
   const { t } = useTranslation();
   const { language } = useMenuStore();
   const perm = useMenuRoutePermissionFlags(STOCK_IN_MENU_ROUTES);
   const txt = useCallback((ko: string, en: string) => (language === 'en' ? en : ko), [language]);
   const codeRef = useRef<HTMLInputElement | null>(null);
-  const [productCode, setProductCode] = useState('');
+  /** 제품명 검색 + 품목코드/바코드 입력 통합 필드 */
+  const [comboInput, setComboInput] = useState('');
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [unit, setUnit] = useState('');
@@ -85,6 +96,12 @@ const StockInSimple: React.FC = () => {
   const [namePick, setNamePick] = useState<ProductLookup | null>(null);
   const nameSearchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const formatProductComboLabel = useCallback((p: ProductLookup) => {
+    const code = (p.product_code || '').trim();
+    const nm = (p.name || '').trim() || '—';
+    return code ? `${nm} · ${code}` : nm;
+  }, []);
+
   const clearProductFields = useCallback(() => {
     setMatchedProductId(null);
     setMatchedCurrentStock(null);
@@ -99,7 +116,7 @@ const StockInSimple: React.FC = () => {
   const applyProductFromLookup = useCallback((product: ProductLookup) => {
     if (!product?.id) return;
     setMatchedProductId(product.id);
-    setProductCode(String(product.product_code ?? '').trim());
+    setComboInput(formatProductComboLabel(product));
     setName(String(product.name ?? ''));
     setCategory(String(product.category ?? '').trim() || '—');
     setUnit(String(product.unit ?? '').trim() || '—');
@@ -110,19 +127,22 @@ const StockInSimple: React.FC = () => {
     setPreviewImageUrl(resolveProductImageUrl(product.image_url));
     setLookupNotFound(false);
     setNamePick(product);
-  }, []);
+  }, [formatProductComboLabel]);
 
   const runLookup = useCallback(async () => {
-    const code = productCode.trim();
+    const code = comboInput.trim();
     if (!code) {
       setLookupNotFound(false);
       clearProductFields();
       return;
     }
+    if (namePick && formatProductComboLabel(namePick) === code) {
+      return;
+    }
     setLookupLoading(true);
     setLookupNotFound(false);
     try {
-      const product = await findProductByExactCode(code);
+      const product = await findProductFromComboInput(code);
       if (product?.id) {
         applyProductFromLookup(product);
       } else {
@@ -148,10 +168,10 @@ const StockInSimple: React.FC = () => {
     } finally {
       setLookupLoading(false);
     }
-  }, [productCode, applyProductFromLookup, clearProductFields, txt]);
+  }, [comboInput, namePick, formatProductComboLabel, applyProductFromLookup, clearProductFields, txt]);
 
   const resetForm = useCallback(() => {
-    setProductCode('');
+    setComboInput('');
     setName('');
     setCategory('');
     setUnit('');
@@ -185,6 +205,26 @@ const StockInSimple: React.FC = () => {
       }
     }, 300);
   }, []);
+
+  const handleComboInputChange = useCallback(
+    (_e: unknown, newInput: string, reason: string) => {
+      setComboInput(newInput);
+      if (reason === 'reset') return;
+      if (namePick && formatProductComboLabel(namePick) !== newInput) {
+        setMatchedProductId(null);
+        setMatchedCurrentStock(null);
+        setName('');
+        setCategory('');
+        setUnit('');
+        setPreviewImageUrl('');
+        setNamePick(null);
+        setLookupNotFound(false);
+        setStockQuantity(0);
+      }
+      onNameSearchInput(_e, newInput, reason);
+    },
+    [namePick, formatProductComboLabel, onNameSearchInput]
+  );
 
   const submit = useCallback(async () => {
     if (!perm.canMutate) {
@@ -255,191 +295,266 @@ const StockInSimple: React.FC = () => {
     }
   }, [name, stockQuantity, matchedProductId, resetForm, txt, language, perm.canMutate, t]);
 
-  const fieldSx = {
-    '& .MuiOutlinedInput-root': {
-      borderRadius: 1.5,
-      bgcolor: 'background.paper'
-    }
-  };
+  const fieldLabelSx = {
+    mb: 1,
+    fontSize: '0.875rem',
+    fontWeight: 600,
+    letterSpacing: '-0.015em',
+    color: 'text.primary',
+    lineHeight: 1.35,
+  } as const;
 
-  /** 기존 품목 조회 후 수정 불가 필드 — 배경·테두리로 입력 가능 필드와 구분 */
-  const readOnlyHighlightSx = (theme: Theme) => ({
+  /** 편집 가능 입력 — 여유 있는 높이, 도움말은 캡션 톤으로 분리 */
+  const appleInputSx = {
     '& .MuiOutlinedInput-root': {
-      borderRadius: 1.5,
-      bgcolor: alpha(theme.palette.primary.main, 0.1),
-      '& fieldset': {
-        borderColor: alpha(theme.palette.primary.main, 0.38)
-      },
-      '&:hover fieldset': {
-        borderColor: alpha(theme.palette.primary.main, 0.55)
+      borderRadius: '12px',
+      minHeight: 48,
+      bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.05),
+      transition: theme.transitions.create(['background-color', 'box-shadow', 'border-color'], { duration: 180 }),
+      '&:hover': {
+        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.14 : 0.08),
       },
       '&.Mui-focused': {
-        bgcolor: alpha(theme.palette.primary.main, 0.12)
+        bgcolor: 'background.paper',
+        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}`,
+        '& fieldset': {
+          borderColor: alpha(theme.palette.divider, 0.95),
+          borderWidth: 1,
+        },
       },
-      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-        borderColor: theme.palette.primary.main,
-        borderWidth: 1
-      }
+      '& fieldset': {
+        borderColor: alpha(theme.palette.divider, 0.9),
+      },
+      '&.Mui-disabled': {
+        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
+      },
     },
-    '& .MuiInputLabel-root.Mui-focused': {
-      color: theme.palette.primary.dark
-    }
-  });
+    '& .MuiOutlinedInput-input': {
+      py: 1.35,
+      fontSize: '0.9375rem',
+      letterSpacing: '-0.02em',
+    },
+    '& .MuiOutlinedInput-input::placeholder': {
+      color: alpha(theme.palette.text.secondary, 0.85),
+      opacity: 1,
+    },
+    '& .MuiFormHelperText-root': {
+      mt: 1.25,
+      mx: 0,
+      px: 0.25,
+      letterSpacing: '-0.01em',
+      fontSize: '0.75rem',
+      lineHeight: 1.5,
+      color: alpha(theme.palette.text.secondary, 0.95),
+    },
+  };
+
+  /** 조회된 품목 읽기 전용 — 입력과 계열, 읽기 전용 톤 */
+  const appleReadOnlySx = {
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '12px',
+      minHeight: 48,
+      bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
+      '& fieldset': {
+        borderColor: alpha(theme.palette.divider, 0.85),
+      },
+      '&:hover fieldset': {
+        borderColor: alpha(theme.palette.divider, 0.92),
+      },
+    },
+    '& .MuiOutlinedInput-input': {
+      py: 1.35,
+      fontSize: '0.9375rem',
+      letterSpacing: '-0.02em',
+    },
+    '& .MuiFormHelperText-root': {
+      mt: 1.25,
+      mx: 0,
+      px: 0.25,
+      letterSpacing: '-0.01em',
+      fontSize: '0.75rem',
+      lineHeight: 1.5,
+      color: alpha(theme.palette.text.secondary, 0.95),
+    },
+  };
 
   return (
-    <Box
-      sx={{
-        p: 3,
-        backgroundColor: 'workArea.main',
-        borderRadius: 2,
-        minHeight: '100%'
-      }}
-    >
-      <Box sx={{ maxWidth: { xs: '100%', sm: 720, md: 880 }, width: '100%', mx: 'auto', px: { xs: 0, sm: 0 } }}>
-        <Stack spacing={1.25} sx={{ mb: 3 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-            <PostAddIcon sx={{ fontSize: 28, color: 'primary.main' }} />
-            <Typography
-              component="h1"
-              sx={{
-                fontSize: '1.125rem',
-                fontWeight: 700,
-                color: 'text.primary',
-                lineHeight: 1.4
-              }}
-            >
-              {txt('입고 관리', 'Receiving')}
-            </Typography>
-          </Box>
-          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.65, pl: { xs: 0, sm: 0.25 } }}>
-            {txt(
-              '이미 시스템에 등록된 품목만 입고할 수 있습니다. 아래에서 제품명을 검색해 선택하거나, 품목코드를 입력·스캔한 뒤 Enter 또는 포커스를 옮기면 품목 정보·이미지를 불러옵니다. 신규 제품은 재고(제품) 관리에서 먼저 등록하세요. 출고는 "출고 관리"에서 바코드로 처리합니다.',
-              'Only items already in the system can be received. Search and pick a product name below, or enter/scan an item code and press Enter or move focus to load details and image. Register new products first in Inventory (Products). Outbound stock uses barcodes in Outbound management.'
-            )}
-          </Typography>
-        </Stack>
+    <Box sx={{ p: 2, maxWidth: 920, mx: 'auto', width: '100%' }}>
+      <Typography
+        component="h1"
+        variant="pageTitle"
+        sx={{
+          fontWeight: 600,
+          fontSize: { xs: '1.125rem', sm: '1.3125rem' },
+          letterSpacing: '-0.022em',
+          lineHeight: 1.28,
+          color: 'text.primary',
+          mb: 1,
+        }}
+      >
+        {txt('입고 관리', 'Receiving')}
+      </Typography>
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{
+          mb: 1.25,
+          lineHeight: 1.55,
+          maxWidth: 720,
+          wordBreak: 'keep-all',
+          overflowWrap: 'break-word',
+        }}
+      >
+        {txt(
+          '이미 시스템에 등록된 품목만 입고할 수 있습니다. 아래 한 칸에서 제품명·코드로 검색해 선택하거나, 품목코드를 입력·스캔한 뒤 Enter 또는 포커스를 옮기면 품목 정보와 이미지를 불러옵니다.',
+          'Only registered products can be received here. In the field below, search by name or code and pick a product, or type/scan an item code and press Enter (or move focus) to load details and the image.'
+        )}
+      </Typography>
+      <Typography
+        variant="body2"
+        color="text.secondary"
+        sx={{
+          mb: 2,
+          lineHeight: 1.55,
+          maxWidth: 720,
+          wordBreak: 'keep-all',
+          overflowWrap: 'break-word',
+        }}
+      >
+        {txt(
+          '신규 제품은 재고(제품) 관리에서 먼저 등록하세요. 출고는 "출고 관리"에서 바코드로 처리합니다.',
+          'Register new products in Inventory (Products) first. Outbound stock uses barcodes in Outbound management.'
+        )}
+      </Typography>
 
-        <Card
-          elevation={0}
-          sx={{
-            border: '1px solid',
-            borderColor: 'divider',
-            borderRadius: 2,
-            bgcolor: 'background.paper',
-            boxShadow: '0 1px 2px rgba(0,0,0,0.06)'
-          }}
-        >
-          <CardContent
-            sx={{
-              p: { xs: 2.5, sm: 3 },
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 2.5
-            }}
-          >
-            <Autocomplete<ProductLookup, false, false, false>
-              value={namePick}
-              disabled={perm.menusLoading || !perm.canMutate}
-              onChange={(_e, v) => {
-                if (v && typeof v === 'object' && v.id) {
-                  applyProductFromLookup(v);
-                } else {
-                  setProductCode('');
-                  setLookupNotFound(false);
-                  clearProductFields();
-                }
-              }}
-              onInputChange={onNameSearchInput}
-              options={nameSearchOptions}
-              loading={nameSearchLoading}
-              filterOptions={(x) => x}
-              getOptionLabel={(p) => {
-                const code = (p.product_code || '').trim();
-                const nm = (p.name || '').trim() || '—';
-                return code ? `${nm} · ${code}` : nm;
-              }}
-              isOptionEqualToValue={(a, b) => a.id === b.id}
-              fullWidth
-              size="medium"
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label={txt('제품명 검색', 'Product name search')}
-                  placeholder={txt('이름 일부 입력 후 목록에서 선택', 'Type part of the name, then pick from the list')}
-                  helperText={txt('등록된 제품명·코드로 검색됩니다.', 'Searches registered product names and codes.')}
-                  FormHelperTextProps={{ sx: { mx: 0, mt: 0.75 } }}
-                  sx={fieldSx}
-                  InputProps={{
-                    ...params.InputProps,
-                    endAdornment: (
-                      <>
-                        {nameSearchLoading ? <CircularProgress color="inherit" size={20} /> : null}
-                        {params.InputProps.endAdornment}
-                      </>
-                    )
-                  }}
-                />
-              )}
-            />
-
-            <TextField
-              inputRef={codeRef}
-              label={txt('품목코드 / 바코드', 'Item code / barcode')}
-              disabled={perm.menusLoading || !perm.canMutate}
-              value={productCode}
-              onChange={(e) => {
-                setProductCode(e.target.value);
-                setNamePick(null);
-                setMatchedProductId(null);
-                setMatchedCurrentStock(null);
-                setLookupNotFound(false);
-                setPreviewImageUrl('');
-              }}
-              onBlur={() => {
-                void runLookup();
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  void runLookup();
-                }
-              }}
-              autoFocus
-              fullWidth
-              size="medium"
-              required
-              variant="outlined"
-              helperText={
-                lookupLoading
-                  ? txt('조회 중…', 'Looking up…')
-                  : matchedProductId
-                    ? txt(
-                        `조회됨 · 현재 재고 ${matchedCurrentStock ?? 0}`,
-                        `Found · current stock ${matchedCurrentStock ?? 0}`
-                      )
-                    : lookupNotFound
-                      ? txt(
-                          '등록된 품목이 없습니다. 제품 등록 후 다시 시도하세요.',
-                          'No matching product. Register the product first, then try again.'
-                        )
-                      : txt(
-                          '입력 후 Enter 또는 다음 칸으로 이동 시 조회',
-                          'Press Enter or move focus to look up'
-                        )
-              }
-              FormHelperTextProps={{ sx: { mx: 0, mt: 0.75 } }}
-              InputProps={{
-                endAdornment: lookupLoading ? (
-                  <InputAdornment position="end">
-                    <CircularProgress size={20} />
-                  </InputAdornment>
-                ) : undefined
-              }}
-              sx={fieldSx}
-            />
+      <Card
+        elevation={0}
+        sx={{
+          border: '1px solid',
+          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+          borderRadius: '20px',
+          boxShadow: theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
+        }}
+      >
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: { xs: 2.5, sm: 3 } }}>
+            <Stack spacing={3}>
+              <Typography
+                component="label"
+                sx={{
+                  ...fieldLabelSx,
+                  mb: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  columnGap: 0.75,
+                  rowGap: 0.5,
+                }}
+              >
+                {txt('제품 검색 · 품목코드 / 바코드', 'Product search · item code / barcode')}
+                <Box component="span" sx={{ color: 'error.main', px: 0.375, display: 'inline-flex' }}>
+                  *
+                </Box>
+              </Typography>
+              <Autocomplete<ProductLookup, false, false, false>
+                slotProps={{
+                  paper: {
+                    elevation: 0,
+                    sx: {
+                      mt: 1,
+                      borderRadius: '14px',
+                      border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+                      boxShadow:
+                        theme.palette.mode === 'light'
+                          ? '0 12px 40px rgba(15, 23, 42, 0.1)'
+                          : '0 12px 40px rgba(0,0,0,0.45)',
+                    },
+                  },
+                }}
+                value={namePick}
+                inputValue={comboInput}
+                disabled={perm.menusLoading || !perm.canMutate}
+                onChange={(_e, v) => {
+                  if (v && typeof v === 'object' && v.id) {
+                    applyProductFromLookup(v);
+                  } else {
+                    setComboInput('');
+                    setLookupNotFound(false);
+                    clearProductFields();
+                  }
+                }}
+                onInputChange={handleComboInputChange}
+                options={nameSearchOptions}
+                loading={nameSearchLoading}
+                filterOptions={(x) => x}
+                getOptionLabel={(p) => formatProductComboLabel(p)}
+                isOptionEqualToValue={(a, b) => a.id === b.id}
+                fullWidth
+                size="medium"
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    inputRef={codeRef}
+                    hiddenLabel
+                    autoFocus
+                    placeholder={txt(
+                      '제품명·코드 검색 또는 코드 입력·스캔',
+                      'Search by name or code, or type/scan code'
+                    )}
+                    helperText={
+                      nameSearchLoading || lookupLoading
+                        ? txt('조회 중…', 'Looking up…')
+                        : matchedProductId
+                          ? txt(
+                              `조회됨 · 현재 재고 ${matchedCurrentStock ?? 0}`,
+                              `Found · current stock ${matchedCurrentStock ?? 0}`
+                            )
+                          : lookupNotFound
+                            ? txt(
+                                '등록된 품목이 없습니다. 제품 등록 후 다시 시도하세요.',
+                                'No matching product. Register the product first, then try again.'
+                              )
+                            : txt(
+                                '목록에서 선택하거나, 품목코드 입력 후 Enter·포커스 이동 시 정확 일치 조회',
+                                'Pick from the list, or enter an item code and press Enter or move focus for exact match.'
+                              )
+                    }
+                    FormHelperTextProps={{ sx: { mx: 0 } }}
+                    sx={appleInputSx}
+                    inputProps={{
+                      ...params.inputProps,
+                      'aria-label': txt('제품 검색 · 품목코드 / 바코드', 'Product search · item code / barcode'),
+                      onBlur: (e: React.FocusEvent<HTMLInputElement>) => {
+                        params.inputProps.onBlur?.(e);
+                        void runLookup();
+                      },
+                      onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+                        params.inputProps.onKeyDown?.(e);
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void runLookup();
+                        }
+                      },
+                    }}
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {nameSearchLoading || lookupLoading ? (
+                            <InputAdornment position="end">
+                              <CircularProgress color="inherit" size={20} />
+                            </InputAdornment>
+                          ) : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
+                  />
+                )}
+              />
+            </Stack>
 
             {lookupNotFound && (
-              <Alert severity="warning" variant="outlined" sx={{ borderRadius: 1.5 }}>
+              <Alert severity="warning" variant="outlined" sx={{ borderRadius: '12px' }}>
                 {txt(
                   '이 품목코드로 등록된 제품이 없습니다. 재고(제품) 관리에서 제품을 먼저 등록한 뒤 입고하세요.',
                   'No product is registered for this code. Add the product in Inventory (Products), then receive stock here.'
@@ -450,17 +565,17 @@ const StockInSimple: React.FC = () => {
             {matchedProductId != null && (
               <>
                 <Box
-                  sx={(theme) => ({
-                    border: '1px solid',
-                    borderColor: alpha(theme.palette.primary.main, 0.28),
-                    borderRadius: 1.5,
-                    bgcolor: alpha(theme.palette.primary.main, 0.06),
-                    p: 1.5,
-                    minHeight: 140,
+                  sx={{
+                    border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+                    borderRadius: '14px',
+                    bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.04),
+                    boxShadow: `inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.04 : 0.45)}`,
+                    p: 2,
+                    minHeight: 160,
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
-                  })}
+                    justifyContent: 'center',
+                  }}
                 >
                   {previewImageUrl ? (
                     <Box
@@ -472,93 +587,123 @@ const StockInSimple: React.FC = () => {
                         maxWidth: '100%',
                         width: 'auto',
                         objectFit: 'contain',
-                        borderRadius: 1,
-                        bgcolor: 'background.paper'
+                        borderRadius: '12px',
+                        bgcolor: 'background.paper',
                       }}
                     />
                   ) : (
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" color="text.secondary" sx={{ letterSpacing: '-0.01em' }}>
                       {txt('등록된 제품 이미지가 없습니다.', 'No product image on file.')}
                     </Typography>
                   )}
                 </Box>
 
-            <TextField
-              label={txt('품명', 'Product name')}
-              value={name}
-              fullWidth
-              size="medium"
-              required
-              variant="outlined"
-              InputProps={{ readOnly: true }}
-              helperText={txt('조회된 품목 정보입니다. 수정할 수 없습니다.', 'Looked-up product (read-only).')}
-              FormHelperTextProps={{ sx: { mx: 0, mt: 0.75 } }}
-              sx={readOnlyHighlightSx}
-            />
-            <TextField
-              label={txt('카테고리', 'Category')}
-              value={category}
-              fullWidth
-              size="medium"
-              variant="outlined"
-              InputProps={{ readOnly: true }}
-              sx={readOnlyHighlightSx}
-            />
-            <TextField
-              label={txt('단위', 'Unit')}
-              value={unit}
-              fullWidth
-              size="medium"
-              variant="outlined"
-              InputProps={{ readOnly: true }}
-              sx={readOnlyHighlightSx}
-            />
-            <TextField
-              label={txt('입고 수량', 'Quantity to receive')}
-              type="number"
-              value={stockQuantity}
-              onChange={(e) => setStockQuantity(Math.max(0, Number(e.target.value) || 0))}
-              inputProps={{ min: 0 }}
-              fullWidth
-              size="medium"
-              variant="outlined"
-              disabled={perm.menusLoading || !perm.canMutate}
-              helperText={txt(
-                `현재 재고 ${matchedCurrentStock ?? 0}에 더해질 수량입니다.`,
-                `Amount to add to current stock (${matchedCurrentStock ?? 0}).`
-              )}
-              FormHelperTextProps={{ sx: { mx: 0, mt: 0.75 } }}
-              sx={fieldSx}
-            />
-            <Tooltip title={t('common.menuNoMutate')} disableHoverListener={perm.menusLoading || perm.canMutate}>
-              <span style={{ display: 'block' }}>
-                <Button
-                  variant="contained"
-                  size="large"
-                  disabled={loading || lookupLoading || perm.menusLoading || !perm.canMutate}
-                  onClick={submit}
-                  fullWidth
-                  sx={{
-                    mt: 0.5,
-                    py: 1.35,
-                    borderRadius: 2,
-                    fontWeight: 700,
-                    fontSize: '0.95rem',
-                    textTransform: 'none',
-                    boxShadow: 'none',
-                    '&:hover': { boxShadow: '0 2px 8px rgba(25, 118, 210, 0.35)' }
-                  }}
-                >
-                  {txt('입고 처리', 'Receive stock')}
-                </Button>
-              </span>
-            </Tooltip>
+                <Box>
+                  <Typography component="label" sx={fieldLabelSx}>
+                    {txt('품명', 'Product name')}
+                    <Box component="span" sx={{ color: 'error.main', ml: 0.25 }}>
+                      *
+                    </Box>
+                  </Typography>
+                  <TextField
+                    hiddenLabel
+                    value={name}
+                    fullWidth
+                    size="medium"
+                    required
+                    variant="outlined"
+                    InputProps={{ readOnly: true }}
+                    placeholder="—"
+                    helperText={txt('조회된 품목 정보입니다. 수정할 수 없습니다.', 'Looked-up product (read-only).')}
+                    FormHelperTextProps={{ sx: { mx: 0 } }}
+                    sx={appleReadOnlySx}
+                  />
+                </Box>
+                <Box>
+                  <Typography component="label" sx={fieldLabelSx}>
+                    {txt('카테고리', 'Category')}
+                  </Typography>
+                  <TextField
+                    hiddenLabel
+                    value={category}
+                    fullWidth
+                    size="medium"
+                    variant="outlined"
+                    InputProps={{ readOnly: true }}
+                    placeholder="—"
+                    sx={appleReadOnlySx}
+                  />
+                </Box>
+                <Box>
+                  <Typography component="label" sx={fieldLabelSx}>
+                    {txt('단위', 'Unit')}
+                  </Typography>
+                  <TextField
+                    hiddenLabel
+                    value={unit}
+                    fullWidth
+                    size="medium"
+                    variant="outlined"
+                    InputProps={{ readOnly: true }}
+                    placeholder="—"
+                    sx={appleReadOnlySx}
+                  />
+                </Box>
+                <Box>
+                  <Typography component="label" sx={fieldLabelSx}>
+                    {txt('입고 수량', 'Quantity to receive')}
+                    <Box component="span" sx={{ color: 'error.main', ml: 0.25 }}>
+                      *
+                    </Box>
+                  </Typography>
+                  <TextField
+                    hiddenLabel
+                    type="number"
+                    value={stockQuantity}
+                    onChange={(e) => setStockQuantity(Math.max(0, Number(e.target.value) || 0))}
+                    inputProps={{ min: 0 }}
+                    fullWidth
+                    size="medium"
+                    variant="outlined"
+                    disabled={perm.menusLoading || !perm.canMutate}
+                    placeholder="0"
+                    helperText={txt(
+                      `현재 재고 ${matchedCurrentStock ?? 0}에 더해질 수량입니다.`,
+                      `Amount to add to current stock (${matchedCurrentStock ?? 0}).`
+                    )}
+                    FormHelperTextProps={{ sx: { mx: 0 } }}
+                    sx={{
+                      ...appleInputSx,
+                      '& .MuiOutlinedInput-input': { fontVariantNumeric: 'tabular-nums' },
+                    }}
+                  />
+                </Box>
+                <Tooltip title={t('common.menuNoMutate')} disableHoverListener={perm.menusLoading || perm.canMutate}>
+                  <span style={{ display: 'block' }}>
+                    <Button
+                      variant="contained"
+                      disableElevation
+                      size="large"
+                      disabled={loading || lookupLoading || perm.menusLoading || !perm.canMutate}
+                      onClick={submit}
+                      fullWidth
+                      sx={{
+                        mt: 0.5,
+                        py: 1.35,
+                        borderRadius: '12px',
+                        fontWeight: 600,
+                        fontSize: '0.95rem',
+                        textTransform: 'none',
+                      }}
+                    >
+                      {txt('입고 처리', 'Receive stock')}
+                    </Button>
+                  </span>
+                </Tooltip>
               </>
             )}
           </CardContent>
         </Card>
-      </Box>
-
       <Snackbar
         open={snack.open}
         autoHideDuration={4000}

@@ -198,7 +198,7 @@ const PersonalDashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <Box sx={{ p: 3, textAlign: 'center' }}>
+      <Box sx={{ py: 8, px: 0, textAlign: 'center' }}>
         <Typography>로딩 중...</Typography>
       </Box>
     );

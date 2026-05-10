@@ -1,4 +1,4 @@
-import { createTheme, Theme } from '@mui/material/styles';
+import { createTheme, Theme, alpha } from '@mui/material/styles';
 
 // hex 색상을 RGB로 변환
 const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
@@ -100,12 +100,12 @@ const THEME_PRESETS: Record<
   /** 모던 SaaS/ERP: 밝은 캔버스·얇은 보더·차분한 타이포 */
   light: {
     mode: 'light',
-    primaryColor: '#156372',
+    primaryColor: '#007A83',
     secondaryColor: '#0d9488',
-    backgroundDefault: '#F3F4F6',
+    backgroundDefault: '#F5F6F8',
     backgroundPaper: '#FFFFFF',
-    workArea: { main: '#FFFFFF', light: '#FAFAFA', dark: '#F4F4F5' },
-    bodyArea: { main: '#F3F4F6', light: '#F9FAFB', dark: '#E5E7EB' },
+    workArea: { main: '#FFFFFF', light: '#F8FAFC', dark: '#F1F5F9' },
+    bodyArea: { main: '#F5F6F8', light: '#F7F8FA', dark: '#EEF2F7' },
     textPrimary: '#111827',
     textSecondary: '#6B7280'
   },
@@ -186,7 +186,9 @@ export const createDynamicTheme = (appearanceSettings: {
   const primaryColors = generateColorVariants(resolvedPrimaryColor);
   const secondaryColors = generateColorVariants(preset.secondaryColor);
   const isLightMode = mode === 'light';
-  const dividerColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#475569' : '#E5E7EB';
+  const containedButtonShadow = `0 4px 12px ${alpha(resolvedPrimaryColor, 0.18)}`;
+  const containedButtonShadowHover = `0 6px 16px ${alpha(resolvedPrimaryColor, 0.22)}`;
+  const dividerColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#475569' : '#EEF2F7';
   const actionActiveColor = isForestTheme
     ? 'rgba(218, 248, 230, 0.78)'
     : mode === 'dark'
@@ -217,16 +219,26 @@ export const createDynamicTheme = (appearanceSettings: {
     : mode === 'dark'
       ? 'rgba(148, 163, 184, 0.28)'
       : 'rgba(13, 138, 255, 0.22)';
-  const cardBorderColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#52647a' : '#E5E7EB';
-  const cardHoverBorderColor = isForestTheme ? '#3b8f66' : mode === 'dark' ? '#64748b' : '#E5E7EB';
-  const cardShadow = mode === 'dark' ? '0 2px 8px rgba(2, 6, 23, 0.32)' : '0 1px 3px rgba(15, 23, 42, 0.04)';
-  const cardHoverShadow = mode === 'dark' ? '0 4px 12px rgba(2, 6, 23, 0.4)' : '0 4px 12px rgba(15, 23, 42, 0.06)';
+  const cardBorderColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#52647a' : '#E5E5E7';
+  const cardHoverBorderColor = isForestTheme ? '#3b8f66' : mode === 'dark' ? '#64748b' : '#D2D2D7';
+  const cardShadow =
+    mode === 'dark' ? '0 1px 0 rgba(0, 0, 0, 0.2)' : '0 4px 18px rgba(15, 23, 42, 0.045)';
+  const cardHoverShadow =
+    mode === 'dark' ? '0 2px 6px rgba(0, 0, 0, 0.24)' : '0 6px 22px rgba(15, 23, 42, 0.06)';
   const appBarBackground = mode === 'dark' ? '#253345' : '#FFFFFF';
   const appBarTextColor = isForestTheme ? '#eafcf1' : mode === 'dark' ? '#f8fafc' : '#111827';
-  const appBarBorderColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#52647a' : '#E5E7EB';
-  const listHoverBg = isForestTheme ? 'rgba(34, 197, 94, 0.2)' : mode === 'dark' ? '#334155' : '#F3F4F6';
-  const listSelectedBg = isForestTheme ? 'rgba(34, 197, 94, 0.34)' : mode === 'dark' ? '#475569' : 'rgba(21, 99, 114, 0.08)';
-  const listSelectedHoverBg = isForestTheme ? 'rgba(74, 222, 128, 0.42)' : mode === 'dark' ? '#64748b' : 'rgba(21, 99, 114, 0.12)';
+  const appBarBorderColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#52647a' : 'rgba(15, 23, 42, 0.04)';
+  const listHoverBg = isForestTheme ? 'rgba(34, 197, 94, 0.2)' : mode === 'dark' ? '#334155' : 'rgba(15, 23, 42, 0.04)';
+  const listSelectedBg = isForestTheme
+    ? 'rgba(34, 197, 94, 0.34)'
+    : mode === 'dark'
+      ? '#475569'
+      : '#EAF2FF';
+  const listSelectedHoverBg = isForestTheme
+    ? 'rgba(74, 222, 128, 0.42)'
+    : mode === 'dark'
+      ? '#64748b'
+      : '#E0EBFA';
 
   return createTheme({
     palette: {
@@ -300,73 +312,114 @@ export const createDynamicTheme = (appearanceSettings: {
       },
     },
     typography: {
-      fontFamily: '"Lato", "Noto Sans KR", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      fontFamily:
+        'Pretendard, "Pretendard Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif',
       h1: {
-        fontSize: `${1.75 * fontSizeMultiplier}rem`,
-        fontWeight: 700,
-        lineHeight: 1.2,
-        letterSpacing: '-0.03em',
-      },
-      h2: {
-        fontSize: `${1.5 * fontSizeMultiplier}rem`,
+        fontSize: `${22 * fontSizeMultiplier}px`,
         fontWeight: 700,
         lineHeight: 1.3,
-        letterSpacing: '-0.025em',
-      },
-      h3: {
-        fontSize: `${1.25 * fontSizeMultiplier}rem`,
-        fontWeight: 600,
-        lineHeight: 1.35,
         letterSpacing: '-0.02em',
+        ...(isLightMode ? { color: '#111827' } : {}),
       },
-      h4: {
-        fontSize: `${1.125 * fontSizeMultiplier}rem`,
-        fontWeight: 600,
-        lineHeight: 1.4,
+      pageTitle: {
+        fontSize: `${22 * fontSizeMultiplier}px`,
+        fontWeight: 700,
+        lineHeight: 1.3,
         letterSpacing: '-0.02em',
+        ...(isLightMode ? { color: '#111827', marginBottom: '6px' } : {}),
       },
-      h5: {
-        fontSize: `${1 * fontSizeMultiplier}rem`,
+      sectionTitle: {
+        fontSize: `${16 * fontSizeMultiplier}px`,
         fontWeight: 600,
         lineHeight: 1.4,
         letterSpacing: '-0.015em',
+        ...(isLightMode ? { color: '#111827' } : {}),
       },
-      h6: {
-        fontSize: `${0.9375 * fontSizeMultiplier}rem`,
+      cardTitle: {
+        fontSize: `${14 * fontSizeMultiplier}px`,
         fontWeight: 600,
-        lineHeight: 1.5,
+        lineHeight: 1.4,
+        letterSpacing: '-0.01em',
+        ...(isLightMode ? { color: '#111827' } : {}),
+      },
+      pageDescription: {
+        fontSize: `${13 * fontSizeMultiplier}px`,
+        lineHeight: 1.6,
+        ...(isLightMode ? { color: '#6B7280' } : {}),
+      },
+      kpiNumber: {
+        fontSize: `${22 * fontSizeMultiplier}px`,
+        fontWeight: 700,
+        lineHeight: 1.3,
+        letterSpacing: '-0.02em',
+        ...(isLightMode ? { color: '#111827' } : {}),
+      },
+      h2: {
+        fontSize: `${16 * fontSizeMultiplier}px`,
+        fontWeight: 600,
+        lineHeight: 1.4,
+        letterSpacing: '-0.015em',
+        ...(isLightMode ? { marginBottom: '12px', color: '#111827' } : {}),
+      },
+      h3: {
+        fontSize: `${1.0625 * fontSizeMultiplier}rem`,
+        fontWeight: 500,
+        lineHeight: 1.45,
         letterSpacing: '-0.01em',
       },
-      body1: {
+      h4: {
+        fontSize: `${1 * fontSizeMultiplier}rem`,
+        fontWeight: 500,
+        lineHeight: 1.45,
+        letterSpacing: '-0.01em',
+      },
+      h5: {
+        fontSize: `${1.0625 * fontSizeMultiplier}rem`,
+        fontWeight: 600,
+        lineHeight: 1.35,
+        letterSpacing: '-0.01em',
+      },
+      h6: {
         fontSize: `${0.875 * fontSizeMultiplier}rem`,
-        lineHeight: 1.65,
-        letterSpacing: '0.01em',
+        fontWeight: 500,
+        lineHeight: 1.5,
+        letterSpacing: '0',
+      },
+        body1: {
+        fontSize: `${13.5 * fontSizeMultiplier}px`,
+        fontWeight: 400,
+        lineHeight: 1.6,
+        letterSpacing: '0',
+        ...(isLightMode ? { color: '#111827' } : {}),
       },
       body2: {
         fontSize: `${0.8125 * fontSizeMultiplier}rem`,
-        lineHeight: 1.55,
-        letterSpacing: '0.01em',
+        lineHeight: 1.45,
+        letterSpacing: '0',
       },
       caption: {
-        fontSize: `${0.75 * fontSizeMultiplier}rem`,
+        fontSize: `${12 * fontSizeMultiplier}px`,
+        fontWeight: 400,
         lineHeight: 1.5,
-        letterSpacing: '0.02em',
+        letterSpacing: '0',
+        ...(isLightMode ? { color: '#6B7280' } : {}),
       },
       subtitle1: {
-        fontSize: `${0.9375 * fontSizeMultiplier}rem`,
+        fontSize: `${14 * fontSizeMultiplier}px`,
         fontWeight: 600,
-        lineHeight: 1.5,
+        lineHeight: 1.4,
         letterSpacing: '-0.01em',
+        ...(isLightMode ? { color: '#111827' } : {}),
       },
       subtitle2: {
         fontSize: `${0.875 * fontSizeMultiplier}rem`,
         fontWeight: 500,
-        lineHeight: 1.5,
-        letterSpacing: '0.005em',
+        lineHeight: 1.45,
+        letterSpacing: '0',
       },
     },
     shape: {
-      borderRadius: isLightMode ? 12 : 12,
+      borderRadius: isLightMode ? 16 : 12,
     },
     spacing: 8,
     components: {
@@ -375,22 +428,40 @@ export const createDynamicTheme = (appearanceSettings: {
           body: {
             WebkitFontSmoothing: 'antialiased',
             MozOsxFontSmoothing: 'grayscale',
+            ...(isLightMode
+              ? {
+                  backgroundColor: '#F5F6F8',
+                  color: '#111827',
+                  fontSize: `${13.5 * fontSizeMultiplier}px`,
+                }
+              : {}),
+          },
+        },
+      },
+      MuiTypography: {
+        defaultProps: {
+          variantMapping: {
+            pageTitle: 'h1',
+            sectionTitle: 'h2',
+            cardTitle: 'h3',
+            pageDescription: 'p',
+            kpiNumber: 'div',
           },
         },
       },
       MuiButton: {
         styleOverrides: {
           root: {
-            borderRadius: 10,
+            borderRadius: isLightMode ? 12 : 8,
             textTransform: 'none',
             fontWeight: 600,
-            fontSize: `${0.875 * fontSizeMultiplier}rem`,
-            padding: '8px 16px',
+            fontSize: `${13.5 * fontSizeMultiplier}px`,
+            minHeight: isLightMode ? 40 : 36,
+            padding: isLightMode ? '8px 16px' : '8px 16px',
             boxShadow: 'none',
-            transform: 'none',
-            transition: 'background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
+            transition: 'all 0.2s ease',
             ...(isLightMode && {
-              '&:hover': { transform: 'none' }
+              '&.Mui-disabled': { opacity: 0.5 },
             })
           },
           outlined: isLightMode
@@ -404,49 +475,100 @@ export const createDynamicTheme = (appearanceSettings: {
             : {},
           contained: {
             background: primaryColors.main,
-            boxShadow: isLightMode ? '0 1px 2px rgba(15, 23, 42, 0.06)' : undefined,
+            boxShadow: isLightMode ? containedButtonShadow : 'none',
             '&:hover': {
               background: primaryColors.dark,
-              boxShadow: isLightMode ? '0 2px 6px rgba(15, 23, 42, 0.1)' : undefined,
-              transform: 'none'
+              boxShadow: isLightMode ? containedButtonShadowHover : 'none',
             }
           },
         },
       },
       MuiCard: {
         styleOverrides: {
-          root: {
-            borderRadius: 12,
-            boxShadow: cardShadow,
-            border: `1px solid ${cardBorderColor}`,
-            backgroundColor: mode === 'dark' ? preset.backgroundPaper : '#ffffff',
-            transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
-            '&:hover': {
-              boxShadow: cardHoverShadow,
-              borderColor: cardHoverBorderColor,
-              ...(isLightMode && { transform: 'none' })
-            },
+          root: ({ ownerState }: { ownerState: { variant?: string } }) => {
+            if (!isLightMode) {
+              return {
+                borderRadius: 12,
+                boxShadow: cardShadow,
+                border: `1px solid ${cardBorderColor}`,
+                backgroundColor: preset.backgroundPaper,
+                transition: 'all 0.2s ease',
+                '&:hover': { boxShadow: cardHoverShadow, borderColor: cardHoverBorderColor },
+              };
+            }
+            const outlined = ownerState.variant === 'outlined';
+            return {
+              backgroundColor: '#FFFFFF',
+              transition: 'box-shadow 0.2s ease, background-color 0.2s ease',
+              ...(outlined
+                ? {
+                    borderRadius: '16px',
+                    boxShadow: '0 2px 10px rgba(15, 23, 42, 0.035)',
+                    border: '1px solid rgba(15, 23, 42, 0.04)',
+                    '&:hover': {
+                      boxShadow: '0 4px 16px rgba(15, 23, 42, 0.05)',
+                    },
+                  }
+                : {
+                    borderRadius: '18px',
+                    border: 'none',
+                    boxShadow: cardShadow,
+                    '&:hover': {
+                      boxShadow: cardHoverShadow,
+                    },
+                  }),
+            };
           },
         },
       },
       MuiCardContent: {
         styleOverrides: {
           root: {
-            padding: 24,
+            padding: isLightMode ? '20px' : 24,
             '&:last-child': {
-              paddingBottom: 24,
+              paddingBottom: isLightMode ? '20px' : 24,
             },
           },
         },
       },
       MuiPaper: {
         styleOverrides: {
-          root: {
-            boxShadow: 'none',
-            border: `1px solid ${dividerColor}`,
-            backgroundColor: mode === 'dark' ? preset.backgroundPaper : '#ffffff',
-            backgroundImage: 'none',
-            borderRadius: isLightMode ? 12 : undefined,
+          root: ({
+            ownerState,
+          }: {
+            ownerState: { variant?: string; elevation?: number };
+          }) => {
+            if (!isLightMode) {
+              return {
+                boxShadow: 'none',
+                border: `1px solid ${dividerColor}`,
+                backgroundColor: preset.backgroundPaper,
+                backgroundImage: 'none',
+              };
+            }
+            const outlined = ownerState.variant === 'outlined';
+            const elev =
+              ownerState.variant === 'elevation' && typeof ownerState.elevation === 'number'
+                ? ownerState.elevation
+                : 0;
+            if (ownerState.variant === 'elevation' && elev >= 8) {
+              return { backgroundImage: 'none' };
+            }
+            return {
+              backgroundImage: 'none',
+              backgroundColor: '#ffffff',
+              ...(outlined
+                ? {
+                    borderRadius: '16px',
+                    boxShadow: '0 2px 10px rgba(15, 23, 42, 0.035)',
+                    border: '1px solid rgba(15, 23, 42, 0.04)',
+                  }
+                : {
+                    borderRadius: '18px',
+                    boxShadow: cardShadow,
+                    border: 'none',
+                  }),
+            };
           },
         },
       },
@@ -462,15 +584,21 @@ export const createDynamicTheme = (appearanceSettings: {
         styleOverrides: {
           root: {
             backgroundColor: isLightMode ? '#ffffff' : preset.backgroundPaper,
+            ...(isLightMode
+              ? {
+                  borderRadius: 14,
+                  minHeight: 44,
+                }
+              : {}),
             '& .MuiOutlinedInput-notchedOutline': {
               borderColor: dividerColor,
             },
             '&:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: isLightMode ? '#94a3b8' : '#64748b',
+              borderColor: isLightMode ? '#D1D5DB' : '#64748b',
             },
             '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
               borderColor: primaryColors.main,
-              borderWidth: 1,
+              borderWidth: isLightMode ? 2 : 1,
             },
           },
         },
@@ -478,25 +606,82 @@ export const createDynamicTheme = (appearanceSettings: {
       MuiTableCell: {
         styleOverrides: {
           root: {
-            borderBottom: isLightMode ? '1px solid #F3F4F6' : `1px solid ${dividerColor}`,
-            ...(isLightMode && { fontSize: '0.875rem', padding: '12px 16px' }),
+            borderBottom: isLightMode ? '1px solid #EEF2F7' : `1px solid ${dividerColor}`,
+            ...(isLightMode && { fontSize: '13.5px', padding: '14px 16px', color: '#111827', lineHeight: 1.5 }),
           },
           head: {
-            backgroundColor: isLightMode ? '#F9FAFB' : '#2b3a4f',
-            color: preset.textSecondary,
+            backgroundColor: isLightMode ? 'transparent' : '#2b3a4f',
+            color: isLightMode ? '#475569' : preset.textSecondary,
             fontWeight: 600,
-            fontSize: isLightMode ? '0.75rem' : undefined,
-            letterSpacing: isLightMode ? '0.04em' : undefined,
-            textTransform: isLightMode ? 'uppercase' : undefined,
-            borderBottom: `1px solid ${dividerColor}`,
+            fontSize: isLightMode ? '12px' : undefined,
+            lineHeight: isLightMode ? 1.4 : undefined,
+            letterSpacing: isLightMode ? '0.02em' : undefined,
+            textTransform: 'none',
+            borderBottom: isLightMode ? '1px solid #EEF2F7' : `1px solid ${dividerColor}`,
           },
+        },
+      },
+      MuiTableHead: {
+        styleOverrides: {
+          root: isLightMode
+            ? {
+                backgroundColor: '#F8FAFC',
+              }
+            : {},
+        },
+      },
+      MuiTableRow: {
+        styleOverrides: {
+          root: isLightMode
+            ? {
+                height: 56,
+                transition: 'all 0.2s ease',
+                '&:hover': { backgroundColor: '#F8FAFC' },
+              }
+            : {},
+        },
+      },
+      MuiTable: {
+        styleOverrides: {
+          root: isLightMode
+            ? {
+                '& .MuiTableHead-root': { backgroundColor: '#F8FAFC' },
+                '& .MuiTableCell-head': {
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: '#475569',
+                  lineHeight: 1.4,
+                },
+                '& .MuiTableRow-root': { height: 56 },
+                '& .MuiTableRow-root:hover': { backgroundColor: '#F8FAFC' },
+                '& .MuiTableCell-root': {
+                  borderBottom: '1px solid #EEF2F7',
+                  fontSize: '13.5px',
+                  lineHeight: 1.5,
+                  color: '#111827',
+                },
+              }
+            : {},
+        },
+      },
+      MuiChip: {
+        styleOverrides: {
+          root: isLightMode
+            ? {
+                borderRadius: 9999,
+                height: 26,
+                fontWeight: 600,
+                fontSize: '0.75rem',
+              }
+            : {},
         },
       },
       MuiDrawer: {
         styleOverrides: {
           paper: {
-            borderRight: `1px solid ${dividerColor}`,
-            backgroundColor: mode === 'dark' ? '#1b2738' : '#FAFAFA',
+            borderRight: isLightMode ? '1px solid rgba(15, 23, 42, 0.06)' : `1px solid ${dividerColor}`,
+            boxShadow: 'none',
+            backgroundColor: mode === 'dark' ? '#1b2738' : '#F7F8FA',
             backgroundImage: 'none',
           },
         },
@@ -504,12 +689,11 @@ export const createDynamicTheme = (appearanceSettings: {
       MuiAppBar: {
         styleOverrides: {
           root: {
-            background: appBarBackground,
+            background: isLightMode ? 'rgba(255, 255, 255, 0.88)' : appBarBackground,
             color: appBarTextColor,
-            boxShadow: isLightMode
-              ? '0 4px 12px -2px rgba(15, 23, 42, 0.08)'
-              : '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-            borderBottom: isLightMode ? '1px solid #D1D5DB' : `1px solid ${appBarBorderColor}`,
+            boxShadow: 'none',
+            borderBottom: isLightMode ? '1px solid #E5E7EB' : `1px solid ${appBarBorderColor}`,
+            ...(isLightMode ? { backdropFilter: 'blur(14px)' } : {}),
           },
         },
       },
@@ -517,17 +701,28 @@ export const createDynamicTheme = (appearanceSettings: {
         styleOverrides: {
           root: {
             borderRadius: isLightMode ? '10px' : 8,
-            margin: isLightMode ? '2px 10px' : '2px 8px',
+            margin: isLightMode ? '4px 8px' : '2px 8px',
             padding: isLightMode ? '10px 12px' : undefined,
-            borderLeft: isLightMode ? '3px solid transparent' : undefined,
+            borderLeft: 'none',
+            ...(isLightMode
+              ? {
+                  fontSize: '13px',
+                  color: '#4B5563',
+                }
+              : {}),
+            transition: 'all 0.2s ease',
             '&:hover': {
               backgroundColor: listHoverBg,
+              ...(isLightMode ? { transform: 'translateY(-1px)' } : {}),
             },
             '&.Mui-selected': {
               backgroundColor: listSelectedBg,
-              ...(isLightMode && {
-                borderLeft: `3px solid ${primaryColors.main}`,
-              }),
+              ...(isLightMode
+                ? {
+                    color: '#007A83',
+                    fontWeight: 500,
+                  }
+                : {}),
               '&:hover': {
                 backgroundColor: listSelectedHoverBg,
               },

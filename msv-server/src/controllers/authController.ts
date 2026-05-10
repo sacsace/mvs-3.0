@@ -137,13 +137,23 @@ const writeLoginLog = async ({
   }
 };
 
-type BillingPlanKey = 'free_day_1' | 'month_5000' | 'year_50000';
+type BillingPlanKey = 'free_week_7' | 'month_5000' | 'year_50000';
 
 const BILLING_PLAN_CONFIG: Record<BillingPlanKey, { days: number; amount: number; code: string }> = {
-  free_day_1: { days: 1, amount: 0, code: 'free_day_1' },
+  free_week_7: { days: 7, amount: 0, code: 'free_week_7' },
   month_5000: { days: 30, amount: 5000, code: 'month_5000' },
   year_50000: { days: 365, amount: 50000, code: 'year_50000' }
 };
+
+/** 구 요금제 키(1일) → 7일 무료로 통일 */
+const normalizeBillingPlanKey = (raw: string): BillingPlanKey | null => {
+  const p = String(raw || '').trim();
+  if (p === 'free_day_1') return 'free_week_7';
+  if (p === 'free_week_7' || p === 'month_5000' || p === 'year_50000') return p;
+  return null;
+};
+
+const FREE_TRIAL_PLAN_CODES = new Set(['free_day_1', 'free_week_7']);
 const GST_RATE = 18; // 18%
 const RAZORPAY_API_BASE = 'https://api.razorpay.com/v1';
 
@@ -258,9 +268,9 @@ const verifyRazorpayPayment = async ({
 export const createSignupPaymentOrder = async (req: Request, res: Response) => {
   try {
     const { planType, companyName, businessNumber, adminEmail } = req.body || {};
-    const normalizedPlan = String(planType || '') as BillingPlanKey;
+    const normalizedPlan = normalizeBillingPlanKey(String(planType || ''));
 
-    if (!BILLING_PLAN_CONFIG[normalizedPlan]) {
+    if (!normalizedPlan || !BILLING_PLAN_CONFIG[normalizedPlan]) {
       return res.status(400).json({
         success: false,
         message: '요금제 값이 올바르지 않습니다.'
@@ -359,11 +369,11 @@ export const register = async (req: Request, res: Response) => {
     const normalizedAdminName = String(adminName || '').trim();
     const normalizedAdminUserid = String(adminUserid || '').trim();
     const normalizedAdminEmail = String(adminEmail || '').trim().toLowerCase();
-    const normalizedPlan = String(planType || '') as BillingPlanKey;
+    const normalizedPlan = normalizeBillingPlanKey(String(planType || ''));
     const normalizedPhone = String(phone || '').trim();
     const normalizedAddress = String(address || '').trim();
 
-    if (!BILLING_PLAN_CONFIG[normalizedPlan]) {
+    if (!normalizedPlan || !BILLING_PLAN_CONFIG[normalizedPlan]) {
       await transaction.rollback();
       return res.status(400).json({
         success: false,
@@ -403,8 +413,8 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
-    // 동일 회사의 무료체험은 1회만 허용
-    if (normalizedPlan === 'free_day_1') {
+    // 동일 회사(회사명·사업자번호·GST 기준)의 무료 체험은 1회만 허용
+    if (normalizedPlan === 'free_week_7') {
       const companiesByName = await (Company as any).findAll({
         where: { name: normalizedCompanyName },
         attributes: ['id', 'subscription_plan', 'settings'],
@@ -434,17 +444,15 @@ export const register = async (req: Request, res: Response) => {
       const alreadyUsedFreeTrial = candidates.some((company: any) => {
         const settings = company?.settings || {};
         const onboarding = settings?.onboarding || {};
-        return (
-          company?.subscription_plan === 'free_day_1' ||
-          onboarding?.freeTrialUsed === true
-        );
+        const plan = company?.subscription_plan;
+        return FREE_TRIAL_PLAN_CODES.has(plan) || onboarding?.freeTrialUsed === true;
       });
 
       if (alreadyUsedFreeTrial) {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: '동일한 회사는 무료 이용(1일)을 1회만 사용할 수 있습니다.'
+          message: '동일한 회사는 무료 이용(7일)을 1회만 사용할 수 있습니다.'
         });
       }
     }
@@ -554,7 +562,7 @@ export const register = async (req: Request, res: Response) => {
             initialized: true,
             planType: normalizedPlan,
             billingAmount: BILLING_PLAN_CONFIG[normalizedPlan].amount,
-            freeTrialUsed: normalizedPlan === 'free_day_1'
+            freeTrialUsed: normalizedPlan === 'free_week_7'
           }
         }
       },

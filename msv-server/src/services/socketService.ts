@@ -1,6 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import jwt from 'jsonwebtoken';
+import { isCorsAllowLanEnabled, isPrivateLanHttpOrigin } from '../utils/corsPrivateLan';
 
 interface AuthenticatedSocket extends Socket {
   user?: {
@@ -23,15 +24,35 @@ class SocketService {
   private connectedUsers: Map<number, string> = new Map();
 
   constructor(server: HTTPServer) {
-    const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
+    const mergeList = (process.env.CORS_ORIGIN || '')
       .split(',')
-      .map((origin) => origin.trim())
+      .concat((process.env.WS_CORS_ORIGIN || '').split(','))
+      .map((o) => o.trim())
       .filter(Boolean);
+    const allowedOrigins =
+      mergeList.length > 0 ? mergeList : ['http://localhost:3000'];
+
+    const isDev = process.env.NODE_ENV === 'development';
 
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: allowedOrigins,
-        methods: ['GET', 'POST']
+        origin: (origin, callback) => {
+          if (isDev) {
+            return callback(null, true);
+          }
+          if (!origin) {
+            return callback(null, true);
+          }
+          if (allowedOrigins.includes(origin)) {
+            return callback(null, true);
+          }
+          if (isCorsAllowLanEnabled() && isPrivateLanHttpOrigin(origin)) {
+            return callback(null, true);
+          }
+          return callback(null, false);
+        },
+        methods: ['GET', 'POST'],
+        credentials: true
       },
       maxHttpBufferSize: 1e6
     });

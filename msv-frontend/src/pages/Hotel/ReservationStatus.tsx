@@ -24,11 +24,13 @@ import {
   DialogContent,
   DialogActions
 } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { roomBookingService, roomTypeRoomService, roomTypeService } from '../../services/api';
 import RoomBookingManagement from '../Work/RoomBookingManagement';
+import { mvsFilterToolbarSx, mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
 
 type BookingStatus = 'pending' | 'confirmed' | 'checked_in' | 'checked_out' | 'cancelled' | 'no_show';
 
@@ -113,6 +115,7 @@ const getGuestColor = (guestName?: string) => {
 };
 
 const ReservationStatus: React.FC = () => {
+  const theme = useTheme();
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [bookings, setBookings] = useState<RoomBooking[]>([]);
@@ -589,22 +592,64 @@ const ReservationStatus: React.FC = () => {
     }
   };
 
+  const headBg =
+    theme.palette.mode === 'light' ? alpha(theme.palette.grey[500], 0.08) : theme.palette.grey[900];
+  const headBorder = alpha(theme.palette.divider, 0.9);
+  const stickyRoomBg = theme.palette.mode === 'light' ? '#F8FAFC' : theme.palette.grey[900];
+  const pastCellBg = alpha(theme.palette.grey[500], 0.14);
+
   return (
-    <Box sx={{ p: 3 }}>
-      <Card variant="outlined">
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-            <Box>
-              <Typography variant="h5" sx={{ fontWeight: 700 }}>{t('reservationStatus.title')}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                {t('reservationStatus.description')}
+    <Box sx={{ p: 0, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
+      <Card
+        elevation={0}
+        sx={{
+          width: '100%',
+          maxWidth: '100%',
+          borderRadius: '20px',
+          border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+          boxShadow: `0 4px 24px ${alpha('#0f172a', 0.055)}`,
+          bgcolor: 'background.paper',
+          overflow: 'hidden'
+        }}
+      >
+        <CardContent sx={{ p: { xs: 2, sm: 3 }, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: { xs: 'flex-start', sm: 'center' },
+              justifyContent: 'space-between',
+              gap: 2,
+              mb: 2.5
+            }}
+          >
+            <Box sx={{ minWidth: 0, flex: '1 1 220px' }}>
+              <Typography component="h1" sx={{ ...mvsPageTitleSx, mb: 0.5 }}>
+                {t('reservationStatus.title')}
               </Typography>
+              <Typography sx={mvsPageDescriptionSx}>{t('reservationStatus.description')}</Typography>
             </Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 1.25,
+                justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                flex: '0 1 auto'
+              }}
+            >
               <Button
                 size="small"
                 variant="contained"
+                disableElevation
                 onClick={() => navigate('/work/room-reservation')}
+                sx={{
+                  borderRadius: '12px',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  px: 2
+                }}
               >
                 {t('reservationStatus.actions.book')}
               </Button>
@@ -612,18 +657,46 @@ const ReservationStatus: React.FC = () => {
                 size="small"
                 variant="outlined"
                 onClick={handleOpenRoomTypeDialog}
+                sx={{
+                  borderRadius: '12px',
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  px: 2,
+                  borderColor: alpha(theme.palette.divider, 0.95)
+                }}
               >
                 {t('reservationStatus.actions.roomTypeInput')}
               </Button>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <IconButton onClick={handlePrevMonth}>
-                  <ChevronLeft />
+              <Box
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 0.25,
+                  px: 1,
+                  py: 0.25,
+                  borderRadius: '12px',
+                  bgcolor: alpha(theme.palette.grey[500], 0.08),
+                  border: `1px solid ${alpha(theme.palette.divider, 0.6)}`
+                }}
+              >
+                <IconButton
+                  onClick={handlePrevMonth}
+                  size="small"
+                  aria-label="previous month"
+                  sx={{ borderRadius: '10px' }}
+                >
+                  <ChevronLeft fontSize="small" />
                 </IconButton>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600, letterSpacing: '0.01em', px: 0.5 }}>
                   {monthLabel}
                 </Typography>
-                <IconButton onClick={handleNextMonth}>
-                  <ChevronRight />
+                <IconButton
+                  onClick={handleNextMonth}
+                  size="small"
+                  aria-label="next month"
+                  sx={{ borderRadius: '10px' }}
+                >
+                  <ChevronRight fontSize="small" />
                 </IconButton>
               </Box>
             </Box>
@@ -631,14 +704,18 @@ const ReservationStatus: React.FC = () => {
 
           <Box
             sx={{
+              ...mvsFilterToolbarSx,
               display: 'grid',
               gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' },
               gap: 2,
               mb: 2,
-              alignItems: 'end'
+              alignItems: 'end',
+              boxSizing: 'border-box',
+              width: '100%',
+              maxWidth: '100%'
             }}
           >
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
               <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5 }}>
                 {t('reservationStatus.filters.search')}
               </Typography>
@@ -648,13 +725,28 @@ const ReservationStatus: React.FC = () => {
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 fullWidth
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '12px',
+                    bgcolor: 'background.paper'
+                  }
+                }}
               />
             </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
               <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5 }}>
                 {t('reservationStatus.filters.roomType')}
               </Typography>
-              <FormControl size="small" fullWidth>
+              <FormControl
+                size="small"
+                fullWidth
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '12px',
+                    bgcolor: 'background.paper'
+                  }
+                }}
+              >
                 <Select
                   value={roomTypeFilter}
                   displayEmpty
@@ -673,35 +765,72 @@ const ReservationStatus: React.FC = () => {
           </Box>
 
           {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert severity="error" sx={{ mb: 2, borderRadius: '12px' }}>
               {error}
             </Alert>
           )}
 
           <TableContainer
             component={Paper}
-            variant="outlined"
+            elevation={0}
             sx={{
+              width: '100%',
+              maxWidth: '100%',
               maxHeight: 'none',
-              overflowY: 'visible'
+              overflowX: 'auto',
+              overflowY: 'visible',
+              borderRadius: '16px',
+              border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+              boxShadow: `0 2px 14px ${alpha('#0f172a', 0.04)}`,
+              bgcolor: 'background.paper',
+              boxSizing: 'border-box'
             }}
           >
-            <Table size="small" stickyHeader>
+            <Table
+              size="small"
+              stickyHeader
+              sx={{
+                width: '100%',
+                minWidth: { xs: 640, sm: 800 },
+                tableLayout: 'fixed',
+                borderCollapse: 'separate',
+                borderSpacing: 0
+              }}
+            >
+              <colgroup>
+                <col style={{ width: 104 }} />
+                {dateRange.map((date) => (
+                  <col key={toIsoDate(date)} />
+                ))}
+                <col style={{ width: 76 }} />
+                <col style={{ width: 92 }} />
+                <col style={{ width: 120 }} />
+              </colgroup>
               <TableHead>
-                <TableRow>
+                <TableRow
+                  sx={{
+                    '& .MuiTableCell-head': {
+                      bgcolor: headBg,
+                      color: 'text.secondary',
+                      fontWeight: 600,
+                      fontSize: '0.75rem',
+                      letterSpacing: '0.02em',
+                      borderBottom: `1px solid ${headBorder}`
+                    }
+                  }}
+                >
                   <TableCell
                     sx={{
-                      minWidth: 90,
                       fontWeight: 700,
                       position: 'sticky',
                       left: 0,
                       zIndex: 3,
-                      backgroundColor: 'background.default',
-                      borderRight: '1px solid',
-                      borderColor: 'divider',
+                      bgcolor: `${stickyRoomBg} !important`,
+                      borderRight: `1px solid ${headBorder}`,
                       color: 'text.primary',
                       fontSize: '0.75rem',
-                      lineHeight: 1.21
+                      lineHeight: 1.21,
+                      width: 104
                     }}
                   >
                     {t('reservationStatus.columns.room')}
@@ -710,17 +839,22 @@ const ReservationStatus: React.FC = () => {
                     const { day, weekday } = formatDayLabel(date, i18n.language === 'en' ? 'en-US' : 'ko-KR');
                     return (
                       <TableCell
-                        key={day + weekday}
+                        key={toIsoDate(date)}
                         align="center"
                         sx={{
-                          minWidth: 36,
                           fontWeight: 700,
                           fontSize: '0.7rem',
-                          lineHeight: 1.21
+                          lineHeight: 1.21,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          px: 0.25
                         }}
                       >
                         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.21 }}>{day}</Typography>
+                          <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.21 }}>
+                            {day}
+                          </Typography>
                           <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.21 }}>
                             {weekday}
                           </Typography>
@@ -728,13 +862,13 @@ const ReservationStatus: React.FC = () => {
                       </TableCell>
                     );
                   })}
-                  <TableCell sx={{ minWidth: 90, fontWeight: 700, fontSize: '0.75rem', lineHeight: 1.21 }}>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', lineHeight: 1.21, width: 76 }}>
                     {t('reservationStatus.columns.booked')}
                   </TableCell>
-                  <TableCell sx={{ minWidth: 120, fontWeight: 700, fontSize: '0.75rem', lineHeight: 1.21 }}>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', lineHeight: 1.21, width: 92 }}>
                     {t('reservationStatus.columns.remaining')}
                   </TableCell>
-                  <TableCell sx={{ minWidth: 140, fontWeight: 700, fontSize: '0.75rem', lineHeight: 1.21 }}>
+                  <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', lineHeight: 1.21, width: 120 }}>
                     {t('reservationStatus.columns.memo')}
                   </TableCell>
                 </TableRow>
@@ -767,13 +901,13 @@ const ReservationStatus: React.FC = () => {
                         sx={{
                           position: 'sticky',
                           left: 0,
-                          backgroundColor: 'action.hover',
+                          backgroundColor: alpha(theme.palette.grey[500], 0.1),
                           fontWeight: 700,
                           color: 'text.primary',
-                          borderRight: '1px solid',
-                          borderColor: 'divider',
+                          borderRight: `1px solid ${headBorder}`,
                           fontSize: '0.75rem',
-                          lineHeight: 1.21
+                          lineHeight: 1.21,
+                          letterSpacing: '0.01em'
                         }}
                       >
                         {roomType} ({rooms.length})
@@ -802,14 +936,14 @@ const ReservationStatus: React.FC = () => {
                             sx={{
                               position: 'sticky',
                               left: 0,
-                              backgroundColor: 'background.paper',
-                              borderRight: '1px solid',
-                              borderColor: 'divider',
+                              backgroundColor: `${theme.palette.background.paper} !important`,
+                              borderRight: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
                               fontWeight: 600,
                               zIndex: 2,
                               color: 'text.primary',
                               fontSize: '0.75rem',
-                              lineHeight: 0.62
+                              lineHeight: 0.62,
+                              boxShadow: `4px 0 12px ${alpha('#0f172a', 0.04)}`
                             }}
                           >
                             <Box
@@ -847,7 +981,7 @@ const ReservationStatus: React.FC = () => {
                                 key={`${room.key}-${iso}`}
                                 align="center"
                                 sx={{
-                                  bgcolor: iso < todayIso ? '#f2f2f2' : undefined,
+                                  bgcolor: iso < todayIso ? pastCellBg : undefined,
                                   background:
                                     iso < todayIso
                                       ? undefined
@@ -858,7 +992,7 @@ const ReservationStatus: React.FC = () => {
                                           : hasCheckoutHalf
                                             ? `linear-gradient(90deg, ${checkoutGuestColor} 0 50%, transparent 50% 100%)`
                                             : undefined,
-                                  borderRight: '1px solid #f0f0f0',
+                                  borderRight: `1px solid ${alpha(theme.palette.divider, 0.55)}`,
                                   height: '26.4px',
                                   cursor: iso < todayIso ? 'not-allowed' : 'pointer',
                                   opacity: iso < todayIso ? 0.45 : 1,
@@ -872,13 +1006,35 @@ const ReservationStatus: React.FC = () => {
                               </TableCell>
                             );
                           })}
-                          <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.75rem', lineHeight: 0.62 }}>
+                          <TableCell
+                            align="center"
+                            sx={{
+                              fontWeight: 600,
+                              fontSize: '0.75rem',
+                              lineHeight: 0.62,
+                              borderRight: `1px solid ${alpha(theme.palette.divider, 0.45)}`
+                            }}
+                          >
                             {bookedCount}
                           </TableCell>
-                          <TableCell align="center" sx={{ fontSize: '0.75rem', lineHeight: 0.62 }}>
+                          <TableCell
+                            align="center"
+                            sx={{
+                              fontSize: '0.75rem',
+                              lineHeight: 0.62,
+                              borderRight: `1px solid ${alpha(theme.palette.divider, 0.45)}`
+                            }}
+                          >
                             {availableCount}
                           </TableCell>
-                          <TableCell sx={{ fontSize: '0.75rem', lineHeight: 0.62 }}>
+                          <TableCell
+                            sx={{
+                              fontSize: '0.75rem',
+                              lineHeight: 1.35,
+                              wordBreak: 'break-word',
+                              color: 'text.secondary'
+                            }}
+                          >
                             {room.note || '-'}
                           </TableCell>
                         </TableRow>

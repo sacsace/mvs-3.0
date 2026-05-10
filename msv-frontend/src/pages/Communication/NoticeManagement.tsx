@@ -46,6 +46,7 @@ import {
   Switch,
   FormControlLabel
 } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -53,7 +54,6 @@ import {
   Visibility as ViewIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
-  Announcement as AnnouncementIcon,
   Person as PersonIcon,
   Schedule as ScheduleIcon,
   Flag as PriorityIcon,
@@ -86,6 +86,7 @@ import {
   PushPin as PushPinIcon
 } from '@mui/icons-material';
 import { useStore } from '../../store';
+import { mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
 import { noticeService, userUiPreferencesService } from '../../services/api';
 import { useTranslation } from 'react-i18next';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
@@ -203,6 +204,7 @@ const stripHtmlTags = (html: string): string => {
 const NOTICE_MENU_ROUTES = ['/communication/notice', '/communication/notices', '/communication'];
 
 const NoticeManagement: React.FC = () => {
+  const theme = useTheme();
   const { user } = useStore();
   const { i18n, t } = useTranslation();
   const noticeMenuFlags = useMenuRoutePermissionFlags(NOTICE_MENU_ROUTES);
@@ -1188,6 +1190,9 @@ const NoticeManagement: React.FC = () => {
     
     const weekDays = isEn ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] : ['일', '월', '화', '수', '목', '금', '토'];
     
+    const cellBorder = alpha(theme.palette.divider, 0.65);
+    const mutedOtherMonth = alpha(theme.palette.grey[500], 0.1);
+
     return (
       <Box
         sx={{
@@ -1195,40 +1200,60 @@ const NoticeManagement: React.FC = () => {
           maxWidth: '100%',
           maxHeight: { xs: 'calc(100vh - 200px)', sm: 'calc(100vh - 220px)' },
           overflowY: 'auto',
-          pr: ycsSp(0.5),
+          pr: { xs: 0.5, sm: 1 },
           boxSizing: 'border-box',
         }}
       >
         {/* 요일 헤더 */}
-        <Box sx={{ display: 'flex', mb: ycsSp(0.5) }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, 1fr)',
+            gap: 0.75,
+            mb: 1.25,
+            px: 0.25,
+          }}
+        >
           {weekDays.map((day, index) => (
-            <Box 
-              key={day} 
-              sx={{ 
-                flex: 1, 
-                textAlign: 'center', 
-                py: ycsSp(0.35),
-                borderRight: index < weekDays.length - 1 ? '1px solid' : 'none',
-                borderColor: 'divider'
+            <Box
+              key={day}
+              sx={{
+                textAlign: 'center',
+                py: 1,
+                borderRadius: '10px',
+                bgcolor: alpha(theme.palette.grey[500], 0.06),
               }}
             >
-              <Typography 
-                variant="body2" 
-                fontWeight="bold"
-                sx={{ fontSize: ycsRem(0.78) }}
-                color={index === 0 ? 'error.main' : index === 6 ? 'error.main' : 'text.primary'}
+              <Typography
+                variant="body2"
+                sx={{
+                  fontSize: ycsRem(0.72),
+                  fontWeight: 600,
+                  letterSpacing: '0.06em',
+                  color:
+                    index === 0 || index === 6
+                      ? alpha(theme.palette.error.main, 0.92)
+                      : alpha(theme.palette.text.primary, 0.72),
+                }}
               >
                 {day}
               </Typography>
             </Box>
           ))}
         </Box>
-        
+
         {/* 달력 그리드 */}
-        <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, 1fr)',
+            gap: 0.75,
+            px: 0.25,
+          }}
+        >
           {days.map((date, index) => {
             if (!date) return null;
-            
+
             const isCurrentMonth = date.getMonth() === month;
             const isHolidayDate = isHoliday(date);
             const holidayNames = getHolidayNames(date);
@@ -1238,56 +1263,56 @@ const NoticeManagement: React.FC = () => {
             const customLabels = customSchedules[dateKey] || [];
             const complianceLabels = getComplianceLabels(date);
             const hasCompanyHoliday = customLabels.some((item) => item.type === 'company_holiday');
-            
-            // 주말과 공휴일 배경을 분리해 가독성 확보
+
             const isWeekendOnly = isWeekendDate && !isHolidayDate;
-            
+
+            const cellBg = isTodayDate
+              ? theme.palette.primary.main
+              : isHolidayDate
+                ? alpha(theme.palette.error.main, 0.1)
+                : isWeekendOnly
+                  ? alpha(theme.palette.primary.main, 0.07)
+                  : !isCurrentMonth
+                    ? mutedOtherMonth
+                    : theme.palette.background.paper;
+
+            const cellFg = !isCurrentMonth
+              ? alpha(theme.palette.text.primary, 0.38)
+              : isTodayDate
+                ? theme.palette.primary.contrastText
+                : isHolidayDate
+                  ? alpha(theme.palette.error.main, 0.95)
+                  : isWeekendDate
+                    ? alpha(theme.palette.error.main, 0.85)
+                    : theme.palette.text.primary;
+
             return (
-              <Box
-                key={index}
-                sx={{
-                  width: 'calc(100% / 7)',
-                  boxSizing: 'border-box',
-                }}
-              >
+              <Box key={index} sx={{ minWidth: 0, boxSizing: 'border-box' }}>
                 <Box
                   sx={{
                     aspectRatio: '3 / 2',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                    p: ycsSp(0.35),
+                    border: `1px solid ${cellBorder}`,
+                    borderRadius: '12px',
+                    p: ycsSp(0.4),
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'flex-start',
-                    bgcolor: isTodayDate 
-                      ? 'primary.light' 
-                      : isHolidayDate
-                        ? 'rgba(244, 67, 54, 0.28)'
-                        : isWeekendOnly
-                          ? 'rgba(25, 118, 210, 0.14)'
-                        : !isCurrentMonth 
-                          ? 'grey.100' 
-                          : 'background.paper',
-                    color: !isCurrentMonth 
-                      ? 'text.disabled' 
-                      : isHolidayDate 
-                        ? 'error.main' 
-                        : isWeekendDate 
-                          ? 'error.main' 
-                          : 'text.primary',
+                    bgcolor: cellBg,
+                    color: cellFg,
                     cursor: 'pointer',
+                    boxShadow: isTodayDate ? `0 2px 12px ${alpha(theme.palette.primary.main, 0.35)}` : 'none',
+                    transition: 'background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease',
                     '&:hover': {
-                      bgcolor: isTodayDate 
-                        ? 'primary.main' 
+                      bgcolor: isTodayDate
+                        ? theme.palette.primary.dark
                         : isHolidayDate
-                          ? 'rgba(244, 67, 54, 0.38)'
+                          ? alpha(theme.palette.error.main, 0.16)
                           : isWeekendOnly
-                            ? 'rgba(25, 118, 210, 0.22)'
-                          : 'action.hover',
-                      color: isTodayDate ? 'white' : 'text.primary',
+                            ? alpha(theme.palette.primary.main, 0.12)
+                            : alpha(theme.palette.grey[500], 0.08),
+                      color: isTodayDate ? theme.palette.primary.contrastText : theme.palette.text.primary,
+                      boxShadow: isTodayDate ? `0 4px 16px ${alpha(theme.palette.primary.main, 0.4)}` : undefined,
                     },
-                    transition: 'all 0.2s',
                   }}
                   onClick={() => openScheduleDialog(date)}
                 >
@@ -1295,8 +1320,9 @@ const NoticeManagement: React.FC = () => {
                     <Typography
                       variant="body2"
                       sx={{
-                        fontWeight: hasCompanyHoliday ? 800 : (isTodayDate ? 'bold' : isHolidayDate ? 'bold' : 'normal'),
+                        fontWeight: hasCompanyHoliday ? 700 : isTodayDate || isHolidayDate ? 600 : 500,
                         fontSize: ycsRem(0.78),
+                        letterSpacing: '-0.02em',
                         display: 'inline-flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -1304,11 +1330,15 @@ const NoticeManagement: React.FC = () => {
                         height: hasCompanyHoliday ? Math.round(22 * YEARLY_CALENDAR_SCALE) : 'auto',
                         px: hasCompanyHoliday ? ycsSp(0.4) : 0,
                         borderRadius: hasCompanyHoliday ? '50%' : 0,
-                        border: hasCompanyHoliday ? `${Math.round(3 * YEARLY_CALENDAR_SCALE)}px solid` : 'none',
-                        borderColor: hasCompanyHoliday ? (isTodayDate ? 'common.white' : 'warning.dark') : 'transparent',
-                        bgcolor: hasCompanyHoliday && !isTodayDate ? 'warning.main' : 'transparent',
-                        color: hasCompanyHoliday && !isTodayDate ? 'common.white' : undefined,
-                        lineHeight: 1
+                        border: hasCompanyHoliday ? `${Math.round(2 * YEARLY_CALENDAR_SCALE)}px solid` : 'none',
+                        borderColor: hasCompanyHoliday ? (isTodayDate ? alpha('#fff', 0.85) : 'warning.dark') : 'transparent',
+                        bgcolor: hasCompanyHoliday && !isTodayDate ? alpha(theme.palette.warning.main, 0.95) : 'transparent',
+                        color: hasCompanyHoliday && !isTodayDate
+                          ? theme.palette.common.white
+                          : isTodayDate && !hasCompanyHoliday
+                            ? theme.palette.primary.contrastText
+                            : undefined,
+                        lineHeight: 1,
                       }}
                     >
                       {date.getDate()}
@@ -1328,9 +1358,10 @@ const NoticeManagement: React.FC = () => {
                           variant="caption"
                           sx={{
                             fontSize: ycsRem(0.58),
-                            color: isTodayDate ? 'white' : 'error.main',
-                            fontWeight: 700,
-                            lineHeight: 1.1
+                            color: isTodayDate ? alpha('#fff', 0.95) : alpha(theme.palette.error.main, 0.92),
+                            fontWeight: 600,
+                            lineHeight: 1.25,
+                            letterSpacing: '0.01em',
                           }}
                         >
                           {getHolidayDisplayName(name)}
@@ -1341,9 +1372,9 @@ const NoticeManagement: React.FC = () => {
                           variant="caption"
                           sx={{
                             fontSize: ycsRem(0.56),
-                            color: isTodayDate ? 'white' : 'error.main',
-                            fontWeight: 700,
-                            lineHeight: 1.1
+                            color: isTodayDate ? alpha('#fff', 0.95) : alpha(theme.palette.error.main, 0.92),
+                            fontWeight: 600,
+                            lineHeight: 1.25,
                           }}
                         >
                           +{holidayNames.length - 2}
@@ -1364,11 +1395,17 @@ const NoticeManagement: React.FC = () => {
                               : item.type === 'company_holiday'
                                 ? 'common.white'
                                 : 'primary.main',
-                            fontWeight: 700,
-                            lineHeight: 1.15,
-                            bgcolor: item.type === 'company_holiday' ? 'warning.dark' : 'transparent',
+                            fontWeight: 600,
+                            lineHeight: 1.2,
+                            letterSpacing: '0.01em',
+                            bgcolor:
+                              item.type === 'company_holiday'
+                                ? isTodayDate
+                                  ? alpha('#fff', 0.22)
+                                  : alpha(theme.palette.warning.dark, 0.92)
+                                : 'transparent',
                             px: item.type === 'company_holiday' ? ycsSp(0.35) : 0,
-                            borderRadius: item.type === 'company_holiday' ? ycsSp(0.6) : 0,
+                            borderRadius: item.type === 'company_holiday' ? '8px' : 0,
                             display: 'inline-flex',
                             alignSelf: 'flex-start'
                           }}
@@ -1381,8 +1418,8 @@ const NoticeManagement: React.FC = () => {
                           variant="caption"
                           sx={{
                             fontSize: ycsRem(0.6),
-                            color: isTodayDate ? 'white' : 'primary.main',
-                            fontWeight: 700
+                            color: isTodayDate ? alpha('#fff', 0.95) : alpha(theme.palette.primary.main, 0.9),
+                            fontWeight: 600,
                           }}
                         >
                           +{customLabels.length - 2}
@@ -1396,13 +1433,19 @@ const NoticeManagement: React.FC = () => {
                         <Typography
                           key={`${dateKey}-${item.id}`}
                           variant="caption"
-                          sx={{ fontSize: ycsRem(0.56), color: item.color, fontWeight: 700, lineHeight: 1.1 }}
+                          sx={{
+                            fontSize: ycsRem(0.56),
+                            color: item.color,
+                            fontWeight: 600,
+                            lineHeight: 1.2,
+                            letterSpacing: '0.01em',
+                          }}
                         >
                           {item.label}
                         </Typography>
                       ))}
                       {complianceLabels.length > 2 && (
-                        <Typography variant="caption" sx={{ fontSize: ycsRem(0.56), color: 'info.main', fontWeight: 700 }}>
+                        <Typography variant="caption" sx={{ fontSize: ycsRem(0.56), color: 'info.main', fontWeight: 600 }}>
                           +{complianceLabels.length - 2}
                         </Typography>
                       )}
@@ -1420,25 +1463,17 @@ const NoticeManagement: React.FC = () => {
   if ((viewMode === 'view' || viewMode === 'edit') && selectedNotice) {
     return (
       <Box sx={{ 
-        p: 3, 
+        p: 0,
         backgroundColor: 'workArea.main',
         borderRadius: 2,
         minHeight: '100%'
       }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <AnnouncementIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-              <Typography component="h1" sx={{
-                fontSize: '16px !important',
-                fontWeight: 600,
-                color: 'text.primary',
-                lineHeight: 1.5
-              }}>
-                공지사항 상세
-                {isEn ? ' Notice Detail' : ''}
-              </Typography>
-            </Box>
+            <Typography component="h1" variant="pageTitle" sx={{ letterSpacing: '-0.02em' }}>
+              공지사항 상세
+              {isEn ? ' Notice Detail' : ''}
+            </Typography>
           </Box>
           <Button
             variant="outlined"
@@ -1956,51 +1991,70 @@ const NoticeManagement: React.FC = () => {
     );
   }
 
+  const shellCardSx = {
+    borderRadius: '20px',
+    border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+    boxShadow: `0 4px 24px ${alpha('#0f172a', 0.055)}`,
+    bgcolor: 'background.paper',
+    overflow: 'hidden' as const,
+    boxSizing: 'border-box' as const,
+  };
+
   return (
-    <Box sx={{ 
-      p: 2,
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%'
-    }}>
-      <Box sx={{ mb: 2 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Box>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <AnnouncementIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-              <Typography component="h1" sx={{
-                fontSize: '16px !important',
-                fontWeight: 600,
-                color: 'text.primary',
-                lineHeight: 1.5
-              }}>
-                공지사항
-                {isEn ? ' Notice Board' : ''}
-              </Typography>
-            </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
+    <Box
+      sx={{
+        p: { xs: 1.5, sm: 2 },
+        width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+        backgroundColor: 'workArea.main',
+        minHeight: '100%',
+      }}
+    >
+      <Box sx={{ mb: 2.5 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, gap: 2 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography component="h1" sx={{ ...mvsPageTitleSx, mb: 0.75 }}>
+              공지사항
+              {isEn ? ' Notice Board' : ''}
+            </Typography>
+            <Typography sx={mvsPageDescriptionSx}>
               {txt('중요한 공지사항과 업무 관련 정보를 확인하는 페이지입니다.', 'This page shows important notices and work-related updates.')}
             </Typography>
           </Box>
         </Box>
 
         {/* 탭 네비게이션 */}
-        <Card sx={{ mb: 2 }}>
-          <Tabs 
-            value={activeTab} 
+        <Card elevation={0} sx={{ ...shellCardSx, mb: 2 }}>
+          <Tabs
+            value={activeTab}
             onChange={(_, newValue) => setActiveTab(newValue)}
-            sx={{ borderBottom: 1, borderColor: 'divider' }}
+            sx={{
+              px: { xs: 0.5, sm: 1 },
+              borderBottom: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+              '& .MuiTabs-indicator': {
+                height: 3,
+                borderRadius: '3px 3px 0 0',
+                bgcolor: 'primary.main',
+              },
+              '& .MuiTab-root': {
+                textTransform: 'none',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                letterSpacing: '0.01em',
+                minHeight: 52,
+                py: 1.25,
+                color: 'text.secondary',
+                '&.Mui-selected': {
+                  color: 'primary.main',
+                  bgcolor: alpha(theme.palette.primary.main, 0.06),
+                },
+              },
+            }}
           >
-            <Tab
-              label={txt('공지사항', 'Notices')}
-              icon={<AnnouncementIcon />}
-              iconPosition="start"
-              disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
-            />
+            <Tab label={txt('공지사항', 'Notices')} disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead} />
             <Tab
               label={txt('연간 스케줄표', 'Yearly Schedule')}
-              icon={<CalendarTodayIcon />}
-              iconPosition="start"
               disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
             />
           </Tabs>
@@ -2017,34 +2071,45 @@ const NoticeManagement: React.FC = () => {
       {activeTab === 0 && (
         <>
       {/* 필터 및 검색 */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box sx={{ 
-            display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr 1fr' },
-            gap: 2, 
-            alignItems: 'center' 
-          }}>
+      <Card elevation={0} sx={{ ...shellCardSx, mb: 2.5 }}>
+        <CardContent sx={{ py: 2.25, px: { xs: 2, sm: 2.5 }, '&:last-child': { pb: 2.25 } }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr auto' },
+              gap: 2,
+              alignItems: 'center',
+            }}
+          >
             <TextField
               fullWidth
               placeholder={txt('제목, 내용, 작성자 검색', 'Search title, content, author')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '12px',
+                  bgcolor: alpha(theme.palette.grey[500], 0.04),
+                },
+              }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon />
+                    <SearchIcon sx={{ color: 'text.secondary', opacity: 0.85 }} />
                   </InputAdornment>
                 ),
               }}
             />
-            <FormControl fullWidth disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}>
+            <FormControl
+              fullWidth
+              disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
+              sx={{
+                '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: alpha(theme.palette.grey[500], 0.04) },
+              }}
+            >
               <InputLabel>{txt('상태', 'Status')}</InputLabel>
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
+              <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} label={txt('상태', 'Status')}>
                 <MenuItem value="">{txt('전체', 'All')}</MenuItem>
                 <MenuItem value="published">{txt('게시됨', 'Published')}</MenuItem>
               </Select>
@@ -2054,9 +2119,20 @@ const NoticeManagement: React.FC = () => {
                 <Button
                   fullWidth
                   variant="contained"
+                  disableElevation
                   startIcon={<AddIcon />}
                   onClick={handleOpenCreateDialog}
                   disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canCreate}
+                  sx={{
+                    borderRadius: '12px',
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    px: 2,
+                    py: 1,
+                    minHeight: 42,
+                    width: { xs: '100%', sm: 'auto' },
+                    whiteSpace: 'nowrap',
+                  }}
                 >
                   {txt('새 공지사항', 'New Notice')}
                 </Button>
@@ -2067,8 +2143,8 @@ const NoticeManagement: React.FC = () => {
       </Card>
 
           {/* 공지사항 목록 테이블 */}
-          <Card>
-            <CardContent>
+          <Card elevation={0} sx={shellCardSx}>
+            <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
               {loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
                   <CircularProgress />
@@ -2080,15 +2156,38 @@ const NoticeManagement: React.FC = () => {
                   </Typography>
                 </Box>
               ) : (
-                <TableContainer>
-                  <Table>
+                <TableContainer
+                  component={Paper}
+                  elevation={0}
+                  sx={{
+                    width: '100%',
+                    maxWidth: '100%',
+                    overflowX: 'auto',
+                    borderRadius: '16px',
+                    border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+                    boxShadow: `0 2px 14px ${alpha('#0f172a', 0.04)}`,
+                  }}
+                >
+                  <Table size="small" sx={{ minWidth: 640, width: '100%' }}>
                     <TableHead>
-                      <TableRow>
+                      <TableRow
+                        sx={{
+                          '& .MuiTableCell-head': {
+                            bgcolor: alpha(theme.palette.grey[500], 0.08),
+                            color: 'text.secondary',
+                            fontWeight: 600,
+                            fontSize: '0.75rem',
+                            letterSpacing: '0.02em',
+                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+                            py: 1.25,
+                          },
+                        }}
+                      >
                         <TableCell>{txt('제목', 'Title')}</TableCell>
                         <TableCell>{txt('작성자', 'Author')}</TableCell>
                         <TableCell>{txt('발행일', 'Published Date')}</TableCell>
                         <TableCell>{txt('조회수', 'Views')}</TableCell>
-                        <TableCell>{txt('작업', 'Action')}</TableCell>
+                        <TableCell align="right">{txt('작업', 'Action')}</TableCell>
                       </TableRow>
                     </TableHead>
             <TableBody>
@@ -2152,8 +2251,8 @@ const NoticeManagement: React.FC = () => {
                       {isEn ? `${notice.views}` : `${notice.views}회`}
                     </Typography>
                   </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                  <TableCell align="right" onClick={(e) => e.stopPropagation()}>
+                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
                       <Tooltip title={noticeMenuFlags.menusLoading || !noticeMenuFlags.canDelete ? t('common.menuNoDelete') : txt('삭제', 'Delete')}>
                         <span style={{ display: 'inline-flex' }}>
                           <IconButton
@@ -2161,6 +2260,7 @@ const NoticeManagement: React.FC = () => {
                             disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canDelete}
                             onClick={() => handleDeleteNotice(notice)}
                             color="error"
+                            sx={{ borderRadius: '10px' }}
                           >
                             <DeleteIcon />
                           </IconButton>
@@ -2177,12 +2277,14 @@ const NoticeManagement: React.FC = () => {
 
               {/* 페이지네이션 */}
               {notices.length > 0 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', pt: 2.5, pb: 0.5 }}>
                   <Pagination
                     count={totalPages}
                     page={page}
                     onChange={(_, value) => setPage(value)}
                     color="primary"
+                    shape="rounded"
+                    sx={{ '& .MuiPaginationItem-root': { borderRadius: '10px', fontWeight: 600 } }}
                   />
                 </Box>
               )}
@@ -2193,49 +2295,97 @@ const NoticeManagement: React.FC = () => {
 
       {/* 연간 스케줄표 탭 */}
       {activeTab === 1 && (
-        <Card sx={{ mb: 2 }}>
-          <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-            <Box sx={{ mb: 1.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600, fontSize: '1rem' }}>
+        <Card elevation={0} sx={{ ...shellCardSx, mb: 2 }}>
+          <CardContent sx={{ py: 2, px: { xs: 2, sm: 2.5 }, '&:last-child': { pb: 2 } }}>
+            <Box
+              sx={{
+                mb: 2,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 1.5,
+              }}
+            >
+              <Typography
+                variant="subtitle1"
+                sx={{ fontWeight: 600, fontSize: '1.0625rem', letterSpacing: '-0.015em', color: 'text.primary' }}
+              >
                 {txt('연간 스케줄표', 'Yearly Schedule')}
               </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <IconButton 
+              <Box
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  flexWrap: 'wrap',
+                  px: 1,
+                  py: 0.5,
+                  borderRadius: '14px',
+                  bgcolor: alpha(theme.palette.grey[500], 0.08),
+                  border: `1px solid ${alpha(theme.palette.divider, 0.65)}`,
+                }}
+              >
+                <IconButton
                   onClick={() => {
                     const prevMonth = new Date(currentDate);
                     prevMonth.setMonth(prevMonth.getMonth() - 1);
                     setCurrentDate(prevMonth);
                   }}
                   size="small"
+                  aria-label="previous month"
+                  sx={{ borderRadius: '10px' }}
                 >
-                  <ChevronLeftIcon />
+                  <ChevronLeftIcon fontSize="small" />
                 </IconButton>
-                <Typography variant="subtitle1" sx={{ minWidth: 160, textAlign: 'center', fontSize: '0.95rem', fontWeight: 600 }}>
+                <Typography
+                  variant="subtitle2"
+                  sx={{
+                    minWidth: 148,
+                    textAlign: 'center',
+                    fontSize: '0.9375rem',
+                    fontWeight: 600,
+                    letterSpacing: '0.01em',
+                    color: 'text.primary',
+                  }}
+                >
                   {isEn
                     ? `${currentDate.toLocaleString('en-US', { month: 'long' })} ${currentDate.getFullYear()}`
                     : `${currentDate.getFullYear()}년 ${currentDate.getMonth() + 1}월`}
                 </Typography>
-                <IconButton 
+                <IconButton
                   onClick={() => {
                     const nextMonth = new Date(currentDate);
                     nextMonth.setMonth(nextMonth.getMonth() + 1);
                     setCurrentDate(nextMonth);
                   }}
                   size="small"
+                  aria-label="next month"
+                  sx={{ borderRadius: '10px' }}
                 >
-                  <ChevronRightIcon />
+                  <ChevronRightIcon fontSize="small" />
                 </IconButton>
                 <Button
                   variant="outlined"
                   size="small"
                   onClick={() => setCurrentDate(new Date())}
+                  sx={{
+                    ml: 0.5,
+                    borderRadius: '10px',
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    fontSize: '0.8125rem',
+                    px: 1.5,
+                    py: 0.5,
+                    borderColor: alpha(theme.palette.divider, 0.95),
+                  }}
                 >
                   {txt('오늘', 'Today')}
                 </Button>
               </Box>
             </Box>
             {!canManageYearlySchedule && (
-              <Alert severity="info" sx={{ mb: 1.5 }}>
+              <Alert severity="info" sx={{ mb: 1.5, borderRadius: '12px' }}>
                 {txt(
                   '연간 스케줄 등록·수정·삭제는 관리자(admin) 또는 시스템 관리자(root)만 할 수 있습니다. 날짜를 누르면 해당 일의 일정을 볼 수 있습니다.',
                   'Adding, editing, or deleting yearly schedule entries is limited to admin or root. Click a date to view schedules for that day.'
