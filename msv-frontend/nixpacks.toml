@@ -3,7 +3,8 @@
 
 [phases.setup]
 # Node.js 런타임 설치
-nixPkgs = ["nodejs", "npm"]
+# npm은 nodejs에 포함됨 — 별도 nixPkgs 'npm'은 Nixpacks 1.41+에서 빌드 실패
+nixPkgs = ["nodejs"]
 
 [phases.install]
 # 의존성 설치 (빌드를 위해 모든 의존성 필요)

@@ -1,5 +1,6 @@
 [phases.setup]
-nixPkgs = ['nodejs', 'npm']
+# npm은 nodejs에 포함됨 — 별도 nixPkgs 'npm'은 Nixpacks 1.41+에서 빌드 실패
+nixPkgs = ['nodejs']
 
 [phases.install]
 cmds = ['npm ci']

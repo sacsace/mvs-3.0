@@ -25,6 +25,11 @@ import {
   getTodayAttendance,
 } from '../controllers/attendanceController';
 import {
+  getHeresnowStatus,
+  syncHeresnowAttendance,
+  updateHeresnowSettings
+} from '../controllers/heresnowIntegrationController';
+import {
   getVacations,
   getVacation,
   createVacation,
@@ -173,6 +178,9 @@ router.post('/payrolls/:id/approve', restrictAuditToReadOnly, approvePayroll);
 router.post('/payrolls/:id/pay', restrictAuditToReadOnly, payPayroll);
 
 // 근태 관련 라우트 (`/company`는 `:id`보다 먼저 등록)
+router.get('/attendances/heresnow/status', getHeresnowStatus);
+router.post('/attendances/heresnow/sync', restrictAuditToReadOnly, requireRole(['admin', 'root']), syncHeresnowAttendance);
+router.put('/attendances/heresnow/settings', restrictAuditToReadOnly, requireRole(['admin', 'root']), updateHeresnowSettings);
 router.get('/attendances/company', getCompanyAttendances);
 router.get('/attendances', getAttendances);
 router.get('/attendances/today', getTodayAttendance);

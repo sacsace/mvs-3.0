@@ -1750,6 +1750,21 @@ export const attendanceService = {
   }
 };
 
+export const heresnowIntegrationService = {
+  getStatus: async () => {
+    const response = await api.get('/hr/attendances/heresnow/status');
+    return response.data;
+  },
+  sync: async (payload?: { since?: string }) => {
+    const response = await api.post('/hr/attendances/heresnow/sync', payload || {});
+    return response.data;
+  },
+  updateSettings: async (payload: { enabled?: boolean; externalCompanyId?: string }) => {
+    const response = await api.put('/hr/attendances/heresnow/settings', payload);
+    return response.data;
+  }
+};
+
 export const accountingBasicInfoService = {
   getBasicInfo: async () => {
     try {

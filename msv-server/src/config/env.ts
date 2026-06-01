@@ -1,8 +1,26 @@
 import { config } from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 import { ENV_CONFIG, SYSTEM_CONSTANTS } from './constants';
 
-// 환경 변수 로드 (시스템 환경변수보다 .env 우선)
-config({ override: true });
+/** monorepo 루트·msv-server·cwd 순으로 .env 로드 (나중 파일이 우선) */
+const loadEnvFiles = () => {
+  const envDir = path.resolve(__dirname, '../..');
+  const rootDir = path.resolve(envDir, '..');
+  const candidates = [
+    path.join(envDir, 'env.development'),
+    path.join(rootDir, '.env'),
+    path.join(envDir, '.env'),
+    path.resolve(process.cwd(), '.env')
+  ];
+  for (const file of candidates) {
+    if (fs.existsSync(file)) {
+      config({ path: file, override: true });
+    }
+  }
+};
+
+loadEnvFiles();
 
 // 필수 환경 변수 검증
 // Railway에서는 DATABASE_URL을 사용하므로, DATABASE_URL이 있으면 개별 DB 환경 변수는 선택사항
@@ -120,6 +138,12 @@ export const env = {
   /** 비어 있으면 GST_GSP_BASE_URL 사용 */
   GST_GSP_EWAY_BASE_URL: process.env.GST_GSP_EWAY_BASE_URL || '',
   GST_GSP_EWAY_PATH: process.env.GST_GSP_EWAY_PATH || '/ewaybill/generate',
+
+  /** HeresNow ↔ MVS 근태 연동 */
+  HERESNOW_API_BASE_URL: process.env.HERESNOW_API_BASE_URL || 'https://www.heresnow.in',
+  MVS_INTEGRATION_API_KEY: process.env.MVS_INTEGRATION_API_KEY || process.env.HERESNOW_INTEGRATION_API_KEY || '',
+  INTEGRATION_DISPATCH_SECRET: process.env.INTEGRATION_DISPATCH_SECRET || '',
+  MVS_WEBHOOK_BEARER: process.env.MVS_WEBHOOK_BEARER || '',
   
   // 모니터링
   HEALTH_CHECK_INTERVAL: parseInt(process.env.HEALTH_CHECK_INTERVAL || '30000'),

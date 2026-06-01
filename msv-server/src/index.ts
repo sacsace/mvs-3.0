@@ -5,7 +5,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { Op, fn, col } from 'sequelize';
-import { config } from 'dotenv';
+// 환경 변수 로드 (env.ts에서 monorepo .env 포함 로드)
 import { validateEnv, printEnvInfo } from './config/env';
 import { connectDB, Menu, Company, Invoice, Customer, Product, User, RoomBooking } from './models';
 import authRoutes from './routes/auth';
@@ -27,15 +27,13 @@ import quotationRoutes from './routes/quotations';
 import communicationRoutes from './routes/communication';
 import aiRoutes from './routes/ai';
 import loginInfoRoutes from './routes/loginInfo';
+import integrationsRoutes from './routes/integrations';
 import { startAttendanceAutoCheckoutScheduler } from './controllers/attendanceController';
 import SocketService from './services/socketService';
 import aiService from './services/aiService';
 import { createServer } from 'http';
 import path from 'path';
 import { isCorsAllowLanEnabled, isPrivateLanHttpOrigin } from './utils/corsPrivateLan';
-
-// 환경 변수 로드 (시스템 환경변수보다 .env 우선)
-config({ override: true });
 
 // 환경 변수 검증 및 출력
 validateEnv();
@@ -263,6 +261,7 @@ app.use('/api/quotations', quotationRoutes);
 app.use('/api/communication', communicationRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/login-info', loginInfoRoutes);
+app.use('/api/integrations', integrationsRoutes);
 
 // 메뉴 데이터 API (한글 지원)
 app.get('/api/menus', async (req, res) => {

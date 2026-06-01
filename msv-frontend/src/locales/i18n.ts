@@ -477,7 +477,18 @@ const ko = {
       statVacationDays: '휴가일',
       statLateDays: '지각일',
       currentMonthRange: '조회 기간',
-      monthPeriodLabel: '{{year}}년 {{month}}월'
+      monthPeriodLabel: '{{year}}년 {{month}}월',
+      heresnowTitle: 'HeresNow 연동',
+      heresnowDescription: 'HeresNow(www.heresnow.in) 출·퇴근 기록을 MVS 근태로 가져옵니다.',
+      heresnowActive: '연동 활성',
+      heresnowInactive: '연동 비활성',
+      heresnowSync: 'HeresNow 동기화',
+      heresnowOpen: 'HeresNow 열기',
+      heresnowLastSync: '마지막 동기화',
+      heresnowSyncSuccess: 'HeresNow 근태 동기화가 완료되었습니다.',
+      heresnowSyncFailed: 'HeresNow 동기화에 실패했습니다.',
+      heresnowApiNotConfigured: '서버 API 키가 설정되지 않았습니다. MVS_INTEGRATION_API_KEY를 확인하세요.',
+      heresnowExternalCompanyId: '외부 회사 ID'
     },
     quotationManagement: {
       title: '견적서 관리',
@@ -3319,7 +3330,18 @@ const en = {
       statVacationDays: 'Vacation days',
       statLateDays: 'Late days',
       currentMonthRange: 'Period',
-      monthPeriodLabel: '{{month}}/{{year}}'
+      monthPeriodLabel: '{{month}}/{{year}}',
+      heresnowTitle: 'HeresNow Integration',
+      heresnowDescription: 'Import clock-in/out records from HeresNow (www.heresnow.in) into MVS attendance.',
+      heresnowActive: 'Integration active',
+      heresnowInactive: 'Integration inactive',
+      heresnowSync: 'Sync from HeresNow',
+      heresnowOpen: 'Open HeresNow',
+      heresnowLastSync: 'Last sync',
+      heresnowSyncSuccess: 'HeresNow attendance sync completed.',
+      heresnowSyncFailed: 'HeresNow sync failed.',
+      heresnowApiNotConfigured: 'Server API key is not configured. Check MVS_INTEGRATION_API_KEY.',
+      heresnowExternalCompanyId: 'External company ID'
     },
     companyManagement: {
       title: 'Company Management',

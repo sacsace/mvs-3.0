@@ -18,12 +18,16 @@ import {
   Select,
   MenuItem,
   Alert,
-  CircularProgress
+  CircularProgress,
+  Switch,
+  FormControlLabel
 } from '@mui/material';
 import {
   Login as CheckInIcon,
   Logout as CheckOutIcon,
-  Refresh as RefreshIcon
+  Refresh as RefreshIcon,
+  Sync as SyncIcon,
+  OpenInNew as OpenInNewIcon
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useTheme, alpha } from '@mui/material/styles';
@@ -32,7 +36,7 @@ import {
   mvsInnerCardSx,
   mvsTitleBlockSx,
 } from '../../theme/mvsLayout';
-import { attendanceService, officeLocationService, vacationService, api } from '../../services/api';
+import { attendanceService, heresnowIntegrationService, officeLocationService, vacationService, api } from '../../services/api';
 import { useStore } from '../../store';
 
 interface Attendance {
@@ -118,8 +122,11 @@ const AttendanceManagement: React.FC = () => {
   const [checkOutLoading, setCheckOutLoading] = useState(false);
   const [vacationDaysInMonth, setVacationDaysInMonth] = useState(0);
   const [officeLocation, setOfficeLocation] = useState<{ latitude: number; longitude: number; radiusMeters?: number } | null>(null);
+  const [heresnowStatus, setHeresnowStatus] = useState<any>(null);
+  const [heresnowSyncLoading, setHeresnowSyncLoading] = useState(false);
   /** admin / root / audit: 근태 현황에서 회사 전체·부서 필터 (일반 직원은 본인만) */
   const canListCompanyAttendance = ['admin', 'root', 'audit'].includes(String(user?.role || ''));
+  const canManageHeresnow = ['admin', 'root'].includes(String(user?.role || ''));
   const TIME_ZONE = 'Asia/Kolkata';
   const IST_OFFSET_MINUTES = 330;
   const pad2 = (value: number) => value.toString().padStart(2, '0');
@@ -236,6 +243,22 @@ const AttendanceManagement: React.FC = () => {
     fetchOfficeLocation();
   }, []);
 
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    heresnowIntegrationService
+      .getStatus()
+      .then((res) => {
+        if (!cancelled && res.success) setHeresnowStatus(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) setHeresnowStatus(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
   const getCurrentPosition = () =>
     new Promise<GeolocationPosition>((resolve, reject) => {
       if (!navigator.geolocation) {
@@ -340,6 +363,42 @@ const AttendanceManagement: React.FC = () => {
       setError(error.response?.data?.message || t('attendanceManagement.loadListError'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleHeresnowSync = async () => {
+    setHeresnowSyncLoading(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await heresnowIntegrationService.sync();
+      if (res.success) {
+        setSuccess(res.message || t('attendanceManagement.heresnowSyncSuccess'));
+        const statusRes = await heresnowIntegrationService.getStatus();
+        if (statusRes.success) setHeresnowStatus(statusRes.data);
+        await fetchAttendances();
+        const todayRes = await attendanceService.getTodayAttendance(getClientDate());
+        if (todayRes.success) setTodayAttendance(todayRes.data);
+      } else {
+        setError(res.message || t('attendanceManagement.heresnowSyncFailed'));
+      }
+    } catch (e: any) {
+      setError(e?.response?.data?.message || t('attendanceManagement.heresnowSyncFailed'));
+    } finally {
+      setHeresnowSyncLoading(false);
+    }
+  };
+
+  const handleHeresnowToggle = async (enabled: boolean) => {
+    if (!canManageHeresnow) return;
+    try {
+      const res = await heresnowIntegrationService.updateSettings({ enabled });
+      if (res.success) {
+        setHeresnowStatus(res.data);
+        setSuccess(enabled ? t('attendanceManagement.heresnowActive') : t('attendanceManagement.heresnowInactive'));
+      }
+    } catch (e: any) {
+      setError(e?.response?.data?.message || t('attendanceManagement.heresnowSyncFailed'));
     }
   };
 
@@ -613,6 +672,100 @@ const AttendanceManagement: React.FC = () => {
           {success}
         </Alert>
       )}
+
+      <Card
+        elevation={0}
+        sx={{
+          ...mvsInnerCardSx,
+          mb: 3,
+          p: 2,
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 2,
+            flexWrap: 'wrap',
+          }}
+        >
+          <Box sx={{ flex: '1 1 280px', minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
+              <Typography sx={{ fontWeight: 700, fontSize: '0.9375rem', color: valueColor }}>
+                {t('attendanceManagement.heresnowTitle')}
+              </Typography>
+              <Chip
+                size="small"
+                label={
+                  heresnowStatus?.enabled
+                    ? t('attendanceManagement.heresnowActive')
+                    : t('attendanceManagement.heresnowInactive')
+                }
+                color={heresnowStatus?.enabled ? 'success' : 'default'}
+                sx={{ height: 24, fontWeight: 600 }}
+              />
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1, lineHeight: 1.55 }}>
+              {t('attendanceManagement.heresnowDescription')}
+            </Typography>
+            {heresnowStatus?.externalCompanyId && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                {t('attendanceManagement.heresnowExternalCompanyId')}: {heresnowStatus.externalCompanyId}
+              </Typography>
+            )}
+            {heresnowStatus?.lastSyncAt && (
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                {t('attendanceManagement.heresnowLastSync')}:{' '}
+                {new Date(heresnowStatus.lastSyncAt).toLocaleString()}
+              </Typography>
+            )}
+            {heresnowStatus?.apiConfigured === false && canManageHeresnow && (
+              <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.75 }}>
+                {t('attendanceManagement.heresnowApiNotConfigured')}
+              </Typography>
+            )}
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+            {canManageHeresnow && (
+              <FormControlLabel
+                control={
+                  <Switch
+                    size="small"
+                    checked={Boolean(heresnowStatus?.enabled)}
+                    onChange={(e) => handleHeresnowToggle(e.target.checked)}
+                  />
+                }
+                label={t('attendanceManagement.heresnowActive')}
+                sx={{ mr: 0 }}
+              />
+            )}
+            {canManageHeresnow && (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={heresnowSyncLoading ? <CircularProgress size={16} /> : <SyncIcon />}
+                disabled={heresnowSyncLoading || !heresnowStatus?.enabled}
+                onClick={handleHeresnowSync}
+                sx={{ textTransform: 'none', fontWeight: 600 }}
+              >
+                {t('attendanceManagement.heresnowSync')}
+              </Button>
+            )}
+            <Button
+              href="https://www.heresnow.in"
+              target="_blank"
+              rel="noopener noreferrer"
+              variant="text"
+              size="small"
+              endIcon={<OpenInNewIcon sx={{ fontSize: '1rem !important' }} />}
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+            >
+              {t('attendanceManagement.heresnowOpen')}
+            </Button>
+          </Box>
+        </Box>
+      </Card>
 
       <Box
         sx={{
