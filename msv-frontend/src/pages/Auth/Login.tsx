@@ -812,6 +812,10 @@ const Login: React.FC = () => {
         </Paper>
       </Container>
       <Typography
+        component="a"
+        href="https://www.msvetnures.in"
+        target="_blank"
+        rel="noopener noreferrer"
         variant="caption"
         sx={{
           position: 'absolute',
@@ -822,6 +826,12 @@ const Login: React.FC = () => {
           letterSpacing: '0.06em',
           textTransform: 'lowercase',
           fontSize: '0.6875rem',
+          textDecoration: 'none',
+          cursor: 'pointer',
+          '&:hover': {
+            color: 'primary.main',
+            textDecoration: 'underline',
+          },
         }}
       >
         minsub ventures private limited

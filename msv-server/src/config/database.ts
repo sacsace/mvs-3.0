@@ -4,6 +4,7 @@ import { SYSTEM_CONSTANTS } from './constants';
 
 // Railway 환경 변수 우선 사용
 const databaseUrl = process.env.DATABASE_URL;
+const isRailwayInternal = Boolean(databaseUrl?.includes('.railway.internal'));
 
 const sequelize = databaseUrl 
   ? new Sequelize(databaseUrl, {
@@ -21,11 +22,10 @@ const sequelize = databaseUrl
         freezeTableName: true
       },
       dialectOptions: {
-        // Railway PostgreSQL SSL 설정
-        ssl: env.NODE_ENV === 'production' ? {
-          require: true,
-          rejectUnauthorized: false
-        } : false
+        // railway.internal 은 SSL 없음 — require:true 시 연결 지연/실패 가능
+        ssl: env.NODE_ENV === 'production' && !isRailwayInternal
+          ? { require: true, rejectUnauthorized: false }
+          : false
       }
     })
   : new Sequelize({

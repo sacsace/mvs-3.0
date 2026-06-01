@@ -7,6 +7,7 @@ const { Sequelize } = require('sequelize');
 const { readdirSync } = require('fs');
 const { join } = require('path');
 const { config } = require('dotenv');
+const { getPostgresDialectOptions } = require('./postgres-dialect-options.cjs');
 
 config();
 
@@ -21,21 +22,28 @@ if (!DATABASE_URL) {
 const sequelize = new Sequelize(DATABASE_URL, {
   logging: console.log,
   dialect: 'postgres',
-  dialectOptions: {
-    ssl:
-      process.env.NODE_ENV === 'production'
-        ? {
-            require: true,
-            rejectUnauthorized: false,
-          }
-        : false,
-  },
+  dialectOptions: getPostgresDialectOptions(DATABASE_URL),
 });
+
+async function authenticateWithRetry(maxRetries = 8) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await sequelize.authenticate();
+      return;
+    } catch (error) {
+      console.error(`DB 연결 실패 (${attempt}/${maxRetries}):`, error.message);
+      if (attempt >= maxRetries) throw error;
+      const waitMs = 5000 * attempt;
+      console.log(`${waitMs}ms 후 재시도...`);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+}
 
 async function runMigrations() {
   try {
     console.log('🔌 데이터베이스 연결 중...');
-    await sequelize.authenticate();
+    await authenticateWithRetry();
     console.log('✅ 데이터베이스 연결 성공\n');
 
     await sequelize.query(`
