@@ -3,7 +3,7 @@ import { Box, Alert, Typography, Button, CircularProgress } from '@mui/material'
 import { alpha } from '@mui/material/styles';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from './Header';
-import Sidebar from './Sidebar';
+import Sidebar, { SIDEBAR_WIDTH_EASING, SIDEBAR_WIDTH_TRANSITION_MS } from './Sidebar';
 import { useStore, useMenuStore } from '../../store';
 import { userUiPreferencesService } from '../../services/api';
 import i18n from '../../locales/i18n';
@@ -186,6 +186,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     }
   }, [location.pathname, menus, menusLoading, hasMenuPermission, user?.role, findMenuByRoute]);
 
+  const contentInsetLeft =
+    (autoCollapseEnabled && isSidebarCollapsed ? collapsedWidth : sidebarWidth) + WORK_AREA_OUTSET;
+
   return (
     <Box 
       sx={{ 
@@ -252,19 +255,20 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             outline: 'none',
             boxShadow: 'none',
             // 사이드바 너비 + 카드와의 간격(회색 띠가 보이도록)
-            paddingLeft: `${(autoCollapseEnabled && isSidebarCollapsed ? collapsedWidth : sidebarWidth) + WORK_AREA_OUTSET}px`,
+            paddingLeft: `${contentInsetLeft}px`,
             paddingRight: `${WORK_AREA_OUTSET + 8}px`,
             paddingTop: `${HEADER_MENU_GAP_PX + 4}px`,
             paddingBottom: `${WORK_AREA_OUTSET + 16}px`,
+            transition: `padding-left ${SIDEBAR_WIDTH_TRANSITION_MS}ms ${SIDEBAR_WIDTH_EASING}`,
             // 반응형 패딩
             '@media (max-width: 600px)': {
-              paddingLeft: `${Math.min((autoCollapseEnabled && isSidebarCollapsed ? collapsedWidth : sidebarWidth) + WORK_AREA_OUTSET, 240 + WORK_AREA_OUTSET)}px`,
+              paddingLeft: `${Math.min(contentInsetLeft, 240 + WORK_AREA_OUTSET)}px`,
               paddingRight: '8px',
               paddingTop: `${HEADER_MENU_GAP_PX}px`,
               paddingBottom: '16px',
             },
             '@media (min-width: 600px) and (max-width: 960px)': {
-              paddingLeft: `${Math.min((autoCollapseEnabled && isSidebarCollapsed ? collapsedWidth : sidebarWidth) + WORK_AREA_OUTSET, 260 + WORK_AREA_OUTSET)}px`,
+              paddingLeft: `${Math.min(contentInsetLeft, 260 + WORK_AREA_OUTSET)}px`,
               paddingRight: '16px',
               paddingTop: `${HEADER_MENU_GAP_PX}px`,
               paddingBottom: '24px',

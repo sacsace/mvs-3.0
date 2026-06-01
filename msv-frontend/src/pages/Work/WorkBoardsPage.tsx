@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Avatar,
+  AvatarGroup,
   Box,
   Button,
   Card,
@@ -17,7 +19,13 @@ import {
   IconButton
 } from '@mui/material';
 import FormFieldLabeled from '../../components/Common/FormFieldLabeled';
-import { Add as AddIcon, DragIndicator as DragIndicatorIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  DragIndicator as DragIndicatorIcon,
+  EditOutlined as EditOutlinedIcon,
+  GroupsOutlined as GroupsOutlinedIcon,
+  ViewKanbanOutlined as ViewKanbanOutlinedIcon
+} from '@mui/icons-material';
 import {
   DndContext,
   DragEndEvent,
@@ -42,7 +50,13 @@ import { workBoardService } from '../../services/api';
 import { showErrorPopup } from '../../utils/errorHandler';
 import { useMenuStore, useStore } from '../../store';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
-import { mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
+import {
+  mvsMainSurfaceSx,
+  mvsPageDescriptionSx,
+  mvsPageShellSx,
+  mvsPageTitleSx,
+  mvsTitleBlockSx
+} from '../../theme/mvsLayout';
 
 /** 보드 색상 — 채도를 낮춘 시스템 톤에 가깝게 */
 const BOARD_COLOR_OPTIONS = [
@@ -66,6 +80,29 @@ const getBoardAccentColor = (board: any, fallbackColor: string) => {
   return fallbackColor;
 };
 
+const getContrastText = (hex: string) => {
+  const normalized = hex.replace('#', '');
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.62 ? '#111827' : '#FFFFFF';
+};
+
+const getMemberInitial = (member: any) => {
+  const label =
+    member?.user?.username ||
+    member?.user?.userid ||
+    member?.user?.email ||
+    '';
+  const trimmed = String(label).trim();
+  if (!trimmed) return '?';
+  return trimmed.charAt(0).toUpperCase();
+};
+
+const getMemberLabel = (member: any) =>
+  member?.user?.username || member?.user?.userid || member?.user?.email || '';
+
 type SortableBoardCardProps = {
   board: any;
   themePrimaryColor: string;
@@ -87,6 +124,9 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
 }) => {
   const theme = useTheme();
   const accent = getBoardAccentColor(board, themePrimaryColor);
+  const headerText = getContrastText(accent);
+  const members = Array.isArray(board.members) ? board.members : [];
+  const previewMembers = members.slice(0, 4);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: board.id,
     disabled: !canEdit
@@ -94,11 +134,12 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.55 : 1,
-    zIndex: isDragging ? 2 : undefined
+    opacity: isDragging ? 0.72 : 1,
+    zIndex: isDragging ? 4 : undefined
   };
 
-  const cardBg = theme.palette.mode === 'light' ? '#FFFFFF' : alpha(theme.palette.grey[900], 0.92);
+  const cardBg = theme.palette.mode === 'light' ? '#FFFFFF' : alpha(theme.palette.grey[900], 0.96);
+  const description = String(board.description || '').trim();
 
   return (
     <Card
@@ -107,159 +148,214 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
       elevation={0}
       sx={{
         width: '100%',
-        minHeight: 148,
-        borderRadius: '16px',
+        minHeight: 176,
+        borderRadius: '18px',
         border: '1px solid',
-        borderColor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.08)' : alpha(theme.palette.common.white, 0.1),
-        borderTop: `4px solid ${accent}`,
+        borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.1),
         backgroundColor: cardBg,
         boxShadow:
           theme.palette.mode === 'light'
-            ? '0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.06)'
-            : '0 2px 8px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.04)',
+            ? '0 2px 8px rgba(15, 23, 42, 0.05), 0 12px 28px rgba(15, 23, 42, 0.04)'
+            : '0 8px 24px rgba(0,0,0,0.35)',
         overflow: 'hidden',
         transition: 'box-shadow 0.22s ease, transform 0.22s ease, border-color 0.22s ease',
         '&:hover': {
           boxShadow:
             theme.palette.mode === 'light'
-              ? '0 2px 4px rgba(0, 0, 0, 0.05), 0 8px 24px rgba(0, 0, 0, 0.09)'
-              : '0 8px 24px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.06)',
-          transform: 'translateY(-2px)',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.1)' : alpha(theme.palette.common.white, 0.12),
+              ? '0 4px 14px rgba(15, 23, 42, 0.08), 0 18px 36px rgba(15, 23, 42, 0.07)'
+              : '0 12px 32px rgba(0,0,0,0.45)',
+          transform: 'translateY(-3px)',
+          borderColor: alpha(accent, 0.35),
+          '& .board-card-actions': { opacity: 1 },
         },
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'stretch' }}>
-        {canEdit ? (
-          <IconButton
-            size="small"
-            aria-label={isEn ? 'Reorder' : '순서 변경'}
-            {...attributes}
-            {...listeners}
+      <CardActionArea
+        onClick={() => navigate(`/work/projects/${board.id}`)}
+        sx={{
+          height: '100%',
+          alignItems: 'stretch',
+          display: 'flex',
+          flexDirection: 'column',
+          '&:hover .MuiCardActionArea-focusHighlight': { opacity: 0.04 },
+        }}
+      >
+        <Box
+          sx={{
+            position: 'relative',
+            px: 2,
+            py: 1.75,
+            minHeight: 58,
+            bgcolor: accent,
+            backgroundImage: `linear-gradient(135deg, ${alpha('#FFFFFF', 0.14)} 0%, transparent 55%)`,
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 1,
+          }}
+        >
+          <ViewKanbanOutlinedIcon sx={{ fontSize: '1.125rem', color: headerText, opacity: 0.88, mt: 0.15 }} />
+          <Typography
+            variant="subtitle1"
             sx={{
-              cursor: 'grab',
-              alignSelf: 'stretch',
-              borderRadius: '10px 0 0 10px',
-              px: 0.5,
-              color: alpha(theme.palette.text.secondary, 0.45),
-              touchAction: 'none',
-              borderRight: '1px solid',
-              borderColor: theme.palette.mode === 'light' ? 'rgba(0,0,0,0.06)' : alpha(theme.palette.common.white, 0.06),
-              '&:hover': { bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.12 : 0.06) },
+              flex: 1,
+              minWidth: 0,
+              fontWeight: 700,
+              lineHeight: 1.35,
+              letterSpacing: '-0.02em',
+              fontSize: '0.98rem',
+              color: headerText,
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            }}
+          >
+            {board.name}
+          </Typography>
+          <Box
+            className="board-card-actions"
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.25,
+              opacity: { xs: 1, sm: 0 },
+              transition: 'opacity 0.18s ease',
+              flexShrink: 0,
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <DragIndicatorIcon sx={{ fontSize: '1.125rem' }} />
-          </IconButton>
-        ) : (
-          <Box sx={{ width: 8, flexShrink: 0 }} aria-hidden />
-        )}
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <CardActionArea
-            onClick={() => navigate(`/work/projects/${board.id}`)}
-            sx={{
-              height: '100%',
-              borderRadius: 0,
-              '&:hover': {
-                backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.07 : 0.035),
-              },
-            }}
-          >
-            <CardContent
-              sx={{
-                py: 2,
-                px: 2,
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                '&:last-child': { pb: 2 },
-              }}
-            >
-              <Typography
-                variant="subtitle1"
-                sx={{
-                  fontWeight: 600,
-                  lineHeight: 1.28,
-                  letterSpacing: '-0.022em',
-                  fontSize: '0.9375rem',
-                  color: 'text.primary',
-                }}
-                gutterBottom
-                noWrap
-              >
-                {board.name}
-              </Typography>
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{
-                  mb: 1.25,
-                  display: 'block',
-                  minHeight: '1.35em',
-                  lineHeight: 1.4,
-                  fontSize: '0.8125rem',
-                  fontWeight: 400,
-                  opacity: String(board.description || '').trim() ? 0.92 : 0.5,
-                }}
-                noWrap
-              >
-                {String(board.description || '').trim() ? board.description : t('workBoards.noDescription')}
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.25 }}>
-                <Chip
-                  size="small"
-                  variant="outlined"
-                  label={t('workBoards.memberCount', { count: board.members?.length ?? 0 })}
-                  sx={{
-                    height: 24,
-                    fontWeight: 500,
-                    fontSize: '0.6875rem',
-                    letterSpacing: '-0.01em',
-                    borderColor: theme.palette.mode === 'light' ? 'rgba(0,0,0,0.1)' : alpha(theme.palette.common.white, 0.14),
-                    bgcolor: theme.palette.mode === 'light' ? 'rgba(0,0,0,0.04)' : alpha(theme.palette.common.black, 0.2),
-                    color: 'text.secondary',
-                    '& .MuiChip-label': { px: 1 },
-                  }}
-                />
-              </Box>
-              {canEdit && (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    mt: 'auto',
-                    pt: 1.25,
-                    borderTop: '1px solid',
-                    borderColor: theme.palette.mode === 'light' ? 'rgba(0,0,0,0.06)' : alpha(theme.palette.common.white, 0.08),
-                  }}
-                >
-                  <Button
+            {canEdit && (
+              <>
+                <Tooltip title={isEn ? 'Reorder' : '순서 변경'}>
+                  <IconButton
                     size="small"
-                    variant="text"
-                    color="primary"
+                    aria-label={isEn ? 'Reorder' : '순서 변경'}
+                    {...attributes}
+                    {...listeners}
                     sx={{
-                      minWidth: 'auto',
-                      px: 1,
-                      py: 0.5,
-                      fontSize: '0.8125rem',
-                      fontWeight: 600,
-                      textTransform: 'none',
-                      borderRadius: '10px',
-                      color: 'primary.main',
+                      width: 28,
+                      height: 28,
+                      color: headerText,
+                      bgcolor: alpha(headerText, 0.12),
+                      touchAction: 'none',
+                      cursor: 'grab',
+                      '&:hover': { bgcolor: alpha(headerText, 0.2) },
                     }}
+                  >
+                    <DragIndicatorIcon sx={{ fontSize: '1rem' }} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title={isEn ? 'Edit' : '수정'}>
+                  <IconButton
+                    size="small"
+                    aria-label={isEn ? 'Edit' : '수정'}
                     onClick={(event) => {
                       event.stopPropagation();
                       onEdit(board);
                     }}
+                    sx={{
+                      width: 28,
+                      height: 28,
+                      color: headerText,
+                      bgcolor: alpha(headerText, 0.12),
+                      '&:hover': { bgcolor: alpha(headerText, 0.2) },
+                    }}
                   >
-                    {isEn ? 'Edit' : '수정'}
-                  </Button>
-                </Box>
-              )}
-            </CardContent>
-          </CardActionArea>
+                    <EditOutlinedIcon sx={{ fontSize: '0.95rem' }} />
+                  </IconButton>
+                </Tooltip>
+              </>
+            )}
+          </Box>
         </Box>
-      </Box>
+
+        <CardContent
+          sx={{
+            flex: 1,
+            py: 2,
+            px: 2,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 1.5,
+            '&:last-child': { pb: 2 },
+          }}
+        >
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{
+              minHeight: '2.8em',
+              lineHeight: 1.55,
+              fontSize: '0.8125rem',
+              fontWeight: 400,
+              opacity: description ? 0.92 : 0.55,
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            }}
+          >
+            {description || t('workBoards.noDescription')}
+          </Typography>
+
+          <Box
+            sx={{
+              mt: 'auto',
+              pt: 1.25,
+              borderTop: '1px solid',
+              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : alpha(theme.palette.common.white, 0.08),
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1,
+            }}
+          >
+            {members.length > 0 ? (
+              <AvatarGroup
+                max={4}
+                sx={{
+                  '& .MuiAvatar-root': {
+                    width: 28,
+                    height: 28,
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    border: `2px solid ${cardBg}`,
+                  },
+                }}
+              >
+                {previewMembers.map((member: any) => (
+                  <Tooltip title={getMemberLabel(member)} key={member.id ?? member.user_id}>
+                    <Avatar sx={{ bgcolor: alpha(accent, 0.88), color: getContrastText(accent) }}>
+                      {getMemberInitial(member)}
+                    </Avatar>
+                  </Tooltip>
+                ))}
+              </AvatarGroup>
+            ) : (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, color: 'text.disabled' }}>
+                <GroupsOutlinedIcon sx={{ fontSize: '1.05rem' }} />
+                <Typography variant="caption" sx={{ fontSize: '0.75rem' }}>
+                  {isEn ? 'No members' : '멤버 없음'}
+                </Typography>
+              </Box>
+            )}
+            <Chip
+              size="small"
+              label={t('workBoards.memberCount', { count: members.length })}
+              sx={{
+                height: 26,
+                fontWeight: 600,
+                fontSize: '0.6875rem',
+                letterSpacing: '-0.01em',
+                borderRadius: '999px',
+                bgcolor: theme.palette.mode === 'light' ? '#F1F5F9' : alpha(theme.palette.common.white, 0.06),
+                color: 'text.secondary',
+                '& .MuiChip-label': { px: 1.1 },
+              }}
+            />
+          </Box>
+        </CardContent>
+      </CardActionArea>
     </Card>
   );
 };
@@ -413,121 +509,194 @@ const WorkBoardsPage: React.FC = () => {
     }
   };
 
-  const pageCanvasBg =
-    theme.palette.mode === 'light'
-      ? 'linear-gradient(180deg, #F4F5F8 0%, #F0F2F5 100%)'
-      : alpha(theme.palette.background.default, 1);
-  const pageCanvasSolid = theme.palette.mode === 'light' ? '#F2F3F7' : theme.palette.background.default;
-
   return (
-    <Box
-      sx={{
-        p: 0,
-        width: '100%',
-        maxWidth: '100%',
-        bgcolor: pageCanvasSolid,
-        backgroundImage: theme.palette.mode === 'light' ? pageCanvasBg : 'none',
-        borderRadius: { xs: 0, sm: '18px' },
-        px: { xs: 2, sm: 2.5 },
-        py: { xs: 2, sm: 2.5 },
-        boxSizing: 'border-box',
-      }}
-    >
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: 2,
-          flexWrap: 'wrap',
-          mb: 2.75,
-          pb: 2,
-          borderBottom: '1px solid',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(0,0,0,0.07)' : alpha(theme.palette.common.white, 0.08),
-        }}
-      >
-        <Box sx={{ flex: '1 1 260px', minWidth: 0 }}>
-          <Typography component="h1" sx={{ ...mvsPageTitleSx, mb: 0.75 }}>
-            {t('workBoards.title')}
-          </Typography>
-          <Typography sx={{ ...mvsPageDescriptionSx, maxWidth: 560 }}>
-            {t('workBoards.description')}
-          </Typography>
-        </Box>
-        {canCreateBoard && (
-          <Button
-            variant="contained"
-            disableElevation
-            startIcon={<AddIcon sx={{ fontSize: '1.125rem' }} />}
-            onClick={openCreateDialog}
-            sx={{
-              flexShrink: 0,
-              alignSelf: { xs: 'stretch', sm: 'flex-start' },
-              borderRadius: '14px',
-              px: 2.5,
-              py: 1.05,
-              textTransform: 'none',
-              fontWeight: 600,
-              boxShadow: theme.palette.mode === 'light' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
-            }}
-          >
-            {t('workBoards.actions.newBoard')}
-          </Button>
-        )}
-      </Box>
-
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={canEditBoard ? handleBoardDragEnd : () => {}}
+    <Box sx={mvsPageShellSx}>
+      <Box sx={mvsMainSurfaceSx}>
+        <Box
+          sx={{
+            ...mvsTitleBlockSx,
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 2,
+            flexWrap: 'wrap',
+          }}
         >
-          <SortableContext items={boards.map((b) => b.id)} strategy={rectSortingStrategy}>
-            <Box
-              sx={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))',
-                gap: { xs: 2, sm: 2.25 },
-                alignItems: 'start',
-              }}
-            >
-              {boards.map((b) => (
-                <SortableBoardCard
-                  key={b.id}
-                  board={b}
-                  themePrimaryColor={themePrimaryColor}
-                  t={t}
-                  isEn={isEn}
-                  navigate={navigate}
-                  onEdit={openEditDialog}
-                  canEdit={canEditBoard}
-                />
-              ))}
-              {boards.length === 0 && (
-                <Box
+          <Box sx={{ flex: '1 1 260px', minWidth: 0 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap', mb: 0.75 }}>
+              <Typography component="h1" sx={{ ...mvsPageTitleSx, mb: 0 }}>
+                {t('workBoards.title')}
+              </Typography>
+              {!loading && boards.length > 0 && (
+                <Chip
+                  size="small"
+                  label={isEn ? `${boards.length} boards` : `보드 ${boards.length}개`}
                   sx={{
-                    gridColumn: '1 / -1',
-                    py: 5,
-                    px: 2,
-                    textAlign: 'center',
-                    borderRadius: '16px',
-                    border: `1px dashed ${theme.palette.mode === 'light' ? 'rgba(0,0,0,0.14)' : alpha(theme.palette.common.white, 0.2)}`,
-                    bgcolor: theme.palette.mode === 'light' ? 'rgba(255,255,255,0.55)' : alpha(theme.palette.common.black, 0.25),
+                    height: 24,
+                    fontWeight: 600,
+                    fontSize: '0.75rem',
+                    bgcolor: '#EEF2FF',
+                    color: '#4338CA',
+                    border: 'none',
                   }}
-                >
-                  <Typography color="text.secondary" sx={{ fontSize: '0.9375rem', lineHeight: 1.6 }}>
-                    {t('workBoards.empty.noBoards')}
-                  </Typography>
-                </Box>
+                />
               )}
             </Box>
-          </SortableContext>
-        </DndContext>
-      )}
+            <Typography sx={{ ...mvsPageDescriptionSx, maxWidth: 620 }}>
+              {t('workBoards.description')}
+            </Typography>
+          </Box>
+          {canCreateBoard && (
+            <Button
+              variant="contained"
+              disableElevation
+              startIcon={<AddIcon sx={{ fontSize: '1.125rem' }} />}
+              onClick={openCreateDialog}
+              sx={{
+                flexShrink: 0,
+                alignSelf: { xs: 'stretch', sm: 'flex-start' },
+                borderRadius: '14px',
+                px: 2.5,
+                py: 1.05,
+                textTransform: 'none',
+                fontWeight: 600,
+                boxShadow: theme.palette.mode === 'light' ? '0 4px 14px rgba(15, 23, 42, 0.08)' : 'none',
+              }}
+            >
+              {t('workBoards.actions.newBoard')}
+            </Button>
+          )}
+        </Box>
+
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={canEditBoard ? handleBoardDragEnd : () => {}}
+          >
+            <SortableContext items={boards.map((b) => b.id)} strategy={rectSortingStrategy}>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: {
+                    xs: '1fr',
+                    sm: 'repeat(auto-fill, minmax(260px, 1fr))',
+                    lg: 'repeat(auto-fill, minmax(280px, 1fr))',
+                  },
+                  gap: { xs: 2, sm: 2.5 },
+                  alignItems: 'stretch',
+                }}
+              >
+                {boards.map((b) => (
+                  <SortableBoardCard
+                    key={b.id}
+                    board={b}
+                    themePrimaryColor={themePrimaryColor}
+                    t={t}
+                    isEn={isEn}
+                    navigate={navigate}
+                    onEdit={openEditDialog}
+                    canEdit={canEditBoard}
+                  />
+                ))}
+                {canCreateBoard && boards.length > 0 && (
+                  <Card
+                    elevation={0}
+                    onClick={openCreateDialog}
+                    sx={{
+                      minHeight: 176,
+                      borderRadius: '18px',
+                      border: '2px dashed',
+                      borderColor: theme.palette.mode === 'light' ? '#CBD5E1' : alpha(theme.palette.common.white, 0.22),
+                      bgcolor: theme.palette.mode === 'light' ? '#F8FAFC' : alpha(theme.palette.common.white, 0.03),
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease',
+                      '&:hover': {
+                        borderColor: 'primary.main',
+                        bgcolor: theme.palette.mode === 'light' ? '#F1F5F9' : alpha(theme.palette.primary.main, 0.08),
+                        transform: 'translateY(-2px)',
+                      },
+                    }}
+                  >
+                    <Stack alignItems="center" spacing={1} sx={{ px: 2, py: 3, textAlign: 'center' }}>
+                      <Box
+                        sx={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: '14px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          bgcolor: alpha(theme.palette.primary.main, 0.1),
+                          color: 'primary.main',
+                        }}
+                      >
+                        <AddIcon />
+                      </Box>
+                      <Typography sx={{ fontWeight: 700, fontSize: '0.9375rem', color: 'text.primary' }}>
+                        {t('workBoards.actions.newBoard')}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 200, lineHeight: 1.5 }}>
+                        {isEn ? 'Add another board for your team' : '팀과 함께 쓸 보드를 추가합니다'}
+                      </Typography>
+                    </Stack>
+                  </Card>
+                )}
+                {boards.length === 0 && (
+                  <Box
+                    sx={{
+                      gridColumn: '1 / -1',
+                      py: 6,
+                      px: 3,
+                      textAlign: 'center',
+                      borderRadius: '20px',
+                      border: `1px dashed ${theme.palette.mode === 'light' ? '#CBD5E1' : alpha(theme.palette.common.white, 0.2)}`,
+                      bgcolor: theme.palette.mode === 'light' ? '#F8FAFC' : alpha(theme.palette.common.black, 0.2),
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: 56,
+                        height: 56,
+                        mx: 'auto',
+                        mb: 2,
+                        borderRadius: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        bgcolor: alpha(theme.palette.primary.main, 0.1),
+                        color: 'primary.main',
+                      }}
+                    >
+                      <ViewKanbanOutlinedIcon sx={{ fontSize: '1.75rem' }} />
+                    </Box>
+                    <Typography color="text.secondary" sx={{ fontSize: '0.9375rem', lineHeight: 1.65, mb: 2.5 }}>
+                      {t('workBoards.empty.noBoards')}
+                    </Typography>
+                    {canCreateBoard && (
+                      <Button
+                        variant="contained"
+                        disableElevation
+                        startIcon={<AddIcon />}
+                        onClick={openCreateDialog}
+                        sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+                      >
+                        {t('workBoards.actions.newBoard')}
+                      </Button>
+                    )}
+                  </Box>
+                )}
+              </Box>
+            </SortableContext>
+          </DndContext>
+        )}
 
       <Dialog
         open={open}
@@ -613,6 +782,7 @@ const WorkBoardsPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      </Box>
     </Box>
   );
 };

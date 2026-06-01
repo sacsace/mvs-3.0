@@ -10,7 +10,8 @@ import {
   Box,
   Typography,
   IconButton,
-  Tooltip
+  Tooltip,
+  Link
 } from '@mui/material';
 import {
   ExpandLess,
@@ -67,6 +68,11 @@ const SIDEBAR_TOP_PX = HEADER_HEIGHT_PX + HEADER_MENU_GAP_PX;
 /** 메뉴 패널 하단과 화면 맨 아래 사이 여백 */
 const SIDEBAR_BOTTOM_GAP_PX = 12;
 const SIDEBAR_HEIGHT_CALC = `calc(100vh - ${SIDEBAR_TOP_PX + SIDEBAR_BOTTOM_GAP_PX}px)`;
+/** 접기/펼치기·본문 패딩과 동일한 easing */
+export const SIDEBAR_WIDTH_TRANSITION_MS = 300;
+export const SIDEBAR_WIDTH_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
+/** 마우스 이탈 후 접기 — 살짝 여유를 두어 자연스럽게 */
+const SIDEBAR_HOVER_CLOSE_DELAY_MS = 380;
 /** 선택 영역·좌측 강조선 모서리 직각 */
 const MENU_ITEM_RADIUS_PX = 10;
 
@@ -110,12 +116,15 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [sidebarWidth, setSidebarWidth] = useState<number>(width);
   const [isResizing, setIsResizing] = useState(false);
+  const [peekOpen, setPeekOpen] = useState(false);
   const startXRef = useRef<number>(0);
   const startWidthRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
-  const effectiveWidth = autoCollapseEnabled && isCollapsed ? collapsedWidth : sidebarWidth;
-  const hoverTimerRef = useRef<number | null>(null);
+  const isExpandedVisual = !autoCollapseEnabled || !isCollapsed || peekOpen;
+  const isCompact = autoCollapseEnabled && !isExpandedVisual;
+  const effectiveWidth = isExpandedVisual ? sidebarWidth : collapsedWidth;
   const leaveTimerRef = useRef<number | null>(null);
+  const peekCloseTimerRef = useRef<number | null>(null);
 
   // width prop이 변경되면 내부 state 업데이트
   useEffect(() => {
@@ -126,13 +135,13 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   // 리사이즈 핸들러
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    if (autoCollapseEnabled && isCollapsed) return;
+    if (isCompact) return;
     e.preventDefault();
     e.stopPropagation();
     setIsResizing(true);
     startXRef.current = e.clientX;
     startWidthRef.current = sidebarWidth;
-  }, [autoCollapseEnabled, isCollapsed, sidebarWidth]);
+  }, [isCompact, sidebarWidth]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isResizing) return;
@@ -189,16 +198,60 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   useEffect(() => {
     return () => {
-      if (hoverTimerRef.current) {
-        window.clearTimeout(hoverTimerRef.current);
-        hoverTimerRef.current = null;
-      }
       if (leaveTimerRef.current) {
         window.clearTimeout(leaveTimerRef.current);
         leaveTimerRef.current = null;
       }
+      if (peekCloseTimerRef.current) {
+        window.clearTimeout(peekCloseTimerRef.current);
+        peekCloseTimerRef.current = null;
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (!autoCollapseEnabled) {
+      setPeekOpen(false);
+    }
+  }, [autoCollapseEnabled]);
+
+  const schedulePeekClose = useCallback(() => {
+    if (peekCloseTimerRef.current) {
+      window.clearTimeout(peekCloseTimerRef.current);
+    }
+    peekCloseTimerRef.current = window.setTimeout(() => {
+      setPeekOpen(false);
+      peekCloseTimerRef.current = null;
+    }, SIDEBAR_WIDTH_TRANSITION_MS + 40);
+  }, []);
+
+  const handleSidebarMouseEnter = useCallback(() => {
+    if (!autoCollapseEnabled) return;
+    if (leaveTimerRef.current) {
+      window.clearTimeout(leaveTimerRef.current);
+      leaveTimerRef.current = null;
+    }
+    if (peekCloseTimerRef.current) {
+      window.clearTimeout(peekCloseTimerRef.current);
+      peekCloseTimerRef.current = null;
+    }
+    setPeekOpen(true);
+    if (isCollapsed) {
+      onCollapseChange?.(false);
+    }
+  }, [autoCollapseEnabled, isCollapsed, onCollapseChange]);
+
+  const handleSidebarMouseLeave = useCallback(() => {
+    if (!autoCollapseEnabled) return;
+    if (leaveTimerRef.current) {
+      window.clearTimeout(leaveTimerRef.current);
+    }
+    leaveTimerRef.current = window.setTimeout(() => {
+      onCollapseChange?.(true);
+      schedulePeekClose();
+      leaveTimerRef.current = null;
+    }, SIDEBAR_HOVER_CLOSE_DELAY_MS);
+  }, [autoCollapseEnabled, onCollapseChange, schedulePeekClose]);
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useStore();
@@ -508,7 +561,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           const nr = normalizeMenuPath(menu.route || '');
           return !!nr && best === nr;
         })();
-    const isCompact = autoCollapseEnabled && isCollapsed;
+    const isCompactItem = isCompact;
     const isEnglish = language === 'en';
     const itemPaddingY = level === 0 ? (isEnglish ? 0.5 : 0.4) : (isEnglish ? 0.72 : 0.58);
     const activePaddingBoost = level === 0 ? 0.06 : 0.1;
@@ -529,7 +582,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     return (
       <React.Fragment key={menu.id}>
         <ListItem disablePadding>
-          {isCompact ? (
+          {isCompactItem ? (
             <Tooltip title={labelText} placement="right">
               <ListItemButton
                 onClick={() => handleMenuClick(menu)}
@@ -595,6 +648,11 @@ const Sidebar: React.FC<SidebarProps> = ({
                 secondary={level === 0 && !hideSecondaryDescription ? menu.description : null}
                 sx={{ 
                   my: level === 0 ? (isEnglish ? 0.08 : 0) : (isEnglish ? 0.14 : 0.08),
+                  opacity: isExpandedVisual ? 1 : 0,
+                  transform: isExpandedVisual ? 'translateX(0)' : 'translateX(-6px)',
+                  transition: `opacity ${SIDEBAR_WIDTH_TRANSITION_MS - 80}ms ${SIDEBAR_WIDTH_EASING} 70ms, transform ${SIDEBAR_WIDTH_TRANSITION_MS - 80}ms ${SIDEBAR_WIDTH_EASING} 70ms`,
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
                   '& .MuiListItemText-primary': {
                     fontSize: '13px',
                     fontWeight: isActive ? 500 : 400,
@@ -620,7 +678,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           )}
         </ListItem>
         
-        {hasChildren && !isCompact && (
+        {hasChildren && !isCompactItem && (
           <Collapse in={isExpanded} timeout="auto" unmountOnExit>
             <List component="div" disablePadding>
               {menu.children.map((child: any) => renderMenuItem(child, level + 1))}
@@ -629,6 +687,30 @@ const Sidebar: React.FC<SidebarProps> = ({
         )}
       </React.Fragment>
     );
+  };
+
+  const drawerPaperSx = {
+    width: effectiveWidth,
+    boxSizing: 'border-box' as const,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    position: 'fixed' as const,
+    top: `${SIDEBAR_TOP_PX}px`,
+    left: 0,
+    height: SIDEBAR_HEIGHT_CALC,
+    minHeight: SIDEBAR_HEIGHT_CALC,
+    backgroundColor: '#F7F8FA',
+    borderRight: '1px solid rgba(15, 23, 42, 0.06)',
+    zIndex: autoCollapseEnabled && peekOpen && isCollapsed ? 1300 : 1200,
+    willChange: 'width, box-shadow',
+    overflowX: 'hidden' as const,
+    boxShadow:
+      autoCollapseEnabled && peekOpen
+        ? '8px 0 28px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.04)'
+        : 'none',
+    transition: isResizing
+      ? 'none'
+      : `width ${SIDEBAR_WIDTH_TRANSITION_MS}ms ${SIDEBAR_WIDTH_EASING}, box-shadow ${SIDEBAR_WIDTH_TRANSITION_MS}ms ${SIDEBAR_WIDTH_EASING}`,
   };
 
   if (loading) {
@@ -641,16 +723,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             width: effectiveWidth,
             flexShrink: 0,
             '& .MuiDrawer-paper': {
-              width: effectiveWidth,
-              boxSizing: 'border-box',
-              position: 'fixed',
-              top: `${SIDEBAR_TOP_PX}px`,
-              left: 0,
-              height: SIDEBAR_HEIGHT_CALC,
-              backgroundColor: '#F7F8FA',
-              borderRight: '1px solid rgba(15, 23, 42, 0.06)',
-              boxShadow: 'none',
-              transition: 'none',
+              ...drawerPaperSx,
             }
           }}
         >
@@ -672,16 +745,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             width: effectiveWidth,
             flexShrink: 0,
             '& .MuiDrawer-paper': {
-              width: effectiveWidth,
-              boxSizing: 'border-box',
-              position: 'fixed',
-              top: `${SIDEBAR_TOP_PX}px`,
-              left: 0,
-              height: SIDEBAR_HEIGHT_CALC,
-              backgroundColor: '#F7F8FA',
-              borderRight: '1px solid rgba(15, 23, 42, 0.06)',
-              boxShadow: 'none',
-              transition: 'none',
+              ...drawerPaperSx,
             }
           }}
         >
@@ -695,33 +759,18 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <Box
-      sx={{ position: 'relative' }}
-      onMouseEnter={() => {
-        if (!autoCollapseEnabled) return;
-        if (leaveTimerRef.current) {
-          window.clearTimeout(leaveTimerRef.current);
-          leaveTimerRef.current = null;
-        }
-        if (hoverTimerRef.current) {
-          window.clearTimeout(hoverTimerRef.current);
-        }
-        hoverTimerRef.current = window.setTimeout(() => {
-          onCollapseChange?.(false);
-        }, 170);
+      sx={{
+        position: 'relative',
+        width:
+          effectiveWidth +
+          (autoCollapseEnabled && isCollapsed && !peekOpen ? 12 : 0),
+        flexShrink: 0,
+        transition: isResizing
+          ? 'none'
+          : `width ${SIDEBAR_WIDTH_TRANSITION_MS}ms ${SIDEBAR_WIDTH_EASING}`,
       }}
-      onMouseLeave={() => {
-        if (!autoCollapseEnabled) return;
-        if (hoverTimerRef.current) {
-          window.clearTimeout(hoverTimerRef.current);
-          hoverTimerRef.current = null;
-        }
-        if (leaveTimerRef.current) {
-          window.clearTimeout(leaveTimerRef.current);
-        }
-        leaveTimerRef.current = window.setTimeout(() => {
-          onCollapseChange?.(true);
-        }, 260);
-      }}
+      onMouseEnter={handleSidebarMouseEnter}
+      onMouseLeave={handleSidebarMouseLeave}
     >
       <Drawer
         variant="permanent"
@@ -729,23 +778,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         sx={{
           width: effectiveWidth,
           flexShrink: 0,
-          '& .MuiDrawer-paper': {
-            width: effectiveWidth,
-            boxSizing: 'border-box',
-            display: 'flex',
-            flexDirection: 'column',
-            position: 'fixed', // 고정 위치로 변경하여 동적 높이 조정
-            top: `${SIDEBAR_TOP_PX}px`, // 헤더 + 소간격 아래에서 시작
-            left: 0,
-            height: SIDEBAR_HEIGHT_CALC,
-            minHeight: SIDEBAR_HEIGHT_CALC,
-            backgroundColor: '#F7F8FA',
-              borderRight: '1px solid rgba(15, 23, 42, 0.06)',
-              boxShadow: 'none',
-              zIndex: 1200, // 헤더보다 낮은 z-index
-            willChange: 'width',
-            transition: isResizing ? 'none' : 'width 260ms cubic-bezier(0.22, 1, 0.36, 1)',
-          }
+          '& .MuiDrawer-paper': drawerPaperSx,
         }}
       >
       {/* 메뉴 리스트 - 헤더 바로 아래부터 시작, 전체 높이 사용 */}
@@ -782,11 +815,32 @@ const Sidebar: React.FC<SidebarProps> = ({
             color="text.secondary"
             sx={{ 
               fontSize: '0.75rem',
-              opacity: 0.7,
-              display: 'block'
+              opacity: isExpandedVisual ? 0.7 : 0,
+              display: 'block',
+              transition: `opacity ${SIDEBAR_WIDTH_TRANSITION_MS - 60}ms ${SIDEBAR_WIDTH_EASING} 90ms`,
             }}
           >
-            © 2025 Minsub Ventures
+            © 2025{' '}
+            <Link
+              href="https://www.msventures.in"
+              target="_blank"
+              rel="noopener noreferrer"
+              underline="none"
+              color="inherit"
+              sx={{
+                fontSize: 'inherit',
+                cursor: 'pointer',
+                '&:hover': {
+                  color: 'inherit',
+                  textDecoration: 'none',
+                },
+                '&:visited': {
+                  color: 'inherit',
+                },
+              }}
+            >
+              Minsub Ventures
+            </Link>
           </Typography>
         </Box>
       </Box>
@@ -800,12 +854,14 @@ const Sidebar: React.FC<SidebarProps> = ({
           left: effectiveWidth - 4,
           width: '8px',
           height: SIDEBAR_HEIGHT_CALC,
-          cursor: autoCollapseEnabled && isCollapsed ? 'default' : 'col-resize',
+          cursor: isCompact ? 'default' : 'col-resize',
           zIndex: 1201,
           backgroundColor: 'transparent',
-          transition: isResizing ? 'none' : 'left 260ms cubic-bezier(0.22, 1, 0.36, 1)',
+          transition: isResizing
+            ? 'none'
+            : `left ${SIDEBAR_WIDTH_TRANSITION_MS}ms ${SIDEBAR_WIDTH_EASING}`,
           '&:hover': {
-            backgroundColor: autoCollapseEnabled && isCollapsed ? 'transparent' : 'rgba(0, 0, 0, 0.05)',
+            backgroundColor: isCompact ? 'transparent' : 'rgba(0, 0, 0, 0.05)',
             '&::after': {
               content: '""',
               position: 'absolute',

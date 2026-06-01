@@ -25,7 +25,8 @@ import {
   Check as CheckIcon,
   DeleteSweep as DeleteSweepIcon,
   Announcement as AnnouncementIcon,
-  AutoAwesome as AutoAwesomeIcon
+  AutoAwesome as AutoAwesomeIcon,
+  Menu as MenuIcon
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
 import { api, userUiPreferencesService } from '../../services/api';
@@ -33,6 +34,7 @@ import { useTranslation } from 'react-i18next';
 import i18n from '../../locales/i18n';
 import { useErrorStore } from '../../store/errorStore';
 import { useNavigate, useLocation } from 'react-router-dom';
+import FullMenuOverlay from './FullMenuOverlay';
 
 interface HeaderNotificationItem {
   id: string;
@@ -154,6 +156,7 @@ const Header: React.FC = () => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [languageAnchorEl, setLanguageAnchorEl] = useState<null | HTMLElement>(null);
   const [notificationAnchorEl, setNotificationAnchorEl] = useState<null | HTMLElement>(null);
+  const [fullMenuOpen, setFullMenuOpen] = useState(false);
   const [notificationFeed, setNotificationFeed] = useState<HeaderNotificationItem[]>([]);
   const [inboxActions, setInboxActions] = useState<ActionInboxRow[]>([]);
   const [serverNotifications, setServerNotifications] = useState<ServerNotificationItem[]>([]);
@@ -695,6 +698,29 @@ const Header: React.FC = () => {
               {user?.username?.charAt(0).toUpperCase() || 'U'}
             </Avatar>
           </IconButton>
+
+          <Tooltip title={language === 'en' ? 'All menus' : '전체 메뉴'}>
+            <IconButton
+              size="small"
+              aria-label={language === 'en' ? 'Open full menu' : '전체 메뉴 열기'}
+              aria-expanded={fullMenuOpen}
+              onClick={() => setFullMenuOpen((prev) => !prev)}
+              sx={{
+                width: 36,
+                height: 36,
+                ml: 0.5,
+                bgcolor: fullMenuOpen ? 'primary.main' : '#1F2937',
+                color: '#FFFFFF',
+                transition: 'background-color 0.2s ease, transform 0.2s ease',
+                '&:hover': {
+                  bgcolor: fullMenuOpen ? 'primary.dark' : '#111827',
+                  transform: 'translateY(-1px)',
+                },
+              }}
+            >
+              <MenuIcon sx={{ fontSize: '1.125rem' }} />
+            </IconButton>
+          </Tooltip>
           
           <Menu
             id="notification-menu"
@@ -924,6 +950,12 @@ const Header: React.FC = () => {
           </Menu>
         </Box>
       </Toolbar>
+
+      <FullMenuOverlay
+        open={fullMenuOpen}
+        onClose={() => setFullMenuOpen(false)}
+        onLanguageClick={handleLanguageMenu}
+      />
     </AppBar>
   );
 };
