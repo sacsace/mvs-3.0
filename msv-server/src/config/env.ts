@@ -3,8 +3,12 @@ import fs from 'fs';
 import path from 'path';
 import { ENV_CONFIG, SYSTEM_CONSTANTS } from './constants';
 
-/** monorepo 루트·msv-server·cwd 순으로 .env 로드 (나중 파일이 우선) */
+/** 로컬 .env 로드 — Railway(RAILWAY_ENVIRONMENT)는 Variables만 사용 */
 const loadEnvFiles = () => {
+  if (process.env.RAILWAY_ENVIRONMENT) {
+    return;
+  }
+
   const envDir = path.resolve(__dirname, '../..');
   const rootDir = path.resolve(envDir, '..');
   const candidates = [
@@ -15,7 +19,7 @@ const loadEnvFiles = () => {
   ];
   for (const file of candidates) {
     if (fs.existsSync(file)) {
-      config({ path: file, override: true });
+      config({ path: file, override: false });
     }
   }
 };
