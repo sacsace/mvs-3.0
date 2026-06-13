@@ -28,6 +28,7 @@ import communicationRoutes from './routes/communication';
 import aiRoutes from './routes/ai';
 import loginInfoRoutes from './routes/loginInfo';
 import integrationsRoutes from './routes/integrations';
+import systemBootstrapRoutes from './routes/systemBootstrap';
 import { startAttendanceAutoCheckoutScheduler } from './controllers/attendanceController';
 import SocketService from './services/socketService';
 import aiService from './services/aiService';
@@ -262,6 +263,7 @@ app.use('/api/communication', communicationRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/login-info', loginInfoRoutes);
 app.use('/api/integrations', integrationsRoutes);
+app.use('/api/system', systemBootstrapRoutes);
 
 // 메뉴 데이터 API (한글 지원)
 app.get('/api/menus', async (req, res) => {
