@@ -1,6 +1,11 @@
 import axios from 'axios';
 import { useErrorStore } from '../store/errorStore';
-import { createEmptyListAxiosResponse, isCollectionListGet } from '../utils/listApi';
+import {
+  createEmptyListAxiosResponse,
+  isCollectionListGet,
+  isGetWithoutResponse,
+  isNotificationFeedGet,
+} from '../utils/listApi';
 
 // API Base URL 동적 설정
 // - 프로덕션(Railway 등): 빌드 시 주입된 REACT_APP_API_URL 최우선. 없으면 동일 오리진 /api (리버스 프록시·같은 서비스용).
@@ -148,7 +153,6 @@ const isAuthBypassEndpoint = (url?: string) => {
   return (
     url.includes('/auth/login') ||
     url.includes('/auth/register') ||
-    url.includes('/auth/signup/payment-order') ||
     url.includes('/auth/refresh')
   );
 };
@@ -387,6 +391,7 @@ api.interceptors.response.use(
 
     const skipErrorPopup =
       error.config?.headers?.['x-skip-error-popup'] === 'true' ||
+      isNotificationFeedGet(error.config) ||
       (typeof error.config?.url === 'string' && /\/hr\/attendances\/(today|check-in|check-out)/.test(error.config.url));
 
     // 인증 오류 처리 (401, 403)
@@ -430,6 +435,18 @@ api.interceptors.response.use(
           return Promise.reject(error);
         }
       }
+    }
+
+    // 알림 폴링 GET 실패(네트워크·서버 오류 포함) — 팝업 없이 빈 목록
+    if (isNotificationFeedGet(error.config)) {
+      console.warn('알림 조회 실패 → 빈 목록으로 처리:', error.config?.method, error.config?.url);
+      return Promise.resolve(createEmptyListAxiosResponse(error.config));
+    }
+
+    // GET + 서버 무응답(네트워크 단절) — Header 회사정보·폴링 등, 모달·errorStore 적재 생략
+    if (!skipErrorPopup && isGetWithoutResponse(error)) {
+      console.warn('GET 네트워크 오류 (팝업 생략):', error.config?.url, error.message);
+      return Promise.reject(error);
     }
 
     // 목록 조회 GET 실패 시 서버 오류 모달 대신 빈 목록으로 처리
@@ -2991,6 +3008,24 @@ export type UserUiPreferencesData = {
   language?: 'ko' | 'en';
   companyHolidayReminderShown?: Record<string, string>;
   roomInvoiceTaxSnapshot?: Record<string, unknown>;
+  notificationSettings?: {
+    realtime?: boolean;
+    email?: boolean;
+    browser?: boolean;
+    system?: boolean;
+    approval?: boolean;
+    vacation?: boolean;
+    expense?: boolean;
+    workReport?: boolean;
+    emailDigest?: 'immediate' | 'daily' | 'weekly';
+  };
+  notificationTemplates?: Array<{
+    id: string;
+    name: string;
+    title: string;
+    message: string;
+    type: 'info' | 'success' | 'warning' | 'error';
+  }>;
 };
 
 export const userUiPreferencesService = {

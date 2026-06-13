@@ -1297,20 +1297,33 @@ const RegularInvoice: React.FC = () => {
       showSnackbar(tr('승인 대상을 선택해주세요.', 'Please select an approver.'), 'error');
       return;
     }
+
+    const invoiceId = deleteDialog.id;
+    const approverUserId = Number(deleteDialog.approverUserId);
+    const memo = deleteDialog.memo.trim() || undefined;
+
+    setDeleteDialog({
+      open: false,
+      id: null,
+      invoiceNumber: '',
+      approverUserId: '',
+      memo: ''
+    });
+
     try {
       setLoading(true);
-      await accountingService.deleteInvoice(deleteDialog.id, {
-        approver_user_id: Number(deleteDialog.approverUserId),
-        memo: deleteDialog.memo.trim() || undefined
+      const response = await accountingService.deleteInvoice(invoiceId, {
+        approver_user_id: approverUserId,
+        memo
       });
+      if (response?.success === false) {
+        showSnackbar(
+          response?.message || tr('삭제 승인 요청 등록에 실패했습니다.', 'Failed to submit delete approval request.'),
+          'error'
+        );
+        return;
+      }
       showSnackbar(tr('삭제 승인 요청이 등록되었습니다.', 'Delete approval request has been submitted.'), 'success');
-      setDeleteDialog({
-        open: false,
-        id: null,
-        invoiceNumber: '',
-        approverUserId: '',
-        memo: ''
-      });
       setIsViewing(false);
       setSelectedInvoice(null);
       await loadInvoices();

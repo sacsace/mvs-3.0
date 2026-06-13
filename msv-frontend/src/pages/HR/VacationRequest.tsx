@@ -440,6 +440,15 @@ const VacationRequest: React.FC = () => {
                       >
                         {annualLeaveInfo.canUseAnnualLeave ? (
                           <>
+                            {annualLeaveInfo.fiscalYearLabel && (
+                              <Typography variant="caption" sx={{ display: 'block', mb: 0.5, opacity: 0.85 }}>
+                                {t('vacationManagement.annualLeaveFiscalYear', {
+                                  label: annualLeaveInfo.fiscalYearLabel,
+                                  start: annualLeaveInfo.fiscalYearStart,
+                                  end: annualLeaveInfo.fiscalYearEnd
+                                })}
+                              </Typography>
+                            )}
                             남은 연차: <strong>{annualLeaveInfo.availableDays}일</strong>
                             {annualLeaveInfo.usedDays > 0 && (
                               <> (사용: {annualLeaveInfo.usedDays}일)</>

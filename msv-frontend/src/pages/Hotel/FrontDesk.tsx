@@ -36,7 +36,7 @@ import { Search as SearchIcon } from '@mui/icons-material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { roomBookingService, roomTypeRoomService, roomTypeService } from '../../services/api';
-import { mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
+import { mvsInnerCardSx, mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
 import { generateWalkInBookingId } from '../../utils/bookingId';
 
 const formatDate = (value: string | undefined, locale: string) => {
@@ -978,6 +978,17 @@ const FrontDesk: React.FC = () => {
     boxSizing: 'border-box' as const
   };
 
+  const summaryCardSx = {
+    ...mvsInnerCardSx,
+    width: '100%',
+    maxWidth: '100%',
+    p: 0,
+    border: '1px solid #B8C4D0',
+    boxShadow: '0 2px 10px rgba(15, 23, 42, 0.08)',
+    overflow: 'hidden',
+    boxSizing: 'border-box' as const,
+  };
+
   const headBg = alpha(theme.palette.grey[500], 0.08);
   const headBorder = alpha(theme.palette.divider, 0.9);
 
@@ -1134,7 +1145,7 @@ const FrontDesk: React.FC = () => {
       <Grid container spacing={2} sx={{ mb: 2.5 }}>
         {summaryCards.map((item) => (
           <Grid key={item.label} size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card elevation={0} sx={shellCardSx}>
+            <Card elevation={0} sx={summaryCardSx}>
               <CardContent sx={{ py: 2, px: 2.25 }}>
                 <Typography
                   variant="caption"

@@ -1,7 +1,7 @@
 import express from 'express';
 import { Op } from 'sequelize';
 import bcrypt from 'bcrypt';
-import { User, Company } from '../models';
+import { User, Company, Tenant } from '../models';
 import { resolveDepartmentFieldsForUser } from '../controllers/departmentController';
 import { authenticateToken } from '../middleware/auth';
 import { requireAdminRootOrUserMenuPermission } from '../middleware/menuPermission';
@@ -488,6 +488,22 @@ router.post(
       }
       
       targetTenantId = selectedCompany.tenant_id;
+    }
+
+    const tenant = await (Tenant as any).findByPk(targetTenantId, { attributes: ['id', 'max_users'] });
+    if (tenant?.max_users != null) {
+      const userCount = await (User as any).count({
+        where: {
+          tenant_id: targetTenantId,
+          status: { [Op.ne]: 'deleted' }
+        }
+      });
+      if (userCount >= tenant.max_users) {
+        return res.status(400).json({
+          success: false,
+          message: `현재 요금제는 최대 ${tenant.max_users}명까지만 등록할 수 있습니다.`
+        });
+      }
     }
 
     // 비밀번호 검증

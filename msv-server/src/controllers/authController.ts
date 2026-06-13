@@ -1,10 +1,8 @@
 import { Request, Response } from 'express';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import crypto from 'crypto';
-import axios from 'axios';
 import { DataTypes, Op } from 'sequelize';
-import { User, Company, LoginLog, Tenant, Menu, UserPermission, CompanyGstNumber, Customer, Invoice, InvoiceItem } from '../models';
+import { User, Company, LoginLog, Tenant, Menu, UserPermission, CompanyGstNumber } from '../models';
 import { AuthRequest } from '../types';
 import sequelize from '../config/database';
 
@@ -137,25 +135,16 @@ const writeLoginLog = async ({
   }
 };
 
-type BillingPlanKey = 'free_week_7' | 'month_5000' | 'year_50000';
+type BillingPlanKey = 'free_3months';
 
-const BILLING_PLAN_CONFIG: Record<BillingPlanKey, { days: number; amount: number; code: string }> = {
-  free_week_7: { days: 7, amount: 0, code: 'free_week_7' },
-  month_5000: { days: 30, amount: 5000, code: 'month_5000' },
-  year_50000: { days: 365, amount: 50000, code: 'year_50000' }
+const BILLING_PLAN_CONFIG: Record<BillingPlanKey, { months: number; amount: number; code: string }> = {
+  free_3months: { months: 3, amount: 0, code: 'free_3months' }
 };
 
-/** 구 요금제 키(1일) → 7일 무료로 통일 */
-const normalizeBillingPlanKey = (raw: string): BillingPlanKey | null => {
-  const p = String(raw || '').trim();
-  if (p === 'free_day_1') return 'free_week_7';
-  if (p === 'free_week_7' || p === 'month_5000' || p === 'year_50000') return p;
-  return null;
-};
+/** 신규 가입은 3개월 무료만 허용 (구 유료·7일 체험 키는 무료 3개월로 통일) */
+const normalizeBillingPlanKey = (_raw: string): BillingPlanKey => 'free_3months';
 
-const FREE_TRIAL_PLAN_CODES = new Set(['free_day_1', 'free_week_7']);
-const GST_RATE = 18; // 18%
-const RAZORPAY_API_BASE = 'https://api.razorpay.com/v1';
+const FREE_TRIAL_PLAN_CODES = new Set(['free_day_1', 'free_week_7', 'free_3months']);
 
 const slugify = (value: string): string =>
   value
@@ -172,175 +161,11 @@ const toDateOnly = (value?: string): Date | null => {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 };
 
-const addDays = (base: Date, days: number): Date => {
-  const next = new Date(base);
-  next.setDate(next.getDate() + days);
-  return next;
-};
-
-const getDateOnlyString = (date: Date): string => {
-  const yyyy = date.getUTCFullYear();
-  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(date.getUTCDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-};
-
-const generateSubscriptionInvoiceNumber = (billingCompanyName: string) => {
-  const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const initials = (billingCompanyName || 'MVS')
-    .replace(/[^A-Za-z0-9]/g, '')
-    .toUpperCase()
-    .slice(0, 3)
-    .padEnd(3, 'X');
-  const seq = `${Date.now()}`.slice(-6);
-  return `${initials}/${yyyy}${mm}/SUB/${seq}`;
-};
-
-const getRazorpayConfig = () => {
-  const keyId = String(process.env.RAZORPAY_KEY_ID || '').trim();
-  const keySecret = String(process.env.RAZORPAY_KEY_SECRET || '').trim();
-  return { keyId, keySecret, enabled: Boolean(keyId && keySecret) };
-};
-
-const verifyRazorpayPayment = async ({
-  plan,
-  razorpayOrderId,
-  razorpayPaymentId,
-  razorpaySignature
-}: {
-  plan: BillingPlanKey;
-  razorpayOrderId: string;
-  razorpayPaymentId: string;
-  razorpaySignature: string;
-}) => {
-  const { keyId, keySecret, enabled } = getRazorpayConfig();
-  if (!enabled) {
-    return { ok: false, message: 'Razorpay 환경 변수가 설정되지 않았습니다.' };
-  }
-
-  const expectedAmount = BILLING_PLAN_CONFIG[plan].amount * 100;
-  const payload = `${razorpayOrderId}|${razorpayPaymentId}`;
-  const expectedSignature = crypto
-    .createHmac('sha256', keySecret)
-    .update(payload)
-    .digest('hex');
-
-  const providedBuffer = Buffer.from(razorpaySignature);
-  const expectedBuffer = Buffer.from(expectedSignature);
-  const signatureMatched =
-    providedBuffer.length === expectedBuffer.length &&
-    crypto.timingSafeEqual(providedBuffer, expectedBuffer);
-
-  if (!signatureMatched) {
-    return { ok: false, message: '결제 서명 검증에 실패했습니다.' };
-  }
-
-  try {
-    const paymentResponse = await axios.get(`${RAZORPAY_API_BASE}/payments/${encodeURIComponent(razorpayPaymentId)}`, {
-      auth: {
-        username: keyId,
-        password: keySecret
-      }
-    });
-    const payment = paymentResponse.data || {};
-    const validStatus = payment.status === 'captured' || payment.status === 'authorized';
-    if (!validStatus) {
-      return { ok: false, message: '결제 상태가 유효하지 않습니다.' };
-    }
-    if (String(payment.order_id || '') !== razorpayOrderId) {
-      return { ok: false, message: '결제 주문 정보가 일치하지 않습니다.' };
-    }
-    if (Number(payment.amount || 0) !== expectedAmount) {
-      return { ok: false, message: '결제 금액이 요금제 금액과 일치하지 않습니다.' };
-    }
-    if (String(payment.currency || '').toUpperCase() !== 'INR') {
-      return { ok: false, message: '결제 통화가 올바르지 않습니다.' };
-    }
-    return { ok: true };
-  } catch (error) {
-    console.error('Razorpay 결제 조회 오류:', error);
-    return { ok: false, message: '결제 검증 중 오류가 발생했습니다.' };
-  }
-};
-
-export const createSignupPaymentOrder = async (req: Request, res: Response) => {
-  try {
-    const { planType, companyName, businessNumber, adminEmail } = req.body || {};
-    const normalizedPlan = normalizeBillingPlanKey(String(planType || ''));
-
-    if (!normalizedPlan || !BILLING_PLAN_CONFIG[normalizedPlan]) {
-      return res.status(400).json({
-        success: false,
-        message: '요금제 값이 올바르지 않습니다.'
-      });
-    }
-
-    const amount = BILLING_PLAN_CONFIG[normalizedPlan].amount;
-    if (amount <= 0) {
-      return res.json({
-        success: true,
-        data: {
-          isFreeTrial: true,
-          plan: normalizedPlan,
-          amount: 0,
-          currency: 'INR'
-        }
-      });
-    }
-
-    const { keyId, keySecret, enabled } = getRazorpayConfig();
-    if (!enabled) {
-      return res.status(500).json({
-        success: false,
-        message: 'Razorpay 결제를 사용할 수 없습니다. 환경 변수를 확인해주세요.'
-      });
-    }
-
-    const amountPaise = amount * 100;
-    const receipt = `mvs-signup-${Date.now()}`;
-    const orderResponse = await axios.post(
-      `${RAZORPAY_API_BASE}/orders`,
-      {
-        amount: amountPaise,
-        currency: 'INR',
-        receipt,
-        notes: {
-          purpose: 'mvs_signup',
-          plan: normalizedPlan,
-          companyName: String(companyName || '').slice(0, 60),
-          businessNumber: String(businessNumber || '').slice(0, 30),
-          adminEmail: String(adminEmail || '').slice(0, 100)
-        }
-      },
-      {
-        auth: {
-          username: keyId,
-          password: keySecret
-        }
-      }
-    );
-
-    const order = orderResponse.data || {};
-    return res.json({
-      success: true,
-      data: {
-        isFreeTrial: false,
-        plan: normalizedPlan,
-        keyId,
-        orderId: order.id,
-        amount: order.amount,
-        currency: order.currency
-      }
-    });
-  } catch (error: any) {
-    console.error('Razorpay 주문 생성 오류:', error?.response?.data || error);
-    return res.status(500).json({
-      success: false,
-      message: '결제 주문 생성 중 오류가 발생했습니다.'
-    });
-  }
+const addMonthsInclusiveEnd = (base: Date, months: number): Date => {
+  const end = new Date(base);
+  end.setMonth(end.getMonth() + months);
+  end.setDate(end.getDate() - 1);
+  return end;
 };
 
 export const register = async (req: Request, res: Response) => {
@@ -357,10 +182,7 @@ export const register = async (req: Request, res: Response) => {
       planType,
       startDate,
       phone,
-      address,
-      razorpayOrderId,
-      razorpayPaymentId,
-      razorpaySignature
+      address
     } = req.body || {};
 
     const normalizedCompanyName = String(companyName || '').trim();
@@ -373,38 +195,6 @@ export const register = async (req: Request, res: Response) => {
     const normalizedPhone = String(phone || '').trim();
     const normalizedAddress = String(address || '').trim();
 
-    if (!normalizedPlan || !BILLING_PLAN_CONFIG[normalizedPlan]) {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        message: '요금제 값이 올바르지 않습니다.'
-      });
-    }
-    if (BILLING_PLAN_CONFIG[normalizedPlan].amount > 0) {
-      const normalizedOrderId = String(razorpayOrderId || '').trim();
-      const normalizedPaymentId = String(razorpayPaymentId || '').trim();
-      const normalizedSignature = String(razorpaySignature || '').trim();
-      if (!normalizedOrderId || !normalizedPaymentId || !normalizedSignature) {
-        await transaction.rollback();
-        return res.status(400).json({
-          success: false,
-          message: '결제 확인 정보가 누락되었습니다. 결제를 먼저 완료해주세요.'
-        });
-      }
-      const verifyResult = await verifyRazorpayPayment({
-        plan: normalizedPlan,
-        razorpayOrderId: normalizedOrderId,
-        razorpayPaymentId: normalizedPaymentId,
-        razorpaySignature: normalizedSignature
-      });
-      if (!verifyResult.ok) {
-        await transaction.rollback();
-        return res.status(400).json({
-          success: false,
-          message: verifyResult.message || '결제 검증에 실패했습니다.'
-        });
-      }
-    }
     if (!/^[0-9]{2}[A-Z0-9]{13}$/.test(normalizedGstNumber)) {
       await transaction.rollback();
       return res.status(400).json({
@@ -413,8 +203,8 @@ export const register = async (req: Request, res: Response) => {
       });
     }
 
-    // 동일 회사(회사명·사업자번호·GST 기준)의 무료 체험은 1회만 허용
-    if (normalizedPlan === 'free_week_7') {
+    // 동일 회사(회사명·사업자번호·GST 기준) 무료 가입은 1회만 허용
+    {
       const companiesByName = await (Company as any).findAll({
         where: { name: normalizedCompanyName },
         attributes: ['id', 'subscription_plan', 'settings'],
@@ -452,7 +242,7 @@ export const register = async (req: Request, res: Response) => {
         await transaction.rollback();
         return res.status(400).json({
           success: false,
-          message: '동일한 회사는 무료 이용(7일)을 1회만 사용할 수 있습니다.'
+          message: '동일한 회사는 무료 이용(3개월)을 1회만 사용할 수 있습니다.'
         });
       }
     }
@@ -506,7 +296,7 @@ export const register = async (req: Request, res: Response) => {
 
     const now = new Date();
     const usageStartDate = toDateOnly(startDate) || new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-    const usageEndDate = addDays(usageStartDate, BILLING_PLAN_CONFIG[normalizedPlan].days - 1);
+    const usageEndDate = addMonthsInclusiveEnd(usageStartDate, BILLING_PLAN_CONFIG[normalizedPlan].months);
     const companySlug = slugify(normalizedCompanyName);
     const uniqueSuffix = `${Date.now().toString(36)}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
     const subdomain = `${companySlug}-${uniqueSuffix}`.slice(0, 60);
@@ -517,8 +307,8 @@ export const register = async (req: Request, res: Response) => {
         name: normalizedCompanyName,
         domain,
         subdomain,
-        plan: normalizedPlan === 'year_50000' ? 'premium' : 'standard',
-        max_users: 100,
+        plan: 'standard',
+        max_users: 1,
         max_companies: 1,
         features: ['all_menus', 'payment_approval', 'work_management', 'analytics'],
         status: 'active',
@@ -562,7 +352,7 @@ export const register = async (req: Request, res: Response) => {
             initialized: true,
             planType: normalizedPlan,
             billingAmount: BILLING_PLAN_CONFIG[normalizedPlan].amount,
-            freeTrialUsed: normalizedPlan === 'free_week_7'
+            freeTrialUsed: true
           }
         }
       },
@@ -641,119 +431,6 @@ export const register = async (req: Request, res: Response) => {
       );
     }
 
-    let revenueInvoice: any = null;
-    if (BILLING_PLAN_CONFIG[normalizedPlan].amount > 0) {
-      // 가입 매출은 Minsub Ventures의 세금계산서(인보이스) 매출로 기록
-      const billingCompanyCandidates = await (Company as any).findAll({
-        attributes: ['id', 'tenant_id', 'name'],
-        where: {
-          status: 'active',
-          name: { [Op.like]: '%Minsub Ventures%' }
-        },
-        transaction,
-        limit: 5
-      });
-      const billingCompany = billingCompanyCandidates[0];
-      if (!billingCompany) {
-        await transaction.rollback();
-        return res.status(500).json({
-          success: false,
-          message: 'Minsub Ventures 청구 회사 정보가 없어 가입을 완료할 수 없습니다.'
-        });
-      }
-
-      const billingUser =
-        (await (User as any).findOne({
-          where: {
-            tenant_id: billingCompany.tenant_id,
-            company_id: billingCompany.id,
-            role: { [Op.in]: ['root', 'admin'] },
-            status: 'active'
-          },
-          order: [['role', 'ASC']],
-          transaction
-        })) ||
-        adminUser;
-
-      let billingCustomer = await (Customer as any).findOne({
-        where: {
-          tenant_id: billingCompany.tenant_id,
-          company_id: billingCompany.id,
-          business_number: normalizedBusinessNumber
-        },
-        transaction
-      });
-      if (!billingCustomer) {
-        billingCustomer = await (Customer as any).create(
-          {
-            tenant_id: billingCompany.tenant_id,
-            company_id: billingCompany.id,
-            name: normalizedCompanyName,
-            business_number: normalizedBusinessNumber,
-            ceo_name: normalizedAdminName,
-            address: normalizedAddress || null,
-            phone: normalizedPhone || null,
-            email: normalizedAdminEmail,
-            status: 'active'
-          },
-          { transaction }
-        );
-      } else {
-        await billingCustomer.update(
-          {
-            name: normalizedCompanyName,
-            ceo_name: normalizedAdminName,
-            address: normalizedAddress || billingCustomer.address,
-            phone: normalizedPhone || billingCustomer.phone,
-            email: normalizedAdminEmail
-          },
-          { transaction }
-        );
-      }
-
-      const subtotal = BILLING_PLAN_CONFIG[normalizedPlan].amount;
-      const taxAmount = Number(((subtotal * GST_RATE) / 100).toFixed(2));
-      const totalAmount = Number((subtotal + taxAmount).toFixed(2));
-      const invoiceDate = getDateOnlyString(now);
-      const invoiceNumber = generateSubscriptionInvoiceNumber(billingCompany.name);
-
-      revenueInvoice = await (Invoice as any).create(
-        {
-          tenant_id: billingCompany.tenant_id,
-          company_id: billingCompany.id,
-          customer_id: billingCustomer.id,
-          invoice_number: invoiceNumber,
-          invoice_date: invoiceDate,
-          due_date: invoiceDate,
-          subtotal,
-          tax_amount: taxAmount,
-          total_amount: totalAmount,
-          status: 'issued',
-          payment_status: 'paid',
-          payment_method: 'online_signup',
-          payment_date: invoiceDate,
-          notes:
-            `신규 가입 결제(${normalizedPlan}) · 가입회사 GST: ${normalizedGstNumber} · tenant_id=${tenant.id}, company_id=${company.id}`,
-          created_by: billingUser.id
-        },
-        { transaction }
-      );
-      await (InvoiceItem as any).create(
-        {
-          invoice_id: revenueInvoice.id,
-          item_name: normalizedPlan === 'year_50000' ? 'MVS 연간 구독' : 'MVS 월간 구독',
-          description: `신규 가입 결제 · 기간 ${getDateOnlyString(usageStartDate)} ~ ${getDateOnlyString(usageEndDate)}`,
-          quantity: 1,
-          unit_price: subtotal,
-          total_price: subtotal,
-          tax_rate: GST_RATE,
-          tax_amount: taxAmount,
-          is_active: true
-        },
-        { transaction }
-      );
-    }
-
     await transaction.commit();
 
     return res.status(201).json({
@@ -766,7 +443,6 @@ export const register = async (req: Request, res: Response) => {
         plan: normalizedPlan,
         billingAmount: BILLING_PLAN_CONFIG[normalizedPlan].amount,
         gstNumber: normalizedGstNumber,
-        taxInvoiceNumber: revenueInvoice ? revenueInvoice.invoice_number : null,
         usageStartDate: usageStartDate.toISOString().split('T')[0],
         usageEndDate: usageEndDate.toISOString().split('T')[0]
       }

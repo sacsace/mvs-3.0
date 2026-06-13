@@ -14,17 +14,17 @@ export const mvsMainSurfaceSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',
   borderRadius: '24px',
   padding: '32px',
-  boxShadow: '0 8px 30px rgba(15, 23, 42, 0.04)',
-  border: 'none',
+  boxShadow: '0 4px 16px rgba(15, 23, 42, 0.09)',
+  border: '1px solid #B8C4D0',
   boxSizing: 'border-box',
 };
 
 export const mvsSectionGroupSx: SxProps<Theme> = {
-  backgroundColor: '#F8FAFC',
+  backgroundColor: '#F0F4F8',
   borderRadius: '20px',
   padding: '20px',
   marginBottom: '24px',
-  border: 'none',
+  border: '1px solid #C5CED9',
   boxShadow: 'none',
 };
 
@@ -32,24 +32,24 @@ export const mvsInnerCardSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',
   borderRadius: '16px',
   padding: '18px',
-  border: 'none',
-  boxShadow: '0 2px 10px rgba(15, 23, 42, 0.035)',
+  border: '1px solid #C5CED9',
+  boxShadow: '0 2px 8px rgba(15, 23, 42, 0.06)',
 };
 
 export const mvsFilterToolbarSx: SxProps<Theme> = {
-  backgroundColor: '#F8FAFC',
+  backgroundColor: '#F0F4F8',
   borderRadius: '18px',
   padding: '16px',
   marginBottom: '24px',
-  border: 'none',
+  border: '1px solid #C5CED9',
 };
 
 export const mvsTableZoneSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',
   borderRadius: '20px',
   padding: '18px',
-  boxShadow: '0 4px 18px rgba(15, 23, 42, 0.04)',
-  border: 'none',
+  boxShadow: '0 4px 14px rgba(15, 23, 42, 0.07)',
+  border: '1px solid #C5CED9',
 };
 
 /** 필터 아래 테이블을 살짝 띄워 구분 (전자결재·고객정보 등과 동일 계열) */
@@ -58,7 +58,7 @@ export const mvsTableWellSx: SxProps<Theme> = (theme) => ({
   pt: 2.5,
   borderTop: '1px solid',
   borderColor:
-    theme.palette.mode === 'dark' ? theme.palette.divider : 'rgba(15, 23, 42, 0.06)',
+    theme.palette.mode === 'dark' ? theme.palette.divider : '#C5CED9',
   borderRadius: 0,
 });
 
@@ -76,7 +76,7 @@ export const mvsTableHeadHighlightSx: SxProps<Theme> = (theme) => {
   const light = theme.palette.mode === 'light';
   const headBg = light ? '#F1F5F9' : theme.palette.grey[800];
   const headFg = light ? '#475569' : theme.palette.grey[200];
-  const headBorder = light ? '#E2E8F0' : theme.palette.divider;
+  const headBorder = light ? '#C5CED9' : theme.palette.divider;
   return {
     bgcolor: headBg,
     '& .MuiTableCell-head': {
@@ -115,11 +115,11 @@ export const mvsTitleBlockSx: SxProps<Theme> = {
 
 /** 대시보드 하단 위젯 그룹 배경 */
 export const mvsDashboardWidgetGroupSx: SxProps<Theme> = {
-  backgroundColor: '#F8FAFC',
+  backgroundColor: '#F0F4F8',
   borderRadius: '22px',
   padding: '20px',
   gap: '20px',
-  border: 'none',
+  border: '1px solid #C5CED9',
   boxShadow: 'none',
 };
 
@@ -127,6 +127,6 @@ export const mvsDashboardWidgetGroupSx: SxProps<Theme> = {
 export const mvsDashboardWidgetCardSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',
   borderRadius: '18px',
-  boxShadow: '0 4px 18px rgba(15, 23, 42, 0.045)',
-  border: 'none',
+  boxShadow: '0 4px 14px rgba(15, 23, 42, 0.07)',
+  border: '1px solid #C5CED9',
 };

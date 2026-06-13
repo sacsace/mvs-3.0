@@ -102,10 +102,10 @@ const THEME_PRESETS: Record<
     mode: 'light',
     primaryColor: '#007A83',
     secondaryColor: '#0d9488',
-    backgroundDefault: '#F5F6F8',
+    backgroundDefault: '#E8EDF3',
     backgroundPaper: '#FFFFFF',
-    workArea: { main: '#FFFFFF', light: '#F8FAFC', dark: '#F1F5F9' },
-    bodyArea: { main: '#F5F6F8', light: '#F7F8FA', dark: '#EEF2F7' },
+    workArea: { main: '#FFFFFF', light: '#F4F7FA', dark: '#E8EDF3' },
+    bodyArea: { main: '#E8EDF3', light: '#F0F4F8', dark: '#DCE3ED' },
     textPrimary: '#111827',
     textSecondary: '#6B7280'
   },

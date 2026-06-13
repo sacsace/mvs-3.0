@@ -497,8 +497,17 @@ const PartnerManagement: React.FC = () => {
       )}
 
       {/* 검색 및 필터 */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
+      <Card
+        elevation={0}
+        sx={{
+          mb: 3,
+          borderRadius: '18px',
+          border: '1px solid #C5CED9',
+          bgcolor: '#F0F4F8',
+          boxShadow: 'none',
+        }}
+      >
+        <CardContent sx={{ py: 2, px: 2, '&:last-child': { pb: 2 } }}>
           <Box sx={{ 
             display: 'flex', 
             gap: 2, 
@@ -520,7 +529,13 @@ const PartnerManagement: React.FC = () => {
               }}
               sx={{ 
                 minWidth: { xs: '100%', sm: 300 },
-                flex: { xs: '1 1 100%', sm: '1 1 auto' }
+                flex: { xs: '1 1 100%', sm: '1 1 auto' },
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '12px',
+                  bgcolor: 'background.paper',
+                  '& fieldset': { borderColor: '#C5CED9' },
+                  '&:hover fieldset': { borderColor: '#B8C4D0' },
+                },
               }}
             />
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
@@ -532,7 +547,13 @@ const PartnerManagement: React.FC = () => {
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
                   displayEmpty
-                  sx={{ height: '40px' }}
+                  sx={{
+                    height: '40px',
+                    borderRadius: '12px',
+                    bgcolor: 'background.paper',
+                    '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
+                  }}
                 >
                   <MenuItem value="all">{t('partnerManagement.allStatus')}</MenuItem>
                   <MenuItem value="active">{t('partnerManagement.active')}</MenuItem>
@@ -550,7 +571,13 @@ const PartnerManagement: React.FC = () => {
                     value={typeFilter}
                     onChange={(e) => setTypeFilter(e.target.value)}
                     displayEmpty
-                    sx={{ height: '40px' }}
+                    sx={{
+                      height: '40px',
+                      borderRadius: '12px',
+                      bgcolor: 'background.paper',
+                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
+                    }}
                   >
                     <MenuItem value="all">{t('partnerManagement.allTypes')}</MenuItem>
                     <MenuItem value="partner">{t('partnerManagement.typePartner')}</MenuItem>

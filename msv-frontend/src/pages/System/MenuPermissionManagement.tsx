@@ -1394,10 +1394,25 @@ const MenuPermissionManagement: React.FC = () => {
 
   const cardShellSx = {
     borderRadius: '20px',
-    border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'dark' ? 0.35 : 0.65)}`,
-    boxShadow: '0 4px 24px rgba(15, 23, 42, 0.06)',
+    border: '1px solid',
+    borderColor: theme.palette.mode === 'light' ? '#C5CED9' : alpha(theme.palette.divider, 0.35),
+    boxShadow:
+      theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.08)' : '0 4px 24px rgba(15, 23, 42, 0.06)',
     bgcolor: 'background.paper',
     overflow: 'hidden' as const,
+  };
+
+  const selectionInputSx = {
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '12px',
+      bgcolor: 'background.paper',
+      '& fieldset': {
+        borderColor: theme.palette.mode === 'light' ? '#C5CED9' : undefined,
+      },
+      '&:hover fieldset': {
+        borderColor: theme.palette.mode === 'light' ? '#B8C4D0' : undefined,
+      },
+    },
   };
 
   const listSectionTitleSx = {
@@ -1546,7 +1561,7 @@ const MenuPermissionManagement: React.FC = () => {
                   placeholder={t('menuPermissionManagement.userSearchPlaceholder')}
                   value={userSearchTerm}
                   onChange={(e) => setUserSearchTerm(e.target.value)}
-                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+                  sx={selectionInputSx}
                 />
               </Box>
 
@@ -1561,7 +1576,7 @@ const MenuPermissionManagement: React.FC = () => {
                   placeholder={t('menuPermissionManagement.companySearchPlaceholder')}
                   value={companySearchTerm}
                   onChange={(e) => setCompanySearchTerm(e.target.value)}
-                  sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+                  sx={selectionInputSx}
                 />
               </Box>
 

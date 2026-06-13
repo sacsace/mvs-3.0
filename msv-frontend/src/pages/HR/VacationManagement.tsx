@@ -1432,9 +1432,12 @@ const VacationManagement: React.FC = () => {
         return (
           <Card>
             <CardContent>
-              <Typography variant="h6" sx={{ mb: 3, fontWeight: 'bold' }}>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                 {t('vacationManagement.leavePolicy')}
               </Typography>
+              <Alert severity="info" variant="outlined" sx={{ mb: 3, borderRadius: 2 }}>
+                {t('vacationManagement.fiscalYearResetNote')}
+              </Alert>
               
               <Grid container spacing={3}>
               {/* 연차 (Earned Leave) */}

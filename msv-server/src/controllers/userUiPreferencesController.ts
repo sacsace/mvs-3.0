@@ -16,6 +16,24 @@ export type UserUiPreferencesPayload = {
   /** 회사 휴일 알림: 날짜키 -> 표시일 키 */
   companyHolidayReminderShown?: Record<string, string>;
   roomInvoiceTaxSnapshot?: Record<string, unknown>;
+  notificationSettings?: {
+    realtime?: boolean;
+    email?: boolean;
+    browser?: boolean;
+    system?: boolean;
+    approval?: boolean;
+    vacation?: boolean;
+    expense?: boolean;
+    workReport?: boolean;
+    emailDigest?: 'immediate' | 'daily' | 'weekly';
+  };
+  notificationTemplates?: Array<{
+    id: string;
+    name: string;
+    title: string;
+    message: string;
+    type: 'info' | 'success' | 'warning' | 'error';
+  }>;
 };
 
 const sanitizeSchedules = (
@@ -125,7 +143,9 @@ export const patchUserUiPreferences = async (req: AuthRequest, res: Response) =>
       'sidebarAutoCollapse',
       'language',
       'companyHolidayReminderShown',
-      'roomInvoiceTaxSnapshot'
+      'roomInvoiceTaxSnapshot',
+      'notificationSettings',
+      'notificationTemplates'
     ];
 
     for (const key of keys) {

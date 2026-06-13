@@ -1570,9 +1570,9 @@ const CompanyManagement: React.FC = () => {
                 sx={{
                   borderRadius: '16px',
                   border: '1px solid',
-                  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+                  borderColor: theme.palette.mode === 'light' ? '#B8C4D0' : 'divider',
                   boxShadow:
-                    theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
+                    theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.08)' : '0 2px 12px rgba(0,0,0,0.25)',
                   bgcolor: 'background.paper',
                 }}
               >
@@ -1603,7 +1603,9 @@ const CompanyManagement: React.FC = () => {
               mb: 3,
               p: 2,
               borderRadius: '14px',
-              bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.06) : alpha(theme.palette.common.black, 0.03),
+              border: '1px solid',
+              borderColor: theme.palette.mode === 'light' ? '#C5CED9' : 'divider',
+              bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.06) : '#F0F4F8',
             }}
           >
             <TextField
@@ -1628,7 +1630,10 @@ const CompanyManagement: React.FC = () => {
                   borderRadius: '12px',
                   bgcolor: 'background.paper',
                   '& fieldset': {
-                    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : undefined,
+                    borderColor: theme.palette.mode === 'light' ? '#C5CED9' : undefined,
+                  },
+                  '&:hover fieldset': {
+                    borderColor: theme.palette.mode === 'light' ? '#B8C4D0' : undefined,
                   },
                 },
               }}

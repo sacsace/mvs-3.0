@@ -86,6 +86,30 @@ const LoginInfoManagement: React.FC = () => {
     fontWeight: 500,
     color: isDark ? 'rgba(224, 235, 255, 0.9)' : theme.palette.text.secondary
   };
+  const toolbarCardSx = isDark
+    ? {}
+    : {
+        borderRadius: '18px',
+        border: '1px solid #C5CED9',
+        bgcolor: '#F0F4F8',
+        boxShadow: 'none',
+      };
+  const toolbarInputSx = isDark
+    ? { '& .MuiOutlinedInput-root': { borderRadius: '12px' } }
+    : {
+        '& .MuiOutlinedInput-root': {
+          borderRadius: '12px',
+          bgcolor: 'background.paper',
+          '& fieldset': { borderColor: '#C5CED9' },
+          '&:hover fieldset': { borderColor: '#B8C4D0' },
+        },
+      };
+  const toolbarOutlinedBtnSx = isDark
+    ? {}
+    : {
+        borderColor: '#C5CED9',
+        '&:hover': { borderColor: '#B8C4D0', bgcolor: 'background.paper' },
+      };
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>('');
   const [tabs, setTabs] = useState<LoginInfoTabRow[]>([]);
@@ -465,8 +489,8 @@ const LoginInfoManagement: React.FC = () => {
         </Alert>
       )}
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
+      <Card elevation={0} sx={{ mb: 3, ...toolbarCardSx }}>
+        <CardContent sx={{ py: 2, px: 2, '&:last-child': { pb: 2 } }}>
           <Box
             sx={{
               display: 'flex',
@@ -475,7 +499,7 @@ const LoginInfoManagement: React.FC = () => {
               gap: 2
             }}
           >
-            <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Box sx={{ flex: 1, minWidth: 0, ...toolbarInputSx }}>
               <Typography variant="caption" sx={fieldLabelSx}>
                 {t('loginInfoManagement.fields.company')}
               </Typography>
@@ -507,7 +531,8 @@ const LoginInfoManagement: React.FC = () => {
               sx={{
                 width: { xs: '100%', sm: '100%', md: 280 },
                 flexShrink: 0,
-                '& .MuiInputBase-root': { height: 40 }
+                '& .MuiInputBase-root': { height: 40 },
+                ...toolbarInputSx,
               }}
             />
             <Box
@@ -519,7 +544,8 @@ const LoginInfoManagement: React.FC = () => {
                 alignSelf: { xs: 'stretch', md: 'flex-end' },
                 '& .MuiButton-root': {
                   height: 40
-                }
+                },
+                '& .MuiButton-outlined': toolbarOutlinedBtnSx,
               }}
             >
               <input

@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../types';
 import { Vacation, User, Company } from '../models';
 import { Op } from 'sequelize';
-import { validateAnnualLeaveRequest, calculateAnnualLeave } from '../utils/vacationCalculator';
+import { calculateAnnualLeave, validateVacationLeaveRequest } from '../utils/vacationCalculator';
 import * as XLSX from 'xlsx';
 
 // 휴가 목록 조회
@@ -206,15 +206,13 @@ export const createVacation = async (req: AuthRequest, res: Response) => {
     const end = new Date(end_date);
     const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-    // 연차 유형인 경우 검증
-    if (vacation_type === 'annual') {
-      const validation = await validateAnnualLeaveRequest(targetUserId, days);
-      if (!validation.valid) {
-        return res.status(400).json({
-          success: false,
-          message: validation.message || '연차 신청이 불가능합니다.'
-        });
-      }
+    // 휴가 유형별 회계연도 잔여 일수 검증 (이월·누적 없음)
+    const leaveValidation = await validateVacationLeaveRequest(targetUserId, vacation_type, days);
+    if (!leaveValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: leaveValidation.message || '휴가 신청이 불가능합니다.'
+      });
     }
 
     // 중복 휴가 검사: 이미 신청/승인된 휴가와 날짜가 겹치는지 확인
@@ -332,13 +330,12 @@ export const updateVacation = async (req: AuthRequest, res: Response) => {
     const finalStartDate = start_date || vacation.start_date;
     const finalEndDate = end_date || vacation.end_date;
     const finalDays = days;
-    if (finalVacationType === 'annual') {
-      // 기존 연차 사용 일수 제외하고 계산 (현재 수정 중인 휴가 제외)
-      const validation = await validateAnnualLeaveRequest(vacation.user_id, finalDays, vacation.id);
+    if (finalVacationType) {
+      const validation = await validateVacationLeaveRequest(vacation.user_id, finalVacationType, finalDays, vacation.id);
       if (!validation.valid) {
         return res.status(400).json({
           success: false,
-          message: validation.message || '연차 신청이 불가능합니다.'
+          message: validation.message || '휴가 신청이 불가능합니다.'
         });
       }
     }

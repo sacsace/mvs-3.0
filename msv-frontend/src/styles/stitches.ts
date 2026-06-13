@@ -3,13 +3,13 @@ import { createStitches } from '@stitches/react';
 const { globalCss } = createStitches({
   theme: {
     colors: {
-      bgCanvas: '#F5F6F8',
+      bgCanvas: '#E8EDF3',
       bgSurface: '#ffffff',
-      bgMuted: '#F7F8FA',
+      bgMuted: '#F0F4F8',
       textStrong: '#111827',
       textMuted: '#6B7280',
-      borderSubtle: '#E5E7EB',
-      borderStrong: '#D1D5DB',
+      borderSubtle: '#D8E0EA',
+      borderStrong: '#B8C5D6',
       primary: '#007A83',
       primaryHover: '#00656D',
       focusRing: 'rgba(0, 122, 131, 0.22)',
@@ -22,8 +22,8 @@ const { globalCss } = createStitches({
       full: '9999px',
     },
     shadows: {
-      card: '0 10px 28px rgba(15, 23, 42, 0.05)',
-      cardHover: '0 12px 32px rgba(15, 23, 42, 0.07)',
+      card: '0 4px 14px rgba(15, 23, 42, 0.07)',
+      cardHover: '0 8px 24px rgba(15, 23, 42, 0.1)',
     },
     fonts: {
       body:
@@ -48,14 +48,14 @@ const applyGlobalStyles = globalCss({
     MozOsxFontSmoothing: 'grayscale',
   },
   '.MuiPaper-root': {
-    border: '1px solid rgba(15, 23, 42, 0.06)',
+    border: '1px solid #D8E0EA',
     backgroundImage: 'none',
     boxShadow: '$card',
   },
   '.MuiCard-root': {
     borderRadius: '20px',
     boxShadow: '$card',
-    border: '1px solid rgba(15, 23, 42, 0.06)',
+    border: '1px solid #D8E0EA',
     transition: 'all 0.2s ease',
     '&:hover': {
       boxShadow: '$cardHover',

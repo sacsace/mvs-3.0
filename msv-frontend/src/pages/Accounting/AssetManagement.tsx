@@ -28,6 +28,7 @@ import {
   CircularProgress,
   Tooltip,
   IconButton,
+  Divider,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -35,7 +36,13 @@ import {
   Delete as DeleteIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
-import { useTheme } from '@mui/material/styles';
+import {
+  mvsFilterToolbarSx,
+  mvsInnerCardSx,
+  mvsMainSurfaceSx,
+  mvsTableHeadHighlightSx,
+  mvsTableZoneSx,
+} from '../../theme/mvsLayout';
 import { accountingService } from '../../services/api';
 import { UTILS } from '../../constants';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
@@ -129,7 +136,6 @@ const calculateDepreciationValues = (
 };
 
 const AssetManagement: React.FC = () => {
-  const theme = useTheme();
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(false);
@@ -392,11 +398,11 @@ const AssetManagement: React.FC = () => {
         </Alert>
       )}
 
-      <Card elevation={0} sx={{ mb: 3, borderRadius: '20px', border: '1px solid', borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider', boxShadow: theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)' }}>
-        <CardContent>
-          <Grid container spacing={2} sx={{ mb: 2 }}>
+      <Card elevation={0} sx={{ mb: 3, ...mvsMainSurfaceSx, p: 0 }}>
+        <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+          <Grid container spacing={2} sx={{ mb: 0 }}>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card elevation={0} sx={{ borderRadius: '14px', border: '1px solid', borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider' }}>
+              <Card elevation={0} sx={{ ...mvsInnerCardSx, p: 0 }}>
                 <CardContent sx={{ py: 2, px: 2 }}>
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>자산 수</Typography>
                   <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600 }}>{summary.totalCount}건</Typography>
@@ -404,7 +410,7 @@ const AssetManagement: React.FC = () => {
               </Card>
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card elevation={0} sx={{ borderRadius: '14px', border: '1px solid', borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider' }}>
+              <Card elevation={0} sx={{ ...mvsInnerCardSx, p: 0 }}>
                 <CardContent sx={{ py: 2, px: 2 }}>
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>사용중 자산</Typography>
                   <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600 }} color="success.main">{summary.activeCount}건</Typography>
@@ -412,7 +418,7 @@ const AssetManagement: React.FC = () => {
               </Card>
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card elevation={0} sx={{ borderRadius: '14px', border: '1px solid', borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider' }}>
+              <Card elevation={0} sx={{ ...mvsInnerCardSx, p: 0 }}>
                 <CardContent sx={{ py: 2, px: 2 }}>
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>총 취득가</Typography>
                   <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600 }}>{formatCurrency(summary.totalPurchase)}</Typography>
@@ -420,7 +426,7 @@ const AssetManagement: React.FC = () => {
               </Card>
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card elevation={0} sx={{ borderRadius: '14px', border: '1px solid', borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider' }}>
+              <Card elevation={0} sx={{ ...mvsInnerCardSx, p: 0 }}>
                 <CardContent sx={{ py: 2, px: 2 }}>
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>총 현재가</Typography>
                   <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600 }} color="text.primary">{formatCurrency(summary.totalCurrent)}</Typography>
@@ -429,6 +435,9 @@ const AssetManagement: React.FC = () => {
             </Grid>
           </Grid>
 
+          <Divider sx={{ my: 2.5, borderColor: '#C5CED9' }} />
+
+          <Box sx={{ ...mvsFilterToolbarSx, mb: 0 }}>
           <Grid container spacing={2} alignItems="flex-end">
             <Grid size={{ xs: 12, md: 6 }}>
               <TextField
@@ -474,41 +483,41 @@ const AssetManagement: React.FC = () => {
               </FormControl>
             </Grid>
           </Grid>
+          </Box>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent>
+      <Card elevation={0} sx={mvsTableZoneSx}>
+        <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
           {loading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
               <CircularProgress />
             </Box>
           ) : filteredAssets.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" align="center">
-              자산 데이터가 없습니다.
-            </Typography>
+            <Box
+              sx={{
+                py: 5,
+                px: 2,
+                textAlign: 'center',
+                borderRadius: '14px',
+                border: '1px dashed #C5CED9',
+                bgcolor: '#F8FAFC',
+              }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                자산 데이터가 없습니다.
+              </Typography>
+            </Box>
           ) : (
-            <TableContainer>
+            <TableContainer
+              sx={{
+                borderRadius: '14px',
+                border: '1px solid #C5CED9',
+                overflow: 'hidden',
+              }}
+            >
               <Table>
-                <TableHead
-                  sx={{
-                    bgcolor: 'background.paper',
-                    '& .MuiTableCell-head': {
-                      bgcolor: 'background.paper',
-                      color: 'text.primary',
-                      fontWeight: 600,
-                      fontSize: '0.875rem',
-                      textTransform: 'none',
-                      letterSpacing: 'normal',
-                      borderBottom: '2px solid',
-                      borderColor: 'primary.main',
-                      py: 1.25
-                    },
-                    '& .MuiTableCell-head:last-of-type': {
-                      textAlign: 'center'
-                    }
-                  }}
-                >
+                <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
                     <TableCell>코드</TableCell>
                     <TableCell>자산명</TableCell>
@@ -522,7 +531,7 @@ const AssetManagement: React.FC = () => {
                 </TableHead>
                 <TableBody>
                   {paginatedAssets.map(asset => (
-                    <TableRow key={asset.id} hover>
+                    <TableRow key={asset.id} hover sx={{ '& .MuiTableCell-root': { borderColor: '#D8E0EA' } }}>
                       <TableCell>{asset.asset_code}</TableCell>
                       <TableCell>{asset.name}</TableCell>
                       <TableCell>{asset.category}</TableCell>

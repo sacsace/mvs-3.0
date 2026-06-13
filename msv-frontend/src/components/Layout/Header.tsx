@@ -26,115 +26,26 @@ import {
   DeleteSweep as DeleteSweepIcon,
   Announcement as AnnouncementIcon,
   AutoAwesome as AutoAwesomeIcon,
-  Menu as MenuIcon
+  Menu as MenuIcon,
+  OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
 import { api, userUiPreferencesService } from '../../services/api';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../locales/i18n';
 import { useErrorStore } from '../../store/errorStore';
+import { useNotificationStore } from '../../store/notificationStore';
 import { useNavigate, useLocation } from 'react-router-dom';
 import FullMenuOverlay from './FullMenuOverlay';
-
-interface HeaderNotificationItem {
-  id: string;
-  title: string;
-  message: string;
-  timestamp: Date;
-  severity: 'info' | 'warning' | 'success' | 'error';
-  read: boolean;
-  href?: string;
-  inboxChip?: 'payment' | 'vacation' | 'quotation';
-}
-
-interface ActionInboxRow {
-  id: string;
-  kind: 'expense_payment' | 'vacation_pending' | 'quotation_pending';
-  timestamp: string;
-  href: string;
-  payload: Record<string, unknown>;
-}
-
-/** `useTranslation().t` — 로컬 타입으로 i18next 버전별 TFunction export 차이 회피 */
-type I18nTranslate = (key: string, options?: Record<string, unknown>) => string;
-
-const mapInboxRowToHeaderItem = (row: ActionInboxRow, t: I18nTranslate): HeaderNotificationItem => {
-  const ts = new Date(row.timestamp);
-  const p = row.payload || {};
-  if (row.kind === 'expense_payment') {
-    return {
-      id: `inbox-${row.id}`,
-      title: t('common.notificationInbox.expenseTitle'),
-      message: t('common.notificationInbox.expenseBody', {
-        requester: String(p.requesterName ?? ''),
-        title: String(p.expenseTitle ?? ''),
-        amount: String(p.amount ?? ''),
-        currency: String(p.currency ?? '')
-      }),
-      timestamp: ts,
-      severity: 'warning',
-      read: false,
-      href: row.href,
-      inboxChip: 'payment'
-    };
-  }
-  if (row.kind === 'vacation_pending') {
-    return {
-      id: `inbox-${row.id}`,
-      title: t('common.notificationInbox.vacationTitle'),
-      message: t('common.notificationInbox.vacationBody', {
-        name: String(p.applicantName ?? '—'),
-        start: String(p.start ?? ''),
-        end: String(p.end ?? ''),
-        days: String(p.days ?? '')
-      }),
-      timestamp: ts,
-      severity: 'info',
-      read: false,
-      href: row.href,
-      inboxChip: 'vacation'
-    };
-  }
-  return {
-    id: `inbox-${row.id}`,
-    title: t('common.notificationInbox.quotationTitle'),
-    message: t('common.notificationInbox.quotationBody', {
-      customer: String(p.customerName ?? '—'),
-      number: String(p.quotationNumber ?? '')
-    }),
-    timestamp: ts,
-    severity: 'success',
-    read: false,
-    href: row.href,
-    inboxChip: 'quotation'
-  };
-};
-
-interface ServerNotificationItem {
-  id: number | string;
-  title?: string;
-  message: string;
-  type?: 'info' | 'warning' | 'success' | 'error';
-  timestamp?: string;
-  read?: boolean;
-  data?: Record<string, unknown>;
-}
-
-/** 서버 알림 `data` 기반 이동 경로 (업무 보고서 등) */
-function hrefFromServerNotificationData(data: unknown): string | undefined {
-  if (data == null || typeof data !== 'object') return undefined;
-  const d = data as Record<string, unknown>;
-  if (d.feature !== 'work_report') return undefined;
-  const rawId = d.id;
-  const reportId =
-    typeof rawId === 'number' && Number.isInteger(rawId)
-      ? rawId
-      : parseInt(String(rawId ?? ''), 10);
-  if (!Number.isInteger(reportId) || reportId <= 0) return undefined;
-  const list =
-    d.list === 'authored' || d.list === 'received' || d.list === 'cc' ? d.list : 'received';
-  return `/work/reports?report=${reportId}&list=${list}`;
-}
+import NotificationDetailDialog from '../Notifications/NotificationDetailDialog';
+import {
+  ActionInboxRow,
+  AppNotification,
+  buildNotificationsFromSources,
+  getNotificationChipColor,
+  getNotificationChipLabel,
+  ServerNotificationItem,
+} from '../../utils/notificationFeed';
 
 interface CalendarScheduleItem {
   id: string;
@@ -152,12 +63,20 @@ const Header: React.FC = () => {
   const isAiRoute =
     location.pathname.startsWith('/ai') ||
     /^\/(cost-analysis|efficiency|forecasting|recommendations)(\/|$)/.test(location.pathname);
-  const { errors, notifications, clearNotifications } = useErrorStore();
+  const { errors, notifications, clearNotifications, clearErrors } = useErrorStore();
+  const {
+    items: notificationItems,
+    mergeFromSources,
+    markRead,
+    markAllRead,
+    clearAll: clearNotificationStore,
+  } = useNotificationStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [languageAnchorEl, setLanguageAnchorEl] = useState<null | HTMLElement>(null);
   const [notificationAnchorEl, setNotificationAnchorEl] = useState<null | HTMLElement>(null);
   const [fullMenuOpen, setFullMenuOpen] = useState(false);
-  const [notificationFeed, setNotificationFeed] = useState<HeaderNotificationItem[]>([]);
+  const [selectedNotification, setSelectedNotification] = useState<AppNotification | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [inboxActions, setInboxActions] = useState<ActionInboxRow[]>([]);
   const [serverNotifications, setServerNotifications] = useState<ServerNotificationItem[]>([]);
   const [companyInfo, setCompanyInfo] = useState<{
@@ -171,7 +90,9 @@ const Header: React.FC = () => {
       try {
         // 사용자의 company_id로 회사 정보 조회
         if (user?.company_id) {
-          const response = await api.get(`/company/${user.company_id}`);
+          const response = await api.get(`/company/${user.company_id}`, {
+            headers: { 'x-skip-error-popup': 'true' },
+          });
           if (response.data.success) {
             const company = response.data.data;
             setCompanyInfo({
@@ -182,7 +103,9 @@ const Header: React.FC = () => {
           }
         }
         
-        const response = await api.get('/company');
+        const response = await api.get('/company', {
+          headers: { 'x-skip-error-popup': 'true' },
+        });
         if (response.data.success) {
           const companies = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
           if (companies.length > 0) {
@@ -304,54 +227,15 @@ const Header: React.FC = () => {
   }, [user?.id]);
 
   useEffect(() => {
-    setNotificationFeed((prev) => {
-      const next = [...prev];
-      const known = new Set(prev.map((item) => item.id));
-
-      serverNotifications.forEach((item) => {
-        const id = `server-${item.id}`;
-        if (known.has(id)) return;
-        const href = hrefFromServerNotificationData(item.data);
-        next.unshift({
-          id,
-          title: item.title || t('common.notification'),
-          message: item.message,
-          timestamp: item.timestamp ? new Date(item.timestamp) : new Date(),
-          severity: (item.type || 'info') as 'info' | 'warning' | 'success' | 'error',
-          read: Boolean(item.read),
-          ...(href ? { href } : {})
-        });
-      });
-
-      notifications.forEach((item) => {
-        const id = `notification-${item.id}`;
-        if (known.has(id)) return;
-        next.unshift({
-          id,
-          title: t('common.notification'),
-          message: item.message,
-          timestamp: new Date(item.timestamp),
-          severity: item.severity,
-          read: false
-        });
-      });
-
-      errors.forEach((item) => {
-        const id = `error-${item.id}`;
-        if (known.has(id)) return;
-        next.unshift({
-          id,
-          title: item.title || t('common.notification'),
-          message: item.message,
-          timestamp: new Date(item.timestamp),
-          severity: (item.type || 'error') as 'info' | 'warning' | 'success' | 'error',
-          read: false
-        });
-      });
-
-      return next.slice(0, 20);
+    const merged = buildNotificationsFromSources({
+      serverNotifications,
+      clientNotifications: notifications,
+      errors,
+      inboxActions,
+      t,
     });
-  }, [errors, notifications, serverNotifications, t]);
+    mergeFromSources(merged);
+  }, [errors, notifications, serverNotifications, inboxActions, t, mergeFromSources]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -424,36 +308,41 @@ const Header: React.FC = () => {
     };
   }, [user?.id, language]);
 
-  const inboxHeaderItems = useMemo(
-    () => inboxActions.map((row) => mapInboxRowToHeaderItem(row, t)),
-    [inboxActions, t]
+  const displayNotificationFeed = useMemo(
+    () => notificationItems.slice(0, 40),
+    [notificationItems]
   );
 
-  const displayNotificationFeed = useMemo(() => {
-    const merged = [...inboxHeaderItems, ...notificationFeed];
-    merged.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-    return merged.slice(0, 40);
-  }, [inboxHeaderItems, notificationFeed]);
-
   const unreadCount = useMemo(
-    () =>
-      inboxActions.length + notificationFeed.filter((item) => !item.read).length,
-    [inboxActions.length, notificationFeed]
+    () => notificationItems.filter((item) => !item.read).length,
+    [notificationItems]
   );
 
   const handleNotificationMenu = (event: React.MouseEvent<HTMLElement>) => {
     setNotificationAnchorEl(event.currentTarget);
-    setNotificationFeed((prev) => prev.map((item) => ({ ...item, read: true })));
   };
 
   const handleNotificationClose = () => {
     setNotificationAnchorEl(null);
   };
 
+  const handleOpenNotificationDetail = (item: AppNotification) => {
+    setSelectedNotification(item);
+    setDetailDialogOpen(true);
+    markRead(item.id);
+    handleNotificationClose();
+  };
+
+  const handleOpenNotificationsPage = () => {
+    navigate('/notifications');
+    handleNotificationClose();
+  };
+
   const handleClearNotificationFeed = () => {
-    setNotificationFeed([]);
+    clearNotificationStore();
     clearNotifications();
-    setNotificationAnchorEl(null);
+    clearErrors();
+    handleNotificationClose();
   };
 
   return (
@@ -751,10 +640,10 @@ const Header: React.FC = () => {
               <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                 {language === 'en' ? 'Notifications' : '알림'}
               </Typography>
-              <Tooltip title={language === 'en' ? 'Mark all as read' : '모두 읽음'}>
+              <Tooltip title={t('notifications.markAllAsRead')}>
                 <IconButton
                   size="small"
-                  onClick={() => setNotificationFeed((prev) => prev.map((item) => ({ ...item, read: true })))}
+                  onClick={markAllRead}
                 >
                   <CheckIcon fontSize="small" />
                 </IconButton>
@@ -771,47 +660,20 @@ const Header: React.FC = () => {
               displayNotificationFeed.map((item) => (
                 <MenuItem
                   key={item.id}
-                  onClick={() => {
-                    if (item.href) {
-                      navigate(item.href);
-                    }
-                    handleNotificationClose();
-                  }}
+                  onClick={() => handleOpenNotificationDetail(item)}
                   sx={{
                     alignItems: 'flex-start',
                     whiteSpace: 'normal',
                     py: 1,
                     borderRadius: 1,
-                    bgcolor: item.read && !item.inboxChip ? 'transparent' : 'action.hover'
+                    bgcolor: item.read ? 'transparent' : 'action.hover'
                   }}
                 >
                   <ListItemIcon sx={{ mt: 0.25, minWidth: 24 }}>
                     <Chip
                       size="small"
-                      label={
-                        item.inboxChip === 'payment'
-                          ? t('common.notificationInbox.chipPayment')
-                          : item.inboxChip === 'vacation'
-                            ? t('common.notificationInbox.chipVacation')
-                            : item.inboxChip === 'quotation'
-                              ? t('common.notificationInbox.chipQuotation')
-                              : item.severity.toUpperCase()
-                      }
-                      color={
-                        item.inboxChip === 'payment'
-                          ? 'warning'
-                          : item.inboxChip === 'vacation'
-                            ? 'info'
-                            : item.inboxChip === 'quotation'
-                              ? 'secondary'
-                              : item.severity === 'error'
-                                ? 'error'
-                                : item.severity === 'warning'
-                                  ? 'warning'
-                                  : item.severity === 'success'
-                                    ? 'success'
-                                    : 'info'
-                      }
+                      label={getNotificationChipLabel(item, t)}
+                      color={getNotificationChipColor(item)}
                       sx={{ height: 18, '& .MuiChip-label': { px: 0.75, fontSize: '0.625rem' } }}
                     />
                   </ListItemIcon>
@@ -823,7 +685,7 @@ const Header: React.FC = () => {
                           {item.message}
                         </Typography>
                         <Typography component="span" variant="caption" color="text.secondary">
-                          {item.timestamp.toLocaleString(language === 'en' ? 'en-US' : 'ko-KR')}
+                          {new Date(item.timestamp).toLocaleString(language === 'en' ? 'en-US' : 'ko-KR')}
                         </Typography>
                       </Box>
                     }
@@ -833,23 +695,40 @@ const Header: React.FC = () => {
                 </MenuItem>
               ))
             )}
-            {displayNotificationFeed.length > 0 && (
-              <>
-                <Divider sx={{ mt: 0.5 }} />
-                <Box sx={{ px: 1, py: 0.5, display: 'flex', justifyContent: 'flex-end' }}>
-                  <Button
-                    size="small"
-                    color="inherit"
-                    startIcon={<DeleteSweepIcon />}
-                    onClick={handleClearNotificationFeed}
-                    sx={{ fontSize: '0.75rem', textTransform: 'none' }}
-                  >
-                    {language === 'en' ? 'Clear All' : '전체 지우기'}
-                  </Button>
-                </Box>
-              </>
-            )}
+            <Divider sx={{ mt: displayNotificationFeed.length > 0 ? 0.5 : 0 }} />
+            <Box sx={{ px: 1, py: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Tooltip title={t('notifications.openPage')}>
+                <IconButton size="small" onClick={handleOpenNotificationsPage} color="primary">
+                  <OpenInNewIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              {displayNotificationFeed.length > 0 ? (
+                <Button
+                  size="small"
+                  color="inherit"
+                  startIcon={<DeleteSweepIcon />}
+                  onClick={handleClearNotificationFeed}
+                  sx={{ fontSize: '0.75rem', textTransform: 'none' }}
+                >
+                  {t('notifications.clearAll')}
+                </Button>
+              ) : (
+                <Typography variant="caption" color="text.secondary" sx={{ pr: 0.5 }}>
+                  {t('notifications.openPage')}
+                </Typography>
+              )}
+            </Box>
           </Menu>
+
+          <NotificationDetailDialog
+            open={detailDialogOpen}
+            notification={selectedNotification}
+            onClose={() => {
+              setDetailDialogOpen(false);
+              setSelectedNotification(null);
+            }}
+            onNavigate={(href) => navigate(href)}
+          />
 
           <Menu
             id="menu-appbar"

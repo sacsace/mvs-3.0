@@ -59,20 +59,20 @@ const theme = createTheme({
       light: '#4ade80',
       dark: '#16a34a',
     },
-    divider: '#EEF2F7',
+    divider: '#C5CED9',
     background: {
-      default: '#F5F6F8',
+      default: '#E8EDF3',
       paper: '#FFFFFF',
     },
     workArea: {
       main: '#FFFFFF',
-      light: '#F8FAFC',
-      dark: '#F1F5F9',
+      light: '#F4F7FA',
+      dark: '#E8EDF3',
     },
     bodyArea: {
-      main: '#F5F6F8',
-      light: '#F7F8FA',
-      dark: '#EEF2F7',
+      main: '#E8EDF3',
+      light: '#F0F4F8',
+      dark: '#DCE3ED',
     },
     text: {
       primary: '#111827',
@@ -312,18 +312,18 @@ const theme = createTheme({
             ...(outlined
               ? {
                   borderRadius: '16px',
-                  boxShadow: '0 2px 10px rgba(15, 23, 42, 0.035)',
-                  border: '1px solid rgba(15, 23, 42, 0.04)',
+                  boxShadow: '0 2px 8px rgba(15, 23, 42, 0.06)',
+                  border: '1px solid #C5CED9',
                   '&:hover': {
-                    boxShadow: '0 4px 16px rgba(15, 23, 42, 0.05)',
+                    boxShadow: '0 6px 18px rgba(15, 23, 42, 0.08)',
                   },
                 }
               : {
                   borderRadius: '18px',
-                  border: 'none',
-                  boxShadow: '0 4px 18px rgba(15, 23, 42, 0.045)',
+                  border: '1px solid #C5CED9',
+                  boxShadow: '0 4px 14px rgba(15, 23, 42, 0.08)',
                   '&:hover': {
-                    boxShadow: '0 6px 22px rgba(15, 23, 42, 0.06)',
+                    boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
                   },
                 }),
           };
@@ -357,13 +357,13 @@ const theme = createTheme({
             ...(outlined
               ? {
                   borderRadius: '16px',
-                  boxShadow: '0 2px 10px rgba(15, 23, 42, 0.035)',
-                  border: '1px solid rgba(15, 23, 42, 0.04)',
+                  boxShadow: '0 2px 8px rgba(15, 23, 42, 0.06)',
+                  border: '1px solid #C5CED9',
                 }
               : {
                   borderRadius: '18px',
-                  boxShadow: '0 4px 18px rgba(15, 23, 42, 0.045)',
-                  border: 'none',
+                  boxShadow: '0 4px 14px rgba(15, 23, 42, 0.08)',
+                  border: '1px solid #C5CED9',
                 }),
           };
         },
@@ -396,8 +396,11 @@ const theme = createTheme({
               paddingTop: '12px',
               paddingBottom: '12px',
             },
+            '& .MuiOutlinedInput-notchedOutline': {
+              borderColor: '#C5CED9',
+            },
             '&:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#D1D5DB',
+              borderColor: '#B8C4D0',
             },
             '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
               borderColor: '#007A83',

@@ -54,6 +54,7 @@ import LoginInfoManagement from './pages/System/LoginInfoManagement';
 
 // Communication 페이지들
 import NoticeManagement from './pages/Communication/NoticeManagement';
+import NotificationManagement from './pages/Notifications/NotificationManagement';
 import EmailManagement from './pages/Communication/EmailManagement';
 import SMSManagement from './pages/Communication/SMSManagement';
 
@@ -106,22 +107,6 @@ const Reports = () => {
   );
 };
 
-
-const Notifications = () => (
-  <UnderDevelopment 
-    pageName="알림 관리"
-    description="시스템 알림 및 메시지를 관리하는 페이지입니다."
-    estimatedCompletion="2024년 12월"
-    features={[
-      "실시간 알림",
-      "이메일 알림 설정",
-      "알림 히스토리",
-      "알림 템플릿 관리",
-      "사용자별 알림 설정"
-    ]}
-    status="development"
-  />
-);
 
 const Chat = () => (
   <UnderDevelopment 
@@ -348,9 +333,7 @@ function App() {
             <Route path="settings/integration" element={<UnderDevelopment pageName="통합 설정" description="외부 시스템과의 통합 설정을 관리하는 페이지입니다." estimatedCompletion="2024년 12월" features={["API 설정", "웹훅 설정", "데이터 동기화", "통합 테스트", "통합 모니터링"]} status="development" />} />
             
             {/* 알림 */}
-            <Route path="notifications" element={<Notifications />} />
-            
-            {/* AI 분석 */}
+            <Route path="notifications" element={<NotificationManagement />} />
             <Route path="ai" element={<Navigate to="/ai/cost-analysis" replace />} />
             <Route path="ai/cost-analysis" element={<CostAnalysis />} />
             <Route path="ai/efficiency-metrics" element={<EfficiencyMetrics />} />

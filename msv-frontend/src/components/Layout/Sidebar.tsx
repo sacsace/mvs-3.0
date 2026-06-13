@@ -707,7 +707,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     height: SIDEBAR_HEIGHT_CALC,
     minHeight: SIDEBAR_HEIGHT_CALC,
     backgroundColor: '#F7F8FA',
-    borderRight: '1px solid rgba(15, 23, 42, 0.06)',
+    borderRight: '1px solid #C5CED9',
     zIndex: autoCollapseEnabled && peekOpen && isCollapsed ? 1300 : 1200,
     willChange: 'width, box-shadow',
     overflowX: 'hidden' as const,

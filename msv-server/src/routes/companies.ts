@@ -2,6 +2,10 @@ import express from 'express';
 import { Sequelize, QueryTypes } from 'sequelize';
 import { Company, CompanyGstNumber, User } from '../models';
 import { authenticateToken, requireRole } from '../middleware/auth';
+import {
+  deleteCompanyWithCascade,
+  CompanyNotFoundError,
+} from '../services/deleteCompanyCascade';
 import { validateBody } from '../middleware/validate';
 import sequelize from '../config/database';
 
@@ -1365,35 +1369,39 @@ router.post('/fix-column-lengths', authenticateToken, requireRole(['root']), asy
   }
 });
 
-// 회사 삭제 (root 권한만)
+// 회사 삭제 (root 권한만) — 하위 사용자·메뉴 등 연관 데이터 FK 역순 cascade 삭제
 router.delete('/:id', authenticateToken, requireRole(['root']), async (req, res) => {
   try {
-    const { id } = req.params;
-    const tenantId = (req as any).user.tenant_id;
-    
-    const deletedRowsCount = await (Company as any).destroy({
-      where: { 
-        id: id,
-        tenant_id: tenantId 
-      }
-    });
-
-    if (deletedRowsCount === 0) {
-      return res.status(404).json({
+    const companyId = parseInt(req.params.id, 10);
+    if (!Number.isFinite(companyId)) {
+      return res.status(400).json({
         success: false,
-        message: '회사를 찾을 수 없습니다.'
+        message: '유효하지 않은 회사 ID입니다.',
       });
     }
 
+    const result = await deleteCompanyWithCascade(companyId);
+
     res.json({
       success: true,
-      message: '회사가 성공적으로 삭제되었습니다.'
+      message: result.purgedTenant
+        ? '회사 및 테넌트 관련 데이터가 모두 삭제되었습니다.'
+        : '회사 및 관련 데이터가 성공적으로 삭제되었습니다.',
+      data: result,
     });
   } catch (error) {
+    if (error instanceof CompanyNotFoundError) {
+      return res.status(404).json({
+        success: false,
+        message: error.message,
+      });
+    }
+
     console.error('회사 삭제 오류:', error);
     res.status(500).json({
       success: false,
-      message: '회사 삭제에 실패했습니다.'
+      message: '회사 삭제 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' && error instanceof Error ? error.message : undefined,
     });
   }
 });
