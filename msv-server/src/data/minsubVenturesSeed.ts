@@ -282,22 +282,33 @@ async function syncFullMenuPermissions(tenantId: number, userIds: number[]) {
       { bind: [userId, tenantId] }
     );
 
-    const [inserted] = await sequelize.query(
-      `INSERT INTO user_permissions (user_id, menu_id, can_view, can_create, can_edit, can_delete, created_at, updated_at)
-       SELECT $1::int, m.id, true, true, true, true, NOW(), NOW()
-       FROM menus m
-       WHERE m.tenant_id = $2::int AND m.is_active = true
-       ON CONFLICT (user_id, menu_id) DO UPDATE SET
-         can_view = true,
-         can_create = true,
-         can_edit = true,
-         can_delete = true,
-         updated_at = NOW()
-       RETURNING id`,
-      { bind: [userId, tenantId] }
+    const [menus] = await sequelize.query(
+      `SELECT id FROM menus WHERE tenant_id = $1::int AND is_active = true ORDER BY id`,
+      { bind: [tenantId] }
     );
-    const count = Array.isArray(inserted) ? inserted.length : 0;
-    console.log(`  ✅ user_id=${userId} 메뉴 권한 ${count}건 동기화 (전체 CRUD)`);
+    const menuIds = (menus as { id: number }[]).map((m) => m.id);
+
+    for (const menuId of menuIds) {
+      const [existing] = await sequelize.query(
+        `SELECT id FROM user_permissions WHERE user_id = $1::int AND menu_id = $2::int LIMIT 1`,
+        { bind: [userId, menuId] }
+      );
+      if ((existing as unknown[]).length > 0) {
+        await sequelize.query(
+          `UPDATE user_permissions SET can_view=true, can_create=true, can_edit=true, can_delete=true, updated_at=NOW()
+           WHERE user_id = $1::int AND menu_id = $2::int`,
+          { bind: [userId, menuId] }
+        );
+      } else {
+        await sequelize.query(
+          `INSERT INTO user_permissions (user_id, menu_id, can_view, can_create, can_edit, can_delete, created_at, updated_at)
+           VALUES ($1::int, $2::int, true, true, true, true, NOW(), NOW())`,
+          { bind: [userId, menuId] }
+        );
+      }
+    }
+
+    console.log(`  ✅ user_id=${userId} 메뉴 권한 ${menuIds.length}건 동기화 (전체 CRUD)`);
   }
 }
 
