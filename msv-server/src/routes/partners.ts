@@ -6,6 +6,7 @@ import { validateBody } from '../middleware/validate';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
 import path from 'path';
+import { isMissingTableError } from '../utils/dbErrors';
 
 const router = express.Router();
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -84,6 +85,9 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('파트너 목록 조회 오류:', error);
+    if (isMissingTableError(error)) {
+      return res.json({ success: true, data: [] });
+    }
     res.status(500).json({
       success: false,
       message: '파트너 목록 조회 중 오류가 발생했습니다.',

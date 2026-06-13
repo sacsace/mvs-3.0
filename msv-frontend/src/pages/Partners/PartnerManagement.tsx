@@ -25,7 +25,8 @@ import {
   DialogActions,
   Tooltip,
   Snackbar,
-  Alert
+  Alert,
+  CircularProgress
 } from '@mui/material';
 import {
   Handshake as HandshakeIcon,
@@ -563,8 +564,12 @@ const PartnerManagement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* 파트너 목록 테이블 - 데이터가 있을 때만 표시 */}
-      {!loading && filteredPartners.length > 0 && (
+      {/* 파트너 목록 테이블 */}
+      {loading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+          <CircularProgress />
+        </Box>
+      ) : (
         <Card>
           <TableContainer
             sx={{

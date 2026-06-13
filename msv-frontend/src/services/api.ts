@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { useErrorStore } from '../store/errorStore';
+import { createEmptyListAxiosResponse, isCollectionListGet } from '../utils/listApi';
 
 // API Base URL 동적 설정
 // - 프로덕션(Railway 등): 빌드 시 주입된 REACT_APP_API_URL 최우선. 없으면 동일 오리진 /api (리버스 프록시·같은 서비스용).
@@ -429,6 +430,16 @@ api.interceptors.response.use(
           return Promise.reject(error);
         }
       }
+    }
+
+    // 목록 조회 GET 실패 시 서버 오류 모달 대신 빈 목록으로 처리
+    const listFetchStatus = error.response?.status;
+    if (
+      isCollectionListGet(error.config) &&
+      (listFetchStatus === 404 || (listFetchStatus != null && listFetchStatus >= 500))
+    ) {
+      console.warn('목록 조회 실패 → 빈 목록으로 처리:', error.config?.method, error.config?.url);
+      return Promise.resolve(createEmptyListAxiosResponse(error.config));
     }
 
     // 일반 에러 처리 - 팝업으로 표시
