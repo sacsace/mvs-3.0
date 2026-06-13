@@ -283,6 +283,7 @@ async function ensurePermissions(tenantId: number, users: any[]) {
 }
 
 async function ensureBusinessData(tenantId: number, companyId: number, createdBy: number) {
+  try {
   const customers = [
     { name: 'TechNova India Pvt Ltd', business_number: 'CUST-001', email: 'contact@technova.in', phone: '+91-98765-43210' },
     { name: 'Global Trade Partners', business_number: 'CUST-002', email: 'sales@gtp.com', phone: '+91-91234-56789' },
@@ -318,8 +319,10 @@ async function ensureBusinessData(tenantId: number, companyId: number, createdBy
         unit_price, cost_price, stock_quantity, min_stock_level, max_stock_level,
         unit, tax_rate, status, created_by, created_at, updated_at
       )
-      SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW()
-      WHERE NOT EXISTS (SELECT 1 FROM products WHERE product_code = $3)`,
+      SELECT $1::int, $2::int, $3::varchar, $4::varchar, $5::text, $6::varchar,
+             $7::numeric, $8::numeric, $9::numeric, $10::numeric, $11::numeric,
+             $12::varchar, $13::numeric, $14::varchar, $15::int, NOW(), NOW()
+      WHERE NOT EXISTS (SELECT 1 FROM products WHERE product_code = $3::varchar)`,
       {
         bind: [
           tenantId,
@@ -354,11 +357,11 @@ async function ensureBusinessData(tenantId: number, companyId: number, createdBy
     await sequelize.query(
       `INSERT INTO invoices (
         tenant_id, company_id, customer_id, invoice_number, invoice_date, due_date,
-        subtotal, tax_amount, total_amount, status, payment_status, invoice_category,
-        is_active, created_by, created_at, updated_at
+        subtotal, tax_amount, total_amount, status, payment_status, created_by, created_at, updated_at
       )
-      SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, 'paid', 'paid', 'regular', true, $10, NOW(), NOW()
-      WHERE NOT EXISTS (SELECT 1 FROM invoices WHERE invoice_number = $4)`,
+      SELECT $1::int, $2::int, $3::int, $4::varchar, $5::date, $6::date,
+             $7::numeric, $8::numeric, $9::numeric, 'paid', 'paid', $10::int, NOW(), NOW()
+      WHERE NOT EXISTS (SELECT 1 FROM invoices WHERE invoice_number = $4::varchar)`,
       {
         bind: [
           tenantId,
@@ -377,6 +380,9 @@ async function ensureBusinessData(tenantId: number, companyId: number, createdBy
   }
 
   console.log(`  ✅ 고객 ${customers.length} · 제품 ${products.length} · 인보이스 ${customers.length}`);
+  } catch (error: any) {
+    console.warn('  ⚠️  샘플 거래 데이터 일부 실패 (회사·메뉴는 적용됨):', error?.message);
+  }
 }
 
 async function ensureNotices(companyId: number, authorId: number) {
