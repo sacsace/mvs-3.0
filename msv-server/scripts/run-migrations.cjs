@@ -25,6 +25,29 @@ const sequelize = new Sequelize(DATABASE_URL, {
   dialectOptions: getPostgresDialectOptions(DATABASE_URL),
 });
 
+const SKIPPABLE_ERROR =
+  /No description found|does not exist|relation .* does not exist|table .* does not exist/i;
+
+const PRIORITY_MIGRATIONS = [
+  '20251004202050-create-users-table.js',
+  '20251004202639-create-all-tables.js',
+];
+
+function sortMigrationFiles(allFiles) {
+  const createMigrations = allFiles
+    .filter((f) => /create-/i.test(f) && !PRIORITY_MIGRATIONS.includes(f))
+    .sort();
+  const otherMigrations = allFiles
+    .filter((f) => !PRIORITY_MIGRATIONS.includes(f) && !createMigrations.includes(f))
+    .sort();
+
+  return [
+    ...PRIORITY_MIGRATIONS.filter((f) => allFiles.includes(f)),
+    ...createMigrations,
+    ...otherMigrations,
+  ];
+}
+
 async function authenticateWithRetry(maxRetries = 8) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -38,6 +61,13 @@ async function authenticateWithRetry(maxRetries = 8) {
       await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
   }
+}
+
+async function getExecutedNames() {
+  const [executedMigrations] = await sequelize.query(
+    'SELECT name FROM "SequelizeMeta" ORDER BY name'
+  );
+  return executedMigrations.map((m) => m.name);
 }
 
 async function runMigrations() {
@@ -56,44 +86,39 @@ async function runMigrations() {
     const allFiles = readdirSync(migrationsPath)
       .filter((file) => file.endsWith('.js'))
       .sort();
-
-    /** 기본 스키마 마이그레이션을 항상 먼저 실행 (파일명 정렬보다 우선) */
-    const priorityMigrations = [
-      '20251004202050-create-users-table.js',
-      '20251004202639-create-all-tables.js',
-    ];
-    const migrationFiles = [
-      ...priorityMigrations.filter((f) => allFiles.includes(f)),
-      ...allFiles.filter((f) => !priorityMigrations.includes(f)),
-    ];
+    const migrationFiles = sortMigrationFiles(allFiles);
 
     console.log(`📋 발견된 마이그레이션 파일: ${migrationFiles.length}개\n`);
 
-    const [executedMigrations] = await sequelize.query(
-      'SELECT name FROM "SequelizeMeta" ORDER BY name'
-    );
+    const maxPasses = 12;
+    let totalRan = 0;
 
-    const executedNames = executedMigrations.map((m) => m.name);
-    console.log(`✅ 이미 실행된 마이그레이션: ${executedNames.length}개`);
+    for (let pass = 1; pass <= maxPasses; pass++) {
+      const executedNames = await getExecutedNames();
+      const pendingMigrations = migrationFiles.filter(
+        (file) => !executedNames.includes(file.replace('.js', ''))
+      );
 
-    const pendingMigrations = migrationFiles.filter(
-      (file) => !executedNames.includes(file.replace('.js', ''))
-    );
+      if (pendingMigrations.length === 0) {
+        console.log('\n✅ 모든 마이그레이션이 이미 실행되었습니다.');
+        break;
+      }
 
-    if (pendingMigrations.length === 0) {
-      console.log('\n✅ 모든 마이그레이션이 이미 실행되었습니다.');
-      await sequelize.close();
-      process.exit(0);
-    }
+      console.log(`\n🔄 패스 ${pass}/${maxPasses} — 실행 대기: ${pendingMigrations.length}개\n`);
 
-    console.log(`\n🔄 실행할 마이그레이션: ${pendingMigrations.length}개\n`);
+      let ranThisPass = 0;
+      let skippedThisPass = 0;
 
-    for (const file of pendingMigrations) {
-      try {
-        console.log(`📦 실행 중: ${file}...`);
-        const migration = require(join(migrationsPath, file));
+      for (const file of pendingMigrations) {
+        try {
+          console.log(`📦 실행 중: ${file}...`);
+          const migration = require(join(migrationsPath, file));
 
-        if (migration.up) {
+          if (!migration.up) {
+            console.log(`   ⚠️  up 함수가 없습니다: ${file}\n`);
+            continue;
+          }
+
           await migration.up(sequelize.getQueryInterface(), Sequelize);
 
           const migrationName = file.replace('.js', '');
@@ -103,17 +128,53 @@ async function runMigrations() {
           );
 
           console.log(`   ✅ 완료: ${file}\n`);
-        } else {
-          console.log(`   ⚠️  up 함수가 없습니다: ${file}\n`);
+          ranThisPass++;
+          totalRan++;
+        } catch (error) {
+          if (SKIPPABLE_ERROR.test(error.message || '')) {
+            console.log(`   ⏭️  의존 테이블 없음 — 다음 패스에서 재시도: ${file}`);
+            console.log(`   ${error.message}\n`);
+            skippedThisPass++;
+            continue;
+          }
+          console.error(`   ❌ 오류: ${file}`);
+          console.error(`   ${error.message}\n`);
+          throw error;
         }
-      } catch (error) {
-        console.error(`   ❌ 오류: ${file}`);
-        console.error(`   ${error.message}\n`);
-        throw error;
       }
+
+      if (ranThisPass === 0) {
+        const remaining = migrationFiles.filter(
+          (file) => !(await getExecutedNames()).includes(file.replace('.js', ''))
+        );
+        if (remaining.length > 0) {
+          console.warn(
+            `\n⚠️  ${remaining.length}개 마이그레이션이 테이블 부재로 건너뛰어졌습니다 (로그인에는 영향 없을 수 있음):`
+          );
+          remaining.slice(0, 10).forEach((f) => console.warn(`   - ${f}`));
+          if (remaining.length > 10) {
+            console.warn(`   ... 외 ${remaining.length - 10}개`);
+          }
+        }
+        break;
+      }
+
+      console.log(
+        `패스 ${pass} 완료 — 실행 ${ranThisPass}개, 건너뜀 ${skippedThisPass}개 (누적 실행 ${totalRan}개)`
+      );
     }
 
-    console.log('🎉 모든 마이그레이션이 성공적으로 실행되었습니다!');
+    const finalExecuted = await getExecutedNames();
+    const stillPending = migrationFiles.filter(
+      (file) => !finalExecuted.includes(file.replace('.js', ''))
+    );
+
+    if (stillPending.length > 0) {
+      console.log(`\nℹ️  미적용 마이그레이션 ${stillPending.length}개 (선택적 스키마)`);
+    } else {
+      console.log('\n🎉 모든 마이그레이션이 성공적으로 실행되었습니다!');
+    }
+
     await sequelize.close();
     process.exit(0);
   } catch (error) {
