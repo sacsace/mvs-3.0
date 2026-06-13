@@ -53,9 +53,19 @@ async function runMigrations() {
     `);
 
     const migrationsPath = join(__dirname, '..', 'migrations');
-    const migrationFiles = readdirSync(migrationsPath)
+    const allFiles = readdirSync(migrationsPath)
       .filter((file) => file.endsWith('.js'))
       .sort();
+
+    /** 기본 스키마 마이그레이션을 항상 먼저 실행 (파일명 정렬보다 우선) */
+    const priorityMigrations = [
+      '20251004202050-create-users-table.js',
+      '20251004202639-create-all-tables.js',
+    ];
+    const migrationFiles = [
+      ...priorityMigrations.filter((f) => allFiles.includes(f)),
+      ...allFiles.filter((f) => !priorityMigrations.includes(f)),
+    ];
 
     console.log(`📋 발견된 마이그레이션 파일: ${migrationFiles.length}개\n`);
 

@@ -3,6 +3,13 @@
 /** @type {import('sequelize-cli').Migration} */
 module.exports = {
   async up (queryInterface, Sequelize) {
+    const tables = await queryInterface.showAllTables();
+    const hasCompanies = tables.some((t) => String(t).toLowerCase() === 'companies');
+    if (!hasCompanies) {
+      console.log('companies 테이블 없음 — create-all-tables 이후 재실행 예정, 건너뜀');
+      return;
+    }
+
     // companies 테이블에 status 컬럼이 있는지 확인
     const tableDescription = await queryInterface.describeTable('companies');
     
