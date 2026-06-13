@@ -144,8 +144,9 @@ async function runMigrations() {
       }
 
       if (ranThisPass === 0) {
+        const executedAfterPass = await getExecutedNames();
         const remaining = migrationFiles.filter(
-          (file) => !(await getExecutedNames()).includes(file.replace('.js', ''))
+          (file) => !executedAfterPass.includes(file.replace('.js', ''))
         );
         if (remaining.length > 0) {
           console.warn(
