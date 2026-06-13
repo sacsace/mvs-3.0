@@ -28,10 +28,11 @@ try {
     Write-Host "=== 1) 개발 메뉴 export ==="
     & (Join-Path $root "scripts\export-menus-from-dev-api.ps1") -DevApiBase $DevApiBase
 
-    Write-Host "`n=== 2) 개발 사용자 export ==="
+    Write-Host "`n=== 2) 개발 사용자·부서 export ==="
     Push-Location $serverDir
     $env:NODE_ENV = "development"
     $env:DATABASE_URL = "postgresql://mvs_user:Korean%402026@localhost:5432/mvs"
+    node scripts/export-departments.cjs
     node scripts/export-users.cjs
     Pop-Location
   }
@@ -51,6 +52,15 @@ try {
   }
 
   if (-not $SkipUsers) {
+    Write-Host "`n==> 운영 부서 import"
+    $deptHeaders = @{ "x-bootstrap-key" = $BootstrapKey }
+    try {
+      $deptResp = Invoke-RestMethod -Uri "$BackendUrl/api/system/import-departments" -Method POST -Headers $deptHeaders -TimeoutSec 300
+      $deptResp | ConvertTo-Json -Compress
+    } catch {
+      Write-Host "부서 import 건너뜀 또는 실패: $($_.Exception.Message)"
+    }
+
     Write-Host "`n==> 운영 사용자 import"
     $userHeaders = @{ "x-bootstrap-key" = $BootstrapKey }
     $userResp = Invoke-RestMethod -Uri "$BackendUrl/api/system/import-users" -Method POST -Headers $userHeaders -TimeoutSec 300

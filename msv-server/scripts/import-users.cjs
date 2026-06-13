@@ -44,6 +44,24 @@ const UPSERT_FIELDS = [
   'employment_type', 'is_payment_officer', 'settings',
 ];
 
+async function resolveDepartmentId(departmentId, departmentName) {
+  if (departmentId != null) {
+    const [rows] = await sequelize.query(
+      `SELECT id FROM departments WHERE id = $1::int LIMIT 1`,
+      { bind: [departmentId] }
+    );
+    if (rows.length) return departmentId;
+  }
+  if (departmentName) {
+    const [byName] = await sequelize.query(
+      `SELECT id FROM departments WHERE tenant_id = $1::int AND name = $2::varchar LIMIT 1`,
+      { bind: [tenantId, departmentName] }
+    );
+    if (byName.length) return byName[0].id;
+  }
+  return null;
+}
+
 async function upsertUser(user) {
   const [existing] = await sequelize.query(
     `SELECT id FROM users WHERE tenant_id = $1::int AND userid = $2::varchar LIMIT 1`,
@@ -51,7 +69,11 @@ async function upsertUser(user) {
   );
 
   const companyId = user.company_id || 1;
-  const values = UPSERT_FIELDS.map((f) => user[f] ?? null);
+  const safeUser = {
+    ...user,
+    department_id: await resolveDepartmentId(user.department_id, user.department),
+  };
+  const values = UPSERT_FIELDS.map((f) => safeUser[f] ?? null);
 
   if (existing.length) {
     const setClause = UPSERT_FIELDS.map((f, i) => `${f} = $${i + 3}`).join(', ');

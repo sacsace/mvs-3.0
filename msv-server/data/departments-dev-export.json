@@ -1,0 +1,61 @@
+{
+  "exported_at": "2026-06-13T21:40:40.114Z",
+  "tenant_id": 1,
+  "departments": [
+    {
+      "id": 1,
+      "tenant_id": 1,
+      "company_id": 1,
+      "name": "Management",
+      "code": null,
+      "parent_id": null,
+      "manager_id": 2,
+      "description": "경영진 부서",
+      "is_active": true
+    },
+    {
+      "id": 2,
+      "tenant_id": 1,
+      "company_id": 1,
+      "name": "Development Team",
+      "code": null,
+      "parent_id": null,
+      "manager_id": 1,
+      "description": "소프트웨어 개발팀",
+      "is_active": true
+    },
+    {
+      "id": 3,
+      "tenant_id": 1,
+      "company_id": 1,
+      "name": "Sales Team",
+      "code": null,
+      "parent_id": null,
+      "manager_id": 3,
+      "description": "영업 및 마케팅팀",
+      "is_active": true
+    },
+    {
+      "id": 4,
+      "tenant_id": 1,
+      "company_id": 1,
+      "name": "HR/Admin",
+      "code": "hradmin",
+      "parent_id": null,
+      "manager_id": 2,
+      "description": "인사관리팀",
+      "is_active": true
+    },
+    {
+      "id": 5,
+      "tenant_id": 1,
+      "company_id": 1,
+      "name": "Accounting Team",
+      "code": null,
+      "parent_id": null,
+      "manager_id": 2,
+      "description": "회계 및 재무팀",
+      "is_active": true
+    }
+  ]
+}
