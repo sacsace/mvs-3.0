@@ -36,7 +36,9 @@ const sequelize = new Sequelize(databaseUrl, {
   dialectOptions: getPostgresDialectOptions(databaseUrl),
 });
 
-const payload = JSON.parse(readFileSync(inPath, 'utf8'));
+let raw = readFileSync(inPath, 'utf8');
+if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+const payload = JSON.parse(raw);
 const sourceMenus = payload.menus || [];
 
 /** 부모가 먼저 insert 되도록 정렬 */

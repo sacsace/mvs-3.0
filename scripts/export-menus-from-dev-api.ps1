@@ -81,6 +81,7 @@ $payload = [PSCustomObject]@{
 
 $dir = Split-Path $OutFile -Parent
 if (!(Test-Path $dir)) { New-Item -ItemType Directory -Path $dir | Out-Null }
-$payload | ConvertTo-Json -Depth 10 | Set-Content -Path $OutFile -Encoding UTF8
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText($OutFile, ($payload | ConvertTo-Json -Depth 10), $utf8NoBom)
 
 Write-Host "✅ 메뉴 $($flatMenus.Count)건, 권한 $($permissions.Count)건 → $OutFile"
