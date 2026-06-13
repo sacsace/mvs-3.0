@@ -1,0 +1,377 @@
+{
+  "exported_at": "2026-06-13T21:38:17.390Z",
+  "tenant_id": 1,
+  "users": [
+    {
+      "id": 1,
+      "tenant_id": 1,
+      "company_id": 1,
+      "userid": "root",
+      "username": "Minsub Lee",
+      "email": "lee@msventures.in",
+      "password_hash": "$2a$10$6AARYKAdQYkfiXaQAsi3heBXsMNfLGfFId8HH.pTY9jpg1RCNlzRC",
+      "role": "root",
+      "department": "IT",
+      "department_id": null,
+      "position": "System Administrator",
+      "status": "active",
+      "employee_number": "0001",
+      "phone": "9789888485",
+      "hire_date": "2018-05-01",
+      "employment_type": "fulltime",
+      "is_payment_officer": false,
+      "settings": {
+        "appearance": {
+          "theme": "light",
+          "primaryColor": "#1976d2",
+          "fontSize": "medium",
+          "sidebarCollapsed": false,
+          "showNotifications": true
+        },
+        "ui": {
+          "quickActionRoutes": [
+            "/accounting/e-invoice",
+            "/basic-info/partners",
+            "/basic-info/company",
+            "/hr/attendance/statistics",
+            "/hr/attendance",
+            "/accounting/expense",
+            "/accounting/statistics",
+            "/basic-info/login-info"
+          ],
+          "dashboardCards": [
+            "calendar",
+            "approval",
+            "projects",
+            "lowStock",
+            "notice"
+          ],
+          "language": "ko",
+          "sidebarWidth": 343,
+          "roomInvoiceTaxSnapshot": {
+            "6": {
+              "cgstRate": 6,
+              "sgstRate": 6
+            }
+          }
+        },
+        "mailServer": {
+          "host": "",
+          "port": 587,
+          "secure": false,
+          "authUser": "lee@msventures.in",
+          "authPass": "",
+          "fromEmail": "lee@msventures.in",
+          "fromName": "Minsub Lee"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "tenant_id": 1,
+      "company_id": 1,
+      "userid": "admin",
+      "username": "Admin User",
+      "email": "admin@mvs.com",
+      "password_hash": "$2a$10$6AARYKAdQYkfiXaQAsi3heBXsMNfLGfFId8HH.pTY9jpg1RCNlzRC",
+      "role": "admin",
+      "department": "Management",
+      "department_id": null,
+      "position": "Administrator",
+      "status": "active",
+      "employee_number": "MVS0002",
+      "phone": "9789888485",
+      "hire_date": null,
+      "employment_type": "fulltime",
+      "is_payment_officer": false,
+      "settings": null
+    },
+    {
+      "id": 3,
+      "tenant_id": 1,
+      "company_id": 1,
+      "userid": "user1",
+      "username": "Dipak",
+      "email": "user@mvs.com",
+      "password_hash": "$2a$10$6AARYKAdQYkfiXaQAsi3heBXsMNfLGfFId8HH.pTY9jpg1RCNlzRC",
+      "role": "user",
+      "department": "Sales",
+      "department_id": null,
+      "position": "Sales Representative",
+      "status": "active",
+      "employee_number": "MVS0003",
+      "phone": null,
+      "hire_date": null,
+      "employment_type": "fulltime",
+      "is_payment_officer": false,
+      "settings": null
+    },
+    {
+      "id": 7,
+      "tenant_id": 1,
+      "company_id": 1,
+      "userid": "test4",
+      "username": "Rupom",
+      "email": "info@msventures.in",
+      "password_hash": "$2b$10$2lX1F6USk4u73.IBu5uAJe0x5tpOwMksM7rpZtsJteYnHLqQ0T21S",
+      "role": "user",
+      "department": "Accounting Team",
+      "department_id": 5,
+      "position": "Manager",
+      "status": "active",
+      "employee_number": "MVPL-001",
+      "phone": "1234567890",
+      "hire_date": null,
+      "employment_type": "fulltime",
+      "is_payment_officer": false,
+      "settings": {
+        "ui": {
+          "calendarSchedules": {
+            "2026-05-01": [
+              {
+                "id": "1777147598460-9j23p3",
+                "title": "회사 휴일",
+                "type": "company_holiday"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 8,
+      "tenant_id": 1,
+      "company_id": 3,
+      "userid": "ydi",
+      "username": "Doolim Yaskawa",
+      "email": "test@test.in",
+      "password_hash": "$2b$10$si3DtC4RU0FlBBegDINN7u8Jqqm6ex0yN5gxx8eEA1AN84Ec8Btsu",
+      "role": "admin",
+      "department": null,
+      "department_id": null,
+      "position": "Manager",
+      "status": "active",
+      "employee_number": "YDIP-001",
+      "phone": "9789888485",
+      "hire_date": null,
+      "employment_type": "fulltime",
+      "is_payment_officer": false,
+      "settings": {
+        "appearance": {
+          "theme": "light",
+          "primaryColor": "#1976d2",
+          "fontSize": "medium",
+          "sidebarCollapsed": false,
+          "showNotifications": true
+        },
+        "ui": {
+          "sidebarWidth": 399
+        }
+      }
+    },
+    {
+      "id": 9,
+      "tenant_id": 1,
+      "company_id": 1,
+      "userid": "user001",
+      "username": "test 2",
+      "email": "temp@gmail.com",
+      "password_hash": "$2b$10$qyLlqpQZSK5b5IxtWmGzR.GNBFNfPIZ1mq06xwzy3wlsXBC8DggvC",
+      "role": "user",
+      "department": "개발팀",
+      "department_id": null,
+      "position": "개발자",
+      "status": "active",
+      "employee_number": "COMP-001",
+      "phone": "9789888485",
+      "hire_date": "2020-01-01",
+      "employment_type": "fulltime",
+      "is_payment_officer": false,
+      "settings": null
+    },
+    {
+      "id": 10,
+      "tenant_id": 1,
+      "company_id": 1,
+      "userid": "user002",
+      "username": "test 1",
+      "email": "kim@example.com",
+      "password_hash": "$2b$10$0b2fknhQMTQH8tnEvuOQ5eohinTgQ7y0GA.3QBPXu.yItzdVc3Exu",
+      "role": "admin",
+      "department": "HR",
+      "department_id": null,
+      "position": "Manager",
+      "status": "active",
+      "employee_number": "COMP-002",
+      "phone": "010-2345-6789",
+      "hire_date": "2019-06-01",
+      "employment_type": "fulltime",
+      "is_payment_officer": false,
+      "settings": null
+    },
+    {
+      "id": 11,
+      "tenant_id": 1,
+      "company_id": 1,
+      "userid": "audit",
+      "username": "Kaushal",
+      "email": "ca@msventures.in",
+      "password_hash": "$2b$10$tbSAwob9LyPwG3ulrurso.u4hL1uHaA5l.yjbJ1kI2E0MAxiwZSIm",
+      "role": "audit",
+      "department": "Accounting Team",
+      "department_id": 5,
+      "position": "Director",
+      "status": "active",
+      "employee_number": "MVPL-002",
+      "phone": null,
+      "hire_date": null,
+      "employment_type": "fulltime",
+      "is_payment_officer": false,
+      "settings": {
+        "ui": {
+          "language": "en",
+          "sidebarWidth": 336
+        }
+      }
+    },
+    {
+      "id": 12,
+      "tenant_id": 1,
+      "company_id": 3,
+      "userid": "ydi2",
+      "username": "YDI User",
+      "email": "doolim.yaskawa.india@gmail.com",
+      "password_hash": "$2b$10$XtwhFjNEV1W9wCYGHvVGPOy3N79n3llDJ9ys9/1nYIuMdYHHRnysW",
+      "role": "user",
+      "department": null,
+      "department_id": null,
+      "position": null,
+      "status": "active",
+      "employee_number": "YDIP-002",
+      "phone": null,
+      "hire_date": null,
+      "employment_type": "fulltime",
+      "is_payment_officer": false,
+      "settings": null
+    },
+    {
+      "id": 13,
+      "tenant_id": 1,
+      "company_id": 12,
+      "userid": "cvs",
+      "username": "CEV Test",
+      "email": "test@test.com",
+      "password_hash": "$2b$10$dzMckW7qipSojcbqshC9seVMv7f7H8OiKPx1dJA13/cRPldxtUWL.",
+      "role": "admin",
+      "department": null,
+      "department_id": null,
+      "position": null,
+      "status": "inactive",
+      "employee_number": "CEVE-001",
+      "phone": null,
+      "hire_date": null,
+      "employment_type": "fulltime",
+      "is_payment_officer": false,
+      "settings": null
+    },
+    {
+      "id": 14,
+      "tenant_id": 1,
+      "company_id": 12,
+      "userid": "cev",
+      "username": "CEV",
+      "email": "1test@test.com",
+      "password_hash": "$2b$10$PYCp7AF/20gEWNL3dpe2y.aZwQi68/37WSqKHGgD4kte3vSvkBVVW",
+      "role": "admin",
+      "department": null,
+      "department_id": null,
+      "position": null,
+      "status": "active",
+      "employee_number": "CEVE-002",
+      "phone": null,
+      "hire_date": null,
+      "employment_type": "fulltime",
+      "is_payment_officer": false,
+      "settings": null
+    },
+    {
+      "id": 15,
+      "tenant_id": 1,
+      "company_id": 1,
+      "userid": "heon",
+      "username": "Heon Bum Ha",
+      "email": "heon@msventures.in",
+      "password_hash": "$2b$10$HANi8Xoe/ECm94Q0TNkhteywS.ek8SzeJChYKXSmwxBSfG408hW/W",
+      "role": "admin",
+      "department": "Management",
+      "department_id": 1,
+      "position": "Executive Director",
+      "status": "active",
+      "employee_number": "MVPL-003",
+      "phone": "+91 89048 31522",
+      "hire_date": "2025-08-15",
+      "employment_type": "fulltime",
+      "is_payment_officer": false,
+      "settings": {
+        "appearance": {
+          "theme": "light",
+          "primaryColor": "#1976d2",
+          "fontSize": "medium",
+          "sidebarCollapsed": false,
+          "showNotifications": true
+        },
+        "ui": {
+          "language": "ko"
+        }
+      }
+    },
+    {
+      "id": 19,
+      "tenant_id": 1,
+      "company_id": 1,
+      "userid": "msventures.017@gmail.com",
+      "username": "Susweta",
+      "email": "msventures.017@gmail.com",
+      "password_hash": "$2b$10$gnY3.8UP5d/oZQaW3OTgJOrT4dLWpalp7jBtwNXmKOh4manI4t.1u",
+      "role": "admin",
+      "department": "HR/Admin",
+      "department_id": 4,
+      "position": "Manager",
+      "status": "active",
+      "employee_number": "MVPL-004",
+      "phone": null,
+      "hire_date": "2026-03-01",
+      "employment_type": "fulltime",
+      "is_payment_officer": false,
+      "settings": {
+        "ui": {
+          "language": "ko"
+        }
+      }
+    },
+    {
+      "id": 20,
+      "tenant_id": 1,
+      "company_id": 1,
+      "userid": "msventures.013@gmail.com",
+      "username": "Vijayalakshmi M S",
+      "email": "msventures.013@gmail.com",
+      "password_hash": "$2b$10$h.Lt6xtcQ.2LFhLXR44J1OcAv0.uuu.cFz4wXB16qeb5yUNSV9u1a",
+      "role": "user",
+      "department": "HR/Admin",
+      "department_id": 4,
+      "position": null,
+      "status": "active",
+      "employee_number": "MVPL-005",
+      "phone": null,
+      "hire_date": null,
+      "employment_type": "fulltime",
+      "is_payment_officer": false,
+      "settings": {
+        "ui": {
+          "sidebarWidth": 383
+        }
+      }
+    }
+  ]
+}

@@ -111,4 +111,42 @@ router.post('/import-menus', async (req: Request, res: Response) => {
   }
 });
 
+/** 개발서버에서 추출한 users-dev-export.json 을 운영 DB에 반영 */
+router.post('/import-users', async (req: Request, res: Response) => {
+  if (!isAuthorized(req)) {
+    return res.status(403).json({ success: false, message: 'Forbidden' });
+  }
+
+  res.setTimeout(600000);
+  req.setTimeout(600000);
+
+  const jsonPath = path.join(serverRoot, 'data', 'users-dev-export.json');
+
+  try {
+    console.log('[bootstrap] 사용자 import 시작...', jsonPath);
+    const { stdout, stderr } = await execAsync(
+      `node scripts/import-users.cjs ${JSON.stringify(jsonPath)} --tenant=1`,
+      {
+        cwd: serverRoot,
+        env: process.env,
+        maxBuffer: 10 * 1024 * 1024,
+      }
+    );
+    if (stdout) console.log(stdout);
+    if (stderr) console.error(stderr);
+
+    return res.json({
+      success: true,
+      message: '개발서버 사용자 데이터가 운영 DB에 반영되었습니다.',
+    });
+  } catch (error: any) {
+    console.error('[bootstrap] 사용자 import 실패:', error);
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'user import failed',
+      stderr: error?.stderr?.slice?.(0, 2000),
+    });
+  }
+});
+
 export default router;
