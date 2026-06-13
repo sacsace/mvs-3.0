@@ -60,4 +60,46 @@ router.post('/bootstrap-database', async (req: Request, res: Response) => {
   }
 });
 
+/** 개발서버에서 추출한 menus-dev-export.json 을 운영 DB에 반영 */
+router.post('/import-menus', async (req: Request, res: Response) => {
+  if (!isAuthorized(req)) {
+    return res.status(403).json({ success: false, message: 'Forbidden' });
+  }
+
+  res.setTimeout(600000);
+  req.setTimeout(600000);
+
+  const jsonPath = path.join(serverRoot, 'data', 'menus-dev-export.json');
+  const syncPerms = String(req.headers['x-sync-permissions'] || req.query.syncPermissions || '1').trim() !== '0';
+
+  try {
+    const args = [jsonPath, '--tenant=1'];
+    if (syncPerms) args.push('--sync-permissions');
+
+    console.log('[bootstrap] 메뉴 import 시작...', args.join(' '));
+    const { stdout, stderr } = await execAsync(
+      `node scripts/import-menus.cjs ${args.map((a) => JSON.stringify(a)).join(' ')}`,
+      {
+        cwd: serverRoot,
+        env: process.env,
+        maxBuffer: 10 * 1024 * 1024,
+      }
+    );
+    if (stdout) console.log(stdout);
+    if (stderr) console.error(stderr);
+
+    return res.json({
+      success: true,
+      message: '개발서버 메뉴 데이터가 운영 DB에 반영되었습니다.',
+    });
+  } catch (error: any) {
+    console.error('[bootstrap] 메뉴 import 실패:', error);
+    return res.status(500).json({
+      success: false,
+      message: error?.message || 'menu import failed',
+      stderr: error?.stderr?.slice?.(0, 2000),
+    });
+  }
+});
+
 export default router;

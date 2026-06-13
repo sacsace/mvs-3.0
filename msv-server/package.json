@@ -21,6 +21,8 @@
     "db:seed": "npx sequelize-cli db:seed:all",
     "db:seed:undo": "npx sequelize-cli db:seed:undo:all",
     "db:seed:data": "ts-node scripts/seed-data.ts",
+    "db:export:menus": "node scripts/export-menus.cjs",
+    "db:import:menus": "node scripts/import-menus.cjs data/menus-dev-export.json --tenant=1 --sync-permissions",
     "db:fix:columns": "ts-node scripts/fix-columns.ts",
     "db:fix:menu-order": "ts-node scripts/fix-menu-order.ts",
     "db:check:menus": "ts-node scripts/check-menus.ts",

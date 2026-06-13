@@ -8,6 +8,8 @@
     "dev:backend": "powershell -Command \"cd 'msv-server'; npm run dev\"",
     "dev:frontend": "powershell -Command \"cd 'msv-frontend'; npm start\"",
     "db:upload:railway": "powershell -ExecutionPolicy Bypass -File ./scripts/upload-local-db-to-railway.ps1",
+    "db:export:menus:dev": "powershell -ExecutionPolicy Bypass -File ./scripts/export-menus-from-dev-api.ps1",
+    "db:import:menus:railway": "powershell -ExecutionPolicy Bypass -File ./scripts/import-menus-to-railway.ps1",
     "db:fix:railway-postgres": "powershell -ExecutionPolicy Bypass -File ./scripts/fix-railway-postgres.ps1",
     "start": "powershell -ExecutionPolicy Bypass -File ./server/start-server.ps1",
     "start:railway": "echo 'This is a monorepo root. Please deploy msv-server or msv-frontend services separately.' && exit 1",
