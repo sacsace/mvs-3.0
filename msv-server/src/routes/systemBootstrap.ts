@@ -21,15 +21,21 @@ router.post('/bootstrap-database', async (req: Request, res: Response) => {
   res.setTimeout(600000);
   req.setTimeout(600000);
 
+  const seedOnly = String(req.headers['x-seed-only'] || req.query.seedOnly || '').trim() === '1';
+
   try {
-    console.log('[bootstrap] 마이그레이션 시작...');
-    const { stdout: migOut, stderr: migErr } = await execAsync('node scripts/run-migrations.cjs', {
-      cwd: serverRoot,
-      env: process.env,
-      maxBuffer: 10 * 1024 * 1024,
-    });
-    if (migOut) console.log(migOut);
-    if (migErr) console.error(migErr);
+    if (!seedOnly) {
+      console.log('[bootstrap] 마이그레이션 시작...');
+      const { stdout: migOut, stderr: migErr } = await execAsync('node scripts/run-migrations.cjs', {
+        cwd: serverRoot,
+        env: process.env,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      if (migOut) console.log(migOut);
+      if (migErr) console.error(migErr);
+    } else {
+      console.log('[bootstrap] x-seed-only=1 — 마이그레이션 건너뜀');
+    }
 
     console.log('[bootstrap] 시드 시작...');
     const { stdout: seedOut, stderr: seedErr } = await execAsync('npx ts-node scripts/seed-data.ts', {

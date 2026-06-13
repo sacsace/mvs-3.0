@@ -58,6 +58,12 @@ const isElevatedRole = (role: string | undefined) =>
   role === 'admin' || role === 'root' || role === 'audit';
 
 /** 결제·휴가·견적 등 승인 대기 건 — 알림 드롭다운용 */
+const isMissingTableError = (error: any) =>
+  error?.name === 'SequelizeDatabaseError' &&
+  (String(error?.message || '').includes('relation') ||
+    String(error?.message || '').includes('does not exist') ||
+    String(error?.message || '').includes('릴레이션'));
+
 export const getActionInbox = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
@@ -84,124 +90,139 @@ export const getActionInbox = async (req: Request, res: Response) => {
     };
 
     // 1) 지출결의서 결제 승인 대기
-    const expenseWhere: any = {
-      is_active: true,
-      payment_request_status: 'requested'
-    };
-    baseCompany(expenseWhere);
+    try {
+      const expenseWhere: any = {
+        is_active: true,
+        payment_request_status: 'requested'
+      };
+      baseCompany(expenseWhere);
 
-    const expenses = await (ExpenseReport as any).findAll({
-      where: expenseWhere,
-      order: [['payment_requested_at', 'DESC']],
-      limit: 40
-    });
-
-    for (const exp of expenses) {
-      const row = exp.toJSON ? exp.toJSON() : exp;
-      if (!canApproveExpensePayment(row, user)) continue;
-      const reqAt = row.payment_requested_at || row.updated_at || row.created_at;
-      items.push({
-        id: `expense_payment-${row.id}`,
-        kind: 'expense_payment',
-        timestamp: reqAt ? new Date(reqAt).toISOString() : new Date().toISOString(),
-        href: '/accounting/expense',
-        payload: {
-          expenseId: row.id,
-          requesterName: row.requester_name || '',
-          expenseTitle: row.title || row.expense_id || '',
-          amount: row.total_amount != null ? String(row.total_amount) : '',
-          currency: row.currency || 'KRW'
-        }
+      const expenses = await (ExpenseReport as any).findAll({
+        where: expenseWhere,
+        order: [['payment_requested_at', 'DESC']],
+        limit: 40
       });
+
+      for (const exp of expenses) {
+        const row = exp.toJSON ? exp.toJSON() : exp;
+        if (!canApproveExpensePayment(row, user)) continue;
+        const reqAt = row.payment_requested_at || row.updated_at || row.created_at;
+        items.push({
+          id: `expense_payment-${row.id}`,
+          kind: 'expense_payment',
+          timestamp: reqAt ? new Date(reqAt).toISOString() : new Date().toISOString(),
+          href: '/accounting/expense',
+          payload: {
+            expenseId: row.id,
+            requesterName: row.requester_name || '',
+            expenseTitle: row.title || row.expense_id || '',
+            amount: row.total_amount != null ? String(row.total_amount) : '',
+            currency: row.currency || 'KRW'
+          }
+        });
+      }
+    } catch (expenseError) {
+      if (!isMissingTableError(expenseError)) throw expenseError;
+      console.warn('알림 인박스: expense_reports 조회 건너뜀 —', (expenseError as Error).message);
     }
 
     // 2) 휴가 승인 대기 — 타인이 신청한 건만 (본인 신청 분은 제외)
-    const vacWhere: any = {
-      is_active: true,
-      status: 'pending',
-      user_id: { [Op.ne]: userId }
-    };
-    baseCompany(vacWhere);
-    if (!isElevatedRole(userRole)) {
-      vacWhere.approved_by = userId;
-    }
+    try {
+      const vacWhere: any = {
+        is_active: true,
+        status: 'pending',
+        user_id: { [Op.ne]: userId }
+      };
+      baseCompany(vacWhere);
+      if (!isElevatedRole(userRole)) {
+        vacWhere.approved_by = userId;
+      }
 
-    const vacations = await (Vacation as any).findAll({
-      where: vacWhere,
-      include: [
-        {
-          model: User,
-          as: 'user',
-          attributes: ['id', 'username'],
-          required: false
-        }
-      ],
-      order: [['applied_date', 'DESC']],
-      limit: 40
-    });
-
-    for (const v of vacations) {
-      const row = v.toJSON ? v.toJSON() : v;
-      const start = row.start_date ? String(row.start_date).slice(0, 10) : '';
-      const end = row.end_date ? String(row.end_date).slice(0, 10) : '';
-      items.push({
-        id: `vacation_pending-${row.id}`,
-        kind: 'vacation_pending',
-        timestamp: row.applied_date
-          ? new Date(row.applied_date).toISOString()
-          : new Date().toISOString(),
-        href: '/hr/leave',
-        payload: {
-          vacationId: row.id,
-          applicantName: (row as any).user?.username || '',
-          start,
-          end,
-          days: row.days != null ? Number(row.days) : 0,
-          vacationType: row.vacation_type || ''
-        }
+      const vacations = await (Vacation as any).findAll({
+        where: vacWhere,
+        include: [
+          {
+            model: User,
+            as: 'user',
+            attributes: ['id', 'username'],
+            required: false
+          }
+        ],
+        order: [['applied_date', 'DESC']],
+        limit: 40
       });
+
+      for (const v of vacations) {
+        const row = v.toJSON ? v.toJSON() : v;
+        const start = row.start_date ? String(row.start_date).slice(0, 10) : '';
+        const end = row.end_date ? String(row.end_date).slice(0, 10) : '';
+        items.push({
+          id: `vacation_pending-${row.id}`,
+          kind: 'vacation_pending',
+          timestamp: row.applied_date
+            ? new Date(row.applied_date).toISOString()
+            : new Date().toISOString(),
+          href: '/hr/leave',
+          payload: {
+            vacationId: row.id,
+            applicantName: (row as any).user?.username || '',
+            start,
+            end,
+            days: row.days != null ? Number(row.days) : 0,
+            vacationType: row.vacation_type || ''
+          }
+        });
+      }
+    } catch (vacationError) {
+      if (!isMissingTableError(vacationError)) throw vacationError;
+      console.warn('알림 인박스: vacations 조회 건너뜀 —', (vacationError as Error).message);
     }
 
     // 3) 견적서 승인 대기 — 내가 작성한 견적은 제외(남이 올려 나에게 승인이 온 건만)
-    const qWhere: any = {
-      is_active: true,
-      status: 'pending_approval',
-      created_by: { [Op.ne]: userId }
-    };
-    baseCompany(qWhere);
-    if (!isElevatedRole(userRole)) {
-      qWhere.approver_user_id = userId;
-    }
+    try {
+      const qWhere: any = {
+        is_active: true,
+        status: 'pending_approval',
+        created_by: { [Op.ne]: userId }
+      };
+      baseCompany(qWhere);
+      if (!isElevatedRole(userRole)) {
+        qWhere.approver_user_id = userId;
+      }
 
-    const quotations = await (Quotation as any).findAll({
-      where: qWhere,
-      include: [
-        {
-          model: Customer,
-          as: 'customer',
-          attributes: ['id', 'name'],
-          required: false
-        }
-      ],
-      order: [['created_at', 'DESC']],
-      limit: 40
-    });
-
-    for (const q of quotations) {
-      const row = q.toJSON ? q.toJSON() : q;
-      items.push({
-        id: `quotation_pending-${row.id}`,
-        kind: 'quotation_pending',
-        timestamp: row.created_at
-          ? new Date(row.created_at).toISOString()
-          : new Date().toISOString(),
-        href: '/work/quotation',
-        payload: {
-          quotationId: row.id,
-          quotationNumber: row.quotation_number || row.id,
-          customerName: (row as any).customer?.name || ''
-        }
+      const quotations = await (Quotation as any).findAll({
+        where: qWhere,
+        include: [
+          {
+            model: Customer,
+            as: 'customer',
+            attributes: ['id', 'name'],
+            required: false
+          }
+        ],
+        order: [['created_at', 'DESC']],
+        limit: 40
       });
+
+      for (const q of quotations) {
+        const row = q.toJSON ? q.toJSON() : q;
+        items.push({
+          id: `quotation_pending-${row.id}`,
+          kind: 'quotation_pending',
+          timestamp: row.created_at
+            ? new Date(row.created_at).toISOString()
+            : new Date().toISOString(),
+          href: '/work/quotation',
+          payload: {
+            quotationId: row.id,
+            quotationNumber: row.quotation_number || row.id,
+            customerName: (row as any).customer?.name || ''
+          }
+        });
+      }
+    } catch (quotationError) {
+      if (!isMissingTableError(quotationError)) throw quotationError;
+      console.warn('알림 인박스: quotations 조회 건너뜀 —', (quotationError as Error).message);
     }
 
     items.sort(

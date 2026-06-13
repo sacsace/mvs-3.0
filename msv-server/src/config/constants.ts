@@ -56,7 +56,8 @@ export const SAMPLE_DATA = {
     ABC: 'ABC 회사',
     XYZ: 'XYZ 기업',
     DEF: 'DEF 주식회사',
-    MVS: 'MVS Solutions'
+    MVS: 'MVS Solutions',
+    MINSUB: 'Minsub Ventures Private Limited',
   },
   DEPARTMENTS: {
     DEVELOPMENT: '개발팀',

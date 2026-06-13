@@ -1,4 +1,4 @@
-import { initializeSampleData } from '../src/data/sampleData';
+import { seedMinsubVenturesData } from '../src/data/minsubVenturesSeed';
 import { connectDB } from '../src/models';
 import bcrypt from 'bcryptjs';
 import { User, Tenant, Company, Menu } from '../src/models';
@@ -52,8 +52,8 @@ async function seedDatabase() {
       await sequelize.query('ALTER TABLE tenants ADD COLUMN subscription_id VARCHAR(255)');
     }
     
-    // Initialize sample data
-    await initializeSampleData();
+    // Minsub Ventures 기본 데이터 (회사·메뉴·권한·샘플 거래)
+    await seedMinsubVenturesData();
     
     // Update user passwords with proper bcrypt hashes
     console.log('🔐 Updating user passwords...');
