@@ -7,8 +7,6 @@ import {
   User,
   Menu,
   Customer,
-  Product,
-  Invoice,
   UserPermission,
 } from '../models';
 
@@ -314,43 +312,68 @@ async function ensureBusinessData(tenantId: number, companyId: number, createdBy
   ];
 
   for (const p of products) {
-    await (Product as any).findOrCreate({
-      where: { tenant_id: tenantId, company_id: companyId, product_code: p.product_code },
-      defaults: {
-        tenant_id: tenantId,
-        company_id: companyId,
-        description: p.name,
-        tax_rate: 18,
-        status: 'active',
-        max_stock_level: 200,
-        created_by: createdBy,
-        ...p,
-      },
-    });
+    await sequelize.query(
+      `INSERT INTO products (
+        tenant_id, company_id, product_code, name, description, category,
+        unit_price, cost_price, stock_quantity, min_stock_level, max_stock_level,
+        unit, tax_rate, status, created_by, created_at, updated_at
+      )
+      SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW(), NOW()
+      WHERE NOT EXISTS (SELECT 1 FROM products WHERE product_code = $3)`,
+      {
+        bind: [
+          tenantId,
+          companyId,
+          p.product_code,
+          p.name,
+          p.name,
+          p.category,
+          p.unit_price,
+          p.cost_price,
+          p.stock_quantity,
+          p.min_stock_level,
+          200,
+          p.unit,
+          18,
+          'active',
+          createdBy,
+        ],
+      }
+    );
   }
 
   const now = new Date();
+  const invoiceDate = now.toISOString().slice(0, 10);
+  const dueDate = new Date(now.getTime() + 30 * 86400000).toISOString().slice(0, 10);
+
   for (let i = 0; i < customerRows.length; i++) {
     const invNo = `MSV-INV-2025-${String(i + 1).padStart(4, '0')}`;
-    await (Invoice as any).findOrCreate({
-      where: { tenant_id: tenantId, company_id: companyId, invoice_number: invNo },
-      defaults: {
-        tenant_id: tenantId,
-        company_id: companyId,
-        customer_id: customerRows[i].id,
-        invoice_number: invNo,
-        invoice_date: now,
-        due_date: new Date(now.getTime() + 30 * 86400000),
-        subtotal: 100000 + i * 25000,
-        tax_amount: 18000 + i * 4500,
-        total_amount: 118000 + i * 29500,
-        status: 'paid',
-        payment_status: 'paid',
-        invoice_category: 'regular',
-        is_active: true,
-        created_by: createdBy,
-      },
-    });
+    const subtotal = 100000 + i * 25000;
+    const taxAmount = 18000 + i * 4500;
+    const totalAmount = 118000 + i * 29500;
+    await sequelize.query(
+      `INSERT INTO invoices (
+        tenant_id, company_id, customer_id, invoice_number, invoice_date, due_date,
+        subtotal, tax_amount, total_amount, status, payment_status, invoice_category,
+        is_active, created_by, created_at, updated_at
+      )
+      SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, 'paid', 'paid', 'regular', true, $10, NOW(), NOW()
+      WHERE NOT EXISTS (SELECT 1 FROM invoices WHERE invoice_number = $4)`,
+      {
+        bind: [
+          tenantId,
+          companyId,
+          customerRows[i].id,
+          invNo,
+          invoiceDate,
+          dueDate,
+          subtotal,
+          taxAmount,
+          totalAmount,
+          createdBy,
+        ],
+      }
+    );
   }
 
   console.log(`  ✅ 고객 ${customers.length} · 제품 ${products.length} · 인보이스 ${customers.length}`);
