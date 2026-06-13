@@ -26,7 +26,15 @@ module.exports = {
       );
     `);
     await queryInterface.sequelize.query(`
-      ALTER TABLE products ADD COLUMN IF NOT EXISTS partner_id INTEGER REFERENCES partners(id) ON DELETE SET NULL;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS partner_id INTEGER;
+    `);
+    await queryInterface.sequelize.query(`
+      DO $$ BEGIN
+        ALTER TABLE products
+          ADD CONSTRAINT products_partner_id_fkey
+          FOREIGN KEY (partner_id) REFERENCES partners(id) ON DELETE SET NULL;
+      EXCEPTION WHEN duplicate_object THEN null;
+      END $$;
     `);
     await queryInterface.sequelize.query(`
       CREATE INDEX IF NOT EXISTS products_partner_id_idx ON products(partner_id);
