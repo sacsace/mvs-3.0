@@ -403,14 +403,18 @@ async function ensureNotices(companyId: number, authorId: number) {
   ];
 
   for (const n of notices) {
-    await sequelize.query(
-      `INSERT INTO notices (tenant_id, company_id, title, content, category, priority, status, author_id, is_public, is_active, created_at, updated_at)
-       SELECT $1, $2, $3, $4, $5::"enum_notices_category", $6::"enum_notices_priority", 'published'::"enum_notices_status", $7, true, true, NOW(), NOW()
-       WHERE NOT EXISTS (SELECT 1 FROM notices WHERE company_id = $2 AND title = $3)`,
-      { bind: [TENANT_ID, companyId, n.title, n.content, n.category, n.priority, authorId] }
-    );
+    try {
+      await sequelize.query(
+        `INSERT INTO notices (tenant_id, company_id, title, content, category, priority, status, author_id, is_public, is_active, created_at, updated_at)
+         SELECT $1::int, $2::int, $3::varchar, $4::text, $5::"enum_notices_category", $6::"enum_notices_priority", 'published'::"enum_notices_status", $7::int, true, true, NOW(), NOW()
+         WHERE NOT EXISTS (SELECT 1 FROM notices WHERE company_id = $2::int AND title = $3::varchar)`,
+        { bind: [TENANT_ID, companyId, n.title, n.content, n.category, n.priority, authorId] }
+      );
+    } catch (noticeError: any) {
+      console.warn(`  ⚠️  공지 "${n.title}" 건너뜀:`, noticeError?.message);
+    }
   }
-  console.log(`  ✅ 공지 ${notices.length}건`);
+  console.log(`  ✅ 공지 ${notices.length}건 시도`);
 }
 
 export async function seedMinsubVenturesData() {
