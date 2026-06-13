@@ -17,6 +17,7 @@ interface VacationAttributes {
   approved_date?: Date;
   rejection_reason?: string;
   attachments?: string;
+  is_active?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -39,6 +40,7 @@ class Vacation extends Model<VacationAttributes, VacationCreationAttributes> imp
   public approved_date?: Date;
   public rejection_reason?: string;
   public attachments?: string;
+  public is_active!: boolean;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
 }
@@ -107,6 +109,11 @@ Vacation.init(
     attachments: {
       type: DataTypes.TEXT,
       allowNull: true
+    },
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true
     }
   },
   {

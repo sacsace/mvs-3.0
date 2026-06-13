@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import SocketService from '../services/socketService';
 import { ExpenseReport, Vacation, Quotation, User, Customer } from '../models';
 import { Op } from 'sequelize';
+import { isMissingTableError } from '../utils/dbErrors';
 
 type NotificationTarget = 'user' | 'tenant' | 'all';
 
@@ -58,12 +59,6 @@ const isElevatedRole = (role: string | undefined) =>
   role === 'admin' || role === 'root' || role === 'audit';
 
 /** 결제·휴가·견적 등 승인 대기 건 — 알림 드롭다운용 */
-const isMissingTableError = (error: any) =>
-  error?.name === 'SequelizeDatabaseError' &&
-  (String(error?.message || '').includes('relation') ||
-    String(error?.message || '').includes('does not exist') ||
-    String(error?.message || '').includes('릴레이션'));
-
 export const getActionInbox = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
