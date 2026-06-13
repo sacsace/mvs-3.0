@@ -193,8 +193,8 @@ async function ensureMenus(tenantId: number) {
         icon: menu.icon,
         order: menu.order,
         level: 0,
-        is_active: true,
         parent_id: null,
+        // import-menus 로 비활성화·이름 변경된 메뉴를 배포 시드가 되돌리지 않음
       });
     }
     parentIds.set(menu.route, row.id);
@@ -218,7 +218,7 @@ async function ensureMenus(tenantId: number) {
         },
       });
       if (!created && row.parent_id !== parentId) {
-        await row.update({ parent_id: parentId, level: 1, is_active: true, ...submenu });
+        await row.update({ parent_id: parentId, level: 1, ...submenu });
       }
       submenuCount++;
     }
@@ -258,7 +258,7 @@ async function ensureUsers(tenantId: number, companyId: number) {
 }
 
 /** 구 샘플 데이터 잔존 메뉴 비활성화 (신규 트리와 중복) */
-const LEGACY_MENU_ROUTES = ['/system', '/payroll'];
+const LEGACY_MENU_ROUTES = ['/system', '/payroll', '/reports'];
 
 async function cleanupLegacyMenus(tenantId: number) {
   const [result] = await sequelize.query(

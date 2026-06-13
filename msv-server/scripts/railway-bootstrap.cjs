@@ -51,8 +51,17 @@ server.on('exit', (code) => {
 
   try {
     await run('node', ['scripts/run-migrations.cjs'], 'DB 마이그레이션');
-    await run('npx', ['ts-node', 'scripts/seed-data.ts'], 'DB 시드 (root/admin 계정)');
-    console.log('\n✅ DB bootstrap 완료 — root / admin123 로 로그인 가능');
+
+    const shouldSeed =
+      process.env.MVS_RUN_DB_SEED === '1' ||
+      process.env.FORCE_DB_SEED === '1';
+
+    if (shouldSeed) {
+      await run('npx', ['ts-node', 'scripts/seed-data.ts'], 'DB 시드 (root/admin 계정)');
+      console.log('\n✅ DB bootstrap 완료 — root / admin123 로 로그인 가능');
+    } else {
+      console.log('\n⏭️ DB 시드 건너뜀 (MVS_RUN_DB_SEED=1 이면 시드 실행). 마이그레이션만 적용됨');
+    }
   } catch (error) {
     console.error('\n⚠️ DB bootstrap 실패 (API는 계속 실행):', error.message);
   }

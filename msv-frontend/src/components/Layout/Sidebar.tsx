@@ -268,12 +268,19 @@ const Sidebar: React.FC<SidebarProps> = ({
   
   const [expandedMenus, setExpandedMenus] = useState<Set<number>>(new Set());
 
-  /** 공지사항·AI 분석은 헤더에서만 진입 — 사이드바 메뉴 트리에서만 제외 */
+  /** 공지·AI·레거시 보고서는 헤더/다른 경로로만 진입 — 사이드바에서 제외 */
   const menusWithoutNotice = useMemo((): Menu[] => {
     const isNoticeMenu = (m: Menu) =>
-      String(m.route || '').startsWith('/communication/notice') ||
+      String(m.route || '').startsWith('/communication') ||
       m.name_ko === '공지사항' ||
-      /^notices?$/i.test(String(m.name_en || '').trim());
+      m.name_ko === '커뮤니케이션' ||
+      /^notices?$/i.test(String(m.name_en || '').trim()) ||
+      /^communication$/i.test(String(m.name_en || '').trim());
+
+    const isLegacyReportsRoot = (m: Menu) => {
+      const route = normalizeMenuPath(m.route || '');
+      return route === '/reports' || m.name_ko === '보고서';
+    };
 
     const isAiMenu = (m: Menu) => {
       const route = String(m.route || '');
@@ -286,7 +293,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     const filterRec = (items: Menu[]): Menu[] =>
       items
-        .filter((x) => !isNoticeMenu(x) && !isAiMenu(x) && !isRemovedNavMenuRoute(x.route))
+        .filter((x) => !isNoticeMenu(x) && !isAiMenu(x) && !isLegacyReportsRoot(x) && !isRemovedNavMenuRoute(x.route))
         .map((x) => {
           if (x.children?.length) {
             const children = filterRec(x.children);
