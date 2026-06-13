@@ -25,8 +25,32 @@ const sequelize = new Sequelize(DATABASE_URL, {
   dialectOptions: getPostgresDialectOptions(DATABASE_URL),
 });
 
-const SKIPPABLE_ERROR =
-  /No description found|does not exist|relation .* does not exist|table .* does not exist/i;
+const MISSING_TABLE_ERROR =
+  /No description found|relation .* does not exist|table .* does not exist/i;
+
+const ALREADY_APPLIED_ERROR =
+  /already exists|이미 있습니다|duplicate key|duplicate_object/i;
+
+const ALREADY_APPLIED_CODES = new Set(['42P07', '42701', '42710']);
+
+function isMissingTableError(error) {
+  const msg = String(error?.message || '');
+  return MISSING_TABLE_ERROR.test(msg) && !ALREADY_APPLIED_ERROR.test(msg);
+}
+
+function isAlreadyAppliedError(error) {
+  const msg = String(error?.message || '');
+  const code = error?.parent?.code || error?.original?.code;
+  return ALREADY_APPLIED_ERROR.test(msg) || ALREADY_APPLIED_CODES.has(code);
+}
+
+async function markMigrationExecuted(file) {
+  const migrationName = file.replace('.js', '');
+  await sequelize.query(
+    'INSERT INTO "SequelizeMeta" (name) VALUES ($1) ON CONFLICT (name) DO NOTHING',
+    { bind: [migrationName] }
+  );
+}
 
 const PRIORITY_MIGRATIONS = [
   '20251004202050-create-users-table.js',
@@ -131,7 +155,15 @@ async function runMigrations() {
           ranThisPass++;
           totalRan++;
         } catch (error) {
-          if (SKIPPABLE_ERROR.test(error.message || '')) {
+          if (isAlreadyAppliedError(error)) {
+            await markMigrationExecuted(file);
+            console.log(`   ⏭️  이미 적용됨 — 메타만 기록: ${file}`);
+            console.log(`   ${error.message}\n`);
+            ranThisPass++;
+            totalRan++;
+            continue;
+          }
+          if (isMissingTableError(error)) {
             console.log(`   ⏭️  의존 테이블 없음 — 다음 패스에서 재시도: ${file}`);
             console.log(`   ${error.message}\n`);
             skippedThisPass++;

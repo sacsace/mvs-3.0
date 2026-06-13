@@ -22,6 +22,7 @@ router.post('/bootstrap-database', async (req: Request, res: Response) => {
   req.setTimeout(600000);
 
   const seedOnly = String(req.headers['x-seed-only'] || req.query.seedOnly || '').trim() === '1';
+  const migrateOnly = String(req.headers['x-migrate-only'] || req.query.migrateOnly || '').trim() === '1';
 
   try {
     if (!seedOnly) {
@@ -37,18 +38,26 @@ router.post('/bootstrap-database', async (req: Request, res: Response) => {
       console.log('[bootstrap] x-seed-only=1 — 마이그레이션 건너뜀');
     }
 
-    console.log('[bootstrap] 시드 시작...');
-    const { stdout: seedOut, stderr: seedErr } = await execAsync('npx ts-node scripts/seed-data.ts', {
-      cwd: serverRoot,
-      env: process.env,
-      maxBuffer: 10 * 1024 * 1024,
-    });
-    if (seedOut) console.log(seedOut);
-    if (seedErr) console.error(seedErr);
+    if (!migrateOnly) {
+      console.log('[bootstrap] 시드 시작...');
+      const { stdout: seedOut, stderr: seedErr } = await execAsync('npx ts-node scripts/seed-data.ts', {
+        cwd: serverRoot,
+        env: process.env,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      if (seedOut) console.log(seedOut);
+      if (seedErr) console.error(seedErr);
+    } else {
+      console.log('[bootstrap] x-migrate-only=1 — 시드 건너뜀');
+    }
 
     return res.json({
       success: true,
-      message: '마이그레이션·시드 완료. root / admin123 로 로그인하세요.',
+      message: migrateOnly
+        ? '마이그레이션 완료.'
+        : seedOnly
+          ? '시드 완료. root / admin123 로 로그인하세요.'
+          : '마이그레이션·시드 완료. root / admin123 로 로그인하세요.',
     });
   } catch (error: any) {
     console.error('[bootstrap] 실패:', error);
