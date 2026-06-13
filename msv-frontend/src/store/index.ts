@@ -100,6 +100,10 @@ export const useMenuStore = create<MenuState>()(
 
       hasMenuPermission: (menuId: number, action: 'view' | 'create' | 'edit' | 'delete') => {
         const { userPermissions } = get();
+        const authUser = useStore.getState().user;
+        if (authUser?.role === 'root' || authUser?.role === 'admin') {
+          return true;
+        }
         const mid = Number(menuId);
         if (!Number.isFinite(mid)) return false;
         const permission = userPermissions.find((p) => Number(p.menu_id) === mid);

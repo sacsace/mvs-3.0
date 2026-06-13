@@ -7,7 +7,6 @@ import {
   User,
   Menu,
   Customer,
-  UserPermission,
 } from '../models';
 
 const TENANT_ID = 1;
@@ -258,28 +257,62 @@ async function ensureUsers(tenantId: number, companyId: number) {
   return createdUsers;
 }
 
-async function ensurePermissions(tenantId: number, users: any[]) {
-  const menus = await (Menu as any).findAll({ where: { tenant_id: tenantId, is_active: true } });
-  let count = 0;
+/** 구 샘플 데이터 잔존 메뉴 비활성화 (신규 트리와 중복) */
+const LEGACY_MENU_ROUTES = ['/system', '/payroll'];
 
-  for (const user of users) {
-    if (!['root', 'admin'].includes(user.role)) continue;
-    for (const menu of menus) {
-      const [, created] = await (UserPermission as any).findOrCreate({
-        where: { user_id: user.id, menu_id: menu.id },
-        defaults: {
-          user_id: user.id,
-          menu_id: menu.id,
-          can_view: true,
-          can_create: true,
-          can_edit: true,
-          can_delete: true,
-        },
-      });
-      if (created) count++;
-    }
+async function cleanupLegacyMenus(tenantId: number) {
+  const [result] = await sequelize.query(
+    `UPDATE menus SET is_active = false, updated_at = NOW()
+     WHERE tenant_id = $1::int AND parent_id IS NULL AND route = ANY($2::varchar[])`,
+    { bind: [tenantId, LEGACY_MENU_ROUTES] }
+  );
+  const rowCount = (result as { rowCount?: number })?.rowCount ?? 0;
+  if (rowCount > 0) {
+    console.log(`  ✅ 레거시 메뉴 ${rowCount}개 비활성화 (${LEGACY_MENU_ROUTES.join(', ')})`);
   }
-  console.log(`  ✅ 메뉴 권한 ${count}건 추가`);
+}
+
+/** root/admin — 활성 메뉴 전체에 CRUD 권한 동기화 (기본 템플릿) */
+async function syncFullMenuPermissions(tenantId: number, userIds: number[]) {
+  for (const userId of userIds) {
+    await sequelize.query(
+      `DELETE FROM user_permissions
+       WHERE user_id = $1::int
+         AND menu_id NOT IN (SELECT id FROM menus WHERE tenant_id = $2::int AND is_active = true)`,
+      { bind: [userId, tenantId] }
+    );
+
+    const [inserted] = await sequelize.query(
+      `INSERT INTO user_permissions (user_id, menu_id, can_view, can_create, can_edit, can_delete, created_at, updated_at)
+       SELECT $1::int, m.id, true, true, true, true, NOW(), NOW()
+       FROM menus m
+       WHERE m.tenant_id = $2::int AND m.is_active = true
+       ON CONFLICT (user_id, menu_id) DO UPDATE SET
+         can_view = true,
+         can_create = true,
+         can_edit = true,
+         can_delete = true,
+         updated_at = NOW()
+       RETURNING id`,
+      { bind: [userId, tenantId] }
+    );
+    const count = Array.isArray(inserted) ? inserted.length : 0;
+    console.log(`  ✅ user_id=${userId} 메뉴 권한 ${count}건 동기화 (전체 CRUD)`);
+  }
+}
+
+async function ensurePermissions(tenantId: number, users: any[]) {
+  await cleanupLegacyMenus(tenantId);
+
+  const privileged = users.filter((u) => ['root', 'admin'].includes(u.role));
+  const userIds = privileged.map((u) => Number(u.id)).filter((id) => Number.isFinite(id));
+
+  if (userIds.length === 0) {
+    console.warn('  ⚠️  root/admin 사용자 없음 — 메뉴 권한 건너뜀');
+    return;
+  }
+
+  await syncFullMenuPermissions(tenantId, userIds);
 }
 
 async function ensureBusinessData(tenantId: number, companyId: number, createdBy: number) {
