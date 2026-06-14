@@ -108,6 +108,7 @@ Quill.register(ExtendedImageFormat as any, true);
 type BoardList = {
   id: number;
   title: string;
+  description?: string | null;
   position: number;
   cards?: BoardCard[];
 };
@@ -306,11 +307,125 @@ const formatDateTime = (value?: string): string => {
 
 const DRAG_TRANSITION = 'transform 90ms cubic-bezier(0.2, 0, 0, 1)';
 
+/** 칸반 열·카드·칩 모서리 — 완전 각진 톤 */
+const KANBAN_SURFACE_RADIUS = '0';
+const KANBAN_CHIP_RADIUS = '0';
+const KANBAN_CONTROL_RADIUS = '0';
+const KANBAN_COLUMN_RADIUS = '0';
+const KANBAN_CARD_RADIUS = '0';
+
+const KANBAN_COLUMN_BG = '#E8EDF3';
+const KANBAN_CARD_BG = '#FFFFFF';
+const KANBAN_CARD_BORDER = '1px solid #C5CED9';
+const KANBAN_COLUMN_SHADOW = '0 1px 4px rgba(15, 23, 42, 0.08)';
+const KANBAN_CARD_SHADOW = '0 1px 2px rgba(15, 23, 42, 0.06)';
+const KANBAN_CARD_HOVER_SHADOW = '0 2px 8px rgba(15, 23, 42, 0.1)';
+const KANBAN_TITLE_DESC_GAP = 0.75;
+
 /** 칸반 카드 고정 높이(열·드래그 미리보기 동일) */
-const WORK_BOARD_CARD_HEIGHT_PX = 158;
+const WORK_BOARD_CARD_MIN_HEIGHT_PX = 76;
+
+const kanbanMetaChipSx = {
+  height: 22,
+  fontWeight: 600,
+  fontSize: '0.68rem',
+  borderRadius: KANBAN_CHIP_RADIUS,
+  border: 'none',
+  bgcolor: '#F0F4F8',
+  color: '#475569',
+} as const;
+
+const cardDetailFieldLabelSx = {
+  display: 'block',
+  mb: 0.5,
+  fontWeight: 700,
+  fontSize: '0.75rem',
+  lineHeight: '18px',
+  color: '#475569',
+} as const;
+
+const cardDetailSectionPaperSx = {
+  p: 1.5,
+  flexShrink: 0,
+  borderRadius: KANBAN_SURFACE_RADIUS,
+  border: '1px solid #C5CED9',
+  bgcolor: '#FFFFFF',
+  boxShadow: 'none',
+} as const;
+
+const cardDetailFormSectionSx = {
+  borderRadius: KANBAN_SURFACE_RADIUS,
+  p: 1.5,
+  flexShrink: 0,
+} as const;
+
+const cardDetailFieldOutlinelessRootSx = {
+  borderRadius: KANBAN_CONTROL_RADIUS,
+  '& .MuiOutlinedInput-notchedOutline': { border: 'none' },
+  '&:hover .MuiOutlinedInput-notchedOutline': { border: 'none' },
+  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { border: 'none' },
+  '&.Mui-focused': {
+    boxShadow: '0 0 0 2px',
+    boxShadowColor: 'primary.main',
+  },
+} as const;
+
+/** 흰 패널 위 — 연한 회색 필드 */
+const cardDetailFieldTintSx = {
+  '& .MuiOutlinedInput-root': {
+    ...cardDetailFieldOutlinelessRootSx,
+    bgcolor: '#F0F4F8',
+    '&:hover': { bgcolor: '#E8EDF3' },
+    '&.Mui-focused': {
+      bgcolor: '#FFFFFF',
+      boxShadow: '0 0 0 2px',
+      boxShadowColor: 'primary.main',
+    },
+    '&.Mui-disabled': { bgcolor: '#EEF2F6' },
+  },
+  '& .MuiInputBase-input': { fontSize: '0.875rem' },
+} as const;
+
+/** 회색 패널 위 — 흰 필드 */
+const cardDetailFieldWhiteSx = {
+  '& .MuiOutlinedInput-root': {
+    ...cardDetailFieldOutlinelessRootSx,
+    bgcolor: '#FFFFFF',
+    height: 40,
+    '&:hover': { bgcolor: '#F8FAFC' },
+    '&.Mui-focused': {
+      bgcolor: '#FFFFFF',
+      boxShadow: '0 0 0 2px',
+      boxShadowColor: 'primary.main',
+    },
+    '&.Mui-disabled': { bgcolor: '#F1F5F9' },
+  },
+  '& .MuiInputBase-input': { fontSize: '0.875rem' },
+  '& .MuiSelect-select': { py: '10px' },
+} as const;
+
+const cardDetailInputSx = {
+  '& .MuiOutlinedInput-root': {
+    borderRadius: KANBAN_CONTROL_RADIUS,
+    bgcolor: '#FFFFFF',
+    '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
+    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'primary.main' },
+  },
+  '& .MuiInputBase-input': { fontSize: '0.875rem' },
+} as const;
+
+const cardDetailSelectSx = {
+  ...cardDetailInputSx,
+  '& .MuiOutlinedInput-root': {
+    ...(cardDetailInputSx['& .MuiOutlinedInput-root'] as Record<string, unknown>),
+    height: 40,
+  },
+  '& .MuiSelect-select': { py: '10px' },
+} as const;
 
 /** 대분류(열) 기본 너비 — flex-grow 없이 고정해 행에 열이 적어도 카드 너비가 동일하게 유지 */
-const WORK_BOARD_COLUMN_WIDTH_PX = 280;
+const WORK_BOARD_COLUMN_WIDTH_PX = 300;
 
 const isHexColor = (value?: string | null): value is string => Boolean(value && /^#[0-9a-fA-F]{6}$/.test(value));
 
@@ -461,6 +576,54 @@ const kanbanCollisionDetection: CollisionDetection = (args) => {
   return closestCorners(args);
 };
 
+function KanbanInlineTitle({
+  title,
+  descriptionPlain,
+  titleFontSize = '0.8125rem',
+}: {
+  title: string;
+  descriptionPlain: string;
+  titleFontSize?: string;
+}) {
+  const hasDesc = Boolean(descriptionPlain);
+  const fullLabel = hasDesc ? `${title} (${descriptionPlain})` : title;
+  return (
+    <Typography
+      component="div"
+      variant="subtitle2"
+      title={hasDesc ? fullLabel : undefined}
+      sx={{
+        flexShrink: 0,
+        minWidth: 0,
+        flex: 1,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        lineHeight: 1.4,
+        fontSize: titleFontSize,
+        letterSpacing: '-0.01em',
+      }}
+    >
+      <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
+        {title || '\u00a0'}
+      </Box>
+      {hasDesc ? (
+        <Box
+          component="span"
+          sx={{
+            fontWeight: 400,
+            color: 'text.secondary',
+            fontSize: `calc(${titleFontSize} - 0.0625rem)`,
+            ml: KANBAN_TITLE_DESC_GAP,
+          }}
+        >
+          ({descriptionPlain})
+        </Box>
+      ) : null}
+    </Typography>
+  );
+}
+
 const DraggableCard = memo(function DraggableCard({
   card,
   onOpenDetail,
@@ -499,20 +662,12 @@ const DraggableCard = memo(function DraggableCard({
     card.description && !isRichTextEmpty(card.description) ? getPlainTextFromHtml(card.description) : '';
 
   const cardAccent = isHexColor(card.color) ? String(card.color) : null;
-  /** 카드 본문은 중립 톤, 색은 상단 바·호버 테두리에만 사용 */
   const barColor = cardAccent || theme.palette.primary.main;
   const cardBg =
-    theme.palette.mode === 'light' ? '#FFFFFF' : alpha(theme.palette.grey[900], 0.88);
-  const cardBorderColor =
-    theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : alpha(theme.palette.common.white, 0.12);
-  const baseShadow =
-    theme.palette.mode === 'light' ? '0 1px 3px rgba(0, 0, 0, 0.05), 0 2px 8px rgba(15, 23, 42, 0.06)' : '0 2px 8px rgba(0,0,0,0.35)';
-  const shadowWithBar = `${baseShadow}, inset 0 3px 0 0 ${barColor}`;
-  const hoverShadow =
-    theme.palette.mode === 'light' ? '0 2px 6px rgba(0, 0, 0, 0.06), 0 6px 16px rgba(15, 23, 42, 0.1)' : '0 4px 14px rgba(0,0,0,0.45)';
-  const hoverWithBar = `${hoverShadow}, inset 0 3px 0 0 ${barColor}`;
-  const hoverBorder =
-    theme.palette.mode === 'light' ? alpha(barColor, 0.35) : alpha(theme.palette.common.white, 0.16);
+    theme.palette.mode === 'light' ? KANBAN_CARD_BG : alpha(theme.palette.grey[900], 0.88);
+  const hasMeta = Boolean(card.assignee || card.due_date);
+  const assigneeInitial =
+    card.assignee?.username?.trim().charAt(0).toUpperCase() || '';
 
   return (
     <Card
@@ -520,25 +675,23 @@ const DraggableCard = memo(function DraggableCard({
       elevation={0}
       sx={{
         width: '100%',
-        height: WORK_BOARD_CARD_HEIGHT_PX,
+        height: 'auto',
+        minHeight: WORK_BOARD_CARD_MIN_HEIGHT_PX,
         display: 'flex',
         flexDirection: 'column',
-        mb: 1.25,
         cursor: dragDisabled ? 'pointer' : 'grab',
         touchAction: dragDisabled ? undefined : 'none',
         userSelect: 'none',
         bgcolor: cardBg,
-        border: '1px solid',
-        borderColor: cardBorderColor,
-        borderRadius: '14px',
+        border: theme.palette.mode === 'light' ? KANBAN_CARD_BORDER : 'none',
+        borderRadius: KANBAN_CARD_RADIUS,
         overflow: 'hidden',
-        boxShadow: shadowWithBar,
-        transition: isDragging ? 'none' : `${DRAG_TRANSITION}, box-shadow 0.2s ease, border-color 0.2s ease`,
+        boxShadow: KANBAN_CARD_SHADOW,
+        transition: isDragging ? 'none' : `${DRAG_TRANSITION}, box-shadow 0.2s ease`,
         willChange: isDragging ? 'transform' : 'auto',
         zIndex: isDragging ? 20 : 1,
         '&:hover': {
-          boxShadow: hoverWithBar,
-          borderColor: hoverBorder,
+          boxShadow: KANBAN_CARD_HOVER_SHADOW,
         },
         ...style,
       }}
@@ -548,100 +701,59 @@ const DraggableCard = memo(function DraggableCard({
         if (!isDragging) onOpenDetail(card);
       }}
     >
+      <Box sx={{ height: 3, flexShrink: 0, bgcolor: barColor }} />
       <CardContent
         sx={{
           flex: 1,
           minHeight: 0,
-          py: 1.25,
-          px: 1.75,
+          py: 1.1,
+          px: 1.25,
           display: 'flex',
           flexDirection: 'column',
+          gap: hasMeta ? 0.75 : 0,
           overflow: 'hidden',
-          '&:last-child': { pb: 1.25 },
+          '&:last-child': { pb: 1.1 },
         }}
       >
-        <Typography
-          variant="subtitle2"
-          color="text.primary"
-          sx={{
-            flexShrink: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            wordBreak: 'break-word',
-            lineHeight: 1.4,
-            fontWeight: 600,
-            fontSize: '0.8125rem',
-            letterSpacing: '-0.01em',
-          }}
-        >
-          {card.title || '\u00a0'}
-        </Typography>
-        <Box sx={{ flex: 1, minHeight: 0, mt: 0.5, overflow: 'hidden' }}>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{
-              overflow: 'hidden',
-              display: '-webkit-box',
-              WebkitLineClamp: 3,
-              WebkitBoxOrient: 'vertical',
-              wordBreak: 'break-word',
-              lineHeight: 1.45,
-              fontSize: '0.75rem',
-            }}
-          >
-            {descPlain || '\u200b'}
-          </Typography>
-        </Box>
+        <KanbanInlineTitle title={card.title || ''} descriptionPlain={descPlain} />
+        {hasMeta ? (
         <Box
           sx={{
             display: 'flex',
-            flexWrap: 'wrap',
-            gap: 0.65,
             alignItems: 'center',
-            mt: 'auto',
-            pt: 0.85,
+            justifyContent: 'space-between',
+            gap: 0.5,
             flexShrink: 0,
-            maxHeight: 52,
-            overflow: 'hidden',
-            borderTop: '1px solid',
-            borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.14)' : alpha(theme.palette.common.white, 0.14),
           }}
         >
-          {card.assignee && (
-            <Chip
-              size="small"
-              label={card.assignee.username}
-              variant="outlined"
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, flex: 1, minWidth: 0 }}>
+            {card.due_date && (
+              <Chip
+                size="small"
+                label={`${txt('만료', 'Due')}: ${formatDueDate(card.due_date)}`}
+                sx={kanbanMetaChipSx}
+              />
+            )}
+          </Box>
+          {card.assignee ? (
+            <Avatar
+              title={card.assignee.username}
               sx={{
-                height: 22,
-                fontWeight: 600,
-                fontSize: '0.68rem',
-                borderRadius: '8px',
-                borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.2)' : alpha(theme.palette.common.white, 0.22),
-                bgcolor: theme.palette.mode === 'light' ? 'rgba(0,0,0,0.04)' : alpha(theme.palette.common.black, 0.25),
+                width: 24,
+                height: 24,
+                fontSize: '0.65rem',
+                fontWeight: 700,
+                flexShrink: 0,
+                bgcolor: '#94A3B8',
+                color: '#FFFFFF',
+                borderRadius: 0,
               }}
-            />
-          )}
-          {card.due_date && (
-            <Chip
-              size="small"
-              label={`${txt('만료', 'Due')}: ${formatDueDate(card.due_date)}`}
-              variant="outlined"
-              sx={{
-                height: 22,
-                fontWeight: 600,
-                fontSize: '0.68rem',
-                borderRadius: '8px',
-                borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.2)' : alpha(theme.palette.common.white, 0.22),
-                bgcolor: theme.palette.mode === 'light' ? 'rgba(0,0,0,0.04)' : alpha(theme.palette.common.black, 0.25),
-              }}
-            />
-          )}
+            >
+              {assigneeInitial}
+            </Avatar>
+          ) : null}
         </Box>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -672,7 +784,8 @@ const ListColumn = memo(function ListColumn({
   allowListReorder,
   allowListTitleEdit,
   allowListDelete,
-  allowAddCard
+  allowAddCard,
+  suppressColumnScroll
 }: {
   list: BoardList;
   accentColor: string;
@@ -699,6 +812,7 @@ const ListColumn = memo(function ListColumn({
   allowListTitleEdit: boolean;
   allowListDelete: boolean;
   allowAddCard: boolean;
+  suppressColumnScroll?: boolean;
 }) {
   const theme = useTheme();
   const { setNodeRef: setCardDropRef, isOver } = useDroppable({ id: `list-${list.id}` });
@@ -745,19 +859,23 @@ const ListColumn = memo(function ListColumn({
         width: { xs: '100%', sm: `${WORK_BOARD_COLUMN_WIDTH_PX}px` },
         minWidth: { xs: 0, sm: WORK_BOARD_COLUMN_WIDTH_PX },
         maxWidth: { xs: '100%', sm: `${WORK_BOARD_COLUMN_WIDTH_PX}px` },
-        bgcolor: theme.palette.mode === 'light' ? alpha(theme.palette.grey[500], 0.06) : alpha(theme.palette.common.black, 0.22),
+        bgcolor: theme.palette.mode === 'light' ? KANBAN_COLUMN_BG : alpha(theme.palette.common.black, 0.22),
         outline: isOver ? '2px solid' : 'none',
         outlineColor: alpha(theme.palette.primary.main, 0.45),
         outlineOffset: 0,
-        p: 1.5,
-        borderRadius: '16px',
+        p: 1.25,
+        borderRadius: KANBAN_COLUMN_RADIUS,
         border: 'none',
-        boxShadow: 'none',
+        boxShadow:
+          theme.palette.mode === 'light'
+            ? `${KANBAN_COLUMN_SHADOW}, inset 3px 0 0 0 ${accentColor}`
+            : 'none',
         alignSelf: 'flex-start',
-        minHeight: 120,
+        minHeight: 180,
         display: 'flex',
         flexDirection: 'column',
         maxHeight: 'calc(100vh - 220px)',
+        overflow: suppressColumnScroll ? 'hidden' : 'visible',
         transition: isListDragging ? 'none' : DRAG_TRANSITION,
         willChange: isListDragging ? 'transform' : 'auto',
         zIndex: isListDragging ? 10 : 1,
@@ -770,13 +888,8 @@ const ListColumn = memo(function ListColumn({
           alignItems: 'center',
           gap: 0.5,
           mb: 1.25,
-          px: 1,
-          py: 0.75,
-          borderRadius: '12px',
-          border: '1px solid',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : alpha(theme.palette.common.white, 0.16),
-          backgroundColor: hexToRgba(accentColor, theme.palette.mode === 'light' ? 0.1 : 0.14),
-          boxShadow: `inset 4px 0 0 0 ${accentColor}`,
+          px: 0.25,
+          flexShrink: 0,
         }}
       >
         <IconButton
@@ -784,9 +897,9 @@ const ListColumn = memo(function ListColumn({
           aria-label={txt('대분류 드래그 이동', 'Drag list')}
           sx={{
             cursor: allowListReorder ? 'grab' : 'default',
-            borderRadius: '10px',
-            color: 'text.secondary',
-            '&:hover': { bgcolor: alpha(theme.palette.action.hover, 0.8) },
+            borderRadius: KANBAN_CONTROL_RADIUS,
+            color: '#64748B',
+            '&:hover': { bgcolor: alpha(theme.palette.common.white, 0.85) },
           }}
           {...(allowListReorder ? listDragAttributes : {})}
           {...(allowListReorder ? listDragListeners : {})}
@@ -810,19 +923,31 @@ const ListColumn = memo(function ListColumn({
             sx={{ flex: 1 }}
           />
         ) : (
-          <Typography
-            sx={{
-              flex: 1,
-              fontWeight: 600,
-              fontSize: '0.875rem',
-              letterSpacing: '-0.015em',
-              lineHeight: 1.35,
-            }}
-            color="text.primary"
-          >
-            {displayBoardListTitle(list.title, language)}
-          </Typography>
+          <KanbanInlineTitle
+            title={displayBoardListTitle(list.title, language)}
+            descriptionPlain={String(list.description || '').trim()}
+            titleFontSize="0.875rem"
+          />
         )}
+        <Box
+          sx={{
+            minWidth: 24,
+            height: 24,
+            px: 0.75,
+            borderRadius: KANBAN_CHIP_RADIUS,
+            bgcolor: '#FFFFFF',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            color: '#64748B',
+            boxShadow: '0 1px 2px rgba(15, 23, 42, 0.08)',
+            flexShrink: 0,
+          }}
+        >
+          {cards.length}
+        </Box>
         {listTitleEditing && allowListTitleEdit ? (
           <IconButton
             size="small"
@@ -860,15 +985,24 @@ const ListColumn = memo(function ListColumn({
       </Box>
       <Box
         sx={{
-          overflowY: 'auto',
+          overflowY: suppressColumnScroll ? 'hidden' : 'auto',
+          overflowX: 'hidden',
           flex: 1,
           minHeight: 0,
-          pr: 0.5,
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1,
+          pr: suppressColumnScroll ? 0 : 0.25,
+          scrollbarWidth: suppressColumnScroll ? 'none' : 'thin',
+          scrollbarColor: '#C5CED9 transparent',
+          msOverflowStyle: suppressColumnScroll ? 'none' : undefined,
           '&::-webkit-scrollbar': {
-            display: 'none'
-          }
+            width: suppressColumnScroll ? 0 : 5,
+          },
+          '&::-webkit-scrollbar-thumb': {
+            backgroundColor: '#C5CED9',
+            borderRadius: 0,
+          },
         }}
       >
         {cards.map((c) => (
@@ -886,13 +1020,12 @@ const ListColumn = memo(function ListColumn({
         <Paper
           elevation={0}
           sx={{
-            mt: 1.25,
-            p: 1.5,
-            bgcolor: theme.palette.mode === 'light' ? '#F8FAFC' : alpha(theme.palette.common.white, 0.04),
-            borderRadius: '14px',
-            border: '1px solid',
-            borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.14)' : alpha(theme.palette.common.white, 0.14),
-            boxShadow: 'none',
+            mt: 0.5,
+            p: 1.25,
+            bgcolor: KANBAN_CARD_BG,
+            borderRadius: KANBAN_CARD_RADIUS,
+            border: KANBAN_CARD_BORDER,
+            boxShadow: KANBAN_CARD_SHADOW,
           }}
         >
           <TextField
@@ -928,11 +1061,11 @@ const ListColumn = memo(function ListColumn({
               variant="contained"
               onClick={onSubmitCard}
               disabled={savingCard || !composerTitle.trim()}
-              sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 600, boxShadow: 'none' }}
+              sx={{ textTransform: 'none', borderRadius: KANBAN_CONTROL_RADIUS, fontWeight: 600, boxShadow: 'none' }}
             >
               {savingCard ? <CircularProgress size={18} color="inherit" /> : txt('카드 추가', 'Add Card')}
             </Button>
-            <IconButton size="small" onClick={onCloseComposer} aria-label={txt('취소', 'Cancel')} sx={{ borderRadius: '10px' }}>
+            <IconButton size="small" onClick={onCloseComposer} aria-label={txt('취소', 'Cancel')} sx={{ borderRadius: KANBAN_CONTROL_RADIUS }}>
               <CloseIcon fontSize="small" />
             </IconButton>
           </Box>
@@ -944,14 +1077,15 @@ const ListColumn = memo(function ListColumn({
           startIcon={<AddIcon sx={{ fontSize: 18 }} />}
           onClick={() => onOpenComposer(list.id)}
           sx={{
-            mt: 1.25,
+            mt: 1,
             justifyContent: 'flex-start',
-            color: 'text.secondary',
+            color: '#64748B',
             textTransform: 'none',
             fontWeight: 600,
-            py: 1,
-            borderRadius: '12px',
-            '&:hover': { bgcolor: alpha(theme.palette.action.hover, 0.9) },
+            py: 0.85,
+            borderRadius: KANBAN_CARD_RADIUS,
+            bgcolor: alpha(theme.palette.common.white, 0.55),
+            '&:hover': { bgcolor: '#FFFFFF', color: '#475569' },
           }}
         >
           {txt('카드 추가', 'Add Card')}
@@ -997,6 +1131,7 @@ const WorkBoardDetailPage: React.FC = () => {
   const [editingListTitle, setEditingListTitle] = useState('');
   const [listSaving, setListSaving] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
+  const [newListDescription, setNewListDescription] = useState('');
   const [creatingList, setCreatingList] = useState(false);
   const [addListOpen, setAddListOpen] = useState(false);
 
@@ -1118,6 +1253,20 @@ const WorkBoardDetailPage: React.FC = () => {
     setActiveCard(null);
     setActiveList(null);
   };
+
+  const isKanbanDragging = Boolean(activeCard || activeList);
+
+  useEffect(() => {
+    if (!isKanbanDragging) return;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      document.documentElement.style.overflow = prevHtmlOverflow;
+    };
+  }, [isKanbanDragging]);
 
   const handleDragEnd = async (event: DragEndEvent) => {
     setActiveCard(null);
@@ -1327,12 +1476,16 @@ const WorkBoardDetailPage: React.FC = () => {
     }
     setCreatingList(true);
     try {
-      const res = await workBoardService.createList(boardId, { title: newListTitle.trim() });
+      const res = await workBoardService.createList(boardId, {
+        title: newListTitle.trim(),
+        description: newListDescription.trim() || null,
+      });
       if (!res.success) {
         showErrorPopup(res.message || '대분류 추가 실패', '업무 보드');
         return;
       }
       setNewListTitle('');
+      setNewListDescription('');
       setAddListOpen(false);
       await loadBoard();
     } catch (error: any) {
@@ -1977,7 +2130,7 @@ const WorkBoardDetailPage: React.FC = () => {
           mb: 2.5,
           flexWrap: 'wrap',
           p: 2,
-          borderRadius: '18px',
+          borderRadius: KANBAN_SURFACE_RADIUS,
           bgcolor: 'background.paper',
           border: '1px solid',
           borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
@@ -1989,7 +2142,7 @@ const WorkBoardDetailPage: React.FC = () => {
           size="small"
           aria-label="목록으로"
           sx={{
-            borderRadius: '12px',
+            borderRadius: KANBAN_SURFACE_RADIUS,
             color: 'text.secondary',
             '&:hover': { bgcolor: alpha(theme.palette.action.hover, 0.9) },
           }}
@@ -2006,10 +2159,33 @@ const WorkBoardDetailPage: React.FC = () => {
             lineHeight: 1.28,
             flex: '1 1 200px',
             minWidth: 0,
+            display: 'flex',
+            alignItems: 'baseline',
+            flexWrap: 'nowrap',
+            overflow: 'hidden',
           }}
           color="text.primary"
         >
-          {board.name}
+          <Box component="span" sx={{ fontWeight: 700, flexShrink: 0 }}>
+            {board.name}
+          </Box>
+          {board.description?.trim() ? (
+            <Box
+              component="span"
+              sx={{
+                fontWeight: 400,
+                color: 'text.secondary',
+                fontSize: { xs: '0.9375rem', sm: '1.0625rem' },
+                ml: KANBAN_TITLE_DESC_GAP,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              title={board.description.trim()}
+            >
+              ({board.description.trim()})
+            </Box>
+          ) : null}
         </Typography>
         <Box sx={{ flexGrow: 1, minWidth: 8 }} />
         {menuCanEdit && (
@@ -2025,7 +2201,7 @@ const WorkBoardDetailPage: React.FC = () => {
             sx={{
               textTransform: 'none',
               fontWeight: 600,
-              borderRadius: '12px',
+              borderRadius: KANBAN_SURFACE_RADIUS,
               px: 2,
               borderColor: alpha(theme.palette.primary.main, 0.45),
             }}
@@ -2040,12 +2216,13 @@ const WorkBoardDetailPage: React.FC = () => {
             color="primary"
             onClick={() => {
               setNewListTitle('');
+              setNewListDescription('');
               setAddListOpen(true);
             }}
             sx={{
               textTransform: 'none',
               fontWeight: 600,
-              borderRadius: '12px',
+              borderRadius: KANBAN_SURFACE_RADIUS,
               px: 2,
               borderColor: alpha(theme.palette.primary.main, 0.45),
             }}
@@ -2062,7 +2239,7 @@ const WorkBoardDetailPage: React.FC = () => {
             sx={{
               textTransform: 'none',
               fontWeight: 600,
-              borderRadius: '12px',
+              borderRadius: KANBAN_SURFACE_RADIUS,
               px: 2,
               borderColor: alpha(theme.palette.error.main, 0.4),
             }}
@@ -2077,11 +2254,10 @@ const WorkBoardDetailPage: React.FC = () => {
         sx={{
           mb: 2,
           p: { xs: 1.25, sm: 1.5 },
-          borderRadius: '14px',
-          border: '1px solid',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-          bgcolor: 'background.paper',
-          boxShadow: '0 2px 12px rgba(15, 23, 42, 0.04)',
+          borderRadius: KANBAN_SURFACE_RADIUS,
+          border: 'none',
+          bgcolor: '#F0F4F8',
+          boxShadow: 'none',
           width: '100%',
           maxWidth: '100%',
           boxSizing: 'border-box',
@@ -2089,8 +2265,13 @@ const WorkBoardDetailPage: React.FC = () => {
       >
         <Typography
           variant="subtitle2"
-          sx={{ mb: 1, fontWeight: 700, fontSize: '0.8125rem', letterSpacing: '-0.01em' }}
-          color="text.primary"
+          sx={{
+            mb: 1,
+            fontWeight: 700,
+            fontSize: '0.8125rem',
+            letterSpacing: '-0.01em',
+            color: '#475569',
+          }}
         >
           {txt('보드 멤버', 'Board Members')} · {members.length}{txt('명', '')}
         </Typography>
@@ -2123,10 +2304,14 @@ const WorkBoardDetailPage: React.FC = () => {
                   flex: { xs: '1 1 100%', sm: '1 1 168px' },
                   maxWidth: { xs: '100%', sm: 220 },
                   width: { xs: '100%', sm: 'auto' },
-                  borderRadius: '10px',
-                  bgcolor: theme.palette.mode === 'light' ? alpha(theme.palette.common.black, 0.03) : alpha(theme.palette.common.white, 0.04),
-                  border: '1px solid',
-                  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : 'divider',
+                  borderRadius: KANBAN_CONTROL_RADIUS,
+                  bgcolor: isOwnerMember
+                    ? alpha(theme.palette.primary.main, 0.1)
+                    : '#FFFFFF',
+                  border: 'none',
+                  boxShadow: isOwnerMember
+                    ? `inset 3px 0 0 ${theme.palette.primary.main}`
+                    : 'none',
                 }}
               >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.65, minWidth: 0 }}>
@@ -2160,7 +2345,20 @@ const WorkBoardDetailPage: React.FC = () => {
                   {m.role === 'owner' ? txt('소유자', 'Owner') : txt('멤버', 'Member')}
                   {m.user?.userid ? ` · ${m.user.userid}` : ''}
                 </Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.4, width: '100%', mt: 0.15 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.4,
+                    width: '100%',
+                    mt: 0.15,
+                    p: 0.35,
+                    borderRadius: KANBAN_CHIP_RADIUS,
+                    bgcolor: isOwnerMember
+                      ? alpha(theme.palette.primary.main, 0.06)
+                      : '#F8FAFC',
+                  }}
+                >
                   <TextField
                     select
                     hiddenLabel
@@ -2177,11 +2375,18 @@ const WorkBoardDetailPage: React.FC = () => {
                       flex: 1,
                       minWidth: 0,
                       '& .MuiOutlinedInput-root': {
-                        borderRadius: '8px',
+                        borderRadius: KANBAN_CHIP_RADIUS,
                         fontSize: '0.6875rem',
                         minHeight: 28,
                         height: 28,
                         boxSizing: 'border-box',
+                        bgcolor: '#FFFFFF',
+                        '& .MuiOutlinedInput-notchedOutline': { border: 'none' },
+                        '&:hover .MuiOutlinedInput-notchedOutline': { border: 'none' },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': { border: 'none' },
+                        '&.Mui-focused': {
+                          boxShadow: `0 0 0 2px ${alpha(theme.palette.primary.main, 0.35)}`,
+                        },
                       },
                       '& .MuiSelect-select': {
                         py: 0,
@@ -2202,7 +2407,7 @@ const WorkBoardDetailPage: React.FC = () => {
                     </MenuItem>
                   </TextField>
                   <Button
-                    variant="outlined"
+                    variant="text"
                     size="small"
                     color="error"
                     disabled={!canRemoveMember || memberRemovingId === Number(m.user_id)}
@@ -2218,8 +2423,11 @@ const WorkBoardDetailPage: React.FC = () => {
                       fontWeight: 600,
                       fontSize: '0.6875rem',
                       lineHeight: 1,
-                      borderRadius: '8px',
+                      borderRadius: KANBAN_CHIP_RADIUS,
                       py: 0,
+                      bgcolor: '#FFFFFF',
+                      '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.08) },
+                      '&.Mui-disabled': { bgcolor: 'transparent', color: 'text.disabled' },
                     }}
                   >
                     {memberRemovingId === Number(m.user_id) ? (
@@ -2235,15 +2443,10 @@ const WorkBoardDetailPage: React.FC = () => {
         </Box>
       </Paper>
 
-      {board.description && (
-        <Typography variant="body2" sx={{ mb: 2.5, maxWidth: 720, lineHeight: 1.55, fontSize: '0.875rem' }} color="text.secondary">
-          {board.description}
-        </Typography>
-      )}
-
       {!cardDetail && (
         <DndContext
           sensors={sensors}
+          autoScroll={false}
           collisionDetection={kanbanCollisionDetection}
           measuring={{
             droppable: {
@@ -2261,8 +2464,8 @@ const WorkBoardDetailPage: React.FC = () => {
               minHeight: 0,
               minWidth: 0,
               display: 'flex',
-              overflow: 'visible',
-              width: '100%'
+              overflow: isKanbanDragging ? 'hidden' : 'visible',
+              width: '100%',
             }}
           >
             <Box
@@ -2277,6 +2480,7 @@ const WorkBoardDetailPage: React.FC = () => {
                 gap: { xs: 2, sm: 2.25 },
                 alignItems: 'stretch',
                 pb: 1,
+                boxSizing: 'border-box',
               }}
             >
             {lists.map((list) => (
@@ -2307,6 +2511,7 @@ const WorkBoardDetailPage: React.FC = () => {
                 allowListTitleEdit={menuCanEdit}
                 allowListDelete={menuCanDelete}
                 allowAddCard={menuCanCreate}
+                suppressColumnScroll={isKanbanDragging}
               />
             ))}
             </Box>
@@ -2321,24 +2526,16 @@ const WorkBoardDetailPage: React.FC = () => {
               <Card
                 elevation={0}
                 sx={{
-                  width: 'min(292px, 85vw)',
-                  maxWidth: 292,
-                  height: WORK_BOARD_CARD_HEIGHT_PX,
+                  width: 'min(300px, 85vw)',
+                  maxWidth: 300,
+                  height: 'auto',
+                  minHeight: WORK_BOARD_CARD_MIN_HEIGHT_PX,
                   display: 'flex',
                   flexDirection: 'column',
-                  borderRadius: '14px',
-                  border: '1px solid',
-                  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : alpha(theme.palette.common.white, 0.12),
-                  bgcolor: theme.palette.mode === 'light' ? '#FFFFFF' : alpha(theme.palette.grey[900], 0.88),
-                  boxShadow: (() => {
-                    const c =
-                      activeCard.color && isHexColor(activeCard.color)
-                        ? String(activeCard.color)
-                        : theme.palette.primary.main;
-                    return theme.palette.mode === 'light'
-                      ? `0 10px 32px rgba(15, 23, 42, 0.18), inset 0 3px 0 0 ${c}`
-                      : `0 10px 32px rgba(0,0,0,0.5), inset 0 3px 0 0 ${c}`;
-                  })(),
+                  borderRadius: KANBAN_CARD_RADIUS,
+                  border: theme.palette.mode === 'light' ? KANBAN_CARD_BORDER : 'none',
+                  bgcolor: theme.palette.mode === 'light' ? KANBAN_CARD_BG : alpha(theme.palette.grey[900], 0.88),
+                  boxShadow: KANBAN_CARD_HOVER_SHADOW,
                   cursor: 'grabbing',
                   touchAction: 'none',
                   transform: 'translateZ(0)',
@@ -2346,120 +2543,118 @@ const WorkBoardDetailPage: React.FC = () => {
                   overflow: 'hidden',
                 }}
               >
+                <Box
+                  sx={{
+                    height: 3,
+                    flexShrink: 0,
+                    bgcolor:
+                      activeCard.color && isHexColor(activeCard.color)
+                        ? String(activeCard.color)
+                        : theme.palette.primary.main,
+                  }}
+                />
                 <CardContent
                   sx={{
                     flex: 1,
                     minHeight: 0,
-                    py: 1,
-                    px: 1.5,
+                    py: 1.1,
+                    px: 1.25,
                     display: 'flex',
                     flexDirection: 'column',
+                    gap: activeCard.assignee || activeCard.due_date ? 0.75 : 0,
                     overflow: 'hidden',
-                    '&:last-child': { pb: 1 }
+                    '&:last-child': { pb: 1.1 },
                   }}
                 >
-                  <Typography
-                    variant="subtitle2"
-                    color="text.primary"
-                    sx={{
-                      flexShrink: 0,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                      wordBreak: 'break-word',
-                      lineHeight: 1.35
-                    }}
-                  >
-                    {activeCard.title || '\u00a0'}
-                  </Typography>
-                  <Box sx={{ flex: 1, minHeight: 0, mt: 0.5, overflow: 'hidden' }}>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{
-                        overflow: 'hidden',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 3,
-                        WebkitBoxOrient: 'vertical',
-                        wordBreak: 'break-word',
-                        lineHeight: 1.35
-                      }}
-                    >
-                      {activeCard.description && !isRichTextEmpty(activeCard.description)
+                  <KanbanInlineTitle
+                    title={activeCard.title || ''}
+                    descriptionPlain={
+                      activeCard.description && !isRichTextEmpty(activeCard.description)
                         ? getPlainTextFromHtml(activeCard.description)
-                        : '\u200b'}
-                    </Typography>
-                  </Box>
+                        : ''
+                    }
+                  />
+                  {activeCard.assignee || activeCard.due_date ? (
                   <Box
                     sx={{
                       display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: 0.5,
                       alignItems: 'center',
-                      mt: 'auto',
-                      pt: 0.5,
+                      justifyContent: 'space-between',
+                      gap: 0.5,
                       flexShrink: 0,
-                      maxHeight: 52,
-                      overflow: 'hidden'
                     }}
                   >
-                    {activeCard.assignee && (
-                      <Chip size="small" label={activeCard.assignee.username} variant="outlined" />
-                    )}
-                    {activeCard.due_date && (
-                      <Chip
-                        size="small"
-                        label={`${txt('만료', 'Due')}: ${formatDueDate(activeCard.due_date)}`}
-                        variant="outlined"
-                      />
-                    )}
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, flex: 1, minWidth: 0 }}>
+                      {activeCard.due_date && (
+                        <Chip
+                          size="small"
+                          label={`${txt('만료', 'Due')}: ${formatDueDate(activeCard.due_date)}`}
+                          sx={kanbanMetaChipSx}
+                        />
+                      )}
+                    </Box>
+                    {activeCard.assignee ? (
+                      <Avatar
+                        sx={{
+                          width: 24,
+                          height: 24,
+                          fontSize: '0.65rem',
+                          fontWeight: 700,
+                          bgcolor: '#94A3B8',
+                          color: '#FFFFFF',
+                          borderRadius: 0,
+                        }}
+                      >
+                        {activeCard.assignee.username?.trim().charAt(0).toUpperCase() || ''}
+                      </Avatar>
+                    ) : null}
                   </Box>
+                  ) : null}
                 </CardContent>
               </Card>
             ) : activeList ? (
               <Paper
-                elevation={8}
+                elevation={0}
                 sx={{
-                  width: 'min(292px, 85vw)',
-                  maxWidth: 292,
+                  width: 'min(300px, 85vw)',
+                  maxWidth: 300,
                   boxSizing: 'border-box',
-                  p: 1.5,
-                  borderRadius: 1.5,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  bgcolor: 'background.paper',
+                  p: 1.25,
+                  borderRadius: KANBAN_COLUMN_RADIUS,
+                  border: 'none',
+                  bgcolor: KANBAN_COLUMN_BG,
+                  boxShadow: `${KANBAN_COLUMN_SHADOW}, inset 3px 0 0 0 ${boardAccentColor}`,
                   cursor: 'grabbing',
                   touchAction: 'none',
                   transform: 'translateZ(0)',
-                  willChange: 'transform'
+                  willChange: 'transform',
                 }}
               >
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.5,
-                    px: 0.75,
-                    py: 0.75,
-                    borderRadius: 1,
-                    border: '1px solid',
-                    borderColor: hexToRgba(boardAccentColor, 0.35),
-                    backgroundColor: hexToRgba(boardAccentColor, 0.14)
-                  }}
-                >
-                  <DragIndicatorIcon fontSize="small" color="action" />
-                  <Typography fontWeight={700} color="text.primary" noWrap sx={{ flex: 1 }}>
-                    {activeList.title}
-                  </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <DragIndicatorIcon fontSize="small" sx={{ color: '#64748B', flexShrink: 0 }} />
+                  <KanbanInlineTitle
+                    title={displayBoardListTitle(activeList.title, language)}
+                    descriptionPlain={String(activeList.description || '').trim()}
+                    titleFontSize="0.875rem"
+                  />
+                  <Box
+                    sx={{
+                      minWidth: 24,
+                      height: 24,
+                      px: 0.75,
+                      borderRadius: KANBAN_CHIP_RADIUS,
+                      bgcolor: '#FFFFFF',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      color: '#64748B',
+                    }}
+                  >
+                    {(activeList.cards || []).length}
+                  </Box>
                 </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                  {txt(
-                    `${(activeList.cards || []).length}개의 카드`,
-                    `${(activeList.cards || []).length} cards`
-                  )}
-                </Typography>
               </Paper>
             ) : null}
           </DragOverlay>
@@ -2476,31 +2671,26 @@ const WorkBoardDetailPage: React.FC = () => {
               mt: 1.5,
               height: 'auto',
               maxHeight: 'none',
-              borderRadius: 0.5,
-              boxShadow: 'none',
+              borderRadius: KANBAN_SURFACE_RADIUS,
+              boxShadow: '0 2px 10px rgba(15, 23, 42, 0.08)',
               overflow: 'hidden',
-              border: 'none',
+              border: '1px solid #C5CED9',
               borderLeft: `4px solid ${accent}`,
-              bgcolor: alpha(accent, theme.palette.mode === 'dark' ? 0.12 : 0.07),
+              bgcolor: '#FFFFFF',
               display: 'flex',
-              flexDirection: 'column'
+              flexDirection: 'column',
             };
           }}
         >
         <Box
-          sx={(theme) => {
-            const custom = cardDetail.color?.trim();
-            const accent = custom || theme.palette.primary.main;
-            return {
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-              bgcolor: alpha(accent, theme.palette.mode === 'dark' ? 0.18 : 0.12),
-              py: 1,
-              px: 2
-            };
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            borderBottom: '1px solid #C5CED9',
+            bgcolor: '#F0F4F8',
+            py: 1.25,
+            px: 2,
           }}
         >
           <Button
@@ -2508,12 +2698,18 @@ const WorkBoardDetailPage: React.FC = () => {
             variant="outlined"
             startIcon={<ArrowBackIcon />}
             onClick={closeCardDetail}
-            sx={{ borderRadius: 999, minWidth: 96 }}
+            sx={{
+              borderRadius: KANBAN_CONTROL_RADIUS,
+              minWidth: 96,
+              fontWeight: 600,
+              borderColor: '#C5CED9',
+              bgcolor: '#FFFFFF',
+            }}
           >
             {txt('뒤로 가기', 'Back')}
           </Button>
           <Box sx={{ minWidth: 0, ml: 0.5 }}>
-            <Typography variant="subtitle1" fontWeight={700} noWrap>
+            <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ letterSpacing: '-0.01em' }}>
               {txt('카드 세부사항', 'Card Details')}
             </Typography>
           </Box>
@@ -2525,7 +2721,7 @@ const WorkBoardDetailPage: React.FC = () => {
               variant="outlined"
               onClick={handleDeleteCard}
               disabled={cardSaving || !cardDetail?.cardId}
-              sx={{ borderRadius: 999, minWidth: 84 }}
+              sx={{ borderRadius: KANBAN_CONTROL_RADIUS, minWidth: 84, fontWeight: 600 }}
             >
               {txt('카드 삭제', 'Delete Card')}
             </Button>
@@ -2543,7 +2739,7 @@ const WorkBoardDetailPage: React.FC = () => {
               cardDetail?.listId === completedList?.id ||
               !canUserCompleteTask
             }
-            sx={{ borderRadius: 999, minWidth: 84 }}
+            sx={{ borderRadius: KANBAN_CONTROL_RADIUS, minWidth: 84, fontWeight: 600 }}
           >
             {cardDetail?.listId === completedList?.id ? txt('종료됨', 'Completed') : txt('업무 종료', 'Complete Task')}
           </Button>
@@ -2552,34 +2748,28 @@ const WorkBoardDetailPage: React.FC = () => {
             variant="contained"
             onClick={saveCardDetail}
             disabled={!menuCanEdit || cardSaving || !cardDetail?.title?.trim()}
-            sx={{ borderRadius: 999, minWidth: 72 }}
+            sx={{ borderRadius: KANBAN_CONTROL_RADIUS, minWidth: 72, fontWeight: 600, boxShadow: 'none' }}
           >
             {cardSaving ? <CircularProgress size={18} color="inherit" /> : txt('저장', 'Save')}
           </Button>
         </Box>
         <Box
           sx={{
-            pt: 1,
-            px: 0,
+            pt: 1.5,
+            px: 1.5,
+            pb: 1.5,
             display: 'flex',
             flexDirection: 'column',
-            gap: 1,
-            bgcolor: 'transparent',
+            gap: 1.25,
+            bgcolor: '#F8FAFC',
             overflowY: 'visible',
             overflowX: 'hidden',
-            minHeight: 'auto'
+            minHeight: 'auto',
           }}
         >
-          <Paper
-            elevation={0}
-            sx={{
-              p: 1.25,
-              flexShrink: 0,
-              borderRadius: 1.5,
-              bgcolor: 'background.paper'
-            }}
-          >
-          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Box sx={{ ...cardDetailFormSectionSx, bgcolor: '#FFFFFF' }}>
+          <Typography variant="caption" sx={cardDetailFieldLabelSx}>
             {txt('제목', 'Title')}
           </Typography>
           <TextField
@@ -2595,9 +2785,17 @@ const WorkBoardDetailPage: React.FC = () => {
             }
             disabled={!menuCanEdit}
               placeholder={txt('카드 제목', 'Card Title')}
-            sx={{ mb: 1 }}
+            sx={{ ...cardDetailFieldTintSx, '& .MuiOutlinedInput-root': { ...cardDetailFieldTintSx['& .MuiOutlinedInput-root'], height: 40 } }}
           />
+          </Box>
 
+          <Box
+            sx={{
+              ...cardDetailFormSectionSx,
+              bgcolor: '#F0F4F8',
+              border: '1px solid #C5CED9',
+            }}
+          >
           <Box
             sx={{
               display: 'grid',
@@ -2606,7 +2804,7 @@ const WorkBoardDetailPage: React.FC = () => {
             }}
           >
             <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.4 }}>
+              <Typography variant="caption" sx={cardDetailFieldLabelSx}>
                 {txt('목록', 'List')}
               </Typography>
               <TextField
@@ -2622,6 +2820,7 @@ const WorkBoardDetailPage: React.FC = () => {
                     prev ? { ...prev, listId: Number(e.target.value) } : prev
                   )
                 }
+                sx={cardDetailFieldWhiteSx}
               >
                 {lists.map((list) => (
                   <MenuItem key={list.id} value={list.id}>
@@ -2631,7 +2830,7 @@ const WorkBoardDetailPage: React.FC = () => {
               </TextField>
             </Box>
             <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.4 }}>
+              <Typography variant="caption" sx={cardDetailFieldLabelSx}>
                 {txt('담당자', 'Assignee')}
               </Typography>
               <TextField
@@ -2652,6 +2851,7 @@ const WorkBoardDetailPage: React.FC = () => {
                       : prev
                   )
                 }
+                sx={cardDetailFieldWhiteSx}
               >
                 <MenuItem value="">{txt('미지정', 'Unassigned')}</MenuItem>
                 {members.map((m: any) => (
@@ -2662,7 +2862,7 @@ const WorkBoardDetailPage: React.FC = () => {
               </TextField>
             </Box>
             <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.4 }}>
+              <Typography variant="caption" sx={cardDetailFieldLabelSx}>
                 {txt('만료일', 'Due Date')}
               </Typography>
               <TextField
@@ -2678,12 +2878,14 @@ const WorkBoardDetailPage: React.FC = () => {
                     prev ? { ...prev, dueDate: e.target.value } : prev
                   )
                 }
+                sx={cardDetailFieldWhiteSx}
               />
             </Box>
           </Box>
+          </Box>
 
-          <Box sx={{ mt: 0.8 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.4 }}>
+          <Box sx={{ ...cardDetailFormSectionSx, bgcolor: '#FFFFFF' }}>
+            <Typography variant="caption" sx={cardDetailFieldLabelSx}>
               {txt('참조자', 'References')}
             </Typography>
             <Autocomplete
@@ -2698,19 +2900,32 @@ const WorkBoardDetailPage: React.FC = () => {
               isOptionEqualToValue={(option, value) => option.id === value.id}
               renderTags={(value, getTagProps) =>
                 value.map((option, index) => (
-                  <Chip size="small" label={option.label} {...getTagProps({ index })} key={option.id} />
+                  <Chip
+                    size="small"
+                    label={option.label}
+                    {...getTagProps({ index })}
+                    key={option.id}
+                    sx={{ borderRadius: KANBAN_CHIP_RADIUS, fontWeight: 600 }}
+                  />
                 ))
               }
               renderInput={(params) => (
-                <TextField {...params} size="small" hiddenLabel placeholder={txt('참조할 사용자 선택', 'Select reference users')} />
+                <TextField
+                  {...params}
+                  size="small"
+                  hiddenLabel
+                  placeholder={txt('참조할 사용자 선택', 'Select reference users')}
+                  sx={cardDetailFieldTintSx}
+                />
               )}
             />
           </Box>
 
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1, mb: 0.4 }}>
+          <Box sx={{ ...cardDetailFormSectionSx, bgcolor: '#F0F4F8' }}>
+          <Typography variant="caption" sx={cardDetailFieldLabelSx}>
             {txt('카드 색상', 'Card Color')}
           </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.6 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75 }}>
             <TextField
               type="color"
               hiddenLabel
@@ -2723,22 +2938,38 @@ const WorkBoardDetailPage: React.FC = () => {
               }
               sx={{
                 width: 44,
-                '& .MuiOutlinedInput-root': { borderRadius: 0.5, p: 0.25 },
+                '& .MuiOutlinedInput-root': {
+                  ...cardDetailFieldOutlinelessRootSx,
+                  bgcolor: '#FFFFFF',
+                  p: 0.25,
+                  '&:hover': { bgcolor: '#F8FAFC' },
+                },
                 '& input[type="color"]': {
-                  borderRadius: 0.5,
+                  borderRadius: KANBAN_CONTROL_RADIUS,
                   cursor: 'pointer',
-                  minHeight: 28
-                }
+                  minHeight: 28,
+                },
               }}
             />
             <Button
               size="small"
-              variant={!cardDetail?.color ? 'contained' : 'outlined'}
+              variant={!cardDetail?.color ? 'contained' : 'text'}
               disabled={!menuCanEdit}
               onClick={() =>
                 setCardDetail((prev) => (prev ? { ...prev, color: '' } : prev))
               }
-              sx={{ borderRadius: 999, minWidth: 48 }}
+              sx={{
+                borderRadius: KANBAN_CONTROL_RADIUS,
+                minWidth: 48,
+                fontWeight: 600,
+                bgcolor: !cardDetail?.color ? 'primary.main' : '#FFFFFF',
+                color: !cardDetail?.color ? '#FFFFFF' : 'primary.main',
+                boxShadow: 'none',
+                '&:hover': {
+                  bgcolor: !cardDetail?.color ? 'primary.dark' : '#F8FAFC',
+                  boxShadow: 'none',
+                },
+              }}
             >
               {txt('기본', 'Default')}
             </Button>
@@ -2746,135 +2977,151 @@ const WorkBoardDetailPage: React.FC = () => {
               <Button
                 key={hex}
                 size="small"
-                variant={cardDetail?.color === hex ? 'contained' : 'outlined'}
+                variant="text"
                 disabled={!menuCanEdit}
                 onClick={() =>
                   setCardDetail((prev) => (prev ? { ...prev, color: hex } : prev))
                 }
                 sx={{
-                  minWidth: 24,
-                  width: 24,
-                  height: 24,
+                  minWidth: 28,
+                  width: 28,
+                  height: 28,
                   p: 0,
-                  borderRadius: 0.5,
-                  borderColor: hex,
-                  bgcolor: cardDetail?.color === hex ? hex : 'transparent',
-                  '&:hover': { bgcolor: hex, opacity: 0.85 }
+                  borderRadius: KANBAN_CONTROL_RADIUS,
+                  border: 'none',
+                  bgcolor: cardDetail?.color === hex ? hex : hexToRgba(hex, 0.38),
+                  boxShadow: cardDetail?.color === hex ? `0 0 0 2px #FFFFFF, 0 0 0 3px ${hex}` : 'none',
+                  '&:hover': { bgcolor: hex, opacity: 0.9, boxShadow: 'none' },
                 }}
               />
             ))}
           </Box>
-          </Paper>
-
-          <Paper
-            elevation={0}
-            sx={{
-              p: 1.25,
-              flexShrink: 0,
-              borderRadius: 1.5,
-              bgcolor: 'background.paper'
-            }}
-          >
-          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-            {txt('설명', 'Description')}
-          </Typography>
-          <Box
-            sx={{
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 1,
-              overflow: 'hidden',
-              display: 'flex',
-              flexDirection: 'column',
-              boxSizing: 'border-box',
-              /* 주의: .ql-snow는 툴바·컨테이너 둘 다에 붙으므로 flex column을 쓰면 툴바 버튼이 세로로 쌓임 */
-              '& .ql-toolbar.ql-snow': {
-                flexShrink: 0,
-                display: 'flex',
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-                width: '100%',
-                border: 'none',
-                borderBottom: '1px solid',
-                borderColor: 'divider',
-                backgroundColor: 'background.paper',
-                '& .ql-formats': {
-                  display: 'inline-flex',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  flexWrap: 'wrap'
-                }
-              },
-              '& .ql-container.ql-snow': {
-                border: 'none',
-                resize: 'vertical',
-                overflow: 'auto',
-                minHeight: 160,
-                maxHeight: 'min(78vh, 900px)',
-                width: '100%',
-                boxSizing: 'border-box',
-                backgroundColor: 'background.paper',
-                display: 'block'
-              },
-              '& .ql-editor': {
-                minHeight: 120,
-                overflowY: 'auto',
-                fontSize: '0.9rem'
-              },
-              '& .ql-editor img': {
-                maxWidth: '100%',
-                height: 'auto',
-                display: 'block'
-              },
-              '& .ql-editor .ql-align-center img': {
-                marginLeft: 'auto',
-                marginRight: 'auto'
-              },
-              '& .ql-editor .ql-align-right img': {
-                marginLeft: 'auto',
-                marginRight: 0
-              },
-              '& .ql-editor .ql-align-left img': {
-                marginLeft: 0,
-                marginRight: 'auto'
-              },
-              '& .ql-image-resize-display': {
-                display: 'none !important'
-              },
-              '& .ql-image-resize-toolbar': {
-                display: 'none !important'
-              }
-            }}
-          >
-            <ReactQuill
-              ref={quillRef}
-              theme="snow"
-              readOnly={!menuCanEdit}
-              value={cardDetail?.description || ''}
-              onChange={(value) =>
-                setCardDetail((prev) => (prev ? { ...prev, description: value } : prev))
-              }
-              modules={quillModules}
-              formats={quillFormats}
-              placeholder={txt('설명을 입력하세요. 이미지 업로드, 글자 크기/색상 변경이 가능합니다.', 'Enter description. Image upload and text size/color changes are available.')}
-            />
           </Box>
+          </Box>
+
+          <Paper
+            elevation={0}
+            sx={{
+              ...cardDetailSectionPaperSx,
+              p: 0,
+              overflow: 'hidden',
+            }}
+          >
+            <Box
+              sx={{
+                px: 1.5,
+                py: 0.75,
+                bgcolor: '#F0F4F8',
+                borderBottom: '1px solid #C5CED9',
+              }}
+            >
+              <Typography variant="caption" sx={{ ...cardDetailFieldLabelSx, mb: 0 }}>
+                {txt('설명', 'Description')}
+              </Typography>
+            </Box>
+            <Box
+              sx={{
+                overflow: 'hidden',
+                boxSizing: 'border-box',
+                /* 주의: .ql-snow는 툴바·컨테이너 둘 다에 붙으므로 flex column을 쓰면 툴바 버튼이 세로로 쌓임 */
+                '& .ql-toolbar.ql-snow': {
+                  flexShrink: 0,
+                  display: 'flex',
+                  flexDirection: 'row',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  width: '100%',
+                  border: 'none',
+                  borderBottom: '1px solid #C5CED9',
+                  bgcolor: '#FFFFFF',
+                  px: 1,
+                  py: 0.5,
+                  '& .ql-formats': {
+                    display: 'inline-flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                  },
+                  '& .ql-stroke': {
+                    stroke: '#475569',
+                  },
+                  '& .ql-fill': {
+                    fill: '#475569',
+                  },
+                  '& .ql-picker-label': {
+                    color: '#475569',
+                  },
+                },
+                '& .ql-container.ql-snow': {
+                  border: 'none',
+                  resize: 'vertical',
+                  overflow: 'auto',
+                  minHeight: 160,
+                  maxHeight: 'min(78vh, 900px)',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  bgcolor: '#FFFFFF',
+                  display: 'block',
+                },
+                '& .ql-editor': {
+                  minHeight: 120,
+                  overflowY: 'auto',
+                  fontSize: '0.9rem',
+                },
+                '& .ql-editor img': {
+                  maxWidth: '100%',
+                  height: 'auto',
+                  display: 'block',
+                },
+                '& .ql-editor .ql-align-center img': {
+                  marginLeft: 'auto',
+                  marginRight: 'auto',
+                },
+                '& .ql-editor .ql-align-right img': {
+                  marginLeft: 'auto',
+                  marginRight: 0,
+                },
+                '& .ql-editor .ql-align-left img': {
+                  marginLeft: 0,
+                  marginRight: 'auto',
+                },
+                '& .ql-image-resize-display': {
+                  display: 'none !important',
+                },
+                '& .ql-image-resize-toolbar': {
+                  display: 'none !important',
+                },
+              }}
+            >
+              <ReactQuill
+                ref={quillRef}
+                theme="snow"
+                readOnly={!menuCanEdit}
+                value={cardDetail?.description || ''}
+                onChange={(value) =>
+                  setCardDetail((prev) => (prev ? { ...prev, description: value } : prev))
+                }
+                modules={quillModules}
+                formats={quillFormats}
+                placeholder={txt(
+                  '설명을 입력하세요. 이미지 업로드, 글자 크기/색상 변경이 가능합니다.',
+                  'Enter description. Image upload and text size/color changes are available.'
+                )}
+              />
+            </Box>
           </Paper>
 
           <Paper
             elevation={0}
             sx={{
-              p: 1,
-              borderRadius: 1.5,
+              ...cardDetailSectionPaperSx,
               display: 'flex',
               flexDirection: 'column',
               flex: 1,
               minHeight: 0,
-              bgcolor: 'background.paper'
             }}
           >
-          <Typography variant="subtitle2" sx={{ mb: 0.35 }}>
+          <Typography variant="caption" sx={cardDetailFieldLabelSx}>
             {txt('댓글 및 활동', 'Comments & Activity')}
           </Typography>
           {commentsBlockedUntilSave ? (
@@ -2893,11 +3140,12 @@ const WorkBoardDetailPage: React.FC = () => {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 gap: 1,
-                mb: 0.5,
-                py: 0.35,
-                px: 0.75,
-                borderRadius: 1,
-                bgcolor: 'action.hover'
+                mb: 0.75,
+                py: 0.5,
+                px: 1,
+                borderRadius: KANBAN_CONTROL_RADIUS,
+                border: '1px solid #C5CED9',
+                bgcolor: '#F0F4F8',
               }}
             >
               <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.35 }}>
@@ -2921,11 +3169,11 @@ const WorkBoardDetailPage: React.FC = () => {
             sx={{
               display: 'flex',
               mb: 0.75,
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 2,
+              border: '1px solid #C5CED9',
+              borderRadius: KANBAN_CONTROL_RADIUS,
               overflow: 'hidden',
-              bgcolor: 'background.paper'
+              bgcolor: '#FFFFFF',
+              boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
             }}
           >
             <TextField
@@ -2940,10 +3188,24 @@ const WorkBoardDetailPage: React.FC = () => {
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 0,
+                  height: 40,
+                  bgcolor: '#FFFFFF',
                   '& fieldset': {
-                    border: 'none'
-                  }
-                }
+                    border: 'none',
+                  },
+                },
+                '& .MuiInputBase-input': {
+                  fontSize: '0.875rem',
+                  py: '10px',
+                  color: '#1E293B',
+                  '&::placeholder': {
+                    color: '#94A3B8',
+                    opacity: 1,
+                  },
+                },
+                '& .Mui-disabled': {
+                  WebkitTextFillColor: '#94A3B8',
+                },
               }}
               onKeyDown={(e) => {
                 if (mentionOpen && mentionCandidates.length > 0) {
@@ -3006,11 +3268,26 @@ const WorkBoardDetailPage: React.FC = () => {
               onClick={submitComment}
               disabled={!isCommentEnabled || commentSaving || !newComment.trim()}
               sx={{
-                minWidth: 64,
+                minWidth: 80,
+                px: 1.5,
+                height: 40,
+                alignSelf: 'stretch',
                 borderRadius: 0,
                 boxShadow: 'none',
-                borderLeft: '1px solid',
-                borderColor: 'divider'
+                fontWeight: 700,
+                fontSize: '0.8125rem',
+                textTransform: 'none',
+                borderLeft: '1px solid #C5CED9',
+                bgcolor: 'primary.main',
+                color: '#FFFFFF',
+                '&:hover': {
+                  bgcolor: 'primary.dark',
+                  boxShadow: 'none',
+                },
+                '&.Mui-disabled': {
+                  bgcolor: '#E2E8F0',
+                  color: '#64748B',
+                },
               }}
             >
               {commentSaving ? <CircularProgress size={18} color="inherit" /> : txt('댓글', 'Comment')}
@@ -3150,6 +3427,7 @@ const WorkBoardDetailPage: React.FC = () => {
           if (!creatingList) {
             setAddListOpen(false);
             setNewListTitle('');
+            setNewListDescription('');
           }
         }}
         maxWidth="xs"
@@ -3158,7 +3436,7 @@ const WorkBoardDetailPage: React.FC = () => {
         <DialogTitle>{txt('대분류 추가', 'Add List')}</DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            {txt('새 열(대분류) 이름을 입력하세요.', 'Enter a name for the new list column.')}
+            {txt('새 열(대분류) 이름과 설명을 입력하세요.', 'Enter a name and optional description for the new list.')}
           </Typography>
           <TextField
             autoFocus
@@ -3173,8 +3451,17 @@ const WorkBoardDetailPage: React.FC = () => {
                 void createNewList();
               }
             }}
-            placeholder={txt('예: 검토 대기', 'e.g. Pending Review')}
-            sx={{ '& .MuiOutlinedInput-root': { borderRadius: '12px' } }}
+            placeholder={txt('대분류 이름', 'List name')}
+            sx={{ mb: 1.25, '& .MuiOutlinedInput-root': { borderRadius: KANBAN_CONTROL_RADIUS } }}
+          />
+          <TextField
+            fullWidth
+            hiddenLabel
+            size="small"
+            value={newListDescription}
+            onChange={(e) => setNewListDescription(e.target.value)}
+            placeholder={txt('설명 (선택)', 'Description (optional)')}
+            sx={{ '& .MuiOutlinedInput-root': { borderRadius: KANBAN_CONTROL_RADIUS } }}
           />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
@@ -3183,6 +3470,7 @@ const WorkBoardDetailPage: React.FC = () => {
               if (!creatingList) {
                 setAddListOpen(false);
                 setNewListTitle('');
+                setNewListDescription('');
               }
             }}
             disabled={creatingList}

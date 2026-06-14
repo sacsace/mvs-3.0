@@ -5,17 +5,19 @@ interface WorkBoardListAttributes {
   id: number;
   board_id: number;
   title: string;
+  description?: string | null;
   position: number;
   created_at?: Date;
   updated_at?: Date;
 }
 
-interface WorkBoardListCreationAttributes extends Optional<WorkBoardListAttributes, 'id' | 'created_at' | 'updated_at' | 'position'> {}
+interface WorkBoardListCreationAttributes extends Optional<WorkBoardListAttributes, 'id' | 'created_at' | 'updated_at' | 'position' | 'description'> {}
 
 class WorkBoardList extends Model<WorkBoardListAttributes, WorkBoardListCreationAttributes> implements WorkBoardListAttributes {
   public id!: number;
   public board_id!: number;
   public title!: string;
+  public description!: string | null;
   public position!: number;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
@@ -30,6 +32,7 @@ WorkBoardList.init(
     },
     board_id: { type: DataTypes.INTEGER, allowNull: false },
     title: { type: DataTypes.STRING(120), allowNull: false },
+    description: { type: DataTypes.STRING(500), allowNull: true, defaultValue: null },
     position: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 }
   },
   {

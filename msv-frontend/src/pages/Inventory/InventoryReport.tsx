@@ -483,12 +483,35 @@ const InventoryReport: React.FC = () => {
   };
 
   const kpiCardSx = {
-    borderRadius: '16px',
-    border: '1px solid',
-    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+    borderRadius: '14px',
+    border: '1px solid #C5CED9',
     boxShadow:
-      theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
-    bgcolor: 'background.paper',
+      theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.08)' : '0 2px 12px rgba(0,0,0,0.25)',
+    bgcolor: '#FFFFFF',
+  } as const;
+
+  const kpiLabelSx = {
+    fontWeight: 700,
+    fontSize: '0.75rem',
+    lineHeight: '18px',
+    letterSpacing: '0.01em',
+    color: theme.palette.mode === 'light' ? '#475569' : 'text.secondary',
+  } as const;
+
+  const kpiValueSx = {
+    mt: 0.75,
+    fontWeight: 700,
+    fontSize: '1.375rem',
+    lineHeight: 1.25,
+    letterSpacing: '-0.02em',
+  } as const;
+
+  const kpiHintSx = {
+    display: 'block',
+    mt: 0.5,
+    fontSize: '0.75rem',
+    lineHeight: 1.4,
+    color: theme.palette.mode === 'light' ? '#64748B' : 'text.secondary',
   } as const;
 
   const outlineToolbarBtnSx = {
@@ -627,52 +650,52 @@ const InventoryReport: React.FC = () => {
       >
         <Card elevation={0} sx={kpiCardSx}>
           <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+            <Typography variant="caption" sx={kpiLabelSx}>
               {t('inventoryReport.statsTotalProducts')}
             </Typography>
-            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
+            <Typography variant="h5" sx={{ ...kpiValueSx, color: 'text.primary' }}>
               {loading ? '…' : stats.totalProducts}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            <Typography variant="caption" sx={kpiHintSx}>
               {t('inventoryReport.statsActiveProducts')}
             </Typography>
           </CardContent>
         </Card>
         <Card elevation={0} sx={kpiCardSx}>
           <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+            <Typography variant="caption" sx={kpiLabelSx}>
               {t('inventoryReport.statsTotalValue')}
             </Typography>
-            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
+            <Typography variant="h5" sx={{ ...kpiValueSx, color: 'text.primary' }}>
               {loading ? '…' : formatCurrency(stats.totalValue)}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            <Typography variant="caption" sx={kpiHintSx}>
               {t('inventoryReport.statsTotalValueHint')}
             </Typography>
           </CardContent>
         </Card>
         <Card elevation={0} sx={kpiCardSx}>
           <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+            <Typography variant="caption" sx={kpiLabelSx}>
               {t('inventoryReport.statsLowStock')}
             </Typography>
-            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'warning.main' }}>
+            <Typography variant="h5" sx={{ ...kpiValueSx, color: 'warning.main' }}>
               {loading ? '…' : stats.lowStockItems}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            <Typography variant="caption" sx={kpiHintSx}>
               {t('inventoryReport.statsLowStockHint')}
             </Typography>
           </CardContent>
         </Card>
         <Card elevation={0} sx={kpiCardSx}>
           <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+            <Typography variant="caption" sx={kpiLabelSx}>
               {t('inventoryReport.statsAvgTurnover')}
             </Typography>
-            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'info.main' }}>
+            <Typography variant="h5" sx={{ ...kpiValueSx, color: 'info.main' }}>
               {loading ? '…' : `${stats.averageTurnover}x`}
             </Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            <Typography variant="caption" sx={kpiHintSx}>
               {t('inventoryReport.statsAvgTurnoverHint')}
             </Typography>
           </CardContent>

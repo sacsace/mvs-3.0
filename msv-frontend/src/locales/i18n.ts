@@ -1433,6 +1433,7 @@ const ko = {
       statsCountSuffix: '{{count}}개',
       alertLowOut: '재고 부족 상품 {{low}}개, 재고 없음 상품 {{out}}개가 있습니다.',
       tableTitle: '재고 현황',
+      searchLabel: '검색',
       searchPlaceholder: '상품명 또는 코드 검색',
       emptyTable: '표시할 재고 상품이 없습니다. 기본 재고 등록에서 상품을 추가하세요.',
       columns: {
@@ -4419,6 +4420,7 @@ const en = {
       statsCountSuffix: '{{count}}',
       alertLowOut: '{{low}} low-stock item(s) and {{out}} out-of-stock item(s).',
       tableTitle: 'Stock status',
+      searchLabel: 'Search',
       searchPlaceholder: 'Search by product name or code',
       emptyTable: 'No stock items to display. Add products in Basic inventory registration.',
       columns: {

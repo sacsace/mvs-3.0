@@ -20,6 +20,7 @@ const DEFAULT_LISTS = [
 ];
 
 let workBoardSchemaEnsured = false;
+let workBoardListSchemaEnsured = false;
 let workBoardCardSchemaEnsured = false;
 let workBoardCardCommentSchemaEnsured = false;
 
@@ -42,6 +43,20 @@ const ensureWorkBoardSchema = async () => {
     });
   }
   workBoardSchemaEnsured = true;
+};
+
+const ensureWorkBoardListSchema = async () => {
+  if (workBoardListSchemaEnsured) return;
+  const queryInterface = sequelize.getQueryInterface();
+  const table = await queryInterface.describeTable('work_board_lists');
+  if (!table.description) {
+    await queryInterface.addColumn('work_board_lists', 'description', {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+      defaultValue: null
+    });
+  }
+  workBoardListSchemaEnsured = true;
 };
 
 const ensureWorkBoardCardSchema = async () => {
@@ -360,6 +375,7 @@ export const createWorkBoard = async (req: RequestWithUser, res: Response) => {
 export const getWorkBoardDetail = async (req: RequestWithUser, res: Response) => {
   try {
     await ensureWorkBoardSchema();
+    await ensureWorkBoardListSchema();
     const user = req.user!;
     const boardId = parseInt(req.params.boardId, 10);
     const { board, member } = await findBoardForUser(boardId, user);
@@ -550,6 +566,7 @@ export const deleteWorkBoard = async (req: RequestWithUser, res: Response) => {
 
 export const createWorkBoardList = async (req: RequestWithUser, res: Response) => {
   try {
+    await ensureWorkBoardListSchema();
     const user = req.user!;
     const boardId = parseInt(req.params.boardId, 10);
     const { board, member } = await findBoardForUser(boardId, user);
@@ -557,17 +574,22 @@ export const createWorkBoardList = async (req: RequestWithUser, res: Response) =
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }
 
-    const { title } = req.body;
+    const { title, description } = req.body;
     if (!title || String(title).trim().length === 0) {
       return res.status(400).json({ success: false, message: '목록 이름이 필요합니다.' });
     }
 
     const max = await WorkBoardList.max('position', { where: { board_id: board.id } });
     const position = max !== null && (max as number) >= 0 ? (max as number) + 1 : 0;
+    const normalizedDescription =
+      description === undefined || description === null
+        ? null
+        : String(description).trim().slice(0, 500) || null;
 
     const list = await WorkBoardList.create({
       board_id: board.id,
       title: String(title).trim().slice(0, 120),
+      description: normalizedDescription,
       position
     });
 
@@ -580,6 +602,7 @@ export const createWorkBoardList = async (req: RequestWithUser, res: Response) =
 
 export const updateWorkBoardList = async (req: RequestWithUser, res: Response) => {
   try {
+    await ensureWorkBoardListSchema();
     const user = req.user!;
     const boardId = parseInt(req.params.boardId, 10);
     const listId = parseInt(req.params.listId, 10);
@@ -593,13 +616,21 @@ export const updateWorkBoardList = async (req: RequestWithUser, res: Response) =
       return res.status(404).json({ success: false, message: '목록을 찾을 수 없습니다.' });
     }
 
-    const { title } = req.body;
+    const { title, description } = req.body;
     if (title !== undefined) {
       const normalized = String(title).trim();
       if (normalized.length === 0) {
         return res.status(400).json({ success: false, message: '목록 이름이 필요합니다.' });
       }
       list.title = normalized.slice(0, 120);
+    }
+    if (description !== undefined) {
+      list.description =
+        description === null || String(description).trim() === ''
+          ? null
+          : String(description).trim().slice(0, 500);
+    }
+    if (title !== undefined || description !== undefined) {
       await list.save();
     }
 

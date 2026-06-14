@@ -29,8 +29,19 @@ import { alpha, useTheme } from '@mui/material/styles';
 import { inventoryService } from '../../services/api';
 import { UTILS } from '../../constants';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+import { mvsTableHeadHighlightSx } from '../../theme/mvsLayout';
 
 const INVENTORY_STATUS_MENU_ROUTES = ['/inventory/status', '/inventory'] as const;
+
+const inventoryFilterLabelSx = {
+  color: 'text.secondary',
+  fontWeight: 600,
+  mb: 0.5,
+  display: 'block',
+  fontSize: '0.75rem',
+  lineHeight: '18px',
+  minHeight: 18,
+} as const;
 
 type StatusRow = {
   id: number;
@@ -470,60 +481,77 @@ const InventoryStatus: React.FC = () => {
         </Alert>
       ) : null}
 
+      {/* 검색 */}
       <Card
         elevation={0}
         sx={{
-          borderRadius: '20px',
-          border: '1px solid',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-          boxShadow:
-            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
-          bgcolor: 'background.paper',
+          mb: 3,
+          borderRadius: '18px',
+          border: '1px solid #C5CED9',
+          bgcolor: '#F0F4F8',
+          boxShadow: 'none',
+        }}
+      >
+        <CardContent sx={{ py: 2, px: 2, '&:last-child': { pb: 2 } }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) minmax(0, 1fr)' },
+              gap: 2,
+              alignItems: 'flex-end',
+              maxWidth: { sm: 640 },
+            }}
+          >
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="caption" sx={inventoryFilterLabelSx}>
+                {t('inventoryStatus.searchLabel')}
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder={t('inventoryStatus.searchPlaceholder')}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    height: 40,
+                    borderRadius: '12px',
+                    bgcolor: '#FFFFFF',
+                    '& .MuiOutlinedInput-input': { py: 0 },
+                    '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
+                  },
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
+
+      {/* 재고 현황 테이블 */}
+      <Card
+        elevation={0}
+        sx={{
+          borderRadius: 0,
+          border: 'none',
+          boxShadow: 'none',
+          bgcolor: 'transparent',
           overflow: 'hidden',
         }}
       >
         <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: 2,
-              px: 2.5,
-              pt: 2.5,
-              pb: 2,
-              borderBottom: '1px solid',
-              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : 'divider',
-            }}
-          >
+          <Box sx={{ px: 2.5, pt: 2, pb: 1.5 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 600, letterSpacing: '-0.01em', color: 'text.primary' }}>
               {t('inventoryStatus.tableTitle')}
             </Typography>
-            <TextField
-              size="small"
-              placeholder={t('inventoryStatus.searchPlaceholder')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              disabled={menuFlags.menusLoading || !menuFlags.canRead}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                minWidth: 260,
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '12px',
-                  bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.03)' : alpha(theme.palette.common.white, 0.04),
-                  '& fieldset': {
-                    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : 'divider',
-                  },
-                },
-              }}
-            />
           </Box>
 
           {loading ? (
@@ -547,24 +575,7 @@ const InventoryStatus: React.FC = () => {
                   },
                 }}
               >
-                <TableHead
-                  sx={{
-                    '& .MuiTableCell-head': {
-                      bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
-                      color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
-                      fontWeight: 600,
-                      fontSize: '0.75rem',
-                      textTransform: 'none',
-                      letterSpacing: '0.01em',
-                      borderBottom: `1px solid ${
-                        theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                      }`,
-                      py: 1.5,
-                      px: 2,
-                      '& .MuiTableSortLabel-root': { color: 'inherit' },
-                    },
-                  }}
-                >
+                <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
                     <TableCell sortDirection={orderBy === 'productCode' ? order : false}>
                       <TableSortLabel
