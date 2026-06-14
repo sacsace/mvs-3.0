@@ -12,12 +12,13 @@ interface WorkBoardCardAttributes {
   reference_user_ids?: number[];
   due_date?: string | null;
   created_by?: number | null;
+  completed_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
 }
 
 interface WorkBoardCardCreationAttributes
-  extends Optional<WorkBoardCardAttributes, 'id' | 'created_at' | 'updated_at' | 'description' | 'color' | 'assignee_user_id' | 'reference_user_ids' | 'due_date' | 'created_by' | 'position'> {}
+  extends Optional<WorkBoardCardAttributes, 'id' | 'created_at' | 'updated_at' | 'description' | 'color' | 'assignee_user_id' | 'reference_user_ids' | 'due_date' | 'created_by' | 'completed_at' | 'position'> {}
 
 class WorkBoardCard extends Model<WorkBoardCardAttributes, WorkBoardCardCreationAttributes> implements WorkBoardCardAttributes {
   public id!: number;
@@ -30,6 +31,7 @@ class WorkBoardCard extends Model<WorkBoardCardAttributes, WorkBoardCardCreation
   public reference_user_ids?: number[];
   public due_date?: string | null;
   public created_by?: number | null;
+  public completed_at?: Date | null;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
 }
@@ -49,7 +51,8 @@ WorkBoardCard.init(
     assignee_user_id: { type: DataTypes.INTEGER, allowNull: true },
     reference_user_ids: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     due_date: { type: DataTypes.DATEONLY, allowNull: true },
-    created_by: { type: DataTypes.INTEGER, allowNull: true }
+    created_by: { type: DataTypes.INTEGER, allowNull: true },
+    completed_at: { type: DataTypes.DATE, allowNull: true }
   },
   {
     sequelize,

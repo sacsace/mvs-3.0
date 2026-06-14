@@ -935,6 +935,38 @@ const ko = {
         systemLoginHistory: '시스템 로그인 이력'
       },
       loginHistoryHint: 'MSV 시스템에 로그인한 사용자·시각·성공 여부 등을 조회합니다.',
+      notifications: {
+        emailHintTitle: '이메일 알림이 실행되는 화면',
+        emailHintIntro:
+          '켜 두면 하단 SMTP(보내는 메일 서버)가 설정된 경우, 아래 업무 화면에서 알림이 발생할 때 수신자 이메일로도 발송됩니다.',
+        emailHintPages: [
+          '업무 보드 (/work/projects) — 카드 담당자 지정, 댓글 @멘션',
+          '업무 보고서 (/work/report) — 제출·수신·참조, 승인·피드백',
+          '지출결의서 (/accounting/expense) — 결제 요청·승인·반려·송금',
+          '회계 인보이스 (/accounting/invoice) — 삭제 승인 요청',
+          '알림 관리 (/notifications) — 관리자 수동 발송'
+        ],
+        emailHintNote:
+          '앱 내 알림(헤더 벨)은 이 스위치와 관계없이 표시됩니다. 이메일은 이 항목이 켜져 있고 SMTP가 준비된 경우에만 추가 발송됩니다.'
+      },
+      backup: {
+        hintTitle: '백업 파일 저장 위치',
+        hintBody:
+          '「지금 백업하기」를 누르면 PostgreSQL DB 덤프(.dump)가 서버 디스크에 저장됩니다. 아래 목록에서 PC로 다운로드해 보관하세요. 보관 기간을 넘긴 파일은 자동 삭제됩니다.',
+        autoBackupNote: '자동 백업·클라우드 업로드 스케줄은 준비 중입니다. 지금은 수동 백업 후 다운로드하세요.',
+        cloudBackupNote: '클라우드 백업(S3 등) 연동은 준비 중입니다.',
+        dialogBody:
+          'PostgreSQL 전체 DB를 pg_dump 형식(.dump)으로 백업합니다. 완료 후 서버에 저장되며 아래 목록에서 다운로드할 수 있습니다.',
+        lastBackup: '마지막 백업',
+        none: '없음',
+        fileListTitle: '저장된 백업 파일',
+        emptyFiles: '저장된 백업 파일이 없습니다. 「지금 백업하기」로 생성하세요.',
+        download: '다운로드',
+        downloading: '다운로드 중…',
+        downloadFailed: '백업 파일 다운로드에 실패했습니다.',
+        backupDone: '데이터베이스 백업이 완료되었습니다.',
+        storagePath: '서버 저장 경로'
+      },
       mailServer: {
         title: '보내는 메일 서버 (SMTP)',
         host: 'SMTP 호스트',
@@ -1212,10 +1244,13 @@ const ko = {
       },
       summary: {
         avgEfficiency: '평균 효율성',
+        avgPersonalEfficiency: '평균 종합 효율',
+        avgOnTimeRate: '평균 기한 준수율',
         avgCompletionRate: '평균 완료율',
         totalAssignedCards: '총 배정 카드',
         completedCards: '완료된 카드',
-        overallCompletionRate: '전체 완료율'
+        overallCompletionRate: '전체 완료율',
+        avgProcessingTime: '평균 처리 시간(완료)'
       },
       filters: {
         department: '부서',
@@ -1226,7 +1261,36 @@ const ko = {
         assigneeStats: '담당자별 카드 통계',
         completionComparison: '완료율 비교',
         cardStatusDistribution: '카드 상태 분포',
-        efficiencyAnalysis: '효율성 분석'
+        efficiencyAnalysis: '개인 효율 분석',
+        processingTimeAnalysis: '처리 시간 분석'
+      },
+      sections: {
+        personalEfficiencyDetail: '담당자별 효율 상세',
+        processingTimeDetail: '담당자별 처리 시간 통계'
+      },
+      processingTime: {
+        median: '중앙값',
+        average: '평균',
+        teamMedian: '팀 완료 중앙값',
+        teamAverage: '팀 완료 평균',
+        fastest: '최단 처리',
+        slowest: '최장 처리',
+        min: '최소',
+        max: '최대',
+        stdDev: '표준편차',
+        sampleSize: '표본 수',
+        sampleCount: '완료 {{completed}} / 미완료 {{open}}',
+        cardsCount: '{{count}}건',
+        teamMedianLine: '팀 중앙값',
+        yAxisDays: '일(day)',
+        dayUnit: '일',
+        buckets: {
+          under1Day: '1일 미만',
+          days1to3: '1~3일',
+          days3to7: '3~7일',
+          days7to14: '7~14일',
+          over14Days: '14일 이상'
+        }
       },
       columns: {
         employeeInfo: '직원 정보',
@@ -1235,12 +1299,36 @@ const ko = {
         inProgress: '진행 중',
         completedCards: '완료 카드',
         efficiency: '효율성',
-        completionRate: '완료율'
+        personalEfficiency: '종합 효율',
+        completionRate: '완료율',
+        onTimeRate: '기한 준수율',
+        overdueCards: '지연 카드',
+        monthlyCompleted: '이번 달 완료',
+        avgProcessingTime: '평균 처리 시간',
+        avgElapsedTime: '평균 경과 시간'
       },
       charts: {
         completionByAssignee: '담당자별 완료율 비교',
         cardStatusDistribution: '카드 상태 분포',
-        efficiencyByAssignee: '담당자별 효율성 분석'
+        efficiencyByAssignee: '담당자별 효율성 분석',
+        personalEfficiencyByAssignee: '담당자별 개인 효율 비교',
+        processingTimeByAssignee: '담당자별 처리 시간 통계',
+        completedDurationDistribution: '완료 처리 시간 분포',
+        avgCompletedProcessing: '완료 평균 처리 시간',
+        avgOpenElapsed: '미완료 평균 경과 시간'
+      },
+      duration: {
+        days: '{{value}}일',
+        hours: '{{value}}시간',
+        minutes: '{{value}}분',
+        lessThanMinute: '1분 미만',
+        none: '-'
+      },
+      tooltips: {
+        processingTimeChart: '막대는 선택한 지표(중앙값/평균)이며, 세로 오차막대는 최소~최대 범위입니다. 점선은 팀 완료 중앙값입니다.',
+        durationDistribution: '완료된 카드의 처리 시간을 구간별로 집계한 분포입니다.',
+        processingTimeDetail: '담당자별 중앙값·평균·최소·최대·표준편차로 처리 시간의 분산을 확인할 수 있습니다.',
+        personalEfficiencyChart: '완료율·기한 준수율·이번 달 완료·지연 카드를 반영한 개인 종합 효율 지표입니다.'
       },
       status: {
         todo: '할 일',
@@ -1249,7 +1337,9 @@ const ko = {
         unassigned: '미배정'
       },
       empty: {
-        noAssigneeStats: '표시할 담당자 통계가 없습니다.'
+        noAssigneeStats: '표시할 담당자 통계가 없습니다.',
+        noProcessingTimeData: '표시할 처리 시간 데이터가 없습니다.',
+        noPersonalEfficiencyData: '표시할 개인 효율 데이터가 없습니다.'
       },
       errors: {
         loadBoardsFailed: '작업 보드 목록을 불러오지 못했습니다.',
@@ -3923,6 +4013,38 @@ const en = {
         systemLoginHistory: 'System login history'
       },
       loginHistoryHint: 'View who logged into the MSV system, when, and success or failure.',
+      notifications: {
+        emailHintTitle: 'Screens that trigger email notifications',
+        emailHintIntro:
+          'When enabled and SMTP (outgoing mail server below) is configured, emails are also sent to recipients when alerts fire on these screens.',
+        emailHintPages: [
+          'Work boards (/work/projects) — assignee changes, @mentions in comments',
+          'Work reports (/work/report) — submit, recipients/CC, approval, feedback',
+          'Expense reports (/accounting/expense) — payment request, approve, reject, transfer',
+          'Accounting invoices (/accounting/invoice) — delete approval requests',
+          'Notification management (/notifications) — admin manual sends'
+        ],
+        emailHintNote:
+          'In-app alerts (header bell) always appear regardless of this switch. Email is sent only when this option is on and SMTP is ready.'
+      },
+      backup: {
+        hintTitle: 'Where backup files are stored',
+        hintBody:
+          'Backup Now creates a PostgreSQL dump (.dump) on the server disk. Download files from the list below to keep a copy on your PC. Files older than the retention period are removed automatically.',
+        autoBackupNote: 'Scheduled auto backup and cloud upload are not enabled yet. Use manual backup and download for now.',
+        cloudBackupNote: 'Cloud backup (S3, etc.) integration is coming soon.',
+        dialogBody:
+          'A full PostgreSQL database dump (.dump) will be created with pg_dump. After completion it is stored on the server and can be downloaded from the list below.',
+        lastBackup: 'Last backup',
+        none: 'None',
+        fileListTitle: 'Stored backup files',
+        emptyFiles: 'No backup files yet. Click Backup Now to create one.',
+        download: 'Download',
+        downloading: 'Downloading…',
+        downloadFailed: 'Failed to download the backup file.',
+        backupDone: 'Database backup completed.',
+        storagePath: 'Server storage path'
+      },
       mailServer: {
         title: 'Outgoing mail server (SMTP)',
         host: 'SMTP host',
@@ -4199,10 +4321,13 @@ const en = {
       },
       summary: {
         avgEfficiency: 'Average Efficiency',
+        avgPersonalEfficiency: 'Avg. Personal Efficiency',
+        avgOnTimeRate: 'Avg. On-time Rate',
         avgCompletionRate: 'Average Completion Rate',
         totalAssignedCards: 'Total Assigned Cards',
         completedCards: 'Completed Cards',
-        overallCompletionRate: 'Overall Completion Rate'
+        overallCompletionRate: 'Overall Completion Rate',
+        avgProcessingTime: 'Avg. Processing Time (Completed)'
       },
       filters: {
         department: 'Department',
@@ -4213,7 +4338,36 @@ const en = {
         assigneeStats: 'Assignee Card Statistics',
         completionComparison: 'Completion Comparison',
         cardStatusDistribution: 'Card Status Distribution',
-        efficiencyAnalysis: 'Efficiency Analysis'
+        efficiencyAnalysis: 'Personal Efficiency',
+        processingTimeAnalysis: 'Processing Time Analysis'
+      },
+      sections: {
+        personalEfficiencyDetail: 'Personal Efficiency Detail',
+        processingTimeDetail: 'Processing Time Statistics by Assignee'
+      },
+      processingTime: {
+        median: 'Median',
+        average: 'Average',
+        teamMedian: 'Team Completed Median',
+        teamAverage: 'Team Completed Average',
+        fastest: 'Fastest',
+        slowest: 'Slowest',
+        min: 'Min',
+        max: 'Max',
+        stdDev: 'Std. Dev.',
+        sampleSize: 'Sample Size',
+        sampleCount: 'Done {{completed}} / Open {{open}}',
+        cardsCount: '{{count}} cards',
+        teamMedianLine: 'Team median',
+        yAxisDays: 'Days',
+        dayUnit: 'd',
+        buckets: {
+          under1Day: '< 1 day',
+          days1to3: '1-3 days',
+          days3to7: '3-7 days',
+          days7to14: '7-14 days',
+          over14Days: '14+ days'
+        }
       },
       columns: {
         employeeInfo: 'Employee Info',
@@ -4222,12 +4376,36 @@ const en = {
         inProgress: 'In Progress',
         completedCards: 'Completed Cards',
         efficiency: 'Efficiency',
-        completionRate: 'Completion Rate'
+        personalEfficiency: 'Personal Efficiency',
+        completionRate: 'Completion Rate',
+        onTimeRate: 'On-time Rate',
+        overdueCards: 'Overdue Cards',
+        monthlyCompleted: 'Completed This Month',
+        avgProcessingTime: 'Avg. Processing Time',
+        avgElapsedTime: 'Avg. Elapsed Time'
       },
       charts: {
         completionByAssignee: 'Completion Rate by Assignee',
         cardStatusDistribution: 'Card Status Distribution',
-        efficiencyByAssignee: 'Efficiency Analysis by Assignee'
+        efficiencyByAssignee: 'Efficiency Analysis by Assignee',
+        personalEfficiencyByAssignee: 'Personal Efficiency by Assignee',
+        processingTimeByAssignee: 'Processing Time Statistics by Assignee',
+        completedDurationDistribution: 'Completed Duration Distribution',
+        avgCompletedProcessing: 'Avg. Completed Processing Time',
+        avgOpenElapsed: 'Avg. Open Elapsed Time'
+      },
+      duration: {
+        days: '{{value}}d',
+        hours: '{{value}}h',
+        minutes: '{{value}}m',
+        lessThanMinute: '< 1 min',
+        none: '-'
+      },
+      tooltips: {
+        processingTimeChart: 'Bars show the selected metric (median/average). Error bars show min-max range. Dashed line is team median.',
+        durationDistribution: 'Distribution of completed card processing times by duration bucket.',
+        processingTimeDetail: 'Median, average, min, max, and standard deviation per assignee.',
+        personalEfficiencyChart: 'Composite score from completion rate, on-time rate, monthly throughput, and overdue cards.'
       },
       status: {
         todo: 'To Do',
@@ -4236,7 +4414,9 @@ const en = {
         unassigned: 'Unassigned'
       },
       empty: {
-        noAssigneeStats: 'No assignee statistics to display.'
+        noAssigneeStats: 'No assignee statistics to display.',
+        noProcessingTimeData: 'No processing time data to display.',
+        noPersonalEfficiencyData: 'No personal efficiency data to display.'
       },
       errors: {
         loadBoardsFailed: 'Failed to load work board list.',

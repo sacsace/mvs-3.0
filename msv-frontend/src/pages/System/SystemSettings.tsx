@@ -31,7 +31,8 @@ import {
   CloudUpload as CloudUploadIcon,
   Save as SaveIcon,
   Email as EmailIcon,
-  DisplaySettings as DisplaySettingsIcon
+  DisplaySettings as DisplaySettingsIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { systemSettingsService } from '../../services/api';
@@ -39,14 +40,26 @@ import { getUploadUrl } from '../../utils/uploadUrl';
 import { useStore, useMenuStore } from '../../store';
 import SystemLoginHistoryTab from './SystemLoginHistoryTab';
 
-/** 시스템 설정 폼: 약간 촘촘한 줄간격·글자 크기 */
-const CARD_CONTENT_COMPACT = { py: 1.5, px: 2, '&:last-child': { pb: 1.5 } } as const;
-const SECTION_TITLE = { fontSize: '0.9375rem', fontWeight: 600, lineHeight: 1.35 } as const;
-const SECTION_HEADER = { display: 'flex', alignItems: 'center', mb: 1 } as const;
-const SECTION_DIVIDER = { mb: 1.25 } as const;
-const FIELD_BLOCK = { mb: 1.25 } as const;
+/** 시스템 설정 폼: 필드·섹션 간 여유 있는 줄간격 */
+const CARD_CONTENT_COMPACT = { py: 2, px: 2.25, '&:last-child': { pb: 2 } } as const;
+const SECTION_TITLE = { fontSize: '0.9375rem', fontWeight: 600, lineHeight: 1.4 } as const;
+const SECTION_HEADER = { display: 'flex', alignItems: 'center', mb: 1.5 } as const;
+const SECTION_DIVIDER = { mb: 2.5 } as const;
+const FIELD_BLOCK = {
+  mb: 2.5,
+  '& .MuiFormHelperText-root': { mt: 0.75, lineHeight: 1.5 },
+} as const;
 const OUTLINED_FIELD = mvsOutlinedLabelProps;
-const SWITCH_LABEL = { mb: 0.35, '& .MuiFormControlLabel-label': { fontSize: '0.8125rem', lineHeight: 1.35 } } as const;
+const SWITCH_LABEL = { mb: 0.75, '& .MuiFormControlLabel-label': { fontSize: '0.8125rem', lineHeight: 1.45 } } as const;
+const SWITCH_ROW = {
+  display: 'flex',
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: { xs: 1, sm: 1.25 },
+  columnGap: 1.5,
+  rowGap: 1.25,
+} as const;
 
 /** 설정 카드 — 테두리·얕은 그림자로 블록 구분 */
 const SETTINGS_CARD_SX = {
@@ -58,34 +71,46 @@ const SETTINGS_CARD_SX = {
   overflow: 'hidden'
 } as const;
 
-/** 우측 열(화면·알림·보안): 좌측 일반 설정과 같은 행 높이에 맞춤 — md 이상만 */
+/** 우측 열(화면·알림·보안) — 카드별 내용 높이에 맞춤(잘림 방지) */
 const SETTINGS_RIGHT_STACK_SX = {
   display: 'flex',
   flexDirection: 'column',
-  gap: 2,
+  gap: 2.5,
   minWidth: 0,
-  minHeight: 0,
-  height: { xs: 'auto', md: '100%' }
 } as const;
 
 const SETTINGS_RIGHT_CARD_SX = {
   ...SETTINGS_CARD_SX,
   display: 'flex',
   flexDirection: 'column',
-  flex: { xs: '0 0 auto', md: '1 1 0' },
-  minHeight: { md: 0 }
+  flex: '0 0 auto',
+  overflow: 'visible',
 } as const;
 
 const SETTINGS_RIGHT_CARD_CONTENT_SX = {
   ...CARD_CONTENT_COMPACT,
-  flex: { xs: 'none', md: 1 },
   display: 'flex',
   flexDirection: 'column',
-  minHeight: { md: 0 }
 } as const;
+
+/** 백업 설정 UI 전체 비활성 — 서버 로직은 유지 */
+const BACKUP_UI_DISABLED = true;
 
 /** 서버에만 비밀번호가 있을 때 입력란에 보이는 마스크(실제 값과 무관) */
 const MAIL_AUTH_PASS_MASK = '********';
+
+type BackupFileItem = {
+  filename: string;
+  size: number;
+  createdAt: string;
+};
+
+const formatBackupSize = (bytes: number) => {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+};
 
 const SystemSettings: React.FC = () => {
   const { t } = useTranslation();
@@ -161,8 +186,22 @@ const SystemSettings: React.FC = () => {
   const [previewLogo, setPreviewLogo] = useState<string>('');
   /** 메일 비밀번호: 저장만 되어 있을 때 필드에 마스크 표시, 포커스 시 편집용으로 비움 */
   const [mailAuthPassFocused, setMailAuthPassFocused] = useState(false);
+  const [backupFiles, setBackupFiles] = useState<BackupFileItem[]>([]);
+  const [backupStoragePath, setBackupStoragePath] = useState('');
+  const [downloadingBackupName, setDownloadingBackupName] = useState<string | null>(null);
 
-  // 설정 로드
+  const loadBackupFiles = useCallback(async () => {
+    if (!isRoot) return;
+    try {
+      const response = await systemSettingsService.listBackups();
+      if (response.success && response.data) {
+        setBackupFiles(response.data.files || []);
+        setBackupStoragePath(response.data.storagePath || '');
+      }
+    } catch (error) {
+      console.error('백업 목록 조회 오류:', error);
+    }
+  }, [isRoot]);
   const loadSettings = useCallback(async () => {
     try {
       setLoading(true);
@@ -225,6 +264,12 @@ const SystemSettings: React.FC = () => {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  useEffect(() => {
+    if (isRoot) {
+      void loadBackupFiles();
+    }
+  }, [isRoot, loadBackupFiles]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -463,17 +508,22 @@ const SystemSettings: React.FC = () => {
       setBackingUp(true);
       const response = await systemSettingsService.runBackup();
       if (response.success) {
-        setSettings(prev => ({
+        const lastBackup = response.data?.lastBackup || response.data?.createdAt || new Date().toISOString();
+        setSettings((prev) => ({
           ...prev,
           backup: {
             ...prev.backup,
-            lastBackup: new Date().toISOString()
-          }
+            lastBackup,
+          },
         }));
+        setBackupFiles(response.data?.files || []);
+        if (response.data?.storagePath) {
+          setBackupStoragePath(response.data.storagePath);
+        }
         setSnackbar({
           open: true,
-          message: '백업이 시작되었습니다.',
-          severity: 'success'
+          message: response.message || t('systemSettings.backup.backupDone'),
+          severity: 'success',
         });
         setOpenDialog(false);
       }
@@ -482,10 +532,35 @@ const SystemSettings: React.FC = () => {
       setSnackbar({
         open: true,
         message: error.response?.data?.message || '백업 실행 중 오류가 발생했습니다.',
-        severity: 'error'
+        severity: 'error',
       });
     } finally {
       setBackingUp(false);
+    }
+  };
+
+  const handleDownloadBackup = async (filename: string) => {
+    try {
+      setDownloadingBackupName(filename);
+      const response = await systemSettingsService.downloadBackup(filename);
+      const blob = new Blob([response.data], { type: 'application/octet-stream' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('백업 다운로드 오류:', error);
+      setSnackbar({
+        open: true,
+        message: t('systemSettings.backup.downloadFailed'),
+        severity: 'error',
+      });
+    } finally {
+      setDownloadingBackupName(null);
     }
   };
 
@@ -560,12 +635,12 @@ const SystemSettings: React.FC = () => {
         sx={{
           display: 'grid',
           gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-          gap: 2,
-          alignItems: 'stretch'
+          gap: 2.5,
+          alignItems: { xs: 'stretch', md: 'flex-start' }
         }}
       >
         {/* 일반 설정 — 좌측 */}
-        <Card sx={{ ...SETTINGS_CARD_SX, height: { md: '100%' }, display: 'flex', flexDirection: 'column' }}>
+        <Card sx={{ ...SETTINGS_CARD_SX, display: 'flex', flexDirection: 'column' }}>
           <CardContent sx={{ ...CARD_CONTENT_COMPACT, flex: 1, display: 'flex', flexDirection: 'column' }}>
             <Box sx={SECTION_HEADER}>
               <SettingsIcon sx={{ mr: 0.75, color: 'primary.main', fontSize: 20 }} />
@@ -573,7 +648,7 @@ const SystemSettings: React.FC = () => {
             </Box>
             <Divider sx={SECTION_DIVIDER} />
             
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.25 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2.5 }}>
               <Avatar 
                 sx={{ mr: 1.5, width: 48, height: 48 }}
                 src={getUploadUrl(previewLogo || settings.general.companyLogo)}
@@ -619,10 +694,10 @@ const SystemSettings: React.FC = () => {
             </Box>
 
             <Box sx={FIELD_BLOCK}>
-              <Typography sx={{ fontSize: '0.75rem', mb: 0.75, fontWeight: 500, color: 'text.primary', lineHeight: 1.35 }}>
+              <Typography sx={{ fontSize: '0.75rem', mb: 1.25, fontWeight: 500, color: 'text.primary', lineHeight: 1.45 }}>
                 사무실 위치 (출근 제한 기준)
               </Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25, mb: 0.75 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 1.5 }}>
                 <TextField
                   size="small"
                   type="number"
@@ -646,7 +721,7 @@ const SystemSettings: React.FC = () => {
                   disabled={!canManageAll}
                 />
               </Box>
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
                 <TextField
                   size="small"
                   type="number"
@@ -671,7 +746,7 @@ const SystemSettings: React.FC = () => {
                   </Button>
                 </Box>
               </Box>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block', fontSize: '0.7rem', lineHeight: 1.4 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', fontSize: '0.7rem', lineHeight: 1.5 }}>
                 등록된 위치에서만 출근할 수 있습니다.
               </Typography>
             </Box>
@@ -690,7 +765,7 @@ const SystemSettings: React.FC = () => {
                   }
                 }}
               />
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.35, display: 'block', fontSize: '0.7rem', lineHeight: 1.4 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block', fontSize: '0.7rem', lineHeight: 1.5 }}>
                 시간대는 항상 인도 표준시(IST)로 고정됩니다.
               </Typography>
             </Box>
@@ -711,7 +786,7 @@ const SystemSettings: React.FC = () => {
               </TextField>
             </Box>
 
-            <Box>
+            <Box sx={FIELD_BLOCK}>
               <TextField
                 fullWidth
                 size="small"
@@ -783,7 +858,7 @@ const SystemSettings: React.FC = () => {
                 <MenuItem value="lavender">라벤더 테마</MenuItem>
                 <MenuItem value="graphite">그래파이트 테마</MenuItem>
               </TextField>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block', fontSize: '0.7rem', lineHeight: 1.45 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block', fontSize: '0.7rem', lineHeight: 1.45 }}>
                 {{
                   light: '밝고 깔끔한 기본 테마',
                   dark: '중성 다크 톤의 기본 야간 테마',
@@ -795,17 +870,7 @@ const SystemSettings: React.FC = () => {
               </Typography>
             </Box>
 
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-                gap: { xs: 0.75, sm: 1 },
-                columnGap: 1.25,
-                rowGap: 0.75
-              }}
-            >
+            <Box sx={SWITCH_ROW}>
               <FormControlLabel
                 control={
                   <Switch
@@ -842,17 +907,50 @@ const SystemSettings: React.FC = () => {
             </Box>
             <Divider sx={SECTION_DIVIDER} />
 
-            <Box
+            <Alert
+              severity="info"
               sx={{
-                display: 'flex',
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-                gap: { xs: 0.75, sm: 1 },
-                columnGap: 1.25,
-                rowGap: 0.75
+                mb: 2,
+                py: 1,
+                fontSize: '0.8125rem',
+                '& .MuiAlert-message': { width: '100%' },
               }}
             >
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.75, fontSize: '0.8125rem' }}>
+                {t('systemSettings.notifications.emailHintTitle')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: '0.8125rem', lineHeight: 1.55 }}>
+                {t('systemSettings.notifications.emailHintIntro')}
+              </Typography>
+              <Box
+                component="ul"
+                sx={{
+                  m: 0,
+                  pl: 2.25,
+                  color: 'text.secondary',
+                  fontSize: '0.8125rem',
+                  lineHeight: 1.6,
+                  '& li': { mb: 0.35 },
+                }}
+              >
+                {(t('systemSettings.notifications.emailHintPages', { returnObjects: true }) as string[]).map(
+                  (line) => (
+                    <Box component="li" key={line}>
+                      {line}
+                    </Box>
+                  )
+                )}
+              </Box>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block', mt: 1, fontSize: '0.75rem', lineHeight: 1.5 }}
+              >
+                {t('systemSettings.notifications.emailHintNote')}
+              </Typography>
+            </Alert>
+
+            <Box sx={SWITCH_ROW}>
               <FormControlLabel
                 control={
                   <Switch
@@ -959,6 +1057,7 @@ const SystemSettings: React.FC = () => {
               />
             </Box>
 
+            <Box sx={SWITCH_ROW}>
             <FormControlLabel
               control={
                 <Switch
@@ -969,7 +1068,7 @@ const SystemSettings: React.FC = () => {
                 />
               }
               label="특수문자 필수"
-              sx={SWITCH_LABEL}
+              sx={{ ...SWITCH_LABEL, mb: 0 }}
             />
 
             <FormControlLabel
@@ -982,7 +1081,7 @@ const SystemSettings: React.FC = () => {
                 />
               }
               label="2단계 인증"
-              sx={SWITCH_LABEL}
+              sx={{ ...SWITCH_LABEL, mb: 0 }}
             />
 
             <FormControlLabel
@@ -997,6 +1096,7 @@ const SystemSettings: React.FC = () => {
               label="IP 화이트리스트"
               sx={{ ...SWITCH_LABEL, mb: 0 }}
             />
+            </Box>
           </CardContent>
         </Card>
         </Box>
@@ -1009,10 +1109,10 @@ const SystemSettings: React.FC = () => {
               <Typography component="h2" sx={SECTION_TITLE}>{t('systemSettings.mailServer.title')}</Typography>
             </Box>
             <Divider sx={SECTION_DIVIDER} />
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1, fontSize: '0.8125rem', lineHeight: 1.45 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, fontSize: '0.8125rem', lineHeight: 1.5 }}>
               {t('systemSettings.mailServer.hint')}
             </Typography>
-            <Alert severity="info" sx={{ mb: 1.5, py: 0.75, fontSize: '0.8125rem', '& .MuiAlert-message': { width: '100%' } }}>
+            <Alert severity="info" sx={{ mb: 2, py: 1, fontSize: '0.8125rem', '& .MuiAlert-message': { width: '100%' } }}>
               {t('systemSettings.mailServer.gmailHint')}
             </Alert>
             {canManageAll && (
@@ -1020,7 +1120,7 @@ const SystemSettings: React.FC = () => {
                 size="small"
                 variant="outlined"
                 onClick={applyGmailMailPreset}
-                sx={{ mb: 1.5, textTransform: 'none', fontSize: '0.8125rem' }}
+                sx={{ mb: 2, textTransform: 'none', fontSize: '0.8125rem' }}
               >
                 {t('systemSettings.mailServer.gmailPreset')}
               </Button>
@@ -1029,7 +1129,7 @@ const SystemSettings: React.FC = () => {
               sx={{
                 display: 'grid',
                 gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                gap: 1.25
+                gap: 1.75
               }}
             >
               <TextField
@@ -1136,7 +1236,19 @@ const SystemSettings: React.FC = () => {
             </Box>
             <Divider sx={SECTION_DIVIDER} />
 
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 1.5 }}>
+            <Alert severity="info" sx={{ mb: 2, py: 1, fontSize: '0.8125rem', '& .MuiAlert-message': { width: '100%' } }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5, fontSize: '0.8125rem' }}>
+                {t('systemSettings.backup.hintTitle')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem', lineHeight: 1.55, mb: 0.75 }}>
+                {t('systemSettings.backup.hintBody')}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.5 }}>
+                {t('systemSettings.backup.autoBackupNote')}
+              </Typography>
+            </Alert>
+
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
               <Box>
                 <FormControlLabel
                   control={
@@ -1144,7 +1256,7 @@ const SystemSettings: React.FC = () => {
                       size="small"
                       checked={settings.backup.autoBackup}
                       onChange={(e) => handleSettingChange('backup', 'autoBackup', e.target.checked)}
-                      disabled={!isRoot}
+                      disabled={BACKUP_UI_DISABLED || !isRoot}
                     />
                   }
                   label="자동 백업"
@@ -1160,7 +1272,7 @@ const SystemSettings: React.FC = () => {
                     {...OUTLINED_FIELD}
                     value={settings.backup.backupFrequency}
                     onChange={(e) => handleSettingChange('backup', 'backupFrequency', e.target.value)}
-                    disabled={!isRoot}
+                    disabled={BACKUP_UI_DISABLED || !isRoot}
                   >
                     <MenuItem value="hourly">매시간</MenuItem>
                     <MenuItem value="daily">매일</MenuItem>
@@ -1179,7 +1291,7 @@ const SystemSettings: React.FC = () => {
                     value={settings.backup.retentionDays}
                     onChange={(e) => handleSettingChange('backup', 'retentionDays', parseInt(e.target.value))}
                     variant="outlined"
-                    disabled={!isRoot}
+                    disabled={BACKUP_UI_DISABLED || !isRoot}
                   />
                 </Box>
               </Box>
@@ -1191,30 +1303,96 @@ const SystemSettings: React.FC = () => {
                       size="small"
                       checked={settings.backup.cloudBackup}
                       onChange={(e) => handleSettingChange('backup', 'cloudBackup', e.target.checked)}
-                      disabled={!isRoot}
+                      disabled={BACKUP_UI_DISABLED}
                     />
                   }
                   label="클라우드 백업"
-                  sx={{ ...SWITCH_LABEL, mb: 1 }}
+                  sx={{ ...SWITCH_LABEL, mb: 0.5 }}
                 />
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, lineHeight: 1.5 }}>
+                  {t('systemSettings.backup.cloudBackupNote')}
+                </Typography>
 
                 <Button
                   variant="outlined"
                   size="small"
                   startIcon={<CloudUploadIcon sx={{ fontSize: 18 }} />}
                   onClick={handleBackupNow}
-                  disabled={!isRoot}
+                  disabled={BACKUP_UI_DISABLED || !isRoot}
                   sx={{ mb: 1 }}
                 >
                   지금 백업하기
                 </Button>
 
-                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem', lineHeight: 1.45 }}>
-                  마지막 백업: {settings.backup.lastBackup 
-                    ? new Date(settings.backup.lastBackup).toLocaleString('ko-KR')
-                    : '없음'}
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem', lineHeight: 1.45, mb: 1 }}>
+                  {t('systemSettings.backup.lastBackup')}: {settings.backup.lastBackup
+                    ? new Date(settings.backup.lastBackup).toLocaleString(language === 'en' ? 'en-US' : 'ko-KR')
+                    : t('systemSettings.backup.none')}
                 </Typography>
+                {backupStoragePath ? (
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, lineHeight: 1.45 }}>
+                    {t('systemSettings.backup.storagePath')}: {backupStoragePath}
+                  </Typography>
+                ) : null}
               </Box>
+            </Box>
+
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, fontSize: '0.8125rem' }}>
+                {t('systemSettings.backup.fileListTitle')}
+              </Typography>
+              {backupFiles.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
+                  {t('systemSettings.backup.emptyFiles')}
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'grid', gap: 1 }}>
+                  {backupFiles.map((file) => (
+                    <Box
+                      key={file.filename}
+                      sx={{
+                        display: 'flex',
+                        alignItems: { xs: 'flex-start', sm: 'center' },
+                        justifyContent: 'space-between',
+                        gap: 1,
+                        flexWrap: 'wrap',
+                        p: 1.25,
+                        borderRadius: 1.5,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        bgcolor: 'background.default',
+                      }}
+                    >
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8125rem', wordBreak: 'break-all' }}>
+                          {file.filename}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {new Date(file.createdAt).toLocaleString(language === 'en' ? 'en-US' : 'ko-KR')} · {formatBackupSize(file.size)}
+                        </Typography>
+                      </Box>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={
+                          downloadingBackupName === file.filename ? (
+                            <CircularProgress size={16} />
+                          ) : (
+                            <DownloadIcon sx={{ fontSize: 18 }} />
+                          )
+                        }
+                        onClick={() => void handleDownloadBackup(file.filename)}
+                        disabled={BACKUP_UI_DISABLED || downloadingBackupName === file.filename}
+                        sx={{ textTransform: 'none', flexShrink: 0 }}
+                      >
+                        {downloadingBackupName === file.filename
+                          ? t('systemSettings.backup.downloading')
+                          : t('systemSettings.backup.download')}
+                      </Button>
+                    </Box>
+                  ))}
+                </Box>
+              )}
             </Box>
           </CardContent>
         </Card>
@@ -1270,8 +1448,8 @@ const SystemSettings: React.FC = () => {
               <Typography variant="body1" gutterBottom>
                 데이터베이스 백업을 시작하시겠습니까?
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                백업 작업은 몇 분 소요될 수 있습니다.
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.55 }}>
+                {t('systemSettings.backup.dialogBody')}
               </Typography>
             </Box>
           )}

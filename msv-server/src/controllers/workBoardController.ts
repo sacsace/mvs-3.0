@@ -24,6 +24,27 @@ let workBoardListSchemaEnsured = false;
 let workBoardCardSchemaEnsured = false;
 let workBoardCardCommentSchemaEnsured = false;
 
+const isDuplicateColumnError = (error: unknown): boolean => {
+  const err = error as { parent?: { code?: string }; original?: { code?: string }; message?: string };
+  const code = err?.parent?.code || err?.original?.code;
+  if (code === '42701') return true;
+  const message = String(err?.message || '').toLowerCase();
+  return message.includes('already exists') || message.includes('이미 있습니다');
+};
+
+const tableColumnExists = async (tableName: string, columnName: string): Promise<boolean> => {
+  const [rows] = await sequelize.query(
+    `SELECT 1
+     FROM information_schema.columns
+     WHERE table_schema = CURRENT_SCHEMA()
+       AND table_name = :tableName
+       AND column_name = :columnName
+     LIMIT 1`,
+    { replacements: { tableName, columnName } }
+  );
+  return Array.isArray(rows) && rows.length > 0;
+};
+
 const ensureWorkBoardSchema = async () => {
   if (workBoardSchemaEnsured) return;
   const queryInterface = sequelize.getQueryInterface();
@@ -62,14 +83,30 @@ const ensureWorkBoardListSchema = async () => {
 const ensureWorkBoardCardSchema = async () => {
   if (workBoardCardSchemaEnsured) return;
   const queryInterface = sequelize.getQueryInterface();
-  const table = await queryInterface.describeTable('work_board_cards');
-  if (!table.reference_user_ids) {
-    await queryInterface.addColumn('work_board_cards', 'reference_user_ids', {
-      type: DataTypes.JSONB,
-      allowNull: false,
-      defaultValue: []
-    });
+
+  if (!(await tableColumnExists('work_board_cards', 'reference_user_ids'))) {
+    try {
+      await queryInterface.addColumn('work_board_cards', 'reference_user_ids', {
+        type: DataTypes.JSONB,
+        allowNull: false,
+        defaultValue: []
+      });
+    } catch (error) {
+      if (!isDuplicateColumnError(error)) throw error;
+    }
   }
+
+  if (!(await tableColumnExists('work_board_cards', 'completed_at'))) {
+    try {
+      await queryInterface.addColumn('work_board_cards', 'completed_at', {
+        type: DataTypes.DATE,
+        allowNull: true
+      });
+    } catch (error) {
+      if (!isDuplicateColumnError(error)) throw error;
+    }
+  }
+
   workBoardCardSchemaEnsured = true;
 };
 
@@ -825,6 +862,16 @@ export const createWorkBoardCard = async (req: RequestWithUser, res: Response) =
     const max = await WorkBoardCard.max('position', { where: { list_id: list.id } });
     const position = max !== null && (max as number) >= 0 ? (max as number) + 1 : 0;
 
+    const boardLists = await WorkBoardList.findAll({
+      where: { board_id: board.id },
+      attributes: ['id', 'title', 'position'],
+      order: [['position', 'ASC']]
+    });
+    const completedListId = resolveCompletedListId(
+      boardLists.map((l) => l.get({ plain: true }) as { id: number; title: string; position: number })
+    );
+    const isCompletedList = completedListId != null && list.id === completedListId;
+
     const card = await WorkBoardCard.create({
       list_id: list.id,
       title: String(title).trim().slice(0, 300),
@@ -834,7 +881,8 @@ export const createWorkBoardCard = async (req: RequestWithUser, res: Response) =
       reference_user_ids: parsedReferenceUserIds.value ?? [],
       due_date: due_date || null,
       color: colorParsed.value ?? null,
-      created_by: user.id
+      created_by: user.id,
+      completed_at: isCompletedList ? new Date() : null
     });
 
     const withUser = await WorkBoardCard.findByPk(card.id, {
@@ -1039,7 +1087,17 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
       const insertAt = Math.min(parseInt(String(index), 10), orderedIds.length);
       orderedIds.splice(insertAt, 0, oldId);
 
-      await card.update({ list_id: newList.id }, { transaction });
+      const patch: Record<string, unknown> = { list_id: newList.id };
+      if (isMovingIntoCompleted) {
+        patch.completed_at = new Date();
+      } else if (
+        oldListId !== newList.id &&
+        completedListId != null &&
+        oldListId === completedListId
+      ) {
+        patch.completed_at = null;
+      }
+      await card.update(patch, { transaction });
 
       for (let i = 0; i < orderedIds.length; i++) {
         await WorkBoardCard.update(

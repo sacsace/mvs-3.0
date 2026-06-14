@@ -45,6 +45,25 @@ export const systemSettingsService = {
     }
   },
 
+  listBackups: async () => {
+    try {
+      const response = await api.get('/system-settings/backups');
+      return response.data;
+    } catch (error) {
+      console.error('백업 목록 조회 오류:', error);
+      throw error;
+    }
+  },
+
+  downloadBackup: async (filename: string) => {
+    const token = getAuthTokenFromStorage();
+    const response = await api.get(`/system-settings/backups/${encodeURIComponent(filename)}/download`, {
+      responseType: 'blob',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    return response;
+  },
+
   /** SMTP ?�스??메일 (관리자 ?�용) */
   sendTestMail: async (body: { to: string; subject?: string }) => {
     try {

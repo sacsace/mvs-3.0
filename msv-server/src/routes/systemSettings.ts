@@ -1,4 +1,5 @@
 import express from 'express';
+import path from 'path';
 import nodemailer from 'nodemailer';
 import { Company, User } from '../models';
 import { authenticateToken, requireRole } from '../middleware/auth';
@@ -491,23 +492,104 @@ router.post('/logo', authenticateToken, requireRole(['root', 'admin']), async (r
 // 백업 실행
 router.post('/backup', authenticateToken, requireRole(['root']), async (req, res) => {
   try {
-    // 실제 백업 로직은 나중에 구현
-    // 현재는 성공 응답만 반환
+    const tenantId = Number((req as any).user.tenant_id);
+    const companyId = Number((req as any).user.company_id);
+    if (!tenantId || !companyId) {
+      return res.status(400).json({ success: false, message: '회사 정보가 없습니다.' });
+    }
+
+    const company = await Company.findOne({
+      where: { id: companyId, tenant_id: tenantId },
+    });
+    if (!company) {
+      return res.status(404).json({ success: false, message: '회사를 찾을 수 없습니다.' });
+    }
+
+    const companySettings = (company.settings || {}) as Record<string, unknown>;
+    const backupSettings = (companySettings.backup || {}) as Record<string, unknown>;
+    const retentionDays = Number(backupSettings.retentionDays) || 30;
+
+    const {
+      createDatabaseBackup,
+      cleanupOldBackups,
+      getBackupRootDir,
+      listDatabaseBackups,
+    } = await import('../services/databaseBackupService');
+
+    const backupFile = await createDatabaseBackup(tenantId);
+    const removedCount = cleanupOldBackups(tenantId, retentionDays);
+    const lastBackup = backupFile.createdAt;
+
+    const nextSettings = {
+      ...companySettings,
+      backup: {
+        ...backupSettings,
+        lastBackup,
+        lastBackupFile: backupFile.filename,
+      },
+    };
+    await company.update({ settings: nextSettings as any });
+
     res.json({
       success: true,
-      message: '백업이 시작되었습니다.',
+      message: '데이터베이스 백업이 완료되었습니다.',
       data: {
-        backupId: `backup_${Date.now()}`,
-        startedAt: new Date().toISOString(),
-        status: 'in_progress'
-      }
+        ...backupFile,
+        storagePath: getBackupRootDir(),
+        removedOldFiles: removedCount,
+        files: listDatabaseBackups(tenantId),
+        lastBackup,
+      },
     });
   } catch (error: any) {
     console.error('백업 실행 오류:', error);
     res.status(500).json({
       success: false,
-      message: '백업 실행 중 오류가 발생했습니다.',
-      error: process.env.NODE_ENV === 'development' ? error?.message : undefined
+      message: error?.message || '백업 실행 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error?.message : undefined,
+    });
+  }
+});
+
+// 백업 파일 목록
+router.get('/backups', authenticateToken, requireRole(['root']), async (req, res) => {
+  try {
+    const tenantId = Number((req as any).user.tenant_id);
+    const { listDatabaseBackups, getBackupRootDir } = await import('../services/databaseBackupService');
+    res.json({
+      success: true,
+      data: {
+        storagePath: getBackupRootDir(),
+        files: listDatabaseBackups(tenantId),
+      },
+    });
+  } catch (error: any) {
+    console.error('백업 목록 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '백업 목록 조회 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error?.message : undefined,
+    });
+  }
+});
+
+// 백업 파일 다운로드
+router.get('/backups/:filename/download', authenticateToken, requireRole(['root']), async (req, res) => {
+  try {
+    const tenantId = Number((req as any).user.tenant_id);
+    const { resolveBackupFilePath } = await import('../services/databaseBackupService');
+    const filePath = resolveBackupFilePath(tenantId, req.params.filename);
+    if (!filePath) {
+      return res.status(404).json({ success: false, message: '백업 파일을 찾을 수 없습니다.' });
+    }
+
+    res.download(filePath, path.basename(filePath));
+  } catch (error: any) {
+    console.error('백업 다운로드 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '백업 다운로드 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error?.message : undefined,
     });
   }
 });
