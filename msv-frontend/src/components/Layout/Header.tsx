@@ -56,7 +56,17 @@ interface CalendarScheduleItem {
   type: 'normal' | 'company_holiday';
 }
 
-const Header: React.FC = () => {
+interface HeaderProps {
+  showMobileNav?: boolean;
+  mobileNavOpen?: boolean;
+  onMobileNavToggle?: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({
+  showMobileNav = false,
+  mobileNavOpen = false,
+  onMobileNavToggle,
+}) => {
   const { user, logout } = useStore();
   const { language, setLanguage } = useMenuStore();
   const { t } = useTranslation();
@@ -301,9 +311,26 @@ const Header: React.FC = () => {
           }
         }}
       >
+        {showMobileNav ? (
+          <IconButton
+            edge="start"
+            color="inherit"
+            aria-label={mobileNavOpen ? (language === 'en' ? 'Close menu' : '메뉴 닫기') : (language === 'en' ? 'Open menu' : '메뉴 열기')}
+            onClick={onMobileNavToggle}
+            sx={{
+              mr: 0.5,
+              color: 'text.primary',
+              borderRadius: '10px',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+          >
+            <MenuIcon />
+          </IconButton>
+        ) : null}
+
         {/* 왼쪽: 회사 로고 및 회사명 */}
         {companyInfo && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mr: 4 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 1.5 }, mr: { xs: 1, sm: 4 }, minWidth: 0 }}>
             {companyInfo.logo ? (
               <Box
                 sx={{
@@ -348,9 +375,13 @@ const Header: React.FC = () => {
               <Typography variant="h6" component="div" sx={{ 
                 fontWeight: 500, 
                 color: 'text.primary', 
-                fontSize: '1.0625rem',
+                fontSize: { xs: '0.9375rem', sm: '1.0625rem' },
                 letterSpacing: '-0.02em',
-                lineHeight: 1.25
+                lineHeight: 1.25,
+                display: { xs: 'none', sm: 'block' },
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}>
                 {cleanCompanyName(companyInfo.name) || t('common.companyNameFallback')}
               </Typography>
@@ -362,7 +393,7 @@ const Header: React.FC = () => {
         <Box sx={{ flexGrow: 1 }} />
         
         {/* 알림 및 사용자 메뉴 */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.75, sm: 2 } }}>
           <Tooltip title={language === 'en' ? 'Notices' : '공지사항'}>
             <Button
               variant="text"
@@ -515,6 +546,7 @@ const Header: React.FC = () => {
             </Avatar>
           </IconButton>
 
+          {!showMobileNav ? (
           <Tooltip title={language === 'en' ? 'All menus' : '전체 메뉴'}>
             <IconButton
               size="small"
@@ -537,6 +569,7 @@ const Header: React.FC = () => {
               <MenuIcon sx={{ fontSize: '1.125rem' }} />
             </IconButton>
           </Tooltip>
+          ) : null}
           
           <Menu
             id="notification-menu"

@@ -10,14 +10,14 @@ export const mvsPageShellSx: SxProps<Theme> = {
   maxWidth: '100%',
   margin: 0,
   boxSizing: 'border-box',
-  py: '32px',
-  px: { xs: '24px', sm: '40px' },
+  py: { xs: '16px', sm: '24px', md: '32px' },
+  px: { xs: '12px', sm: '24px', md: '40px' },
 };
 
 export const mvsMainSurfaceSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',
-  borderRadius: '24px',
-  padding: '32px',
+  borderRadius: { xs: '12px', sm: '18px', md: '24px' },
+  padding: { xs: '16px', sm: '24px', md: '32px' },
   boxShadow: '0 4px 16px rgba(15, 23, 42, 0.09)',
   border: '1px solid #B8C4D0',
   boxSizing: 'border-box',
@@ -42,9 +42,9 @@ export const mvsInnerCardSx: SxProps<Theme> = {
 
 export const mvsFilterToolbarSx: MvsStyleObject = {
   backgroundColor: '#F0F4F8',
-  borderRadius: '18px',
-  padding: '16px',
-  marginBottom: '24px',
+  borderRadius: { xs: '12px', sm: '18px' },
+  padding: { xs: '12px', sm: '16px' },
+  marginBottom: { xs: '16px', sm: '24px' },
   border: '1px solid #C5CED9',
   boxShadow: 'none',
 };
@@ -79,10 +79,18 @@ export const mvsSearchZoneSx: MvsStyleObject = mvsFilterToolbarSx;
 
 export const mvsTableZoneSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',
-  borderRadius: '20px',
-  padding: '18px',
+  borderRadius: { xs: '14px', sm: '20px' },
+  padding: { xs: '12px', sm: '18px' },
   boxShadow: '0 4px 14px rgba(15, 23, 42, 0.07)',
   border: '1px solid #C5CED9',
+};
+
+/** 모바일에서 넓은 테이블 가로 스크롤 */
+export const mvsTableScrollSx: SxProps<Theme> = {
+  width: '100%',
+  maxWidth: '100%',
+  overflowX: 'auto',
+  WebkitOverflowScrolling: 'touch',
 };
 
 /** 필터 아래 테이블을 살짝 띄워 구분 (전자결재·고객정보 등과 동일 계열) */
@@ -128,7 +136,7 @@ export const mvsTableHeadHighlightSx: SxProps<Theme> = (theme) => {
 };
 
 export const mvsPageTitleSx: SxProps<Theme> = {
-  fontSize: '22px',
+  fontSize: { xs: '18px', sm: '20px', md: '22px' },
   fontWeight: 700,
   lineHeight: 1.3,
   letterSpacing: '-0.02em',

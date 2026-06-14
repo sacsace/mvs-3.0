@@ -52,6 +52,7 @@ interface SidebarProps {
   open: boolean;
   onClose: () => void;
   onToggle?: () => void;
+  isMobile?: boolean;
   width?: number;
   onWidthChange?: (width: number) => void;
   autoCollapseEnabled?: boolean;
@@ -106,7 +107,8 @@ const routeMatchesMenuPath = (currentPath: string, route?: string) =>
 
 const Sidebar: React.FC<SidebarProps> = ({
   open,
-  onClose: _onClose,
+  onClose,
+  isMobile = false,
   width = 280,
   onWidthChange,
   autoCollapseEnabled = false,
@@ -120,8 +122,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   const startXRef = useRef<number>(0);
   const startWidthRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
-  const isExpandedVisual = !autoCollapseEnabled || !isCollapsed || peekOpen;
-  const isCompact = autoCollapseEnabled && !isExpandedVisual;
+  const isExpandedVisual = isMobile || !autoCollapseEnabled || !isCollapsed || peekOpen;
+  const isCompact = !isMobile && autoCollapseEnabled && !isExpandedVisual;
   const effectiveWidth = isExpandedVisual ? sidebarWidth : collapsedWidth;
   const leaveTimerRef = useRef<number | null>(null);
   const peekCloseTimerRef = useRef<number | null>(null);
@@ -552,7 +554,9 @@ const Sidebar: React.FC<SidebarProps> = ({
       handleMenuToggle(menu.id);
     } else if (menu.route) {
       navigate(menu.route);
-      // 사이드바 닫기 비활성화 (데스크톱에서 항상 열린 상태 유지)
+      if (isMobile) {
+        onClose();
+      }
     }
   };
 
@@ -720,6 +724,136 @@ const Sidebar: React.FC<SidebarProps> = ({
       : `width ${SIDEBAR_WIDTH_TRANSITION_MS}ms ${SIDEBAR_WIDTH_EASING}, box-shadow ${SIDEBAR_WIDTH_TRANSITION_MS}ms ${SIDEBAR_WIDTH_EASING}`,
   };
 
+  const mobileDrawerPaperSx = {
+    width: Math.min(sidebarWidth, 300),
+    maxWidth: '85vw',
+    boxSizing: 'border-box' as const,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    top: `${SIDEBAR_TOP_PX}px`,
+    height: SIDEBAR_HEIGHT_CALC,
+    minHeight: SIDEBAR_HEIGHT_CALC,
+    backgroundColor: '#F7F8FA',
+    borderRight: '1px solid #C5CED9',
+    overflowX: 'hidden' as const,
+  };
+
+  const drawerBody = (
+    <Box
+      sx={{
+        flexGrow: 1,
+        overflow: 'auto',
+        backgroundColor: '#F7F8FA',
+        p: 1.5,
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <List sx={{ flexGrow: 1, p: 0 }}>
+        {menusWithoutNotice
+          .filter((menu: Menu) => {
+            const menuName = language === 'ko' ? menu.name_ko : menu.name_en;
+            return menuName !== '시스템관리' && menuName !== 'System Management';
+          })
+          .map((menu: Menu) => renderMenuItem(menu))}
+      </List>
+
+      <Box
+        sx={{
+          mt: 'auto',
+          p: 2,
+          textAlign: 'center',
+          backgroundColor: '#F7F8FA',
+          flexShrink: 0,
+          position: 'relative',
+        }}
+      >
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{
+            fontSize: '0.75rem',
+            opacity: isExpandedVisual ? 0.7 : 0,
+            display: 'block',
+            transition: `opacity ${SIDEBAR_WIDTH_TRANSITION_MS - 60}ms ${SIDEBAR_WIDTH_EASING} 90ms`,
+          }}
+        >
+          © {new Date().getFullYear()}{' '}
+          <Link
+            href="https://www.msventures.in"
+            target="_blank"
+            rel="noopener noreferrer"
+            underline="none"
+            color="inherit"
+            sx={{
+              fontSize: 'inherit',
+              cursor: 'pointer',
+              '&:hover': {
+                color: 'inherit',
+                textDecoration: 'none',
+              },
+              '&:visited': {
+                color: 'inherit',
+              },
+            }}
+          >
+            Minsub Ventures
+          </Link>
+        </Typography>
+      </Box>
+    </Box>
+  );
+
+  if (isMobile) {
+    if (loading) {
+      return (
+        <Drawer
+          variant="temporary"
+          anchor="left"
+          open={open}
+          onClose={onClose}
+          ModalProps={{ keepMounted: true }}
+          sx={{ '& .MuiDrawer-paper': mobileDrawerPaperSx }}
+        >
+          <Box sx={{ p: 2, textAlign: 'center' }}>
+            <Typography>메뉴 로딩 중...</Typography>
+          </Box>
+        </Drawer>
+      );
+    }
+
+    if (error) {
+      return (
+        <Drawer
+          variant="temporary"
+          anchor="left"
+          open={open}
+          onClose={onClose}
+          ModalProps={{ keepMounted: true }}
+          sx={{ '& .MuiDrawer-paper': mobileDrawerPaperSx }}
+        >
+          <Box sx={{ p: 2, textAlign: 'center' }}>
+            <Typography color="error">{error}</Typography>
+          </Box>
+        </Drawer>
+      );
+    }
+
+    return (
+      <Drawer
+        variant="temporary"
+        anchor="left"
+        open={open}
+        onClose={onClose}
+        ModalProps={{ keepMounted: true }}
+        sx={{ '& .MuiDrawer-paper': mobileDrawerPaperSx }}
+      >
+        {drawerBody}
+      </Drawer>
+    );
+  }
+
   if (loading) {
     return (
       <Box sx={{ position: 'relative' }}>
@@ -788,69 +922,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           '& .MuiDrawer-paper': drawerPaperSx,
         }}
       >
-      {/* 메뉴 리스트 - 헤더 바로 아래부터 시작, 전체 높이 사용 */}
-      <Box sx={{ 
-        flexGrow: 1, 
-        overflow: 'auto',
-        backgroundColor: '#F7F8FA',
-        p: 1.5,
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
-        <List sx={{ flexGrow: 1, p: 0 }}>
-          {menusWithoutNotice
-            .filter((menu: Menu) => {
-              // 시스템관리 메뉴 제외 (기본정보관리의 시스템 설정과 동일한 기능)
-              const menuName = language === 'ko' ? menu.name_ko : menu.name_en;
-              return menuName !== '시스템관리' && menuName !== 'System Management';
-            })
-            .map((menu: Menu) => renderMenuItem(menu))}
-        </List>
-        
-        {/* 저작권 정보 - 메뉴 영역 내부 하단 고정 */}
-        <Box sx={{ 
-          mt: 'auto', 
-          p: 2, 
-          textAlign: 'center',
-          backgroundColor: '#F7F8FA',
-          flexShrink: 0,
-          position: 'relative'
-        }}>
-          <Typography 
-            variant="caption" 
-            color="text.secondary"
-            sx={{ 
-              fontSize: '0.75rem',
-              opacity: isExpandedVisual ? 0.7 : 0,
-              display: 'block',
-              transition: `opacity ${SIDEBAR_WIDTH_TRANSITION_MS - 60}ms ${SIDEBAR_WIDTH_EASING} 90ms`,
-            }}
-          >
-            © {new Date().getFullYear()}{' '}
-            <Link
-              href="https://www.msventures.in"
-              target="_blank"
-              rel="noopener noreferrer"
-              underline="none"
-              color="inherit"
-              sx={{
-                fontSize: 'inherit',
-                cursor: 'pointer',
-                '&:hover': {
-                  color: 'inherit',
-                  textDecoration: 'none',
-                },
-                '&:visited': {
-                  color: 'inherit',
-                },
-              }}
-            >
-              Minsub Ventures
-            </Link>
-          </Typography>
-        </Box>
-      </Box>
+        {drawerBody}
       </Drawer>
       {/* 리사이즈 핸들 */}
       <Box

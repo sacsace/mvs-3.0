@@ -64,7 +64,7 @@ const MvsPageHeader: React.FC<MvsPageHeaderProps> = ({
         width: '100%',
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25, flex: '1 1 280px', minWidth: 0 }}>
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25, flex: { xs: '1 1 100%', sm: '1 1 280px' }, minWidth: 0 }}>
         {backTo || onBack ? (
           <IconButton
             size="small"
@@ -118,8 +118,9 @@ const MvsPageHeader: React.FC<MvsPageHeaderProps> = ({
             display: 'flex',
             flexWrap: 'wrap',
             gap: 1,
-            justifyContent: 'flex-end',
+            justifyContent: { xs: 'flex-start', sm: 'flex-end' },
             flexShrink: 0,
+            width: { xs: '100%', sm: 'auto' },
             maxWidth: { xs: '100%', sm: '58%' },
           }}
         >

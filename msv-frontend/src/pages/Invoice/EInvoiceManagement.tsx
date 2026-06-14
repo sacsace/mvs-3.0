@@ -1347,7 +1347,7 @@ const EInvoiceManagement: React.FC = () => {
             <Alert severity="info" sx={{ mb: 3 }}>
               {t('eInvoiceManagement.gst.irpWorkflow')}
             </Alert>
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 3 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: 3 }}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

@@ -1249,7 +1249,7 @@ const InventoryManagement: React.FC = () => {
           bgcolor: 'background.paper',
         }}
       >
-        <TableContainer sx={{ width: '100%', maxWidth: '100%', overflowX: 'hidden', bgcolor: 'transparent' }}>
+        <TableContainer sx={{ width: '100%', maxWidth: '100%', overflowX: 'auto', bgcolor: 'transparent' }}>
           <Table
             size="small"
             sx={{

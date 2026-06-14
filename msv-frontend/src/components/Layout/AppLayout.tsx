@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Box, Alert, Typography, Button, CircularProgress } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { Box, Alert, Typography, Button, CircularProgress, useMediaQuery } from '@mui/material';
+import { alpha, useTheme } from '@mui/material/styles';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from './Header';
 import Sidebar, { SIDEBAR_WIDTH_EASING, SIDEBAR_WIDTH_TRANSITION_MS } from './Sidebar';
@@ -27,7 +27,10 @@ const HEADER_MENU_GAP_PX = 8;
 const HEADER_LAYOUT_HEIGHT = 60;
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
+  const theme = useTheme();
+  const isMobileNav = useMediaQuery(theme.breakpoints.down('md'));
   const [sidebarOpen] = useState(true);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState<number>(280);
   const [autoCollapseEnabled, setAutoCollapseEnabled] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
@@ -45,9 +48,20 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   }, []);
 
   const handleSidebarToggle = () => {
-    // 사이드바 토글 비활성화 - 항상 열린 상태 유지
-    // setSidebarOpen(!sidebarOpen);
+    if (isMobileNav) {
+      setMobileNavOpen((prev) => !prev);
+    }
   };
+
+  useEffect(() => {
+    if (!isMobileNav) {
+      setMobileNavOpen(false);
+    }
+  }, [isMobileNav]);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     const handleAutoCollapseChange = (event: Event) => {
@@ -186,8 +200,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     }
   }, [location.pathname, menus, menusLoading, hasMenuPermission, user?.role, findMenuByRoute]);
 
-  const contentInsetLeft =
-    (autoCollapseEnabled && isSidebarCollapsed ? collapsedWidth : sidebarWidth) + WORK_AREA_OUTSET;
+  const contentInsetLeft = isMobileNav
+    ? WORK_AREA_OUTSET
+    : (autoCollapseEnabled && isSidebarCollapsed ? collapsedWidth : sidebarWidth) + WORK_AREA_OUTSET;
 
   const isWorkBoardChromeless =
     location.pathname === '/work/projects' ||
@@ -211,7 +226,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       }}
     >
       {/* 헤더 - 최상단 (fixed라 문서 높이 0 → 아래 스페이서로 본문 시작 위치 확보) */}
-      <Header />
+      <Header
+        showMobileNav={isMobileNav}
+        mobileNavOpen={mobileNavOpen}
+        onMobileNavToggle={handleSidebarToggle}
+      />
       <Box
         aria-hidden
         sx={{
@@ -238,9 +257,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       >
         {/* 사이드바 - 절대 위치로 고정 */}
         <Sidebar 
-          open={sidebarOpen} 
-          onClose={handleSidebarToggle} 
+          open={isMobileNav ? mobileNavOpen : sidebarOpen} 
+          onClose={() => setMobileNavOpen(false)} 
           onToggle={handleSidebarToggle}
+          isMobile={isMobileNav}
           width={sidebarWidth}
           onWidthChange={handleSidebarWidthChange}
           autoCollapseEnabled={autoCollapseEnabled}
@@ -269,23 +289,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             boxShadow: 'none',
             // 사이드바 너비 + 카드와의 간격(회색 띠가 보이도록)
             paddingLeft: `${contentInsetLeft}px`,
-            paddingRight: `${WORK_AREA_OUTSET + 8}px`,
-            paddingTop: `${HEADER_MENU_GAP_PX + 4}px`,
-            paddingBottom: `${WORK_AREA_OUTSET + 16}px`,
-            transition: `padding-left ${SIDEBAR_WIDTH_TRANSITION_MS}ms ${SIDEBAR_WIDTH_EASING}`,
-            // 반응형 패딩
-            '@media (max-width: 600px)': {
-              paddingLeft: `${Math.min(contentInsetLeft, 240 + WORK_AREA_OUTSET)}px`,
-              paddingRight: '8px',
-              paddingTop: `${HEADER_MENU_GAP_PX}px`,
-              paddingBottom: '16px',
-            },
-            '@media (min-width: 600px) and (max-width: 960px)': {
-              paddingLeft: `${Math.min(contentInsetLeft, 260 + WORK_AREA_OUTSET)}px`,
-              paddingRight: '16px',
-              paddingTop: `${HEADER_MENU_GAP_PX}px`,
-              paddingBottom: '24px',
-            },
+            paddingRight: { xs: 1, sm: 1.5, md: `${WORK_AREA_OUTSET + 8}px` },
+            paddingTop: { xs: 0.75, sm: `${HEADER_MENU_GAP_PX + 4}px` },
+            paddingBottom: { xs: 1.5, sm: 2, md: `${WORK_AREA_OUTSET + 16}px` },
+            transition: isMobileNav
+              ? 'none'
+              : `padding-left ${SIDEBAR_WIDTH_TRANSITION_MS}ms ${SIDEBAR_WIDTH_EASING}`,
             // CSS-in-JS로 즉시 적용되는 스타일
             '& > *': {
               width: '100%',
@@ -300,7 +309,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               maxWidth: '100%',
               mx: 0,
               backgroundColor: isWorkBoardChromeless ? 'transparent' : 'workArea.main',
-              borderRadius: isWorkBoardChromeless ? 0 : '24px',
+              borderRadius: isWorkBoardChromeless ? 0 : { xs: '12px', sm: '18px', md: '24px' },
               boxShadow: isWorkBoardChromeless ? 'none' : '0 4px 16px rgba(15, 23, 42, 0.08)',
               border: isWorkBoardChromeless ? 'none' : '1px solid #C5CED9',
               ...(isWorkBoardChromeless

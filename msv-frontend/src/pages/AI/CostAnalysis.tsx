@@ -586,7 +586,7 @@ const CostAnalysis: React.FC = () => {
 
       {/* 예측 분석 탭 */}
       <TabPanel value={activeTab} index={2}>
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 3 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: 3 }}>
           <Card elevation={0} sx={{ ...mvsInnerCardSx, ...cardShellSx }}>
             <CardContent sx={{ py: 2.75, px: { xs: 2.25, sm: 3 }, '&:last-child': { pb: 2.75 } }}>
               <Typography component="h2" variant="h6" sx={sectionTitleSx}>

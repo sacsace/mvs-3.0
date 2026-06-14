@@ -1560,7 +1560,7 @@ const WorkReport: React.FC = () => {
           bgcolor: 'background.paper',
         }}
       >
-        <TableContainer sx={{ bgcolor: 'transparent' }}>
+        <TableContainer sx={{ bgcolor: 'transparent', width: '100%', maxWidth: '100%', overflowX: 'auto' }}>
           <Table
             sx={{
               borderCollapse: 'collapse',

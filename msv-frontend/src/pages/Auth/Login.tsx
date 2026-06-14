@@ -504,9 +504,6 @@ const Login: React.FC = () => {
               >
                 {loading ? t('common.loading') : t('login.loginButton')}
               </Button>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textAlign: 'center', mt: 1 }}>
-                {i18n.language === 'en' ? 'Press Enter to sign in' : 'Enter 키로 로그인'}
-              </Typography>
 
               <Button
                 fullWidth

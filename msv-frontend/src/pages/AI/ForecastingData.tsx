@@ -403,7 +403,7 @@ const ForecastingData: React.FC = () => {
 
       {/* 수요 예측 탭 */}
       <TabPanel value={activeTab} index={1}>
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 3 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: 3 }}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -547,7 +547,7 @@ const ForecastingData: React.FC = () => {
 
       {/* 리스크 분석 탭 */}
       <TabPanel value={activeTab} index={3}>
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 3 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: 3 }}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -626,7 +626,7 @@ const ForecastingData: React.FC = () => {
 
       {/* AI 인사이트 탭 */}
       <TabPanel value={activeTab} index={4}>
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 3 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: 3 }}>
           {forecastingData?.aiInsights?.map((insight, index) => (
             <Card key={index}>
               <CardContent>

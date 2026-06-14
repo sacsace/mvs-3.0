@@ -478,7 +478,7 @@ const EfficiencyMetrics: React.FC = () => {
 
       {/* 리소스 활용 탭 */}
       <TabPanel value={activeTab} index={2}>
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 3 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: 3 }}>
           <Card>
             <CardContent>
               <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -564,7 +564,7 @@ const EfficiencyMetrics: React.FC = () => {
 
       {/* AI 추천 탭 */}
       <TabPanel value={activeTab} index={3}>
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 3 }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 400px), 1fr))', gap: 3 }}>
           {efficiencyData?.aiRecommendations?.map((recommendation, index) => (
             <Card key={index}>
               <CardContent>

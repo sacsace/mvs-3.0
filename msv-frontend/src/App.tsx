@@ -17,6 +17,7 @@ import ProtectedRoute from './components/Auth/ProtectedRoute';
 import ErrorDialog from './components/Common/ErrorDialog';
 import NotificationSnackbar from './components/Common/NotificationSnackbar';
 import ErrorBoundary from './components/Common/ErrorBoundary';
+import AppInstallBanner from './components/Common/AppInstallBanner';
 import UnderDevelopment from './components/Common/UnderDevelopment';
 import ComingSoon from './components/Common/ComingSoon';
 import { lazyPage } from './components/Common/LazyPage';
@@ -172,6 +173,7 @@ function App() {
       <ErrorBoundary>
         <ErrorDialog />
         <NotificationSnackbar />
+        <AppInstallBanner />
         <Router>
           <Routes>
           {/* 인증 관련 라우트 */}
