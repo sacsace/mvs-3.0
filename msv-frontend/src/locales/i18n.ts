@@ -2648,7 +2648,7 @@ const ko = {
           {
             title: '제8조 (문의)',
             paragraphs: [
-              '서비스 이용과 관련한 문의는 고객센터 페이지 또는 minsubl@gmail.com 으로 연락해 주세요.'
+              '서비스 이용과 관련한 문의는 고객센터 페이지 또는 info@msventures.in 으로 연락해 주세요.'
             ]
           }
         ]
@@ -2696,14 +2696,14 @@ const ko = {
           {
             title: '6. 이용자의 권리',
             paragraphs: [
-              '이용자는 언제든지 자신의 개인정보에 대해 열람, 정정, 삭제, 처리 정지를 요청할 수 있습니다. 요청은 고객센터 또는 infor@msventures.in 으로 접수할 수 있습니다.'
+              '이용자는 언제든지 자신의 개인정보에 대해 열람, 정정, 삭제, 처리 정지를 요청할 수 있습니다. 요청은 고객센터 또는 info@msventures.in 으로 접수할 수 있습니다.'
             ]
           },
           {
             title: '7. 개인정보 보호 책임자',
             paragraphs: [
               '· 담당: Minsub Ventures Private Limited',
-              '· 이메일: infor@msventures.in',
+              '· 이메일: info@msventures.in',
               '· 웹사이트: www.msventures.in'
             ]
           }
@@ -2713,7 +2713,7 @@ const ko = {
         title: '고객센터',
         intro: 'MVS 서비스 이용 중 궁금한 점이나 기술 지원이 필요하시면 아래 채널로 문의해 주세요.',
         emailLabel: '이메일',
-        emailValue: 'minsubl@gmail.com',
+        emailValue: 'info@msventures.in',
         websiteLabel: '웹사이트',
         websiteValue: 'www.msventures.in',
         hoursLabel: '운영 시간',
@@ -5635,7 +5635,7 @@ const en = {
           {
             title: 'Article 8 (Contact)',
             paragraphs: [
-              'For service-related inquiries, please use the Customer Center page or email minsubl@gmail.com.'
+              'For service-related inquiries, please use the Customer Center page or email info@msventures.in.'
             ]
           }
         ]
@@ -5683,14 +5683,14 @@ const en = {
           {
             title: '6. Your Rights',
             paragraphs: [
-              'You may request access, correction, deletion, or suspension of processing of your personal information via the Customer Center or infor@msventures.in.'
+              'You may request access, correction, deletion, or suspension of processing of your personal information via the Customer Center or info@msventures.in.'
             ]
           },
           {
             title: '7. Privacy Officer',
             paragraphs: [
               '· Organization: Minsub Ventures Private Limited',
-              '· Email: infor@msventures.in',
+              '· Email: info@msventures.in',
               '· Website: www.msventures.in'
             ]
           }
@@ -5700,7 +5700,7 @@ const en = {
         title: 'Customer Center',
         intro: 'If you have questions or need technical support while using MVS, please contact us through the channels below.',
         emailLabel: 'Email',
-        emailValue: 'minsubl@gmail.com',
+        emailValue: 'info@msventures.in',
         websiteLabel: 'Website',
         websiteValue: 'www.msventures.in',
         hoursLabel: 'Business hours',
