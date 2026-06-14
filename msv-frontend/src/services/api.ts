@@ -89,6 +89,10 @@ const authStorage = {
 };
 const SESSION_WARNING_MS = 30 * 1000; // 30초
 const SESSION_CHECK_INTERVAL_MS = 5 * 1000; // 5초
+
+/** 동일 429 안내가 errorStore에 반복 적재되지 않도록 */
+let lastRateLimitNoticeAt = 0;
+const RATE_LIMIT_NOTICE_COOLDOWN_MS = 60 * 1000;
 const REFRESH_COOLDOWN_MS = 10 * 1000; // 10초
 const ACTIVITY_REFRESH_WINDOW_MS = 2 * 60 * 1000; // 만료 2분 전부터 활동 기반 연장
 const ACTIVITY_RECENT_WINDOW_MS = 5 * 60 * 1000; // 최근 5분 활동은 "사용 중"으로 간주
@@ -453,27 +457,36 @@ api.interceptors.response.use(
     const listFetchStatus = error.response?.status;
     if (
       isCollectionListGet(error.config) &&
-      (listFetchStatus === 404 || (listFetchStatus != null && listFetchStatus >= 500))
+      (listFetchStatus === 404 ||
+        listFetchStatus === 429 ||
+        (listFetchStatus != null && listFetchStatus >= 500))
     ) {
-      console.warn('목록 조회 실패 → 빈 목록으로 처리:', error.config?.method, error.config?.url);
+      if (listFetchStatus === 429) {
+        console.warn('목록 조회 한도 초과 → 빈 목록으로 처리:', error.config?.method, error.config?.url);
+      } else {
+        console.warn('목록 조회 실패 → 빈 목록으로 처리:', error.config?.method, error.config?.url);
+      }
       return Promise.resolve(createEmptyListAxiosResponse(error.config));
+    }
+
+    // 429 Rate Limit — 1분에 한 번만 안내 (errorStore 100건 누적 방지)
+    if (!skipErrorPopup && error.response?.status === 429) {
+      const now = Date.now();
+      if (now - lastRateLimitNoticeAt >= RATE_LIMIT_NOTICE_COOLDOWN_MS) {
+        lastRateLimitNoticeAt = now;
+        const errorStore = useErrorStore.getState();
+        errorStore.showError(
+          '요청 한도 초과',
+          '너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요.',
+          undefined,
+          'warning'
+        );
+      }
+      return Promise.reject(error);
     }
 
     // 일반 에러 처리 - 팝업으로 표시
     // 인증 오류가 아니고, 로그인 API가 아닌 경우에만 팝업 표시
-    // 로그인 API는 로그인 페이지에서 직접 오류 메시지를 표시하므로 팝업을 표시하지 않음
-    // 429 Rate Limit 오류는 특별 처리 (재시도 안내)
-    if (!skipErrorPopup && error.response?.status === 429) {
-      const errorStore = useErrorStore.getState();
-      errorStore.showError(
-        '요청 한도 초과',
-        '너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요.',
-        undefined,
-        'warning'
-      );
-      return Promise.reject(error);
-    }
-    
     if (!skipErrorPopup && error.response?.status !== 401 && error.response?.status !== 403 && !isLoginEndpoint) {
       const errorStore = useErrorStore.getState();
       const errorMessage = error.response?.data?.message || error.message || '알 수 없는 오류가 발생했습니다.';
@@ -622,6 +635,17 @@ export const userService = {
       return response.data;
     } catch (error) {
       console.error('사용자 목록 조회 오류:', error);
+      throw error;
+    }
+  },
+
+  getNextEmployeeNumber: async (companyId?: number) => {
+    try {
+      const params = companyId != null ? { company_id: companyId } : undefined;
+      const response = await api.get('/users/next-employee-number', { params });
+      return response.data;
+    } catch (error) {
+      console.error('사원번호 미리보기 오류:', error);
       throw error;
     }
   }

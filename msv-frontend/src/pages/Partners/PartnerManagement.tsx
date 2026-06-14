@@ -46,6 +46,25 @@ import { partnerService } from '../../services/api';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+import { mvsSearchFieldSx } from '../../theme/mvsLayout';
+
+const partnerFilterLabelSx = {
+  color: 'text.secondary',
+  fontWeight: 600,
+  mb: 0.5,
+  display: 'block',
+  fontSize: '0.75rem',
+  lineHeight: '18px',
+  minHeight: 18,
+};
+
+const partnerFilterSelectSx = {
+  borderRadius: '12px',
+  bgcolor: '#FFFFFF',
+  height: 40,
+  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
+};
 
 const PARTNER_MENU_ROUTES = ['/basic-info/partners', '/basic-info'] as const;
 
@@ -508,52 +527,52 @@ const PartnerManagement: React.FC = () => {
         }}
       >
         <CardContent sx={{ py: 2, px: 2, '&:last-child': { pb: 2 } }}>
-          <Box sx={{ 
-            display: 'flex', 
-            gap: 2, 
-            alignItems: 'flex-end', 
-            flexWrap: 'wrap',
-            flexDirection: { xs: 'column', sm: 'row' }
-          }}>
-            <TextField
-              placeholder={t('partnerManagement.searchPlaceholder')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              disabled={menuFlags.menusLoading || !menuFlags.canRead}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{ 
-                minWidth: { xs: '100%', sm: 300 },
-                flex: { xs: '1 1 100%', sm: '1 1 auto' },
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '12px',
-                  bgcolor: 'background.paper',
-                  '& fieldset': { borderColor: '#C5CED9' },
-                  '&:hover fieldset': { borderColor: '#B8C4D0' },
-                },
-              }}
-            />
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-              <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary', fontWeight: 500 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr' },
+              gap: 2,
+              alignItems: 'flex-end',
+              ...mvsSearchFieldSx,
+            }}
+          >
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="caption" sx={partnerFilterLabelSx}>
+                {t('partnerManagement.searchLabel')}
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder={t('partnerManagement.searchPlaceholder')}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    height: 40,
+                    bgcolor: '#FFFFFF',
+                    '& .MuiOutlinedInput-input': { py: 0 },
+                  },
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="caption" sx={partnerFilterLabelSx}>
                 {t('partnerManagement.status')}
               </Typography>
-              <FormControl sx={{ minWidth: { xs: '100%', sm: 120 }, width: { xs: '100%', sm: 'auto' } }} disabled={menuFlags.menusLoading || !menuFlags.canRead}>
+              <FormControl fullWidth size="small" disabled={menuFlags.menusLoading || !menuFlags.canRead}>
                 <Select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
                   displayEmpty
-                  sx={{
-                    height: '40px',
-                    borderRadius: '12px',
-                    bgcolor: 'background.paper',
-                    '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
-                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
-                  }}
+                  sx={partnerFilterSelectSx}
                 >
                   <MenuItem value="all">{t('partnerManagement.allStatus')}</MenuItem>
                   <MenuItem value="active">{t('partnerManagement.active')}</MenuItem>
@@ -562,29 +581,23 @@ const PartnerManagement: React.FC = () => {
                 </Select>
               </FormControl>
             </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-              <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary', fontWeight: 500 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="caption" sx={partnerFilterLabelSx}>
                 {t('partnerManagement.companyType')}
               </Typography>
-              <FormControl sx={{ minWidth: { xs: '100%', sm: 120 }, width: { xs: '100%', sm: 'auto' } }} disabled={menuFlags.menusLoading || !menuFlags.canRead}>
+              <FormControl fullWidth size="small" disabled={menuFlags.menusLoading || !menuFlags.canRead}>
                 <Select
-                    value={typeFilter}
-                    onChange={(e) => setTypeFilter(e.target.value)}
-                    displayEmpty
-                    sx={{
-                      height: '40px',
-                      borderRadius: '12px',
-                      bgcolor: 'background.paper',
-                      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
-                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
-                    }}
-                  >
-                    <MenuItem value="all">{t('partnerManagement.allTypes')}</MenuItem>
-                    <MenuItem value="partner">{t('partnerManagement.typePartner')}</MenuItem>
-                    <MenuItem value="customer">{t('partnerManagement.typeCustomer')}</MenuItem>
-                    <MenuItem value="customer_partner">{t('partnerManagement.typeCustomerPartner')}</MenuItem>
-                    <MenuItem value="other">{t('partnerManagement.typeOther')}</MenuItem>
-                  </Select>
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  displayEmpty
+                  sx={partnerFilterSelectSx}
+                >
+                  <MenuItem value="all">{t('partnerManagement.allTypes')}</MenuItem>
+                  <MenuItem value="partner">{t('partnerManagement.typePartner')}</MenuItem>
+                  <MenuItem value="customer">{t('partnerManagement.typeCustomer')}</MenuItem>
+                  <MenuItem value="customer_partner">{t('partnerManagement.typeCustomerPartner')}</MenuItem>
+                  <MenuItem value="other">{t('partnerManagement.typeOther')}</MenuItem>
+                </Select>
               </FormControl>
             </Box>
           </Box>

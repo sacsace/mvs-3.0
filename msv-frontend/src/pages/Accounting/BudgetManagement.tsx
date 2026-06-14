@@ -69,7 +69,26 @@ import { useStore } from '../../store';
 import { api, accountingService } from '../../services/api';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import { mvsSearchFieldSx } from '../../theme/mvsLayout';
 import * as XLSX from 'xlsx';
+
+const budgetFilterLabelSx = {
+  color: 'text.secondary',
+  fontWeight: 600,
+  mb: 0.5,
+  display: 'block',
+  fontSize: '0.75rem',
+  lineHeight: '18px',
+  minHeight: 18,
+};
+
+const budgetFilterSelectSx = {
+  borderRadius: '12px',
+  bgcolor: '#FFFFFF',
+  height: 40,
+  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
+};
 
 interface BudgetItem {
   id: number;
@@ -915,28 +934,48 @@ const BudgetManagement: React.FC = () => {
         <CardContent>
           <Box sx={{ 
             display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', sm: (user?.role === 'root' || user?.role === 'audit') ? '2fr 1fr 1fr 1fr' : '2fr 1fr 1fr' },
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm:
+                canSelectCompany
+                  ? 'minmax(160px, 2fr) minmax(130px, 1fr) minmax(110px, 1fr) minmax(110px, 1fr) auto'
+                  : 'minmax(160px, 2fr) minmax(110px, 1fr) minmax(110px, 1fr) auto',
+            },
             gap: 2, 
-            alignItems: 'flex-end' 
+            alignItems: 'flex-end',
+            ...mvsSearchFieldSx,
           }}>
-            <TextField
-              fullWidth
-              placeholder="예산명, 예산번호, 기간 검색..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                ),
-              }}
-            />
-            {(user?.role === 'root' || user?.role === 'audit') && (
-              <FormControl fullWidth>
-                <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="caption" sx={budgetFilterLabelSx}>
+                검색
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder="예산명, 예산번호, 기간 검색..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    height: 40,
+                    '& .MuiOutlinedInput-input': { py: 0 },
+                  },
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Box>
+            {canSelectCompany && (
+              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                <Typography variant="caption" sx={budgetFilterLabelSx}>
                   회사
                 </Typography>
+                <FormControl fullWidth size="small">
                   <Select
                     value={selectedCompanyId}
                     onChange={(e) => {
@@ -949,26 +988,28 @@ const BudgetManagement: React.FC = () => {
                       }
                     }}
                     displayEmpty
-                    sx={{ height: '40px' }}
+                    sx={budgetFilterSelectSx}
                   >
-                  <MenuItem value="">전체 회사</MenuItem>
-                  {companies.map((company) => (
-                    <MenuItem key={company.id} value={company.id}>
-                      {company.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+                    <MenuItem value="">전체 회사</MenuItem>
+                    {companies.map((company) => (
+                      <MenuItem key={company.id} value={company.id}>
+                        {company.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
             )}
-            <FormControl fullWidth>
-              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="caption" sx={budgetFilterLabelSx}>
                 상태
               </Typography>
+              <FormControl fullWidth size="small">
               <Select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 displayEmpty
-                sx={{ height: '40px' }}
+                sx={budgetFilterSelectSx}
               >
                 <MenuItem value="all">전체 상태</MenuItem>
                 <MenuItem value="draft">초안</MenuItem>
@@ -979,15 +1020,17 @@ const BudgetManagement: React.FC = () => {
                 <MenuItem value="cancelled">취소됨</MenuItem>
               </Select>
             </FormControl>
-            <FormControl fullWidth>
-              <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+            </Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="caption" sx={budgetFilterLabelSx}>
                 유형
               </Typography>
+              <FormControl fullWidth size="small">
               <Select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
                 displayEmpty
-                sx={{ height: '40px' }}
+                sx={budgetFilterSelectSx}
               >
                 <MenuItem value="all">전체 유형</MenuItem>
                 <MenuItem value="annual">연간</MenuItem>
@@ -996,19 +1039,36 @@ const BudgetManagement: React.FC = () => {
                 <MenuItem value="project">프로젝트</MenuItem>
               </Select>
             </FormControl>
-            <Button
-              variant="outlined"
-              startIcon={<FilterIcon />}
-              onClick={() => {
-                setSearchTerm('');
-                setStatusFilter('all');
-                setTypeFilter('all');
-                setSelectedCompanyId('');
-              }}
-              sx={{ height: '40px' }}
-            >
-              초기화
-            </Button>
+            </Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography
+                variant="caption"
+                sx={{ ...budgetFilterLabelSx, visibility: 'hidden', userSelect: 'none' }}
+                aria-hidden
+              >
+                초기화
+              </Typography>
+              <Button
+                variant="outlined"
+                startIcon={<FilterIcon />}
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('all');
+                  setTypeFilter('all');
+                  setSelectedCompanyId('');
+                }}
+                sx={{
+                  height: 40,
+                  whiteSpace: 'nowrap',
+                  minWidth: 'fit-content',
+                  px: 2,
+                  borderRadius: '12px',
+                  textTransform: 'none',
+                }}
+              >
+                초기화
+              </Button>
+            </Box>
           </Box>
         </CardContent>
       </Card>

@@ -46,7 +46,7 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import { useStore, useMenuStore } from '../../store';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
-import { api, departmentService } from '../../services/api';
+import { api, departmentService, userService } from '../../services/api';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useTranslation } from 'react-i18next';
@@ -136,55 +136,82 @@ function formatIfscDisplay(stored: string): string {
   return parts.join(' ');
 }
 
-/** 생성/수정 폼 아코디언 — 카드형 셸 */
-function getAccordionFormSx(theme: Theme) {
+/** 전화번호 저장값: 공백 제거 후 숫자만, 최대 10자 */
+function normalizePhoneDigits(raw: string): string {
+  return String(raw ?? '')
+    .replace(/\s/g, '')
+    .replace(/\D/g, '')
+    .slice(0, 10);
+}
+
+/** 전화번호 표시: 10자리, 5+공백+5 (예: 12345 67890) */
+function formatPhoneDisplay(digitsOnly: string): string {
+  const d = normalizePhoneDigits(digitsOnly);
+  if (!d) return '';
+  if (d.length <= 5) return d;
+  return `${d.slice(0, 5)} ${d.slice(5)}`;
+}
+
+/** 생성/수정 폼 아코디언 — 구분선 최소화 */
+function getAccordionFormSx(_theme: Theme) {
   return {
     '&:before': { display: 'none' },
-    boxShadow: '0 4px 22px rgba(15, 23, 42, 0.06)',
-    border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'dark' ? 0.35 : 0.1)}`,
-    borderRadius: '16px',
-    mb: 1.75,
-    bgcolor: 'background.paper',
-    overflow: 'hidden' as const,
+    boxShadow: 'none',
+    border: 'none',
+    borderRadius: 0,
+    mb: 0,
+    bgcolor: 'transparent',
+    overflow: 'visible' as const,
     '& .MuiAccordionSummary-root': {
-      minHeight: 52,
-      py: 1.25,
-      px: 1.25,
+      minHeight: 40,
+      py: 0,
+      px: 0,
+      bgcolor: 'transparent',
+      borderBottom: 'none',
+      '&.Mui-expanded': { minHeight: 40 },
     },
+    '& .MuiAccordionSummary-content': { my: 0.5 },
     '& .MuiAccordionDetails-root': {
-      pt: 0.5,
+      pt: 1.5,
       pb: 2.5,
-      px: { xs: 2, sm: 2.75 },
+      px: 0,
+    },
+    '&.MuiAccordion-root:not(:first-of-type)': {
+      mt: 2.5,
     },
   };
 }
 
+const userFormSectionTitleSx = {
+  fontSize: '0.9375rem',
+  fontWeight: 700,
+  letterSpacing: '-0.01em',
+  color: 'text.primary',
+} as const;
+
 const highlightPayrollFieldsSx = {
-  p: { xs: 1.5, sm: 2 },
-  borderRadius: '14px',
-  border: '1px solid',
-  borderColor: (theme: Theme) => alpha(theme.palette.divider, 0.85),
-  bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, 0.035),
+  display: 'flex',
+  flexDirection: 'column' as const,
+  gap: 1.5,
+  width: '100%',
   boxSizing: 'border-box' as const,
 };
 
-/** 부서·직책 행 강조 */
+/** 부서·직책 행 */
 const highlightDeptPositionRowSx = {
-  p: { xs: 1.5, sm: 1.75 },
-  borderRadius: '14px',
-  bgcolor: (theme: Theme) => alpha(theme.palette.primary.main, 0.06),
-  border: '1px solid',
-  borderColor: (theme: Theme) => alpha(theme.palette.divider, 0.75),
+  width: '100%',
   boxSizing: 'border-box' as const,
 };
 
-/** 인사 정보 필드 라벨 — 한 단계 작게 */
+/** 폼 필드 라벨 — 필터·검색 영역과 동일 토큰 */
 const hrFieldLabelSx = {
-  fontSize: '0.8125rem',
+  color: 'text.secondary',
   fontWeight: 600,
-  lineHeight: 1.25,
-  mb: 0.375,
-  color: 'text.primary'
+  mb: 0.5,
+  display: 'block',
+  fontSize: '0.75rem',
+  lineHeight: '18px',
+  minHeight: 18,
 } as const;
 
 const hrHintSx = {
@@ -195,42 +222,41 @@ const hrHintSx = {
 } as const;
 
 const highlightBankFieldsSx = {
-  p: { xs: 1.5, sm: 2 },
-  borderRadius: '14px',
-  border: '1px solid',
-  borderColor: (theme: Theme) => alpha(theme.palette.divider, 0.85),
-  bgcolor: (theme: Theme) => alpha(theme.palette.success.main, theme.palette.mode === 'dark' ? 0.08 : 0.04),
+  display: 'grid',
+  gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+  gap: 2,
+  alignItems: 'flex-start',
   boxSizing: 'border-box' as const,
 };
 
-/** 폼 내 TextField·Select 공통 — 라운드·연한 필 배경 */
+/** 폼 내 TextField·Select 공통 — 흰 배경·40px·#C5CED9 테두리 */
 function getFormControlSurfaceSx(theme: Theme) {
-  const fill = alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.12 : 0.07);
-  const fillHover = alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.16 : 0.1);
   return {
     '& .MuiOutlinedInput-root': {
       borderRadius: '12px',
-      bgcolor: fill,
-      transition: theme.transitions.create(['background-color', 'box-shadow'], { duration: 150 }),
-      '&:hover': { bgcolor: fillHover },
-      '&.Mui-focused': {
-        bgcolor: theme.palette.background.paper,
-        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}`,
+      bgcolor: 'background.paper',
+      transition: theme.transitions.create(['border-color', 'box-shadow'], { duration: 150 }),
+      '&:not(.MuiInputBase-multiline)': { height: 40 },
+      '& .MuiOutlinedInput-notchedOutline': {
+        borderColor: '#C5CED9',
+      },
+      '&:hover .MuiOutlinedInput-notchedOutline': {
+        borderColor: '#B8C4D0',
       },
       '& fieldset': {
-        borderColor: alpha(theme.palette.divider, 0.9),
+        borderColor: '#C5CED9',
       },
       '&:hover fieldset': {
-        borderColor: alpha(theme.palette.text.primary, 0.12),
+        borderColor: '#B8C4D0',
+      },
+      '&.Mui-focused': {
+        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}`,
       },
     },
-    '& .MuiOutlinedInput-notchedOutline': {
-      borderWidth: '1px',
-    },
-    '& .MuiInputBase-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-      borderWidth: '1px',
-    },
+    '& .MuiInputBase-input:not(.MuiInputBase-inputMultiline)': { py: 0 },
+    '& .MuiSelect-select': { display: 'flex', alignItems: 'center', py: '10px' },
     '& .MuiFormControl-root': { width: '100%' },
+    '& .MuiFormHelperText-root': { mx: 0, mt: 0.5 },
   };
 }
 
@@ -360,6 +386,31 @@ const UserManagement: React.FC = () => {
   });
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [previewEmployeeNumberLoading, setPreviewEmployeeNumberLoading] = useState(false);
+
+  const fetchNextEmployeeNumber = useCallback(async (companyId?: number) => {
+    if (user?.role === 'root' && !companyId) {
+      setFormData((prev) => ({ ...prev, employee_number: '' }));
+      return;
+    }
+    setPreviewEmployeeNumberLoading(true);
+    try {
+      const response = await userService.getNextEmployeeNumber(companyId);
+      if (response?.success) {
+        const nextNumber = response.data?.employee_number || '';
+        setFormData((prev) => ({ ...prev, employee_number: nextNumber }));
+      }
+    } catch (err) {
+      console.error('사원번호 미리보기 오류:', err);
+    } finally {
+      setPreviewEmployeeNumberLoading(false);
+    }
+  }, [user?.role]);
+
+  const loginUserCompanyId = useMemo(() => {
+    const id = user?.company_id;
+    return id != null && id > 0 ? id : undefined;
+  }, [user?.company_id]);
 
   const fetchCompanies = useCallback(async () => {
     try {
@@ -479,6 +530,11 @@ const UserManagement: React.FC = () => {
   }, [menusLoading, pageTab, viewMode, hrElevated, userMgmtMenuFlags.canCreate, userMgmtMenuFlags.canView]);
 
   useEffect(() => {
+    if (pageTab !== 1 || viewMode !== 'create' || editingUser) return;
+    void fetchNextEmployeeNumber((formData as { company_id?: number }).company_id);
+  }, [pageTab, viewMode, editingUser, (formData as { company_id?: number }).company_id, fetchNextEmployeeNumber]);
+
+  useEffect(() => {
     // 검색어나 회사 필터가 변경되면 사용자 목록 다시 조회
     const timer = setTimeout(() => {
       fetchUsers();
@@ -517,7 +573,7 @@ const UserManagement: React.FC = () => {
       role: 'user',
       status: 'active',
     is_payment_officer: false,
-    company_id: undefined
+    company_id: loginUserCompanyId
     } as any);
     setPageTab(1);
     setViewMode('create');
@@ -742,6 +798,7 @@ const UserManagement: React.FC = () => {
         if (user?.role === 'root' && (formData as any).company_id) {
           submitData.company_id = (formData as any).company_id;
         }
+        submitData.employee_number = '';
         await api.post('/users', submitData);
         setSuccess(t('userManagement.userCreated'));
       }
@@ -882,7 +939,7 @@ const UserManagement: React.FC = () => {
     }}>
       {/* 상단 네비게이션 탭 */}
       {/* 헤더 */}
-      <Box sx={{ mb: 3 }}>
+      <Box sx={{ mb: pageTab === 0 && viewMode === 'list' ? 3 : 1.5 }}>
         <Box
           sx={{
             display: 'flex',
@@ -968,12 +1025,33 @@ const UserManagement: React.FC = () => {
             sx={{
               minHeight: 48,
               px: 0.5,
+              bgcolor: '#F0F4F8',
+              '& .MuiTabs-indicator': {
+                height: 3,
+                borderRadius: '3px 3px 0 0',
+                bgcolor: 'primary.main',
+              },
               '& .MuiTab-root': {
                 textTransform: 'none',
-                fontWeight: 600,
+                fontWeight: 500,
                 fontSize: '0.875rem',
                 minHeight: 48,
                 letterSpacing: '-0.01em',
+                color: 'text.secondary',
+                transition: theme.transitions.create(['color', 'background-color'], { duration: 180 }),
+                '&:hover': {
+                  color: 'text.primary',
+                  bgcolor: alpha(theme.palette.common.white, 0.55),
+                },
+              },
+              '& .MuiTab-root.Mui-selected': {
+                color: 'primary.main',
+                fontWeight: 700,
+                bgcolor: '#FFFFFF',
+              },
+              '& .MuiTab-root.Mui-disabled': {
+                color: 'text.disabled',
+                fontWeight: 500,
               },
             }}
             onChange={(e, newValue) => {
@@ -1032,16 +1110,21 @@ const UserManagement: React.FC = () => {
         </Card>
       </Box>
 
-      {/* 검색 및 필터 — 탭 전환 시 높이 유지(공간 예약) */}
-      <Box sx={{ mb: 3, minHeight: 48 }}>
+      {/* 검색 및 필터 */}
+      {pageTab === 0 && viewMode === 'list' && (
+      <Box sx={{ mb: 2, minHeight: 48 }}>
         <Box
           sx={{
-            display: 'flex',
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              md:
+                user?.role === 'root'
+                  ? 'minmax(0, 1fr) minmax(0, 1fr) auto'
+                  : 'minmax(0, 1fr) auto',
+            },
             gap: 2,
-            flexWrap: { xs: 'wrap', md: 'nowrap' },
             alignItems: 'center',
-            visibility: pageTab === 0 && viewMode === 'list' ? 'visible' : 'hidden',
-            pointerEvents: pageTab === 0 && viewMode === 'list' ? 'auto' : 'none'
           }}
         >
           <TextField
@@ -1049,21 +1132,32 @@ const UserManagement: React.FC = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             size="small"
-            sx={{ flex: 1, minWidth: { xs: '100%', sm: 200 } }}
+            fullWidth
+            sx={{
+              minWidth: 0,
+              '& .MuiOutlinedInput-root': { height: 40 },
+            }}
             InputProps={{
               startAdornment: (
                 <Box sx={{ mr: 1, display: 'flex', alignItems: 'center' }}>
                   <PersonIcon fontSize="small" color="action" />
                 </Box>
-              )
+              ),
             }}
           />
           {user?.role === 'root' && (
-            <FormControl sx={{ minWidth: 200 }} size="small">
+            <FormControl fullWidth size="small" sx={{ minWidth: 0 }}>
               <Select
                 value={selectedCompanyId}
                 onChange={(e) => setSelectedCompanyId(e.target.value as number | '')}
                 displayEmpty
+                sx={{
+                  height: 40,
+                  bgcolor: '#FFFFFF',
+                  borderRadius: '12px',
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
+                }}
               >
                 <MenuItem value="">{t('userManagement.allCompanies')}</MenuItem>
                 {companies.map((company) => (
@@ -1074,7 +1168,7 @@ const UserManagement: React.FC = () => {
               </Select>
             </FormControl>
           )}
-          <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0, justifySelf: { xs: 'start', md: 'auto' } }}>
             <Checkbox
               checked={showInactive}
               onChange={(e) => setShowInactive(e.target.checked)}
@@ -1086,6 +1180,7 @@ const UserManagement: React.FC = () => {
           </Box>
         </Box>
       </Box>
+      )}
 
       {/* 알림 */}
       {error && (
@@ -1353,67 +1448,89 @@ const UserManagement: React.FC = () => {
 
       {/* 사용자 생성/편집 폼 (본문에 표시) */}
       {pageTab === 1 && (viewMode === 'create' || viewMode === 'edit') && (
-        <Card
-          elevation={0}
-          sx={{
-            borderRadius: '20px',
-            border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'dark' ? 0.35 : 0.1)}`,
-            boxShadow: '0 4px 24px rgba(15, 23, 42, 0.06)',
-            overflow: 'hidden',
-            maxWidth: '100%',
-            boxSizing: 'border-box',
-          }}
-        >
-          <CardContent sx={{ py: 2.75, px: { xs: 2, sm: 3 }, '&:last-child': { pb: 2.75 } }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, mb: 2.5, flexWrap: 'wrap' }}>
-              <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'text.primary' }}>
-                {editingUser ? t('userManagement.editUserTitle') : t('userManagement.createUserTitle')}
-              </Typography>
-              <Button
-                variant="text"
-                onClick={() => {
-                  setPageTab(0);
-                  setViewMode('list');
-                  setEditingUser(null);
-                }}
-                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, color: 'primary.main' }}
-              >
-                {t('userManagement.backToList')}
-              </Button>
-            </Box>
-            <form onSubmit={handleSubmit}>
-              <Box sx={{ p: { xs: 0, sm: 0.5 }, pt: 0, ...getFormControlSurfaceSx(theme) }}>
+        <Box sx={{ width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              gap: 2,
+              mb: 2.5,
+              flexWrap: 'wrap',
+            }}
+          >
+            <Typography
+              component="h2"
+              sx={{
+                fontSize: '1.125rem',
+                fontWeight: 700,
+                letterSpacing: '-0.02em',
+                color: 'text.primary',
+                lineHeight: 1.3,
+              }}
+            >
+              {editingUser ? t('userManagement.editUserTitle') : t('userManagement.createUserTitle')}
+            </Typography>
+            <Button
+              variant="text"
+              onClick={() => {
+                setPageTab(0);
+                setViewMode('list');
+                setEditingUser(null);
+              }}
+              sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, color: 'primary.main', flexShrink: 0 }}
+            >
+              {t('userManagement.backToList')}
+            </Button>
+          </Box>
+          <form onSubmit={handleSubmit}>
+            <Box sx={getFormControlSurfaceSx(theme)}>
               {/* 기본 정보 섹션 */}
               <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography component="h3" sx={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                  <Typography component="h3" sx={userFormSectionTitleSx}>
                     {t('userManagement.sectionBasic')}
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Box sx={{ 
-                    display: 'grid', 
+                  <Box sx={{
+                    display: 'grid',
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 2.25,
+                    gap: 2,
                   }}>
                     <Box>
-                      <Box sx={{ mb: 1.25 }}>
-                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                      <Box>
+                        <Typography variant="caption" sx={hrFieldLabelSx}>
                           {t('userManagement.employeeNumber')}
                         </Typography>
                         <TextField
                           fullWidth
                           variant="outlined"
-                          value={formData.employee_number}
-                          onChange={(e) => setFormData({ ...formData, employee_number: e.target.value })}
-                          placeholder={editingUser ? t('userManagement.placeholderEmployeeEdit') : t('userManagement.placeholderEmployeeAuto')}
-                          helperText={!editingUser ? t('userManagement.helperEmployeeAuto') : ''}
+                          value={
+                            previewEmployeeNumberLoading && !editingUser
+                              ? t('common.loading')
+                              : formData.employee_number
+                          }
+                          disabled
+                          helperText={
+                            !editingUser
+                              ? user?.role === 'root' && !(formData as { company_id?: number }).company_id
+                                ? t('userManagement.helperEmployeePending')
+                                : t('userManagement.helperEmployeeAuto')
+                              : ''
+                          }
+                          sx={{
+                            '& .MuiInputBase-input.Mui-disabled': {
+                              WebkitTextFillColor: theme.palette.text.primary,
+                              color: 'text.primary',
+                            },
+                          }}
                         />
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 1.25 }}>
-                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                      <Box>
+                        <Typography variant="caption" sx={hrFieldLabelSx}>
                           {t('userManagement.name')} <span style={{ color: 'red' }}>*</span>
                         </Typography>
                         <TextField
@@ -1426,8 +1543,8 @@ const UserManagement: React.FC = () => {
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 1.25 }}>
-                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                      <Box>
+                        <Typography variant="caption" sx={hrFieldLabelSx}>
                           {t('userManagement.dateOfBirth')}
                         </Typography>
                         <TextField
@@ -1441,8 +1558,8 @@ const UserManagement: React.FC = () => {
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 1.25 }}>
-                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                      <Box>
+                        <Typography variant="caption" sx={hrFieldLabelSx}>
                           {t('userManagement.gender')}
                         </Typography>
                         <FormControl fullWidth>
@@ -1460,22 +1577,23 @@ const UserManagement: React.FC = () => {
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 1.25 }}>
-                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                      <Box>
+                        <Typography variant="caption" sx={hrFieldLabelSx}>
                           {t('userManagement.phoneNumber')}
                         </Typography>
                         <TextField
                           fullWidth
                           variant="outlined"
-                          value={formData.phone}
-                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                          value={formatPhoneDisplay(formData.phone)}
+                          onChange={(e) => setFormData({ ...formData, phone: normalizePhoneDigits(e.target.value) })}
                           placeholder={t('userManagement.phonePlaceholder')}
+                          inputProps={{ inputMode: 'numeric', maxLength: 11, autoComplete: 'off' }}
                         />
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 1.25 }}>
-                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                      <Box>
+                        <Typography variant="caption" sx={hrFieldLabelSx}>
                           {t('userManagement.email')} <span style={{ color: 'red' }}>*</span>
                         </Typography>
                         <TextField
@@ -1495,9 +1613,9 @@ const UserManagement: React.FC = () => {
                         />
                       </Box>
                     </Box>
-                    <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
-                      <Box sx={{ mb: 1.25 }}>
-                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                    <Box>
+                      <Box>
+                        <Typography variant="caption" sx={hrFieldLabelSx}>
                           {t('userManagement.address')}
                         </Typography>
                         <TextField
@@ -1505,14 +1623,12 @@ const UserManagement: React.FC = () => {
                           variant="outlined"
                           value={formData.address}
                           onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                          multiline
-                          rows={2}
                         />
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 1.25 }}>
-                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                      <Box>
+                        <Typography variant="caption" sx={hrFieldLabelSx}>
                           {t('userManagement.emergencyContactName')}
                         </Typography>
                         <TextField
@@ -1525,16 +1641,17 @@ const UserManagement: React.FC = () => {
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 1.25 }}>
-                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                      <Box>
+                        <Typography variant="caption" sx={hrFieldLabelSx}>
                           {t('userManagement.emergencyContactPhone')}
                         </Typography>
                         <TextField
                           fullWidth
                           variant="outlined"
-                          value={formData.emergency_phone}
-                          onChange={(e) => setFormData({ ...formData, emergency_phone: e.target.value })}
+                          value={formatPhoneDisplay(formData.emergency_phone)}
+                          onChange={(e) => setFormData({ ...formData, emergency_phone: normalizePhoneDigits(e.target.value) })}
                           placeholder={t('userManagement.phonePlaceholder')}
+                          inputProps={{ inputMode: 'numeric', maxLength: 11, autoComplete: 'off' }}
                         />
                       </Box>
                     </Box>
@@ -1545,14 +1662,14 @@ const UserManagement: React.FC = () => {
               {/* 인사 정보 섹션 */}
               <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography component="h3" sx={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                  <Typography component="h3" sx={userFormSectionTitleSx}>
                     {t('userManagement.sectionHr')}
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                     <Box sx={{ width: '100%' }}>
-                      <Typography sx={hrFieldLabelSx}>{t('userManagement.hireDate')}</Typography>
+                      <Typography variant="caption" sx={hrFieldLabelSx}>{t('userManagement.hireDate')}</Typography>
                       <TextField
                         fullWidth
                         size="small"
@@ -1561,9 +1678,6 @@ const UserManagement: React.FC = () => {
                         value={formData.hire_date}
                         onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
                         InputLabelProps={{ shrink: true }}
-                        sx={{
-                          '& .MuiInputBase-input': { fontSize: '0.8125rem', py: 0.875 }
-                        }}
                       />
                     </Box>
                     <Box
@@ -1587,13 +1701,12 @@ const UserManagement: React.FC = () => {
                         }}
                       >
                         <Box sx={{ width: '100%', minWidth: 0 }}>
-                          <Typography sx={hrFieldLabelSx}>{t('userManagement.employmentType')}</Typography>
+                          <Typography variant="caption" sx={hrFieldLabelSx}>{t('userManagement.employmentType')}</Typography>
                           <FormControl fullWidth size="small">
                             <Select
                               value={formData.employment_type}
                               onChange={(e) => setFormData({ ...formData, employment_type: e.target.value })}
                               displayEmpty
-                              sx={{ fontSize: '0.8125rem', '& .MuiSelect-select': { py: 0.875 } }}
                               MenuProps={{
                                 PaperProps: {
                                   sx: { maxHeight: 320, '& .MuiMenuItem-root': { fontSize: '0.8125rem' } }
@@ -1611,7 +1724,7 @@ const UserManagement: React.FC = () => {
                           </FormControl>
                         </Box>
                         <Box sx={{ width: '100%', minWidth: 0 }}>
-                          <Typography sx={hrFieldLabelSx}>{t('userManagement.salary')}</Typography>
+                          <Typography variant="caption" sx={hrFieldLabelSx}>{t('userManagement.salary')}</Typography>
                           <TextField
                             fullWidth
                             size="small"
@@ -1620,7 +1733,6 @@ const UserManagement: React.FC = () => {
                             value={formData.salary}
                             onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
                             placeholder={t('userManagement.placeholderMonthlySalary')}
-                            sx={{ '& .MuiInputBase-input': { fontSize: '0.8125rem', py: 0.875 } }}
                             InputProps={{
                               endAdornment: (
                                 <Typography sx={{ fontSize: '0.75rem', mr: 0.75 }}>INR</Typography>
@@ -1641,7 +1753,7 @@ const UserManagement: React.FC = () => {
                           }}
                         >
                           <Box sx={{ width: '100%', minWidth: 0 }}>
-                            <Typography sx={hrFieldLabelSx}>{t('userManagement.department')}</Typography>
+                            <Typography variant="caption" sx={hrFieldLabelSx}>{t('userManagement.department')}</Typography>
                             <FormControl fullWidth size="small">
                               <Select
                                 value={formData.department_id === '' ? '' : String(formData.department_id)}
@@ -1660,7 +1772,6 @@ const UserManagement: React.FC = () => {
                                   }
                                 }}
                                 displayEmpty
-                                sx={{ fontSize: '0.8125rem', '& .MuiSelect-select': { py: 0.875 } }}
                                 renderValue={(selected) => {
                                   if (selected === '') {
                                     return (
@@ -1695,7 +1806,7 @@ const UserManagement: React.FC = () => {
                             </Typography>
                           </Box>
                           <Box sx={{ width: '100%', minWidth: 0 }}>
-                            <Typography sx={hrFieldLabelSx}>{t('userManagement.positionTitle')}</Typography>
+                            <Typography variant="caption" sx={hrFieldLabelSx}>{t('userManagement.positionTitle')}</Typography>
                             <TextField
                               fullWidth
                               size="small"
@@ -1703,7 +1814,6 @@ const UserManagement: React.FC = () => {
                               value={formData.position}
                               onChange={(e) => setFormData({ ...formData, position: e.target.value })}
                               placeholder={t('userManagement.positionPlaceholder')}
-                              sx={{ '& .MuiInputBase-input': { fontSize: '0.8125rem', py: 0.875 } }}
                             />
                           </Box>
                         </Box>
@@ -1716,23 +1826,14 @@ const UserManagement: React.FC = () => {
               {/* 개인 은행 계좌 */}
               <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography component="h3" sx={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                  <Typography component="h3" sx={userFormSectionTitleSx}>
                     {t('userManagement.sectionBank')}
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Box
-                    sx={{
-                      ...highlightBankFieldsSx,
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-                      gap: 1.5,
-                      alignItems: 'flex-start',
-                      boxSizing: 'border-box'
-                    }}
-                  >
+                  <Box sx={highlightBankFieldsSx}>
                     <Box sx={{ width: '100%', minWidth: 0 }}>
-                      <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                      <Typography variant="caption" sx={hrFieldLabelSx}>
                         {t('userManagement.bankName')}
                       </Typography>
                       <TextField
@@ -1744,7 +1845,7 @@ const UserManagement: React.FC = () => {
                       />
                     </Box>
                     <Box sx={{ width: '100%', minWidth: 0 }}>
-                      <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                      <Typography variant="caption" sx={hrFieldLabelSx}>
                         {t('userManagement.accountNumber')}
                       </Typography>
                       <TextField
@@ -1762,7 +1863,7 @@ const UserManagement: React.FC = () => {
                       />
                     </Box>
                     <Box sx={{ width: '100%', minWidth: 0 }}>
-                      <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                      <Typography variant="caption" sx={hrFieldLabelSx}>
                         {t('userManagement.ifscCode')}
                       </Typography>
                       <TextField
@@ -1786,26 +1887,29 @@ const UserManagement: React.FC = () => {
               {/* 계정 정보 섹션 */}
               <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography component="h3" sx={{ fontSize: '1rem', fontWeight: 700, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                  <Typography component="h3" sx={userFormSectionTitleSx}>
                     {t('userManagement.sectionAccount')}
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Box sx={{ 
-                    display: 'grid', 
+                  <Box sx={{
+                    display: 'grid',
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 2.25,
+                    gap: 2,
                   }}>
                     {user?.role === 'root' && !editingUser && (
                       <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
-                        <Box sx={{ mb: 1.25 }}>
-                          <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                        <Box>
+                          <Typography variant="caption" sx={hrFieldLabelSx}>
                             {t('userManagement.companySelect')} <span style={{ color: 'red' }}>*</span>
                           </Typography>
                           <FormControl fullWidth>
                             <Select
                               value={(formData as any).company_id || ''}
-                              onChange={(e) => setFormData({ ...formData, company_id: e.target.value as number })}
+                              onChange={(e) => {
+                                const company_id = e.target.value as number;
+                                setFormData({ ...formData, company_id });
+                              }}
                               required
                             >
                               {companies.map((company) => (
@@ -1819,8 +1923,8 @@ const UserManagement: React.FC = () => {
                       </Box>
                     )}
                     <Box>
-                      <Box sx={{ mb: 1.25 }}>
-                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                      <Box>
+                        <Typography variant="caption" sx={hrFieldLabelSx}>
                           {t('userManagement.userId')} <span style={{ color: 'red' }}>*</span>
                         </Typography>
                         <TextField
@@ -1834,8 +1938,8 @@ const UserManagement: React.FC = () => {
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 1.25 }}>
-                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                      <Box>
+                        <Typography variant="caption" sx={hrFieldLabelSx}>
                           {t('userManagement.password')} {!editingUser && <span style={{ color: 'red' }}>*</span>}
                         </Typography>
                         <TextField
@@ -1850,8 +1954,8 @@ const UserManagement: React.FC = () => {
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 1.25 }}>
-                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                      <Box>
+                        <Typography variant="caption" sx={hrFieldLabelSx}>
                           {t('userManagement.roleLabel')} <span style={{ color: 'red' }}>*</span>
                         </Typography>
                         <FormControl fullWidth>
@@ -1871,8 +1975,8 @@ const UserManagement: React.FC = () => {
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 1.25 }}>
-                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                      <Box>
+                        <Typography variant="caption" sx={hrFieldLabelSx}>
                           {t('userManagement.statusLabel')}
                         </Typography>
                         <FormControl fullWidth>
@@ -1889,8 +1993,8 @@ const UserManagement: React.FC = () => {
                       </Box>
                     </Box>
                     <Box>
-                      <Box sx={{ mb: 1.25 }}>
-                        <Typography variant="body2" sx={{ mb: 0.5, fontWeight: 500, color: 'text.primary' }}>
+                      <Box>
+                        <Typography variant="caption" sx={hrFieldLabelSx}>
                           {t('userManagement.paymentOfficer')}
                         </Typography>
                         <FormControlLabel
@@ -1908,7 +2012,7 @@ const UserManagement: React.FC = () => {
                 </AccordionDetails>
               </Accordion>
             </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, mt: 3, pt: 2.5, borderTop: 1, borderColor: alpha(theme.palette.divider, 0.85) }}>
+              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, mt: 3, pt: 1 }}>
                 <Button
                   onClick={() => {
                     setPageTab(0);
@@ -1924,8 +2028,7 @@ const UserManagement: React.FC = () => {
                 </Button>
               </Box>
             </form>
-          </CardContent>
-        </Card>
+        </Box>
       )}
 
       {/* 사용자 상세 보기 다이얼로그 */}
@@ -2009,7 +2112,7 @@ const UserManagement: React.FC = () => {
                         {t('userManagement.phoneNumber')}
                       </Typography>
                       <Typography variant="body1" sx={userDetailValueSx}>
-                        {(selectedUser as any).phone || '-'}
+                        {formatPhoneDisplay((selectedUser as any).phone || '') || '-'}
                       </Typography>
                     </Box>
                     <Box>
@@ -2055,7 +2158,7 @@ const UserManagement: React.FC = () => {
                         {t('userManagement.emergencyContactPhone')}
                       </Typography>
                       <Typography variant="body1" sx={userDetailValueSx}>
-                        {(selectedUser as any).emergency_phone || '-'}
+                        {formatPhoneDisplay((selectedUser as any).emergency_phone || '') || '-'}
                       </Typography>
                     </Box>
                   </Box>

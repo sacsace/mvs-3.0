@@ -36,7 +36,7 @@ import { AutoAwesome as AutoAwesomeIcon, Download as DownloadIcon } from '@mui/i
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ComposedChart, Area, PieChart, Pie, Cell } from 'recharts';
 import { useMenuStore } from '../../store';
 import { api } from '../../services/api';
-import { mvsFilterToolbarSx, mvsInnerCardSx, mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
+import { mvsFilterToolbarSx, mvsSearchFieldSx, mvsInnerCardSx, mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
 
 // TabPanel 컴포넌트 정의
 interface TabPanelProps {
@@ -271,7 +271,7 @@ const CostAnalysis: React.FC = () => {
       )}
 
       {/* 필터 및 액션 */}
-      <Card elevation={0} sx={{ mb: 3, ...mvsFilterToolbarSx, ...filterBarSx }}>
+      <Card elevation={0} sx={{ mb: 3, ...mvsFilterToolbarSx, ...mvsSearchFieldSx, ...filterBarSx }}>
         <CardContent sx={{ py: 2.5, px: { xs: 2, sm: 2.5 }, '&:last-child': { pb: 2.5 } }}>
           <Box
             sx={{

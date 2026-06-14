@@ -46,9 +46,28 @@ import {
   Download as DownloadIcon
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { mvsSearchFieldSx } from '../../theme/mvsLayout';
 import { ewayBillService } from '../../services/api';
 import PromptDialog from '../../components/Common/PromptDialog';
 import { usePromptDialog } from '../../hooks/usePromptDialog';
+
+const eWayBillFilterLabelSx = {
+  color: 'text.secondary',
+  fontWeight: 600,
+  mb: 0.5,
+  display: 'block',
+  fontSize: '0.75rem',
+  lineHeight: '18px',
+  minHeight: 18,
+};
+
+const eWayBillFilterSelectSx = {
+  borderRadius: '12px',
+  bgcolor: '#FFFFFF',
+  height: 40,
+  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
+};
 
 interface EWayBillItem {
   id: number;
@@ -328,17 +347,6 @@ const EWayBillComponent: React.FC = () => {
     }),
     [theme]
   );
-  const softFieldSx = useMemo(
-    () => ({
-      '& .MuiOutlinedInput-root': {
-        borderRadius: '12px',
-        bgcolor: alpha(theme.palette.text.primary, 0.03),
-        '& fieldset': { borderColor: alpha(theme.palette.text.primary, 0.08) },
-      },
-    }),
-    [theme]
-  );
-
   // 샘플 데이터
   const sampleData = useMemo<EWayBill[]>(() => [
     {
@@ -1083,77 +1091,106 @@ const EWayBillComponent: React.FC = () => {
       {/* 필터 및 검색 */}
       <Card elevation={0} sx={shellCardSx}>
         <CardContent sx={{ py: 2.5 }}>
-          <Box sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr' },
-            gap: 2,
-            alignItems: 'center',
-          }}>
-            <TextField
-              fullWidth
-              placeholder={t('eWayBillManagement.filters.searchPlaceholder')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              sx={softFieldSx}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon color="action" />
-                  </InputAdornment>
-                ),
-              }}
-            />
-            <FormControl fullWidth>
-              <InputLabel>{t('eWayBillManagement.filters.status')}</InputLabel>
-              <Select
-                label={t('eWayBillManagement.filters.status')}
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr' },
+              gap: 2,
+              alignItems: 'flex-end',
+              ...mvsSearchFieldSx,
+            }}
+          >
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="caption" sx={eWayBillFilterLabelSx}>
+                {t('eWayBillManagement.filters.search')}
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder={t('eWayBillManagement.filters.searchPlaceholder')}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 sx={{
+                  '& .MuiOutlinedInput-root': {
+                    height: 40,
+                    '& .MuiOutlinedInput-input': { py: 0 },
+                  },
+                }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="caption" sx={eWayBillFilterLabelSx}>
+                {t('eWayBillManagement.filters.status')}
+              </Typography>
+              <FormControl fullWidth size="small">
+                <Select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  displayEmpty
+                  sx={eWayBillFilterSelectSx}
+                >
+                  <MenuItem value="">{t('eWayBillManagement.filters.all')}</MenuItem>
+                  <MenuItem value="draft">{t('eWayBillManagement.status.draft')}</MenuItem>
+                  <MenuItem value="generated">{t('eWayBillManagement.status.generated')}</MenuItem>
+                  <MenuItem value="active">{t('eWayBillManagement.status.active')}</MenuItem>
+                  <MenuItem value="expired">{t('eWayBillManagement.status.expired')}</MenuItem>
+                  <MenuItem value="cancelled">{t('eWayBillManagement.status.cancelled')}</MenuItem>
+                  <MenuItem value="rejected">{t('eWayBillManagement.status.rejected')}</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="caption" sx={eWayBillFilterLabelSx}>
+                {t('eWayBillManagement.filters.supplyType')}
+              </Typography>
+              <FormControl fullWidth size="small">
+                <Select
+                  value={supplyTypeFilter}
+                  onChange={(e) => setSupplyTypeFilter(e.target.value)}
+                  displayEmpty
+                  sx={eWayBillFilterSelectSx}
+                >
+                  <MenuItem value="">{t('eWayBillManagement.filters.all')}</MenuItem>
+                  <MenuItem value="outward">{t('eWayBillManagement.supply.outward')}</MenuItem>
+                  <MenuItem value="inward">{t('eWayBillManagement.supply.inward')}</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography
+                variant="caption"
+                sx={{ ...eWayBillFilterLabelSx, visibility: 'hidden', userSelect: 'none' }}
+                aria-hidden
+              >
+                {t('eWayBillManagement.actions.reset')}
+              </Typography>
+              <Button
+                variant="outlined"
+                startIcon={<FilterIcon />}
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('');
+                  setSupplyTypeFilter('');
+                }}
+                sx={{
+                  height: 40,
+                  whiteSpace: 'nowrap',
+                  minWidth: 'fit-content',
+                  px: 2,
                   borderRadius: '12px',
-                  bgcolor: alpha(theme.palette.text.primary, 0.03),
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: alpha(theme.palette.text.primary, 0.08) },
+                  textTransform: 'none',
                 }}
               >
-                <MenuItem value="">{t('eWayBillManagement.filters.all')}</MenuItem>
-                <MenuItem value="draft">{t('eWayBillManagement.status.draft')}</MenuItem>
-                <MenuItem value="generated">{t('eWayBillManagement.status.generated')}</MenuItem>
-                <MenuItem value="active">{t('eWayBillManagement.status.active')}</MenuItem>
-                <MenuItem value="expired">{t('eWayBillManagement.status.expired')}</MenuItem>
-                <MenuItem value="cancelled">{t('eWayBillManagement.status.cancelled')}</MenuItem>
-                <MenuItem value="rejected">{t('eWayBillManagement.status.rejected')}</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel>{t('eWayBillManagement.filters.supplyType')}</InputLabel>
-              <Select
-                label={t('eWayBillManagement.filters.supplyType')}
-                value={supplyTypeFilter}
-                onChange={(e) => setSupplyTypeFilter(e.target.value)}
-                sx={{
-                  borderRadius: '12px',
-                  bgcolor: alpha(theme.palette.text.primary, 0.03),
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: alpha(theme.palette.text.primary, 0.08) },
-                }}
-              >
-                <MenuItem value="">{t('eWayBillManagement.filters.all')}</MenuItem>
-                <MenuItem value="outward">{t('eWayBillManagement.supply.outward')}</MenuItem>
-                <MenuItem value="inward">{t('eWayBillManagement.supply.inward')}</MenuItem>
-              </Select>
-            </FormControl>
-            <Button
-              fullWidth
-              variant="outlined"
-              startIcon={<FilterIcon />}
-              onClick={() => {
-                setSearchTerm('');
-                setStatusFilter('');
-                setSupplyTypeFilter('');
-              }}
-              sx={{ textTransform: 'none', borderRadius: '12px', height: '56px' }}
-            >
-              {t('eWayBillManagement.actions.reset')}
-            </Button>
+                {t('eWayBillManagement.actions.reset')}
+              </Button>
+            </Box>
           </Box>
         </CardContent>
       </Card>

@@ -70,6 +70,25 @@ import { useNavigate } from 'react-router-dom';
 import { accountingService, API_BASE_URL, userService, partnerService } from '../../services/api';
 import QRCode from 'qrcode';
 import { useTranslation } from 'react-i18next';
+import { mvsSearchFieldSx } from '../../theme/mvsLayout';
+
+const expenseFilterLabelSx = {
+  color: 'text.secondary',
+  fontWeight: 600,
+  mb: 0.5,
+  display: 'block',
+  fontSize: '0.75rem',
+  lineHeight: '18px',
+  minHeight: 18,
+};
+
+const expenseFilterSelectSx = {
+  borderRadius: '12px',
+  bgcolor: '#FFFFFF',
+  height: 40,
+  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
+};
 
 interface ExpenseItem {
   id: string;
@@ -2191,111 +2210,93 @@ const ExpenseApproval: React.FC = () => {
 
       {/* 필터 및 검색 */}
       <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box sx={{ 
-            display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr' },
-            gap: 2, 
-            alignItems: 'center' 
-          }}>
-            <Box>
-              <InputLabel
-                shrink
-                sx={{
-                  visibility: 'hidden',
-                  position: 'static',
-                  transform: 'none',
-                  mb: 0.5,
-                  fontSize: '0.875rem'
-                }}
-              >
-                placeholder
-              </InputLabel>
+        <CardContent sx={{ py: 2.5, px: 2.5 }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'minmax(180px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) auto',
+              },
+              gap: 2,
+              alignItems: 'flex-end',
+              ...mvsSearchFieldSx,
+            }}
+          >
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="caption" sx={expenseFilterLabelSx}>
+                {t('expenseApproval.placeholders.searchSimple')}
+              </Typography>
               <TextField
                 fullWidth
                 size="small"
                 placeholder={t('expenseApproval.placeholders.search')}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    height: 40,
+                    '& .MuiOutlinedInput-input': { py: 0 },
+                  },
+                }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon />
+                      <SearchIcon fontSize="small" />
                     </InputAdornment>
                   ),
                 }}
-                sx={{ '& .MuiOutlinedInput-root': { height: '40px' } }}
               />
             </Box>
-            <FormControl fullWidth>
-              <InputLabel
-                shrink
-                sx={{
-                  position: 'static',
-                  transform: 'none',
-                  mb: 0.5,
-                  color: 'text.secondary',
-                  fontSize: '0.8rem'
-                }}
-              >
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="caption" sx={expenseFilterLabelSx}>
                 {t('expenseApproval.filters.status')}
-              </InputLabel>
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                displayEmpty
-                sx={{ height: '40px' }}
-              >
-                <MenuItem value="">{t('expenseApproval.filters.all')}</MenuItem>
-                <MenuItem value="draft">{t('expenseApproval.status.draft')}</MenuItem>
-                <MenuItem value="submitted">{t('expenseApproval.status.submitted')}</MenuItem>
-                <MenuItem value="in_review">{t('expenseApproval.status.inReview')}</MenuItem>
-                <MenuItem value="approved">{t('expenseApproval.status.approved')}</MenuItem>
-                <MenuItem value="rejected">{t('expenseApproval.status.rejected')}</MenuItem>
-                <MenuItem value="paid">{t('expenseApproval.status.paid')}</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel
-                shrink
-                sx={{
-                  position: 'static',
-                  transform: 'none',
-                  mb: 0.5,
-                  color: 'text.secondary',
-                  fontSize: '0.8rem'
-                }}
-              >
+              </Typography>
+              <FormControl fullWidth size="small">
+                <Select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  displayEmpty
+                  sx={expenseFilterSelectSx}
+                >
+                  <MenuItem value="">{t('expenseApproval.filters.all')}</MenuItem>
+                  <MenuItem value="draft">{t('expenseApproval.status.draft')}</MenuItem>
+                  <MenuItem value="submitted">{t('expenseApproval.status.submitted')}</MenuItem>
+                  <MenuItem value="in_review">{t('expenseApproval.status.inReview')}</MenuItem>
+                  <MenuItem value="approved">{t('expenseApproval.status.approved')}</MenuItem>
+                  <MenuItem value="rejected">{t('expenseApproval.status.rejected')}</MenuItem>
+                  <MenuItem value="paid">{t('expenseApproval.status.paid')}</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="caption" sx={expenseFilterLabelSx}>
                 {t('expenseApproval.filters.priority')}
-              </InputLabel>
-              <Select
-                value={priorityFilter}
-                onChange={(e) => setPriorityFilter(e.target.value)}
-                displayEmpty
-                sx={{ height: '40px' }}
+              </Typography>
+              <FormControl fullWidth size="small">
+                <Select
+                  value={priorityFilter}
+                  onChange={(e) => setPriorityFilter(e.target.value)}
+                  displayEmpty
+                  sx={expenseFilterSelectSx}
+                >
+                  <MenuItem value="">{t('expenseApproval.filters.all')}</MenuItem>
+                  <MenuItem value="low">{t('expenseApproval.priority.low')}</MenuItem>
+                  <MenuItem value="medium">{t('expenseApproval.priority.medium')}</MenuItem>
+                  <MenuItem value="high">{t('expenseApproval.priority.high')}</MenuItem>
+                  <MenuItem value="urgent">{t('expenseApproval.priority.urgent')}</MenuItem>
+                </Select>
+              </FormControl>
+            </Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography
+                variant="caption"
+                sx={{ ...expenseFilterLabelSx, visibility: 'hidden', userSelect: 'none' }}
+                aria-hidden
               >
-                <MenuItem value="">{t('expenseApproval.filters.all')}</MenuItem>
-                <MenuItem value="low">{t('expenseApproval.priority.low')}</MenuItem>
-                <MenuItem value="medium">{t('expenseApproval.priority.medium')}</MenuItem>
-                <MenuItem value="high">{t('expenseApproval.priority.high')}</MenuItem>
-                <MenuItem value="urgent">{t('expenseApproval.priority.urgent')}</MenuItem>
-              </Select>
-            </FormControl>
-            <Box>
-              <InputLabel
-                shrink
-                sx={{
-                  visibility: 'hidden',
-                  position: 'static',
-                  transform: 'none',
-                  mb: 0.5,
-                  fontSize: '0.875rem'
-                }}
-              >
-                placeholder
-              </InputLabel>
+                {t('expenseApproval.actions.reset')}
+              </Typography>
               <Button
-                fullWidth
                 variant="outlined"
                 startIcon={<FilterIcon />}
                 onClick={() => {
@@ -2303,7 +2304,14 @@ const ExpenseApproval: React.FC = () => {
                   setStatusFilter('');
                   setPriorityFilter('');
                 }}
-                sx={{ height: '40px' }}
+                sx={{
+                  height: 40,
+                  whiteSpace: 'nowrap',
+                  minWidth: 'fit-content',
+                  px: 2,
+                  borderRadius: '12px',
+                  textTransform: 'none',
+                }}
               >
                 {t('expenseApproval.actions.reset')}
               </Button>

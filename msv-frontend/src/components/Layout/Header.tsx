@@ -193,7 +193,7 @@ const Header: React.FC = () => {
     void loadServerNotifications();
     const intervalId = window.setInterval(() => {
       void loadServerNotifications();
-    }, 10000);
+    }, 30000);
 
     return () => {
       window.clearInterval(intervalId);
@@ -220,7 +220,7 @@ const Header: React.FC = () => {
     void loadInbox();
     const inboxInterval = window.setInterval(() => {
       void loadInbox();
-    }, 15000);
+    }, 45000);
     return () => {
       window.clearInterval(inboxInterval);
     };

@@ -30,7 +30,7 @@ import { ChevronLeft, ChevronRight } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { roomBookingService, roomTypeRoomService, roomTypeService } from '../../services/api';
 import RoomBookingManagement from '../Work/RoomBookingManagement';
-import { mvsFilterToolbarSx, mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
+import { mvsFilterToolbarSx, mvsSearchFieldSx, mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
 
 type BookingStatus = 'pending' | 'confirmed' | 'checked_in' | 'checked_out' | 'cancelled' | 'no_show';
 
@@ -705,6 +705,7 @@ const ReservationStatus: React.FC = () => {
           <Box
             sx={{
               ...mvsFilterToolbarSx,
+              ...mvsSearchFieldSx,
               display: 'grid',
               gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' },
               gap: 2,

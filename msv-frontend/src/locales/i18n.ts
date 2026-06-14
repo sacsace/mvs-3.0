@@ -65,7 +65,7 @@ const ko = {
       notification: '알림',
       detailShow: '상세 정보 보기',
       detailHide: '상세 정보 숨기기',
-      errorCount: '총 {{count}}개의 알림이 있습니다.',
+      errorCount: '총 {{count}}개의 오류가 있습니다.',
       errorCountTruncated: '(최근 100개만 표시됩니다)',
       languageKo: '한국어',
       languageEn: 'English',
@@ -422,6 +422,7 @@ const ko = {
       placeholderEmployeeEdit: '수정하려면 입력하세요',
       placeholderEmployeeAuto: '비워두면 자동 생성됩니다',
       helperEmployeeAuto: '회사명 약자와 시퀀스 번호로 자동 생성됩니다',
+      helperEmployeePending: '회사 선택 후 자동 생성된 번호가 표시됩니다',
       dateOfBirth: '생년월일',
       gender: '성별',
       selectPlaceholder: '선택하세요',
@@ -429,7 +430,7 @@ const ko = {
       genderFemale: '여성',
       genderOther: '기타',
       phoneNumber: '전화번호',
-      phonePlaceholder: '010-1234-5678',
+      phonePlaceholder: '12345 67890',
       address: '주소',
       emergencyContactName: '비상연락처 이름',
       emergencyContactPhone: '비상연락처 전화번호',
@@ -682,6 +683,7 @@ const ko = {
       excelImport: 'Excel 가져오기',
       addPartner: '파트너 추가',
       searchPlaceholder: '회사명, 대표자, 업종, 주소로 검색...',
+      searchLabel: '검색',
       status: '상태',
       allStatus: '전체 상태',
       companyType: '업체 유형',
@@ -814,7 +816,7 @@ const ko = {
     loginInfoManagement: {
       title: '로그인 정보',
       description:
-        '회사별로 세무·은행 등 외부 사이트와 MCA(Ministry of Corporate Affairs, 법인등기 등) 관련 로그인 ID·비밀번호·URL을 저장합니다. MSV 로그인 계정과는 별개입니다.',
+        '회사별 세무·은행·MCA(법인등기) 등 외부 사이트의 로그인 ID·비밀번호·URL을 저장하며, MSV 로그인 계정과는 별개입니다.',
       excelHint:
         '셀을 클릭해 바로 입력하면 저장됩니다. 엑셀에서 복사한 영역을 그리드에 붙여 넣을 수 있습니다. (구분·Login ID·비밀번호가 모두 있어야 저장됩니다.)',
       hints: {
@@ -1783,6 +1785,7 @@ const ko = {
         downloadPdf: 'PDF 다운로드'
       },
       filters: {
+        search: '검색',
         status: '상태',
         roomType: '객실 유형',
         payment: '결제 여부',
@@ -2113,6 +2116,7 @@ const ko = {
         analytics: '통계 및 분석'
       },
       filters: {
+        search: '검색',
         searchPlaceholder: 'E-Way Bill 번호, E-Invoice 번호, 운송업체명, GSTIN, 차량번호로 검색...',
         company: '회사',
         allCompanies: '전체 회사',
@@ -2511,7 +2515,7 @@ const ko = {
     },
     login: {
       welcome: 'Welcome',
-      signIn: 'Sign in to your account',
+      signIn: '계정에 로그인하세요',
       userID: 'User ID',
       password: '비밀번호',
       rememberMe: 'Remember me',
@@ -2524,7 +2528,7 @@ const ko = {
       showPassword: '비밀번호 표시',
       hidePassword: '비밀번호 숨기기',
       cardTitle: '로그인',
-      emailLabel: '이메일',
+      emailLabel: '이메일 / ID',
       signUpCta: '회원가입',
       footerDevelopedBy: '개발',
       footerCompanyName: 'Minsub Ventures Private Limited',
@@ -2576,6 +2580,162 @@ const ko = {
         finishSignup: '가입 완료',
         passwordMismatch: '비밀번호 확인이 일치하지 않습니다.',
         registerFailed: '가입에 실패했습니다.'
+      },
+      footerTerms: '이용약관',
+      footerPrivacy: '개인정보 처리방침',
+      footerSupport: '고객센터'
+    },
+    legalPages: {
+      backToLogin: '로그인으로 돌아가기',
+      lastUpdated: '최종 개정일: {{date}}',
+      terms: {
+        title: '이용약관',
+        intro: 'MVS(Minsub Ventures) 서비스 이용과 관련한 권리·의무 및 책임 사항을 규정합니다.',
+        lastUpdated: '2025-06-02',
+        sections: [
+          {
+            title: '제1조 (목적)',
+            paragraphs: [
+              '본 약관은 Minsub Ventures Private Limited(이하 "회사")가 제공하는 MVS 클라우드 ERP 서비스(이하 "서비스")의 이용 조건 및 절차, 회사와 이용자의 권리·의무 및 책임 사항을 규정함을 목적으로 합니다.'
+            ]
+          },
+          {
+            title: '제2조 (정의)',
+            paragraphs: [
+              '① "이용자"란 본 약관에 따라 회사가 제공하는 서비스를 이용하는 회원 및 비회원을 말합니다.',
+              '② "회원"이란 회사에 개인정보를 제공하여 회원등록을 한 자로서, 서비스를 지속적으로 이용할 수 있는 자를 말합니다.',
+              '③ "콘텐츠"란 서비스 내에서 제공되거나 이용자가 생성·저장하는 데이터, 문서, 설정 정보 등을 말합니다.'
+            ]
+          },
+          {
+            title: '제3조 (약관의 효력 및 변경)',
+            paragraphs: [
+              '① 본 약관은 서비스 화면에 게시하거나 기타 방법으로 공지함으로써 효력이 발생합니다.',
+              '② 회사는 관련 법령을 위반하지 않는 범위에서 약관을 개정할 수 있으며, 개정 시 적용일자 및 개정 사유를 사전에 공지합니다.',
+              '③ 이용자가 개정 약관에 동의하지 않는 경우 서비스 이용을 중단하고 탈퇴할 수 있습니다.'
+            ]
+          },
+          {
+            title: '제4조 (서비스의 제공)',
+            paragraphs: [
+              '① 회사는 ERP, 회계, 인사, 재고, 호텔 운영 등 업무 관리 기능을 포함한 클라우드 서비스를 제공합니다.',
+              '② 회사는 시스템 점검, 장애 대응, 서비스 개선을 위해 일시적으로 서비스 제공을 중단할 수 있으며, 가능한 경우 사전에 공지합니다.',
+              '③ 무료 체험, 유료 요금제 등 서비스 이용 조건은 별도 안내 또는 가입 화면에서 제공됩니다.'
+            ]
+          },
+          {
+            title: '제5조 (이용자의 의무)',
+            paragraphs: [
+              '① 이용자는 관계 법령, 본 약관 및 서비스 이용 안내를 준수해야 합니다.',
+              '② 이용자는 계정 정보를 안전하게 관리해야 하며, 제3자에게 양도·대여할 수 없습니다.',
+              '③ 이용자는 서비스를 통해 불법 정보를 저장·전송하거나, 시스템 보안을 침해하는 행위를 해서는 안 됩니다.'
+            ]
+          },
+          {
+            title: '제6조 (개인정보 보호)',
+            paragraphs: [
+              '회사는 관련 법령 및 개인정보 처리방침에 따라 이용자의 개인정보를 보호합니다. 자세한 내용은 개인정보 처리방침을 참고해 주세요.'
+            ]
+          },
+          {
+            title: '제7조 (면책 및 책임 제한)',
+            paragraphs: [
+              '① 회사는 천재지변, 불가항력, 이용자의 귀책 사유로 인한 서비스 장애에 대해 책임을 지지 않습니다.',
+              '② 회사는 이용자가 서비스에 입력·저장한 데이터의 정확성에 대해 보증하지 않으며, 이용자는 자신의 업무 데이터를 정기적으로 백업할 책임이 있습니다.'
+            ]
+          },
+          {
+            title: '제8조 (문의)',
+            paragraphs: [
+              '서비스 이용과 관련한 문의는 고객센터 페이지 또는 minsubl@gmail.com 으로 연락해 주세요.'
+            ]
+          }
+        ]
+      },
+      privacy: {
+        title: '개인정보 처리방침',
+        intro: 'MVS는 이용자의 개인정보를 소중히 여기며, 관련 법령에 따라 안전하게 처리합니다.',
+        lastUpdated: '2025-06-02',
+        sections: [
+          {
+            title: '1. 수집하는 개인정보 항목',
+            paragraphs: [
+              '회사는 서비스 제공을 위해 아래와 같은 개인정보를 수집할 수 있습니다.',
+              '· 필수: 회사명, 사업자번호, GST 번호, 관리자 이름, 이메일(ID), 비밀번호(암호화 저장), 연락처',
+              '· 선택: 주소, 부서, 직급, 시스템 이용 기록, 접속 로그, IP 주소, 쿠키 정보'
+            ]
+          },
+          {
+            title: '2. 개인정보의 수집·이용 목적',
+            paragraphs: [
+              '· 회원 가입 및 본인 확인, 계정 관리',
+              '· ERP·회계·인사 등 업무 서비스 제공 및 운영',
+              '· 고객 문의 응대, 공지 전달, 서비스 품질 개선',
+              '· 부정 이용 방지 및 보안, 법령상 의무 이행'
+            ]
+          },
+          {
+            title: '3. 보유 및 이용 기간',
+            paragraphs: [
+              '이용자의 개인정보는 원칙적으로 회원 탈퇴 또는 이용 목적 달성 시 지체 없이 파기합니다. 다만, 관계 법령에 따라 일정 기간 보관이 필요한 경우 해당 기간 동안 보관합니다.'
+            ]
+          },
+          {
+            title: '4. 개인정보의 제3자 제공',
+            paragraphs: [
+              '회사는 이용자의 동의 없이 개인정보를 외부에 제공하지 않습니다. 다만, 법령에 따른 요청이 있는 경우 예외로 할 수 있습니다.'
+            ]
+          },
+          {
+            title: '5. 개인정보 처리 위탁',
+            paragraphs: [
+              '서비스 운영을 위해 클라우드 호스팅, 이메일 발송 등 일부 업무를 외부 전문 업체에 위탁할 수 있으며, 위탁 시 관련 법령에 따라 계약 및 관리·감독을 수행합니다.'
+            ]
+          },
+          {
+            title: '6. 이용자의 권리',
+            paragraphs: [
+              '이용자는 언제든지 자신의 개인정보에 대해 열람, 정정, 삭제, 처리 정지를 요청할 수 있습니다. 요청은 고객센터 또는 infor@msventures.in 으로 접수할 수 있습니다.'
+            ]
+          },
+          {
+            title: '7. 개인정보 보호 책임자',
+            paragraphs: [
+              '· 담당: Minsub Ventures Private Limited',
+              '· 이메일: infor@msventures.in',
+              '· 웹사이트: www.msventures.in'
+            ]
+          }
+        ]
+      },
+      support: {
+        title: '고객센터',
+        intro: 'MVS 서비스 이용 중 궁금한 점이나 기술 지원이 필요하시면 아래 채널로 문의해 주세요.',
+        emailLabel: '이메일',
+        emailValue: 'minsubl@gmail.com',
+        websiteLabel: '웹사이트',
+        websiteValue: 'www.msventures.in',
+        hoursLabel: '운영 시간',
+        hoursValue: '평일 09:00 – 18:00 (IST)\n주말·공휴일: 이메일 접수 후 영업일 기준 순차 응답',
+        faqTitle: '자주 묻는 질문',
+        faq: [
+          {
+            question: '비밀번호를 잊어버렸어요.',
+            answer: '관리자 계정의 경우 회사 내 시스템 관리자에게 초기화를 요청해 주세요. 신규 가입 직후라면 고객센터 이메일로 회사명과 관리자 이메일을 알려주시면 확인 후 안내드립니다.'
+          },
+          {
+            question: '무료 체험 기간은 얼마나 되나요?',
+            answer: '신규 가입 시 3개월 무료 이용이 제공됩니다. 동일 회사(회사명·사업자번호·GST)당 1회만 적용됩니다.'
+          },
+          {
+            question: '데이터는 어디에 저장되나요?',
+            answer: '서비스 데이터는 보안이 적용된 클라우드 환경에 저장됩니다. 자세한 내용은 개인정보 처리방침을 참고해 주세요.'
+          },
+          {
+            question: '기술 장애가 발생했어요.',
+            answer: '이메일로 회사명, 발생 시각, 화면 캡처(가능한 경우)를 함께 보내주시면 빠르게 확인하겠습니다.'
+          }
+        ]
       }
     },
     vacationManagement: {
@@ -2959,7 +3119,7 @@ const en = {
       notification: 'Notification',
       detailShow: 'Show details',
       detailHide: 'Hide details',
-      errorCount: 'There are {{count}} notifications.',
+      errorCount: 'There are {{count}} errors.',
       errorCountTruncated: '(Showing up to 100)',
       languageKo: 'Korean',
       languageEn: 'English',
@@ -3316,6 +3476,7 @@ const en = {
       placeholderEmployeeEdit: 'Enter to edit',
       placeholderEmployeeAuto: 'Leave blank for auto-generation',
       helperEmployeeAuto: 'Auto-generated from company abbreviation and sequence number',
+      helperEmployeePending: 'Select a company to preview the auto-generated number',
       dateOfBirth: 'Date of Birth',
       gender: 'Gender',
       selectPlaceholder: 'Select',
@@ -3323,7 +3484,7 @@ const en = {
       genderFemale: 'Female',
       genderOther: 'Other',
       phoneNumber: 'Phone Number',
-      phonePlaceholder: 'e.g. +91 98765 43210',
+      phonePlaceholder: '12345 67890',
       address: 'Address',
       emergencyContactName: 'Emergency Contact Name',
       emergencyContactPhone: 'Emergency Contact Phone',
@@ -3508,6 +3669,7 @@ const en = {
       excelImport: 'Import from Excel',
       addPartner: 'Add Partner',
       searchPlaceholder: 'Search by company name, representative, industry, address...',
+      searchLabel: 'Search',
       status: 'Status',
       allStatus: 'All Status',
       companyType: 'Company Type',
@@ -3640,7 +3802,7 @@ const en = {
     loginInfoManagement: {
       title: 'Login credentials',
       description:
-        'Store login IDs, passwords, and URLs for external sites (e.g. tax, banking) and MCA (Ministry of Corporate Affairs) per company. Not the same as MSV user accounts.',
+        'Per company, store login IDs, passwords, and URLs for external sites (tax, banking, MCA/corporate registry); separate from MSV login accounts.',
       excelHint:
         'Edits save when you leave the cell. You can paste from Excel. Division, Login ID, and Password are required to save.',
       hints: {
@@ -4609,6 +4771,7 @@ const en = {
         downloadPdf: 'Download PDF'
       },
       filters: {
+        search: 'Search',
         status: 'Status',
         roomType: 'Room Type',
         payment: 'Payment',
@@ -4939,6 +5102,7 @@ const en = {
         analytics: 'Statistics & Analytics'
       },
       filters: {
+        search: 'Search',
         searchPlaceholder: 'Search by E-Way Bill No., E-Invoice No., transporter, GSTIN, vehicle number...',
         company: 'Company',
         allCompanies: 'All Companies',
@@ -5350,7 +5514,7 @@ const en = {
       showPassword: 'Show password',
       hidePassword: 'Hide password',
       cardTitle: 'Log in',
-      emailLabel: 'Email',
+      emailLabel: 'Email / ID',
       signUpCta: 'Sign up',
       footerDevelopedBy: 'Developed by',
       footerCompanyName: 'Minsub Ventures Private Limited',
@@ -5402,6 +5566,162 @@ const en = {
         finishSignup: 'Complete registration',
         passwordMismatch: 'Password and confirmation do not match.',
         registerFailed: 'Registration failed.'
+      },
+      footerTerms: 'Terms of Service',
+      footerPrivacy: 'Privacy Policy',
+      footerSupport: 'Customer Center'
+    },
+    legalPages: {
+      backToLogin: 'Back to login',
+      lastUpdated: 'Last updated: {{date}}',
+      terms: {
+        title: 'Terms of Service',
+        intro: 'These terms govern your use of the MVS cloud ERP service provided by Minsub Ventures.',
+        lastUpdated: '2025-06-02',
+        sections: [
+          {
+            title: 'Article 1 (Purpose)',
+            paragraphs: [
+              'These Terms of Service define the conditions, procedures, and rights and obligations between Minsub Ventures Private Limited ("Company") and users of the MVS cloud ERP service ("Service").'
+            ]
+          },
+          {
+            title: 'Article 2 (Definitions)',
+            paragraphs: [
+              '① "User" means any member or non-member who uses the Service under these Terms.',
+              '② "Member" means a person who has registered with the Company and may continuously use the Service.',
+              '③ "Content" means data, documents, settings, and other information provided through or created within the Service.'
+            ]
+          },
+          {
+            title: 'Article 3 (Effect and Changes)',
+            paragraphs: [
+              '① These Terms become effective when posted on the Service or otherwise announced.',
+              '② The Company may revise these Terms without violating applicable laws and will announce the effective date and reason in advance.',
+              '③ If a user does not agree to revised Terms, they may stop using the Service and withdraw membership.'
+            ]
+          },
+          {
+            title: 'Article 4 (Provision of Service)',
+            paragraphs: [
+              '① The Company provides cloud-based business management functions including ERP, accounting, HR, inventory, and hotel operations.',
+              '② The Company may temporarily suspend the Service for maintenance, incident response, or improvements, with prior notice when possible.',
+              '③ Free trials and paid plans are described on the sign-up screen or in separate notices.'
+            ]
+          },
+          {
+            title: 'Article 5 (User Obligations)',
+            paragraphs: [
+              '① Users must comply with applicable laws, these Terms, and service guidelines.',
+              '② Users must keep account credentials secure and must not transfer or lend accounts to third parties.',
+              '③ Users must not store or transmit illegal information or compromise system security.'
+            ]
+          },
+          {
+            title: 'Article 6 (Privacy)',
+            paragraphs: [
+              'The Company protects personal information in accordance with applicable laws and the Privacy Policy.'
+            ]
+          },
+          {
+            title: 'Article 7 (Disclaimer)',
+            paragraphs: [
+              '① The Company is not liable for service interruptions caused by force majeure or user fault.',
+              '② The Company does not guarantee the accuracy of data entered by users; users are responsible for backing up business data.'
+            ]
+          },
+          {
+            title: 'Article 8 (Contact)',
+            paragraphs: [
+              'For service-related inquiries, please use the Customer Center page or email minsubl@gmail.com.'
+            ]
+          }
+        ]
+      },
+      privacy: {
+        title: 'Privacy Policy',
+        intro: 'MVS values your privacy and processes personal information securely in accordance with applicable laws.',
+        lastUpdated: '2025-06-02',
+        sections: [
+          {
+            title: '1. Information We Collect',
+            paragraphs: [
+              'We may collect the following information to provide the Service.',
+              '· Required: company name, business registration number, GST number, administrator name, email (ID), password (stored encrypted), contact number',
+              '· Optional: address, department, job title, usage logs, access logs, IP address, cookies'
+            ]
+          },
+          {
+            title: '2. Purpose of Use',
+            paragraphs: [
+              '· Membership registration, identity verification, and account management',
+              '· Providing and operating ERP, accounting, HR, and related business services',
+              '· Customer support, notices, and service quality improvement',
+              '· Fraud prevention, security, and legal compliance'
+            ]
+          },
+          {
+            title: '3. Retention Period',
+            paragraphs: [
+              'Personal information is deleted without delay when membership ends or the purpose is fulfilled, unless retention is required by law.'
+            ]
+          },
+          {
+            title: '4. Third-Party Disclosure',
+            paragraphs: [
+              'We do not provide personal information to third parties without consent, except where required by law.'
+            ]
+          },
+          {
+            title: '5. Processing Entrustment',
+            paragraphs: [
+              'We may entrust hosting, email delivery, and other operations to specialized vendors under contractual safeguards required by law.'
+            ]
+          },
+          {
+            title: '6. Your Rights',
+            paragraphs: [
+              'You may request access, correction, deletion, or suspension of processing of your personal information via the Customer Center or infor@msventures.in.'
+            ]
+          },
+          {
+            title: '7. Privacy Officer',
+            paragraphs: [
+              '· Organization: Minsub Ventures Private Limited',
+              '· Email: infor@msventures.in',
+              '· Website: www.msventures.in'
+            ]
+          }
+        ]
+      },
+      support: {
+        title: 'Customer Center',
+        intro: 'If you have questions or need technical support while using MVS, please contact us through the channels below.',
+        emailLabel: 'Email',
+        emailValue: 'minsubl@gmail.com',
+        websiteLabel: 'Website',
+        websiteValue: 'www.msventures.in',
+        hoursLabel: 'Business hours',
+        hoursValue: 'Mon–Fri 09:00 – 18:00 (IST)\nWeekends & holidays: email inquiries answered on the next business day',
+        faqTitle: 'Frequently asked questions',
+        faq: [
+          {
+            question: 'I forgot my password.',
+            answer: 'For administrator accounts, ask your company system administrator to reset it. For new registrations, email us your company name and administrator email for assistance.'
+          },
+          {
+            question: 'How long is the free trial?',
+            answer: 'New sign-ups receive 3 months of free usage. This applies once per company (company name, business number, and GST).'
+          },
+          {
+            question: 'Where is my data stored?',
+            answer: 'Service data is stored in a secured cloud environment. See the Privacy Policy for details.'
+          },
+          {
+            question: 'I encountered a technical issue.',
+            answer: 'Please email us with your company name, time of occurrence, and a screenshot if possible for faster resolution.'
+          }
+        ]
       }
     },
     quotationManagement: {

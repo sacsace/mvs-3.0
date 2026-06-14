@@ -49,6 +49,25 @@ import {
 import { useStore } from '../../store';
 import { api } from '../../services/api';
 import { useTranslation } from 'react-i18next';
+import { mvsSearchFieldSx } from '../../theme/mvsLayout';
+
+const eWayBillFilterLabelSx = {
+  color: 'text.secondary',
+  fontWeight: 600,
+  mb: 0.5,
+  display: 'block',
+  fontSize: '0.75rem',
+  lineHeight: '18px',
+  minHeight: 18,
+};
+
+const eWayBillFilterSelectSx = {
+  borderRadius: '12px',
+  bgcolor: '#FFFFFF',
+  height: 40,
+  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
+};
 
 // TabPanel 컴포넌트 정의
 interface TabPanelProps {
@@ -341,83 +360,121 @@ const EWayBillManagement: React.FC = () => {
             {/* 검색 및 필터 */}
             <Card sx={{ mb: 3 }}>
               <CardContent>
-                <Box sx={{ 
-                  display: 'grid', 
-                  gridTemplateColumns: { xs: '1fr', sm: (user?.role === 'root' || user?.role === 'audit') ? '2fr 1fr 1fr 1fr' : '2fr 1fr 1fr' },
-                  gap: 2, 
-                  alignItems: 'flex-end' 
-                }}>
-                  <TextField
-                    fullWidth
-                    placeholder={t('eWayBillManagement.filters.searchPlaceholder')}
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon />
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: {
+                      xs: '1fr',
+                      sm: (user?.role === 'root' || user?.role === 'audit') ? '2fr 1fr 1fr 1fr' : '2fr 1fr 1fr',
+                    },
+                    gap: 2,
+                    alignItems: 'flex-end',
+                    ...mvsSearchFieldSx,
+                  }}
+                >
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="caption" sx={eWayBillFilterLabelSx}>
+                      {t('eWayBillManagement.filters.search')}
+                    </Typography>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      placeholder={t('eWayBillManagement.filters.searchPlaceholder')}
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          height: 40,
+                          '& .MuiOutlinedInput-input': { py: 0 },
+                        },
+                      }}
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <SearchIcon fontSize="small" />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+                  </Box>
                   {(user?.role === 'root' || user?.role === 'audit') && (
-                    <FormControl fullWidth>
-                      <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                      <Typography variant="caption" sx={eWayBillFilterLabelSx}>
                         {t('eWayBillManagement.filters.company')}
                       </Typography>
-                      <Select
-                        value={selectedCompanyId}
-                        onChange={(e) => {
-                          const value = String(e.target.value);
-                          if (value === '') {
-                            setSelectedCompanyId('');
-                          } else {
-                            const num = Number(value);
-                            setSelectedCompanyId(isNaN(num) ? '' : num);
-                          }
-                        }}
-                        displayEmpty
-                        sx={{ height: '40px' }}
-                      >
-                        <MenuItem value="">{t('eWayBillManagement.filters.allCompanies')}</MenuItem>
-                        {companies.map((company) => (
-                          <MenuItem key={company.id} value={company.id}>
-                            {company.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                      <FormControl fullWidth size="small">
+                        <Select
+                          value={selectedCompanyId}
+                          onChange={(e) => {
+                            const value = String(e.target.value);
+                            if (value === '') {
+                              setSelectedCompanyId('');
+                            } else {
+                              const num = Number(value);
+                              setSelectedCompanyId(isNaN(num) ? '' : num);
+                            }
+                          }}
+                          displayEmpty
+                          sx={eWayBillFilterSelectSx}
+                        >
+                          <MenuItem value="">{t('eWayBillManagement.filters.allCompanies')}</MenuItem>
+                          {companies.map((company) => (
+                            <MenuItem key={company.id} value={company.id}>
+                              {company.name}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Box>
                   )}
-                  <FormControl fullWidth>
-                    <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="caption" sx={eWayBillFilterLabelSx}>
                       {t('eWayBillManagement.filters.status')}
                     </Typography>
-                    <Select
-                      value={filterStatus}
-                      onChange={(e) => setFilterStatus(e.target.value)}
-                      displayEmpty
-                      sx={{ height: '40px' }}
+                    <FormControl fullWidth size="small">
+                      <Select
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value)}
+                        displayEmpty
+                        sx={eWayBillFilterSelectSx}
+                      >
+                        <MenuItem value="all">{t('eWayBillManagement.filters.allStatus')}</MenuItem>
+                        <MenuItem value="draft">{t('eWayBillManagement.status.draft')}</MenuItem>
+                        <MenuItem value="generated">{t('eWayBillManagement.status.generated')}</MenuItem>
+                        <MenuItem value="active">{t('eWayBillManagement.status.active')}</MenuItem>
+                        <MenuItem value="expired">{t('eWayBillManagement.status.expired')}</MenuItem>
+                        <MenuItem value="cancelled">{t('eWayBillManagement.status.cancelled')}</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Box>
+                  <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography
+                      variant="caption"
+                      sx={{ ...eWayBillFilterLabelSx, visibility: 'hidden', userSelect: 'none' }}
+                      aria-hidden
                     >
-                      <MenuItem value="all">{t('eWayBillManagement.filters.allStatus')}</MenuItem>
-                      <MenuItem value="draft">{t('eWayBillManagement.status.draft')}</MenuItem>
-                      <MenuItem value="generated">{t('eWayBillManagement.status.generated')}</MenuItem>
-                      <MenuItem value="active">{t('eWayBillManagement.status.active')}</MenuItem>
-                      <MenuItem value="expired">{t('eWayBillManagement.status.expired')}</MenuItem>
-                      <MenuItem value="cancelled">{t('eWayBillManagement.status.cancelled')}</MenuItem>
-                    </Select>
-                  </FormControl>
-                  <Button
-                    variant="outlined"
-                    startIcon={<FilterListIcon />}
-                    onClick={() => {
-                      setSearchTerm('');
-                      setFilterStatus('all');
-                      setSelectedCompanyId('');
-                    }}
-                    sx={{ height: '40px' }}
-                  >
-                    {t('eWayBillManagement.actions.reset')}
-                  </Button>
+                      {t('eWayBillManagement.actions.reset')}
+                    </Typography>
+                    <Button
+                      variant="outlined"
+                      startIcon={<FilterListIcon />}
+                      onClick={() => {
+                        setSearchTerm('');
+                        setFilterStatus('all');
+                        setSelectedCompanyId('');
+                      }}
+                      sx={{
+                        height: 40,
+                        whiteSpace: 'nowrap',
+                        minWidth: 'fit-content',
+                        px: 2,
+                        borderRadius: '12px',
+                        textTransform: 'none',
+                      }}
+                    >
+                      {t('eWayBillManagement.actions.reset')}
+                    </Button>
+                  </Box>
                 </Box>
               </CardContent>
             </Card>

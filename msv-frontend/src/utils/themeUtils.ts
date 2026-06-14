@@ -591,10 +591,10 @@ export const createDynamicTheme = (appearanceSettings: {
                 }
               : {}),
             '& .MuiOutlinedInput-notchedOutline': {
-              borderColor: dividerColor,
+              borderColor: isLightMode ? '#C5CED9' : dividerColor,
             },
             '&:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: isLightMode ? '#D1D5DB' : '#64748b',
+              borderColor: isLightMode ? '#B8C4D0' : '#64748b',
             },
             '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
               borderColor: primaryColors.main,

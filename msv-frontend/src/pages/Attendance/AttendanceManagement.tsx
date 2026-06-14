@@ -33,6 +33,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme, alpha } from '@mui/material/styles';
 import {
   mvsFilterToolbarSx,
+  mvsSearchFieldSx,
   mvsInnerCardSx,
   mvsTitleBlockSx,
 } from '../../theme/mvsLayout';
@@ -104,7 +105,7 @@ const countVacationOverlapDaysInMonth = (
 
 const AttendanceManagement: React.FC = () => {
   const theme = useTheme();
-  /** 라이트: 검정, 다크: 대비용 백색 */
+  /** ???: ??, ??: ??? ?? */
   const inkFg = theme.palette.mode === 'dark' ? theme.palette.common.white : theme.palette.common.black;
   const { user } = useStore();
   const { t } = useTranslation();
@@ -124,7 +125,7 @@ const AttendanceManagement: React.FC = () => {
   const [officeLocation, setOfficeLocation] = useState<{ latitude: number; longitude: number; radiusMeters?: number } | null>(null);
   const [heresnowStatus, setHeresnowStatus] = useState<any>(null);
   const [heresnowSyncLoading, setHeresnowSyncLoading] = useState(false);
-  /** admin / root / audit: 근태 현황에서 회사 전체·부서 필터 (일반 직원은 본인만) */
+  /** admin / root / audit: ?? ???? ?? ????? ?? (?? ??? ???) */
   const canListCompanyAttendance = ['admin', 'root', 'audit'].includes(String(user?.role || ''));
   const canManageHeresnow = ['admin', 'root'].includes(String(user?.role || ''));
   const TIME_ZONE = 'Asia/Kolkata';
@@ -207,7 +208,7 @@ const AttendanceManagement: React.FC = () => {
           setDepartments(Array.from(deptSet).sort());
         }
       } catch (e) {
-        console.error('사용자 목록 로드 오류:', e);
+        console.error('??? ?? ?? ??:', e);
       }
     };
     fetchUsers();
@@ -236,7 +237,7 @@ const AttendanceManagement: React.FC = () => {
           }
         }
       } catch (locationError) {
-        console.error('사무실 위치 로드 오류:', locationError);
+        console.error('??? ?? ?? ??:', locationError);
       }
     };
 
@@ -262,7 +263,7 @@ const AttendanceManagement: React.FC = () => {
   const getCurrentPosition = () =>
     new Promise<GeolocationPosition>((resolve, reject) => {
       if (!navigator.geolocation) {
-        reject(new Error('이 브라우저에서는 위치 정보를 사용할 수 없습니다.'));
+        reject(new Error('? ??????? ?? ??? ??? ? ????.'));
         return;
       }
       navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -272,7 +273,7 @@ const AttendanceManagement: React.FC = () => {
       });
     });
 
-  // 오늘의 근태 조회
+  // ??? ?? ??
   useEffect(() => {
     const fetchTodayAttendance = async () => {
       try {
@@ -281,7 +282,7 @@ const AttendanceManagement: React.FC = () => {
           setTodayAttendance(response.data);
         }
       } catch (error) {
-        console.error('오늘의 근태 조회 오류:', error);
+        console.error('??? ?? ?? ??:', error);
       }
     };
 
@@ -333,7 +334,7 @@ const AttendanceManagement: React.FC = () => {
     return { workingDays, lateDays };
   }, [attendances, user?.id]);
 
-  // 근태 목록 조회
+  // ?? ?? ??
   const fetchAttendances = async () => {
     setLoading(true);
     setError(null);
@@ -359,7 +360,7 @@ const AttendanceManagement: React.FC = () => {
         setError(response.message || t('attendanceManagement.loadListFailed'));
       }
     } catch (error: any) {
-      console.error('근태 목록 조회 오류:', error);
+      console.error('?? ?? ?? ??:', error);
       setError(error.response?.data?.message || t('attendanceManagement.loadListError'));
     } finally {
       setLoading(false);
@@ -406,7 +407,7 @@ const AttendanceManagement: React.FC = () => {
     fetchAttendances();
   }, [filter.department, filter.status, canListCompanyAttendance]);
 
-  // 출근 처리
+  // ?? ??
   const handleCheckIn = async () => {
     if (todayAttendance?.check_in) {
       setError(t('attendanceManagement.alreadyCheckedIn'));
@@ -466,7 +467,7 @@ const AttendanceManagement: React.FC = () => {
         setError(response.message || t('attendanceManagement.checkInFailed'));
       }
     } catch (error: any) {
-      console.error('출근 처리 오류:', error);
+      console.error('?? ?? ??:', error);
       if (error.code === 1 || error.message?.includes('Geolocation')) {
         setError(t('attendanceManagement.locationRequired'));
       } else {
@@ -477,7 +478,7 @@ const AttendanceManagement: React.FC = () => {
     }
   };
 
-  // 퇴근 처리
+  // ?? ??
   const handleCheckOut = async () => {
     setCheckOutLoading(true);
     setError(null);
@@ -492,7 +493,7 @@ const AttendanceManagement: React.FC = () => {
         skip_geo: true
       });
       if (response.success) {
-        // 성공 메시지는 선택 언어(i18n) 기준으로 고정 표시
+        // ?? ???? ?? ??(i18n) ???? ?? ??
         setSuccess(t('attendanceManagement.checkOutSuccess'));
         setTodayAttendance(response.data);
         fetchAttendances();
@@ -500,7 +501,7 @@ const AttendanceManagement: React.FC = () => {
         setError(response.message || t('attendanceManagement.checkOutFailed'));
       }
     } catch (error: any) {
-      console.error('퇴근 처리 오류:', error);
+      console.error('?? ?? ??:', error);
         setError(error.response?.data?.message || t('attendanceManagement.checkOutError'));
     } finally {
       setCheckOutLoading(false);
@@ -559,11 +560,11 @@ const AttendanceManagement: React.FC = () => {
       const istDate = new Date(istMs);
       const hours = istDate.getUTCHours();
       const minutes = istDate.getUTCMinutes();
-      const period = hours >= 12 ? '오후' : '오전';
+      const period = hours >= 12 ? '??' : '??';
       const displayHour = hours % 12 === 0 ? 12 : hours % 12;
       return `${period} ${pad2(displayHour)}:${pad2(minutes)}`;
     } catch (error) {
-      console.error('시간 포맷팅 오류:', error, dateString);
+      console.error('?? ??? ??:', error, dateString);
       return dateString;
     }
   };
@@ -574,7 +575,7 @@ const AttendanceManagement: React.FC = () => {
     if (!match) return null;
     const hours = Number(match[1]);
     const minutes = match[2];
-    const period = hours >= 12 ? '오후' : '오전';
+    const period = hours >= 12 ? '??' : '??';
     const displayHour = hours % 12 === 0 ? 12 : hours % 12;
     return `${period} ${pad2(displayHour)}:${minutes}`;
   };
@@ -831,7 +832,7 @@ const AttendanceManagement: React.FC = () => {
         </Card>
       </Box>
 
-      {/* 오늘의 근태 카드 — 레이아웃 서피스와 동일 톤, 장식 스트립 없음 */}
+      {/* ??? ?? ?? ? ???? ???? ?? ?, ?? ??? ?? */}
       <Card
         elevation={0}
         sx={{
@@ -977,7 +978,7 @@ const AttendanceManagement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* 근태 현황 */}
+      {/* ?? ?? */}
       <Card
         elevation={0}
         sx={{
@@ -1017,10 +1018,11 @@ const AttendanceManagement: React.FC = () => {
             </Button>
           </Box>
 
-          {/* 필터 (당월 고정) — 테이블 헤더 톤과 구분되도록 살짝 다른 서피스 */}
+          {/* ?? (?? ??) ? ??? ?? ?? ????? ?? ?? ??? */}
           <Box
             sx={{
               ...mvsFilterToolbarSx,
+              ...mvsSearchFieldSx,
               display: 'flex',
               flexWrap: 'wrap',
               alignItems: 'flex-end',

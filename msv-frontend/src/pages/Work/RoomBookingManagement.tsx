@@ -249,23 +249,39 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     }),
     [theme]
   );
+  const filterLabelSx = {
+    color: 'text.secondary',
+    fontWeight: 600,
+    mb: 0.5,
+    display: 'block',
+    fontSize: '0.75rem',
+    lineHeight: '18px',
+    minHeight: 18,
+  };
   const softFieldSx = useMemo(
     () => ({
       '& .MuiOutlinedInput-root': {
         borderRadius: '12px',
-        bgcolor: alpha(theme.palette.text.primary, 0.03),
-        '& fieldset': { borderColor: alpha(theme.palette.text.primary, 0.08) },
+        bgcolor: '#FFFFFF',
+        height: 40,
+        '& .MuiOutlinedInput-input': {
+          py: 0,
+        },
+        '& fieldset': { borderColor: '#C5CED9' },
+        '&:hover fieldset': { borderColor: '#B8C4D0' },
       },
     }),
-    [theme]
+    []
   );
   const selectFieldSx = useMemo(
     () => ({
       borderRadius: '12px',
-      bgcolor: alpha(theme.palette.text.primary, 0.03),
-      '& .MuiOutlinedInput-notchedOutline': { borderColor: alpha(theme.palette.text.primary, 0.08) },
+      bgcolor: '#FFFFFF',
+      height: 40,
+      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
     }),
-    [theme]
+    []
   );
 
   const billToInputSx = {
@@ -2311,26 +2327,32 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
         <CardContent sx={{ py: 2.5 }}>
           <Box sx={{ 
             display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr 1fr 1fr' },
+            gridTemplateColumns: { xs: '1fr', sm: 'minmax(180px, 2fr) repeat(4, minmax(110px, 1fr)) auto' },
             gap: 2, 
-            alignItems: 'center' 
+            alignItems: 'flex-end' 
           }}>
-            <TextField
-              fullWidth
-              placeholder={t('roomBookingManagement.placeholders.search')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              sx={softFieldSx}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon color="action" />
-                  </InputAdornment>
-                ),
-              }}
-            />
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5 }}>
+              <Typography variant="caption" sx={filterLabelSx}>
+                {t('roomBookingManagement.filters.search')}
+              </Typography>
+              <TextField
+                fullWidth
+                size="small"
+                placeholder={t('roomBookingManagement.placeholders.search')}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                sx={softFieldSx}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon color="action" fontSize="small" />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </Box>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="caption" sx={filterLabelSx}>
                 {t('roomBookingManagement.filters.status')}
               </Typography>
               <FormControl fullWidth size="small">
@@ -2352,7 +2374,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
               </FormControl>
             </Box>
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5 }}>
+              <Typography variant="caption" sx={filterLabelSx}>
                 {t('roomBookingManagement.filters.roomType')}
               </Typography>
               <FormControl fullWidth size="small">
@@ -2372,7 +2394,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
               </FormControl>
             </Box>
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5 }}>
+              <Typography variant="caption" sx={filterLabelSx}>
                 {t('roomBookingManagement.filters.payment')}
               </Typography>
               <FormControl fullWidth size="small">
@@ -2390,7 +2412,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
               </FormControl>
             </Box>
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5 }}>
+              <Typography variant="caption" sx={filterLabelSx}>
                 {t('roomBookingManagement.filters.date')}
               </Typography>
               <TextField
@@ -2402,21 +2424,36 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                 sx={softFieldSx}
               />
             </Box>
-            <Button
-              fullWidth
-              variant="outlined"
-              startIcon={<FilterIcon />}
-              onClick={() => {
-                setSearchTerm('');
-                setStatusFilter('');
-                setRoomTypeFilter('');
-                setPaymentFilter('');
-                setDateFilter('');
-              }}
-              sx={{ textTransform: 'none', borderRadius: '12px', height: '40px' }}
-            >
-              {t('roomBookingManagement.actions.reset')}
-            </Button>
+            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+              <Typography
+                variant="caption"
+                sx={{ ...filterLabelSx, visibility: 'hidden', userSelect: 'none' }}
+                aria-hidden
+              >
+                {t('roomBookingManagement.actions.reset')}
+              </Typography>
+              <Button
+                variant="outlined"
+                startIcon={<FilterIcon />}
+                onClick={() => {
+                  setSearchTerm('');
+                  setStatusFilter('');
+                  setRoomTypeFilter('');
+                  setPaymentFilter('');
+                  setDateFilter('');
+                }}
+                sx={{
+                  textTransform: 'none',
+                  borderRadius: '12px',
+                  height: 40,
+                  whiteSpace: 'nowrap',
+                  minWidth: 'fit-content',
+                  px: 2,
+                }}
+              >
+                {t('roomBookingManagement.actions.reset')}
+              </Button>
+            </Box>
           </Box>
         </CardContent>
       </Card>

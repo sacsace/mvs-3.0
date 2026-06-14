@@ -1,4 +1,8 @@
 import type { SxProps, Theme } from '@mui/material/styles';
+import type { SystemStyleObject } from '@mui/system';
+
+/** sx prop에 spread 가능한 plain object 토큰 */
+export type MvsStyleObject = SystemStyleObject<Theme>;
 
 /** MVS 공통 레이아웃 토큰 — 페이지에서 sx로 재사용 가능 (로직 변경 없음) */
 export const mvsPageShellSx: SxProps<Theme> = {
@@ -36,13 +40,37 @@ export const mvsInnerCardSx: SxProps<Theme> = {
   boxShadow: '0 2px 8px rgba(15, 23, 42, 0.06)',
 };
 
-export const mvsFilterToolbarSx: SxProps<Theme> = {
+export const mvsFilterToolbarSx: MvsStyleObject = {
   backgroundColor: '#F0F4F8',
   borderRadius: '18px',
   padding: '16px',
   marginBottom: '24px',
   border: '1px solid #C5CED9',
+  boxShadow: 'none',
 };
+
+/** 검색·필터 입력(TextField·Select·Autocomplete) 테두리 — 페이지 sx에 spread */
+export const mvsSearchFieldSx: MvsStyleObject = {
+  '& .MuiOutlinedInput-root': {
+    borderRadius: '12px',
+    bgcolor: 'background.paper',
+    '& .MuiOutlinedInput-notchedOutline': {
+      borderColor: '#C5CED9',
+    },
+    '&:hover .MuiOutlinedInput-notchedOutline': {
+      borderColor: '#B8C4D0',
+    },
+    '& fieldset': {
+      borderColor: '#C5CED9',
+    },
+    '&:hover fieldset': {
+      borderColor: '#B8C4D0',
+    },
+  },
+};
+
+/** 검색·필터 영역 래퍼(mvsFilterToolbarSx와 동일 계열) */
+export const mvsSearchZoneSx: MvsStyleObject = mvsFilterToolbarSx;
 
 export const mvsTableZoneSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',

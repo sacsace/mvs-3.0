@@ -38,6 +38,7 @@ import {
 } from '@mui/icons-material';
 import {
   mvsFilterToolbarSx,
+  mvsSearchFieldSx,
   mvsInnerCardSx,
   mvsMainSurfaceSx,
   mvsTableHeadHighlightSx,
@@ -437,7 +438,7 @@ const AssetManagement: React.FC = () => {
 
           <Divider sx={{ my: 2.5, borderColor: '#C5CED9' }} />
 
-          <Box sx={{ ...mvsFilterToolbarSx, mb: 0 }}>
+          <Box sx={{ ...mvsFilterToolbarSx, ...mvsSearchFieldSx, mb: 0 }}>
           <Grid container spacing={2} alignItems="flex-end">
             <Grid size={{ xs: 12, md: 6 }}>
               <TextField

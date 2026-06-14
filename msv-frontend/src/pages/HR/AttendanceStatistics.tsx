@@ -27,6 +27,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme, alpha } from '@mui/material/styles';
 import {
   mvsFilterToolbarSx,
+  mvsSearchFieldSx,
   mvsInnerCardSx,
   mvsTitleBlockSx,
 } from '../../theme/mvsLayout';
@@ -344,6 +345,7 @@ const AttendanceStatistics: React.FC = () => {
           <Box
             sx={{
               ...mvsFilterToolbarSx,
+              ...mvsSearchFieldSx,
               display: 'flex',
               flexWrap: 'wrap',
               alignItems: 'flex-end',

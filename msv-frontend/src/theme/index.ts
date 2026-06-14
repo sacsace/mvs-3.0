@@ -414,6 +414,25 @@ const theme = createTheme({
         },
       },
     },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          borderRadius: '14px',
+          backgroundColor: '#FFFFFF',
+          minHeight: 44,
+          '& .MuiOutlinedInput-notchedOutline': {
+            borderColor: '#C5CED9',
+          },
+          '&:hover .MuiOutlinedInput-notchedOutline': {
+            borderColor: '#B8C4D0',
+          },
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+            borderColor: '#007A83',
+            borderWidth: 2,
+          },
+        },
+      },
+    },
     MuiSelect: {
       styleOverrides: {
         root: {

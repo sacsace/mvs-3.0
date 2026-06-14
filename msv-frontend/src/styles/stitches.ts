@@ -48,19 +48,33 @@ const applyGlobalStyles = globalCss({
     MozOsxFontSmoothing: 'grayscale',
   },
   '.MuiPaper-root': {
-    border: '1px solid #D8E0EA',
+    border: '1px solid #C5CED9',
     backgroundImage: 'none',
     boxShadow: '$card',
   },
   '.MuiCard-root': {
     borderRadius: '20px',
     boxShadow: '$card',
-    border: '1px solid #D8E0EA',
+    border: '1px solid #C5CED9',
     transition: 'all 0.2s ease',
     '&:hover': {
       boxShadow: '$cardHover',
       transform: 'translateY(-1px)',
     },
+  },
+  '.MuiCard-root:has([data-testid="SearchIcon"])': {
+    border: '1px solid #C5CED9 !important',
+    backgroundColor: '#F0F4F8',
+    boxShadow: 'none !important',
+    '&:hover': {
+      transform: 'none',
+    },
+  },
+  '.MuiOutlinedInput-root:not(.Mui-disabled) .MuiOutlinedInput-notchedOutline': {
+    borderColor: '#C5CED9',
+  },
+  '.MuiOutlinedInput-root:not(.Mui-disabled):hover .MuiOutlinedInput-notchedOutline': {
+    borderColor: '#B8C4D0',
   },
   '.MuiCard-root.MuiPaper-outlined': {
     borderRadius: '14px',

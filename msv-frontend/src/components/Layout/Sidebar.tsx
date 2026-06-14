@@ -827,7 +827,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               transition: `opacity ${SIDEBAR_WIDTH_TRANSITION_MS - 60}ms ${SIDEBAR_WIDTH_EASING} 90ms`,
             }}
           >
-            © 2025{' '}
+            © {new Date().getFullYear()}{' '}
             <Link
               href="https://www.msventures.in"
               target="_blank"

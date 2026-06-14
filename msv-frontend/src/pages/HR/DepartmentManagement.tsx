@@ -245,7 +245,7 @@ export const DepartmentManagementPanel: React.FC<{
       <Card
         elevation={0}
         sx={{
-          borderRadius: '18px',
+          borderRadius: 0,
           border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'dark' ? 0.35 : 0.1)}`,
           boxShadow: '0 4px 22px rgba(15, 23, 42, 0.06)',
           overflow: 'hidden',

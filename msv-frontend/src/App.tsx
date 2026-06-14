@@ -10,6 +10,9 @@ import { useStore } from './store';
 import { useErrorStore } from './store/errorStore';
 import AppLayout from './components/Layout/AppLayout';
 import Login from './pages/Auth/Login';
+import TermsOfService from './pages/Legal/TermsOfService';
+import PrivacyPolicy from './pages/Legal/PrivacyPolicy';
+import CustomerCenter from './pages/Legal/CustomerCenter';
 import Dashboard from './pages/Dashboard/Dashboard';
 import PersonalDashboard from './pages/Dashboard/PersonalDashboard';
 import TeamDashboard from './pages/Dashboard/TeamDashboard';
@@ -183,6 +186,9 @@ function App() {
           <Routes>
           {/* 인증 관련 라우트 */}
           <Route path="/login" element={<Login />} />
+          <Route path="/legal/terms" element={<TermsOfService />} />
+          <Route path="/legal/privacy" element={<PrivacyPolicy />} />
+          <Route path="/legal/support" element={<CustomerCenter />} />
           <Route path="/expense-receipt-upload" element={<ExpenseReceiptUpload />} />
           
           {/* 메인 애플리케이션 라우트 (인증 필요) */}

@@ -389,7 +389,7 @@ const CustomerInformation: React.FC = () => {
         </Card>
       </Box>
 
-      <Card sx={{ mb: 3, borderRadius: '18px', bgcolor: '#F8FAFC', borderColor: 'rgba(15, 23, 42, 0.06)' }} variant="outlined">
+      <Card sx={{ mb: 3, borderRadius: '18px', bgcolor: '#F0F4F8', border: '1px solid #C5CED9', boxShadow: 'none' }} variant="outlined">
         <CardContent sx={{ py: 2.5, px: 2.5 }}>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '3fr 1fr auto' }, gap: 2, alignItems: 'center' }}>
             <TextField

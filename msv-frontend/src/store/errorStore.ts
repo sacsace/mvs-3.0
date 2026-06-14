@@ -55,6 +55,18 @@ export const useErrorStore = create<ErrorState>((set) => ({
     };
     
     set((state) => {
+      const dedupeWindowMs = 30 * 1000;
+      const now = Date.now();
+      const isDuplicate = state.errors.some(
+        (existing) =>
+          existing.title === title &&
+          existing.message === message &&
+          now - existing.timestamp.getTime() < dedupeWindowMs
+      );
+      if (isDuplicate) {
+        return state;
+      }
+
       // 최대 100개의 에러만 유지 (오래된 에러는 자동 삭제)
       const maxErrors = 100;
       const newErrors = [...state.errors, error];

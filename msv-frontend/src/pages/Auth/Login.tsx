@@ -20,7 +20,7 @@ import {
   VisibilityOff
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { api, API_BASE_URL } from '../../services/api';
 import { useTranslation } from 'react-i18next';
 import { alpha, useTheme } from '@mui/material/styles';
@@ -82,8 +82,8 @@ const Login: React.FC = () => {
     // 에러 메시지를 즉시 지우지 않고 사용자가 로그인 버튼을 다시 클릭할 때까지 유지
   };
 
-  const cardWidth = 420;
-  const controlWidth = 340;
+  const cardWidth = 400;
+  const controlWidth = 320;
 
   const getPeriodEndDate = (startDate: string): string => {
     const start = new Date(startDate);
@@ -241,48 +241,33 @@ const Login: React.FC = () => {
 
   const loginInputSx = {
     '& .MuiOutlinedInput-root': {
-      minHeight: 48,
-      borderRadius: '12px',
-      bgcolor: theme.palette.mode === 'light' ? '#ffffff' : alpha(theme.palette.grey[500], 0.14),
-      transition: theme.transitions.create(['background-color', 'box-shadow', 'border-color'], { duration: 180 }),
+      minHeight: 40,
+      borderRadius: '8px',
+      bgcolor: '#FFFFFF',
       '& fieldset': {
-        borderColor: theme.palette.mode === 'light' ? '#b8c5d6' : alpha(theme.palette.divider, 0.75),
-        borderWidth: '1.5px',
+        borderColor: '#C5CED9',
       },
-      '&:hover': {
-        bgcolor: theme.palette.mode === 'light' ? '#ffffff' : alpha(theme.palette.grey[500], 0.18),
-        '& fieldset': {
-          borderColor: theme.palette.mode === 'light' ? '#8fa3bc' : alpha(theme.palette.divider, 0.95),
-        },
+      '&:hover fieldset': {
+        borderColor: '#B8C4D0',
       },
-      '&.Mui-focused': {
-        bgcolor: theme.palette.mode === 'light' ? '#ffffff' : alpha(theme.palette.grey[500], 0.12),
-        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.28)}`,
-        '& fieldset': {
-          borderColor: theme.palette.primary.main,
-          borderWidth: '2px',
-        },
+      '&.Mui-focused fieldset': {
+        borderColor: 'primary.main',
+        borderWidth: '1px',
       },
     },
     '& .MuiInputBase-input': {
-      py: 1.35,
-      px: 1.5,
-      fontSize: '0.9375rem',
-      letterSpacing: '-0.02em',
-      '&::placeholder': {
-        color: alpha(theme.palette.text.secondary, 0.85),
-        opacity: 1,
-      },
+      py: 1,
+      px: 1.25,
+      fontSize: '0.875rem',
     },
   } as const;
 
   const loginFieldLabelSx = {
     display: 'block',
-    mb: 0.75,
-    color: theme.palette.mode === 'light' ? '#334155' : 'text.primary',
-    fontSize: '0.8125rem',
-    fontWeight: 700,
-    letterSpacing: '-0.01em',
+    mb: 0.5,
+    color: 'text.secondary',
+    fontSize: '0.75rem',
+    fontWeight: 600,
   } as const;
 
   const signupFieldSx = {
@@ -343,10 +328,7 @@ const Login: React.FC = () => {
     <Box
       sx={{
         minHeight: '100vh',
-        background:
-          theme.palette.mode === 'light'
-            ? 'radial-gradient(90% 60% at 50% 0%, rgba(99, 102, 241, 0.12) 0%, transparent 55%), linear-gradient(180deg, #d5dde8 0%, #e2e8f0 45%, #d8e0ea 100%)'
-            : `linear-gradient(180deg, ${theme.palette.grey[900]} 0%, ${alpha(theme.palette.common.black, 0.92)} 100%)`,
+        bgcolor: theme.palette.mode === 'light' ? '#F0F4F8' : theme.palette.grey[900],
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -368,31 +350,25 @@ const Login: React.FC = () => {
           onChange={handleLoginLanguage}
           aria-label={t('login.languageToggleAria')}
           sx={{
-            bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'light' ? 0.14 : 0.2),
-            p: 0.4,
-            borderRadius: '999px',
-            border: `1px solid ${theme.palette.mode === 'light' ? '#b8c5d6' : alpha(theme.palette.divider, 0.45)}`,
-            boxShadow: theme.palette.mode === 'light' ? '0 2px 8px rgba(15, 23, 42, 0.08)' : 'none',
+            bgcolor: 'background.paper',
+            p: 0.25,
+            borderRadius: '8px',
+            border: '1px solid #C5CED9',
             '& .MuiToggleButtonGroup-grouped': {
               border: 0,
-              mx: 0.2,
-              borderRadius: '999px !important',
-              px: 1.85,
-              py: 0.55,
+              mx: 0.15,
+              borderRadius: '6px !important',
+              px: 1.5,
+              py: 0.45,
               fontSize: '0.8125rem',
               fontWeight: 600,
-              letterSpacing: '-0.01em',
               textTransform: 'none',
               color: 'text.secondary',
-              '&:hover': {
-                bgcolor: alpha(theme.palette.primary.main, 0.06),
-              },
               '&.Mui-selected': {
-                bgcolor: 'background.paper',
+                bgcolor: alpha(theme.palette.primary.main, 0.1),
                 color: 'primary.main',
-                boxShadow: `0 1px 4px ${alpha(theme.palette.common.black, 0.1)}`,
                 '&:hover': {
-                  bgcolor: 'background.paper',
+                  bgcolor: alpha(theme.palette.primary.main, 0.14),
                 },
               },
             },
@@ -411,37 +387,31 @@ const Login: React.FC = () => {
           elevation={0}
           sx={{
             px: { xs: 3, sm: 3.5 },
-            py: { xs: 3.25, sm: 3.5 },
-            borderRadius: '20px',
+            py: { xs: 3, sm: 3.5 },
+            borderRadius: '10px',
             bgcolor: 'background.paper',
-            border: `1px solid ${theme.palette.mode === 'light' ? '#b8c5d6' : alpha(theme.palette.divider, 0.5)}`,
-            boxShadow:
-              theme.palette.mode === 'light'
-                ? '0 2px 4px rgba(15, 23, 42, 0.06), 0 12px 32px rgba(15, 23, 42, 0.12), 0 28px 56px rgba(15, 23, 42, 0.08)'
-                : '0 20px 50px rgba(0,0,0,0.45)',
+            border: theme.palette.mode === 'light' ? '1px solid #C5CED9' : `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+            boxShadow: 'none',
             width: `min(100%, ${cardWidth}px)`,
             mx: 'auto',
           }}
         >
           <Box
             sx={{
-              textAlign: 'left',
-              mb: 2.5,
-              pb: 2,
+              textAlign: 'center',
+              mb: 2,
               width: `min(100%, ${controlWidth}px)`,
               mx: 'auto',
-              borderBottom: `1px solid ${theme.palette.mode === 'light' ? '#d8e0ea' : alpha(theme.palette.divider, 0.45)}`,
             }}
           >
             <Typography
               component="h1"
               sx={{
                 fontWeight: 700,
-                fontSize: { xs: '1.5rem', sm: '1.625rem' },
+                fontSize: '1.25rem',
                 color: 'text.primary',
-                letterSpacing: '-0.025em',
-                lineHeight: 1.25,
-                mb: 0,
+                letterSpacing: '-0.02em',
+                lineHeight: 1.3,
               }}
             >
               {t('login.cardTitle')}
@@ -452,18 +422,10 @@ const Login: React.FC = () => {
             {error && (
               <Alert
                 severity="error"
-                variant="outlined"
                 sx={{
                   mb: 2,
-                  borderRadius: '12px',
+                  borderRadius: '8px',
                   fontSize: '0.8125rem',
-                  lineHeight: 1.45,
-                  bgcolor: alpha(theme.palette.error.main, theme.palette.mode === 'light' ? 0.06 : 0.12),
-                  color: theme.palette.mode === 'light' ? 'error.dark' : theme.palette.error.light,
-                  borderColor: alpha(theme.palette.error.main, 0.35),
-                  '& .MuiAlert-icon': {
-                    color: 'error.main',
-                  },
                 }}
               >
                 {error}
@@ -471,7 +433,7 @@ const Login: React.FC = () => {
             )}
 
             <Box component="form" onSubmit={handleSubmit}>
-              <Box sx={{ mb: 2 }}>
+              <Box sx={{ mb: 1.5 }}>
                 <Typography component="label" htmlFor="userid" sx={loginFieldLabelSx}>
                   {t('login.emailLabel')}
                 </Typography>
@@ -489,7 +451,7 @@ const Login: React.FC = () => {
                 />
               </Box>
 
-              <Box sx={{ mb: 2.25 }}>
+              <Box sx={{ mb: 2 }}>
                 <Typography component="label" htmlFor="password" sx={loginFieldLabelSx}>
                   {t('login.password')}
                 </Typography>
@@ -512,14 +474,8 @@ const Login: React.FC = () => {
                           aria-label={
                             showPassword ? t('login.hidePassword') : t('login.showPassword')
                           }
-                          sx={{
-                            color: 'text.secondary',
-                            borderRadius: '10px',
-                            '&:hover': {
-                              color: 'text.primary',
-                              bgcolor: alpha(theme.palette.action.hover, 1),
-                            },
-                          }}
+                          size="small"
+                          sx={{ color: 'text.secondary' }}
                         >
                           {showPassword ? <VisibilityOff sx={{ fontSize: '1rem' }} /> : <Visibility sx={{ fontSize: '1rem' }} />}
                         </IconButton>
@@ -538,22 +494,12 @@ const Login: React.FC = () => {
                 disableElevation
                 disabled={loading}
                 sx={{
-                  py: 1.35,
-                  mt: 0.5,
-                  minHeight: 48,
-                  fontSize: '0.9375rem',
+                  py: 1,
+                  minHeight: 40,
+                  fontSize: '0.875rem',
                   fontWeight: 600,
-                  borderRadius: '12px',
+                  borderRadius: '8px',
                   textTransform: 'none',
-                  letterSpacing: '-0.01em',
-                  boxShadow: theme.palette.mode === 'light' ? '0 4px 14px rgba(15, 118, 110, 0.28)' : 'none',
-                  '&:hover': {
-                    boxShadow: theme.palette.mode === 'light' ? '0 6px 18px rgba(15, 118, 110, 0.34)' : 'none',
-                  },
-                  '&:disabled': {
-                    bgcolor: alpha(theme.palette.action.disabledBackground, 1),
-                    color: 'text.disabled',
-                  },
                 }}
               >
                 {loading ? t('common.loading') : t('login.loginButton')}
@@ -561,7 +507,7 @@ const Login: React.FC = () => {
 
               <Button
                 fullWidth
-                variant="outlined"
+                variant="text"
                 onClick={() => {
                   setSignupOpen(true);
                   setSignupStep('form');
@@ -570,23 +516,13 @@ const Login: React.FC = () => {
                   setSignupResult(null);
                 }}
                 sx={{
-                  mt: 1.5,
-                  py: 1,
-                  minHeight: 44,
-                  fontSize: '0.875rem',
+                  mt: 1,
+                  py: 0.75,
+                  minHeight: 36,
+                  fontSize: '0.8125rem',
                   fontWeight: 600,
-                  border: `1px solid ${alpha(theme.palette.primary.main, 0.35)}`,
                   color: 'primary.main',
-                  bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'light' ? 0.05 : 0.1),
                   textTransform: 'none',
-                  letterSpacing: '-0.01em',
-                  borderRadius: '12px',
-                  '&:hover': {
-                    border: `1px solid ${alpha(theme.palette.primary.main, 0.55)}`,
-                    bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'light' ? 0.1 : 0.16),
-                    color: 'primary.dark',
-                    textDecoration: 'none',
-                  },
                 }}
               >
                 {t('login.signUpCta')}
@@ -596,6 +532,56 @@ const Login: React.FC = () => {
 
         </Paper>
       </Container>
+      <Box
+        sx={{
+          position: 'absolute',
+          left: '50%',
+          bottom: 38,
+          transform: 'translateX(-50%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 0.75,
+          flexWrap: 'wrap',
+          maxWidth: 'min(96vw, 640px)',
+          px: 1,
+        }}
+      >
+        {[
+          { to: '/legal/terms', label: t('login.footerTerms') },
+          { to: '/legal/privacy', label: t('login.footerPrivacy') },
+          { to: '/legal/support', label: t('login.footerSupport') },
+        ].map((link, index) => (
+          <React.Fragment key={link.to}>
+            {index > 0 && (
+              <Typography
+                variant="caption"
+                sx={{ color: alpha(theme.palette.text.secondary, 0.45), fontSize: '0.6875rem' }}
+              >
+                ·
+              </Typography>
+            )}
+            <Typography
+              component={RouterLink}
+              to={link.to}
+              variant="caption"
+              sx={{
+                color: alpha(theme.palette.text.secondary, 0.82),
+                fontSize: '0.6875rem',
+                fontWeight: 600,
+                textDecoration: 'none',
+                whiteSpace: 'nowrap',
+                '&:hover': {
+                  color: 'primary.main',
+                  textDecoration: 'underline',
+                },
+              }}
+            >
+              {link.label}
+            </Typography>
+          </React.Fragment>
+        ))}
+      </Box>
       <Box
         sx={{
           position: 'absolute',

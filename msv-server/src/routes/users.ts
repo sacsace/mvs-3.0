@@ -315,6 +315,58 @@ router.get('/', async (req, res) => {
   }
 });
 
+// 다음 사원번호 미리보기 (등록 폼 표시용)
+router.get('/next-employee-number', async (req, res) => {
+  try {
+    const tenantId = (req as any).user.tenant_id;
+    const companyId = (req as any).user.company_id;
+    const userRole = (req as any).user.role;
+    const { company_id } = req.query;
+
+    let targetCompanyId = companyId;
+    if (userRole === 'root' && company_id) {
+      targetCompanyId = parseInt(company_id as string, 10);
+    }
+
+    if (!targetCompanyId || Number.isNaN(targetCompanyId)) {
+      return res.status(400).json({
+        success: false,
+        message: '회사를 선택해주세요.'
+      });
+    }
+
+    const companyWhere: Record<string, unknown> = { id: targetCompanyId };
+    if (userRole !== 'root') {
+      companyWhere.tenant_id = tenantId;
+    }
+
+    const company = await (Company as any).findOne({
+      where: companyWhere,
+      attributes: ['id', 'name']
+    });
+
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        message: '회사 정보를 찾을 수 없습니다.'
+      });
+    }
+
+    const employeeNumber = await generateEmployeeNumber(company.id, company.name);
+
+    return res.json({
+      success: true,
+      data: { employee_number: employeeNumber }
+    });
+  } catch (error: any) {
+    console.error('사원번호 미리보기 오류:', error);
+    return res.status(500).json({
+      success: false,
+      message: '사원번호 미리보기 중 오류가 발생했습니다.'
+    });
+  }
+});
+
 // 사용자 상세 조회
 router.get('/:id', async (req, res) => {
   try {

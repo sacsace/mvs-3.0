@@ -457,7 +457,7 @@ const AccountingStatistics: React.FC = () => {
         <CardContent sx={{ py: 2.5, px: 2.5 }}>
           <Grid container spacing={2} alignItems="flex-end">
             {canSelectCompany && (
-              <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+              <Grid size={{ xs: 12, sm: 9, md: 3 }}>
                 <FormControl fullWidth>
                   <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
                     회사
@@ -473,7 +473,7 @@ const AccountingStatistics: React.FC = () => {
                         setSelectedCompanyId(isNaN(num) ? '' : num);
                       }
                     }}
-                    sx={{ height: '40px' }}
+                    sx={{ height: '40px', minWidth: 0 }}
                   >
                     <MenuItem value="">전체 회사</MenuItem>
                     {companies.map((company) => (

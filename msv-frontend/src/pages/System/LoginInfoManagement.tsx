@@ -449,33 +449,91 @@ const LoginInfoManagement: React.FC = () => {
         '& .MuiAutocomplete-popupIndicator, & .MuiAutocomplete-clearIndicator': isDark ? { color: 'rgba(220, 231, 255, 0.8)' } : undefined
       }}
     >
-      <Box sx={{ mb: 2 }}>
-        <Typography component="h1" variant="pageTitle">
-          {t('loginInfoManagement.title')}
-        </Typography>
-        <Typography
-          variant="body2"
+      <Box
+        sx={{
+          mb: 2,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 2,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography component="h1" variant="pageTitle">
+            {t('loginInfoManagement.title')}
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              mt: 0.75,
+              color: isDark ? 'rgba(200, 214, 235, 0.88)' : 'text.secondary',
+              lineHeight: 1.5,
+              whiteSpace: { xs: 'normal', md: 'nowrap' },
+            }}
+          >
+            {t('loginInfoManagement.description')}
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              mt: 1,
+              color: isDark ? 'rgba(180, 200, 230, 0.85)' : 'text.secondary',
+              lineHeight: 1.5,
+              maxWidth: 900,
+              fontSize: '0.8125rem',
+            }}
+          >
+            {t('loginInfoManagement.excelHint')}
+          </Typography>
+        </Box>
+        <Box
           sx={{
-            mt: 0.75,
-            color: isDark ? 'rgba(200, 214, 235, 0.88)' : 'text.secondary',
-            lineHeight: 1.5,
-            maxWidth: 720
+            display: 'flex',
+            gap: 1,
+            flexWrap: 'wrap',
+            flexShrink: 0,
+            alignItems: 'center',
+            '& .MuiButton-root': { height: 40 },
+            '& .MuiButton-outlined': toolbarOutlinedBtnSx,
           }}
         >
-          {t('loginInfoManagement.description')}
-        </Typography>
-        <Typography
-          variant="body2"
-          sx={{
-            mt: 1,
-            color: isDark ? 'rgba(180, 200, 230, 0.85)' : 'text.secondary',
-            lineHeight: 1.5,
-            maxWidth: 900,
-            fontSize: '0.8125rem'
-          }}
-        >
-          {t('loginInfoManagement.excelHint')}
-        </Typography>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleFileChange}
+            style={{ display: 'none' }}
+          />
+          <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canMutate}>
+            <span style={{ display: 'inline-flex' }}>
+              <Button
+                variant="outlined"
+                onClick={handleImportClick}
+                disabled={
+                  menuFlags.menusLoading ||
+                  !menuFlags.canMutate ||
+                  !selectedCompanyId ||
+                  selectedTabId === ''
+                }
+              >
+                {t('loginInfoManagement.actions.importExcel')}
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
+            <span style={{ display: 'inline-flex' }}>
+              <Button
+                variant="outlined"
+                startIcon={<FileDownloadIcon />}
+                onClick={() => gridRef.current?.exportToExcel()}
+                disabled={menuFlags.menusLoading || !menuFlags.canRead || !selectedCompanyId || selectedTabId === ''}
+              >
+                {t('loginInfoManagement.actions.exportExcel')}
+              </Button>
+            </span>
+          </Tooltip>
+        </Box>
       </Box>
 
       {errorMessage && (
@@ -493,13 +551,16 @@ const LoginInfoManagement: React.FC = () => {
         <CardContent sx={{ py: 2, px: 2, '&:last-child': { pb: 2 } }}>
           <Box
             sx={{
-              display: 'flex',
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                md: 'minmax(300px, 380px) minmax(220px, 1fr) auto',
+              },
+              gap: 2,
               alignItems: { xs: 'stretch', md: 'flex-end' },
-              flexDirection: { xs: 'column', md: 'row' },
-              gap: 2
             }}
           >
-            <Box sx={{ flex: 1, minWidth: 0, ...toolbarInputSx }}>
+            <Box sx={{ width: '100%', minWidth: { md: 300 }, ...toolbarInputSx }}>
               <Typography variant="caption" sx={fieldLabelSx}>
                 {t('loginInfoManagement.fields.company')}
               </Typography>
@@ -510,11 +571,18 @@ const LoginInfoManagement: React.FC = () => {
                 getOptionLabel={(option) => option.name}
                 isOptionEqualToValue={(option, value) => option.id === value.id}
                 disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                sx={{ width: '100%' }}
                 renderInput={(params) => (
-                  <TextField {...params} size="small" placeholder={t('loginInfoManagement.placeholders.selectCompany')} />
+                  <TextField
+                    {...params}
+                    size="small"
+                    placeholder={t('loginInfoManagement.placeholders.selectCompany')}
+                    sx={{ '& .MuiInputBase-root': { height: 40 } }}
+                  />
                 )}
               />
             </Box>
+
             <TextField
               size="small"
               placeholder={t('loginInfoManagement.placeholders.searchRows')}
@@ -529,12 +597,13 @@ const LoginInfoManagement: React.FC = () => {
                 )
               }}
               sx={{
-                width: { xs: '100%', sm: '100%', md: 280 },
-                flexShrink: 0,
+                width: '100%',
+                minWidth: 0,
                 '& .MuiInputBase-root': { height: 40 },
                 ...toolbarInputSx,
               }}
             />
+
             <Box
               sx={{
                 display: 'flex',
@@ -548,71 +617,26 @@ const LoginInfoManagement: React.FC = () => {
                 '& .MuiButton-outlined': toolbarOutlinedBtnSx,
               }}
             >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleFileChange}
-                style={{ display: 'none' }}
-              />
-              <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
+              <Tooltip
+                title={
+                  menuFlags.menusLoading || !menuFlags.canRead
+                    ? t('common.menuNoView')
+                    : t('loginInfoManagement.actions.refresh')
+                }
+              >
                 <span style={{ display: 'inline-flex' }}>
                   <Button
                     variant="outlined"
-                    startIcon={<RefreshIcon />}
                     onClick={() =>
                       selectedCompanyId &&
                       selectedTabId !== '' &&
                       loadLoginInfos(Number(selectedCompanyId), Number(selectedTabId))
                     }
                     disabled={menuFlags.menusLoading || !menuFlags.canRead || !selectedCompanyId || selectedTabId === ''}
+                    aria-label={t('loginInfoManagement.actions.refresh')}
+                    sx={{ minWidth: 40, width: 40, px: 0 }}
                   >
-                    {t('loginInfoManagement.actions.refresh')}
-                  </Button>
-                </span>
-              </Tooltip>
-              <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canMutate}>
-                <span style={{ display: 'inline-flex' }}>
-                  <Button
-                    variant="outlined"
-                    onClick={handleImportClick}
-                    disabled={
-                      menuFlags.menusLoading ||
-                      !menuFlags.canMutate ||
-                      !selectedCompanyId ||
-                      selectedTabId === ''
-                    }
-                  >
-                    {t('loginInfoManagement.actions.importExcel')}
-                  </Button>
-                </span>
-              </Tooltip>
-              <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
-                <span style={{ display: 'inline-flex' }}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<FileDownloadIcon />}
-                    onClick={() => gridRef.current?.exportToExcel()}
-                    disabled={menuFlags.menusLoading || !menuFlags.canRead || !selectedCompanyId || selectedTabId === ''}
-                  >
-                    {t('loginInfoManagement.actions.exportExcel')}
-                  </Button>
-                </span>
-              </Tooltip>
-              <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canMutate}>
-                <span style={{ display: 'inline-flex' }}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<ViewColumnIcon />}
-                    onClick={() => gridRef.current?.openAddColumnDialog()}
-                    disabled={
-                      menuFlags.menusLoading ||
-                      !menuFlags.canMutate ||
-                      !selectedCompanyId ||
-                      selectedTabId === ''
-                    }
-                  >
-                    {t('loginInfoManagement.actions.addColumn')}
+                    <RefreshIcon fontSize="small" />
                   </Button>
                 </span>
               </Tooltip>
@@ -700,6 +724,29 @@ const LoginInfoManagement: React.FC = () => {
                       aria-label={t('loginInfoManagement.tabs.addTab')}
                     >
                       <AddIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip
+                  title={
+                    menuFlags.menusLoading || !menuFlags.canMutate
+                      ? t('common.menuNoMutate')
+                      : t('loginInfoManagement.actions.addColumn')
+                  }
+                >
+                  <span style={{ display: 'inline-flex' }}>
+                    <IconButton
+                      size="small"
+                      onClick={() => gridRef.current?.openAddColumnDialog()}
+                      disabled={
+                        menuFlags.menusLoading ||
+                        !menuFlags.canMutate ||
+                        !selectedCompanyId ||
+                        selectedTabId === ''
+                      }
+                      aria-label={t('loginInfoManagement.actions.addColumn')}
+                    >
+                      <ViewColumnIcon fontSize="small" />
                     </IconButton>
                   </span>
                 </Tooltip>
