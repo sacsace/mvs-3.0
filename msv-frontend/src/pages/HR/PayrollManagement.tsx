@@ -16,6 +16,8 @@ import {
   InputAdornment,
   Tooltip
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { useTranslation } from 'react-i18next';
 import {
   Add as AddIcon,
@@ -448,24 +450,16 @@ const PayrollManagement: React.FC = () => {
   return (
     <Box
       sx={{
-        p: 0,
-        backgroundColor: 'workArea.main',
-        borderRadius: 2,
+        ...mvsPageRootSx,
         display: 'flex',
         flexDirection: 'column',
         flex: 1,
         minHeight: 'calc(100dvh - 200px)',
-        boxSizing: 'border-box'
       }}
     >
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexShrink: 0 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <MoneyIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-          <Typography component="h1" variant="pageTitle">
-            {t('payrollManagement.title')}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+      <MvsPageHeader
+        title={t('payrollManagement.title')}
+        actions={
           <Tooltip title={bulkCreateHeaderTooltip} disableHoverListener={!bulkCreateHeaderTooltip}>
             <span style={{ display: 'inline-flex' }}>
               <Button
@@ -479,8 +473,8 @@ const PayrollManagement: React.FC = () => {
               </Button>
             </span>
           </Tooltip>
-        </Box>
-      </Box>
+        }
+      />
 
       {!menuFlags.menusLoading && !menuFlags.canRead && (
         <Alert severity="warning" sx={{ mb: 2 }}>

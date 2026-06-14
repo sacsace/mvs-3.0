@@ -1,8 +1,10 @@
 import type { Menu } from '../services/menuService';
 
-/** 현재 경로에 해당하는 leaf(또는 prefix 일치) 메뉴 id — AppLayout.findMenuByRoute 와 동일 규칙 */
-export function findMenuIdByPath(menuList: Menu[], pathname: string): number | null {
-  const normalizedRoute = pathname.replace(/^\/+|\/+$/g, '');
+const normalizeRoutePath = (path: string) => path.replace(/^\/+|\/+$/g, '');
+
+/** 현재 경로에 해당하는 leaf(또는 prefix 일치) 메뉴 — AppLayout.findMenuByRoute 와 동일 규칙 */
+export function findMenuByPath(menuList: Menu[], pathname: string): Menu | null {
+  const normalizedRoute = normalizeRoutePath(pathname);
 
   const findMenu = (menus: Menu[]): Menu | null => {
     for (const menu of menus) {
@@ -14,7 +16,7 @@ export function findMenuIdByPath(menuList: Menu[], pathname: string): number | n
         continue;
       }
 
-      const normalizedMenuRoute = menu.route.replace(/^\/+|\/+$/g, '');
+      const normalizedMenuRoute = normalizeRoutePath(menu.route);
 
       if (normalizedMenuRoute === normalizedRoute) {
         return menu;
@@ -32,6 +34,11 @@ export function findMenuIdByPath(menuList: Menu[], pathname: string): number | n
     return null;
   };
 
-  const menu = findMenu(menuList);
+  return findMenu(menuList);
+}
+
+/** 현재 경로에 해당하는 leaf(또는 prefix 일치) 메뉴 id — AppLayout.findMenuByRoute 와 동일 규칙 */
+export function findMenuIdByPath(menuList: Menu[], pathname: string): number | null {
+  const menu = findMenuByPath(menuList, pathname);
   return menu ? menu.id : null;
 }

@@ -25,6 +25,8 @@ import {
   TextField,
   Typography
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { useTranslation } from 'react-i18next';
 import { useTheme, alpha } from '@mui/material/styles';
 import {
@@ -376,22 +378,11 @@ const WorkStatistics: React.FC = () => {
   } as const;
 
   return (
-    <Box sx={{ width: '100%', maxWidth: '100%', minHeight: '100%', bgcolor: 'transparent' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-        <Typography
-          component="h1"
-          variant="pageTitle"
-          sx={{
-            color: 'text.primary',
-            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-            fontWeight: 600,
-            letterSpacing: '-0.022em',
-            lineHeight: 1.28,
-          }}
-        >
-          {t('workStatistics.title')}
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={t('workStatistics.title')}
+        actions={
+          <>
           <Button
             variant="outlined"
             startIcon={<RefreshIcon sx={{ fontSize: 18 }} />}
@@ -429,8 +420,9 @@ const WorkStatistics: React.FC = () => {
           >
             {t('workStatistics.actions.export')}
           </Button>
-        </Box>
-      </Box>
+          </>
+        }
+      />
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' }, gap: 2, mb: 3 }}>
         <Card elevation={0} sx={kpiCardSx}>
@@ -493,9 +485,12 @@ const WorkStatistics: React.FC = () => {
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr' }, gap: 2, alignItems: 'center' }}>
             <TextField
               fullWidth
+              size="small"
+              label={t('common.search')}
               placeholder={t('workStatistics.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              InputLabelProps={{ shrink: true }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -518,24 +513,36 @@ const WorkStatistics: React.FC = () => {
                 },
               }}
             />
-            <FormControl fullWidth>
-              <InputLabel sx={{ color: 'text.primary', opacity: 0.75 }}>{t('workStatistics.filters.department')}</InputLabel>
-              <Select value={departmentFilter} onChange={(e) => setDepartmentFilter(e.target.value)}>
-                <MenuItem value="">{t('workStatistics.filters.all')}</MenuItem>
-                {departments.map((dept) => (
-                  <MenuItem key={dept} value={dept}>{dept}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel sx={{ color: 'text.primary', opacity: 0.75 }}>{t('workStatistics.filters.period')}</InputLabel>
-              <Select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value)}>
-                <MenuItem value="">{t('workStatistics.filters.all')}</MenuItem>
-                {periods.map((period) => (
-                  <MenuItem key={period} value={period}>{period}</MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('workStatistics.filters.department')}
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="">{t('workStatistics.filters.all')}</MenuItem>
+              {departments.map((dept) => (
+                <MenuItem key={dept} value={dept}>{dept}</MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('workStatistics.filters.period')}
+              value={periodFilter}
+              onChange={(e) => setPeriodFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="">{t('workStatistics.filters.all')}</MenuItem>
+              {periods.map((period) => (
+                <MenuItem key={period} value={period}>{period}</MenuItem>
+              ))}
+            </TextField>
             <Button
               fullWidth
               variant="outlined"

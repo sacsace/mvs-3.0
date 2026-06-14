@@ -6,8 +6,6 @@ import {
   CardContent,
   Button,
   TextField,
-  FormControl,
-  Select,
   MenuItem,
   Switch,
   FormControlLabel,
@@ -23,6 +21,8 @@ import {
   Tabs,
   Tab
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx, mvsOutlinedLabelProps } from '../../theme/mvsLayout';
 import {
   Settings as SettingsIcon,
   Notifications as NotificationsIcon,
@@ -44,14 +44,8 @@ const CARD_CONTENT_COMPACT = { py: 1.5, px: 2, '&:last-child': { pb: 1.5 } } as 
 const SECTION_TITLE = { fontSize: '0.9375rem', fontWeight: 600, lineHeight: 1.35 } as const;
 const SECTION_HEADER = { display: 'flex', alignItems: 'center', mb: 1 } as const;
 const SECTION_DIVIDER = { mb: 1.25 } as const;
-const FIELD_LABEL = {
-  fontSize: '0.75rem',
-  mb: 0.5,
-  fontWeight: 500,
-  color: 'text.primary',
-  lineHeight: 1.35
-} as const;
 const FIELD_BLOCK = { mb: 1.25 } as const;
+const OUTLINED_FIELD = mvsOutlinedLabelProps;
 const SWITCH_LABEL = { mb: 0.35, '& .MuiFormControlLabel-label': { fontSize: '0.8125rem', lineHeight: 1.35 } } as const;
 
 /** 설정 카드 — 테두리·얕은 그림자로 블록 구분 */
@@ -517,40 +511,26 @@ const SystemSettings: React.FC = () => {
     !mailAuthPassFocused;
 
   return (
-    <Box sx={{ 
-      p: 0, 
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%'
-    }}>
-      {/* 헤더 */}
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        mb: 2 
-      }}>
-        <Box>
-          <Typography component="h1" variant="pageTitle" sx={{ mb: 0.5 }}>
-            시스템 설정
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem', lineHeight: 1.45 }}>
-            시스템 전반의 설정을 관리하는 페이지입니다.
-          </Typography>
-        </Box>
-        {settingsTab === 0 && (
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <SaveIcon sx={{ fontSize: 18 }} />}
-            onClick={handleSave}
-            disabled={saving}
-            sx={{ borderRadius: 1.5, py: 0.75 }}
-          >
-            {saving ? '저장 중...' : '설정 저장'}
-          </Button>
-        )}
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title="시스템 설정"
+        description="시스템 전반의 설정을 관리하는 페이지입니다."
+        mb={2}
+        actions={
+          settingsTab === 0 ? (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <SaveIcon sx={{ fontSize: 18 }} />}
+              onClick={handleSave}
+              disabled={saving}
+              sx={{ borderRadius: 1.5, py: 0.75 }}
+            >
+              {saving ? '저장 중...' : '설정 저장'}
+            </Button>
+          ) : undefined
+        }
+      />
 
       <Card sx={{ mb: 1.5 }}>
         <CardContent sx={{ py: 0.25, '&:last-child': { pb: 0.25 } }}>
@@ -611,12 +591,11 @@ const SystemSettings: React.FC = () => {
             </Box>
 
             <Box sx={FIELD_BLOCK}>
-              <Typography sx={FIELD_LABEL}>
-                회사명
-              </Typography>
               <TextField
                 fullWidth
                 size="small"
+                label="회사명"
+                {...OUTLINED_FIELD}
                 value={settings.general.companyName}
                 onChange={(e) => handleSettingChange('general', 'companyName', e.target.value)}
                 variant="outlined"
@@ -625,10 +604,11 @@ const SystemSettings: React.FC = () => {
             </Box>
 
             <Box sx={FIELD_BLOCK}>
-              <Typography sx={FIELD_LABEL}>{t('systemSettings.general.companyAbbreviation')}</Typography>
               <TextField
                 fullWidth
                 size="small"
+                label={t('systemSettings.general.companyAbbreviation')}
+                {...OUTLINED_FIELD}
                 value={settings.general.companyAbbreviation}
                 onChange={(e) => handleSettingChange('general', 'companyAbbreviation', e.target.value.toUpperCase())}
                 variant="outlined"
@@ -639,54 +619,45 @@ const SystemSettings: React.FC = () => {
             </Box>
 
             <Box sx={FIELD_BLOCK}>
-              <Typography sx={{ ...FIELD_LABEL, mb: 0.75 }}>
+              <Typography sx={{ fontSize: '0.75rem', mb: 0.75, fontWeight: 500, color: 'text.primary', lineHeight: 1.35 }}>
                 사무실 위치 (출근 제한 기준)
               </Typography>
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25, mb: 0.75 }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Typography variant="caption" sx={{ mb: 0.35, color: 'text.secondary', fontWeight: 600, fontSize: '0.7rem' }}>
-                    위도
-                  </Typography>
-                  <TextField
-                    size="small"
-                    type="number"
-                    inputProps={{ step: '0.000001' }}
-                    value={settings.general.officeLocation.latitude}
-                    onChange={(e) => handleOfficeLocationChange('latitude', e.target.value)}
-                    fullWidth
-                    disabled={!canManageAll}
-                  />
-                </Box>
-                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Typography variant="caption" sx={{ mb: 0.35, color: 'text.secondary', fontWeight: 600, fontSize: '0.7rem' }}>
-                    경도
-                  </Typography>
-                  <TextField
-                    size="small"
-                    type="number"
-                    inputProps={{ step: '0.000001' }}
-                    value={settings.general.officeLocation.longitude}
-                    onChange={(e) => handleOfficeLocationChange('longitude', e.target.value)}
-                    fullWidth
-                    disabled={!canManageAll}
-                  />
-                </Box>
+                <TextField
+                  size="small"
+                  type="number"
+                  label="위도"
+                  {...OUTLINED_FIELD}
+                  inputProps={{ step: '0.000001' }}
+                  value={settings.general.officeLocation.latitude}
+                  onChange={(e) => handleOfficeLocationChange('latitude', e.target.value)}
+                  fullWidth
+                  disabled={!canManageAll}
+                />
+                <TextField
+                  size="small"
+                  type="number"
+                  label="경도"
+                  {...OUTLINED_FIELD}
+                  inputProps={{ step: '0.000001' }}
+                  value={settings.general.officeLocation.longitude}
+                  onChange={(e) => handleOfficeLocationChange('longitude', e.target.value)}
+                  fullWidth
+                  disabled={!canManageAll}
+                />
               </Box>
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25 }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                  <Typography variant="caption" sx={{ mb: 0.35, color: 'text.secondary', fontWeight: 600, fontSize: '0.7rem' }}>
-                    허용 반경 (미터)
-                  </Typography>
-                  <TextField
-                    size="small"
-                    type="number"
-                    inputProps={{ min: 10, step: '10' }}
-                    value={settings.general.officeLocation.radiusMeters}
-                    onChange={(e) => handleOfficeLocationChange('radiusMeters', e.target.value)}
-                    fullWidth
-                    disabled={!canManageAll}
-                  />
-                </Box>
+                <TextField
+                  size="small"
+                  type="number"
+                  label="허용 반경 (미터)"
+                  {...OUTLINED_FIELD}
+                  inputProps={{ min: 10, step: '10' }}
+                  value={settings.general.officeLocation.radiusMeters}
+                  onChange={(e) => handleOfficeLocationChange('radiusMeters', e.target.value)}
+                  fullWidth
+                  disabled={!canManageAll}
+                />
                 <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
                   <Button
                     variant="outlined"
@@ -706,10 +677,9 @@ const SystemSettings: React.FC = () => {
             </Box>
 
             <Box sx={FIELD_BLOCK}>
-              <Typography sx={FIELD_LABEL}>
-                시간대
-              </Typography>
               <TextField
+                label="시간대"
+                {...OUTLINED_FIELD}
                 value="인도 표준시 (IST)"
                 fullWidth
                 size="small"
@@ -726,36 +696,34 @@ const SystemSettings: React.FC = () => {
             </Box>
 
             <Box sx={FIELD_BLOCK}>
-              <Typography sx={FIELD_LABEL}>
-                언어
-              </Typography>
-              <FormControl fullWidth size="small">
-                <Select
-                  value={settings.general.language}
-                  onChange={(e) => handleSettingChange('general', 'language', e.target.value)}
-                  displayEmpty
-                  disabled={!canManageAll}
-                >
-                  <MenuItem value="ko">한국어</MenuItem>
-                  <MenuItem value="en">English</MenuItem>
-                </Select>
-              </FormControl>
+              <TextField
+                fullWidth
+                size="small"
+                select
+                label="언어"
+                {...OUTLINED_FIELD}
+                value={settings.general.language}
+                onChange={(e) => handleSettingChange('general', 'language', e.target.value)}
+                disabled={!canManageAll}
+              >
+                <MenuItem value="ko">한국어</MenuItem>
+                <MenuItem value="en">English</MenuItem>
+              </TextField>
             </Box>
 
             <Box>
-              <Typography sx={FIELD_LABEL}>
-                통화
-              </Typography>
-              <FormControl fullWidth size="small">
-                <Select
-                  value={'INR'}
-                  onChange={(e) => handleSettingChange('general', 'currency', e.target.value)}
-                  displayEmpty
-                  disabled={!canManageAll}
-                >
-                  <MenuItem value="INR">INR (Rs.)</MenuItem>
-                </Select>
-              </FormControl>
+              <TextField
+                fullWidth
+                size="small"
+                select
+                label="통화"
+                {...OUTLINED_FIELD}
+                value="INR"
+                onChange={(e) => handleSettingChange('general', 'currency', e.target.value)}
+                disabled={!canManageAll}
+              >
+                <MenuItem value="INR">INR (Rs.)</MenuItem>
+              </TextField>
             </Box>
           </CardContent>
         </Card>
@@ -772,19 +740,21 @@ const SystemSettings: React.FC = () => {
             <Divider sx={SECTION_DIVIDER} />
 
             <Box sx={FIELD_BLOCK}>
-              <Typography sx={FIELD_LABEL}>
-                테마
-              </Typography>
-              <FormControl fullWidth size="small">
-                <Select
-                  value={(() => {
-                    const rawTheme = String(settings.appearance.theme || 'light');
-                    const normalizedTheme = rawTheme === 'ocean' ? 'forest' : rawTheme;
-                    return ['light', 'dark', 'forest', 'sunset', 'lavender', 'graphite'].includes(normalizedTheme) ? normalizedTheme : 'light';
-                  })()}
-                  onChange={(e) => handleSettingChange('appearance', 'theme', e.target.value)}
-                  displayEmpty
-                  renderValue={(selected) => {
+              <TextField
+                fullWidth
+                size="small"
+                select
+                label="테마"
+                {...OUTLINED_FIELD}
+                value={(() => {
+                  const rawTheme = String(settings.appearance.theme || 'light');
+                  const normalizedTheme = rawTheme === 'ocean' ? 'forest' : rawTheme;
+                  return ['light', 'dark', 'forest', 'sunset', 'lavender', 'graphite'].includes(normalizedTheme) ? normalizedTheme : 'light';
+                })()}
+                onChange={(e) => handleSettingChange('appearance', 'theme', e.target.value)}
+                SelectProps={{
+                  displayEmpty: true,
+                  renderValue: (selected) => {
                     const labelMap: Record<string, string> = {
                       light: '라이트 테마',
                       dark: '다크 테마',
@@ -794,25 +764,25 @@ const SystemSettings: React.FC = () => {
                       graphite: '그래파이트 테마'
                     };
                     return labelMap[String(selected)] || '라이트 테마';
-                  }}
-                  sx={{
-                    '& .MuiSelect-select': {
-                      color: 'text.primary',
-                      WebkitTextFillColor: (theme) => theme.palette.text.primary
-                    },
-                    '& .MuiSvgIcon-root': {
-                      color: 'text.primary'
-                    }
-                  }}
-                >
-                  <MenuItem value="light">라이트 테마</MenuItem>
-                  <MenuItem value="dark">다크 테마</MenuItem>
-                  <MenuItem value="forest">포레스트 테마</MenuItem>
-                  <MenuItem value="sunset">선셋 테마</MenuItem>
-                  <MenuItem value="lavender">라벤더 테마</MenuItem>
-                  <MenuItem value="graphite">그래파이트 테마</MenuItem>
-                </Select>
-              </FormControl>
+                  },
+                }}
+                sx={{
+                  '& .MuiSelect-select': {
+                    color: 'text.primary',
+                    WebkitTextFillColor: (theme) => theme.palette.text.primary
+                  },
+                  '& .MuiSvgIcon-root': {
+                    color: 'text.primary'
+                  }
+                }}
+              >
+                <MenuItem value="light">라이트 테마</MenuItem>
+                <MenuItem value="dark">다크 테마</MenuItem>
+                <MenuItem value="forest">포레스트 테마</MenuItem>
+                <MenuItem value="sunset">선셋 테마</MenuItem>
+                <MenuItem value="lavender">라벤더 테마</MenuItem>
+                <MenuItem value="graphite">그래파이트 테마</MenuItem>
+              </TextField>
               <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block', fontSize: '0.7rem', lineHeight: 1.45 }}>
                 {{
                   light: '밝고 깔끔한 기본 테마',
@@ -961,13 +931,12 @@ const SystemSettings: React.FC = () => {
             <Divider sx={SECTION_DIVIDER} />
 
             <Box sx={FIELD_BLOCK}>
-              <Typography sx={FIELD_LABEL}>
-                최소 비밀번호 길이
-              </Typography>
               <TextField
                 fullWidth
                 size="small"
                 type="number"
+                label="최소 비밀번호 길이"
+                {...OUTLINED_FIELD}
                 value={settings.security.passwordMinLength}
                 onChange={(e) => handleSettingChange('security', 'passwordMinLength', parseInt(e.target.value))}
                 variant="outlined"
@@ -976,13 +945,12 @@ const SystemSettings: React.FC = () => {
             </Box>
 
             <Box sx={FIELD_BLOCK}>
-              <Typography sx={FIELD_LABEL}>
-                세션 타임아웃 (분)
-              </Typography>
               <TextField
                 fullWidth
                 size="small"
                 type="number"
+                label="세션 타임아웃 (분)"
+                {...OUTLINED_FIELD}
                 value={settings.security.sessionTimeout}
                 onChange={(e) => handleSettingChange('security', 'sessionTimeout', parseInt(e.target.value))}
                 inputProps={{ min: 5, max: 1440, step: 1 }}
@@ -1068,6 +1036,7 @@ const SystemSettings: React.FC = () => {
                 fullWidth
                 size="small"
                 label={t('systemSettings.mailServer.host')}
+                {...OUTLINED_FIELD}
                 value={settings.mailServer.host}
                 onChange={(e) => handleMailServerChange('host', e.target.value)}
                 disabled={!canManageAll}
@@ -1078,6 +1047,7 @@ const SystemSettings: React.FC = () => {
                 size="small"
                 type="number"
                 label={t('systemSettings.mailServer.port')}
+                {...OUTLINED_FIELD}
                 value={settings.mailServer.port}
                 onChange={(e) => handleMailServerChange('port', parseInt(e.target.value, 10) || 587)}
                 disabled={!canManageAll}
@@ -1098,6 +1068,7 @@ const SystemSettings: React.FC = () => {
                 fullWidth
                 size="small"
                 label={t('systemSettings.mailServer.authUser')}
+                {...OUTLINED_FIELD}
                 value={settings.mailServer.authUser}
                 onChange={(e) => handleMailServerChange('authUser', e.target.value)}
                 disabled={!canManageAll}
@@ -1108,6 +1079,7 @@ const SystemSettings: React.FC = () => {
                 size="small"
                 type={showMailPassMask ? 'text' : 'password'}
                 label={t('systemSettings.mailServer.authPass')}
+                {...OUTLINED_FIELD}
                 value={showMailPassMask ? MAIL_AUTH_PASS_MASK : settings.mailServer.authPass}
                 onChange={(e) => handleMailServerChange('authPass', e.target.value)}
                 onFocus={() => setMailAuthPassFocused(true)}
@@ -1134,6 +1106,7 @@ const SystemSettings: React.FC = () => {
                 fullWidth
                 size="small"
                 label={t('systemSettings.mailServer.fromEmail')}
+                {...OUTLINED_FIELD}
                 value={settings.mailServer.fromEmail}
                 onChange={(e) => handleMailServerChange('fromEmail', e.target.value)}
                 disabled={!canManageAll}
@@ -1143,6 +1116,7 @@ const SystemSettings: React.FC = () => {
                 fullWidth
                 size="small"
                 label={t('systemSettings.mailServer.fromName')}
+                {...OUTLINED_FIELD}
                 value={settings.mailServer.fromName}
                 onChange={(e) => handleMailServerChange('fromName', e.target.value)}
                 disabled={!canManageAll}
@@ -1178,32 +1152,30 @@ const SystemSettings: React.FC = () => {
                 />
 
                 <Box sx={FIELD_BLOCK}>
-                  <Typography sx={FIELD_LABEL}>
-                    백업 주기
-                  </Typography>
-                  <FormControl fullWidth size="small">
-                    <Select
-                      value={settings.backup.backupFrequency}
-                      onChange={(e) => handleSettingChange('backup', 'backupFrequency', e.target.value)}
-                      displayEmpty
-                      disabled={!isRoot}
-                    >
-                      <MenuItem value="hourly">매시간</MenuItem>
-                      <MenuItem value="daily">매일</MenuItem>
-                      <MenuItem value="weekly">매주</MenuItem>
-                      <MenuItem value="monthly">매월</MenuItem>
-                    </Select>
-                  </FormControl>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    select
+                    label="백업 주기"
+                    {...OUTLINED_FIELD}
+                    value={settings.backup.backupFrequency}
+                    onChange={(e) => handleSettingChange('backup', 'backupFrequency', e.target.value)}
+                    disabled={!isRoot}
+                  >
+                    <MenuItem value="hourly">매시간</MenuItem>
+                    <MenuItem value="daily">매일</MenuItem>
+                    <MenuItem value="weekly">매주</MenuItem>
+                    <MenuItem value="monthly">매월</MenuItem>
+                  </TextField>
                 </Box>
 
                 <Box sx={FIELD_BLOCK}>
-                  <Typography sx={FIELD_LABEL}>
-                    보관 기간 (일)
-                  </Typography>
                   <TextField
                     fullWidth
                     size="small"
                     type="number"
+                    label="보관 기간 (일)"
+                    {...OUTLINED_FIELD}
                     value={settings.backup.retentionDays}
                     onChange={(e) => handleSettingChange('backup', 'retentionDays', parseInt(e.target.value))}
                     variant="outlined"

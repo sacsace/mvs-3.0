@@ -32,6 +32,8 @@ import {
   Tab,
   InputAdornment,
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import {
   ReceiptLong as ReceiptLongIcon,
@@ -673,24 +675,11 @@ const EInvoiceManagement: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 0 }}>
-      <Typography
-        component="h1"
-        variant="pageTitle"
-        sx={{
-          fontWeight: 600,
-          fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-          letterSpacing: '-0.022em',
-          lineHeight: 1.28,
-          color: 'text.primary',
-          mb: 0.75,
-        }}
-      >
-        {t('eInvoiceManagement.title')}
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3, lineHeight: 1.5, maxWidth: 720 }}>
-        {t('eInvoiceManagement.description')}
-      </Typography>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={t('eInvoiceManagement.title')}
+        description={t('eInvoiceManagement.description')}
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
@@ -943,9 +932,11 @@ const EInvoiceManagement: React.FC = () => {
                     }}>
                       <TextField
                         fullWidth
+                        label={t('common.search')}
                         placeholder={t('eInvoiceManagement.filters.searchPlaceholder')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
+                        InputLabelProps={{ shrink: true }}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
@@ -955,50 +946,48 @@ const EInvoiceManagement: React.FC = () => {
                         }}
                       />
                       {(user?.role === 'root' || user?.role === 'audit') && (
-                        <FormControl fullWidth>
-                          <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                            {t('eInvoiceManagement.filters.company')}
-                          </Typography>
-                          <Select
-                            value={selectedCompanyId}
-                            onChange={(e) => {
-                              const value = String(e.target.value);
-                              if (value === '') {
-                                setSelectedCompanyId('');
-                              } else {
-                                const num = Number(value);
-                                setSelectedCompanyId(isNaN(num) ? '' : num);
-                              }
-                            }}
-                            displayEmpty
-                            sx={{ height: '40px' }}
-                          >
-                            <MenuItem value="">{t('eInvoiceManagement.filters.allCompanies')}</MenuItem>
-                            {companies.map((company) => (
-                              <MenuItem key={company.id} value={company.id}>
-                                {company.name}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                      )}
-                      <FormControl fullWidth>
-                        <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                          {t('eInvoiceManagement.filters.status')}
-                        </Typography>
-                        <Select
-                          value={filterStatus}
-                          onChange={(e) => setFilterStatus(e.target.value)}
-                          displayEmpty
+                        <TextField
+                          fullWidth
+                          select
+                          label={t('eInvoiceManagement.filters.company')}
+                          value={selectedCompanyId}
+                          onChange={(e) => {
+                            const value = String(e.target.value);
+                            if (value === '') {
+                              setSelectedCompanyId('');
+                            } else {
+                              const num = Number(value);
+                              setSelectedCompanyId(isNaN(num) ? '' : num);
+                            }
+                          }}
+                          InputLabelProps={{ shrink: true }}
+                          SelectProps={{ displayEmpty: true }}
                           sx={{ height: '40px' }}
                         >
-                          <MenuItem value="all">{t('eInvoiceManagement.filters.allStatus')}</MenuItem>
-                          <MenuItem value="draft">{t('eInvoiceManagement.status.draft')}</MenuItem>
-                          <MenuItem value="generated">{t('eInvoiceManagement.status.generated')}</MenuItem>
-                          <MenuItem value="uploaded">{t('eInvoiceManagement.status.uploaded')}</MenuItem>
-                          <MenuItem value="cancelled">{t('eInvoiceManagement.status.cancelled')}</MenuItem>
-                        </Select>
-                      </FormControl>
+                          <MenuItem value="">{t('eInvoiceManagement.filters.allCompanies')}</MenuItem>
+                          {companies.map((company) => (
+                            <MenuItem key={company.id} value={company.id}>
+                              {company.name}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      )}
+                      <TextField
+                        fullWidth
+                        select
+                        label={t('eInvoiceManagement.filters.status')}
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value)}
+                        InputLabelProps={{ shrink: true }}
+                        SelectProps={{ displayEmpty: true }}
+                        sx={{ height: '40px' }}
+                      >
+                        <MenuItem value="all">{t('eInvoiceManagement.filters.allStatus')}</MenuItem>
+                        <MenuItem value="draft">{t('eInvoiceManagement.status.draft')}</MenuItem>
+                        <MenuItem value="generated">{t('eInvoiceManagement.status.generated')}</MenuItem>
+                        <MenuItem value="uploaded">{t('eInvoiceManagement.status.uploaded')}</MenuItem>
+                        <MenuItem value="cancelled">{t('eInvoiceManagement.status.cancelled')}</MenuItem>
+                      </TextField>
                       <Button
                         variant="outlined"
                         startIcon={<FilterListIcon />}

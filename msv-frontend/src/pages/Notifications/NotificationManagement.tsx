@@ -35,6 +35,8 @@ import {
   Snackbar,
   CircularProgress,
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Notifications as NotificationsIcon,
   Check as CheckIcon,
@@ -785,18 +787,13 @@ const NotificationManagement: React.FC = () => {
   );
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 } }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-        <NotificationsIcon color="primary" sx={{ fontSize: 32 }} />
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1.2 }}>
-            {t('notificationManagement.title')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {t('notificationManagement.description')}
-          </Typography>
-        </Box>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx, p: { xs: 2, sm: 3 } }}>
+      <MvsPageHeader
+        title={t('notificationManagement.title')}
+        description={t('notificationManagement.description')}
+        icon={<NotificationsIcon color="primary" />}
+        mb={2}
+      />
 
       <Tabs value={activeTab} onChange={handleTabChange} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
         <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label={t('notificationManagement.tabHistory')} />

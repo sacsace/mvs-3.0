@@ -27,6 +27,8 @@ import {
   InputAdornment,
   LinearProgress
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -198,13 +200,8 @@ const TaskManagement: React.FC = () => {
   });
 
   return (
-    <Box sx={{ width: '100%', p: 0 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <AssignmentIcon sx={{ mr: 2, fontSize: '2rem', color: 'primary.main' }} />
-        <Typography variant="pageTitle" component="h1">
-          업무 관리
-        </Typography>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader title="업무 관리" />
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
         <Card>
@@ -254,9 +251,12 @@ const TaskManagement: React.FC = () => {
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '4fr 2fr 2fr 2fr' }, gap: 2, alignItems: 'center' }}>
             <TextField
               fullWidth
+              size="small"
+              label="검색"
               placeholder="업무명, 설명, 담당자로 검색"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              InputLabelProps={{ shrink: true }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -265,31 +265,37 @@ const TaskManagement: React.FC = () => {
                 ),
               }}
             />
-            <FormControl fullWidth>
-              <InputLabel>상태</InputLabel>
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <MenuItem value="all">전체</MenuItem>
-                <MenuItem value="pending">대기</MenuItem>
-                <MenuItem value="in_progress">진행중</MenuItem>
-                <MenuItem value="completed">완료</MenuItem>
-                <MenuItem value="cancelled">취소</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel>우선순위</InputLabel>
-              <Select
-                value={priorityFilter}
-                onChange={(e) => setPriorityFilter(e.target.value)}
-              >
-                <MenuItem value="all">전체</MenuItem>
-                <MenuItem value="high">높음</MenuItem>
-                <MenuItem value="medium">보통</MenuItem>
-                <MenuItem value="low">낮음</MenuItem>
-              </Select>
-            </FormControl>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="상태"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="all">전체</MenuItem>
+              <MenuItem value="pending">대기</MenuItem>
+              <MenuItem value="in_progress">진행중</MenuItem>
+              <MenuItem value="completed">완료</MenuItem>
+              <MenuItem value="cancelled">취소</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="우선순위"
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="all">전체</MenuItem>
+              <MenuItem value="high">높음</MenuItem>
+              <MenuItem value="medium">보통</MenuItem>
+              <MenuItem value="low">낮음</MenuItem>
+            </TextField>
             <Button
               variant="contained"
               startIcon={<AddIcon />}

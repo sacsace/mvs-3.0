@@ -14,6 +14,8 @@ import {
   CircularProgress,
   Tooltip
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { api, inventoryService } from '../../services/api';
@@ -375,53 +377,24 @@ const StockInSimple: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 2, maxWidth: 920, mx: 'auto', width: '100%' }}>
-      <Typography
-        component="h1"
-        variant="pageTitle"
-        sx={{
-          fontWeight: 600,
-          fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-          letterSpacing: '-0.022em',
-          lineHeight: 1.28,
-          color: 'text.primary',
-          mb: 1,
-        }}
-      >
-        {txt('입고 관리', 'Receiving')}
-      </Typography>
-      <Typography
-        variant="body2"
-        color="text.secondary"
-        sx={{
-          mb: 1.25,
-          lineHeight: 1.55,
-          maxWidth: 720,
-          wordBreak: 'keep-all',
-          overflowWrap: 'break-word',
-        }}
-      >
-        {txt(
-          '이미 시스템에 등록된 품목만 입고할 수 있습니다. 아래 한 칸에서 제품명·코드로 검색해 선택하거나, 품목코드를 입력·스캔한 뒤 Enter 또는 포커스를 옮기면 품목 정보와 이미지를 불러옵니다.',
-          'Only registered products can be received here. In the field below, search by name or code and pick a product, or type/scan an item code and press Enter (or move focus) to load details and the image.'
-        )}
-      </Typography>
-      <Typography
-        variant="body2"
-        color="text.secondary"
-        sx={{
-          mb: 2,
-          lineHeight: 1.55,
-          maxWidth: 720,
-          wordBreak: 'keep-all',
-          overflowWrap: 'break-word',
-        }}
-      >
-        {txt(
-          '신규 제품은 재고(제품) 관리에서 먼저 등록하세요. 출고는 "출고 관리"에서 바코드로 처리합니다.',
-          'Register new products in Inventory (Products) first. Outbound stock uses barcodes in Outbound management.'
-        )}
-      </Typography>
+    <Box sx={{ ...mvsPageRootSx, p: 2, maxWidth: 920, mx: 'auto' }}>
+      <MvsPageHeader
+        title={txt('입고 관리', 'Receiving')}
+        description={
+          <>
+            {txt(
+              '이미 시스템에 등록된 품목만 입고할 수 있습니다. 아래 한 칸에서 제품명·코드로 검색해 선택하거나, 품목코드를 입력·스캔한 뒤 Enter 또는 포커스를 옮기면 품목 정보와 이미지를 불러옵니다.',
+              'Only registered products can be received here. In the field below, search by name or code and pick a product, or type/scan an item code and press Enter (or move focus) to load details and the image.'
+            )}
+            <Typography component="span" variant="body2" color="text.secondary" sx={{ display: 'block', mt: 1, lineHeight: 1.55, maxWidth: 720 }}>
+              {txt(
+                '신규 제품은 재고(제품) 관리에서 먼저 등록하세요. 출고는 "출고 관리"에서 바코드로 처리합니다.',
+                'Register new products in Inventory (Products) first. Outbound stock uses barcodes in Outbound management.'
+              )}
+            </Typography>
+          </>
+        }
+      />
 
       <Card
         elevation={0}

@@ -29,6 +29,7 @@ import { departmentService } from '../../services/api';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { mvsTableHeadHighlightSx } from '../../theme/mvsLayout';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
 
 type DeptRow = {
   id: number;
@@ -202,45 +203,28 @@ export const DepartmentManagementPanel: React.FC<{
             }
       }
     >
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          gap: 2,
-          mb: 2.5,
-          flexWrap: 'wrap',
-        }}
-      >
-        <Typography
-          component={embedded ? 'h2' : 'h1'}
-          sx={{
-            fontSize: embedded ? '1.125rem' : '1.25rem',
-            fontWeight: 700,
-            letterSpacing: '-0.02em',
-            color: 'text.primary',
-            lineHeight: 1.3,
-          }}
-        >
-          {t('departmentManagement.title')}
-        </Typography>
-        <Button
-          variant="contained"
-          disableElevation
-          startIcon={<AddIcon />}
-          onClick={openCreate}
-          disabled={!canCreate}
-          sx={{
-            borderRadius: '12px',
-            textTransform: 'none',
-            fontWeight: 600,
-            px: 2.25,
-            flexShrink: 0,
-          }}
-        >
-          {t('departmentManagement.add')}
-        </Button>
-      </Box>
+      <MvsPageHeader
+        title={t('departmentManagement.title')}
+        mb={2.5}
+        actions={
+          <Button
+            variant="contained"
+            disableElevation
+            startIcon={<AddIcon />}
+            onClick={openCreate}
+            disabled={!canCreate}
+            sx={{
+              borderRadius: '12px',
+              textTransform: 'none',
+              fontWeight: 600,
+              px: 2.25,
+              flexShrink: 0,
+            }}
+          >
+            {t('departmentManagement.add')}
+          </Button>
+        }
+      />
 
       <Card
         elevation={0}

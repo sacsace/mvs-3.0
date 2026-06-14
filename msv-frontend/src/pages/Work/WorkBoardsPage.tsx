@@ -50,13 +50,8 @@ import { workBoardService } from '../../services/api';
 import { showErrorPopup } from '../../utils/errorHandler';
 import { useMenuStore, useStore } from '../../store';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
-import {
-  mvsMainSurfaceSx,
-  mvsPageDescriptionSx,
-  mvsPageShellSx,
-  mvsPageTitleSx,
-  mvsTitleBlockSx
-} from '../../theme/mvsLayout';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 
 /** 보드 색상 — 채도를 낮춘 시스템 톤에 가깝게 */
 const BOARD_COLOR_OPTIONS = [
@@ -148,8 +143,8 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
       elevation={0}
       sx={{
         width: '100%',
-        minHeight: 176,
-        borderRadius: '18px',
+        minHeight: 158,
+        borderRadius: '16px',
         border: '1px solid',
         borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.1),
         backgroundColor: cardBg,
@@ -183,9 +178,9 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
         <Box
           sx={{
             position: 'relative',
-            px: 2,
-            py: 1.75,
-            minHeight: 58,
+            px: 1.65,
+            py: 1.35,
+            minHeight: 50,
             bgcolor: accent,
             backgroundImage: `linear-gradient(135deg, ${alpha('#FFFFFF', 0.14)} 0%, transparent 55%)`,
             display: 'flex',
@@ -193,7 +188,7 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
             gap: 1,
           }}
         >
-          <ViewKanbanOutlinedIcon sx={{ fontSize: '1.125rem', color: headerText, opacity: 0.88, mt: 0.15 }} />
+          <ViewKanbanOutlinedIcon sx={{ fontSize: '1rem', color: headerText, opacity: 0.88, mt: 0.1 }} />
           <Typography
             variant="subtitle1"
             sx={{
@@ -202,7 +197,7 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
               fontWeight: 700,
               lineHeight: 1.35,
               letterSpacing: '-0.02em',
-              fontSize: '0.98rem',
+              fontSize: '0.9rem',
               color: headerText,
               display: '-webkit-box',
               WebkitLineClamp: 2,
@@ -272,21 +267,21 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
         <CardContent
           sx={{
             flex: 1,
-            py: 2,
-            px: 2,
+            py: 1.65,
+            px: 1.65,
             display: 'flex',
             flexDirection: 'column',
-            gap: 1.5,
-            '&:last-child': { pb: 2 },
+            gap: 1.15,
+            '&:last-child': { pb: 1.65 },
           }}
         >
           <Typography
             variant="body2"
             color="text.secondary"
             sx={{
-              minHeight: '2.8em',
-              lineHeight: 1.55,
-              fontSize: '0.8125rem',
+              minHeight: '2.5em',
+              lineHeight: 1.5,
+              fontSize: '0.78rem',
               fontWeight: 400,
               opacity: description ? 0.92 : 0.55,
               display: '-webkit-box',
@@ -301,7 +296,7 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
           <Box
             sx={{
               mt: 'auto',
-              pt: 1.25,
+              pt: 1,
               borderTop: '1px solid',
               borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : alpha(theme.palette.common.white, 0.08),
               display: 'flex',
@@ -315,9 +310,9 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
                 max={4}
                 sx={{
                   '& .MuiAvatar-root': {
-                    width: 28,
-                    height: 28,
-                    fontSize: '0.72rem',
+                    width: 26,
+                    height: 26,
+                    fontSize: '0.68rem',
                     fontWeight: 700,
                     border: `2px solid ${cardBg}`,
                   },
@@ -343,9 +338,9 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
               size="small"
               label={t('workBoards.memberCount', { count: members.length })}
               sx={{
-                height: 26,
+                height: 24,
                 fontWeight: 600,
-                fontSize: '0.6875rem',
+                fontSize: '0.65rem',
                 letterSpacing: '-0.01em',
                 borderRadius: '999px',
                 bgcolor: theme.palette.mode === 'light' ? '#F1F5F9' : alpha(theme.palette.common.white, 0.06),
@@ -510,63 +505,30 @@ const WorkBoardsPage: React.FC = () => {
   };
 
   return (
-    <Box sx={mvsPageShellSx}>
-      <Box sx={mvsMainSurfaceSx}>
-        <Box
-          sx={{
-            ...mvsTitleBlockSx,
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 2,
-            flexWrap: 'wrap',
-          }}
-        >
-          <Box sx={{ flex: '1 1 260px', minWidth: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap', mb: 0.75 }}>
-              <Typography component="h1" sx={{ ...mvsPageTitleSx, mb: 0 }}>
-                {t('workBoards.title')}
-              </Typography>
-              {!loading && boards.length > 0 && (
-                <Chip
-                  size="small"
-                  label={isEn ? `${boards.length} boards` : `보드 ${boards.length}개`}
-                  sx={{
-                    height: 24,
-                    fontWeight: 600,
-                    fontSize: '0.75rem',
-                    bgcolor: '#EEF2FF',
-                    color: '#4338CA',
-                    border: 'none',
-                  }}
-                />
-              )}
-            </Box>
-            <Typography sx={{ ...mvsPageDescriptionSx, maxWidth: 620 }}>
-              {t('workBoards.description')}
-            </Typography>
-          </Box>
-          {canCreateBoard && (
+    <Box sx={{ ...mvsPageRootSx, flex: 1, border: 'none' }}>
+      <MvsPageHeader
+        title={t('workBoards.title')}
+        description={t('workBoards.description')}
+        actions={
+          canCreateBoard ? (
             <Button
               variant="contained"
               disableElevation
-              startIcon={<AddIcon sx={{ fontSize: '1.125rem' }} />}
+              startIcon={<AddIcon sx={{ fontSize: 20 }} />}
               onClick={openCreateDialog}
               sx={{
                 flexShrink: 0,
-                alignSelf: { xs: 'stretch', sm: 'flex-start' },
-                borderRadius: '14px',
+                borderRadius: '12px',
                 px: 2.5,
-                py: 1.05,
                 textTransform: 'none',
                 fontWeight: 600,
-                boxShadow: theme.palette.mode === 'light' ? '0 4px 14px rgba(15, 23, 42, 0.08)' : 'none',
               }}
             >
               {t('workBoards.actions.newBoard')}
             </Button>
-          )}
-        </Box>
+          ) : undefined
+        }
+      />
 
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
@@ -584,10 +546,10 @@ const WorkBoardsPage: React.FC = () => {
                   display: 'grid',
                   gridTemplateColumns: {
                     xs: '1fr',
-                    sm: 'repeat(auto-fill, minmax(260px, 1fr))',
-                    lg: 'repeat(auto-fill, minmax(280px, 1fr))',
+                    sm: 'repeat(auto-fill, minmax(220px, 1fr))',
+                    lg: 'repeat(auto-fill, minmax(240px, 1fr))',
                   },
-                  gap: { xs: 2, sm: 2.5 },
+                  gap: { xs: 1.75, sm: 2 },
                   alignItems: 'stretch',
                 }}
               >
@@ -608,11 +570,11 @@ const WorkBoardsPage: React.FC = () => {
                     elevation={0}
                     onClick={openCreateDialog}
                     sx={{
-                      minHeight: 176,
-                      borderRadius: '18px',
+                      minHeight: 158,
+                      borderRadius: '16px',
                       border: '2px dashed',
                       borderColor: theme.palette.mode === 'light' ? '#CBD5E1' : alpha(theme.palette.common.white, 0.22),
-                      bgcolor: theme.palette.mode === 'light' ? '#F8FAFC' : alpha(theme.palette.common.white, 0.03),
+                      bgcolor: 'transparent',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
@@ -620,17 +582,17 @@ const WorkBoardsPage: React.FC = () => {
                       transition: 'border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease',
                       '&:hover': {
                         borderColor: 'primary.main',
-                        bgcolor: theme.palette.mode === 'light' ? '#F1F5F9' : alpha(theme.palette.primary.main, 0.08),
+                        bgcolor: alpha(theme.palette.common.white, 0.45),
                         transform: 'translateY(-2px)',
                       },
                     }}
                   >
-                    <Stack alignItems="center" spacing={1} sx={{ px: 2, py: 3, textAlign: 'center' }}>
+                    <Stack alignItems="center" spacing={0.85} sx={{ px: 1.75, py: 2.25, textAlign: 'center' }}>
                       <Box
                         sx={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: '14px',
+                          width: 38,
+                          height: 38,
+                          borderRadius: '12px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -638,9 +600,9 @@ const WorkBoardsPage: React.FC = () => {
                           color: 'primary.main',
                         }}
                       >
-                        <AddIcon />
+                        <AddIcon sx={{ fontSize: '1.25rem' }} />
                       </Box>
-                      <Typography sx={{ fontWeight: 700, fontSize: '0.9375rem', color: 'text.primary' }}>
+                      <Typography sx={{ fontWeight: 700, fontSize: '0.875rem', color: 'text.primary' }}>
                         {t('workBoards.actions.newBoard')}
                       </Typography>
                       <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 200, lineHeight: 1.5 }}>
@@ -658,7 +620,7 @@ const WorkBoardsPage: React.FC = () => {
                       textAlign: 'center',
                       borderRadius: '20px',
                       border: `1px dashed ${theme.palette.mode === 'light' ? '#CBD5E1' : alpha(theme.palette.common.white, 0.2)}`,
-                      bgcolor: theme.palette.mode === 'light' ? '#F8FAFC' : alpha(theme.palette.common.black, 0.2),
+                      bgcolor: 'transparent',
                     }}
                   >
                     <Box
@@ -782,7 +744,6 @@ const WorkBoardsPage: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
-      </Box>
     </Box>
   );
 };

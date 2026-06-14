@@ -4,8 +4,7 @@ import {
   Typography,
   Card,
   CardContent,
-  FormControl,
-  Select,
+  TextField,
   MenuItem,
   Button,
   Stack,
@@ -23,6 +22,8 @@ import {
   TableHead,
   TableRow,
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
@@ -399,18 +400,12 @@ const AccountingStatistics: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 0 }}>
-      {/* 헤더 */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography component="h1" variant="pageTitle" sx={{ fontWeight: 600, letterSpacing: '-0.022em', fontSize: { xs: '1.125rem', sm: '1.3125rem' }, mb: 0.75 }}>
-            회계 통계
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', lineHeight: 1.5, maxWidth: 720 }}>
-            수익, 비용, 수익성 등 회계 관련 통계를 종합적으로 분석하세요.
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title="회계 통계"
+        description="수익, 비용, 수익성 등 회계 관련 통계를 종합적으로 분석하세요."
+        actions={
+          <>
           <Button
             variant="outlined"
             startIcon={<RefreshIcon fontSize="small" />}
@@ -433,8 +428,9 @@ const AccountingStatistics: React.FC = () => {
           >
             보고서 다운로드
           </Button>
-        </Box>
-      </Box>
+          </>
+        }
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
@@ -458,103 +454,99 @@ const AccountingStatistics: React.FC = () => {
           <Grid container spacing={2} alignItems="flex-end">
             {canSelectCompany && (
               <Grid size={{ xs: 12, sm: 9, md: 3 }}>
-                <FormControl fullWidth>
-                  <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                    회사
-                  </Typography>
-                  <Select
-                    value={selectedCompanyId}
-                    onChange={(e) => {
-                      const value = String(e.target.value);
-                      if (value === '') {
-                        setSelectedCompanyId('');
-                      } else {
-                        const num = Number(value);
-                        setSelectedCompanyId(isNaN(num) ? '' : num);
-                      }
-                    }}
-                    sx={{ height: '40px', minWidth: 0 }}
-                  >
-                    <MenuItem value="">전체 회사</MenuItem>
-                    {companies.map((company) => (
-                      <MenuItem key={company.id} value={company.id}>
-                        {company.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <TextField
+                  fullWidth
+                  select
+                  label="회사"
+                  value={selectedCompanyId}
+                  onChange={(e) => {
+                    const value = String(e.target.value);
+                    if (value === '') {
+                      setSelectedCompanyId('');
+                    } else {
+                      const num = Number(value);
+                      setSelectedCompanyId(isNaN(num) ? '' : num);
+                    }
+                  }}
+                  InputLabelProps={{ shrink: true }}
+                  SelectProps={{ displayEmpty: true }}
+                  sx={{ height: '40px', minWidth: 0 }}
+                >
+                  <MenuItem value="">전체 회사</MenuItem>
+                  {companies.map((company) => (
+                    <MenuItem key={company.id} value={company.id}>
+                      {company.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
               </Grid>
             )}
             <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-              <FormControl fullWidth>
-                <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                  기간
-                </Typography>
-                <Select
-                  value={selectedPeriod}
-                  onChange={(e) => setSelectedPeriod(e.target.value)}
-                  displayEmpty
-                  sx={{ height: '40px' }}
-                >
-                  <MenuItem value="day">일간</MenuItem>
-                  <MenuItem value="week">주간</MenuItem>
-                  <MenuItem value="month">월간</MenuItem>
-                  <MenuItem value="quarter">분기</MenuItem>
-                  <MenuItem value="year">연간</MenuItem>
-                </Select>
-              </FormControl>
+              <TextField
+                fullWidth
+                select
+                label="기간"
+                value={selectedPeriod}
+                onChange={(e) => setSelectedPeriod(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                SelectProps={{ displayEmpty: true }}
+                sx={{ height: '40px' }}
+              >
+                <MenuItem value="day">일간</MenuItem>
+                <MenuItem value="week">주간</MenuItem>
+                <MenuItem value="month">월간</MenuItem>
+                <MenuItem value="quarter">분기</MenuItem>
+                <MenuItem value="year">연간</MenuItem>
+              </TextField>
               </Grid>
             {selectedPeriod === 'year' && (
               <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-                <FormControl fullWidth>
-                  <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                    연도
-                  </Typography>
-                  <Select
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(e.target.value as number)}
-                    sx={{ height: '40px' }}
-                  >
-                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
-                      <MenuItem key={year} value={year}>{year}년</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <TextField
+                  fullWidth
+                  select
+                  label="연도"
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ height: '40px' }}
+                >
+                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                    <MenuItem key={year} value={year}>{year}년</MenuItem>
+                  ))}
+                </TextField>
               </Grid>
             )}
             {selectedPeriod === 'month' && (
               <>
                 <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-                  <FormControl fullWidth>
-                    <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                      연도
-                    </Typography>
-                    <Select
-                      value={selectedYear}
-                      onChange={(e) => setSelectedYear(e.target.value as number)}
-                      sx={{ height: '40px' }}
-                    >
-                      {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
-                        <MenuItem key={year} value={year}>{year}년</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <TextField
+                    fullWidth
+                    select
+                    label="연도"
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(Number(e.target.value))}
+                    InputLabelProps={{ shrink: true }}
+                    sx={{ height: '40px' }}
+                  >
+                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                      <MenuItem key={year} value={year}>{year}년</MenuItem>
+                    ))}
+                  </TextField>
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-                  <FormControl fullWidth>
-                    <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                      월
-                    </Typography>
-                    <Select
-                      value={selectedMonth}
-                      onChange={(e) => setSelectedMonth(e.target.value as number)}
-                      sx={{ height: '40px' }}
-                    >
-                      {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
-                        <MenuItem key={month} value={month}>{month}월</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <TextField
+                    fullWidth
+                    select
+                    label="월"
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                    InputLabelProps={{ shrink: true }}
+                    sx={{ height: '40px' }}
+                  >
+                    {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+                      <MenuItem key={month} value={month}>{month}월</MenuItem>
+                    ))}
+                  </TextField>
                 </Grid>
               </>
             )}

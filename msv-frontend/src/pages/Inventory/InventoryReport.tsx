@@ -4,9 +4,6 @@ import {
   Typography,
   Card,
   CardContent,
-  FormControl,
-  InputLabel,
-  Select,
   MenuItem,
   Button,
   Table,
@@ -29,6 +26,8 @@ import {
   DialogActions,
   Alert
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx, mvsFilterToolbarSx, mvsSearchFieldSx, mvsOutlinedLabelProps } from '../../theme/mvsLayout';
 import {
   Warning as WarningIcon,
   CheckCircle as CheckCircleIcon,
@@ -60,6 +59,16 @@ import { UTILS } from '../../constants';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 
 const INVENTORY_REPORT_MENU_ROUTES = ['/inventory/report', '/inventory'] as const;
+
+const FILTER_OUTLINED = mvsOutlinedLabelProps;
+
+const reportFilterFieldSx = {
+  minWidth: 160,
+  '& .MuiOutlinedInput-root': {
+    height: 40,
+    '& .MuiOutlinedInput-input': { py: 0 },
+  },
+} as const;
 
 interface InventoryStats {
   totalProducts: number;
@@ -526,27 +535,11 @@ const InventoryReport: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 0 }}>
-      {/* 헤더 */}
-      <Box sx={{ mb: 3 }}>
-        <Typography
-          component="h1"
-          variant="pageTitle"
-          sx={{
-            fontWeight: 600,
-            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-            letterSpacing: '-0.022em',
-            lineHeight: 1.28,
-            color: 'text.primary',
-            mb: 0.75,
-          }}
-        >
-          {t('inventoryReport.pageTitle')}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', lineHeight: 1.5, maxWidth: 720 }}>
-          {t('inventoryReport.pageSubtitle')}
-        </Typography>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={t('inventoryReport.pageTitle')}
+        description={t('inventoryReport.pageSubtitle')}
+      />
 
       {loadError ? (
         <Alert severity="warning" sx={{ mb: 2 }}>
@@ -561,48 +554,47 @@ const InventoryReport: React.FC = () => {
       ) : null}
 
       {/* 필터 및 액션 */}
-      <Card
-        elevation={0}
-        sx={{
-          mb: 3,
-          borderRadius: '16px',
-          border: '1px solid',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-          bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.03),
-          boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : 'none',
-        }}
-      >
-        <CardContent sx={{ py: 2.5, px: 2.5 }}>
-          <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
-            <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
-              <FormControl size="small" sx={{ minWidth: 120 }} disabled={menuFlags.menusLoading || !menuFlags.canRead}>
-                <InputLabel>{t('inventoryReport.periodLabel')}</InputLabel>
-                <Select
-                  value={selectedPeriod}
-                  label={t('inventoryReport.periodLabel')}
-                  onChange={(e) => setSelectedPeriod(e.target.value)}
-                >
-                  <MenuItem value="week">{t('inventoryReport.periodWeek')}</MenuItem>
-                  <MenuItem value="month">{t('inventoryReport.periodMonth')}</MenuItem>
-                  <MenuItem value="quarter">{t('inventoryReport.periodQuarter')}</MenuItem>
-                  <MenuItem value="year">{t('inventoryReport.periodYear')}</MenuItem>
-                </Select>
-              </FormControl>
-              <FormControl size="small" sx={{ minWidth: 120 }} disabled={menuFlags.menusLoading || !menuFlags.canRead}>
-                <InputLabel>{t('inventoryReport.categoryLabel')}</InputLabel>
-                <Select
-                  value={selectedCategory}
-                  label={t('inventoryReport.categoryLabel')}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                >
-                  <MenuItem value="">{t('inventoryReport.allCategories')}</MenuItem>
-                  {categoryOptions.map((c) => (
-                    <MenuItem key={c} value={c}>
-                      {c}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+      <Card elevation={0} sx={{ mb: 3, ...mvsFilterToolbarSx, ...mvsSearchFieldSx }}>
+        <CardContent sx={{ py: 2, px: 2, '&:last-child': { pb: 2 } }}>
+          <Stack direction="row" spacing={2} alignItems="flex-end" justifyContent="space-between" flexWrap="wrap" useFlexGap sx={mvsSearchFieldSx}>
+            <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap alignItems="flex-end">
+              <TextField
+                size="small"
+                select
+                label={t('inventoryReport.periodLabel')}
+                {...FILTER_OUTLINED}
+                value={selectedPeriod}
+                onChange={(e) => setSelectedPeriod(e.target.value)}
+                disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                sx={reportFilterFieldSx}
+              >
+                <MenuItem value="week">{t('inventoryReport.periodWeek')}</MenuItem>
+                <MenuItem value="month">{t('inventoryReport.periodMonth')}</MenuItem>
+                <MenuItem value="quarter">{t('inventoryReport.periodQuarter')}</MenuItem>
+                <MenuItem value="year">{t('inventoryReport.periodYear')}</MenuItem>
+              </TextField>
+              <TextField
+                size="small"
+                select
+                label={t('inventoryReport.categoryLabel')}
+                {...FILTER_OUTLINED}
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                SelectProps={{
+                  displayEmpty: true,
+                  renderValue: (selected) =>
+                    selected === '' ? t('inventoryReport.allCategories') : String(selected),
+                }}
+                sx={reportFilterFieldSx}
+              >
+                <MenuItem value="">{t('inventoryReport.allCategories')}</MenuItem>
+                {categoryOptions.map((c) => (
+                  <MenuItem key={c} value={c}>
+                    {c}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Stack>
             <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
               <Button
@@ -843,6 +835,8 @@ const InventoryReport: React.FC = () => {
             </Typography>
             <TextField
               size="small"
+              label={t('common.search')}
+              {...FILTER_OUTLINED}
               placeholder={t('inventoryReport.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}

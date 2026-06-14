@@ -46,6 +46,8 @@ import {
   Switch,
   FormControlLabel
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
   Add as AddIcon,
@@ -1462,29 +1464,21 @@ const NoticeManagement: React.FC = () => {
 
   if ((viewMode === 'view' || viewMode === 'edit') && selectedNotice) {
     return (
-      <Box sx={{ 
-        p: 0,
-        backgroundColor: 'workArea.main',
-        borderRadius: 2,
-        minHeight: '100%'
-      }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Box>
-            <Typography component="h1" variant="pageTitle" sx={{ letterSpacing: '-0.02em' }}>
-              공지사항 상세
-              {isEn ? ' Notice Detail' : ''}
-            </Typography>
-          </Box>
-          <Button
-            variant="outlined"
-            onClick={() => {
-              setViewMode('list');
-              setIsEditing(false);
-            }}
-          >
-            {txt('목록으로', 'Back to List')}
-          </Button>
-        </Box>
+      <Box sx={{ ...mvsPageRootSx }}>
+        <MvsPageHeader
+          title={<>공지사항 상세{isEn ? ' Notice Detail' : ''}</>}
+          actions={
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setViewMode('list');
+                setIsEditing(false);
+              }}
+            >
+              {txt('목록으로', 'Back to List')}
+            </Button>
+          }
+        />
 
         <Card>
           <CardContent>
@@ -2003,26 +1997,16 @@ const NoticeManagement: React.FC = () => {
   return (
     <Box
       sx={{
+        ...mvsPageRootSx,
         p: { xs: 1.5, sm: 2 },
-        width: '100%',
-        maxWidth: '100%',
-        boxSizing: 'border-box',
-        backgroundColor: 'workArea.main',
-        minHeight: '100%',
       }}
     >
       <Box sx={{ mb: 2.5 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, gap: 2 }}>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography component="h1" sx={{ ...mvsPageTitleSx, mb: 0.75 }}>
-              공지사항
-              {isEn ? ' Notice Board' : ''}
-            </Typography>
-            <Typography sx={mvsPageDescriptionSx}>
-              {txt('중요한 공지사항과 업무 관련 정보를 확인하는 페이지입니다.', 'This page shows important notices and work-related updates.')}
-            </Typography>
-          </Box>
-        </Box>
+        <MvsPageHeader
+          title={<>공지사항{isEn ? ' Notice Board' : ''}</>}
+          description={txt('중요한 공지사항과 업무 관련 정보를 확인하는 페이지입니다.', 'This page shows important notices and work-related updates.')}
+          mb={2}
+        />
 
         {/* 탭 네비게이션 */}
         <Card elevation={0} sx={{ ...shellCardSx, mb: 2 }}>
@@ -2083,10 +2067,13 @@ const NoticeManagement: React.FC = () => {
           >
             <TextField
               fullWidth
+              size="small"
+              label={txt('검색', 'Search')}
               placeholder={txt('제목, 내용, 작성자 검색', 'Search title, content, author')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
+              InputLabelProps={{ shrink: true }}
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: '12px',
@@ -2103,12 +2090,13 @@ const NoticeManagement: React.FC = () => {
             />
             <FormControl
               fullWidth
+              size="small"
               disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
               sx={{
                 '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: alpha(theme.palette.grey[500], 0.04) },
               }}
             >
-              <InputLabel>{txt('상태', 'Status')}</InputLabel>
+              <InputLabel shrink>{txt('상태', 'Status')}</InputLabel>
               <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} label={txt('상태', 'Status')}>
                 <MenuItem value="">{txt('전체', 'All')}</MenuItem>
                 <MenuItem value="published">{txt('게시됨', 'Published')}</MenuItem>

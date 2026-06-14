@@ -43,6 +43,8 @@ import { useStore } from '../../store';
 import { showErrorPopup, showSuccessPopup } from '../../utils/errorHandler';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 
 interface User {
   id: number;
@@ -358,20 +360,11 @@ const ProjectManagement: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 0 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <FolderIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-            <Typography component="h1" variant="pageTitle">
-              프로젝트 관리
-            </Typography>
-          </Box>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-            프로젝트를 관리하고 조회하는 페이지입니다.
-          </Typography>
-        </Box>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title="프로젝트 관리"
+        description="프로젝트를 관리하고 조회하는 페이지입니다."
+      />
 
 
 
@@ -387,9 +380,11 @@ const ProjectManagement: React.FC = () => {
             }}>
               <TextField
                 fullWidth
+                label="검색"
                 placeholder="프로젝트명, 설명, 코드, 담당자로 검색..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                InputLabelProps={{ shrink: true }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -399,72 +394,69 @@ const ProjectManagement: React.FC = () => {
                 }}
               />
               {(user?.role === 'root' || user?.role === 'audit') && (
-                <FormControl fullWidth>
-                  <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                    회사
-                  </Typography>
-                  <Select
-                    value={selectedCompanyId}
-                    onChange={(e) => {
-                      const value = String(e.target.value);
-                      if (value === '') {
-                        setSelectedCompanyId('');
-                      } else {
-                        const num = Number(value);
-                        setSelectedCompanyId(isNaN(num) ? '' : num);
-                      }
-                      setTimeout(() => loadProjects(), 100);
-                    }}
-                    displayEmpty
-                    sx={{ height: '40px' }}
-                  >
-                    <MenuItem value="">전체 회사</MenuItem>
-                    {companies.map((company) => (
-                      <MenuItem key={company.id} value={company.id}>
-                        {company.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <TextField
+                  fullWidth
+                  select
+                  label="회사"
+                  value={selectedCompanyId}
+                  onChange={(e) => {
+                    const value = String(e.target.value);
+                    if (value === '') {
+                      setSelectedCompanyId('');
+                    } else {
+                      const num = Number(value);
+                      setSelectedCompanyId(isNaN(num) ? '' : num);
+                    }
+                    setTimeout(() => loadProjects(), 100);
+                  }}
+                  InputLabelProps={{ shrink: true }}
+                  SelectProps={{ displayEmpty: true }}
+                  sx={{ height: '40px' }}
+                >
+                  <MenuItem value="">전체 회사</MenuItem>
+                  {companies.map((company) => (
+                    <MenuItem key={company.id} value={company.id}>
+                      {company.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
               )}
-              <FormControl fullWidth>
-                <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                  상태
-                </Typography>
-                <Select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  displayEmpty
-                  sx={{ height: '40px' }}
-                >
-                  <MenuItem value="all">전체 상태</MenuItem>
-                  <MenuItem value="planning">기획</MenuItem>
-                  <MenuItem value="in_progress">진행중</MenuItem>
-                  <MenuItem value="completed">완료</MenuItem>
-                  <MenuItem value="on_hold">보류</MenuItem>
-                  <MenuItem value="cancelled">취소</MenuItem>
-                </Select>
-              </FormControl>
-              <FormControl fullWidth>
-                <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                  담당자
-                </Typography>
-                <Select
-                  value={managerFilter}
-                  onChange={(e) => setManagerFilter(e.target.value)}
-                  displayEmpty
-                  sx={{ height: '40px' }}
-                >
-                  <MenuItem value="all">전체 담당자</MenuItem>
-                  {users
-                    .filter(u => !u.status || u.status === 'active')
-                    .map((user) => (
-                      <MenuItem key={user.id} value={user.id.toString()}>
-                        {user.username}
-                      </MenuItem>
-                    ))}
-                </Select>
-              </FormControl>
+              <TextField
+                fullWidth
+                select
+                label="상태"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                SelectProps={{ displayEmpty: true }}
+                sx={{ height: '40px' }}
+              >
+                <MenuItem value="all">전체 상태</MenuItem>
+                <MenuItem value="planning">기획</MenuItem>
+                <MenuItem value="in_progress">진행중</MenuItem>
+                <MenuItem value="completed">완료</MenuItem>
+                <MenuItem value="on_hold">보류</MenuItem>
+                <MenuItem value="cancelled">취소</MenuItem>
+              </TextField>
+              <TextField
+                fullWidth
+                select
+                label="담당자"
+                value={managerFilter}
+                onChange={(e) => setManagerFilter(e.target.value)}
+                InputLabelProps={{ shrink: true }}
+                SelectProps={{ displayEmpty: true }}
+                sx={{ height: '40px' }}
+              >
+                <MenuItem value="all">전체 담당자</MenuItem>
+                {users
+                  .filter(u => !u.status || u.status === 'active')
+                  .map((user) => (
+                    <MenuItem key={user.id} value={user.id.toString()}>
+                      {user.username}
+                    </MenuItem>
+                  ))}
+              </TextField>
               <Button
                 variant="outlined"
                 startIcon={<FilterIcon />}

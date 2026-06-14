@@ -429,27 +429,32 @@ const QuotationManagement: React.FC = () => {
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                 <TextField
                   size="small"
+                  label="검색"
                   placeholder="검색..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
                   InputProps={{
                     startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
                   }}
                 />
-                <FormControl size="small" sx={{ minWidth: 120 }}>
-                  <InputLabel>상태</InputLabel>
-                  <Select
-                    value={filterStatus}
-                    onChange={(e) => setFilterStatus(e.target.value)}
-                  >
-                    <MenuItem value="all">전체</MenuItem>
-                    <MenuItem value="draft">초안</MenuItem>
-                    <MenuItem value="sent">발송됨</MenuItem>
-                    <MenuItem value="accepted">승인됨</MenuItem>
-                    <MenuItem value="rejected">거절됨</MenuItem>
-                    <MenuItem value="expired">만료됨</MenuItem>
-                  </Select>
-                </FormControl>
+                <TextField
+                  size="small"
+                  select
+                  label="상태"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  SelectProps={{ displayEmpty: true }}
+                  sx={{ minWidth: 120 }}
+                >
+                  <MenuItem value="all">전체</MenuItem>
+                  <MenuItem value="draft">초안</MenuItem>
+                  <MenuItem value="sent">발송됨</MenuItem>
+                  <MenuItem value="accepted">승인됨</MenuItem>
+                  <MenuItem value="rejected">거절됨</MenuItem>
+                  <MenuItem value="expired">만료됨</MenuItem>
+                </TextField>
               </Box>
               <Button
                 variant="contained"

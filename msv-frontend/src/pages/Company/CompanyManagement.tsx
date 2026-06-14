@@ -41,6 +41,8 @@ import {
   CircularProgress,
   Tooltip
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Business as BusinessIcon,
   Save as SaveIcon,
@@ -1462,55 +1464,30 @@ const CompanyManagement: React.FC = () => {
   } as const;
 
   return (
-    <Box sx={{ p: 0, width: '100%', maxWidth: '100%', bgcolor: 'transparent', minHeight: '100%' }}>
-      {/* 헤더 */}
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          flexWrap: 'wrap',
-          gap: 2,
-          mb: 3,
-        }}
-      >
-        <Box sx={{ minWidth: 0 }}>
-          <Typography
-            component="h1"
-            variant="pageTitle"
-            sx={{
-              mb: 0.75,
-              fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-              fontWeight: 600,
-              letterSpacing: '-0.022em',
-              lineHeight: 1.28,
-              color: tablePrimaryFg,
-            }}
-          >
-            {t('companyManagement.pageTitle')}
-          </Typography>
-          <Typography variant="body2" sx={{ fontSize: '0.8125rem', lineHeight: 1.55, color: pageMutedFg, maxWidth: 640 }}>
-            {t('companyManagement.description')}
-          </Typography>
-        </Box>
-        {user?.role === 'root' && (
-          <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
-            <span style={{ display: 'inline-flex' }}>
-              <Button
-                variant="contained"
-                color="primary"
-                disableElevation
-                startIcon={<AddIcon sx={{ fontSize: 20 }} />}
-                onClick={handleAdd}
-                disabled={menuFlags.menusLoading || !menuFlags.canCreate}
-                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
-              >
-                {t('companyManagement.addCompany')}
-              </Button>
-            </span>
-          </Tooltip>
-        )}
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={t('companyManagement.pageTitle')}
+        description={t('companyManagement.description')}
+        actions={
+          user?.role === 'root' ? (
+            <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
+              <span style={{ display: 'inline-flex' }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  disableElevation
+                  startIcon={<AddIcon sx={{ fontSize: 20 }} />}
+                  onClick={handleAdd}
+                  disabled={menuFlags.menusLoading || !menuFlags.canCreate}
+                  sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+                >
+                  {t('companyManagement.addCompany')}
+                </Button>
+              </span>
+            </Tooltip>
+          ) : undefined
+        }
+      />
 
       {/* 알림 메시지 */}
       {!menuFlags.menusLoading && !menuFlags.canRead && (

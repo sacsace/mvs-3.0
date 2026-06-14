@@ -19,6 +19,8 @@ import {
   DialogActions,
   InputAdornment
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import {
@@ -447,55 +449,47 @@ const LoginInfoManagement: React.FC = () => {
         '& .MuiAutocomplete-popupIndicator, & .MuiAutocomplete-clearIndicator': isDark ? { color: 'rgba(220, 231, 255, 0.8)' } : undefined
       }}
     >
-      <Box
-        sx={{
-          mb: 2,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          gap: 2,
-          flexWrap: 'wrap',
-        }}
-      >
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography component="h1" variant="pageTitle">
-            {t('loginInfoManagement.title')}
-          </Typography>
-          <Typography
-            variant="body2"
+      <MvsPageHeader
+        title={t('loginInfoManagement.title')}
+        description={
+          <>
+            <Typography
+              variant="body2"
+              sx={{
+                color: isDark ? 'rgba(200, 214, 235, 0.88)' : 'text.secondary',
+                lineHeight: 1.5,
+                whiteSpace: { xs: 'normal', md: 'nowrap' },
+              }}
+            >
+              {t('loginInfoManagement.description')}
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                mt: 1,
+                color: isDark ? 'rgba(180, 200, 230, 0.85)' : 'text.secondary',
+                lineHeight: 1.5,
+                maxWidth: 900,
+                fontSize: '0.8125rem',
+              }}
+            >
+              {t('loginInfoManagement.excelHint')}
+            </Typography>
+          </>
+        }
+        mb={2}
+        actions={
+          <Box
             sx={{
-              mt: 0.75,
-              color: isDark ? 'rgba(200, 214, 235, 0.88)' : 'text.secondary',
-              lineHeight: 1.5,
-              whiteSpace: { xs: 'normal', md: 'nowrap' },
+              display: 'flex',
+              gap: 1,
+              flexWrap: 'wrap',
+              flexShrink: 0,
+              alignItems: 'center',
+              '& .MuiButton-root': { height: 40 },
+              '& .MuiButton-outlined': toolbarOutlinedBtnSx,
             }}
           >
-            {t('loginInfoManagement.description')}
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{
-              mt: 1,
-              color: isDark ? 'rgba(180, 200, 230, 0.85)' : 'text.secondary',
-              lineHeight: 1.5,
-              maxWidth: 900,
-              fontSize: '0.8125rem',
-            }}
-          >
-            {t('loginInfoManagement.excelHint')}
-          </Typography>
-        </Box>
-        <Box
-          sx={{
-            display: 'flex',
-            gap: 1,
-            flexWrap: 'wrap',
-            flexShrink: 0,
-            alignItems: 'center',
-            '& .MuiButton-root': { height: 40 },
-            '& .MuiButton-outlined': toolbarOutlinedBtnSx,
-          }}
-        >
           <input
             ref={fileInputRef}
             type="file"
@@ -531,8 +525,9 @@ const LoginInfoManagement: React.FC = () => {
               </Button>
             </span>
           </Tooltip>
-        </Box>
-      </Box>
+          </Box>
+        }
+      />
 
       {errorMessage && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorMessage(null)}>
@@ -559,9 +554,6 @@ const LoginInfoManagement: React.FC = () => {
             }}
           >
             <Box sx={{ width: '100%', minWidth: { md: 300 }, ...toolbarInputSx }}>
-              <Typography variant="caption" sx={fieldLabelSx}>
-                {t('loginInfoManagement.fields.company')}
-              </Typography>
               <Autocomplete
                 options={companies}
                 value={selectedCompany || null}
@@ -574,6 +566,8 @@ const LoginInfoManagement: React.FC = () => {
                   <TextField
                     {...params}
                     size="small"
+                    label={t('loginInfoManagement.fields.company')}
+                    InputLabelProps={{ shrink: true }}
                     placeholder={t('loginInfoManagement.placeholders.selectCompany')}
                     sx={{ '& .MuiInputBase-root': { height: 40 } }}
                   />
@@ -583,10 +577,12 @@ const LoginInfoManagement: React.FC = () => {
 
             <TextField
               size="small"
+              label={t('common.search')}
               placeholder={t('loginInfoManagement.placeholders.searchRows')}
               value={rowSearchQuery}
               onChange={(e) => setRowSearchQuery(e.target.value)}
               disabled={menuFlags.menusLoading || !menuFlags.canRead || !selectedCompanyId || selectedTabId === ''}
+              InputLabelProps={{ shrink: true }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">

@@ -47,6 +47,8 @@ import {
   Collapse,
   useTheme
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { alpha } from '@mui/material/styles';
 import {
   Add as AddIcon,
@@ -74,15 +76,6 @@ import QRCode from 'qrcode';
 import { useTranslation } from 'react-i18next';
 import { mvsSearchFieldSx } from '../../theme/mvsLayout';
 
-const expenseFilterLabelSx = {
-  color: 'text.secondary',
-  fontWeight: 600,
-  mb: 0.5,
-  display: 'block',
-  fontSize: '0.75rem',
-  lineHeight: '18px',
-  minHeight: 18,
-};
 
 const expenseFilterSelectSx = {
   borderRadius: '12px',
@@ -1025,37 +1018,33 @@ const ExpenseApproval: React.FC = () => {
   if (viewMode === 'create' || viewMode === 'edit') {
     const isEdit = viewMode === 'edit';
     return (
-      <Box sx={{
-        p: 0,
-        backgroundColor: 'workArea.main',
-        borderRadius: 2,
-        minHeight: '100%'
-      }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="pageTitle" component="h1" sx={{ fontWeight: 600, letterSpacing: '-0.022em' }}>
-            {isEdit ? t('expenseApproval.form.editTitle') : t('expenseApproval.form.createTitle')}
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            {headerStatusBanner === 'draftCreated' && (
-              <Typography variant="body2" color="text.secondary">
-                {t('expenseApproval.success.draftCreated')}
-              </Typography>
-            )}
-            {headerStatusBanner === 'autoSaved' && (
-              <Typography variant="body2" color="text.secondary">
-                {t('expenseApproval.voucher.autoSaveSaved')}
-              </Typography>
-            )}
-            {headerStatusBanner === 'autoSaveFailed' && (
-              <Typography variant="body2" color="error">
-                {t('expenseApproval.voucher.autoSaveFailed')}
-              </Typography>
-            )}
-            <Button variant="outlined" onClick={() => setViewMode('list')}>
-              {t('expenseApproval.actions.backToList')}
-            </Button>
-          </Box>
-        </Box>
+      <Box sx={{ ...mvsPageRootSx }}>
+        <MvsPageHeader
+          title={isEdit ? t('expenseApproval.form.editTitle') : t('expenseApproval.form.createTitle')}
+          mb={2}
+          actions={
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              {headerStatusBanner === 'draftCreated' && (
+                <Typography variant="body2" color="text.secondary">
+                  {t('expenseApproval.success.draftCreated')}
+                </Typography>
+              )}
+              {headerStatusBanner === 'autoSaved' && (
+                <Typography variant="body2" color="text.secondary">
+                  {t('expenseApproval.voucher.autoSaveSaved')}
+                </Typography>
+              )}
+              {headerStatusBanner === 'autoSaveFailed' && (
+                <Typography variant="body2" color="error">
+                  {t('expenseApproval.voucher.autoSaveFailed')}
+                </Typography>
+              )}
+              <Button variant="outlined" onClick={() => setViewMode('list')}>
+                {t('expenseApproval.actions.backToList')}
+              </Button>
+            </Box>
+          }
+        />
 
         <Paper variant="outlined" component="section" lang={formLangAttr} sx={expenseFormPaperSx}>
             {saving && <LinearProgress sx={{ mb: 2, borderRadius: '4px' }} />}
@@ -1758,17 +1747,11 @@ const ExpenseApproval: React.FC = () => {
     const isPaymentPaid = selectedExpense.paymentRequestStatus === 'paid';
 
     return (
-      <Box sx={{ 
-        p: 0,
-        backgroundColor: 'workArea.main',
-        borderRadius: 2,
-        minHeight: '100%'
-      }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5, mb: 3 }}>
-          <Typography variant="pageTitle" component="h1" sx={{ fontWeight: 600, letterSpacing: '-0.022em' }}>
-            {t('expenseApproval.detail.title')}
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+      <Box sx={{ ...mvsPageRootSx }}>
+        <MvsPageHeader
+          title={t('expenseApproval.detail.title')}
+          actions={
+            <>
             <Button
               variant="outlined"
               onClick={() => setViewMode('list')}
@@ -1785,8 +1768,9 @@ const ExpenseApproval: React.FC = () => {
             >
               {t('expenseApproval.actions.editDetail')}
             </Button>
-          </Box>
-        </Box>
+            </>
+          }
+        />
 
         <Card>
           <CardContent>
@@ -2126,26 +2110,22 @@ const ExpenseApproval: React.FC = () => {
   }
 
   return (
-    <Box sx={{ 
-      p: 0,
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%'
-    }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="pageTitle" component="h1" sx={{ fontWeight: 600, letterSpacing: '-0.022em' }}>
-          {t('expenseApproval.title')}
-        </Typography>
-        <Button
-          variant="contained"
-          disableElevation
-          startIcon={<AddIcon fontSize="small" />}
-          onClick={handleCreateExpense}
-          sx={{ borderRadius: '12px', textTransform: 'none' }}
-        >
-          {t('expenseApproval.actions.requestExpense')}
-        </Button>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={t('expenseApproval.title')}
+        mb={2}
+        actions={
+          <Button
+            variant="contained"
+            disableElevation
+            startIcon={<AddIcon fontSize="small" />}
+            onClick={handleCreateExpense}
+            sx={{ borderRadius: '12px', textTransform: 'none' }}
+          >
+            {t('expenseApproval.actions.requestExpense')}
+          </Button>
+        }
+      />
 
       <Tabs
         value={listTab}
@@ -2221,88 +2201,99 @@ const ExpenseApproval: React.FC = () => {
               ...mvsSearchFieldSx,
             }}
           >
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={expenseFilterLabelSx}>
-                {t('expenseApproval.placeholders.searchSimple')}
-              </Typography>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder={t('expenseApproval.placeholders.search')}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    height: 40,
-                    '& .MuiOutlinedInput-input': { py: 0 },
-                  },
-                }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={expenseFilterLabelSx}>
-                {t('expenseApproval.filters.status')}
-              </Typography>
-              <FormControl fullWidth size="small">
-                <Select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  displayEmpty
-                  sx={expenseFilterSelectSx}
-                >
-                  <MenuItem value="">{t('expenseApproval.filters.all')}</MenuItem>
-                  <MenuItem value="draft">{t('expenseApproval.status.draft')}</MenuItem>
-                  <MenuItem value="submitted">{t('expenseApproval.status.submitted')}</MenuItem>
-                  <MenuItem value="in_review">{t('expenseApproval.status.inReview')}</MenuItem>
-                  <MenuItem value="approved">{t('expenseApproval.status.approved')}</MenuItem>
-                  <MenuItem value="rejected">{t('expenseApproval.status.rejected')}</MenuItem>
-                  <MenuItem value="paid">{t('expenseApproval.status.paid')}</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={expenseFilterLabelSx}>
-                {t('expenseApproval.filters.priority')}
-              </Typography>
-              <FormControl fullWidth size="small">
-                <Select
-                  value={priorityFilter}
-                  onChange={(e) => setPriorityFilter(e.target.value)}
-                  displayEmpty
-                  sx={expenseFilterSelectSx}
-                >
-                  <MenuItem value="">{t('expenseApproval.filters.all')}</MenuItem>
-                  <MenuItem value="low">{t('expenseApproval.priority.low')}</MenuItem>
-                  <MenuItem value="medium">{t('expenseApproval.priority.medium')}</MenuItem>
-                  <MenuItem value="high">{t('expenseApproval.priority.high')}</MenuItem>
-                  <MenuItem value="urgent">{t('expenseApproval.priority.urgent')}</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography
-                variant="caption"
-                sx={{ ...expenseFilterLabelSx, visibility: 'hidden', userSelect: 'none' }}
-                aria-hidden
-              >
-                {t('expenseApproval.actions.reset')}
-              </Typography>
-              <Button
-                variant="outlined"
-                startIcon={<FilterIcon />}
-                onClick={() => {
-                  setSearchTerm('');
-                  setStatusFilter('');
-                  setPriorityFilter('');
-                }}
-                sx={{
+            <TextField
+              fullWidth
+              size="small"
+              label={t('expenseApproval.placeholders.searchSimple')}
+              placeholder={t('expenseApproval.placeholders.search')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  height: 40,
+                  '& .MuiOutlinedInput-input': { py: 0 },
+                },
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('expenseApproval.filters.status')}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) => {
+                  if (selected === '' || selected == null) return t('expenseApproval.filters.all');
+                  const statusLabels: Record<string, string> = {
+                    draft: t('expenseApproval.status.draft'),
+                    submitted: t('expenseApproval.status.submitted'),
+                    in_review: t('expenseApproval.status.inReview'),
+                    approved: t('expenseApproval.status.approved'),
+                    rejected: t('expenseApproval.status.rejected'),
+                    paid: t('expenseApproval.status.paid'),
+                  };
+                  return statusLabels[String(selected)] ?? String(selected);
+                },
+              }}
+              sx={expenseFilterSelectSx}
+            >
+              <MenuItem value="">{t('expenseApproval.filters.all')}</MenuItem>
+              <MenuItem value="draft">{t('expenseApproval.status.draft')}</MenuItem>
+              <MenuItem value="submitted">{t('expenseApproval.status.submitted')}</MenuItem>
+              <MenuItem value="in_review">{t('expenseApproval.status.inReview')}</MenuItem>
+              <MenuItem value="approved">{t('expenseApproval.status.approved')}</MenuItem>
+              <MenuItem value="rejected">{t('expenseApproval.status.rejected')}</MenuItem>
+              <MenuItem value="paid">{t('expenseApproval.status.paid')}</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('expenseApproval.filters.priority')}
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) => {
+                  if (selected === '' || selected == null) return t('expenseApproval.filters.all');
+                  const priorityLabels: Record<string, string> = {
+                    low: t('expenseApproval.priority.low'),
+                    medium: t('expenseApproval.priority.medium'),
+                    high: t('expenseApproval.priority.high'),
+                    urgent: t('expenseApproval.priority.urgent'),
+                  };
+                  return priorityLabels[String(selected)] ?? String(selected);
+                },
+              }}
+              sx={expenseFilterSelectSx}
+            >
+              <MenuItem value="">{t('expenseApproval.filters.all')}</MenuItem>
+              <MenuItem value="low">{t('expenseApproval.priority.low')}</MenuItem>
+              <MenuItem value="medium">{t('expenseApproval.priority.medium')}</MenuItem>
+              <MenuItem value="high">{t('expenseApproval.priority.high')}</MenuItem>
+              <MenuItem value="urgent">{t('expenseApproval.priority.urgent')}</MenuItem>
+            </TextField>
+            <Button
+              variant="outlined"
+              startIcon={<FilterIcon />}
+              onClick={() => {
+                setSearchTerm('');
+                setStatusFilter('');
+                setPriorityFilter('');
+              }}
+              sx={{
                   height: 40,
                   whiteSpace: 'nowrap',
                   minWidth: 'fit-content',
@@ -2313,7 +2304,6 @@ const ExpenseApproval: React.FC = () => {
               >
                 {t('expenseApproval.actions.reset')}
               </Button>
-            </Box>
           </Box>
         </CardContent>
       </Card>

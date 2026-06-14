@@ -29,6 +29,8 @@ import {
   Alert,
   Snackbar
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import MuiLink from '@mui/material/Link';
 import {
   Add as AddIcon,
@@ -541,23 +543,11 @@ const ContractManagement: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 0, width: '100%', maxWidth: '100%', bgcolor: 'transparent' }}>
-      {/* 헤더 */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-        <Typography
-          variant="pageTitle"
-          component="h1"
-          sx={{
-            fontWeight: 600,
-            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-            letterSpacing: '-0.022em',
-            lineHeight: 1.28,
-            color: 'text.primary',
-          }}
-        >
-          {txt('계약 관리', 'Contract management')}
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={txt('계약 관리', 'Contract management')}
+        actions={
+          <>
           <Button
             variant="outlined"
             startIcon={<RefreshIcon sx={{ fontSize: 18 }} />}
@@ -599,8 +589,9 @@ const ContractManagement: React.FC = () => {
               </Button>
             </span>
           </Tooltip>
-        </Box>
-      </Box>
+          </>
+        }
+      />
 
       {/* 통계 카드 */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
@@ -670,12 +661,15 @@ const ContractManagement: React.FC = () => {
             <Grid size={{ xs: 12, md: 4 }}>
               <TextField
                 fullWidth
+                size="small"
+                label={txt('검색', 'Search')}
                 placeholder={txt(
                   '계약명, 계약번호, 고객명으로 검색...',
                   'Search by title, number, customer…'
                 )}
                 value={searchTerm}
                 onChange={handleSearch}
+                InputLabelProps={{ shrink: true }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -696,8 +690,8 @@ const ContractManagement: React.FC = () => {
               />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <FormControl fullWidth>
-                <InputLabel>{txt('상태', 'Status')}</InputLabel>
+              <FormControl fullWidth size="small">
+                <InputLabel shrink>{txt('상태', 'Status')}</InputLabel>
                 <Select
                   value={statusFilter}
                   onChange={handleStatusFilter}
@@ -712,8 +706,8 @@ const ContractManagement: React.FC = () => {
               </FormControl>
             </Grid>
             <Grid size={{ xs: 12, md: 2 }}>
-              <FormControl fullWidth>
-                <InputLabel>{txt('계약 구분', 'Contract type')}</InputLabel>
+              <FormControl fullWidth size="small">
+                <InputLabel shrink>{txt('계약 구분', 'Contract type')}</InputLabel>
                 <Select
                   value={contractTypeFilter}
                   onChange={handleContractTypeFilter}
@@ -726,8 +720,8 @@ const ContractManagement: React.FC = () => {
               </FormControl>
             </Grid>
             <Grid size={{ xs: 12, md: 2 }}>
-              <FormControl fullWidth>
-                <InputLabel>{txt('기간', 'Period')}</InputLabel>
+              <FormControl fullWidth size="small">
+                <InputLabel shrink>{txt('기간', 'Period')}</InputLabel>
                 <Select
                   value={dateFilter}
                   onChange={handleDateFilter}

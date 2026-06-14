@@ -31,6 +31,8 @@ import {
   DialogContent,
   DialogActions
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import {
   Add as AddIcon,
@@ -788,62 +790,40 @@ const QuotationManagement: React.FC = () => {
         boxSizing: 'border-box'
       }}
     >
-      <Box
-        sx={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 2,
-          mb: 3,
-          rowGap: 1.5
-        }}
-      >
-        <Typography
-          component="h1"
-          variant="pageTitle"
-          sx={{
-            lineHeight: 1.28,
-            fontWeight: 600,
-            letterSpacing: '-0.022em',
-            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-            minWidth: 0,
-            flex: '1 1 200px',
-            pr: 1
-          }}
-        >
-          {t('quotationManagement.title')}
-        </Typography>
-        {isCreating || isEditing ? (
-          <Button
-            variant="outlined"
-            onClick={handleCancelForm}
-            sx={{
-              borderRadius: '12px',
-              textTransform: 'none',
-              flexShrink: 0,
-              overflow: 'visible'
-            }}
-          >
-            {t('common.back')}
-          </Button>
-        ) : (
-          <Button
-            variant="contained"
-            disableElevation
-            startIcon={<AddIcon fontSize="small" />}
-            onClick={handleAddQuotation}
-            sx={{
-              borderRadius: '12px',
-              textTransform: 'none',
-              flexShrink: 0,
-              overflow: 'visible'
-            }}
-          >
-            {t('quotationManagement.create')}
-          </Button>
-        )}
-      </Box>
+      <MvsPageHeader
+        title={t('quotationManagement.title')}
+        actions={
+          isCreating || isEditing ? (
+            <Button
+              variant="outlined"
+              onClick={handleCancelForm}
+              sx={{
+                borderRadius: '12px',
+                textTransform: 'none',
+                flexShrink: 0,
+                overflow: 'visible'
+              }}
+            >
+              {t('common.back')}
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              disableElevation
+              startIcon={<AddIcon fontSize="small" />}
+              onClick={handleAddQuotation}
+              sx={{
+                borderRadius: '12px',
+                textTransform: 'none',
+                flexShrink: 0,
+                overflow: 'visible'
+              }}
+            >
+              {t('quotationManagement.create')}
+            </Button>
+          )
+        }
+      />
 
       {/* 통계 카드 */}
       <Box sx={{ 
@@ -1037,9 +1017,12 @@ const QuotationManagement: React.FC = () => {
               >
                 <TextField
                   fullWidth
+                  size="small"
+                  label="검색"
                   placeholder={t('quotationManagement.searchPlaceholder')}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
@@ -1048,26 +1031,32 @@ const QuotationManagement: React.FC = () => {
                     ),
                   }}
                 />
-                <FormControl fullWidth>
-                  <InputLabel>{t('quotationManagement.status')}</InputLabel>
-                  <Select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                  >
-                    <MenuItem value="">{t('menuPermissionManagement.all')}</MenuItem>
-                    <MenuItem value="draft">{t('quotationManagement.statusDraft')}</MenuItem>
-                    <MenuItem value="pending_approval">{t('quotationManagement.statusPendingApproval')}</MenuItem>
-                    <MenuItem value="sent">{t('quotationManagement.statusSent')}</MenuItem>
-                    <MenuItem value="approved">{t('quotationManagement.statusApproved')}</MenuItem>
-                    <MenuItem value="rejected">{t('quotationManagement.statusRejected')}</MenuItem>
-                    <MenuItem value="expired">{t('quotationManagement.statusExpired')}</MenuItem>
-                  </Select>
-                </FormControl>
                 <TextField
                   fullWidth
+                  size="small"
+                  select
+                  label={t('quotationManagement.status')}
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  SelectProps={{ displayEmpty: true }}
+                >
+                  <MenuItem value="">{t('menuPermissionManagement.all')}</MenuItem>
+                  <MenuItem value="draft">{t('quotationManagement.statusDraft')}</MenuItem>
+                  <MenuItem value="pending_approval">{t('quotationManagement.statusPendingApproval')}</MenuItem>
+                  <MenuItem value="sent">{t('quotationManagement.statusSent')}</MenuItem>
+                  <MenuItem value="approved">{t('quotationManagement.statusApproved')}</MenuItem>
+                  <MenuItem value="rejected">{t('quotationManagement.statusRejected')}</MenuItem>
+                  <MenuItem value="expired">{t('quotationManagement.statusExpired')}</MenuItem>
+                </TextField>
+                <TextField
+                  fullWidth
+                  size="small"
+                  label={t('quotationManagement.customerName')}
                   placeholder={t('quotationManagement.customerSearchPlaceholder')}
                   value={customerFilter}
                   onChange={(e) => setCustomerFilter(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
                 />
                 <Button
                   variant="outlined"

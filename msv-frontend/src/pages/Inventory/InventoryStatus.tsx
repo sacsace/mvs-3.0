@@ -23,6 +23,8 @@ import {
   DialogActions,
   Button
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { Search as SearchIcon, Warning as WarningIcon, CheckCircle as CheckCircleIcon, Error as ErrorIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { alpha, useTheme } from '@mui/material/styles';
@@ -32,16 +34,6 @@ import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionF
 import { mvsTableHeadHighlightSx } from '../../theme/mvsLayout';
 
 const INVENTORY_STATUS_MENU_ROUTES = ['/inventory/status', '/inventory'] as const;
-
-const inventoryFilterLabelSx = {
-  color: 'text.secondary',
-  fontWeight: 600,
-  mb: 0.5,
-  display: 'block',
-  fontSize: '0.75rem',
-  lineHeight: '18px',
-  minHeight: 18,
-} as const;
 
 type StatusRow = {
   id: number;
@@ -398,26 +390,11 @@ const InventoryStatus: React.FC = () => {
   } as const;
 
   return (
-    <Box sx={{ p: 0 }}>
-      <Box sx={{ mb: 3 }}>
-        <Typography
-          component="h1"
-          variant="pageTitle"
-          sx={{
-            fontWeight: 600,
-            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-            letterSpacing: '-0.022em',
-            lineHeight: 1.28,
-            color: 'text.primary',
-            mb: 0.75,
-          }}
-        >
-          {t('inventoryStatus.pageTitle')}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', lineHeight: 1.5, maxWidth: 720 }}>
-          {t('inventoryStatus.pageSubtitle')}
-        </Typography>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={t('inventoryStatus.pageTitle')}
+        description={t('inventoryStatus.pageSubtitle')}
+      />
 
       {loadError ? (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -502,36 +479,33 @@ const InventoryStatus: React.FC = () => {
               maxWidth: { sm: 640 },
             }}
           >
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={inventoryFilterLabelSx}>
-                {t('inventoryStatus.searchLabel')}
-              </Typography>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder={t('inventoryStatus.searchPlaceholder')}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    height: 40,
-                    borderRadius: '12px',
-                    bgcolor: '#FFFFFF',
-                    '& .MuiOutlinedInput-input': { py: 0 },
-                    '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
-                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
-                  },
-                }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Box>
+            <TextField
+              fullWidth
+              size="small"
+              label={t('inventoryStatus.searchLabel')}
+              placeholder={t('inventoryStatus.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              InputLabelProps={{ shrink: true }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  height: 40,
+                  borderRadius: '12px',
+                  bgcolor: '#FFFFFF',
+                  '& .MuiOutlinedInput-input': { py: 0 },
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
+                },
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
           </Box>
         </CardContent>
       </Card>

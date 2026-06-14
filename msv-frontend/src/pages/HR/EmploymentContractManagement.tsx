@@ -32,6 +32,8 @@ import {
   Typography,
   Paper
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { useTheme, alpha } from '@mui/material/styles';
 import { Add as AddIcon, Edit as EditIcon, Draw as DrawIcon, PictureAsPdf as PictureAsPdfIcon } from '@mui/icons-material';
 import { API_BASE_URL, companyService, employmentContractService, userService } from '../../services/api';
@@ -666,50 +668,32 @@ const EmploymentContractManagement: React.FC = () => {
   );
 
   return (
-    <Box sx={{ p: 0, backgroundColor: 'workArea.main', borderRadius: 2, minHeight: '100%', width: '100%', maxWidth: '100%' }}>
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          mb: 2.5,
-          flexWrap: 'wrap',
-          gap: 2,
-        }}
-      >
-        <Typography
-          component="h1"
-          variant="pageTitle"
-          sx={{
-            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-            fontWeight: 600,
-            letterSpacing: '-0.022em',
-            lineHeight: 1.28,
-            color: theme.palette.mode === 'dark' ? 'common.white' : 'text.primary',
-          }}
-        >
-          {txt('전자근로계약 관리', 'Employment contract management')}
-        </Typography>
-        {isRoot && (
-          <Box sx={{ minWidth: { xs: '100%', sm: 280 }, maxWidth: 360, display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary', mb: 0.5, fontWeight: 600, fontSize: '0.75rem' }}>
-              {txt('회사', 'Company')}
-            </Typography>
-            <FormControl size="small" fullWidth>
-              <Select
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={txt('전자근로계약 관리', 'Employment contract management')}
+        mb={2.5}
+        actions={
+          isRoot ? (
+            <Box sx={{ minWidth: { xs: '100%', sm: 280 }, maxWidth: 360 }}>
+              <TextField
+                select
+                size="small"
+                fullWidth
+                label={txt('회사', 'Company')}
                 value={selectedCompanyId}
                 onChange={(e) => setSelectedCompanyId(Number(e.target.value))}
-                displayEmpty
+                InputLabelProps={{ shrink: true }}
+                SelectProps={{ displayEmpty: true }}
                 sx={{ borderRadius: '14px', minHeight: 44, bgcolor: 'background.paper' }}
               >
                 {companies.map((company) => (
                   <MenuItem key={company.id} value={company.id}>{company.name}</MenuItem>
                 ))}
-              </Select>
-            </FormControl>
-          </Box>
-        )}
-      </Box>
+              </TextField>
+            </Box>
+          ) : undefined
+        }
+      />
 
       <Card
         elevation={0}

@@ -109,7 +109,14 @@ const buildCardNestedInclude = (light: boolean) => {
     { model: User, as: 'assignee', attributes: ['id', 'username', 'userid', 'email'] },
     { model: User, as: 'cardCreator', attributes: ['id', 'username'] }
   ];
-  if (!light) {
+  if (light) {
+    includes.push({
+      model: WorkBoardCardComment,
+      as: 'comments',
+      attributes: ['id'],
+      separate: true
+    });
+  } else {
     includes.push({
       model: WorkBoardCardComment,
       as: 'comments',

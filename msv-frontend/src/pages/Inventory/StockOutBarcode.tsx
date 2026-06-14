@@ -13,6 +13,8 @@ import {
   CircularProgress,
   Tooltip
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { useTranslation } from 'react-i18next';
 import { alpha, useTheme } from '@mui/material/styles';
 import { api, inventoryService } from '../../services/api';
@@ -248,27 +250,14 @@ const StockOutBarcode: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 2, maxWidth: 920, mx: 'auto', width: '100%' }}>
-      <Typography
-        component="h1"
-        variant="pageTitle"
-        sx={{
-          fontWeight: 600,
-          fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-          letterSpacing: '-0.022em',
-          lineHeight: 1.28,
-          color: 'text.primary',
-          mb: 1,
-        }}
-      >
-        {txt('출고 관리', 'Outbound management')}
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.55, maxWidth: 720 }}>
-        {txt(
+    <Box sx={{ ...mvsPageRootSx, p: 2, maxWidth: 920, mx: 'auto' }}>
+      <MvsPageHeader
+        title={txt('출고 관리', 'Outbound management')}
+        description={txt(
           '재고(제품) 관리에서 등록된 품목만 출고할 수 있습니다. 바코드·품목코드·제품명으로 검색한 뒤 수량을 입력해 출고합니다.',
           'Only products registered in inventory can be shipped out. Find the item by barcode, item code, or name, then enter the quantity.'
         )}
-      </Typography>
+      />
 
       <Card
         elevation={0}

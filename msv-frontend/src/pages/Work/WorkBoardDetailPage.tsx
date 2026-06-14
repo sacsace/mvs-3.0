@@ -1,6 +1,7 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Avatar,
+  AvatarGroup,
   Box,
   Button,
   Card,
@@ -12,23 +13,29 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  Menu,
   MenuItem,
   Popper,
   Paper,
   TextField,
+  Tooltip,
   Typography,
   Autocomplete
 } from '@mui/material';
 import {
   Add as AddIcon,
   ArrowBack as ArrowBackIcon,
+  ChatBubbleOutline as ChatBubbleOutlineIcon,
   Check as CheckIcon,
+  CheckCircle as CheckCircleIcon,
   Close as CloseIcon,
-  DragIndicator as DragIndicatorIcon,
   DeleteOutline as DeleteIcon,
   EditOutlined as EditOutlinedIcon,
+  MoreHoriz as MoreHorizIcon,
+  Notes as NotesIcon,
   PersonAdd as PersonAddIcon,
-  LibraryAddOutlined as LibraryAddOutlinedIcon
+  LibraryAddOutlined as LibraryAddOutlinedIcon,
+  VisibilityOutlined as VisibilityOutlinedIcon
 } from '@mui/icons-material';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
@@ -56,6 +63,10 @@ import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import RichTextEditor from '../../components/RichTextEditor/RichTextEditor';
 import { alpha, useTheme } from '@mui/material/styles';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsOutlinedLabelProps } from '../../theme/mvsLayout';
+
+const CARD_DETAIL_OUTLINED = mvsOutlinedLabelProps;
 
 type BoardList = {
   id: number;
@@ -260,23 +271,36 @@ const formatDateTime = (value?: string): string => {
 const DRAG_TRANSITION = 'transform 40ms ease-out';
 const DRAG_LAYOUT_TRANSITION = 'none';
 
-/** 칸반 열·카드·칩 모서리 — 완전 각진 톤 */
-const KANBAN_SURFACE_RADIUS = '0';
-const KANBAN_CHIP_RADIUS = '0';
-const KANBAN_CONTROL_RADIUS = '0';
-const KANBAN_COLUMN_RADIUS = '0';
-const KANBAN_CARD_RADIUS = '0';
+/** 칸반 — 트렐로형 라운드·라벤더 보드 */
+const KANBAN_DETAIL_SHELL_RADIUS = '2px';
+const KANBAN_SURFACE_RADIUS = '12px';
+const KANBAN_CHIP_RADIUS = '6px';
+const KANBAN_CONTROL_RADIUS = '8px';
+const KANBAN_COLUMN_RADIUS = '12px';
+const KANBAN_CARD_RADIUS = '8px';
 
-const KANBAN_COLUMN_BG = '#E8EDF3';
+/** 소분류(칸반 열) — 그라데이션 위 반투명 화이트 패널 */
+const KANBAN_COLUMN_BG = 'rgba(255, 255, 255, 0.62)';
+const KANBAN_COLUMN_BORDER = '1px solid rgba(255, 255, 255, 0.92)';
+const KANBAN_COLUMN_SHADOW = '0 4px 14px rgba(9, 30, 66, 0.09)';
+const KANBAN_MEMBER_PANEL_BG = 'rgba(255, 255, 255, 0.48)';
+const KANBAN_MEMBER_PANEL_BORDER = '1px solid rgba(255, 255, 255, 0.82)';
 const KANBAN_CARD_BG = '#FFFFFF';
-const KANBAN_CARD_BORDER = '1px solid #C5CED9';
-const KANBAN_COLUMN_SHADOW = '0 1px 4px rgba(15, 23, 42, 0.08)';
-const KANBAN_CARD_SHADOW = '0 1px 2px rgba(15, 23, 42, 0.06)';
-const KANBAN_CARD_HOVER_SHADOW = '0 2px 8px rgba(15, 23, 42, 0.1)';
+const KANBAN_CARD_BORDER = 'none';
+const KANBAN_CARD_SHADOW = '0 1px 3px rgba(9, 30, 66, 0.15)';
+const KANBAN_CARD_HOVER_SHADOW = '0 2px 6px rgba(9, 30, 66, 0.2)';
 const KANBAN_TITLE_DESC_GAP = 0.75;
+const KANBAN_META_ICON_COLOR = '#6B778C';
 
-/** 칸반 카드 고정 높이(열·드래그 미리보기 동일) */
-const WORK_BOARD_CARD_MIN_HEIGHT_PX = 76;
+/** 칸반 카드 최소 높이(열·드래그 미리보기 동일) */
+const WORK_BOARD_CARD_MIN_HEIGHT_PX = 68;
+
+/** 보드 멤버 — 겹침 원형 아바타 */
+const BOARD_MEMBER_AVATAR_SIZE = 32;
+const BOARD_MEMBER_AVATAR_OVERLAP_PX = 10;
+const BOARD_MEMBER_AVATAR_MAX = 7;
+
+const AVATAR_PALETTE = ['#6554C0', '#00B8D9', '#36B37E', '#FF5630', '#FFAB00', '#403294'];
 
 const kanbanMetaChipSx = {
   height: 22,
@@ -368,6 +392,30 @@ const cardDetailInputSx = {
   '& .MuiInputBase-input': { fontSize: '0.875rem' },
 } as const;
 
+const cardDetailOutlinedTintSx = {
+  ...cardDetailInputSx,
+  '& .MuiOutlinedInput-root': {
+    ...(cardDetailInputSx['& .MuiOutlinedInput-root'] as Record<string, unknown>),
+    bgcolor: '#F0F4F8',
+    '&:hover': { bgcolor: '#E8EDF3' },
+    '&.Mui-focused': { bgcolor: '#FFFFFF' },
+    '&.Mui-disabled': { bgcolor: '#EEF2F6' },
+  },
+} as const;
+
+const cardDetailOutlinedWhiteSx = {
+  ...cardDetailInputSx,
+  '& .MuiOutlinedInput-root': {
+    ...(cardDetailInputSx['& .MuiOutlinedInput-root'] as Record<string, unknown>),
+    bgcolor: '#FFFFFF',
+    height: 40,
+    '&:hover': { bgcolor: '#F8FAFC' },
+    '&.Mui-focused': { bgcolor: '#FFFFFF' },
+    '&.Mui-disabled': { bgcolor: '#F1F5F9' },
+  },
+  '& .MuiSelect-select': { py: '10px' },
+} as const;
+
 const cardDetailSelectSx = {
   ...cardDetailInputSx,
   '& .MuiOutlinedInput-root': {
@@ -378,7 +426,7 @@ const cardDetailSelectSx = {
 } as const;
 
 /** 대분류(열) 기본 너비 — flex-grow 없이 고정해 행에 열이 적어도 카드 너비가 동일하게 유지 */
-const WORK_BOARD_COLUMN_WIDTH_PX = 300;
+const WORK_BOARD_COLUMN_WIDTH_PX = 272;
 
 const isHexColor = (value?: string | null): value is string => Boolean(value && /^#[0-9a-fA-F]{6}$/.test(value));
 
@@ -533,18 +581,21 @@ function KanbanInlineTitle({
   title,
   descriptionPlain,
   titleFontSize = '0.8125rem',
+  compact = false,
 }: {
   title: string;
   descriptionPlain: string;
   titleFontSize?: string;
+  /** 카드 면 — 제목만 표시(설명은 아이콘으로) */
+  compact?: boolean;
 }) {
-  const hasDesc = Boolean(descriptionPlain);
-  const fullLabel = hasDesc ? `${title} (${descriptionPlain})` : title;
+  const hasDesc = Boolean(descriptionPlain) && !compact;
+  const fullLabel = hasDesc || compact ? (descriptionPlain ? `${title} (${descriptionPlain})` : title) : title;
   return (
     <Typography
       component="div"
       variant="subtitle2"
-      title={hasDesc ? fullLabel : undefined}
+      title={fullLabel}
       sx={{
         flexShrink: 0,
         minWidth: 0,
@@ -552,41 +603,100 @@ function KanbanInlineTitle({
         overflow: 'hidden',
         textOverflow: 'ellipsis',
         whiteSpace: 'nowrap',
-        lineHeight: 1.4,
+        lineHeight: 1.45,
         fontSize: titleFontSize,
         letterSpacing: '-0.01em',
+        fontWeight: 500,
+        color: 'text.primary',
       }}
     >
-      <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
-        {title || '\u00a0'}
-      </Box>
-      {hasDesc ? (
-        <Box
-          component="span"
-          sx={{
-            fontWeight: 400,
-            color: 'text.secondary',
-            fontSize: `calc(${titleFontSize} - 0.0625rem)`,
-            ml: KANBAN_TITLE_DESC_GAP,
-          }}
-        >
-          ({descriptionPlain})
+      {compact ? (
+        title || '\u00a0'
+      ) : (
+        <>
+          <Box component="span" sx={{ fontWeight: 700, color: 'text.primary' }}>
+            {title || '\u00a0'}
+          </Box>
+          {hasDesc ? (
+            <Box
+              component="span"
+              sx={{
+                fontWeight: 400,
+                color: 'text.secondary',
+                fontSize: `calc(${titleFontSize} - 0.0625rem)`,
+                ml: KANBAN_TITLE_DESC_GAP,
+              }}
+            >
+              ({descriptionPlain})
+            </Box>
+          ) : null}
+        </>
+      )}
+    </Typography>
+  );
+}
+
+const getAvatarColor = (userId: number) => AVATAR_PALETTE[Math.abs(userId) % AVATAR_PALETTE.length];
+
+type BoardMemberLite = { user_id: number; user?: { id?: number; username?: string } };
+
+function resolveCardFaceAvatars(card: BoardCard, members: BoardMemberLite[]) {
+  const seen = new Set<number>();
+  const avatars: { id: number; label: string }[] = [];
+  const push = (id?: number | null, label?: string) => {
+    const uid = id != null ? Number(id) : 0;
+    if (!uid || seen.has(uid)) return;
+    seen.add(uid);
+    avatars.push({ id: uid, label: (label || '?').trim().charAt(0).toUpperCase() || '?' });
+  };
+  push(card.assignee?.id, card.assignee?.username);
+  (card.reference_user_ids || []).forEach((rid) => {
+    const m = members.find((x) => Number(x.user_id) === Number(rid));
+    push(rid, m?.user?.username);
+  });
+  return avatars.slice(0, 4);
+}
+
+function KanbanMetaIcon({
+  icon,
+  count,
+}: {
+  icon: React.ReactNode;
+  count?: number;
+}) {
+  return (
+    <Box
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 0.25,
+        color: KANBAN_META_ICON_COLOR,
+        fontSize: '0.75rem',
+        lineHeight: 1,
+      }}
+    >
+      {icon}
+      {count != null && count > 0 ? (
+        <Box component="span" sx={{ fontSize: '0.6875rem', fontWeight: 600 }}>
+          {count}
         </Box>
       ) : null}
-    </Typography>
+    </Box>
   );
 }
 
 const DraggableCard = memo(function DraggableCard({
   card,
   onOpenDetail,
-  txt,
-  dragDisabled
+  dragDisabled,
+  isCompletedList,
+  members,
 }: {
   card: BoardCard;
   onOpenDetail: (card: BoardCard) => void;
-  txt: (ko: string, en: string) => string;
   dragDisabled?: boolean;
+  isCompletedList?: boolean;
+  members: BoardMemberLite[];
 }) {
   const theme = useTheme();
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -615,12 +725,13 @@ const DraggableCard = memo(function DraggableCard({
     card.description && !isRichTextEmpty(card.description) ? getPlainTextFromHtml(card.description) : '';
 
   const cardAccent = isHexColor(card.color) ? String(card.color) : null;
-  const barColor = cardAccent || theme.palette.primary.main;
   const cardBg =
     theme.palette.mode === 'light' ? KANBAN_CARD_BG : alpha(theme.palette.grey[900], 0.88);
-  const hasMeta = Boolean(card.assignee || card.due_date);
-  const assigneeInitial =
-    card.assignee?.username?.trim().charAt(0).toUpperCase() || '';
+  const commentCount = card.comments?.length ?? 0;
+  const referenceCount = card.reference_user_ids?.length ?? 0;
+  const hasDesc = Boolean(descPlain);
+  const faceAvatars = resolveCardFaceAvatars(card, members);
+  const showMeta = hasDesc || commentCount > 0 || referenceCount > 0 || Boolean(card.due_date) || faceAvatars.length > 0;
 
   return (
     <Card
@@ -654,58 +765,96 @@ const DraggableCard = memo(function DraggableCard({
         if (!isDragging) onOpenDetail(card);
       }}
     >
-      <Box sx={{ height: 3, flexShrink: 0, bgcolor: barColor }} />
+      {cardAccent ? (
+        <Box sx={{ height: 6, flexShrink: 0, bgcolor: cardAccent }} />
+      ) : null}
       <CardContent
         sx={{
           flex: 1,
           minHeight: 0,
-          py: 1.1,
+          py: 1.15,
           px: 1.25,
           display: 'flex',
           flexDirection: 'column',
-          gap: hasMeta ? 0.75 : 0,
+          gap: showMeta ? 0.85 : 0,
           overflow: 'hidden',
-          '&:last-child': { pb: 1.1 },
+          '&:last-child': { pb: 1.15 },
         }}
       >
-        <KanbanInlineTitle title={card.title || ''} descriptionPlain={descPlain} />
-        {hasMeta ? (
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 0.5,
-            flexShrink: 0,
-          }}
-        >
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, flex: 1, minWidth: 0 }}>
-            {card.due_date && (
-              <Chip
-                size="small"
-                label={`${txt('만료', 'Due')}: ${formatDueDate(card.due_date)}`}
-                sx={kanbanMetaChipSx}
-              />
-            )}
-          </Box>
-          {card.assignee ? (
-            <Avatar
-              title={card.assignee.username}
-              sx={{
-                width: 24,
-                height: 24,
-                fontSize: '0.65rem',
-                fontWeight: 700,
-                flexShrink: 0,
-                bgcolor: '#94A3B8',
-                color: '#FFFFFF',
-                borderRadius: 0,
-              }}
-            >
-              {assigneeInitial}
-            </Avatar>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.5, minWidth: 0 }}>
+          {isCompletedList ? (
+            <CheckCircleIcon sx={{ fontSize: 18, color: '#36B37E', flexShrink: 0, mt: 0.1 }} />
           ) : null}
+          <KanbanInlineTitle
+            title={card.title || ''}
+            descriptionPlain={descPlain}
+            titleFontSize="0.8125rem"
+            compact
+          />
         </Box>
+        {showMeta ? (
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 0.75,
+              flexShrink: 0,
+              minHeight: 22,
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.85, flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
+              {referenceCount > 0 ? (
+                <KanbanMetaIcon
+                  icon={<VisibilityOutlinedIcon sx={{ fontSize: 15 }} />}
+                  count={referenceCount}
+                />
+              ) : null}
+              {hasDesc ? (
+                <KanbanMetaIcon icon={<NotesIcon sx={{ fontSize: 15 }} />} />
+              ) : null}
+              {commentCount > 0 ? (
+                <KanbanMetaIcon
+                  icon={<ChatBubbleOutlineIcon sx={{ fontSize: 15 }} />}
+                  count={commentCount}
+                />
+              ) : null}
+              {card.due_date ? (
+                <Chip
+                  size="small"
+                  label={formatDueDate(card.due_date)}
+                  sx={{
+                    ...kanbanMetaChipSx,
+                    height: 20,
+                    fontSize: '0.625rem',
+                    bgcolor: alpha('#FF5630', 0.12),
+                    color: '#BF2600',
+                  }}
+                />
+              ) : null}
+            </Box>
+            {faceAvatars.length > 0 ? (
+              <AvatarGroup
+                max={4}
+                sx={{
+                  flexShrink: 0,
+                  '& .MuiAvatar-root': {
+                    width: 24,
+                    height: 24,
+                    fontSize: '0.625rem',
+                    fontWeight: 700,
+                    border: '2px solid #fff',
+                  },
+                }}
+              >
+                {faceAvatars.map((a) => (
+                  <Avatar key={a.id} sx={{ bgcolor: getAvatarColor(a.id) }}>
+                    {a.label}
+                  </Avatar>
+                ))}
+              </AvatarGroup>
+            ) : null}
+          </Box>
         ) : null}
       </CardContent>
     </Card>
@@ -714,7 +863,6 @@ const DraggableCard = memo(function DraggableCard({
 
 const ListColumn = memo(function ListColumn({
   list,
-  accentColor,
   listTitleEditing,
   listTitleDraft,
   listSaving,
@@ -738,10 +886,11 @@ const ListColumn = memo(function ListColumn({
   allowListTitleEdit,
   allowListDelete,
   allowAddCard,
-  suppressColumnScroll
+  suppressColumnScroll,
+  members,
+  isCompletedList,
 }: {
   list: BoardList;
-  accentColor: string;
   listTitleEditing: boolean;
   listTitleDraft: string;
   listSaving: boolean;
@@ -766,8 +915,11 @@ const ListColumn = memo(function ListColumn({
   allowListDelete: boolean;
   allowAddCard: boolean;
   suppressColumnScroll?: boolean;
+  members: BoardMemberLite[];
+  isCompletedList?: boolean;
 }) {
   const theme = useTheme();
+  const [listMenuAnchor, setListMenuAnchor] = useState<null | HTMLElement>(null);
   const { setNodeRef: setCardDropRef, isOver } = useDroppable({ id: `list-${list.id}` });
   const { setNodeRef: setListDropRef } = useDroppable({ id: `listcol-${list.id}` });
   const {
@@ -813,21 +965,20 @@ const ListColumn = memo(function ListColumn({
         minWidth: { xs: 0, sm: WORK_BOARD_COLUMN_WIDTH_PX },
         maxWidth: { xs: '100%', sm: `${WORK_BOARD_COLUMN_WIDTH_PX}px` },
         bgcolor: theme.palette.mode === 'light' ? KANBAN_COLUMN_BG : alpha(theme.palette.common.black, 0.22),
+        backdropFilter: theme.palette.mode === 'light' ? 'blur(10px)' : 'none',
+        WebkitBackdropFilter: theme.palette.mode === 'light' ? 'blur(10px)' : 'none',
         outline: isOver ? '2px solid' : 'none',
         outlineColor: alpha(theme.palette.primary.main, 0.45),
         outlineOffset: 0,
         p: 1.25,
         borderRadius: KANBAN_COLUMN_RADIUS,
-        border: 'none',
-        boxShadow:
-          theme.palette.mode === 'light'
-            ? `${KANBAN_COLUMN_SHADOW}, inset 3px 0 0 0 ${accentColor}`
-            : 'none',
+        border: theme.palette.mode === 'light' ? KANBAN_COLUMN_BORDER : 'none',
+        boxShadow: theme.palette.mode === 'light' ? KANBAN_COLUMN_SHADOW : 'none',
         alignSelf: 'flex-start',
-        minHeight: 180,
+        minHeight: 120,
         display: 'flex',
         flexDirection: 'column',
-        maxHeight: 'calc(100vh - 220px)',
+        maxHeight: 'calc(100vh - 240px)',
         overflow: suppressColumnScroll ? 'hidden' : 'visible',
         transition: isListDragging ? 'none' : DRAG_TRANSITION,
         willChange: isListDragging ? 'transform' : 'auto',
@@ -840,26 +991,14 @@ const ListColumn = memo(function ListColumn({
           display: 'flex',
           alignItems: 'center',
           gap: 0.5,
-          mb: 1.25,
-          px: 0.25,
+          mb: 1,
+          px: 0.15,
           flexShrink: 0,
+          cursor: allowListReorder ? 'grab' : 'default',
         }}
+        {...(allowListReorder ? listDragAttributes : {})}
+        {...(allowListReorder ? listDragListeners : {})}
       >
-        <IconButton
-          size="small"
-          aria-label={txt('대분류 드래그 이동', 'Drag list')}
-          sx={{
-            cursor: allowListReorder ? 'grab' : 'default',
-            borderRadius: KANBAN_CONTROL_RADIUS,
-            color: '#64748B',
-            '&:hover': { bgcolor: alpha(theme.palette.common.white, 0.85) },
-          }}
-          {...(allowListReorder ? listDragAttributes : {})}
-          {...(allowListReorder ? listDragListeners : {})}
-          disabled={!allowListReorder}
-        >
-          <DragIndicatorIcon fontSize="small" />
-        </IconButton>
         {listTitleEditing && allowListTitleEdit ? (
           <TextField
             autoFocus
@@ -876,31 +1015,31 @@ const ListColumn = memo(function ListColumn({
             sx={{ flex: 1 }}
           />
         ) : (
-          <KanbanInlineTitle
-            title={displayBoardListTitle(list.title, language)}
-            descriptionPlain={String(list.description || '').trim()}
-            titleFontSize="0.875rem"
-          />
+          <>
+            <Typography
+              component="span"
+              sx={{
+                fontWeight: 700,
+                fontSize: '0.875rem',
+                color: '#172B4D',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                flex: 1,
+                minWidth: 0,
+              }}
+              title={displayBoardListTitle(list.title, language)}
+            >
+              {displayBoardListTitle(list.title, language)}
+            </Typography>
+            <Typography
+              component="span"
+              sx={{ fontSize: '0.8125rem', fontWeight: 500, color: '#6B778C', flexShrink: 0 }}
+            >
+              {cards.length}
+            </Typography>
+          </>
         )}
-        <Box
-          sx={{
-            minWidth: 24,
-            height: 24,
-            px: 0.75,
-            borderRadius: KANBAN_CHIP_RADIUS,
-            bgcolor: '#FFFFFF',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '0.75rem',
-            fontWeight: 700,
-            color: '#64748B',
-            boxShadow: '0 1px 2px rgba(15, 23, 42, 0.08)',
-            flexShrink: 0,
-          }}
-        >
-          {cards.length}
-        </Box>
         {listTitleEditing && allowListTitleEdit ? (
           <IconButton
             size="small"
@@ -910,31 +1049,49 @@ const ListColumn = memo(function ListColumn({
           >
             <CheckIcon fontSize="small" />
           </IconButton>
-        ) : (
-          (allowListTitleEdit || allowListDelete) && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
-              {allowListTitleEdit && (
-                <IconButton
-                  size="small"
-                  onClick={() => onStartEditListTitle(list.id)}
-                  aria-label={txt('제목 수정', 'Edit title')}
+        ) : (allowListTitleEdit || allowListDelete) ? (
+          <>
+            <IconButton
+              size="small"
+              aria-label={txt('대분류 메뉴', 'List menu')}
+              onClick={(e) => setListMenuAnchor(e.currentTarget)}
+              sx={{ color: '#6B778C', borderRadius: KANBAN_CONTROL_RADIUS }}
+            >
+              <MoreHorizIcon fontSize="small" />
+            </IconButton>
+            <Menu
+              anchorEl={listMenuAnchor}
+              open={Boolean(listMenuAnchor)}
+              onClose={() => setListMenuAnchor(null)}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+              {allowListTitleEdit ? (
+                <MenuItem
+                  onClick={() => {
+                    setListMenuAnchor(null);
+                    onStartEditListTitle(list.id);
+                  }}
                 >
-                  <EditOutlinedIcon fontSize="small" />
-                </IconButton>
-              )}
-              {allowListDelete && (
-                <IconButton
-                  size="small"
-                  color="error"
-                  onClick={() => onDeleteList(list.id, list.title)}
-                  aria-label={txt('대분류 삭제', 'Delete list')}
+                  <EditOutlinedIcon fontSize="small" sx={{ mr: 1 }} />
+                  {txt('제목 수정', 'Edit title')}
+                </MenuItem>
+              ) : null}
+              {allowListDelete ? (
+                <MenuItem
+                  onClick={() => {
+                    setListMenuAnchor(null);
+                    onDeleteList(list.id, list.title);
+                  }}
+                  sx={{ color: 'error.main' }}
                 >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              )}
-            </Box>
-          )
-        )}
+                  <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
+                  {txt('대분류 삭제', 'Delete list')}
+                </MenuItem>
+              ) : null}
+            </Menu>
+          </>
+        ) : null}
       </Box>
       <Box
         sx={{
@@ -962,7 +1119,8 @@ const ListColumn = memo(function ListColumn({
           <DraggableCard
             key={c.id}
             card={c}
-            txt={txt}
+            members={members}
+            isCompletedList={isCompletedList}
             onOpenDetail={handleOpenCard}
             dragDisabled={!allowListReorder}
           />
@@ -1027,21 +1185,23 @@ const ListColumn = memo(function ListColumn({
         <Button
           fullWidth
           size="small"
-          startIcon={<AddIcon sx={{ fontSize: 18 }} />}
+          startIcon={<AddIcon sx={{ fontSize: 16 }} />}
           onClick={() => onOpenComposer(list.id)}
           sx={{
-            mt: 1,
+            mt: 0.75,
             justifyContent: 'flex-start',
-            color: '#64748B',
+            color: '#5E6C84',
             textTransform: 'none',
-            fontWeight: 600,
+            fontWeight: 500,
+            fontSize: '0.8125rem',
             py: 0.85,
-            borderRadius: KANBAN_CARD_RADIUS,
-            bgcolor: alpha(theme.palette.common.white, 0.55),
-            '&:hover': { bgcolor: '#FFFFFF', color: '#475569' },
+            px: 1,
+            borderRadius: KANBAN_CONTROL_RADIUS,
+            bgcolor: 'transparent',
+            '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.72)', color: '#172B4D' },
           }}
         >
-          {txt('카드 추가', 'Add Card')}
+          {txt('카드 추가', 'Add a card')}
         </Button>
       ) : null}
     </Paper>
@@ -1094,6 +1254,8 @@ const WorkBoardDetailPage: React.FC = () => {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [memberRoleUpdatingId, setMemberRoleUpdatingId] = useState<number | null>(null);
   const [memberRemovingId, setMemberRemovingId] = useState<number | null>(null);
+  const [memberMenuAnchor, setMemberMenuAnchor] = useState<HTMLElement | null>(null);
+  const [memberMenuTarget, setMemberMenuTarget] = useState<any | null>(null);
   const [cardDetail, setCardDetail] = useState<CardDetailState | null>(null);
   const [cardSaving, setCardSaving] = useState(false);
   const [cardComments, setCardComments] = useState<BoardCardComment[]>([]);
@@ -1838,6 +2000,16 @@ const WorkBoardDetailPage: React.FC = () => {
     }
   };
 
+  const closeMemberMenu = () => {
+    setMemberMenuAnchor(null);
+    setMemberMenuTarget(null);
+  };
+
+  const openMemberMenu = (event: React.MouseEvent<HTMLElement>, member: any) => {
+    setMemberMenuAnchor(event.currentTarget);
+    setMemberMenuTarget(member);
+  };
+
   const handleRemoveMember = (memberUserId: number, memberName: string) => {
     if (!menuCanEdit) return;
     showConfirm(
@@ -1890,10 +2062,6 @@ const WorkBoardDetailPage: React.FC = () => {
   const isOwner = myMember?.role === 'owner' || user?.role === 'root';
   const canManageMembers = isOwner && menuCanEdit;
   const canDeleteBoard = myMember?.role === 'owner' && menuCanDelete;
-  const boardAccentColor =
-    isHexColor(board?.board_color) && board.board_color
-      ? board.board_color.toUpperCase()
-      : (isHexColor(theme.palette.primary.main) ? theme.palette.primary.main.toUpperCase() : '#1976D2');
   const lists: BoardList[] = [...(board?.lists || [])].sort((a, b) => a.position - b.position);
   /** 제목에 완료/종료/done 등이 없으면 칸반이 2열 이상일 때 마지막 열을 완료 이동 목적으로 사용 */
   const completedListByTitle = lists.find((list) => isCompletedListTitle(list.title));
@@ -1988,15 +2156,17 @@ const WorkBoardDetailPage: React.FC = () => {
   return (
     <Box
       sx={{
-        p: { xs: 2, sm: 3 },
-        pb: 3,
+        p: 0,
+        pb: 2,
+        flex: 1,
         width: '100%',
         minWidth: 0,
+        minHeight: '100%',
         display: 'flex',
         flexDirection: 'column',
         overflowX: 'hidden',
-        /* AppLayout이 이미 workArea.main(흰 패널)로 감쌈 — 별도 회색 바탕을 두면 사이드·본문과 톤이 어긋남 */
-        backgroundColor: 'transparent',
+        boxSizing: 'border-box',
+        background: 'transparent',
         '& .MuiOutlinedInput-root': {
           borderRadius: 2,
           backgroundColor: 'background.paper',
@@ -2017,72 +2187,12 @@ const WorkBoardDetailPage: React.FC = () => {
         }
       }}
     >
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1.25,
-          mb: 2.5,
-          flexWrap: 'wrap',
-          p: 2,
-          borderRadius: KANBAN_SURFACE_RADIUS,
-          bgcolor: 'background.paper',
-          border: '1px solid',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-          boxShadow: '0 4px 18px rgba(15, 23, 42, 0.05)',
-        }}
-      >
-        <IconButton
-          onClick={() => navigate('/work/projects')}
-          size="small"
-          aria-label="목록으로"
-          sx={{
-            borderRadius: KANBAN_SURFACE_RADIUS,
-            color: 'text.secondary',
-            '&:hover': { bgcolor: alpha(theme.palette.action.hover, 0.9) },
-          }}
-        >
-          <ArrowBackIcon />
-        </IconButton>
-        <Typography
-          component="h1"
-          variant="pageTitle"
-          sx={{
-            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-            fontWeight: 600,
-            letterSpacing: '-0.022em',
-            lineHeight: 1.28,
-            flex: '1 1 200px',
-            minWidth: 0,
-            display: 'flex',
-            alignItems: 'baseline',
-            flexWrap: 'nowrap',
-            overflow: 'hidden',
-          }}
-          color="text.primary"
-        >
-          <Box component="span" sx={{ fontWeight: 700, flexShrink: 0 }}>
-            {board.name}
-          </Box>
-          {board.description?.trim() ? (
-            <Box
-              component="span"
-              sx={{
-                fontWeight: 400,
-                color: 'text.secondary',
-                fontSize: { xs: '0.9375rem', sm: '1.0625rem' },
-                ml: KANBAN_TITLE_DESC_GAP,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-              title={board.description.trim()}
-            >
-              ({board.description.trim()})
-            </Box>
-          ) : null}
-        </Typography>
-        <Box sx={{ flexGrow: 1, minWidth: 8 }} />
+      <MvsPageHeader
+        backTo="/work/projects"
+        title={board.name}
+        description={board.description?.trim() || undefined}
+        actions={
+          <>
         {menuCanEdit && (
           <Button
             startIcon={<PersonAddIcon sx={{ fontSize: 18 }} />}
@@ -2096,9 +2206,9 @@ const WorkBoardDetailPage: React.FC = () => {
             sx={{
               textTransform: 'none',
               fontWeight: 600,
-              borderRadius: KANBAN_SURFACE_RADIUS,
+              borderRadius: '12px',
               px: 2,
-              borderColor: alpha(theme.palette.primary.main, 0.45),
+              borderColor: alpha(theme.palette.divider, 0.95),
             }}
           >
             {txt('멤버 초대', 'Invite Member')}
@@ -2117,9 +2227,9 @@ const WorkBoardDetailPage: React.FC = () => {
             sx={{
               textTransform: 'none',
               fontWeight: 600,
-              borderRadius: KANBAN_SURFACE_RADIUS,
+              borderRadius: '12px',
               px: 2,
-              borderColor: alpha(theme.palette.primary.main, 0.45),
+              borderColor: alpha(theme.palette.divider, 0.95),
             }}
           >
             {txt('대분류 추가', 'Add List')}
@@ -2134,7 +2244,7 @@ const WorkBoardDetailPage: React.FC = () => {
             sx={{
               textTransform: 'none',
               fontWeight: 600,
-              borderRadius: KANBAN_SURFACE_RADIUS,
+              borderRadius: '12px',
               px: 2,
               borderColor: alpha(theme.palette.error.main, 0.4),
             }}
@@ -2142,201 +2252,244 @@ const WorkBoardDetailPage: React.FC = () => {
             {txt('보드 삭제', 'Delete Board')}
           </Button>
         )}
-      </Box>
+          </>
+        }
+      />
 
-      <Paper
-        elevation={0}
+      <Box
         sx={{
-          mb: 2,
-          p: { xs: 1.25, sm: 1.5 },
-          borderRadius: KANBAN_SURFACE_RADIUS,
-          border: 'none',
-          bgcolor: '#F0F4F8',
-          boxShadow: 'none',
+          mb: 2.5,
+          px: { xs: 1.25, sm: 1.5 },
+          py: { xs: 1, sm: 1.15 },
+          borderRadius: '12px',
+          bgcolor: KANBAN_MEMBER_PANEL_BG,
+          border: KANBAN_MEMBER_PANEL_BORDER,
+          boxShadow: '0 2px 10px rgba(9, 30, 66, 0.06)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
           width: '100%',
           maxWidth: '100%',
           boxSizing: 'border-box',
         }}
       >
-        <Typography
-          variant="subtitle2"
-          sx={{
-            mb: 1,
-            fontWeight: 700,
-            fontSize: '0.8125rem',
-            letterSpacing: '-0.01em',
-            color: '#475569',
-          }}
-        >
-          {txt('보드 멤버', 'Board Members')} · {members.length}{txt('명', '')}
-        </Typography>
         <Box
           sx={{
             display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1.5,
             flexWrap: 'wrap',
-            gap: 0.75,
-            alignItems: 'stretch',
-            width: '100%',
           }}
         >
-          {members.map((m: any) => {
-            const name = m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`;
-            const initial = name.trim().charAt(0).toUpperCase() || '?';
-            const isSelf = Number(m.user_id) === Number(user?.id || 0);
-            const isOwnerMember = m.role === 'owner';
-            const canRemoveMember = menuCanEdit && (canManageMembers || isSelf) && !isOwnerMember;
-            return (
-              <Box
-                key={m.id}
-                sx={{
-                  boxSizing: 'border-box',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 0.45,
-                  py: 0.65,
-                  px: 0.85,
-                  minWidth: 0,
-                  flex: { xs: '1 1 100%', sm: '1 1 168px' },
-                  maxWidth: { xs: '100%', sm: 220 },
-                  width: { xs: '100%', sm: 'auto' },
-                  borderRadius: KANBAN_CONTROL_RADIUS,
-                  bgcolor: isOwnerMember
-                    ? alpha(theme.palette.primary.main, 0.1)
-                    : '#FFFFFF',
-                  border: 'none',
-                  boxShadow: isOwnerMember
-                    ? `inset 3px 0 0 ${theme.palette.primary.main}`
-                    : 'none',
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.65, minWidth: 0 }}>
+          <Typography
+            variant="subtitle2"
+            sx={{
+              fontWeight: 700,
+              fontSize: '0.8125rem',
+              letterSpacing: '-0.01em',
+              color: '#42526E',
+              flexShrink: 0,
+            }}
+          >
+            {txt('보드 멤버', 'Board Members')} · {members.length}{txt('명', '')}
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+            {members.slice(0, BOARD_MEMBER_AVATAR_MAX).map((m: any, index: number) => {
+              const name = m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`;
+              const initial = name.trim().charAt(0).toUpperCase() || '?';
+              const isOwnerMember = m.role === 'owner';
+              const roleLabel = isOwnerMember ? txt('소유자', 'Owner') : txt('멤버', 'Member');
+              const userid = m.user?.userid ? String(m.user.userid) : '';
+              return (
+                <Tooltip
+                  key={m.id ?? m.user_id}
+                  title={
+                    <Box sx={{ textAlign: 'center' }}>
+                      <Typography variant="caption" display="block" sx={{ fontWeight: 700 }}>
+                        {name}
+                      </Typography>
+                      <Typography variant="caption" display="block" sx={{ opacity: 0.9 }}>
+                        {roleLabel}
+                        {userid ? ` · ${userid}` : ''}
+                      </Typography>
+                    </Box>
+                  }
+                  arrow
+                  placement="top"
+                >
                   <Avatar
+                    component="button"
+                    type="button"
+                    aria-label={`${name}, ${roleLabel}`}
+                    onClick={(e) => openMemberMenu(e, m)}
                     sx={{
-                      width: 26,
-                      height: 26,
-                      fontSize: '0.7rem',
-                      flexShrink: 0,
-                      bgcolor: m.role === 'owner' ? 'primary.main' : alpha(theme.palette.grey[500], 0.35),
-                      color: m.role === 'owner' ? 'primary.contrastText' : 'text.primary',
-                      fontWeight: 600,
+                      width: BOARD_MEMBER_AVATAR_SIZE,
+                      height: BOARD_MEMBER_AVATAR_SIZE,
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      border: '2px solid #FFFFFF',
+                      boxSizing: 'border-box',
+                      ml: index === 0 ? 0 : `-${BOARD_MEMBER_AVATAR_OVERLAP_PX}px`,
+                      zIndex: index + 1,
+                      cursor: 'pointer',
+                      p: 0,
+                      bgcolor: isOwnerMember ? 'primary.main' : getAvatarColor(Number(m.user_id)),
+                      color: '#FFFFFF',
+                      transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                      ...(isOwnerMember
+                        ? { boxShadow: `0 0 0 1px ${alpha(theme.palette.primary.main, 0.45)}` }
+                        : {}),
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        zIndex: BOARD_MEMBER_AVATAR_MAX + 2,
+                        boxShadow: '0 2px 8px rgba(9, 30, 66, 0.18)',
+                      },
                     }}
                   >
                     {initial}
                   </Avatar>
-                  <Typography
-                    noWrap
-                    color="text.primary"
-                    sx={{ fontWeight: 600, fontSize: '0.75rem', lineHeight: 1.2, minWidth: 0, flex: 1 }}
-                  >
-                    {name}
-                  </Typography>
-                </Box>
-                <Typography
-                  noWrap
-                  color="text.secondary"
-                  title={m.user?.userid ? String(m.user.userid) : undefined}
-                  sx={{ fontSize: '0.625rem', lineHeight: 1.2, pl: 0.1 }}
-                >
-                  {m.role === 'owner' ? txt('소유자', 'Owner') : txt('멤버', 'Member')}
-                  {m.user?.userid ? ` · ${m.user.userid}` : ''}
-                </Typography>
-                <Box
+                </Tooltip>
+              );
+            })}
+            {members.length > BOARD_MEMBER_AVATAR_MAX ? (
+              <Tooltip
+                title={members
+                  .slice(BOARD_MEMBER_AVATAR_MAX)
+                  .map((m: any) => m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`)
+                  .join(', ')}
+                arrow
+                placement="top"
+              >
+                <Avatar
                   sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 0.4,
-                    width: '100%',
-                    mt: 0.15,
-                    p: 0.35,
-                    borderRadius: KANBAN_CHIP_RADIUS,
-                    bgcolor: isOwnerMember
-                      ? alpha(theme.palette.primary.main, 0.06)
-                      : '#F8FAFC',
+                    width: BOARD_MEMBER_AVATAR_SIZE,
+                    height: BOARD_MEMBER_AVATAR_SIZE,
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    border: '2px solid #FFFFFF',
+                    boxSizing: 'border-box',
+                    ml: `-${BOARD_MEMBER_AVATAR_OVERLAP_PX}px`,
+                    zIndex: BOARD_MEMBER_AVATAR_MAX + 1,
+                    bgcolor: '#DFE1E6',
+                    color: '#42526E',
                   }}
                 >
-                  <TextField
-                    select
-                    hiddenLabel
-                    size="small"
-                    value={m.role}
-                    disabled={!canManageMembers || memberRoleUpdatingId === Number(m.user_id)}
-                    onChange={(e) => {
-                      const nextRole = e.target.value as 'owner' | 'member';
-                      if (nextRole !== m.role) {
-                        void handleChangeMemberRole(Number(m.user_id), nextRole);
-                      }
-                    }}
-                    sx={{
-                      flex: 1,
-                      minWidth: 0,
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: KANBAN_CHIP_RADIUS,
-                        fontSize: '0.6875rem',
-                        minHeight: 28,
-                        height: 28,
-                        boxSizing: 'border-box',
-                        bgcolor: '#FFFFFF',
-                        '& .MuiOutlinedInput-notchedOutline': { border: 'none' },
-                        '&:hover .MuiOutlinedInput-notchedOutline': { border: 'none' },
-                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': { border: 'none' },
-                        '&.Mui-focused': {
-                          boxShadow: `0 0 0 2px ${alpha(theme.palette.primary.main, 0.35)}`,
-                        },
-                      },
-                      '& .MuiSelect-select': {
-                        py: 0,
-                        px: 0.75,
-                        minHeight: 28,
-                        height: 28,
-                        display: 'flex',
-                        alignItems: 'center',
-                        boxSizing: 'border-box',
-                      },
-                    }}
-                  >
-                    <MenuItem value="member" dense sx={{ fontSize: '0.75rem', minHeight: 34 }}>
-                      {txt('멤버', 'Member')}
-                    </MenuItem>
-                    <MenuItem value="owner" dense sx={{ fontSize: '0.75rem', minHeight: 34 }}>
-                      {txt('소유자', 'Owner')}
-                    </MenuItem>
-                  </TextField>
-                  <Button
-                    variant="text"
-                    size="small"
-                    color="error"
-                    disabled={!canRemoveMember || memberRemovingId === Number(m.user_id)}
-                    onClick={() => handleRemoveMember(Number(m.user_id), name)}
-                    sx={{
-                      flexShrink: 0,
-                      height: 28,
-                      minHeight: 28,
-                      minWidth: 44,
-                      px: 0.75,
-                      boxSizing: 'border-box',
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      fontSize: '0.6875rem',
-                      lineHeight: 1,
-                      borderRadius: KANBAN_CHIP_RADIUS,
-                      py: 0,
-                      bgcolor: '#FFFFFF',
-                      '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.08) },
-                      '&.Mui-disabled': { bgcolor: 'transparent', color: 'text.disabled' },
-                    }}
-                  >
-                    {memberRemovingId === Number(m.user_id) ? (
-                      <CircularProgress size={14} color="inherit" aria-label={txt('삭제 중', 'Deleting')} />
-                    ) : (
-                      txt('삭제', 'Delete')
-                    )}
-                  </Button>
+                  +{members.length - BOARD_MEMBER_AVATAR_MAX}
+                </Avatar>
+              </Tooltip>
+            ) : null}
+          </Box>
+        </Box>
+      </Box>
+
+      <Menu
+        anchorEl={memberMenuAnchor}
+        open={Boolean(memberMenuAnchor && memberMenuTarget)}
+        onClose={closeMemberMenu}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '12px',
+              minWidth: 240,
+              mt: 1,
+              border: '1px solid #C5CED9',
+              boxShadow: '0 8px 24px rgba(9, 30, 66, 0.14)',
+            },
+          },
+        }}
+      >
+        {memberMenuTarget ? (() => {
+          const m = memberMenuTarget;
+          const name = m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`;
+          const initial = name.trim().charAt(0).toUpperCase() || '?';
+          const isOwnerMember = m.role === 'owner';
+          const canRemoveMember =
+            menuCanEdit &&
+            (canManageMembers || Number(m.user_id) === Number(user?.id || 0)) &&
+            !isOwnerMember;
+          return (
+            <Box sx={{ px: 2, py: 1.5, minWidth: 220 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1.5 }}>
+                <Avatar
+                  sx={{
+                    width: 36,
+                    height: 36,
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    bgcolor: isOwnerMember ? 'primary.main' : getAvatarColor(Number(m.user_id)),
+                    color: '#FFFFFF',
+                  }}
+                >
+                  {initial}
+                </Avatar>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography sx={{ fontWeight: 700, fontSize: '0.875rem', lineHeight: 1.3 }} noWrap>
+                    {name}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" noWrap>
+                    {isOwnerMember ? txt('소유자', 'Owner') : txt('멤버', 'Member')}
+                    {m.user?.userid ? ` · ${m.user.userid}` : ''}
+                  </Typography>
                 </Box>
               </Box>
-            );
-          })}
-        </Box>
-      </Paper>
+              {canManageMembers ? (
+                <TextField
+                  select
+                  fullWidth
+                  size="small"
+                  hiddenLabel
+                  value={m.role}
+                  disabled={memberRoleUpdatingId === Number(m.user_id)}
+                  onChange={(e) => {
+                    const nextRole = e.target.value as 'owner' | 'member';
+                    if (nextRole !== m.role) {
+                      void handleChangeMemberRole(Number(m.user_id), nextRole);
+                    }
+                  }}
+                  sx={{
+                    mb: canRemoveMember ? 1 : 0,
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: KANBAN_CHIP_RADIUS,
+                      fontSize: '0.75rem',
+                      minHeight: 34,
+                      bgcolor: '#F4F6FA',
+                    },
+                  }}
+                >
+                  <MenuItem value="member" dense>
+                    {txt('멤버', 'Member')}
+                  </MenuItem>
+                  <MenuItem value="owner" dense>
+                    {txt('소유자', 'Owner')}
+                  </MenuItem>
+                </TextField>
+              ) : null}
+              {canRemoveMember ? (
+                <Button
+                  fullWidth
+                  variant="text"
+                  size="small"
+                  color="error"
+                  disabled={memberRemovingId === Number(m.user_id)}
+                  onClick={() => {
+                    closeMemberMenu();
+                    handleRemoveMember(Number(m.user_id), name);
+                  }}
+                  sx={{ mt: 1, textTransform: 'none', fontWeight: 600, borderRadius: KANBAN_CHIP_RADIUS }}
+                >
+                  {memberRemovingId === Number(m.user_id) ? (
+                    <CircularProgress size={14} color="inherit" />
+                  ) : (
+                    txt('보드에서 제거', 'Remove from board')
+                  )}
+                </Button>
+              ) : null}
+            </Box>
+          );
+        })() : null}
+      </Menu>
 
       {!cardDetail && (
         <DndContext
@@ -2358,22 +2511,21 @@ const WorkBoardDetailPage: React.FC = () => {
               minHeight: 0,
               minWidth: 0,
               display: 'flex',
-              overflow: isKanbanDragging ? 'hidden' : 'visible',
+              overflow: isKanbanDragging ? 'hidden' : 'auto',
               width: '100%',
+              boxSizing: 'border-box',
+              scrollbarWidth: 'thin',
+              scrollbarColor: '#C1C7D0 transparent',
             }}
           >
             <Box
               sx={{
-                width: '100%',
-                maxWidth: '100%',
-                minWidth: 0,
                 display: 'flex',
-                flexWrap: 'wrap',
-                justifyContent: 'flex-start',
-                alignContent: 'flex-start',
-                gap: { xs: 2, sm: 2.25 },
-                alignItems: 'stretch',
-                pb: 1,
+                flexWrap: { xs: 'wrap', md: 'nowrap' },
+                alignItems: 'flex-start',
+                gap: 1.5,
+                pb: 0.5,
+                minWidth: 'min-content',
                 boxSizing: 'border-box',
               }}
             >
@@ -2381,7 +2533,8 @@ const WorkBoardDetailPage: React.FC = () => {
               <ListColumn
                 key={list.id}
                 list={list}
-                accentColor={boardAccentColor}
+                members={members}
+                isCompletedList={isCompletedListTitle(list.title) || completedList?.id === list.id}
                 txt={txt}
                 language={language}
                 listTitleEditing={editingListId === list.id}
@@ -2420,14 +2573,14 @@ const WorkBoardDetailPage: React.FC = () => {
               <Card
                 elevation={0}
                 sx={{
-                  width: 'min(300px, 85vw)',
-                  maxWidth: 300,
+                  width: WORK_BOARD_COLUMN_WIDTH_PX,
+                  maxWidth: WORK_BOARD_COLUMN_WIDTH_PX,
                   height: 'auto',
                   minHeight: WORK_BOARD_CARD_MIN_HEIGHT_PX,
                   display: 'flex',
                   flexDirection: 'column',
                   borderRadius: KANBAN_CARD_RADIUS,
-                  border: theme.palette.mode === 'light' ? KANBAN_CARD_BORDER : 'none',
+                  border: 'none',
                   bgcolor: theme.palette.mode === 'light' ? KANBAN_CARD_BG : alpha(theme.palette.grey[900], 0.88),
                   boxShadow: KANBAN_CARD_HOVER_SHADOW,
                   cursor: 'grabbing',
@@ -2437,27 +2590,20 @@ const WorkBoardDetailPage: React.FC = () => {
                   overflow: 'hidden',
                 }}
               >
-                <Box
-                  sx={{
-                    height: 3,
-                    flexShrink: 0,
-                    bgcolor:
-                      activeCard.color && isHexColor(activeCard.color)
-                        ? String(activeCard.color)
-                        : theme.palette.primary.main,
-                  }}
-                />
+                {activeCard.color && isHexColor(activeCard.color) ? (
+                  <Box sx={{ height: 6, flexShrink: 0, bgcolor: String(activeCard.color) }} />
+                ) : null}
                 <CardContent
                   sx={{
                     flex: 1,
                     minHeight: 0,
-                    py: 1.1,
+                    py: 1.15,
                     px: 1.25,
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: activeCard.assignee || activeCard.due_date ? 0.75 : 0,
+                    gap: 0.85,
                     overflow: 'hidden',
-                    '&:last-child': { pb: 1.1 },
+                    '&:last-child': { pb: 1.15 },
                   }}
                 >
                   <KanbanInlineTitle
@@ -2467,87 +2613,37 @@ const WorkBoardDetailPage: React.FC = () => {
                         ? getPlainTextFromHtml(activeCard.description)
                         : ''
                     }
+                    compact
                   />
-                  {activeCard.assignee || activeCard.due_date ? (
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 0.5,
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, flex: 1, minWidth: 0 }}>
-                      {activeCard.due_date && (
-                        <Chip
-                          size="small"
-                          label={`${txt('만료', 'Due')}: ${formatDueDate(activeCard.due_date)}`}
-                          sx={kanbanMetaChipSx}
-                        />
-                      )}
-                    </Box>
-                    {activeCard.assignee ? (
-                      <Avatar
-                        sx={{
-                          width: 24,
-                          height: 24,
-                          fontSize: '0.65rem',
-                          fontWeight: 700,
-                          bgcolor: '#94A3B8',
-                          color: '#FFFFFF',
-                          borderRadius: 0,
-                        }}
-                      >
-                        {activeCard.assignee.username?.trim().charAt(0).toUpperCase() || ''}
-                      </Avatar>
-                    ) : null}
-                  </Box>
-                  ) : null}
                 </CardContent>
               </Card>
             ) : activeList ? (
               <Paper
                 elevation={0}
                 sx={{
-                  width: 'min(300px, 85vw)',
-                  maxWidth: 300,
+                  width: WORK_BOARD_COLUMN_WIDTH_PX,
+                  maxWidth: WORK_BOARD_COLUMN_WIDTH_PX,
                   boxSizing: 'border-box',
                   p: 1.25,
                   borderRadius: KANBAN_COLUMN_RADIUS,
-                  border: 'none',
+                  border: KANBAN_COLUMN_BORDER,
                   bgcolor: KANBAN_COLUMN_BG,
-                  boxShadow: `${KANBAN_COLUMN_SHADOW}, inset 3px 0 0 0 ${boardAccentColor}`,
+                  backdropFilter: 'blur(10px)',
+                  WebkitBackdropFilter: 'blur(10px)',
+                  boxShadow: KANBAN_CARD_HOVER_SHADOW,
                   cursor: 'grabbing',
                   touchAction: 'none',
                   transform: 'translateZ(0)',
                   willChange: 'transform',
                 }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  <DragIndicatorIcon fontSize="small" sx={{ color: '#64748B', flexShrink: 0 }} />
-                  <KanbanInlineTitle
-                    title={displayBoardListTitle(activeList.title, language)}
-                    descriptionPlain={String(activeList.description || '').trim()}
-                    titleFontSize="0.875rem"
-                  />
-                  <Box
-                    sx={{
-                      minWidth: 24,
-                      height: 24,
-                      px: 0.75,
-                      borderRadius: KANBAN_CHIP_RADIUS,
-                      bgcolor: '#FFFFFF',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                      color: '#64748B',
-                    }}
-                  >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                  <Typography sx={{ fontWeight: 700, fontSize: '0.875rem', color: '#172B4D', flex: 1 }}>
+                    {displayBoardListTitle(activeList.title, language)}
+                  </Typography>
+                  <Typography sx={{ fontSize: '0.8125rem', color: '#6B778C' }}>
                     {(activeList.cards || []).length}
-                  </Box>
+                  </Typography>
                 </Box>
               </Paper>
             ) : null}
@@ -2565,8 +2661,8 @@ const WorkBoardDetailPage: React.FC = () => {
               mt: 1.5,
               height: 'auto',
               maxHeight: 'none',
-              borderRadius: KANBAN_SURFACE_RADIUS,
-              boxShadow: '0 2px 10px rgba(15, 23, 42, 0.08)',
+              borderRadius: KANBAN_DETAIL_SHELL_RADIUS,
+              boxShadow: '0 1px 0 #C5CED9, 0 4px 14px rgba(15, 23, 42, 0.07)',
               overflow: 'hidden',
               border: '1px solid #C5CED9',
               borderLeft: `4px solid ${accent}`,
@@ -2662,14 +2758,18 @@ const WorkBoardDetailPage: React.FC = () => {
           }}
         >
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <Box sx={{ ...cardDetailFormSectionSx, bgcolor: '#FFFFFF' }}>
-          <Typography variant="caption" sx={cardDetailFieldLabelSx}>
-            {txt('제목', 'Title')}
-          </Typography>
+          <Box
+            sx={{
+              ...cardDetailFormSectionSx,
+              bgcolor: '#F0F4F8',
+              border: '1px solid #C5CED9',
+            }}
+          >
           <TextField
             fullWidth
-            hiddenLabel
             size="small"
+            label={txt('제목', 'Title')}
+            {...CARD_DETAIL_OUTLINED}
             variant="outlined"
             value={cardDetail?.title || ''}
             onChange={(e) =>
@@ -2678,8 +2778,8 @@ const WorkBoardDetailPage: React.FC = () => {
               )
             }
             disabled={!menuCanEdit}
-              placeholder={txt('카드 제목', 'Card Title')}
-            sx={{ ...cardDetailFieldTintSx, '& .MuiOutlinedInput-root': { ...cardDetailFieldTintSx['& .MuiOutlinedInput-root'], height: 40 } }}
+            placeholder={txt('카드 제목', 'Card Title')}
+            sx={cardDetailOutlinedWhiteSx}
           />
           </Box>
 
@@ -2697,91 +2797,90 @@ const WorkBoardDetailPage: React.FC = () => {
               gap: 1
             }}
           >
-            <Box>
-              <Typography variant="caption" sx={cardDetailFieldLabelSx}>
-                {txt('목록', 'List')}
-              </Typography>
-              <TextField
-                select
-                fullWidth
-                hiddenLabel
-                size="small"
-                variant="outlined"
-                value={cardDetail?.listId || ''}
-                disabled={!menuCanEdit}
-                onChange={(e) =>
-                  setCardDetail((prev) =>
-                    prev ? { ...prev, listId: Number(e.target.value) } : prev
-                  )
-                }
-                sx={cardDetailFieldWhiteSx}
-              >
-                {lists.map((list) => (
-                  <MenuItem key={list.id} value={list.id}>
-                    {displayBoardListTitle(list.title, language)}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
-            <Box>
-              <Typography variant="caption" sx={cardDetailFieldLabelSx}>
-                {txt('담당자', 'Assignee')}
-              </Typography>
-              <TextField
-                select
-                fullWidth
-                hiddenLabel
-                size="small"
-                variant="outlined"
-                value={cardDetail?.assigneeUserId ?? ''}
-                disabled={!menuCanEdit}
-                onChange={(e) =>
-                  setCardDetail((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          assigneeUserId: e.target.value === '' ? null : Number(e.target.value)
-                        }
-                      : prev
-                  )
-                }
-                sx={cardDetailFieldWhiteSx}
-              >
-                <MenuItem value="">{txt('미지정', 'Unassigned')}</MenuItem>
-                {members.map((m: any) => (
-                  <MenuItem key={m.user_id} value={m.user_id}>
-                    {m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Box>
-            <Box>
-              <Typography variant="caption" sx={cardDetailFieldLabelSx}>
-                {txt('만료일', 'Due Date')}
-              </Typography>
-              <TextField
-                type="date"
-                fullWidth
-                hiddenLabel
-                size="small"
-                variant="outlined"
-                value={cardDetail?.dueDate || ''}
-                disabled={!menuCanEdit}
-                onChange={(e) =>
-                  setCardDetail((prev) =>
-                    prev ? { ...prev, dueDate: e.target.value } : prev
-                  )
-                }
-                sx={cardDetailFieldWhiteSx}
-              />
-            </Box>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label={txt('목록', 'List')}
+              {...CARD_DETAIL_OUTLINED}
+              variant="outlined"
+              value={cardDetail?.listId || ''}
+              disabled={!menuCanEdit}
+              onChange={(e) =>
+                setCardDetail((prev) =>
+                  prev ? { ...prev, listId: Number(e.target.value) } : prev
+                )
+              }
+              sx={cardDetailOutlinedWhiteSx}
+            >
+              {lists.map((list) => (
+                <MenuItem key={list.id} value={list.id}>
+                  {displayBoardListTitle(list.title, language)}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              select
+              fullWidth
+              size="small"
+              label={txt('담당자', 'Assignee')}
+              {...CARD_DETAIL_OUTLINED}
+              variant="outlined"
+              value={cardDetail?.assigneeUserId ?? ''}
+              disabled={!menuCanEdit}
+              onChange={(e) =>
+                setCardDetail((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        assigneeUserId: e.target.value === '' ? null : Number(e.target.value)
+                      }
+                    : prev
+                )
+              }
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) => {
+                  if (selected === '' || selected == null) return txt('미지정', 'Unassigned');
+                  const m = members.find((mem: any) => mem.user_id === Number(selected));
+                  return m?.user?.username || `${txt('사용자', 'User')} ${selected}`;
+                },
+              }}
+              sx={cardDetailOutlinedWhiteSx}
+            >
+              <MenuItem value="">{txt('미지정', 'Unassigned')}</MenuItem>
+              {members.map((m: any) => (
+                <MenuItem key={m.user_id} value={m.user_id}>
+                  {m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              type="date"
+              fullWidth
+              size="small"
+              label={txt('만료일', 'Due Date')}
+              {...CARD_DETAIL_OUTLINED}
+              variant="outlined"
+              value={cardDetail?.dueDate || ''}
+              disabled={!menuCanEdit}
+              onChange={(e) =>
+                setCardDetail((prev) =>
+                  prev ? { ...prev, dueDate: e.target.value } : prev
+                )
+              }
+              sx={cardDetailOutlinedWhiteSx}
+            />
           </Box>
           </Box>
 
-          <Box sx={{ ...cardDetailFormSectionSx, bgcolor: '#FFFFFF' }}>
-            <Typography variant="caption" sx={cardDetailFieldLabelSx}>
-              {txt('참조자', 'References')}
-            </Typography>
+          <Box
+            sx={{
+              ...cardDetailFormSectionSx,
+              bgcolor: '#F0F4F8',
+              border: '1px solid #C5CED9',
+            }}
+          >
             <Autocomplete
               multiple
               disabled={!menuCanEdit}
@@ -2807,19 +2906,42 @@ const WorkBoardDetailPage: React.FC = () => {
                 <TextField
                   {...params}
                   size="small"
-                  hiddenLabel
+                  label={txt('참조자', 'References')}
+                  {...CARD_DETAIL_OUTLINED}
                   placeholder={txt('참조할 사용자 선택', 'Select reference users')}
-                  sx={cardDetailFieldTintSx}
+                  sx={{
+                    ...cardDetailOutlinedWhiteSx,
+                    '& .MuiOutlinedInput-root': {
+                      ...(cardDetailOutlinedWhiteSx['& .MuiOutlinedInput-root'] as Record<string, unknown>),
+                      height: 'auto',
+                      minHeight: 40,
+                      alignItems: 'center',
+                      py: 0.5,
+                    },
+                  }}
                 />
               )}
             />
           </Box>
 
-          <Box sx={{ ...cardDetailFormSectionSx, bgcolor: '#F0F4F8' }}>
-          <Typography variant="caption" sx={cardDetailFieldLabelSx}>
-            {txt('카드 색상', 'Card Color')}
-          </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75 }}>
+          <Box
+            component="fieldset"
+            sx={{
+              ...cardDetailFormSectionSx,
+              bgcolor: '#F0F4F8',
+              border: '1px solid #C5CED9',
+              borderRadius: KANBAN_CONTROL_RADIUS,
+              m: 0,
+              minWidth: 0,
+            }}
+          >
+            <Box
+              component="legend"
+              sx={{ px: 0.5, ml: 0.5, fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}
+            >
+              {txt('카드 색상', 'Card Color')}
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75 }}>
             <TextField
               type="color"
               hiddenLabel
@@ -2833,10 +2955,11 @@ const WorkBoardDetailPage: React.FC = () => {
               sx={{
                 width: 44,
                 '& .MuiOutlinedInput-root': {
-                  ...cardDetailFieldOutlinelessRootSx,
+                  borderRadius: KANBAN_CONTROL_RADIUS,
                   bgcolor: '#FFFFFF',
                   p: 0.25,
-                  '&:hover': { bgcolor: '#F8FAFC' },
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
                 },
                 '& input[type="color"]': {
                   borderRadius: KANBAN_CONTROL_RADIUS,
@@ -2889,29 +3012,28 @@ const WorkBoardDetailPage: React.FC = () => {
                 }}
               />
             ))}
-          </Box>
+            </Box>
           </Box>
           </Box>
 
-          <Paper
-            elevation={0}
+          <Box
+            component="fieldset"
             sx={{
-              ...cardDetailSectionPaperSx,
+              border: '1px solid #C5CED9',
+              borderRadius: KANBAN_SURFACE_RADIUS,
+              m: 0,
               p: 0,
+              minWidth: 0,
+              flexShrink: 0,
               overflow: 'hidden',
+              bgcolor: '#FFFFFF',
             }}
           >
             <Box
-              sx={{
-                px: 1.5,
-                py: 0.75,
-                bgcolor: '#F0F4F8',
-                borderBottom: '1px solid #C5CED9',
-              }}
+              component="legend"
+              sx={{ px: 0.5, ml: 1, fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}
             >
-              <Typography variant="caption" sx={{ ...cardDetailFieldLabelSx, mb: 0 }}>
-                {txt('설명', 'Description')}
-              </Typography>
+              {txt('설명', 'Description')}
             </Box>
             <RichTextEditor
               readOnly={!menuCanEdit}
@@ -2924,9 +3046,9 @@ const WorkBoardDetailPage: React.FC = () => {
                 '설명을 입력하세요. 이미지 업로드, 글자 크기/색상 변경이 가능합니다.',
                 'Enter description. Image upload and text size/color changes are available.'
               )}
-              sx={{ border: 'none', borderRadius: 0 }}
+              sx={{ border: 'none', borderRadius: 0, width: '100%' }}
             />
-          </Paper>
+          </Box>
 
           <Paper
             elevation={0}

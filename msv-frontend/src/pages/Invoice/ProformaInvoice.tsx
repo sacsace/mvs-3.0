@@ -30,6 +30,8 @@ import {
   Divider,
   Avatar
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -399,24 +401,16 @@ const ProformaInvoice: React.FC = () => {
 
   if (viewMode === 'view' && selectedProformaInvoice) {
     return (
-      <Box sx={{ 
-        p: 0,
-        backgroundColor: 'workArea.main',
-        borderRadius: 2,
-        minHeight: '100%'
-      }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="pageTitle" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <ReceiptIcon />
-            프로포마 인보이스 상세
-          </Typography>
-          <Button
-            variant="outlined"
-            onClick={() => setViewMode('list')}
-          >
-            목록으로
-          </Button>
-        </Box>
+      <Box sx={{ ...mvsPageRootSx }}>
+        <MvsPageHeader
+          title="프포마 인보이스 상세"
+          icon={<ReceiptIcon />}
+          actions={
+            <Button variant="outlined" onClick={() => setViewMode('list')}>
+              목록으로
+            </Button>
+          }
+        />
 
         <Card>
           <CardContent>
@@ -660,26 +654,21 @@ const ProformaInvoice: React.FC = () => {
   }
 
   return (
-    <Box sx={{ 
-      p: 0,
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%'
-    }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="pageTitle" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <ReceiptIcon />
-          프로포마 인보이스
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setOpenDialog(true)}
-          sx={{ borderRadius: 2 }}
-        >
-          프로포마 인보이스 생성
-        </Button>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title="프로포마 인보이스"
+        icon={<ReceiptIcon />}
+        actions={
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenDialog(true)}
+            sx={{ borderRadius: 2 }}
+          >
+            프로포마 인보이스 생성
+          </Button>
+        }
+      />
 
       {/* 통계 카드 */}
       <Box sx={{ 
@@ -741,9 +730,12 @@ const ProformaInvoice: React.FC = () => {
           }}>
             <TextField
               fullWidth
+              size="small"
+              label="검색"
               placeholder="프로포마 번호, 고객명, 이메일, 견적서 번호 검색"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              InputLabelProps={{ shrink: true }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -752,23 +744,27 @@ const ProformaInvoice: React.FC = () => {
                 ),
               }}
             />
-            <FormControl fullWidth>
-              <InputLabel>상태</InputLabel>
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <MenuItem value="">전체</MenuItem>
-                <MenuItem value="draft">초안</MenuItem>
-                <MenuItem value="sent">발송됨</MenuItem>
-                <MenuItem value="accepted">승인됨</MenuItem>
-                <MenuItem value="rejected">거부됨</MenuItem>
-                <MenuItem value="converted">변환됨</MenuItem>
-                <MenuItem value="expired">만료됨</MenuItem>
-              </Select>
-            </FormControl>
             <TextField
               fullWidth
+              size="small"
+              select
+              label="상태"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="">전체</MenuItem>
+              <MenuItem value="draft">초안</MenuItem>
+              <MenuItem value="sent">발송됨</MenuItem>
+              <MenuItem value="accepted">승인됨</MenuItem>
+              <MenuItem value="rejected">거부됨</MenuItem>
+              <MenuItem value="converted">변환됨</MenuItem>
+              <MenuItem value="expired">만료됨</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
               type="date"
               label="날짜"
               value={dateFilter}

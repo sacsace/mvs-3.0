@@ -36,6 +36,8 @@ import {
   ListItemText,
   ListItemAvatar
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
@@ -398,18 +400,12 @@ const EInvoiceCreate: React.FC = () => {
   );
 
   return (
-    <Box sx={{ 
-      p: 0,
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%'
-    }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="pageTitle" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <ReceiptIcon />
-          E-Invoice 생성
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title="E-Invoice 생성"
+        icon={<ReceiptIcon />}
+        actions={
+          <>
           <Button
             variant="outlined"
             startIcon={<PrintIcon />}
@@ -424,8 +420,9 @@ const EInvoiceCreate: React.FC = () => {
           >
             PDF 다운로드
           </Button>
-        </Box>
-      </Box>
+          </>
+        }
+      />
 
       <Stepper activeStep={activeStep} sx={{ mb: 3 }}>
         {steps.map((label) => (

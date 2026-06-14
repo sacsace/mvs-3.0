@@ -31,6 +31,8 @@ import {
   MenuItem,
   LinearProgress
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { alpha, useTheme } from '@mui/material/styles';
 import { AutoAwesome as AutoAwesomeIcon, Download as DownloadIcon } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ComposedChart, Area, PieChart, Pie, Cell } from 'recharts';
@@ -249,16 +251,14 @@ const CostAnalysis: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 0, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
-      <Typography component="h1" sx={{ ...mvsPageTitleSx, mb: 1 }}>
-        {txt('AI 비용 분석', 'AI Cost Analysis')}
-      </Typography>
-      <Typography sx={{ ...mvsPageDescriptionSx, mb: 3, maxWidth: 720 }}>
-        {txt(
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={txt('AI 비용 분석', 'AI Cost Analysis')}
+        description={txt(
           '최근 비용 추이와 카테고리별 지출을 분석하고, AI가 절감 포인트와 향후 비용을 예측합니다.',
           'Analyzes recent spending by category and uses AI to suggest savings and forecast costs.'
         )}
-      </Typography>
+      />
 
       {error && (
         <Alert
@@ -285,7 +285,7 @@ const CostAnalysis: React.FC = () => {
             }}
           >
             <FormControl size="small" sx={{ minWidth: 128 }}>
-              <InputLabel>{txt('기간', 'Period')}</InputLabel>
+              <InputLabel shrink>{txt('기간', 'Period')}</InputLabel>
               <Select
                 value={timeRange}
                 label={txt('기간', 'Period')}
@@ -298,7 +298,7 @@ const CostAnalysis: React.FC = () => {
               </Select>
             </FormControl>
             <FormControl size="small" sx={{ minWidth: 140 }}>
-              <InputLabel>{txt('카테고리', 'Category')}</InputLabel>
+              <InputLabel shrink>{txt('카테고리', 'Category')}</InputLabel>
               <Select
                 value={selectedCategory}
                 label={txt('카테고리', 'Category')}

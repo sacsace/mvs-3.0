@@ -43,6 +43,8 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useStore } from '../../store';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { filterActiveCompanyUsers, useReferenceDataStore } from '../../store/referenceDataStore';
 
 // 조직도 노드 타입 정의
@@ -439,24 +441,12 @@ const OrganizationChart: React.FC = () => {
   }, [nodes]);
 
   return (
-    <Box sx={{ 
-      p: 0,
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%',
-      height: 'calc(100vh - 200px)'
-    }}>
-      {/* 헤더 */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography component="h1" variant="pageTitle" sx={{ mb: 1 }}>
-            조직도 관리
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-            회사 조직 구조를 시각화하고 관리하는 페이지입니다.
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+    <Box sx={{ ...mvsPageRootSx, height: 'calc(100vh - 200px)' }}>
+      <MvsPageHeader
+        title="조직도 관리"
+        description="회사 조직 구조를 시각화하고 관리하는 페이지입니다."
+        actions={
+          <>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -474,8 +464,9 @@ const OrganizationChart: React.FC = () => {
           >
             새로고침
           </Button>
-        </Box>
-      </Box>
+          </>
+        }
+      />
 
       {/* 통계 카드 */}
       <Box sx={{ 

@@ -17,6 +17,7 @@ import {
   Alert,
   Tabs,
   Tab,
+  TextField,
   FormControl,
   InputLabel,
   Select,
@@ -25,6 +26,8 @@ import {
   Tooltip,
   CircularProgress
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Speed as SpeedIcon,
   TrendingUp as TrendingUpIcon,
@@ -185,18 +188,12 @@ const EfficiencyMetrics: React.FC = () => {
   }
 
   return (
-    <Box sx={{ 
-      width: '100%',
-      maxWidth: '1400px',
-      p: 0
-    }}>
-      <Typography variant="pageTitle" component="h1" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <SpeedIcon color="primary" />
-        효율성 지표 분석
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        AI 기반 효율성 측정과 개선 제안을 제공합니다.
-      </Typography>
+    <Box sx={{ ...mvsPageRootSx, maxWidth: '1400px' }}>
+      <MvsPageHeader
+        title="효율성 지표 분석"
+        description="AI 기반 효율성 측정과 개선 제안을 제공합니다."
+        icon={<SpeedIcon color="primary" />}
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
@@ -208,31 +205,37 @@ const EfficiencyMetrics: React.FC = () => {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>기간</InputLabel>
-              <Select
-                value={timeRange}
-                onChange={(e) => setTimeRange(e.target.value)}
-              >
-                <MenuItem value="1month">1개월</MenuItem>
-                <MenuItem value="3months">3개월</MenuItem>
-                <MenuItem value="6months">6개월</MenuItem>
-                <MenuItem value="1year">1년</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>부서</InputLabel>
-              <Select
-                value={selectedDepartment}
-                onChange={(e) => setSelectedDepartment(e.target.value)}
-              >
-                <MenuItem value="all">전체</MenuItem>
-                <MenuItem value="sales">영업</MenuItem>
-                <MenuItem value="marketing">마케팅</MenuItem>
-                <MenuItem value="development">개발</MenuItem>
-                <MenuItem value="operations">운영</MenuItem>
-              </Select>
-            </FormControl>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="기간"
+              value={timeRange}
+              onChange={(e) => setTimeRange(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ minWidth: 120 }}
+            >
+              <MenuItem value="1month">1개월</MenuItem>
+              <MenuItem value="3months">3개월</MenuItem>
+              <MenuItem value="6months">6개월</MenuItem>
+              <MenuItem value="1year">1년</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="부서"
+              value={selectedDepartment}
+              onChange={(e) => setSelectedDepartment(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ minWidth: 120 }}
+            >
+              <MenuItem value="all">전체</MenuItem>
+              <MenuItem value="sales">영업</MenuItem>
+              <MenuItem value="marketing">마케팅</MenuItem>
+              <MenuItem value="development">개발</MenuItem>
+              <MenuItem value="operations">운영</MenuItem>
+            </TextField>
             <Button
               variant="contained"
               startIcon={<AutoAwesomeIcon />}

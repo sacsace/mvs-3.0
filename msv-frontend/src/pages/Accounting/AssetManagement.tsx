@@ -30,6 +30,8 @@ import {
   IconButton,
   Divider,
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -373,20 +375,16 @@ const AssetManagement: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 0 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-        <Box>
-          <Typography component="h1" variant="pageTitle" sx={{ fontWeight: 600, letterSpacing: '-0.022em', fontSize: { xs: '1.125rem', sm: '1.3125rem' }, mb: 0.75 }}>
-            자산 관리
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5, maxWidth: 560 }}>
-            자산 등록, 감가상각, 상태 관리를 한 번에 처리합니다.
-          </Typography>
-        </Box>
-        <Button variant="contained" disableElevation startIcon={<AddIcon fontSize="small" />} onClick={handleCreate} sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}>
-          자산 등록
-        </Button>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title="자산 관리"
+        description="자산 등록, 감가상각, 상태 관리를 한 번에 처리합니다."
+        actions={
+          <Button variant="contained" disableElevation startIcon={<AddIcon fontSize="small" />} onClick={handleCreate} sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}>
+            자산 등록
+          </Button>
+        }
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
@@ -443,9 +441,11 @@ const AssetManagement: React.FC = () => {
             <Grid size={{ xs: 12, md: 6 }}>
               <TextField
                 fullWidth
+                label="검색"
                 placeholder="코드/자산명/시리얼/위치 검색"
                 value={filters.search}
                 onChange={e => setFilters({ ...filters, search: e.target.value })}
+                InputLabelProps={{ shrink: true }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -456,32 +456,38 @@ const AssetManagement: React.FC = () => {
               />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <FormControl fullWidth>
-                <Select
-                  value={filters.category}
-                  onChange={e => setFilters({ ...filters, category: e.target.value })}
-                >
-                  <MenuItem value="all">전체 분류</MenuItem>
-                  {assetCategories.map(cat => (
-                    <MenuItem key={cat.value} value={cat.value}>{cat.value}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <TextField
+                fullWidth
+                select
+                label="분류"
+                value={filters.category}
+                onChange={e => setFilters({ ...filters, category: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+                SelectProps={{ displayEmpty: true }}
+              >
+                <MenuItem value="all">전체 분류</MenuItem>
+                {assetCategories.map(cat => (
+                  <MenuItem key={cat.value} value={cat.value}>{cat.value}</MenuItem>
+                ))}
+              </TextField>
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <FormControl fullWidth>
-                <Select
-                  value={filters.status}
-                  onChange={e => setFilters({ ...filters, status: e.target.value as AssetStatus | 'all' })}
-                >
-                  <MenuItem value="all">전체 상태</MenuItem>
-                  <MenuItem value="active">사용중</MenuItem>
-                  <MenuItem value="maintenance">점검중</MenuItem>
-                  <MenuItem value="disposed">폐기</MenuItem>
-                  <MenuItem value="lost">분실</MenuItem>
-                  <MenuItem value="transferred">이관</MenuItem>
-                </Select>
-              </FormControl>
+              <TextField
+                fullWidth
+                select
+                label="상태"
+                value={filters.status}
+                onChange={e => setFilters({ ...filters, status: e.target.value as AssetStatus | 'all' })}
+                InputLabelProps={{ shrink: true }}
+                SelectProps={{ displayEmpty: true }}
+              >
+                <MenuItem value="all">전체 상태</MenuItem>
+                <MenuItem value="active">사용중</MenuItem>
+                <MenuItem value="maintenance">점검중</MenuItem>
+                <MenuItem value="disposed">폐기</MenuItem>
+                <MenuItem value="lost">분실</MenuItem>
+                <MenuItem value="transferred">이관</MenuItem>
+              </TextField>
             </Grid>
           </Grid>
           </Box>

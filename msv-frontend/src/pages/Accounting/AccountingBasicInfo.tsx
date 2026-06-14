@@ -11,6 +11,8 @@ import {
   Divider,
   Alert
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { accountingBasicInfoService } from '../../services/api';
@@ -197,19 +199,11 @@ const AccountingBasicInfo: React.FC = () => {
   );
 
   return (
-    <Box sx={{ p: 0 }}>
-      <Box sx={{ mb: 3 }}>
-        <Typography
-          component="h1"
-          variant="pageTitle"
-          sx={{ fontWeight: 600, letterSpacing: '-0.022em', fontSize: { xs: '1.125rem', sm: '1.3125rem' }, mb: 0.75 }}
-        >
-          {t('accountingBasicInfo.title')}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5, maxWidth: 720 }}>
-          {t('accountingBasicInfo.description')}
-        </Typography>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={t('accountingBasicInfo.title')}
+        description={t('accountingBasicInfo.description')}
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>

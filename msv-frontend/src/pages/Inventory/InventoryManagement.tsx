@@ -16,9 +16,6 @@ import {
   Button,
   Chip,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
   MenuItem,
   IconButton,
   Dialog,
@@ -36,6 +33,8 @@ import {
   CircularProgress,
   Autocomplete
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx, mvsFilterToolbarSx, mvsSearchFieldSx, mvsOutlinedLabelProps } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -91,6 +90,16 @@ const INV_COL_TOTAL = Object.values(INV_COL_DEFAULTS).reduce((s, n) => s + n, 0)
 
 /** DB `menus.route` — 기본재고 등록 (`App.tsx` `/inventory/basic`) */
 const INVENTORY_BASIC_MENU_ROUTES = ['/inventory/basic', '/inventory'];
+
+const FILTER_OUTLINED = mvsOutlinedLabelProps;
+const FORM_OUTLINED = mvsOutlinedLabelProps;
+
+const inventoryFilterFieldSx = {
+  '& .MuiOutlinedInput-root': {
+    height: 40,
+    '& .MuiOutlinedInput-input': { py: 0 },
+  },
+} as const;
 
 function invColWidthPct(key: string): string {
   const w = INV_COL_DEFAULTS[key] ?? 80;
@@ -932,21 +941,10 @@ const InventoryManagement: React.FC = () => {
       minWidth: 0,
       boxSizing: 'border-box'
     }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-        <Typography
-          component="h1"
-          variant="pageTitle"
-          sx={{
-            fontWeight: 600,
-            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-            letterSpacing: '-0.022em',
-            lineHeight: 1.28,
-            color: 'text.primary',
-          }}
-        >
-          {t('inventoryManagement.pageTitle')}
-        </Typography>
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
+      <MvsPageHeader
+        title={t('inventoryManagement.pageTitle')}
+        actions={
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
           <input
             ref={excelFileInputRef}
             type="file"
@@ -1048,8 +1046,9 @@ const InventoryManagement: React.FC = () => {
               </Button>
             </span>
           </Tooltip>
-        </Box>
-      </Box>
+          </Box>
+        }
+      />
 
       {!menusLoading && !basicMenuFlags.canRead ? (
         <Alert severity="warning" sx={{ mb: 2 }}>
@@ -1111,107 +1110,127 @@ const InventoryManagement: React.FC = () => {
       </Grid>
 
       {/* 필터 및 검색 */}
-      <Card
-        elevation={0}
-        sx={{
-          mb: 3,
-          borderRadius: '16px',
-          border: '1px solid',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-          bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.03),
-          boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : 'none',
-        }}
-      >
-        <CardContent sx={{ py: 2.5, px: 2.5 }}>
-          <Grid container spacing={2} alignItems="center">
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField
-                fullWidth
-                placeholder={t('inventoryManagement.searchPlaceholder')}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
-                    </InputAdornment>
-                  ),
-                }}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '12px',
-                    bgcolor: 'background.paper',
-                    '& fieldset': {
-                      borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : 'divider',
-                    },
-                  },
-                }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-              <FormControl fullWidth>
-                <InputLabel>{t('inventoryManagement.category')}</InputLabel>
-                <Select
-                  value={categoryFilter}
-                  label={t('inventoryManagement.category')}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                >
-                  <MenuItem value="">{t('inventoryManagement.all')}</MenuItem>
-                  {categories.map(category => (
-                    <MenuItem key={category} value={category}>{category}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-              <FormControl fullWidth>
-                <InputLabel>{t('inventoryManagement.warehouse')}</InputLabel>
-                <Select
-                  value={warehouseFilter}
-                  label={t('inventoryManagement.warehouse')}
-                  onChange={(e) => setWarehouseFilter(e.target.value)}
-                >
-                  <MenuItem value="">{t('inventoryManagement.all')}</MenuItem>
-                  {warehouseManageList.map((w) => (
-                    <MenuItem key={w.id} value={w.name}>
-                      {w.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-              <FormControl fullWidth>
-                <InputLabel>{t('inventoryManagement.status')}</InputLabel>
-                <Select
-                  value={statusFilter}
-                  label={t('inventoryManagement.status')}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <MenuItem value="">{t('inventoryManagement.all')}</MenuItem>
-                  <MenuItem value="in_stock">{t('inventoryManagement.stockStatus.inStock')}</MenuItem>
-                  <MenuItem value="low_stock">{t('inventoryManagement.stockStatus.lowStock')}</MenuItem>
-                  <MenuItem value="out_of_stock">{t('inventoryManagement.stockStatus.outOfStock')}</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<FilterIcon fontSize="small" />}
-                onClick={() => {
-                  setSearchTerm('');
-                  setCategoryFilter('');
-                  setWarehouseFilter('');
-                  setStatusFilter('');
-                }}
-                sx={outlineToolbarBtnSx}
-              >
-                {t('inventoryManagement.reset')}
-              </Button>
-            </Grid>
-          </Grid>
+      <Card elevation={0} sx={{ mb: 3, ...mvsFilterToolbarSx, ...mvsSearchFieldSx }}>
+        <CardContent sx={{ py: 2, px: 2, '&:last-child': { pb: 2 } }}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'repeat(2, minmax(0, 1fr))',
+                lg: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto',
+              },
+              gap: 2,
+              alignItems: 'flex-end',
+              ...mvsSearchFieldSx,
+            }}
+          >
+            <TextField
+              fullWidth
+              size="small"
+              label={t('common.search')}
+              {...FILTER_OUTLINED}
+              placeholder={t('inventoryManagement.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              sx={inventoryFilterFieldSx}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('inventoryManagement.category')}
+              {...FILTER_OUTLINED}
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) =>
+                  selected === '' ? t('inventoryManagement.all') : String(selected),
+              }}
+              sx={inventoryFilterFieldSx}
+            >
+              <MenuItem value="">{t('inventoryManagement.all')}</MenuItem>
+              {categories.map((category) => (
+                <MenuItem key={category} value={category}>
+                  {category}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('inventoryManagement.warehouse')}
+              {...FILTER_OUTLINED}
+              value={warehouseFilter}
+              onChange={(e) => setWarehouseFilter(e.target.value)}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) =>
+                  selected === '' ? t('inventoryManagement.all') : String(selected),
+              }}
+              sx={inventoryFilterFieldSx}
+            >
+              <MenuItem value="">{t('inventoryManagement.all')}</MenuItem>
+              {warehouseManageList.map((w) => (
+                <MenuItem key={w.id} value={w.name}>
+                  {w.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('inventoryManagement.status')}
+              {...FILTER_OUTLINED}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) => {
+                  if (selected === '') return t('inventoryManagement.all');
+                  if (selected === 'in_stock') return t('inventoryManagement.stockStatus.inStock');
+                  if (selected === 'low_stock') return t('inventoryManagement.stockStatus.lowStock');
+                  if (selected === 'out_of_stock') return t('inventoryManagement.stockStatus.outOfStock');
+                  return String(selected);
+                },
+              }}
+              sx={inventoryFilterFieldSx}
+            >
+              <MenuItem value="">{t('inventoryManagement.all')}</MenuItem>
+              <MenuItem value="in_stock">{t('inventoryManagement.stockStatus.inStock')}</MenuItem>
+              <MenuItem value="low_stock">{t('inventoryManagement.stockStatus.lowStock')}</MenuItem>
+              <MenuItem value="out_of_stock">{t('inventoryManagement.stockStatus.outOfStock')}</MenuItem>
+            </TextField>
+            <Button
+              variant="outlined"
+              startIcon={<FilterIcon fontSize="small" />}
+              onClick={() => {
+                setSearchTerm('');
+                setCategoryFilter('');
+                setWarehouseFilter('');
+                setStatusFilter('');
+              }}
+              sx={{
+                ...outlineToolbarBtnSx,
+                height: 40,
+                whiteSpace: 'nowrap',
+                gridColumn: { xs: '1 / -1', sm: '1 / -1', lg: 'auto' },
+                justifySelf: { lg: 'stretch' },
+              }}
+            >
+              {t('inventoryManagement.reset')}
+            </Button>
+          </Box>
         </CardContent>
       </Card>
 
@@ -2659,15 +2678,10 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
     onSave(formData);
   };
 
-  /** 라벨은 위쪽 Typography만 사용 — 입력 높이 통일 (medium + hiddenLabel), Apple 계열 필 톤 */
-  const fieldLabelSx = {
-    mb: 0.75,
-    color: 'text.secondary',
-    fontSize: '0.8125rem',
-    fontWeight: 600,
-    letterSpacing: '-0.01em',
-  };
   const outlinedControlSx = {
+    '& .MuiInputLabel-root': {
+      fontSize: '0.8125rem',
+    },
     '& .MuiOutlinedInput-root': {
       borderRadius: '12px',
       minHeight: 40,
@@ -2708,10 +2722,24 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
       ) : null}
       <Grid container spacing={{ xs: 2.25, sm: 2.75 }}>
         <Grid size={{ xs: 12 }}>
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1.25, fontWeight: 600, letterSpacing: '-0.01em' }}>
-            {t('inventoryManagement.form.productImage')}
-          </Typography>
-          <Stack direction="row" spacing={1.75} alignItems="center" flexWrap="wrap">
+          <Box
+            component="fieldset"
+            sx={{
+              m: 0,
+              p: 1.5,
+              minWidth: 0,
+              border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+              borderRadius: '14px',
+              bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
+            }}
+          >
+            <Box
+              component="legend"
+              sx={{ px: 0.5, ml: 0.5, fontSize: '0.75rem', fontWeight: 600, color: 'text.secondary' }}
+            >
+              {t('inventoryManagement.form.productImage')}
+            </Box>
+            <Stack direction="row" spacing={1.75} alignItems="center" flexWrap="wrap">
             <Box
               sx={{
                 width: 104,
@@ -2777,42 +2805,36 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
                 </Button>
               ) : null}
             </Stack>
-          </Stack>
+            </Stack>
+          </Box>
         </Grid>
 
         <Grid size={{ xs: 12 }}>
           <Stack spacing={2.25}>
+            <TextField
+              size="small"
+              fullWidth
+              label={t('inventoryManagement.form.productName')}
+              {...FORM_OUTLINED}
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onBlur={handleProductNameBlur}
+              required
+              disabled={formFieldsDisabled}
+              sx={outlinedControlSx}
+            />
             <Box>
-              <Typography sx={fieldLabelSx}>
-                {t('inventoryManagement.form.productName')}
-                {t('inventoryManagement.form.required')}
-              </Typography>
-              <TextField
-                hiddenLabel
-                size="medium"
-                fullWidth
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                onBlur={handleProductNameBlur}
-                required
-                disabled={formFieldsDisabled}
-                sx={outlinedControlSx}
-              />
-            </Box>
-            <Box>
-              <Typography sx={fieldLabelSx}>
-                {t('inventoryManagement.form.sku')}
-                {t('inventoryManagement.form.required')}
-              </Typography>
-              <Stack direction="row" spacing={1.5} alignItems="center" useFlexGap flexWrap="wrap">
+              <Stack direction="row" spacing={1.5} alignItems="flex-start" useFlexGap flexWrap="wrap">
                 <TextField
-                  hiddenLabel
-                  size="medium"
+                  size="small"
                   fullWidth
+                  label={t('inventoryManagement.form.sku')}
+                  {...FORM_OUTLINED}
                   value={formData.sku}
                   onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
                   required
                   disabled={formFieldsDisabled}
+                  helperText={!skuTrim ? t('inventoryManagement.form.barcodeHint') : undefined}
                   sx={{ ...outlinedControlSx, flex: 1, minWidth: 0 }}
                 />
                 <Button
@@ -2826,59 +2848,39 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
                   {t('inventoryManagement.form.generateSku')}
                 </Button>
               </Stack>
-              {!skuTrim ? (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block', fontSize: '0.75rem' }}>
-                  {t('inventoryManagement.form.barcodeHint')}
-                </Typography>
-              ) : null}
             </Box>
           </Stack>
         </Grid>
 
         <Grid size={{ xs: 12 }}>
           <Box
+            component="fieldset"
             sx={{
+              m: 0,
+              p: 0,
+              minWidth: 0,
               border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
               borderRadius: '14px',
               bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.04),
               boxShadow: `inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.04 : 0.45)}`,
-              px: { xs: 2, sm: 2.5 },
-              py: { xs: 2, sm: 2 },
-              display: 'flex',
-              flexDirection: { xs: 'column', sm: 'row' },
-              alignItems: { xs: 'stretch', sm: 'center' },
-              gap: { xs: 1.5, sm: 2.5 },
-              minHeight: { xs: 'auto', sm: 96 },
             }}
           >
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{
-                fontWeight: 600,
-                flexShrink: 0,
-                lineHeight: 1.45,
-                letterSpacing: '-0.01em',
-                maxWidth: { sm: 200 },
-                wordBreak: 'keep-all',
-                overflowWrap: 'break-word',
-                alignSelf: { xs: 'flex-start', sm: 'center' },
-              }}
+            <Box
+              component="legend"
+              sx={{ px: 0.5, ml: 1.5, fontSize: '0.75rem', fontWeight: 600, color: 'text.secondary' }}
             >
               {t('inventoryManagement.form.barcodeQrSection')}
-            </Typography>
+            </Box>
             <Box
               sx={{
-                flex: 1,
-                width: '100%',
-                minWidth: 0,
+                px: { xs: 2, sm: 2.5 },
+                py: { xs: 2, sm: 2 },
                 display: 'flex',
                 justifyContent: 'flex-start',
                 alignItems: 'center',
                 overflowX: 'auto',
                 overflowY: 'visible',
                 minHeight: 56,
-                py: 0.5,
               }}
             >
               <svg ref={barcodeRef} style={{ maxWidth: 'min(100%, 360px)', width: 320, height: 'auto', display: 'block' }} />
@@ -2891,10 +2893,6 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
         </Grid>
 
         <Grid size={{ xs: 12, md: 6 }}>
-          <Typography sx={fieldLabelSx}>
-            {t('inventoryManagement.form.category')}
-            {t('inventoryManagement.form.required')}
-          </Typography>
           <Stack direction="row" spacing={1.5} alignItems="flex-start" useFlexGap>
             <Autocomplete
               options={categoryNames}
@@ -2914,13 +2912,11 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
               renderInput={(params) => (
                 <TextField
                   {...params}
+                  size="small"
                   required
-                  hiddenLabel
+                  label={t('inventoryManagement.form.category')}
+                  {...FORM_OUTLINED}
                   placeholder={t('inventoryManagement.form.selectCategory')}
-                  inputProps={{
-                    ...params.inputProps,
-                    'aria-label': t('inventoryManagement.form.category')
-                  }}
                   sx={outlinedControlSx}
                 />
               )}
@@ -2946,10 +2942,6 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
           ) : null}
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Typography sx={fieldLabelSx}>
-            {t('inventoryManagement.form.supplier')}
-            {t('inventoryManagement.form.required')}
-          </Typography>
           <Stack direction="row" spacing={1.5} alignItems="flex-start" useFlexGap>
             <Autocomplete
               options={partnerOptions}
@@ -2979,13 +2971,11 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
               renderInput={(params) => (
                 <TextField
                   {...params}
+                  size="small"
                   required
-                  hiddenLabel
+                  label={t('inventoryManagement.form.supplier')}
+                  {...FORM_OUTLINED}
                   placeholder={t('inventoryManagement.form.selectPartner')}
-                  inputProps={{
-                    ...params.inputProps,
-                    'aria-label': t('inventoryManagement.form.supplier')
-                  }}
                   sx={outlinedControlSx}
                 />
               )}
@@ -3000,14 +2990,11 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
         </Grid>
 
         <Grid size={{ xs: 12, sm: 4 }}>
-          <Typography sx={fieldLabelSx}>
-            {t('inventoryManagement.form.currentStock')}
-            {t('inventoryManagement.form.required')}
-          </Typography>
           <TextField
-            hiddenLabel
-            size="medium"
+            size="small"
             fullWidth
+            label={t('inventoryManagement.form.currentStock')}
+            {...FORM_OUTLINED}
             type="number"
             value={formData.currentStock}
             onChange={(e) => setFormData({ ...formData, currentStock: parseInt(e.target.value) || 0 })}
@@ -3017,14 +3004,11 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 4 }}>
-          <Typography sx={fieldLabelSx}>
-            {t('inventoryManagement.form.minStock')}
-            {t('inventoryManagement.form.required')}
-          </Typography>
           <TextField
-            hiddenLabel
-            size="medium"
+            size="small"
             fullWidth
+            label={t('inventoryManagement.form.minStock')}
+            {...FORM_OUTLINED}
             type="number"
             value={formData.minStock}
             onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) || 0 })}
@@ -3034,14 +3018,11 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
           />
         </Grid>
         <Grid size={{ xs: 12, sm: 4 }}>
-          <Typography sx={fieldLabelSx}>
-            {t('inventoryManagement.form.maxStock')}
-            {t('inventoryManagement.form.required')}
-          </Typography>
           <TextField
-            hiddenLabel
-            size="medium"
+            size="small"
             fullWidth
+            label={t('inventoryManagement.form.maxStock')}
+            {...FORM_OUTLINED}
             type="number"
             value={formData.maxStock}
             onChange={(e) => setFormData({ ...formData, maxStock: parseInt(e.target.value) || 0 })}
@@ -3052,10 +3033,6 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
         </Grid>
 
         <Grid size={{ xs: 12, md: 6 }}>
-          <Typography sx={fieldLabelSx}>
-            {t('inventoryManagement.form.unit')}
-            {t('inventoryManagement.form.required')}
-          </Typography>
           <Stack direction="row" spacing={1.5} alignItems="flex-start" useFlexGap>
             <Autocomplete
               options={unitNames}
@@ -3075,13 +3052,11 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
               renderInput={(params) => (
                 <TextField
                   {...params}
+                  size="small"
                   required
-                  hiddenLabel
+                  label={t('inventoryManagement.form.unit')}
+                  {...FORM_OUTLINED}
                   placeholder={t('inventoryManagement.form.selectUnit')}
-                  inputProps={{
-                    ...params.inputProps,
-                    'aria-label': t('inventoryManagement.form.unit')
-                  }}
                   sx={outlinedControlSx}
                 />
               )}
@@ -3108,14 +3083,11 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
         </Grid>
 
         <Grid size={{ xs: 12, md: 6 }}>
-          <Typography sx={fieldLabelSx}>
-            {t('inventoryManagement.form.unitPrice')}
-            {t('inventoryManagement.form.required')}
-          </Typography>
           <TextField
-            hiddenLabel
-            size="medium"
+            size="small"
             fullWidth
+            label={t('inventoryManagement.form.unitPrice')}
+            {...FORM_OUTLINED}
             type="number"
             value={formData.unitPrice}
             onChange={(e) => setFormData({ ...formData, unitPrice: parseInt(e.target.value) || 0 })}
@@ -3125,32 +3097,33 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
           />
         </Grid>
         <Grid size={{ xs: 12 }}>
-          <Typography sx={fieldLabelSx}>
-            {t('inventoryManagement.form.location')}
-            {t('inventoryManagement.form.required')}
-          </Typography>
           <Stack direction="row" spacing={1.5} alignItems="flex-start" useFlexGap>
-            <FormControl fullWidth required size="medium" sx={{ flex: 1, minWidth: 0 }} disabled={formFieldsDisabled}>
-              <Select
-                displayEmpty
-                value={formData.location || ''}
-                onChange={(e) => setFormData({ ...formData, location: String(e.target.value) })}
-                inputProps={{ 'aria-label': t('inventoryManagement.form.location') }}
-                sx={{
-                  ...outlinedControlSx,
-                  '& .MuiSelect-select': { display: 'flex', alignItems: 'center', py: 1.1 },
-                }}
-              >
-                <MenuItem value="">
-                  <em>{t('inventoryManagement.form.selectLocation')}</em>
+            <TextField
+              select
+              size="small"
+              fullWidth
+              required
+              label={t('inventoryManagement.form.location')}
+              {...FORM_OUTLINED}
+              value={formData.location || ''}
+              onChange={(e) => setFormData({ ...formData, location: String(e.target.value) })}
+              disabled={formFieldsDisabled}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) =>
+                  selected === '' ? t('inventoryManagement.form.selectLocation') : String(selected),
+              }}
+              sx={{ ...outlinedControlSx, flex: 1, minWidth: 0 }}
+            >
+              <MenuItem value="">
+                <em>{t('inventoryManagement.form.selectLocation')}</em>
+              </MenuItem>
+              {locationOptions.map((c) => (
+                <MenuItem key={`${c.id}-${c.name}`} value={c.name}>
+                  {c.name}
                 </MenuItem>
-                {locationOptions.map((c) => (
-                  <MenuItem key={`${c.id}-${c.name}`} value={c.name}>
-                    {c.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+              ))}
+            </TextField>
             <Button
               type="button"
               variant="outlined"
@@ -3186,7 +3159,9 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
             autoFocus
             margin="dense"
             fullWidth
+            size="small"
             label={t('inventoryManagement.form.categoryName')}
+            {...FORM_OUTLINED}
             value={newCategoryName}
             onChange={(e) => setNewCategoryName(e.target.value)}
             sx={outlinedControlSx}
@@ -3226,7 +3201,9 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
             autoFocus
             margin="dense"
             fullWidth
+            size="small"
             label={t('inventoryManagement.form.locationName')}
+            {...FORM_OUTLINED}
             value={newLocationName}
             onChange={(e) => setNewLocationName(e.target.value)}
             sx={outlinedControlSx}
@@ -3266,7 +3243,9 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
             autoFocus
             margin="dense"
             fullWidth
+            size="small"
             label={t('inventoryManagement.form.unitName')}
+            {...FORM_OUTLINED}
             value={newUnitName}
             onChange={(e) => setNewUnitName(e.target.value)}
             sx={outlinedControlSx}

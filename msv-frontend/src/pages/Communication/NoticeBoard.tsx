@@ -34,6 +34,8 @@ import {
   Avatar,
   Badge
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Announcement as AnnouncementIcon,
   Add as AddIcon,
@@ -273,28 +275,21 @@ const NoticeBoard: React.FC = () => {
   const getUnreadCount = () => notices.filter(n => !n.isRead).length;
 
   return (
-    <Box sx={{ p: 0 }}>
-      {/* 헤더 */}
-      <Box sx={{ mb: 3 }}>
-        <Typography variant="pageTitle" component="h1" gutterBottom sx={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: 1.5,
-          fontWeight: 600,
-          color: 'text.primary'
-        }}>
-          <AnnouncementIcon sx={{ fontSize: '2rem', color: 'primary.main' }} />
-          공지사항
-          {getUnreadCount() > 0 && (
-            <Badge badgeContent={getUnreadCount()} color="error">
-              <Box />
-            </Badge>
-          )}
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          중요한 공지사항과 업무 관련 정보를 확인하는 페이지입니다.
-        </Typography>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={
+          <>
+            공지사항
+            {getUnreadCount() > 0 && (
+              <Badge badgeContent={getUnreadCount()} color="error" sx={{ ml: 1 }}>
+                <Box />
+              </Badge>
+            )}
+          </>
+        }
+        description="중요한 공지사항과 업무 관련 정보를 확인하는 페이지입니다."
+        icon={<AnnouncementIcon />}
+      />
 
       {/* 필터 및 액션 */}
       <Card sx={{ mb: 3 }}>
@@ -304,9 +299,11 @@ const NoticeBoard: React.FC = () => {
               <TextField
                 fullWidth
                 size="small"
+                label="검색"
                 placeholder="제목, 내용, 작성자 검색"
                 value={filters.search}
                 onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                InputLabelProps={{ shrink: true }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -318,7 +315,7 @@ const NoticeBoard: React.FC = () => {
             </Grid>
             <Grid size={{ xs: 12, md: 2 }}>
               <FormControl fullWidth size="small">
-                <InputLabel>우선순위</InputLabel>
+                <InputLabel shrink>우선순위</InputLabel>
                 <Select
                   value={filters.priority}
                   label="우선순위"
@@ -333,7 +330,7 @@ const NoticeBoard: React.FC = () => {
             </Grid>
             <Grid size={{ xs: 12, md: 2 }}>
               <FormControl fullWidth size="small">
-                <InputLabel>카테고리</InputLabel>
+                <InputLabel shrink>카테고리</InputLabel>
                 <Select
                   value={filters.category}
                   label="카테고리"

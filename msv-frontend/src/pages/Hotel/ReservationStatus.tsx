@@ -24,6 +24,8 @@ import {
   DialogContent,
   DialogActions
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { ChevronLeft, ChevronRight } from '@mui/icons-material';
@@ -599,7 +601,7 @@ const ReservationStatus: React.FC = () => {
   const pastCellBg = alpha(theme.palette.grey[500], 0.14);
 
   return (
-    <Box sx={{ p: 0, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
+    <Box sx={{ ...mvsPageRootSx }}>
       <Card
         elevation={0}
         sx={{
@@ -613,32 +615,12 @@ const ReservationStatus: React.FC = () => {
         }}
       >
         <CardContent sx={{ p: { xs: 2, sm: 3 }, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
-          <Box
-            sx={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: { xs: 'flex-start', sm: 'center' },
-              justifyContent: 'space-between',
-              gap: 2,
-              mb: 2.5
-            }}
-          >
-            <Box sx={{ minWidth: 0, flex: '1 1 220px' }}>
-              <Typography component="h1" sx={{ ...mvsPageTitleSx, mb: 0.5 }}>
-                {t('reservationStatus.title')}
-              </Typography>
-              <Typography sx={mvsPageDescriptionSx}>{t('reservationStatus.description')}</Typography>
-            </Box>
-            <Box
-              sx={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-                gap: 1.25,
-                justifyContent: { xs: 'flex-start', sm: 'flex-end' },
-                flex: '0 1 auto'
-              }}
-            >
+          <MvsPageHeader
+            title={t('reservationStatus.title')}
+            description={t('reservationStatus.description')}
+            mb={2.5}
+            actions={
+              <>
               <Button
                 size="small"
                 variant="contained"
@@ -699,8 +681,9 @@ const ReservationStatus: React.FC = () => {
                   <ChevronRight fontSize="small" />
                 </IconButton>
               </Box>
-            </Box>
-          </Box>
+              </>
+            }
+          />
 
           <Box
             sx={{
@@ -716,53 +699,47 @@ const ReservationStatus: React.FC = () => {
               maxWidth: '100%'
             }}
           >
-            <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5 }}>
-                {t('reservationStatus.filters.search')}
-              </Typography>
-              <TextField
-                size="small"
-                placeholder={t('reservationStatus.placeholders.search')}
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                fullWidth
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '12px',
-                    bgcolor: 'background.paper'
-                  }
-                }}
-              />
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5 }}>
-                {t('reservationStatus.filters.roomType')}
-              </Typography>
-              <FormControl
-                size="small"
-                fullWidth
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '12px',
-                    bgcolor: 'background.paper'
-                  }
-                }}
-              >
-                <Select
-                  value={roomTypeFilter}
-                  displayEmpty
-                  renderValue={(selected) => (selected ? selected : t('reservationStatus.filters.all'))}
-                  onChange={(event) => setRoomTypeFilter(event.target.value)}
-                >
-                  <MenuItem value="">{t('reservationStatus.filters.all')}</MenuItem>
-                  {roomTypeOptions.map((type) => (
-                    <MenuItem key={type} value={type}>
-                      {type}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
+            <TextField
+              size="small"
+              fullWidth
+              label={t('reservationStatus.filters.search')}
+              placeholder={t('reservationStatus.placeholders.search')}
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '12px',
+                  bgcolor: 'background.paper'
+                }
+              }}
+            />
+            <TextField
+              size="small"
+              fullWidth
+              select
+              label={t('reservationStatus.filters.roomType')}
+              value={roomTypeFilter}
+              onChange={(event) => setRoomTypeFilter(event.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) => (selected ? selected : t('reservationStatus.filters.all')),
+              }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '12px',
+                  bgcolor: 'background.paper'
+                }
+              }}
+            >
+              <MenuItem value="">{t('reservationStatus.filters.all')}</MenuItem>
+              {roomTypeOptions.map((type) => (
+                <MenuItem key={type} value={type}>
+                  {type}
+                </MenuItem>
+              ))}
+            </TextField>
           </Box>
 
           {error && (

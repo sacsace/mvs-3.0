@@ -25,6 +25,8 @@ import {
   DialogActions,
   Divider
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -180,18 +182,10 @@ const StockOutManagement: React.FC = () => {
       px: 2,
       py: 3
     }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <Typography component="h1" variant="pageTitle" sx={{ fontWeight: 600, letterSpacing: '-0.022em', fontSize: { xs: '1.125rem', sm: '1.3125rem' } }}>
-              재고 이동 및 조정
-            </Typography>
-          </Box>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-            재고 이동 및 조정을 관리하는 페이지입니다.
-          </Typography>
-        </Box>
-      </Box>
+      <MvsPageHeader
+        title="재고 이동 및 조정"
+        description="재고 이동 및 조정을 관리하는 페이지입니다."
+      />
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
         {/* 통계 카드 */}

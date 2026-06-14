@@ -25,6 +25,8 @@ import {
   DialogActions,
   InputAdornment
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -123,17 +125,11 @@ const QuotationList: React.FC = () => {
   });
 
   return (
-    <Box sx={{ width: '100%', p: 0 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography component="h1" variant="pageTitle" sx={{ fontWeight: 600, letterSpacing: '-0.022em', mb: 0.75 }}>
-            견적서
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-            견적서를 관리하고 조회하는 페이지입니다.
-          </Typography>
-        </Box>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title="견적서"
+        description="견적서를 관리하고 조회하는 페이지입니다."
+      />
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
         {/* 통계 카드 */}
@@ -185,9 +181,12 @@ const QuotationList: React.FC = () => {
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '4fr 3fr 5fr' }, gap: 2, alignItems: 'center' }}>
             <TextField
               fullWidth
+              size="small"
+              label="검색"
               placeholder="견적서 번호 또는 고객명으로 검색"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              InputLabelProps={{ shrink: true }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -196,20 +195,23 @@ const QuotationList: React.FC = () => {
                 ),
               }}
             />
-            <FormControl fullWidth>
-              <InputLabel>상태 필터</InputLabel>
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <MenuItem value="all">전체</MenuItem>
-                <MenuItem value="draft">초안</MenuItem>
-                <MenuItem value="sent">발송됨</MenuItem>
-                <MenuItem value="accepted">승인됨</MenuItem>
-                <MenuItem value="rejected">거절됨</MenuItem>
-                <MenuItem value="expired">만료됨</MenuItem>
-              </Select>
-            </FormControl>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="상태"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="all">전체</MenuItem>
+              <MenuItem value="draft">초안</MenuItem>
+              <MenuItem value="sent">발송됨</MenuItem>
+              <MenuItem value="accepted">승인됨</MenuItem>
+              <MenuItem value="rejected">거절됨</MenuItem>
+              <MenuItem value="expired">만료됨</MenuItem>
+            </TextField>
             <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
               <Button
                 variant="outlined"

@@ -38,6 +38,8 @@ import {
   AccordionSummary,
   AccordionDetails,
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Code as CodeIcon,
   Add as AddIcon,
@@ -455,21 +457,11 @@ const CodeManagement: React.FC = () => {
   );
 
   return (
-    <Box sx={{ p: 0 }}>
-      {/* 헤더 */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <CodeIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-            <Typography component="h1" variant="pageTitle">
-              코드 관리
-            </Typography>
-          </Box>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-            시스템에서 사용하는 코드 그룹과 코드 값을 관리합니다.
-          </Typography>
-        </Box>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title="코드 관리"
+        description="시스템에서 사용하는 코드 그룹과 코드 값을 관리합니다."
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>

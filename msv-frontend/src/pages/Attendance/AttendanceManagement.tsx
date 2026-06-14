@@ -13,15 +13,15 @@ import {
   Paper,
   Button,
   Chip,
-  FormControl,
-  InputLabel,
-  Select,
+  TextField,
   MenuItem,
   Alert,
   CircularProgress,
   Switch,
   FormControlLabel
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Login as CheckInIcon,
   Logout as CheckOutIcon,
@@ -635,30 +635,8 @@ const AttendanceManagement: React.FC = () => {
   const valueColor = theme.palette.mode === 'dark' ? inkFg : 'text.primary';
 
   return (
-    <Box sx={{ width: '100%', maxWidth: '100%' }}>
-      <Box
-        sx={{
-          ...mvsTitleBlockSx,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-start',
-        }}
-      >
-        <Typography
-          component="h1"
-          variant="pageTitle"
-          sx={{
-            color: valueColor,
-            mb: 0,
-            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-            fontWeight: 600,
-            letterSpacing: '-0.022em',
-            lineHeight: 1.28,
-          }}
-        >
-          {t('attendanceManagement.pageTitle')}
-        </Typography>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader title={t('attendanceManagement.pageTitle')} />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
@@ -1030,7 +1008,7 @@ const AttendanceManagement: React.FC = () => {
                 theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.06) : alpha(theme.palette.common.black, 0.03),
             }}
           >
-            <Box sx={{ flex: '1 1 200px' }}>
+            <Box sx={{ flex: '1 1 200px', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
               <Typography variant="body2" sx={{ mb: 0.5, color: labelColor, fontSize: '0.8125rem', fontWeight: 600 }}>
                 {t('attendanceManagement.currentMonthRange')}
               </Typography>
@@ -1042,43 +1020,51 @@ const AttendanceManagement: React.FC = () => {
               </Typography>
             </Box>
             {canListCompanyAttendance && (
-              <FormControl sx={{ flex: '1 1 180px', minWidth: 160 }} size="small">
-                <Typography variant="body2" sx={{ mb: 0.5, color: labelColor, fontSize: '0.8125rem', fontWeight: 600 }}>
-                  {t('attendanceManagement.department')}
-                </Typography>
-                <Select
-                  value={filter.department}
-                  onChange={(e) => setFilter({ ...filter, department: e.target.value })}
-                  displayEmpty
-                  sx={{ height: 44, borderRadius: '14px' }}
-                >
-                  <MenuItem value="all">{t('attendanceManagement.all')}</MenuItem>
-                  {departments.map((dept) => (
-                    <MenuItem key={dept} value={dept}>
-                      {dept}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-            <FormControl sx={{ flex: '1 1 180px', minWidth: 160 }} size="small">
-              <Typography variant="body2" sx={{ mb: 0.5, color: labelColor, fontSize: '0.8125rem', fontWeight: 600 }}>
-                {t('attendanceManagement.status')}
-              </Typography>
-              <Select
-                value={filter.status}
-                onChange={(e) => setFilter({ ...filter, status: e.target.value })}
-                displayEmpty
-                sx={{ height: 44, borderRadius: '14px' }}
+              <TextField
+                fullWidth
+                size="small"
+                select
+                label={t('attendanceManagement.department')}
+                value={filter.department}
+                onChange={(e) => setFilter({ ...filter, department: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+                SelectProps={{
+                  displayEmpty: true,
+                  renderValue: (selected) =>
+                    selected === 'all' ? t('attendanceManagement.all') : String(selected),
+                }}
+                sx={{ flex: '1 1 180px', minWidth: 160 }}
               >
                 <MenuItem value="all">{t('attendanceManagement.all')}</MenuItem>
-                <MenuItem value="normal">{t('attendanceManagement.statusNormal')}</MenuItem>
-                <MenuItem value="late">{t('attendanceManagement.statusLate')}</MenuItem>
-                <MenuItem value="early">{t('attendanceManagement.statusEarly')}</MenuItem>
-                <MenuItem value="overtime">{t('attendanceManagement.statusOvertime')}</MenuItem>
-                <MenuItem value="absent">{t('attendanceManagement.statusAbsent')}</MenuItem>
-              </Select>
-            </FormControl>
+                {departments.map((dept) => (
+                  <MenuItem key={dept} value={dept}>
+                    {dept}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('attendanceManagement.status')}
+              value={filter.status}
+              onChange={(e) => setFilter({ ...filter, status: e.target.value })}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) =>
+                  selected === 'all' ? t('attendanceManagement.all') : getStatusLabel(String(selected)),
+              }}
+              sx={{ flex: '1 1 180px', minWidth: 160 }}
+            >
+              <MenuItem value="all">{t('attendanceManagement.all')}</MenuItem>
+              <MenuItem value="normal">{t('attendanceManagement.statusNormal')}</MenuItem>
+              <MenuItem value="late">{t('attendanceManagement.statusLate')}</MenuItem>
+              <MenuItem value="early">{t('attendanceManagement.statusEarly')}</MenuItem>
+              <MenuItem value="overtime">{t('attendanceManagement.statusOvertime')}</MenuItem>
+              <MenuItem value="absent">{t('attendanceManagement.statusAbsent')}</MenuItem>
+            </TextField>
           </Box>
 
           {loading ? (

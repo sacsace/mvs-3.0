@@ -17,6 +17,7 @@ import {
   Alert,
   Tabs,
   Tab,
+  TextField,
   FormControl,
   InputLabel,
   Select,
@@ -36,6 +37,8 @@ import {
   Switch,
   FormControlLabel
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Psychology as PsychologyIcon,
   TrendingUp as TrendingUpIcon,
@@ -186,18 +189,12 @@ const RecommendationEngine: React.FC = () => {
   }
 
   return (
-    <Box sx={{ 
-      width: '100%',
-      maxWidth: '1400px',
-      p: 0
-    }}>
-      <Typography variant="pageTitle" component="h1" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <PsychologyIcon color="primary" />
-        AI 추천 엔진
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        개인화된 추천을 통해 사용자 경험을 향상시키고 비즈니스 성과를 극대화합니다.
-      </Typography>
+    <Box sx={{ ...mvsPageRootSx, maxWidth: '1400px' }}>
+      <MvsPageHeader
+        title="AI 추천 엔진"
+        description="개인화된 추천을 통해 사용자 경험을 향상시키고 비즈니스 성과를 극대화합니다."
+        icon={<PsychologyIcon color="primary" />}
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
@@ -209,19 +206,22 @@ const RecommendationEngine: React.FC = () => {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>추천 타입</InputLabel>
-              <Select
-                value={recommendationType}
-                onChange={(e) => setRecommendationType(e.target.value)}
-              >
-                <MenuItem value="all">전체</MenuItem>
-                <MenuItem value="product">상품</MenuItem>
-                <MenuItem value="service">서비스</MenuItem>
-                <MenuItem value="content">콘텐츠</MenuItem>
-                <MenuItem value="action">액션</MenuItem>
-              </Select>
-            </FormControl>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="추천 타입"
+              value={recommendationType}
+              onChange={(e) => setRecommendationType(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ minWidth: 120 }}
+            >
+              <MenuItem value="all">전체</MenuItem>
+              <MenuItem value="product">상품</MenuItem>
+              <MenuItem value="service">서비스</MenuItem>
+              <MenuItem value="content">콘텐츠</MenuItem>
+              <MenuItem value="action">액션</MenuItem>
+            </TextField>
             <Button
               variant="contained"
               startIcon={<RefreshIcon />}

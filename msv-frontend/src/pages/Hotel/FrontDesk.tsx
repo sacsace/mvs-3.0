@@ -32,6 +32,8 @@ import {
   Autocomplete,
   InputAdornment
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { Search as SearchIcon } from '@mui/icons-material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
@@ -1010,13 +1012,11 @@ const FrontDesk: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 0, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
-      <Box sx={{ mb: 2.5 }}>
-        <Typography component="h1" sx={{ ...mvsPageTitleSx, mb: 0.5 }}>
-          {t('frontDesk.title')}
-        </Typography>
-        <Typography sx={mvsPageDescriptionSx}>{t('frontDesk.description')}</Typography>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={t('frontDesk.title')}
+        description={t('frontDesk.description')}
+      />
 
       <Card elevation={0} sx={{ ...shellCardSx, mb: 2.5 }}>
         <CardContent sx={{ py: 2.25, px: { xs: 2, sm: 2.5 }, '&:last-child': { pb: 2.25 } }}>

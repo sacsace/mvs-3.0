@@ -7,8 +7,6 @@ import {
   Button,
   Chip,
   MenuItem,
-  Select,
-  FormControl,
   Table,
   TableHead,
   TableRow,
@@ -218,80 +216,70 @@ const SystemLoginHistoryTab: React.FC = () => {
               alignItems: 'center'
             }}
           >
-            <Box>
-              <Typography variant="caption" sx={fieldLabelSx}>
-                {t('loginInfoManagement.fields.company')}
-              </Typography>
-              <Autocomplete
-                options={companies}
-                value={selectedCompany || null}
-                onChange={(_, newValue) => setSelectedCompanyId(newValue?.id ?? '')}
-                getOptionLabel={(option) => option.name}
-                isOptionEqualToValue={(option, value) => option.id === value.id}
-                renderInput={(params) => (
-                  <TextField {...params} size="small" placeholder={t('loginInfoManagement.placeholders.selectCompany')} />
-                )}
-              />
-            </Box>
-            <Box>
-              <Typography variant="caption" sx={fieldLabelSx}>
-                {t('loginInfoManagement.fields.searchUserId')}
-              </Typography>
-              <TextField
-                size="small"
-                placeholder={t('loginInfoManagement.placeholders.searchUserId')}
-                value={logFilters.userid}
-                onChange={(event) => setLogFilters((prev) => ({ ...prev, userid: event.target.value }))}
-                fullWidth
-              />
-            </Box>
-            <Box>
-              <Typography variant="caption" sx={fieldLabelSx}>
-                {t('loginInfoManagement.fields.result')}
-              </Typography>
-              <FormControl size="small" fullWidth>
-                <Select
-                  value={logFilters.status}
-                  displayEmpty
-                  onChange={(event) =>
-                    setLogFilters((prev) => ({
-                      ...prev,
-                      status: event.target.value as '' | 'success' | 'failure'
-                    }))
-                  }
-                >
-                  <MenuItem value="">{t('loginInfoManagement.filters.all')}</MenuItem>
-                  <MenuItem value="success">{t('loginInfoManagement.status.success')}</MenuItem>
-                  <MenuItem value="failure">{t('loginInfoManagement.status.failure')}</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-            <Box>
-              <Typography variant="caption" sx={fieldLabelSx}>
-                {t('loginInfoManagement.fields.startDate')}
-              </Typography>
-              <TextField
-                size="small"
-                type="date"
-                placeholder={t('loginInfoManagement.placeholders.date')}
-                value={logFilters.start_date}
-                onChange={(event) => setLogFilters((prev) => ({ ...prev, start_date: event.target.value }))}
-                fullWidth
-              />
-            </Box>
-            <Box>
-              <Typography variant="caption" sx={fieldLabelSx}>
-                {t('loginInfoManagement.fields.endDate')}
-              </Typography>
-              <TextField
-                size="small"
-                type="date"
-                placeholder={t('loginInfoManagement.placeholders.date')}
-                value={logFilters.end_date}
-                onChange={(event) => setLogFilters((prev) => ({ ...prev, end_date: event.target.value }))}
-                fullWidth
-              />
-            </Box>
+            <Autocomplete
+              options={companies}
+              value={selectedCompany || null}
+              onChange={(_, newValue) => setSelectedCompanyId(newValue?.id ?? '')}
+              getOptionLabel={(option) => option.name}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label={t('loginInfoManagement.fields.company')}
+                  InputLabelProps={{ shrink: true }}
+                  placeholder={t('loginInfoManagement.placeholders.selectCompany')}
+                />
+              )}
+            />
+            <TextField
+              size="small"
+              label={t('loginInfoManagement.fields.searchUserId')}
+              placeholder={t('loginInfoManagement.placeholders.searchUserId')}
+              value={logFilters.userid}
+              onChange={(event) => setLogFilters((prev) => ({ ...prev, userid: event.target.value }))}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+            />
+            <TextField
+              size="small"
+              select
+              label={t('loginInfoManagement.fields.result')}
+              value={logFilters.status}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+              fullWidth
+              onChange={(event) =>
+                setLogFilters((prev) => ({
+                  ...prev,
+                  status: event.target.value as '' | 'success' | 'failure'
+                }))
+              }
+            >
+              <MenuItem value="">{t('loginInfoManagement.filters.all')}</MenuItem>
+              <MenuItem value="success">{t('loginInfoManagement.status.success')}</MenuItem>
+              <MenuItem value="failure">{t('loginInfoManagement.status.failure')}</MenuItem>
+            </TextField>
+            <TextField
+              size="small"
+              type="date"
+              label={t('loginInfoManagement.fields.startDate')}
+              placeholder={t('loginInfoManagement.placeholders.date')}
+              value={logFilters.start_date}
+              onChange={(event) => setLogFilters((prev) => ({ ...prev, start_date: event.target.value }))}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+            />
+            <TextField
+              size="small"
+              type="date"
+              label={t('loginInfoManagement.fields.endDate')}
+              placeholder={t('loginInfoManagement.placeholders.date')}
+              value={logFilters.end_date}
+              onChange={(event) => setLogFilters((prev) => ({ ...prev, end_date: event.target.value }))}
+              InputLabelProps={{ shrink: true }}
+              fullWidth
+            />
             <Button
               variant="outlined"
               onClick={handleLogFilterReset}

@@ -11,6 +11,8 @@ import {
   CircularProgress,
   Divider
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import SendIcon from '@mui/icons-material/Send';
 import EmailIcon from '@mui/icons-material/Email';
 import { useTranslation } from 'react-i18next';
@@ -83,17 +85,8 @@ const MailSendTest: React.FC = () => {
   };
 
   return (
-    <Box
-      sx={{
-        p: 2,
-        backgroundColor: 'workArea.main',
-        borderRadius: 2,
-        minHeight: '100%'
-      }}
-    >
-      <Typography component="h1" variant="pageTitle" sx={{ mb: 2 }}>
-        {t('mailSendTest.title')}
-      </Typography>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader title={t('mailSendTest.title')} />
 
       {!canManage && (
         <Alert severity="warning" sx={{ mb: 2, maxWidth: 560 }}>

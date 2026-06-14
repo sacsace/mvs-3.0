@@ -4,6 +4,8 @@ import {
   TextField, FormControl, InputLabel, Select, MenuItem, IconButton, Chip, Avatar,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, InputAdornment, Divider
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon,
   Search as SearchIcon, Download as DownloadIcon, Print as PrintIcon, CheckCircle as ApproveIcon,
@@ -180,27 +182,24 @@ const ExpenseManagement: React.FC = () => {
   });
 
   return (
-    <Box sx={{ width: '100%', px: 2, py: 3 }}>
-      {/* 헤더 */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography component="h1" variant="pageTitle" sx={{ fontWeight: 600, letterSpacing: '-0.022em', mb: 0.75 }}>
-            지출결의서
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-            지출결의서를 관리하는 페이지입니다.
-          </Typography>
-        </Box>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx, px: 2, py: 3 }}>
+      <MvsPageHeader
+        title="지출결의서"
+        description="지출결의서를 관리하는 페이지입니다."
+      />
 
       {/* 검색 및 필터 */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
             <TextField
+              fullWidth
+              size="small"
+              label="검색"
               placeholder="결의서 번호, 직원명, 부서, 설명으로 검색..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              InputLabelProps={{ shrink: true }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -210,33 +209,41 @@ const ExpenseManagement: React.FC = () => {
               }}
               sx={{ minWidth: 300 }}
             />
-            <FormControl sx={{ minWidth: 120 }}>
-              <InputLabel>상태</InputLabel>
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <MenuItem value="all">전체 상태</MenuItem>
-                <MenuItem value="pending">대기</MenuItem>
-                <MenuItem value="approved">승인</MenuItem>
-                <MenuItem value="rejected">거부</MenuItem>
-                <MenuItem value="paid">지급완료</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl sx={{ minWidth: 120 }}>
-              <InputLabel>카테고리</InputLabel>
-              <Select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-              >
-                <MenuItem value="all">전체 카테고리</MenuItem>
-                <MenuItem value="출장비">출장비</MenuItem>
-                <MenuItem value="회식비">회식비</MenuItem>
-                <MenuItem value="교통비">교통비</MenuItem>
-                <MenuItem value="사무용품">사무용품</MenuItem>
-                <MenuItem value="기타">기타</MenuItem>
-              </Select>
-            </FormControl>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="상태"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+              sx={{ minWidth: 120 }}
+            >
+              <MenuItem value="all">전체 상태</MenuItem>
+              <MenuItem value="pending">대기</MenuItem>
+              <MenuItem value="approved">승인</MenuItem>
+              <MenuItem value="rejected">거부</MenuItem>
+              <MenuItem value="paid">지급완료</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="카테고리"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+              sx={{ minWidth: 120 }}
+            >
+              <MenuItem value="all">전체 카테고리</MenuItem>
+              <MenuItem value="출장비">출장비</MenuItem>
+              <MenuItem value="회식비">회식비</MenuItem>
+              <MenuItem value="교통비">교통비</MenuItem>
+              <MenuItem value="사무용품">사무용품</MenuItem>
+              <MenuItem value="기타">기타</MenuItem>
+            </TextField>
             <Box sx={{ flexGrow: 1 }} />
             <Button variant="outlined" startIcon={<DownloadIcon />} sx={{ mr: 1 }}>
               내보내기

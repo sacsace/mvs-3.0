@@ -7,7 +7,7 @@ import Sidebar, { SIDEBAR_WIDTH_EASING, SIDEBAR_WIDTH_TRANSITION_MS } from './Si
 import { useStore, useMenuStore } from '../../store';
 import { userUiPreferencesService } from '../../services/api';
 import i18n from '../../locales/i18n';
-import { mvsPageShellSx } from '../../theme/mvsLayout';
+import { mvsPageShellSx, mvsWorkBoardPageBg } from '../../theme/mvsLayout';
 
 /** 서버 prefs의 ko가 클라이언트 영어 선택보다 늦게 도착할 때 UI 언어를 덮어쓰지 않음 */
 function shouldApplyPrefsLanguage(prefsLang: 'ko' | 'en', current: 'ko' | 'en'): boolean {
@@ -189,13 +189,20 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const contentInsetLeft =
     (autoCollapseEnabled && isSidebarCollapsed ? collapsedWidth : sidebarWidth) + WORK_AREA_OUTSET;
 
+  const isWorkBoardChromeless =
+    location.pathname === '/work/projects' ||
+    /^\/work\/projects\/\d+$/.test(location.pathname);
+
   return (
     <Box 
       sx={{ 
         display: 'flex',
         flexDirection: 'column',
         minHeight: '100vh',
-        backgroundColor: 'bodyArea.main',
+        backgroundColor: isWorkBoardChromeless ? 'transparent' : 'bodyArea.main',
+        ...(isWorkBoardChromeless
+          ? { background: mvsWorkBoardPageBg, backgroundColor: 'transparent' }
+          : {}),
         fontFamily: 'var(--font-sans)',
         // CSS 변수로 사이드바 너비 정의
         '--sidebar-width': '280px',
@@ -223,7 +230,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
-          backgroundColor: 'bodyArea.main',
+          backgroundColor: isWorkBoardChromeless ? 'transparent' : 'bodyArea.main',
+        ...(isWorkBoardChromeless
+          ? { background: mvsWorkBoardPageBg, backgroundColor: 'transparent' }
+          : {}),
         }}
       >
         {/* 사이드바 - 절대 위치로 고정 */}
@@ -249,7 +259,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             flexDirection: 'column',
             justifyContent: 'flex-start',
             alignItems: 'stretch',
-            backgroundColor: 'bodyArea.main',
+            backgroundColor: isWorkBoardChromeless ? 'transparent' : 'bodyArea.main',
+            ...(isWorkBoardChromeless
+              ? { background: mvsWorkBoardPageBg, backgroundColor: 'transparent' }
+              : {}),
             position: 'relative',
             border: 'none',
             outline: 'none',
@@ -286,10 +299,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               width: '100%',
               maxWidth: '100%',
               mx: 0,
-              backgroundColor: 'workArea.main',
-              borderRadius: '24px',
-              boxShadow: '0 4px 16px rgba(15, 23, 42, 0.08)',
-              border: '1px solid #C5CED9',
+              backgroundColor: isWorkBoardChromeless ? 'transparent' : 'workArea.main',
+              borderRadius: isWorkBoardChromeless ? 0 : '24px',
+              boxShadow: isWorkBoardChromeless ? 'none' : '0 4px 16px rgba(15, 23, 42, 0.08)',
+              border: isWorkBoardChromeless ? 'none' : '1px solid #C5CED9',
+              ...(isWorkBoardChromeless
+                ? { background: mvsWorkBoardPageBg, backgroundColor: 'transparent' }
+                : {}),
               outline: 'none',
               overflow: 'hidden',
               position: 'relative',
@@ -323,6 +339,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 border: 'none',
                 outline: 'none',
                 boxShadow: 'none',
+                ...(isWorkBoardChromeless
+                  ? {
+                      flex: 1,
+                      minHeight: '100%',
+                      background: mvsWorkBoardPageBg,
+                      backgroundColor: 'transparent',
+                    }
+                  : {}),
                 ...mvsPageShellSx,
                 '&::before': {
                   display: 'none'

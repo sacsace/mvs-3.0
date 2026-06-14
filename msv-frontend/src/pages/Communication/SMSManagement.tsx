@@ -40,6 +40,8 @@ import {
   ToggleButtonGroup,
   Pagination
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -300,24 +302,16 @@ const SMSManagement: React.FC = () => {
 
   if (viewMode === 'view' && selectedSms) {
     return (
-      <Box sx={{ 
-        p: 0,
-        backgroundColor: 'workArea.main',
-        borderRadius: 2,
-        minHeight: '100%'
-      }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="pageTitle" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <SmsIcon />
-            SMS 상세
-          </Typography>
-          <Button
-            variant="outlined"
-            onClick={() => setViewMode('list')}
-          >
-            목록으로
-          </Button>
-        </Box>
+      <Box sx={{ ...mvsPageRootSx }}>
+        <MvsPageHeader
+          title="SMS 상세"
+          icon={<SmsIcon />}
+          actions={
+            <Button variant="outlined" onClick={() => setViewMode('list')}>
+              목록으로
+            </Button>
+          }
+        />
 
         <Card>
           <CardContent>
@@ -412,26 +406,21 @@ const SMSManagement: React.FC = () => {
   }
 
   return (
-    <Box sx={{ 
-      p: 0,
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%'
-    }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="pageTitle" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <SmsIcon />
-          SMS 관리
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setOpenDialog(true)}
-          sx={{ borderRadius: 2 }}
-        >
-          SMS 작성
-        </Button>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title="SMS 관리"
+        icon={<SmsIcon />}
+        actions={
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenDialog(true)}
+            sx={{ borderRadius: 2 }}
+          >
+            SMS 작성
+          </Button>
+        }
+      />
 
       {/* 통계 카드 */}
       <Box sx={{ 
@@ -493,9 +482,12 @@ const SMSManagement: React.FC = () => {
           }}>
             <TextField
               fullWidth
+              size="small"
+              label="검색"
               placeholder="수신자, 내용, 전화번호 검색"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              InputLabelProps={{ shrink: true }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -504,32 +496,38 @@ const SMSManagement: React.FC = () => {
                 ),
               }}
             />
-            <FormControl fullWidth>
-              <InputLabel>상태</InputLabel>
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <MenuItem value="">전체</MenuItem>
-                <MenuItem value="draft">임시저장</MenuItem>
-                <MenuItem value="scheduled">예약됨</MenuItem>
-                <MenuItem value="sent">발송됨</MenuItem>
-                <MenuItem value="delivered">전달됨</MenuItem>
-                <MenuItem value="failed">실패</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel>유형</InputLabel>
-              <Select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-              >
-                <MenuItem value="">전체</MenuItem>
-                <MenuItem value="individual">개별</MenuItem>
-                <MenuItem value="group">그룹</MenuItem>
-                <MenuItem value="broadcast">방송</MenuItem>
-              </Select>
-            </FormControl>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="상태"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="">전체</MenuItem>
+              <MenuItem value="draft">임시저장</MenuItem>
+              <MenuItem value="scheduled">예약됨</MenuItem>
+              <MenuItem value="sent">발송됨</MenuItem>
+              <MenuItem value="delivered">전달됨</MenuItem>
+              <MenuItem value="failed">실패</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="유형"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="">전체</MenuItem>
+              <MenuItem value="individual">개별</MenuItem>
+              <MenuItem value="group">그룹</MenuItem>
+              <MenuItem value="broadcast">방송</MenuItem>
+            </TextField>
             <Button
               fullWidth
               variant="outlined"

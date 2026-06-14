@@ -4,6 +4,8 @@ import {
   TextField, FormControl, InputLabel, Select, MenuItem, IconButton, Chip, Avatar,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, InputAdornment, Divider
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   ReceiptLong as ReceiptIcon, Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon,
   Search as SearchIcon, Download as DownloadIcon, Print as PrintIcon, Send as SendIcon,
@@ -152,23 +154,21 @@ const InvoiceManagement: React.FC = () => {
   });
 
   return (
-    <Box sx={{ width: '100%' }}>
-      {/* 헤더 */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <ReceiptIcon sx={{ mr: 2, fontSize: '2rem', color: 'primary.main' }} />
-        <Typography variant="pageTitle" component="h1" sx={{ fontWeight: 'bold' }}>
-          일반 인보이스 관리
-        </Typography>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader title="일반 인보이스 관리" />
 
       {/* 검색 및 필터 */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
             <TextField
+              fullWidth
+              size="small"
+              label="검색"
               placeholder="인보이스 번호, 고객명, 이메일로 검색..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              InputLabelProps={{ shrink: true }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -178,20 +178,24 @@ const InvoiceManagement: React.FC = () => {
               }}
               sx={{ minWidth: 300 }}
             />
-            <FormControl sx={{ minWidth: 120 }}>
-              <InputLabel>상태</InputLabel>
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <MenuItem value="all">전체 상태</MenuItem>
-                <MenuItem value="draft">초안</MenuItem>
-                <MenuItem value="sent">발송</MenuItem>
-                <MenuItem value="paid">결제완료</MenuItem>
-                <MenuItem value="overdue">연체</MenuItem>
-                <MenuItem value="cancelled">취소</MenuItem>
-              </Select>
-            </FormControl>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="상태"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+              sx={{ minWidth: 120 }}
+            >
+              <MenuItem value="all">전체 상태</MenuItem>
+              <MenuItem value="draft">초안</MenuItem>
+              <MenuItem value="sent">발송</MenuItem>
+              <MenuItem value="paid">결제완료</MenuItem>
+              <MenuItem value="overdue">연체</MenuItem>
+              <MenuItem value="cancelled">취소</MenuItem>
+            </TextField>
             <Box sx={{ flexGrow: 1 }} />
             <Button variant="outlined" startIcon={<DownloadIcon />} sx={{ mr: 1 }}>
               내보내기

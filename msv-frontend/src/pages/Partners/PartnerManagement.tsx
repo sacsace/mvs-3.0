@@ -46,18 +46,10 @@ import { partnerService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 import { mvsSearchFieldSx } from '../../theme/mvsLayout';
-
-const partnerFilterLabelSx = {
-  color: 'text.secondary',
-  fontWeight: 600,
-  mb: 0.5,
-  display: 'block',
-  fontSize: '0.75rem',
-  lineHeight: '18px',
-  minHeight: 18,
-};
 
 const partnerFilterSelectSx = {
   borderRadius: '12px',
@@ -426,28 +418,12 @@ const PartnerManagement: React.FC = () => {
   });
 
   return (
-    <Box sx={{ 
-      p: 0,
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%'
-    }}>
-      {/* 헤더 */}
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        mb: 3 
-      }}>
-        <Box>
-          <Typography component="h1" variant="pageTitle" sx={{ mb: 1 }}>
-            {t('partnerManagement.pageTitle')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-            {t('partnerManagement.description')}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={t('partnerManagement.pageTitle')}
+        description={t('partnerManagement.description')}
+        actions={
+          <>
           <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
             <span style={{ display: 'inline-flex' }}>
               <Button
@@ -500,8 +476,9 @@ const PartnerManagement: React.FC = () => {
               </Button>
             </span>
           </Tooltip>
-        </Box>
-      </Box>
+          </>
+        }
+      />
 
       {!menuFlags.menusLoading && !menuFlags.canRead && (
         <Alert severity="warning" sx={{ mb: 2 }}>
@@ -530,70 +507,65 @@ const PartnerManagement: React.FC = () => {
               ...mvsSearchFieldSx,
             }}
           >
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={partnerFilterLabelSx}>
-                {t('partnerManagement.searchLabel')}
-              </Typography>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder={t('partnerManagement.searchPlaceholder')}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    height: 40,
-                    bgcolor: '#FFFFFF',
-                    '& .MuiOutlinedInput-input': { py: 0 },
-                  },
-                }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={partnerFilterLabelSx}>
-                {t('partnerManagement.status')}
-              </Typography>
-              <FormControl fullWidth size="small" disabled={menuFlags.menusLoading || !menuFlags.canRead}>
-                <Select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  displayEmpty
-                  sx={partnerFilterSelectSx}
-                >
-                  <MenuItem value="all">{t('partnerManagement.allStatus')}</MenuItem>
-                  <MenuItem value="active">{t('partnerManagement.active')}</MenuItem>
-                  <MenuItem value="inactive">{t('partnerManagement.inactive')}</MenuItem>
-                  <MenuItem value="suspended">{t('partnerManagement.suspended')}</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={partnerFilterLabelSx}>
-                {t('partnerManagement.companyType')}
-              </Typography>
-              <FormControl fullWidth size="small" disabled={menuFlags.menusLoading || !menuFlags.canRead}>
-                <Select
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                  displayEmpty
-                  sx={partnerFilterSelectSx}
-                >
-                  <MenuItem value="all">{t('partnerManagement.allTypes')}</MenuItem>
-                  <MenuItem value="partner">{t('partnerManagement.typePartner')}</MenuItem>
-                  <MenuItem value="customer">{t('partnerManagement.typeCustomer')}</MenuItem>
-                  <MenuItem value="customer_partner">{t('partnerManagement.typeCustomerPartner')}</MenuItem>
-                  <MenuItem value="other">{t('partnerManagement.typeOther')}</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
+            <TextField
+              fullWidth
+              size="small"
+              label={t('partnerManagement.searchLabel')}
+              placeholder={t('partnerManagement.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              InputLabelProps={{ shrink: true }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  height: 40,
+                  bgcolor: '#FFFFFF',
+                  '& .MuiOutlinedInput-input': { py: 0 },
+                },
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('partnerManagement.status')}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+              sx={partnerFilterSelectSx}
+            >
+              <MenuItem value="all">{t('partnerManagement.allStatus')}</MenuItem>
+              <MenuItem value="active">{t('partnerManagement.active')}</MenuItem>
+              <MenuItem value="inactive">{t('partnerManagement.inactive')}</MenuItem>
+              <MenuItem value="suspended">{t('partnerManagement.suspended')}</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('partnerManagement.companyType')}
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+              sx={partnerFilterSelectSx}
+            >
+              <MenuItem value="all">{t('partnerManagement.allTypes')}</MenuItem>
+              <MenuItem value="partner">{t('partnerManagement.typePartner')}</MenuItem>
+              <MenuItem value="customer">{t('partnerManagement.typeCustomer')}</MenuItem>
+              <MenuItem value="customer_partner">{t('partnerManagement.typeCustomerPartner')}</MenuItem>
+              <MenuItem value="other">{t('partnerManagement.typeOther')}</MenuItem>
+            </TextField>
           </Box>
         </CardContent>
       </Card>

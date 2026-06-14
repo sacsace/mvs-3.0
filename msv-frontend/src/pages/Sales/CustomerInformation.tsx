@@ -28,6 +28,8 @@ import {
   TextField,
   Typography
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Business as BusinessIcon,
@@ -346,13 +348,8 @@ const CustomerInformation: React.FC = () => {
   };
 
   return (
-    <Box sx={{ width: '100%', maxWidth: '100%' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
-        <CustomerIcon sx={{ fontSize: 28, color: 'primary.main' }} />
-        <Typography component="h1" variant="pageTitle">
-          {txt('고객 정보 관리', 'Customer information')}
-        </Typography>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader title={txt('고객 정보 관리', 'Customer information')} />
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2.5, mb: 3 }}>
         <Card variant="outlined" sx={{ borderRadius: '18px' }}>
@@ -394,12 +391,15 @@ const CustomerInformation: React.FC = () => {
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '3fr 1fr auto' }, gap: 2, alignItems: 'center' }}>
             <TextField
               fullWidth
+              size="small"
+              label={txt('검색', 'Search')}
               placeholder={txt(
                 '고객명, 사업자번호, 담당자, 연락처, 이메일 검색',
                 'Search by name, business no., contact, phone, email'
               )}
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
+              InputLabelProps={{ shrink: true }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -409,8 +409,8 @@ const CustomerInformation: React.FC = () => {
               }}
               sx={{ bgcolor: '#fff', borderRadius: '14px', '& .MuiInputBase-input::placeholder': { color: '#9CA3AF', opacity: 1 } }}
             />
-            <FormControl fullWidth>
-              <InputLabel>{txt('상태', 'Status')}</InputLabel>
+            <FormControl fullWidth size="small">
+              <InputLabel shrink>{txt('상태', 'Status')}</InputLabel>
               <Select
                 label={txt('상태', 'Status')}
                 value={statusFilter}

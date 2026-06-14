@@ -40,6 +40,8 @@ import {
   ToggleButtonGroup,
   Pagination
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -330,24 +332,16 @@ const EmailManagement: React.FC = () => {
 
   if (viewMode === 'view' && selectedEmail) {
     return (
-      <Box sx={{ 
-        p: 0,
-        backgroundColor: 'workArea.main',
-        borderRadius: 2,
-        minHeight: '100%'
-      }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="pageTitle" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <EmailIcon />
-            이메일 상세
-          </Typography>
-          <Button
-            variant="outlined"
-            onClick={() => setViewMode('list')}
-          >
-            목록으로
-          </Button>
-        </Box>
+      <Box sx={{ ...mvsPageRootSx }}>
+        <MvsPageHeader
+          title="이메일 상세"
+          icon={<EmailIcon />}
+          actions={
+            <Button variant="outlined" onClick={() => setViewMode('list')}>
+              목록으로
+            </Button>
+          }
+        />
 
         <Card>
           <CardContent>
@@ -433,26 +427,21 @@ const EmailManagement: React.FC = () => {
   }
 
   return (
-    <Box sx={{ 
-      p: 0,
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%'
-    }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="pageTitle" component="h1" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <EmailIcon />
-        이메일 관리
-      </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setOpenDialog(true)}
-          sx={{ borderRadius: 2 }}
-        >
-          이메일 작성
-        </Button>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title="이메일 관리"
+        icon={<EmailIcon />}
+        actions={
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenDialog(true)}
+            sx={{ borderRadius: 2 }}
+          >
+            이메일 작성
+          </Button>
+        }
+      />
 
       {/* 통계 카드 */}
       <Box sx={{ 
@@ -546,9 +535,12 @@ const EmailManagement: React.FC = () => {
           }}>
             <TextField
               fullWidth
+              size="small"
+              label="검색"
               placeholder="제목, 발신자, 내용 검색"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              InputLabelProps={{ shrink: true }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -557,33 +549,39 @@ const EmailManagement: React.FC = () => {
                 ),
               }}
             />
-            <FormControl fullWidth>
-              <InputLabel>상태</InputLabel>
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <MenuItem value="">전체</MenuItem>
-                <MenuItem value="draft">임시저장</MenuItem>
-                <MenuItem value="sent">발송됨</MenuItem>
-                <MenuItem value="received">수신됨</MenuItem>
-                <MenuItem value="archived">보관됨</MenuItem>
-                <MenuItem value="deleted">삭제됨</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel>우선순위</InputLabel>
-              <Select
-                value={priorityFilter}
-                onChange={(e) => setPriorityFilter(e.target.value)}
-              >
-                <MenuItem value="">전체</MenuItem>
-                <MenuItem value="low">낮음</MenuItem>
-                <MenuItem value="normal">보통</MenuItem>
-                <MenuItem value="high">높음</MenuItem>
-                <MenuItem value="urgent">긴급</MenuItem>
-              </Select>
-            </FormControl>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="상태"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="">전체</MenuItem>
+              <MenuItem value="draft">임시저장</MenuItem>
+              <MenuItem value="sent">발송됨</MenuItem>
+              <MenuItem value="received">수신됨</MenuItem>
+              <MenuItem value="archived">보관됨</MenuItem>
+              <MenuItem value="deleted">삭제됨</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="우선순위"
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="">전체</MenuItem>
+              <MenuItem value="low">낮음</MenuItem>
+              <MenuItem value="normal">보통</MenuItem>
+              <MenuItem value="high">높음</MenuItem>
+              <MenuItem value="urgent">긴급</MenuItem>
+            </TextField>
             <Button
               fullWidth
               variant="outlined"

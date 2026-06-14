@@ -3075,7 +3075,7 @@ const Dashboard: React.FC = () => {
                 {(user?.role === 'admin' || user?.role === 'root') &&
                 (dashboardLeaveDeptOptions.length > 0 || dashboardLeaveMapped.length > 0) ? (
                   <FormControl size="small" sx={{ minWidth: 140 }}>
-                    <InputLabel id="dash-vcal-dept">{t('vacationManagement.departmentFilter')}</InputLabel>
+                    <InputLabel shrink id="dash-vcal-dept">{t('vacationManagement.departmentFilter')}</InputLabel>
                     <Select
                       labelId="dash-vcal-dept"
                       label={t('vacationManagement.departmentFilter')}

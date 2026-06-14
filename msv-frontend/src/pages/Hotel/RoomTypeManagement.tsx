@@ -28,6 +28,8 @@ import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Search as Searc
 import { useTranslation } from 'react-i18next';
 import { roomTypeService } from '../../services/api';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 type RoomType = {
@@ -191,15 +193,15 @@ const RoomTypeManagement: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 0 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          {t('roomTypeManagement.title')}
-        </Typography>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
-          {t('roomTypeManagement.actions.register')}
-        </Button>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={t('roomTypeManagement.title')}
+        actions={
+          <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
+            {t('roomTypeManagement.actions.register')}
+          </Button>
+        }
+      />
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
@@ -211,42 +213,39 @@ const RoomTypeManagement: React.FC = () => {
               alignItems: 'end'
             }}
           >
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5 }}>
-                {t('roomTypeManagement.filters.search')}
-              </Typography>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder={t('roomTypeManagement.placeholders.search')}
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" />
-                    </InputAdornment>
-                  )
-                }}
-              />
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5 }}>
-                {t('roomTypeManagement.filters.status')}
-              </Typography>
-              <FormControl size="small" fullWidth>
-                <Select
-                  value={statusFilter}
-                  displayEmpty
-                  renderValue={(selected) => (selected ? selected : t('roomTypeManagement.filters.statusAll'))}
-                  onChange={(event) => setStatusFilter(event.target.value)}
-                >
-                  <MenuItem value="">{t('roomTypeManagement.filters.statusAll')}</MenuItem>
-                  <MenuItem value="active">{t('roomTypeManagement.status.active')}</MenuItem>
-                  <MenuItem value="inactive">{t('roomTypeManagement.status.inactive')}</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
+            <TextField
+              fullWidth
+              size="small"
+              label={t('roomTypeManagement.filters.search')}
+              placeholder={t('roomTypeManagement.placeholders.search')}
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              InputLabelProps={{ shrink: true }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                )
+              }}
+            />
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('roomTypeManagement.filters.status')}
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) => (selected ? selected : t('roomTypeManagement.filters.statusAll')),
+              }}
+            >
+              <MenuItem value="">{t('roomTypeManagement.filters.statusAll')}</MenuItem>
+              <MenuItem value="active">{t('roomTypeManagement.status.active')}</MenuItem>
+              <MenuItem value="inactive">{t('roomTypeManagement.status.inactive')}</MenuItem>
+            </TextField>
             <Button
               variant="outlined"
               onClick={() => {

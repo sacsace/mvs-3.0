@@ -16,9 +16,6 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
   MenuItem,
   Alert,
   CircularProgress,
@@ -33,6 +30,8 @@ import {
   CardContent,
   TableSortLabel
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx, mvsPageDescriptionSx, mvsPageTitleSx, mvsOutlinedLabelProps } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -54,7 +53,6 @@ import { useTranslation } from 'react-i18next';
 import { alpha, useTheme } from '@mui/material/styles';
 import type { Theme } from '@mui/material/styles';
 import { DepartmentManagementPanel } from '../HR/DepartmentManagement';
-import { mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
 
 const USER_MGMT_MENU_ROUTES = ['/hr/users', '/users'];
 
@@ -204,16 +202,8 @@ const highlightDeptPositionRowSx = {
   boxSizing: 'border-box' as const,
 };
 
-/** 폼 필드 라벨 — 필터·검색 영역과 동일 토큰 */
-const hrFieldLabelSx = {
-  color: 'text.secondary',
-  fontWeight: 600,
-  mb: 0.5,
-  display: 'block',
-  fontSize: '0.75rem',
-  lineHeight: '18px',
-  minHeight: 18,
-} as const;
+/** 폼 outlined 라벨 — 테두리 위 고정 */
+const OUTLINED_FIELD = mvsOutlinedLabelProps;
 
 const hrHintSx = {
   fontSize: '0.7rem',
@@ -916,48 +906,25 @@ const UserManagement: React.FC = () => {
   }
 
   return (
-    <Box sx={{ 
-      p: 0,
-      backgroundColor: 'transparent',
-      borderRadius: 0,
-      minHeight: '100%',
-      width: '100%',
-      maxWidth: '100%',
-      boxSizing: 'border-box',
-    }}>
-      {/* 상단 네비게이션 탭 */}
-      {/* 헤더 */}
+    <Box sx={{ ...mvsPageRootSx, borderRadius: 0 }}>
       <Box sx={{ mb: pageTab === 0 && viewMode === 'list' ? 3 : 1.5 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            gap: 2,
-            mb: 2,
-            minHeight: 40
-          }}
-        >
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography component="h1" sx={{ ...mvsPageTitleSx, mb: 0.75 }}>
-              {t('userManagement.title')}
-            </Typography>
-            <Typography sx={mvsPageDescriptionSx}>
-              {t('userManagement.description')}
-            </Typography>
-          </Box>
-          <Box
-            sx={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 1,
-              justifyContent: 'flex-end',
-              flexShrink: 0,
-              maxWidth: { xs: '100%', sm: '55%' },
-              visibility: pageTab === 0 && viewMode === 'list' ? 'visible' : 'hidden',
-              pointerEvents: pageTab === 0 && viewMode === 'list' ? 'auto' : 'none'
-            }}
-          >
+        <MvsPageHeader
+          title={t('userManagement.title')}
+          description={t('userManagement.description')}
+          mb={2}
+          actions={
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 1,
+                justifyContent: 'flex-end',
+                flexShrink: 0,
+                maxWidth: { xs: '100%', sm: '55%' },
+                visibility: pageTab === 0 && viewMode === 'list' ? 'visible' : 'hidden',
+                pointerEvents: pageTab === 0 && viewMode === 'list' ? 'auto' : 'none',
+              }}
+            >
             <Button
               variant="outlined"
               startIcon={<DownloadIcon />}
@@ -994,8 +961,9 @@ const UserManagement: React.FC = () => {
                 {t('userManagement.deleteSelected')} ({selectedUsers.length})
               </Button>
             )}
-          </Box>
-        </Box>
+            </Box>
+          }
+        />
 
         {/* 탭 네비게이션 */}
         <Card
@@ -1116,11 +1084,13 @@ const UserManagement: React.FC = () => {
           }}
         >
           <TextField
+            label={t('common.search')}
             placeholder={t('userManagement.search')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             size="small"
             fullWidth
+            InputLabelProps={{ shrink: true }}
             sx={{
               minWidth: 0,
               '& .MuiOutlinedInput-root': { height: 40 },
@@ -1134,27 +1104,33 @@ const UserManagement: React.FC = () => {
             }}
           />
           {user?.role === 'root' && (
-            <FormControl fullWidth size="small" sx={{ minWidth: 0 }}>
-              <Select
-                value={selectedCompanyId}
-                onChange={(e) => setSelectedCompanyId(e.target.value as number | '')}
-                displayEmpty
-                sx={{
-                  height: 40,
-                  bgcolor: '#FFFFFF',
-                  borderRadius: '12px',
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
-                }}
-              >
-                <MenuItem value="">{t('userManagement.allCompanies')}</MenuItem>
-                {companies.map((company) => (
-                  <MenuItem key={company.id} value={company.id}>
-                    {company.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <TextField
+              fullWidth
+              select
+              size="small"
+              label={t('userManagement.company')}
+              value={selectedCompanyId}
+              onChange={(e) => setSelectedCompanyId(e.target.value as number | '')}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{
+                displayEmpty: true,
+              }}
+              sx={{
+                minWidth: 0,
+                height: 40,
+                bgcolor: '#FFFFFF',
+                borderRadius: '12px',
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
+              }}
+            >
+              <MenuItem value="">{t('userManagement.allCompanies')}</MenuItem>
+              {companies.map((company) => (
+                <MenuItem key={company.id} value={company.id}>
+                  {company.name}
+                </MenuItem>
+              ))}
+            </TextField>
           )}
           <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0, justifySelf: { xs: 'start', md: 'auto' } }}>
             <Checkbox
@@ -1486,163 +1462,118 @@ const UserManagement: React.FC = () => {
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
                     gap: 2,
                   }}>
-                    <Box>
-                      <Box>
-                        <Typography variant="caption" sx={hrFieldLabelSx}>
-                          {t('userManagement.employeeNumber')}
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          variant="outlined"
-                          value={
-                            previewEmployeeNumberLoading && !editingUser
-                              ? t('common.loading')
-                              : formData.employee_number
-                          }
-                          disabled
-                          helperText={
-                            !editingUser
-                              ? user?.role === 'root' && !(formData as { company_id?: number }).company_id
-                                ? t('userManagement.helperEmployeePending')
-                                : t('userManagement.helperEmployeeAuto')
-                              : ''
-                          }
-                          sx={{
-                            '& .MuiInputBase-input.Mui-disabled': {
-                              WebkitTextFillColor: theme.palette.text.primary,
-                              color: 'text.primary',
-                            },
-                          }}
-                        />
-                      </Box>
-                    </Box>
-                    <Box>
-                      <Box>
-                        <Typography variant="caption" sx={hrFieldLabelSx}>
-                          {t('userManagement.name')} <span style={{ color: 'red' }}>*</span>
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          variant="outlined"
-                          value={formData.username}
-                          onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                          required
-                        />
-                      </Box>
-                    </Box>
-                    <Box>
-                      <Box>
-                        <Typography variant="caption" sx={hrFieldLabelSx}>
-                          {t('userManagement.dateOfBirth')}
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          type="date"
-                          variant="outlined"
-                          value={formData.birth_date}
-                          onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
-                          InputLabelProps={{ shrink: true }}
-                        />
-                      </Box>
-                    </Box>
-                    <Box>
-                      <Box>
-                        <Typography variant="caption" sx={hrFieldLabelSx}>
-                          {t('userManagement.gender')}
-                        </Typography>
-                        <FormControl fullWidth>
-                          <Select
-                            value={formData.gender}
-                            onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                            displayEmpty
-                          >
-                            <MenuItem value="">{t('userManagement.selectPlaceholder')}</MenuItem>
-                            <MenuItem value="male">{t('userManagement.genderMale')}</MenuItem>
-                            <MenuItem value="female">{t('userManagement.genderFemale')}</MenuItem>
-                            <MenuItem value="other">{t('userManagement.genderOther')}</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Box>
-                    </Box>
-                    <Box>
-                      <Box>
-                        <Typography variant="caption" sx={hrFieldLabelSx}>
-                          {t('userManagement.phoneNumber')}
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          variant="outlined"
-                          value={formatPhoneDisplay(formData.phone)}
-                          onChange={(e) => setFormData({ ...formData, phone: normalizePhoneDigits(e.target.value) })}
-                          placeholder={t('userManagement.phonePlaceholder')}
-                          inputProps={{ inputMode: 'numeric', maxLength: 11, autoComplete: 'off' }}
-                        />
-                      </Box>
-                    </Box>
-                    <Box>
-                      <Box>
-                        <Typography variant="caption" sx={hrFieldLabelSx}>
-                          {t('userManagement.email')} <span style={{ color: 'red' }}>*</span>
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          type="email"
-                          variant="outlined"
-                          value={formData.email}
-                          onChange={(e) => {
-                            const email = e.target.value;
-                            setFormData({
-                              ...formData,
-                              email,
-                              ...(!editingUser ? { userid: email } : {})
-                            });
-                          }}
-                          required
-                        />
-                      </Box>
-                    </Box>
-                    <Box>
-                      <Box>
-                        <Typography variant="caption" sx={hrFieldLabelSx}>
-                          {t('userManagement.address')}
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          variant="outlined"
-                          value={formData.address}
-                          onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                        />
-                      </Box>
-                    </Box>
-                    <Box>
-                      <Box>
-                        <Typography variant="caption" sx={hrFieldLabelSx}>
-                          {t('userManagement.emergencyContactName')}
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          variant="outlined"
-                          value={formData.emergency_contact}
-                          onChange={(e) => setFormData({ ...formData, emergency_contact: e.target.value })}
-                          placeholder={t('userManagement.placeholderEmergencyName')}
-                        />
-                      </Box>
-                    </Box>
-                    <Box>
-                      <Box>
-                        <Typography variant="caption" sx={hrFieldLabelSx}>
-                          {t('userManagement.emergencyContactPhone')}
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          variant="outlined"
-                          value={formatPhoneDisplay(formData.emergency_phone)}
-                          onChange={(e) => setFormData({ ...formData, emergency_phone: normalizePhoneDigits(e.target.value) })}
-                          placeholder={t('userManagement.phonePlaceholder')}
-                          inputProps={{ inputMode: 'numeric', maxLength: 11, autoComplete: 'off' }}
-                        />
-                      </Box>
-                    </Box>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label={t('userManagement.employeeNumber')}
+                      {...OUTLINED_FIELD}
+                      value={
+                        previewEmployeeNumberLoading && !editingUser
+                          ? t('common.loading')
+                          : formData.employee_number
+                      }
+                      disabled
+                      helperText={
+                        !editingUser
+                          ? user?.role === 'root' && !(formData as { company_id?: number }).company_id
+                            ? t('userManagement.helperEmployeePending')
+                            : t('userManagement.helperEmployeeAuto')
+                          : ''
+                      }
+                      sx={{
+                        '& .MuiInputBase-input.Mui-disabled': {
+                          WebkitTextFillColor: theme.palette.text.primary,
+                          color: 'text.primary',
+                        },
+                      }}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label={t('userManagement.name')}
+                      {...OUTLINED_FIELD}
+                      value={formData.username}
+                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                      required
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="date"
+                      label={t('userManagement.dateOfBirth')}
+                      {...OUTLINED_FIELD}
+                      value={formData.birth_date}
+                      onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      select
+                      label={t('userManagement.gender')}
+                      {...OUTLINED_FIELD}
+                      value={formData.gender}
+                      onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                      SelectProps={{ displayEmpty: true }}
+                    >
+                      <MenuItem value="">{t('userManagement.selectPlaceholder')}</MenuItem>
+                      <MenuItem value="male">{t('userManagement.genderMale')}</MenuItem>
+                      <MenuItem value="female">{t('userManagement.genderFemale')}</MenuItem>
+                      <MenuItem value="other">{t('userManagement.genderOther')}</MenuItem>
+                    </TextField>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label={t('userManagement.phoneNumber')}
+                      {...OUTLINED_FIELD}
+                      value={formatPhoneDisplay(formData.phone)}
+                      onChange={(e) => setFormData({ ...formData, phone: normalizePhoneDigits(e.target.value) })}
+                      placeholder={t('userManagement.phonePlaceholder')}
+                      inputProps={{ inputMode: 'numeric', maxLength: 11, autoComplete: 'off' }}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="email"
+                      label={t('userManagement.email')}
+                      {...OUTLINED_FIELD}
+                      value={formData.email}
+                      onChange={(e) => {
+                        const email = e.target.value;
+                        setFormData({
+                          ...formData,
+                          email,
+                          ...(!editingUser ? { userid: email } : {})
+                        });
+                      }}
+                      required
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label={t('userManagement.address')}
+                      {...OUTLINED_FIELD}
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label={t('userManagement.emergencyContactName')}
+                      {...OUTLINED_FIELD}
+                      value={formData.emergency_contact}
+                      onChange={(e) => setFormData({ ...formData, emergency_contact: e.target.value })}
+                      placeholder={t('userManagement.placeholderEmergencyName')}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label={t('userManagement.emergencyContactPhone')}
+                      {...OUTLINED_FIELD}
+                      value={formatPhoneDisplay(formData.emergency_phone)}
+                      onChange={(e) => setFormData({ ...formData, emergency_phone: normalizePhoneDigits(e.target.value) })}
+                      placeholder={t('userManagement.phonePlaceholder')}
+                      inputProps={{ inputMode: 'numeric', maxLength: 11, autoComplete: 'off' }}
+                    />
                   </Box>
                 </AccordionDetails>
               </Accordion>
@@ -1656,18 +1587,15 @@ const UserManagement: React.FC = () => {
                 </AccordionSummary>
                 <AccordionDetails>
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    <Box sx={{ width: '100%' }}>
-                      <Typography variant="caption" sx={hrFieldLabelSx}>{t('userManagement.hireDate')}</Typography>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        type="date"
-                        variant="outlined"
-                        value={formData.hire_date}
-                        onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
-                        InputLabelProps={{ shrink: true }}
-                      />
-                    </Box>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="date"
+                      label={t('userManagement.hireDate')}
+                      {...OUTLINED_FIELD}
+                      value={formData.hire_date}
+                      onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
+                    />
                     <Box
                       sx={{
                         ...highlightPayrollFieldsSx,
@@ -1678,7 +1606,6 @@ const UserManagement: React.FC = () => {
                         boxSizing: 'border-box'
                       }}
                     >
-                      {/* 1행: 근무형태 | 급여 */}
                       <Box
                         sx={{
                           display: 'grid',
@@ -1688,48 +1615,47 @@ const UserManagement: React.FC = () => {
                           width: '100%'
                         }}
                       >
-                        <Box sx={{ width: '100%', minWidth: 0 }}>
-                          <Typography variant="caption" sx={hrFieldLabelSx}>{t('userManagement.employmentType')}</Typography>
-                          <FormControl fullWidth size="small">
-                            <Select
-                              value={formData.employment_type}
-                              onChange={(e) => setFormData({ ...formData, employment_type: e.target.value })}
-                              displayEmpty
-                              MenuProps={{
-                                PaperProps: {
-                                  sx: { maxHeight: 320, '& .MuiMenuItem-root': { fontSize: '0.8125rem' } }
-                                },
-                                anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
-                                transformOrigin: { vertical: 'top', horizontal: 'left' }
-                              }}
-                            >
-                              <MenuItem value="fulltime">{t('userManagement.empFulltime')}</MenuItem>
-                              <MenuItem value="daily">{t('userManagement.empDaily')}</MenuItem>
-                              <MenuItem value="contract">{t('userManagement.empContract')}</MenuItem>
-                              <MenuItem value="parttime">{t('userManagement.empParttime')}</MenuItem>
-                              <MenuItem value="intern">{t('userManagement.empIntern')}</MenuItem>
-                            </Select>
-                          </FormControl>
-                        </Box>
-                        <Box sx={{ width: '100%', minWidth: 0 }}>
-                          <Typography variant="caption" sx={hrFieldLabelSx}>{t('userManagement.salary')}</Typography>
-                          <TextField
-                            fullWidth
-                            size="small"
-                            type="number"
-                            variant="outlined"
-                            value={formData.salary}
-                            onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-                            placeholder={t('userManagement.placeholderMonthlySalary')}
-                            InputProps={{
-                              endAdornment: (
-                                <Typography sx={{ fontSize: '0.75rem', mr: 0.75 }}>INR</Typography>
-                              )
-                            }}
-                          />
-                        </Box>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          select
+                          label={t('userManagement.employmentType')}
+                          {...OUTLINED_FIELD}
+                          value={formData.employment_type}
+                          onChange={(e) => setFormData({ ...formData, employment_type: e.target.value })}
+                          SelectProps={{
+                            displayEmpty: true,
+                            MenuProps: {
+                              PaperProps: {
+                                sx: { maxHeight: 320, '& .MuiMenuItem-root': { fontSize: '0.8125rem' } }
+                              },
+                              anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+                              transformOrigin: { vertical: 'top', horizontal: 'left' }
+                            },
+                          }}
+                        >
+                          <MenuItem value="fulltime">{t('userManagement.empFulltime')}</MenuItem>
+                          <MenuItem value="daily">{t('userManagement.empDaily')}</MenuItem>
+                          <MenuItem value="contract">{t('userManagement.empContract')}</MenuItem>
+                          <MenuItem value="parttime">{t('userManagement.empParttime')}</MenuItem>
+                          <MenuItem value="intern">{t('userManagement.empIntern')}</MenuItem>
+                        </TextField>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type="number"
+                          label={t('userManagement.salary')}
+                          {...OUTLINED_FIELD}
+                          value={formData.salary}
+                          onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
+                          placeholder={t('userManagement.placeholderMonthlySalary')}
+                          InputProps={{
+                            endAdornment: (
+                              <Typography sx={{ fontSize: '0.75rem', mr: 0.75 }}>INR</Typography>
+                            )
+                          }}
+                        />
                       </Box>
-                      {/* 2행: 부서 | 직책 — 하이라이트 */}
                       <Box sx={{ ...highlightDeptPositionRowSx }}>
                         <Box
                           sx={{
@@ -1741,26 +1667,30 @@ const UserManagement: React.FC = () => {
                           }}
                         >
                           <Box sx={{ width: '100%', minWidth: 0 }}>
-                            <Typography variant="caption" sx={hrFieldLabelSx}>{t('userManagement.department')}</Typography>
-                            <FormControl fullWidth size="small">
-                              <Select
-                                value={formData.department_id === '' ? '' : String(formData.department_id)}
-                                onChange={(e) => {
-                                  const v = e.target.value;
-                                  if (v === '') {
-                                    setFormData({ ...formData, department_id: '', department: '' });
-                                  } else {
-                                    const id = Number(v);
-                                    const d = departments.find((x) => x.id === id);
-                                    setFormData({
-                                      ...formData,
-                                      department_id: id,
-                                      department: d?.name || ''
-                                    });
-                                  }
-                                }}
-                                displayEmpty
-                                renderValue={(selected) => {
+                            <TextField
+                              fullWidth
+                              size="small"
+                              select
+                              label={t('userManagement.department')}
+                              {...OUTLINED_FIELD}
+                              value={formData.department_id === '' ? '' : String(formData.department_id)}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === '') {
+                                  setFormData({ ...formData, department_id: '', department: '' });
+                                } else {
+                                  const id = Number(v);
+                                  const d = departments.find((x) => x.id === id);
+                                  setFormData({
+                                    ...formData,
+                                    department_id: id,
+                                    department: d?.name || ''
+                                  });
+                                }
+                              }}
+                              SelectProps={{
+                                displayEmpty: true,
+                                renderValue: (selected) => {
                                   if (selected === '') {
                                     return (
                                       <Typography component="span" color="text.secondary" sx={{ fontStyle: 'italic', fontSize: '0.8125rem' }}>
@@ -1770,40 +1700,38 @@ const UserManagement: React.FC = () => {
                                   }
                                   const d = departments.find((x) => String(x.id) === selected);
                                   return d?.name ?? '';
-                                }}
-                                MenuProps={{
+                                },
+                                MenuProps: {
                                   PaperProps: {
                                     sx: { maxHeight: 320, '& .MuiMenuItem-root': { fontSize: '0.8125rem' } }
                                   },
                                   anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
                                   transformOrigin: { vertical: 'top', horizontal: 'left' }
-                                }}
-                              >
-                                <MenuItem value="">
-                                  <em>{t('departmentManagement.noDepartment')}</em>
+                                },
+                              }}
+                            >
+                              <MenuItem value="">
+                                <em>{t('departmentManagement.noDepartment')}</em>
+                              </MenuItem>
+                              {departments.map((d) => (
+                                <MenuItem key={d.id} value={String(d.id)}>
+                                  {d.name}
                                 </MenuItem>
-                                {departments.map((d) => (
-                                  <MenuItem key={d.id} value={String(d.id)}>
-                                    {d.name}
-                                  </MenuItem>
-                                ))}
-                              </Select>
-                            </FormControl>
+                              ))}
+                            </TextField>
                             <Typography color="text.secondary" sx={hrHintSx}>
                               {t('userManagement.deptFromMasterHint')}
                             </Typography>
                           </Box>
-                          <Box sx={{ width: '100%', minWidth: 0 }}>
-                            <Typography variant="caption" sx={hrFieldLabelSx}>{t('userManagement.positionTitle')}</Typography>
-                            <TextField
-                              fullWidth
-                              size="small"
-                              variant="outlined"
-                              value={formData.position}
-                              onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                              placeholder={t('userManagement.positionPlaceholder')}
-                            />
-                          </Box>
+                          <TextField
+                            fullWidth
+                            size="small"
+                            label={t('userManagement.positionTitle')}
+                            {...OUTLINED_FIELD}
+                            value={formData.position}
+                            onChange={(e) => setFormData({ ...formData, position: e.target.value })}
+                            placeholder={t('userManagement.positionPlaceholder')}
+                          />
                         </Box>
                       </Box>
                     </Box>
@@ -1820,54 +1748,45 @@ const UserManagement: React.FC = () => {
                 </AccordionSummary>
                 <AccordionDetails>
                   <Box sx={highlightBankFieldsSx}>
-                    <Box sx={{ width: '100%', minWidth: 0 }}>
-                      <Typography variant="caption" sx={hrFieldLabelSx}>
-                        {t('userManagement.bankName')}
-                      </Typography>
-                      <TextField
-                        fullWidth
-                        variant="outlined"
-                        value={formData.bank_name}
-                        onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
-                        placeholder={t('userManagement.bankNamePlaceholder')}
-                      />
-                    </Box>
-                    <Box sx={{ width: '100%', minWidth: 0 }}>
-                      <Typography variant="caption" sx={hrFieldLabelSx}>
-                        {t('userManagement.accountNumber')}
-                      </Typography>
-                      <TextField
-                        fullWidth
-                        variant="outlined"
-                        value={formatBankAccountDisplay(formData.bank_account)}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            bank_account: normalizeBankAccountDigits(e.target.value)
-                          })
-                        }
-                        placeholder={t('userManagement.accountPlaceholder')}
-                        inputProps={{ inputMode: 'numeric', autoComplete: 'off' }}
-                      />
-                    </Box>
-                    <Box sx={{ width: '100%', minWidth: 0 }}>
-                      <Typography variant="caption" sx={hrFieldLabelSx}>
-                        {t('userManagement.ifscCode')}
-                      </Typography>
-                      <TextField
-                        fullWidth
-                        variant="outlined"
-                        value={formatIfscDisplay(formData.bank_ifsc)}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            bank_ifsc: normalizeIfsc(e.target.value)
-                          })
-                        }
-                        placeholder={t('userManagement.ifscPlaceholder')}
-                        inputProps={{ maxLength: 14, autoComplete: 'off' }}
-                      />
-                    </Box>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label={t('userManagement.bankName')}
+                      {...OUTLINED_FIELD}
+                      value={formData.bank_name}
+                      onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
+                      placeholder={t('userManagement.bankNamePlaceholder')}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label={t('userManagement.accountNumber')}
+                      {...OUTLINED_FIELD}
+                      value={formatBankAccountDisplay(formData.bank_account)}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          bank_account: normalizeBankAccountDigits(e.target.value)
+                        })
+                      }
+                      placeholder={t('userManagement.accountPlaceholder')}
+                      inputProps={{ inputMode: 'numeric', autoComplete: 'off' }}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label={t('userManagement.ifscCode')}
+                      {...OUTLINED_FIELD}
+                      value={formatIfscDisplay(formData.bank_ifsc)}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          bank_ifsc: normalizeIfsc(e.target.value)
+                        })
+                      }
+                      placeholder={t('userManagement.ifscPlaceholder')}
+                      inputProps={{ maxLength: 14, autoComplete: 'off' }}
+                    />
                   </Box>
                 </AccordionDetails>
               </Accordion>
@@ -1886,115 +1805,90 @@ const UserManagement: React.FC = () => {
                     gap: 2,
                   }}>
                     {user?.role === 'root' && !editingUser && (
-                      <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
-                        <Box>
-                          <Typography variant="caption" sx={hrFieldLabelSx}>
-                            {t('userManagement.companySelect')} <span style={{ color: 'red' }}>*</span>
-                          </Typography>
-                          <FormControl fullWidth>
-                            <Select
-                              value={(formData as any).company_id || ''}
-                              onChange={(e) => {
-                                const company_id = e.target.value as number;
-                                setFormData({ ...formData, company_id });
-                              }}
-                              required
-                            >
-                              {companies.map((company) => (
-                                <MenuItem key={company.id} value={company.id}>
-                                  {company.name}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        </Box>
-                      </Box>
+                      <TextField
+                        sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}
+                        fullWidth
+                        size="small"
+                        select
+                        label={t('userManagement.companySelect')}
+                        {...OUTLINED_FIELD}
+                        value={(formData as any).company_id || ''}
+                        onChange={(e) => {
+                          const company_id = Number(e.target.value);
+                          setFormData({ ...formData, company_id });
+                        }}
+                        required
+                      >
+                        {companies.map((company) => (
+                          <MenuItem key={company.id} value={company.id}>
+                            {company.name}
+                          </MenuItem>
+                        ))}
+                      </TextField>
                     )}
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label={t('userManagement.userId')}
+                      {...OUTLINED_FIELD}
+                      value={formData.userid}
+                      onChange={(e) => setFormData({ ...formData, userid: e.target.value })}
+                      required
+                      disabled={!!editingUser}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="password"
+                      label={t('userManagement.password')}
+                      {...OUTLINED_FIELD}
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      required={!editingUser}
+                      placeholder={editingUser ? t('userManagement.passwordPlaceholderEdit') : t('userManagement.passwordPlaceholderNew')}
+                    />
+                    <TextField
+                      fullWidth
+                      size="small"
+                      select
+                      label={t('userManagement.roleLabel')}
+                      {...OUTLINED_FIELD}
+                      value={formData.role}
+                      onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                      required
+                      SelectProps={{ displayEmpty: true }}
+                    >
+                      <MenuItem value="user">{t('userManagement.roleUser')}</MenuItem>
+                      <MenuItem value="admin">{t('userManagement.roleAdmin')}</MenuItem>
+                      <MenuItem value="audit">{t('userManagement.roleAudit')}</MenuItem>
+                      {user?.role === 'root' && (
+                        <MenuItem value="root">Root</MenuItem>
+                      )}
+                    </TextField>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      select
+                      label={t('userManagement.statusLabel')}
+                      {...OUTLINED_FIELD}
+                      value={formData.status}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                      SelectProps={{ displayEmpty: true }}
+                    >
+                      <MenuItem value="active">{t('userManagement.statusActive')}</MenuItem>
+                      <MenuItem value="inactive">{t('userManagement.statusInactive')}</MenuItem>
+                      <MenuItem value="suspended">{t('userManagement.statusSuspended')}</MenuItem>
+                    </TextField>
                     <Box>
-                      <Box>
-                        <Typography variant="caption" sx={hrFieldLabelSx}>
-                          {t('userManagement.userId')} <span style={{ color: 'red' }}>*</span>
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          variant="outlined"
-                          value={formData.userid}
-                          onChange={(e) => setFormData({ ...formData, userid: e.target.value })}
-                          required
-                          disabled={!!editingUser}
-                        />
-                      </Box>
-                    </Box>
-                    <Box>
-                      <Box>
-                        <Typography variant="caption" sx={hrFieldLabelSx}>
-                          {t('userManagement.password')} {!editingUser && <span style={{ color: 'red' }}>*</span>}
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          type="password"
-                          variant="outlined"
-                          value={formData.password}
-                          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                          required={!editingUser}
-                          placeholder={editingUser ? t('userManagement.passwordPlaceholderEdit') : t('userManagement.passwordPlaceholderNew')}
-                        />
-                      </Box>
-                    </Box>
-                    <Box>
-                      <Box>
-                        <Typography variant="caption" sx={hrFieldLabelSx}>
-                          {t('userManagement.roleLabel')} <span style={{ color: 'red' }}>*</span>
-                        </Typography>
-                        <FormControl fullWidth>
-                          <Select
-                            value={formData.role}
-                            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                            displayEmpty
-                          >
-                            <MenuItem value="user">{t('userManagement.roleUser')}</MenuItem>
-                            <MenuItem value="admin">{t('userManagement.roleAdmin')}</MenuItem>
-                            <MenuItem value="audit">{t('userManagement.roleAudit')}</MenuItem>
-                            {user?.role === 'root' && (
-                              <MenuItem value="root">Root</MenuItem>
-                            )}
-                          </Select>
-                        </FormControl>
-                      </Box>
-                    </Box>
-                    <Box>
-                      <Box>
-                        <Typography variant="caption" sx={hrFieldLabelSx}>
-                          {t('userManagement.statusLabel')}
-                        </Typography>
-                        <FormControl fullWidth>
-                          <Select
-                            value={formData.status}
-                            onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                            displayEmpty
-                          >
-                            <MenuItem value="active">{t('userManagement.statusActive')}</MenuItem>
-                            <MenuItem value="inactive">{t('userManagement.statusInactive')}</MenuItem>
-                            <MenuItem value="suspended">{t('userManagement.statusSuspended')}</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Box>
-                    </Box>
-                    <Box>
-                      <Box>
-                        <Typography variant="caption" sx={hrFieldLabelSx}>
-                          {t('userManagement.paymentOfficer')}
-                        </Typography>
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              checked={Boolean((formData as any).is_payment_officer)}
-                              onChange={(e) => setFormData({ ...formData, is_payment_officer: e.target.checked })}
-                            />
-                          }
-                          label={t('userManagement.paymentOfficerAssign')}
-                        />
-                      </Box>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={Boolean((formData as any).is_payment_officer)}
+                            onChange={(e) => setFormData({ ...formData, is_payment_officer: e.target.checked })}
+                          />
+                        }
+                        label={t('userManagement.paymentOfficerAssign')}
+                      />
                     </Box>
                   </Box>
                 </AccordionDetails>

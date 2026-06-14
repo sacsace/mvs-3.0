@@ -38,8 +38,11 @@ import {
   ListItem,
   ListItemText,
   ListItemAvatar,
-  Autocomplete
+  Autocomplete,
+  type AutocompleteRenderInputParams,
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx, mvsPageTitleSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -58,12 +61,67 @@ import RichTextEditor from '../../components/RichTextEditor/RichTextEditor';
 import { workReportService } from '../../services/api';
 import { filterActiveCompanyUsers, useReferenceDataStore } from '../../store/referenceDataStore';
 import { useTranslation } from 'react-i18next';
-import { useTheme, alpha } from '@mui/material/styles';
+import { useTheme, alpha, type Theme } from '@mui/material/styles';
 import { useStore } from '../../store';
 import { useSearchParams } from 'react-router-dom';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
-import { mvsPageTitleSx } from '../../theme/mvsLayout';
+
+/** 보고서 제출 다이얼로그 — outlined floating label + 노치 라벨 */
+function getReportDialogFieldSx(theme: Theme) {
+  return {
+    '& .MuiOutlinedInput-root': {
+      borderRadius: '12px',
+      bgcolor: 'background.paper',
+      transition: theme.transitions.create(['border-color', 'box-shadow'], { duration: 150 }),
+      '&:not(.MuiInputBase-multiline)': { minHeight: 40 },
+      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
+      '& fieldset': { borderColor: '#C5CED9' },
+      '&:hover fieldset': { borderColor: '#B8C4D0' },
+      '&.Mui-focused': {
+        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.2)}`,
+        '& .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
+      },
+    },
+    '& .MuiInputBase-input:not(.MuiInputBase-inputMultiline)': { py: 1 },
+    '& .MuiInputLabel-root': {
+      fontSize: '0.8125rem',
+      fontWeight: 600,
+      letterSpacing: '-0.01em',
+      color: '#475569',
+      bgcolor: 'background.paper',
+      px: 0.5,
+      zIndex: 2,
+    },
+    '& .MuiInputLabel-root.MuiInputLabel-shrink': {
+      color: '#475569',
+      bgcolor: 'background.paper',
+      zIndex: 2,
+    },
+    '& .MuiFormControl-root': {
+      overflow: 'visible',
+    },
+    '& .MuiFormHelperText-root': { mx: 0, mt: 0.5 },
+  } as const;
+}
+
+function reportDialogShrinkLabel(params: AutocompleteRenderInputParams) {
+  const base = params.InputLabelProps ?? {};
+  return {
+    ...base,
+    shrink: true,
+    sx: {
+      ...((base as { sx?: object }).sx ?? {}),
+      color: '#475569',
+      fontWeight: 600,
+      fontSize: '0.8125rem',
+      bgcolor: 'background.paper',
+      px: 0.5,
+      zIndex: 2,
+    },
+  };
+}
 
 function stripHtmlToPlain(html: string): string {
   if (!html) return '';
@@ -261,6 +319,7 @@ const WorkReport: React.FC = () => {
   const isEnglish = i18n.language.startsWith('en');
   const tr = useCallback((ko: string, en: string) => (isEnglish ? en : ko), [isEnglish]);
   const theme = useTheme();
+  const reportDialogFieldSx = useMemo(() => getReportDialogFieldSx(theme), [theme]);
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
 
   const [reports, setReports] = useState<WorkReportItem[]>([]);
@@ -967,34 +1026,25 @@ const WorkReport: React.FC = () => {
             minHeight: '100%',
           }}
         >
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-          <Typography
-            variant="pageTitle"
-            component="h1"
-            sx={{
-              fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-              fontWeight: 600,
-              letterSpacing: '-0.022em',
-              lineHeight: 1.28,
-            }}
-          >
-            {tr('업무 보고서 상세', 'Work Report Detail')}
-          </Typography>
-          <Button
-            variant="outlined"
-            onClick={() => setViewMode('list')}
-            sx={{
-              borderRadius: '12px',
-              textTransform: 'none',
-              fontWeight: 600,
-              borderColor: 'divider',
-              color: 'text.secondary',
-              '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
-            }}
-          >
-            {tr('목록으로', 'Back to List')}
-          </Button>
-        </Box>
+        <MvsPageHeader
+          title={tr('업무 보고서 상세', 'Work Report Detail')}
+          actions={
+            <Button
+              variant="outlined"
+              onClick={() => setViewMode('list')}
+              sx={{
+                borderRadius: '12px',
+                textTransform: 'none',
+                fontWeight: 600,
+                borderColor: 'divider',
+                color: 'text.secondary',
+                '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+              }}
+            >
+              {tr('목록으로', 'Back to List')}
+            </Button>
+          }
+        />
 
         {detailOpenedFrom === 'received' &&
           selectedReport.status === 'draft' &&
@@ -1255,31 +1305,23 @@ const WorkReport: React.FC = () => {
     bgcolor: 'background.paper',
   } as const;
 
-  const reportDialogFieldLabelSx = {
-    mb: 0.75,
-    fontSize: '0.8125rem',
-    fontWeight: 600,
-    letterSpacing: '-0.01em',
-    color: 'text.secondary',
-  } as const;
-
   return (
-    <Box sx={{ p: 0, width: '100%', maxWidth: '100%', bgcolor: 'transparent', minHeight: '100%' }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-        <Typography component="h1" sx={{ ...mvsPageTitleSx, color: 'text.primary' }}>
-          {tr('업무 보고서', 'Work Reports')}
-        </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          disableElevation
-          startIcon={<AddIcon sx={{ fontSize: 20 }} />}
-          onClick={handleOpenCreate}
-          sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
-        >
-          {tr('보고서 제출', 'Submit report')}
-        </Button>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={tr('업무 보고서', 'Work Reports')}
+        actions={
+          <Button
+            variant="contained"
+            color="primary"
+            disableElevation
+            startIcon={<AddIcon sx={{ fontSize: 20 }} />}
+            onClick={handleOpenCreate}
+            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+          >
+            {tr('보고서 제출', 'Submit report')}
+          </Button>
+        }
+      />
 
       <Card
         elevation={0}
@@ -1684,7 +1726,7 @@ const WorkReport: React.FC = () => {
           sx={{
             pt: 2.5,
             px: 3,
-            pb: 1.25,
+            pb: 2,
             fontSize: '1.125rem',
             fontWeight: 700,
             letterSpacing: '-0.02em',
@@ -1693,33 +1735,27 @@ const WorkReport: React.FC = () => {
         >
           {selectedReport ? tr('보고서 수정', 'Edit Report') : tr('보고서 제출', 'Submit report')}
         </DialogTitle>
-        <DialogContent sx={{ px: 3, pt: 0, pb: 1 }}>
+        <DialogContent
+          sx={{
+            px: 3,
+            pt: 4,
+            pb: 2,
+            overflow: 'visible',
+            position: 'relative',
+            zIndex: 1,
+            '&.MuiDialogContent-root': { marginTop: 0 },
+          }}
+        >
           <Box
             sx={{
               display: 'grid',
               gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-              gap: { xs: 2.25, sm: 2.75 },
+              gap: { xs: 2, sm: 2.5 },
+              alignItems: 'flex-start',
               color: 'text.primary',
-              '& .MuiOutlinedInput-root': {
-                borderRadius: '12px',
-                bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.05),
-                transition: theme.transitions.create(['background-color', 'box-shadow'], { duration: 150 }),
-                '&:hover': {
-                  bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.14 : 0.08),
-                },
-                '&.Mui-focused': {
-                  bgcolor: 'background.paper',
-                  boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.2)}`,
-                },
-                '& fieldset': {
-                  borderColor: alpha(theme.palette.divider, 0.9),
-                },
-              },
-              '& .MuiOutlinedInput-input::placeholder': {
-                color: theme.palette.text.secondary,
-                opacity: 1,
-              },
-              '& .MuiInputLabel-root': { fontSize: '0.8125rem' },
+              overflow: 'visible',
+              pt: 0.5,
+              '& .MuiFormControl-root': { width: '100%', overflow: 'visible' },
               '& .ql-toolbar': {
                 borderTopLeftRadius: 13,
                 borderTopRightRadius: 13,
@@ -1732,39 +1768,65 @@ const WorkReport: React.FC = () => {
               '& .ql-editor.ql-blank::before': { color: theme.palette.text.secondary },
             }}
           >
-            <Box>
-              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
-                {tr('제목', 'Title')} *
-              </Typography>
+            <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / 2' }, minWidth: 0, overflow: 'visible' }}>
               <TextField
+                variant="outlined"
+                size="small"
+                label={tr('제목', 'Title')}
+                slotProps={{
+                  inputLabel: {
+                    shrink: true,
+                    sx: {
+                      color: '#475569',
+                      fontWeight: 600,
+                      fontSize: '0.8125rem',
+                      bgcolor: 'background.paper',
+                      px: 0.5,
+                      zIndex: 2,
+                    },
+                  },
+                }}
                 value={formState.title}
                 onChange={(e) => setFormState((prev) => ({ ...prev, title: e.target.value }))}
                 fullWidth
+                required
                 placeholder={tr('제목을 입력하세요', 'Enter title')}
+                sx={reportDialogFieldSx}
               />
             </Box>
-            <Box>
-              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
-                {tr('유형', 'Type')}
-              </Typography>
-              <FormControl fullWidth>
-                <Select
-                  value={formState.type}
-                  onChange={(e) => setFormState((prev) => ({ ...prev, type: e.target.value as WorkReportItem['type'] }))}
-                >
-                  <MenuItem value="daily">{tr('일일 보고서', 'Daily Report')}</MenuItem>
-                  <MenuItem value="weekly">{tr('주간 보고서', 'Weekly Report')}</MenuItem>
-                  <MenuItem value="monthly">{tr('월간 보고서', 'Monthly Report')}</MenuItem>
-                  <MenuItem value="project">{tr('프로젝트 보고서', 'Project Report')}</MenuItem>
-                  <MenuItem value="incident">{tr('장애 보고서', 'Incident Report')}</MenuItem>
-                  <MenuItem value="other">{tr('기타', 'Other')}</MenuItem>
-                </Select>
-              </FormControl>
+            <Box sx={{ gridColumn: { xs: '1 / -1', sm: '2 / 3' }, minWidth: 0, overflow: 'visible' }}>
+              <TextField
+                variant="outlined"
+                size="small"
+                select
+                fullWidth
+                label={tr('유형', 'Type')}
+                slotProps={{
+                  inputLabel: {
+                    shrink: true,
+                    sx: {
+                      color: '#475569',
+                      fontWeight: 600,
+                      fontSize: '0.8125rem',
+                      bgcolor: 'background.paper',
+                      px: 0.5,
+                      zIndex: 2,
+                    },
+                  },
+                }}
+                value={formState.type}
+                onChange={(e) => setFormState((prev) => ({ ...prev, type: e.target.value as WorkReportItem['type'] }))}
+                sx={reportDialogFieldSx}
+              >
+                <MenuItem value="daily">{tr('일일 보고서', 'Daily Report')}</MenuItem>
+                <MenuItem value="weekly">{tr('주간 보고서', 'Weekly Report')}</MenuItem>
+                <MenuItem value="monthly">{tr('월간 보고서', 'Monthly Report')}</MenuItem>
+                <MenuItem value="project">{tr('프로젝트 보고서', 'Project Report')}</MenuItem>
+                <MenuItem value="incident">{tr('장애 보고서', 'Incident Report')}</MenuItem>
+                <MenuItem value="other">{tr('기타', 'Other')}</MenuItem>
+              </TextField>
             </Box>
-            <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
-              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
-                {tr('보고서 수신자', 'Report recipient')} *
-              </Typography>
+            <Box sx={{ gridColumn: { xs: '1 / -1' }, minWidth: 0 }}>
               <Autocomplete
                 options={companyUserOptions}
                 getOptionLabel={(o) => `${o.label}${o.userid ? ` (${o.userid})` : ''}`}
@@ -1783,17 +1845,20 @@ const WorkReport: React.FC = () => {
                 renderInput={(params) => (
                   <TextField
                     {...params}
+                    variant="outlined"
+                    size="small"
+                    label={tr('보고서 수신자', 'Report recipient')}
+                    InputLabelProps={reportDialogShrinkLabel(params)}
+                    required
                     placeholder={tr('수신자를 검색하여 선택하세요', 'Search and select recipient')}
                     fullWidth
+                    sx={reportDialogFieldSx}
                   />
                 )}
                 isOptionEqualToValue={(a, b) => a.id === b.id}
               />
             </Box>
-            <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
-              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
-                {tr('참조 (열람·피드백만, 승인 불가)', 'CC (view & feedback only; cannot approve)')}
-              </Typography>
+            <Box sx={{ gridColumn: { xs: '1 / -1' }, minWidth: 0 }}>
               <Autocomplete
                 multiple
                 options={companyUserOptions.filter((o) => o.id !== formState.recipientUserId)}
@@ -1808,85 +1873,142 @@ const WorkReport: React.FC = () => {
                 renderInput={(params) => (
                   <TextField
                     {...params}
+                    variant="outlined"
+                    size="small"
+                    label={tr('참조 (열람·피드백만, 승인 불가)', 'CC (view & feedback only; cannot approve)')}
+                    InputLabelProps={reportDialogShrinkLabel(params)}
                     placeholder={tr('참조 인원을 검색하여 추가', 'Search and add CC recipients')}
                     fullWidth
+                    sx={reportDialogFieldSx}
                   />
                 )}
                 isOptionEqualToValue={(a, b) => a.id === b.id}
               />
             </Box>
-            <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / 2' } }}>
-              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
-                {tr('우선순위', 'Priority')}
-              </Typography>
-              <FormControl fullWidth>
-                <Select
-                  value={formState.priority}
-                  onChange={(e) =>
-                    setFormState((prev) => ({ ...prev, priority: e.target.value as WorkReportItem['priority'] }))
-                  }
-                >
-                  <MenuItem value="low">{tr('낮음', 'Low')}</MenuItem>
-                  <MenuItem value="medium">{tr('보통', 'Medium')}</MenuItem>
-                  <MenuItem value="high">{tr('높음', 'High')}</MenuItem>
-                  <MenuItem value="urgent">{tr('긴급', 'Urgent')}</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-            <Box sx={{ gridColumn: { xs: '1 / -1', sm: '2 / 3' } }}>
-              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
-                {tr('작성일', 'Report Date')}
-              </Typography>
+            <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / 2' }, minWidth: 0 }}>
               <TextField
+                variant="outlined"
+                size="small"
+                select
+                fullWidth
+                label={tr('우선순위', 'Priority')}
+                InputLabelProps={{ shrink: true }}
+                value={formState.priority}
+                onChange={(e) =>
+                  setFormState((prev) => ({ ...prev, priority: e.target.value as WorkReportItem['priority'] }))
+                }
+                sx={reportDialogFieldSx}
+              >
+                <MenuItem value="low">{tr('낮음', 'Low')}</MenuItem>
+                <MenuItem value="medium">{tr('보통', 'Medium')}</MenuItem>
+                <MenuItem value="high">{tr('높음', 'High')}</MenuItem>
+                <MenuItem value="urgent">{tr('긴급', 'Urgent')}</MenuItem>
+              </TextField>
+            </Box>
+            <Box sx={{ gridColumn: { xs: '1 / -1', sm: '2 / 3' }, minWidth: 0 }}>
+              <TextField
+                variant="outlined"
+                size="small"
                 type="date"
+                fullWidth
+                label={tr('작성일', 'Report Date')}
+                InputLabelProps={{ shrink: true }}
                 value={formState.reportDate}
                 onChange={(e) => setFormState((prev) => ({ ...prev, reportDate: e.target.value }))}
-                fullWidth
+                sx={reportDialogFieldSx}
               />
             </Box>
-            <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
-              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
+            <Box
+              component="fieldset"
+              sx={{
+                gridColumn: { xs: '1 / -1' },
+                m: 0,
+                p: 0,
+                minWidth: 0,
+                border: '1px solid #C5CED9',
+                borderRadius: '14px',
+                bgcolor: 'background.paper',
+              }}
+            >
+              <Box
+                component="legend"
+                sx={{
+                  px: 0.5,
+                  ml: 1.5,
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  letterSpacing: '-0.01em',
+                  color: 'text.secondary',
+                  bgcolor: 'background.paper',
+                }}
+              >
                 {tr('내용', 'Content')} *
-              </Typography>
+              </Box>
               <RichTextEditor
                 value={formState.content}
                 onChange={(html) => setFormState((prev) => ({ ...prev, content: html }))}
                 minHeight={240}
                 sx={{
-                  border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+                  border: 'none',
                   borderRadius: '14px',
                   boxShadow: `inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.04 : 0.5)}`,
                 }}
               />
             </Box>
-            <Box>
-              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
-                {tr('이슈/도전 과제 (한 줄에 하나씩)', 'Issues/Challenges (one per line)')}
-              </Typography>
+            <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / 2' }, minWidth: 0 }}>
               <TextField
+                variant="outlined"
+                size="small"
+                label={tr('이슈/도전 과제 (한 줄에 하나씩)', 'Issues/Challenges (one per line)')}
+                InputLabelProps={{ shrink: true }}
                 value={formState.challenges}
                 onChange={(e) => setFormState((prev) => ({ ...prev, challenges: e.target.value }))}
                 fullWidth
                 multiline
                 minRows={3}
+                sx={reportDialogFieldSx}
               />
             </Box>
-            <Box>
-              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
-                {tr('다음 계획 (한 줄에 하나씩)', 'Next plans (one per line)')}
-              </Typography>
+            <Box sx={{ gridColumn: { xs: '1 / -1', sm: '2 / 3' }, minWidth: 0 }}>
               <TextField
+                variant="outlined"
+                size="small"
+                label={tr('다음 계획 (한 줄에 하나씩)', 'Next plans (one per line)')}
+                InputLabelProps={{ shrink: true }}
                 value={formState.nextSteps}
                 onChange={(e) => setFormState((prev) => ({ ...prev, nextSteps: e.target.value }))}
                 fullWidth
                 multiline
                 minRows={3}
+                sx={reportDialogFieldSx}
               />
             </Box>
-            <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
-              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
+            <Box
+              component="fieldset"
+              sx={{
+                gridColumn: { xs: '1 / -1' },
+                m: 0,
+                p: 1.5,
+                minWidth: 0,
+                border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+                borderRadius: '14px',
+                bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
+              }}
+            >
+              <Box
+                component="legend"
+                sx={{
+                  px: 0.5,
+                  ml: 0.5,
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  letterSpacing: '-0.01em',
+                  color: 'text.secondary',
+                  bgcolor: 'background.paper',
+                }}
+              >
                 {tr('첨부파일', 'Attachments')}
-              </Typography>
+              </Box>
               <Typography variant="caption" display="block" sx={{ mb: 1.25, color: 'text.secondary', letterSpacing: '-0.01em' }}>
                 {tr(
                   `최대 ${WORK_REPORT_MAX_ATTACHMENTS}개, 파일당 ${WORK_REPORT_MAX_FILE_BYTES / (1024 * 1024)}MB 이하`,
@@ -1963,15 +2085,17 @@ const WorkReport: React.FC = () => {
                 </List>
               )}
             </Box>
-            <Box sx={{ gridColumn: { xs: '1 / -1' } }}>
-              <Typography variant="body2" sx={reportDialogFieldLabelSx}>
-                {tr('태그 (쉼표로 구분)', 'Tags (comma separated)')}
-              </Typography>
+            <Box sx={{ gridColumn: { xs: '1 / -1' }, minWidth: 0 }}>
               <TextField
+                variant="outlined"
+                size="small"
+                label={tr('태그 (쉼표로 구분)', 'Tags (comma separated)')}
+                InputLabelProps={{ shrink: true }}
                 value={formState.tags}
                 onChange={(e) => setFormState((prev) => ({ ...prev, tags: e.target.value }))}
                 fullWidth
                 placeholder={tr('태그를 입력하세요', 'Enter tags')}
+                sx={reportDialogFieldSx}
               />
             </Box>
             <FormControlLabel

@@ -41,6 +41,8 @@ import {
   DialogActions,
   TableSortLabel
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend
@@ -96,6 +98,14 @@ interface VacationRequest {
 }
 
 const VACATION_MENU_ROUTES = ['/hr/leave'];
+
+/** 휴가 현황 상단 통계 카드 */
+const vacationStatCardSx = {
+  bgcolor: '#F0F4F8',
+  border: '1px solid #E2E8F0',
+  borderRadius: '12px',
+  boxShadow: 'none',
+} as const;
 
 const VacationManagement: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -722,7 +732,7 @@ const VacationManagement: React.FC = () => {
             {/* 전체 통계 카드 */}
             <Grid container spacing={3} sx={{ mb: 3 }}>
               <Grid size={{ xs: 12, md: 6, lg: 3 }}>
-                <Card>
+                <Card sx={vacationStatCardSx}>
                   <CardContent>
                     <Typography variant="body2" color="text.secondary" gutterBottom>
                       {t('vacationManagement.totalRequests')}
@@ -734,7 +744,7 @@ const VacationManagement: React.FC = () => {
                 </Card>
               </Grid>
               <Grid size={{ xs: 12, md: 6, lg: 3 }}>
-                <Card>
+                <Card sx={vacationStatCardSx}>
                   <CardContent>
                     <Typography variant="body2" color="text.secondary" gutterBottom>
                       {t('vacationManagement.pendingRequests')}
@@ -746,7 +756,7 @@ const VacationManagement: React.FC = () => {
                 </Card>
               </Grid>
               <Grid size={{ xs: 12, md: 6, lg: 3 }}>
-                <Card>
+                <Card sx={vacationStatCardSx}>
                   <CardContent>
                     <Typography variant="body2" color="text.secondary" gutterBottom>
                       {t('vacationManagement.approvedRequests')}
@@ -758,7 +768,7 @@ const VacationManagement: React.FC = () => {
                 </Card>
               </Grid>
               <Grid size={{ xs: 12, md: 6, lg: 3 }}>
-                <Card>
+                <Card sx={vacationStatCardSx}>
                   <CardContent>
                     <Typography variant="body2" color="text.secondary" gutterBottom>
                       {t('vacationManagement.totalDays')}
@@ -1714,16 +1724,8 @@ const VacationManagement: React.FC = () => {
   };
 
   return (
-    <Box sx={{ width: '100%', p: 0 }}>
-      {/* 헤더 */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <CalendarIcon sx={{ fontSize: '16px !important', color: 'primary.main' }} />
-          <Typography component="h1" variant="pageTitle">
-            {t('vacationManagement.title')}
-          </Typography>
-        </Box>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader title={t('vacationManagement.title')} mb={2} />
 
       {/* 탭 메뉴 */}
       <Card sx={{ mb: 3 }}>
@@ -1801,9 +1803,11 @@ const VacationManagement: React.FC = () => {
             <CardContent>
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end', flexWrap: 'wrap' }}>
                 <TextField
+                  label={t('common.search')}
                   placeholder={t('vacationManagement.searchPlaceholder')}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
@@ -1813,41 +1817,37 @@ const VacationManagement: React.FC = () => {
                   }}
                   sx={{ minWidth: 300 }}
                 />
-                <FormControl sx={{ minWidth: 120 }}>
-                  <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                    {t('vacationManagement.status')}
-                  </Typography>
-                  <Select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    displayEmpty
-                    sx={{ height: '40px' }}
-                  >
-                    <MenuItem value="all">{t('vacationManagement.allStatus')}</MenuItem>
-                    <MenuItem value="pending">{t('vacationManagement.statusPending')}</MenuItem>
-                    <MenuItem value="approved">{t('vacationManagement.statusApproved')}</MenuItem>
-                    <MenuItem value="rejected">{t('vacationManagement.statusRejected')}</MenuItem>
-                    <MenuItem value="cancelled">{t('vacationManagement.statusCancelled')}</MenuItem>
-                  </Select>
-                </FormControl>
-                <FormControl sx={{ minWidth: 120 }}>
-                  <Typography variant="body2" sx={{ mb: 0.5, color: 'text.secondary', fontSize: '0.875rem' }}>
-                    {t('vacationManagement.leaveTypeFilter')}
-                  </Typography>
-                  <Select
-                    value={typeFilter}
-                    onChange={(e) => setTypeFilter(e.target.value)}
-                    displayEmpty
-                    sx={{ height: '40px' }}
-                  >
-                    <MenuItem value="all">{t('vacationManagement.allTypes')}</MenuItem>
-                    {vacationTypes.map(type => (
-                      <MenuItem key={type.key} value={type.key}>
-                        {type.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <TextField
+                  select
+                  label={t('vacationManagement.status')}
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  SelectProps={{ displayEmpty: true }}
+                  sx={{ minWidth: 120, height: '40px' }}
+                >
+                  <MenuItem value="all">{t('vacationManagement.allStatus')}</MenuItem>
+                  <MenuItem value="pending">{t('vacationManagement.statusPending')}</MenuItem>
+                  <MenuItem value="approved">{t('vacationManagement.statusApproved')}</MenuItem>
+                  <MenuItem value="rejected">{t('vacationManagement.statusRejected')}</MenuItem>
+                  <MenuItem value="cancelled">{t('vacationManagement.statusCancelled')}</MenuItem>
+                </TextField>
+                <TextField
+                  select
+                  label={t('vacationManagement.leaveTypeFilter')}
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  SelectProps={{ displayEmpty: true }}
+                  sx={{ minWidth: 120, height: '40px' }}
+                >
+                  <MenuItem value="all">{t('vacationManagement.allTypes')}</MenuItem>
+                  {vacationTypes.map(type => (
+                    <MenuItem key={type.key} value={type.key}>
+                      {type.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
                 <Box sx={{ flexGrow: 1 }} />
                 {canExportVacations && (
                   <Button

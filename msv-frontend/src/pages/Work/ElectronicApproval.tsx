@@ -40,6 +40,8 @@ import {
   DialogActions,
   TableSortLabel
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx, mvsOutlinedLabelProps } from '../../theme/mvsLayout';
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
@@ -202,6 +204,18 @@ const ResizableImage = Image.extend({
     };
   },
 });
+
+const APPROVAL_OUTLINED = mvsOutlinedLabelProps;
+
+const approvalWriteFieldSx = {
+  '& .MuiOutlinedInput-root': {
+    borderRadius: 1,
+    bgcolor: 'background.paper',
+    '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'primary.main' },
+    '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: 'primary.main' },
+  },
+} as const;
 
 const ElectronicApproval: React.FC = () => {
   const theme = useTheme();
@@ -1725,34 +1739,25 @@ const ElectronicApproval: React.FC = () => {
           opacity: 0.75
         }
       }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-          <Typography
-            variant="pageTitle"
-            component="h1"
-            sx={{
-              fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-              fontWeight: 600,
-              letterSpacing: '-0.022em',
-              lineHeight: 1.28,
-            }}
-          >
-            {t('approval.detailPageTitle')}
-          </Typography>
-          <Button
-            variant="outlined"
-            onClick={() => setViewMode('list')}
-            sx={{
-              borderRadius: '12px',
-              textTransform: 'none',
-              fontWeight: 600,
-              borderColor: 'divider',
-              color: 'text.secondary',
-              '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
-            }}
-          >
-            {t('approval.backToList')}
-          </Button>
-        </Box>
+        <MvsPageHeader
+          title={t('approval.detailPageTitle')}
+          actions={
+            <Button
+              variant="outlined"
+              onClick={() => setViewMode('list')}
+              sx={{
+                borderRadius: '12px',
+                textTransform: 'none',
+                fontWeight: 600,
+                borderColor: 'divider',
+                color: 'text.secondary',
+                '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
+              }}
+            >
+              {t('approval.backToList')}
+            </Button>
+          }
+        />
 
         <Card>
           <CardContent>
@@ -2257,11 +2262,7 @@ const ElectronicApproval: React.FC = () => {
         opacity: 1,
       },
     }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-        <Typography component="h1" sx={{ ...mvsPageTitleSx, color: 'text.primary' }}>
-          {t('approval.pageTitle')}
-        </Typography>
-      </Box>
+      <MvsPageHeader title={t('approval.pageTitle')} mb={2} />
 
       {/* 탭 네비게이션 */}
       <Card
@@ -2483,11 +2484,7 @@ const ElectronicApproval: React.FC = () => {
                   }}>
                   {t('approval.approverSectionTitle')}
                 </Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    {t('approval.approverFieldLabel')}
-                  </Typography>
-                  <Autocomplete
+                <Autocomplete
                     options={users.filter(u => u.id !== user?.id)}
                     getOptionLabel={(option) => `${option.username}${option.department ? ` (${option.department})` : ''}`}
                     value={users.find(u => u.id === formData.nextApproverId) || null}
@@ -2498,25 +2495,23 @@ const ElectronicApproval: React.FC = () => {
                       <TextField
                         {...params}
                         required
+                        label={t('approval.approverFieldLabel')}
+                        {...APPROVAL_OUTLINED}
                         placeholder={t('approval.selectApprover')}
                         variant="outlined"
                         size="small"
                         inputRef={approverInputRef}
                         sx={{
+                          ...approvalWriteFieldSx,
                           '& .MuiOutlinedInput-root': {
+                            ...(approvalWriteFieldSx['& .MuiOutlinedInput-root'] as Record<string, unknown>),
                             borderRadius: '12px',
                             bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.1 : 0.05),
-                            '&:hover': {
-                              '& .MuiOutlinedInput-notchedOutline': {
-                                borderColor: alpha(theme.palette.primary.main, 0.45),
-                              },
-                            },
                           },
                         }}
                       />
                     )}
                   />
-                </Box>
               </Box>
 
               <Divider />
@@ -2547,176 +2542,104 @@ const ElectronicApproval: React.FC = () => {
                   {/* 왼쪽 컬럼 */}
                   <Grid size={{ xs: 12, md: 6 }}>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {t('approval.titleLabel')} **
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          value={formData.title}
-                          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                          required
-                          variant="outlined"
-                          size="small"
-                          inputRef={titleInputRef}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 1,
-                              bgcolor: 'background.paper',
-                              '&:hover': {
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                  borderColor: 'primary.main'
-                                }
-                              },
-                              '&.Mui-focused': {
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                  borderWidth: 2
-                                }
-                              }
-                            }
-                          }}
-                        />
-                      </Box>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {t('approval.category')}
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          value={formData.category}
-                          onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                          variant="outlined"
-                          size="small"
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 1,
-                              bgcolor: 'background.paper',
-                              '&:hover': {
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                  borderColor: 'primary.main'
-                                }
-                              }
-                            }
-                          }}
-                        />
-                      </Box>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {t('approval.priority')}
-                        </Typography>
-                        <FormControl fullWidth variant="outlined" size="small">
-                          <Select
-                            value={formData.priority}
-                            onChange={(e) => setFormData({ ...formData, priority: e.target.value as any })}
-                            sx={{
-                              borderRadius: 1,
-                              bgcolor: 'background.paper',
-                              '&:hover': {
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                  borderColor: 'primary.main'
-                                }
-                              }
-                            }}
-                          >
-                            <MenuItem value="low">{t('approval.low')}</MenuItem>
-                            <MenuItem value="medium">{t('approval.normal')}</MenuItem>
-                            <MenuItem value="high">{t('approval.high')}</MenuItem>
-                            <MenuItem value="urgent">{t('approval.urgent')}</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Box>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label={t('approval.titleLabel')}
+                        {...APPROVAL_OUTLINED}
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        required
+                        variant="outlined"
+                        inputRef={titleInputRef}
+                        sx={approvalWriteFieldSx}
+                      />
+                      <TextField
+                        fullWidth
+                        size="small"
+                        label={t('approval.category')}
+                        {...APPROVAL_OUTLINED}
+                        value={formData.category}
+                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                        variant="outlined"
+                        sx={approvalWriteFieldSx}
+                      />
+                      <TextField
+                        fullWidth
+                        size="small"
+                        select
+                        label={t('approval.priority')}
+                        {...APPROVAL_OUTLINED}
+                        value={formData.priority}
+                        onChange={(e) => setFormData({ ...formData, priority: e.target.value as any })}
+                        variant="outlined"
+                        sx={approvalWriteFieldSx}
+                      >
+                        <MenuItem value="low">{t('approval.low')}</MenuItem>
+                        <MenuItem value="medium">{t('approval.normal')}</MenuItem>
+                        <MenuItem value="high">{t('approval.high')}</MenuItem>
+                        <MenuItem value="urgent">{t('approval.urgent')}</MenuItem>
+                      </TextField>
                     </Box>
                   </Grid>
 
                   {/* 오른쪽 컬럼 */}
                   <Grid size={{ xs: 12, md: 6 }}>
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {t('approval.type')} *
-                        </Typography>
-                        <FormControl fullWidth variant="outlined" size="small">
-                          <Select
-                            value={formData.type}
-                            onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
-                            sx={{
-                              borderRadius: 1,
-                              bgcolor: 'background.paper',
-                              '&:hover': {
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                  borderColor: 'primary.main'
-                                }
-                              }
-                            }}
-                          >
-                            <MenuItem value="expense">{t('approval.expense')}</MenuItem>
-                            <MenuItem value="purchase">{t('approval.purchase')}</MenuItem>
-                            <MenuItem value="contract">{t('approval.contract')}</MenuItem>
-                            <MenuItem value="other">{t('approval.other')}</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Box>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {t('approval.amount')}
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          type="number"
-                          value={formData.amount}
-                          onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                          variant="outlined"
-                          size="small"
+                      <TextField
+                        fullWidth
+                        size="small"
+                        select
+                        label={t('approval.type')}
+                        {...APPROVAL_OUTLINED}
+                        value={formData.type}
+                        onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                        required
+                        variant="outlined"
+                        sx={approvalWriteFieldSx}
+                      >
+                        <MenuItem value="expense">{t('approval.expense')}</MenuItem>
+                        <MenuItem value="purchase">{t('approval.purchase')}</MenuItem>
+                        <MenuItem value="contract">{t('approval.contract')}</MenuItem>
+                        <MenuItem value="other">{t('approval.other')}</MenuItem>
+                      </TextField>
+                      <TextField
+                        fullWidth
+                        size="small"
+                        type="number"
+                        label={t('approval.amount')}
+                        {...APPROVAL_OUTLINED}
+                        value={formData.amount}
+                        onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                        variant="outlined"
                         InputProps={{
                           startAdornment: <Typography sx={{ mr: 1, color: 'text.secondary' }}>Rs.</Typography>
                         }}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 1,
-                              bgcolor: 'background.paper',
-                              '&:hover': {
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                  borderColor: 'primary.main'
-                                }
-                              }
-                            }
-                          }}
-                        />
-                      </Box>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                        <Typography variant="body2" color="text.secondary">
-                          {t('approval.deadline')}
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          type="date"
-                          value={formData.dueDate}
-                          onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                          variant="outlined"
-                          size="small"
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: 1,
-                              bgcolor: 'background.paper',
-                              '&:hover': {
-                                '& .MuiOutlinedInput-notchedOutline': {
-                                  borderColor: 'primary.main'
-                                }
-                              }
-                            }
-                          }}
-                        />
-                      </Box>
+                        sx={approvalWriteFieldSx}
+                      />
+                      <TextField
+                        fullWidth
+                        size="small"
+                        type="date"
+                        label={t('approval.deadline')}
+                        {...APPROVAL_OUTLINED}
+                        value={formData.dueDate}
+                        onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                        variant="outlined"
+                        sx={approvalWriteFieldSx}
+                      />
                     </Box>
                   </Grid>
                 </Grid>
 
                 {/* 설명 섹션 - 전체 너비 */}
-                <Box sx={{ mt: 3 }}>
-                  <Typography variant="subtitle2" sx={{ mb: 1.25, fontWeight: 700, fontSize: '15px', color: 'text.primary', letterSpacing: '-0.01em' }}>
-                    {t('approval.description')} **
-                  </Typography>
-                  <Box sx={{
+                <Box
+                  component="fieldset"
+                  sx={{
+                    mt: 3,
+                    m: 0,
+                    p: 0,
+                    minWidth: 0,
                     border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
                     borderRadius: '14px',
                     bgcolor: 'background.paper',
@@ -2724,6 +2647,19 @@ const ElectronicApproval: React.FC = () => {
                     flexDirection: 'column',
                     minHeight: 280,
                     boxShadow: `inset 0 0 0 1px ${alpha(theme.palette.divider, 0.06)}`,
+                  }}
+                >
+                  <Box
+                    component="legend"
+                    sx={{ px: 0.5, ml: 1.5, fontSize: '0.75rem', fontWeight: 600, color: 'text.secondary' }}
+                  >
+                    {t('approval.description')}
+                  </Box>
+                  <Box sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    flex: 1,
+                    minHeight: 0,
                     '& .tiptap': {
                       flex: 1,
                       minHeight: 230,
@@ -3468,9 +3404,12 @@ const ElectronicApproval: React.FC = () => {
           }}>
             <TextField
               fullWidth
+              size="small"
+              label={t('common.search')}
               placeholder={t('approval.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              InputLabelProps={{ shrink: true }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -3489,47 +3428,56 @@ const ElectronicApproval: React.FC = () => {
                 },
               }}
             />
-            <FormControl fullWidth>
-              <InputLabel>{t('approval.status')}</InputLabel>
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <MenuItem value="">{t('approval.all')}</MenuItem>
-                <MenuItem value="draft">{t('approval.draft')}</MenuItem>
-                <MenuItem value="submitted">{t('approval.submitted')}</MenuItem>
-                <MenuItem value="in_review">{t('approval.inReview')}</MenuItem>
-                <MenuItem value="approved">{t('approval.approved')}</MenuItem>
-                <MenuItem value="rejected">{t('approval.rejected')}</MenuItem>
-                <MenuItem value="cancelled">{t('approval.cancelled')}</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel>{t('approval.type')}</InputLabel>
-              <Select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-              >
-                <MenuItem value="">{t('approval.all')}</MenuItem>
-                <MenuItem value="expense">{t('approval.expense')}</MenuItem>
-                <MenuItem value="purchase">{t('approval.purchase')}</MenuItem>
-                <MenuItem value="contract">{t('approval.contract')}</MenuItem>
-                <MenuItem value="other">{t('approval.other')}</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel>{t('approval.priority')}</InputLabel>
-              <Select
-                value={priorityFilter}
-                onChange={(e) => setPriorityFilter(e.target.value)}
-              >
-                <MenuItem value="">{t('approval.all')}</MenuItem>
-                <MenuItem value="low">{t('approval.low')}</MenuItem>
-                <MenuItem value="medium">{t('approval.normal')}</MenuItem>
-                <MenuItem value="high">{t('approval.high')}</MenuItem>
-                <MenuItem value="urgent">{t('approval.urgent')}</MenuItem>
-              </Select>
-            </FormControl>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('approval.status')}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="">{t('approval.all')}</MenuItem>
+              <MenuItem value="draft">{t('approval.draft')}</MenuItem>
+              <MenuItem value="submitted">{t('approval.submitted')}</MenuItem>
+              <MenuItem value="in_review">{t('approval.inReview')}</MenuItem>
+              <MenuItem value="approved">{t('approval.approved')}</MenuItem>
+              <MenuItem value="rejected">{t('approval.rejected')}</MenuItem>
+              <MenuItem value="cancelled">{t('approval.cancelled')}</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('approval.type')}
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="">{t('approval.all')}</MenuItem>
+              <MenuItem value="expense">{t('approval.expense')}</MenuItem>
+              <MenuItem value="purchase">{t('approval.purchase')}</MenuItem>
+              <MenuItem value="contract">{t('approval.contract')}</MenuItem>
+              <MenuItem value="other">{t('approval.other')}</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('approval.priority')}
+              value={priorityFilter}
+              onChange={(e) => setPriorityFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="">{t('approval.all')}</MenuItem>
+              <MenuItem value="low">{t('approval.low')}</MenuItem>
+              <MenuItem value="medium">{t('approval.normal')}</MenuItem>
+              <MenuItem value="high">{t('approval.high')}</MenuItem>
+              <MenuItem value="urgent">{t('approval.urgent')}</MenuItem>
+            </TextField>
             <Button
               fullWidth
               variant="outlined"

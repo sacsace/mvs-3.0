@@ -39,6 +39,8 @@ import {
   DialogActions,
   CircularProgress
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { alpha } from '@mui/material/styles';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import {
@@ -1526,25 +1528,11 @@ const RegularInvoice: React.FC = () => {
         </Box>
       )}
       {/* ?? */}
-      <Box sx={{ mb: 3 }}>
-        <Typography
-          component="h1"
-          variant="pageTitle"
-          sx={{
-            fontWeight: 600,
-            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-            letterSpacing: '-0.022em',
-            lineHeight: 1.28,
-            color: 'text.primary',
-            mb: 0.75,
-          }}
-        >
-          {tr('일반 세금계산서', 'Regular Tax Invoice')}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-          {tr('일반 세금계산서를 생성하고 관리합니다.', 'Create and manage regular invoices.')}
-        </Typography>
-      </Box>
+      <MvsPageHeader
+        title={tr('일반 세금계산서', 'Regular Tax Invoice')}
+        description={tr('일반 세금계산서를 생성하고 관리합니다.', 'Create and manage regular invoices.')}
+        mb={!isInvoicePageMode ? 2 : 3}
+      />
 
       {!isInvoicePageMode && (
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
@@ -1569,9 +1557,11 @@ const RegularInvoice: React.FC = () => {
               <TextField
                 fullWidth
                 size="small"
+                label={tr('검색', 'Search')}
                 placeholder={tr('인보이스 번호 또는 고객명 검색', 'Search by invoice number or customer')}
                 value={filters.search}
                 onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+                InputLabelProps={{ shrink: true }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -1583,7 +1573,7 @@ const RegularInvoice: React.FC = () => {
             </Grid>
             <Grid size={{ xs: 12, md: 2 }}>
               <FormControl fullWidth size="small">
-                <InputLabel>{tr('결제 상태', 'Payment Status')}</InputLabel>
+                <InputLabel shrink>{tr('결제 상태', 'Payment Status')}</InputLabel>
                 <Select
                   value={filters.payment_status}
                   label={tr('결제 상태', 'Payment Status')}

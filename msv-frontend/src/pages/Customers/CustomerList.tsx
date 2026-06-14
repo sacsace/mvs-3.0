@@ -26,6 +26,8 @@ import {
   Avatar,
   InputAdornment
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -152,13 +154,8 @@ const CustomerList: React.FC = () => {
   });
 
   return (
-    <Box sx={{ width: '100%', p: 0 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <PeopleIcon sx={{ mr: 2, fontSize: '2rem', color: 'primary.main' }} />
-        <Typography variant="pageTitle" component="h1">
-          고객 목록
-        </Typography>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader title="고객 목록" />
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 3, mb: 3 }}>
         {/* 통계 카드 */}
@@ -210,9 +207,12 @@ const CustomerList: React.FC = () => {
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '4fr 2fr 2fr 4fr' }, gap: 2, alignItems: 'center' }}>
             <TextField
               fullWidth
+              size="small"
+              label="검색"
               placeholder="고객명, 담당자, 이메일로 검색"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              InputLabelProps={{ shrink: true }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -221,30 +221,36 @@ const CustomerList: React.FC = () => {
                 ),
               }}
             />
-            <FormControl fullWidth>
-              <InputLabel>고객 유형</InputLabel>
-              <Select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-              >
-                <MenuItem value="all">전체</MenuItem>
-                <MenuItem value="enterprise">기업</MenuItem>
-                <MenuItem value="retail">소매</MenuItem>
-                <MenuItem value="individual">개인</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel>상태</InputLabel>
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <MenuItem value="all">전체</MenuItem>
-                <MenuItem value="active">활성</MenuItem>
-                <MenuItem value="inactive">비활성</MenuItem>
-                <MenuItem value="pending">대기</MenuItem>
-              </Select>
-            </FormControl>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="고객 유형"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="all">전체</MenuItem>
+              <MenuItem value="enterprise">기업</MenuItem>
+              <MenuItem value="retail">소매</MenuItem>
+              <MenuItem value="individual">개인</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="상태"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="all">전체</MenuItem>
+              <MenuItem value="active">활성</MenuItem>
+              <MenuItem value="inactive">비활성</MenuItem>
+              <MenuItem value="pending">대기</MenuItem>
+            </TextField>
             <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
               <Button
                 variant="outlined"

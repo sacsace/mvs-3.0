@@ -109,6 +109,7 @@ const DepartmentLeaveCalendar: React.FC<DepartmentLeaveCalendarProps> = ({
   }, [gridDays, vacations]);
 
   const maxChips = 3;
+  const cellBorder = '1px solid #B8C4D0';
 
   return (
     <Box>
@@ -160,6 +161,7 @@ const DepartmentLeaveCalendar: React.FC<DepartmentLeaveCalendarProps> = ({
               py: 1.1,
               textAlign: 'center',
               bgcolor: '#F5F5F7',
+              border: cellBorder,
               borderRadius: '8px',
               fontSize: '0.8125rem',
               fontWeight: 500,
@@ -184,10 +186,11 @@ const DepartmentLeaveCalendar: React.FC<DepartmentLeaveCalendarProps> = ({
               sx={{
                 minHeight: { xs: 72, sm: 88 },
                 p: 0.75,
+                border: cellBorder,
                 borderRadius: '10px',
                 bgcolor: inMonth ? 'background.paper' : alpha(theme.palette.action.hover, 0.65),
-                boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
-                transition: 'background-color 0.2s ease, box-shadow 0.2s ease',
+                boxShadow: 'none',
+                transition: 'background-color 0.2s ease, border-color 0.2s ease',
                 '&:hover': {
                   bgcolor: inMonth ? alpha(theme.palette.primary.main, 0.04) : undefined,
                 },

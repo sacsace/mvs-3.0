@@ -69,6 +69,11 @@ export const mvsSearchFieldSx: MvsStyleObject = {
   },
 };
 
+/** 검색·필터 outlined 라벨 — 테두리 위 고정 (급여관리·근태관리 필터와 동일) */
+export const mvsOutlinedLabelProps = {
+  InputLabelProps: { shrink: true },
+} as const;
+
 /** 검색·필터 영역 래퍼(mvsFilterToolbarSx와 동일 계열) */
 export const mvsSearchZoneSx: MvsStyleObject = mvsFilterToolbarSx;
 
@@ -128,7 +133,17 @@ export const mvsPageTitleSx: SxProps<Theme> = {
   lineHeight: 1.3,
   letterSpacing: '-0.02em',
   color: '#111827',
-  marginBottom: '6px',
+  marginBottom: 0,
+};
+
+/** 모든 페이지 공통 루트 래퍼 — AppLayout 패딩 안에서 시작 위치 통일 */
+export const mvsPageRootSx: SxProps<Theme> = {
+  p: 0,
+  width: '100%',
+  maxWidth: '100%',
+  minHeight: '100%',
+  boxSizing: 'border-box',
+  bgcolor: 'transparent',
 };
 
 export const mvsPageDescriptionSx: SxProps<Theme> = {
@@ -140,6 +155,10 @@ export const mvsPageDescriptionSx: SxProps<Theme> = {
 export const mvsTitleBlockSx: SxProps<Theme> = {
   marginBottom: '24px',
 };
+
+/** 업무 관리(보드 목록·상세) 페이지 배경 그라데이션 */
+export const mvsWorkBoardPageBg =
+  'linear-gradient(145deg, #EEF2FA 0%, #E8EBF5 42%, #F4F6FB 100%)';
 
 /** 대시보드 하단 위젯 그룹 배경 */
 export const mvsDashboardWidgetGroupSx: SxProps<Theme> = {

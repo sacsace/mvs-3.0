@@ -22,6 +22,8 @@ import {
   DialogActions,
   Link
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { Refresh as RefreshIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useTheme, alpha } from '@mui/material/styles';
@@ -287,41 +289,11 @@ const AttendanceStatistics: React.FC = () => {
   };
 
   return (
-    <Box sx={{ width: '100%', maxWidth: '100%' }}>
-      <Box
-        sx={{
-          ...mvsTitleBlockSx,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 0.75,
-        }}
-      >
-        <Typography
-          component="h1"
-          variant="pageTitle"
-          sx={{
-            color: valueColor,
-            mb: 0,
-            fontSize: { xs: '1.125rem', sm: '1.3125rem' },
-            fontWeight: 600,
-            letterSpacing: '-0.022em',
-            lineHeight: 1.28,
-          }}
-        >
-          {t('attendanceStatistics.title')}
-        </Typography>
-        <Typography
-          variant="body2"
-          sx={{
-            fontSize: '0.8125rem',
-            lineHeight: 1.55,
-            color: labelColor,
-            maxWidth: 720,
-          }}
-        >
-          {t('attendanceStatistics.description')}
-        </Typography>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={t('attendanceStatistics.title')}
+        description={t('attendanceStatistics.description')}
+      />
 
       <Card
         elevation={0}

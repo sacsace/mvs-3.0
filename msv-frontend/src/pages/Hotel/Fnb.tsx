@@ -1,5 +1,7 @@
 import React from 'react';
 import { Box, Card, CardContent, Grid, Typography, Divider, Button } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 
 const summaryCards = [
   { label: '오늘 주문', value: '0' },
@@ -10,13 +12,11 @@ const summaryCards = [
 
 const Fnb: React.FC = () => {
   return (
-    <Box sx={{ p: 0 }}>
-      <Box sx={{ mb: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>F&amp;B</Typography>
-        <Typography variant="body2" color="text.secondary">
-          식음료 주문과 재고, 매출 현황을 관리합니다.
-        </Typography>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title="F&B"
+        description="식음료 주문과 재고, 매출 현황을 관리합니다."
+      />
 
       <Grid container spacing={2} sx={{ mb: 2 }}>
         {summaryCards.map((item) => (

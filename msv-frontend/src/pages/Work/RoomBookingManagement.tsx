@@ -36,6 +36,8 @@ import {
   TableSortLabel,
   useTheme
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { alpha } from '@mui/material/styles';
 import {
   Add as AddIcon,
@@ -252,15 +254,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     }),
     [theme]
   );
-  const filterLabelSx = {
-    color: 'text.secondary',
-    fontWeight: 600,
-    mb: 0.5,
-    display: 'block',
-    fontSize: '0.75rem',
-    lineHeight: '18px',
-    minHeight: 18,
-  };
   const softFieldSx = useMemo(
     () => ({
       '& .MuiOutlinedInput-root': {
@@ -1836,15 +1829,8 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
         borderRadius: 2,
         minHeight: '100%'
       }} className="invoice-print-root">
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }} className="no-print">
-          <Typography
-            variant="h3"
-            component="h1"
-            sx={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.2em' }}
-          >
-            <HotelIcon />
-            Tax Invoice
-          </Typography>
+        <Box className="no-print">
+          <MvsPageHeader title="Tax Invoice" icon={<HotelIcon />} />
         </Box>
 
         <Card>
@@ -2298,26 +2284,21 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   }
 
   return (
-    <Box sx={{ 
-      p: 0,
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%'
-    }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-        <Typography component="h1" variant="pageTitle" sx={{ fontWeight: 600, letterSpacing: '-0.022em' }}>
-          {t('roomBookingManagement.title')}
-        </Typography>
-        <Button
-          variant="contained"
-          disableElevation
-          startIcon={<AddIcon />}
-          onClick={handleOpenCreate}
-          sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}
-        >
-          {t('roomBookingManagement.actions.book')}
-        </Button>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title={t('roomBookingManagement.title')}
+        actions={
+          <Button
+            variant="contained"
+            disableElevation
+            startIcon={<AddIcon />}
+            onClick={handleOpenCreate}
+            sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}
+          >
+            {t('roomBookingManagement.actions.book')}
+          </Button>
+        }
+      />
 
       {/* 필터 및 검색 */}
       <Card elevation={0} sx={shellCardSx}>
@@ -2328,129 +2309,114 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
             gap: 2, 
             alignItems: 'flex-end' 
           }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={filterLabelSx}>
-                {t('roomBookingManagement.filters.search')}
-              </Typography>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder={t('roomBookingManagement.placeholders.search')}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                sx={softFieldSx}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon color="action" fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={filterLabelSx}>
-                {t('roomBookingManagement.filters.status')}
-              </Typography>
-              <FormControl fullWidth size="small">
-                <Select
-                  value={statusFilter}
-                  displayEmpty
-                  renderValue={(selected) => (selected ? selected : t('roomBookingManagement.filters.all'))}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  sx={selectFieldSx}
-                >
-                  <MenuItem value="">{t('roomBookingManagement.filters.all')}</MenuItem>
-                  <MenuItem value="confirmed">{t('roomBookingManagement.status.confirmed')}</MenuItem>
-                  <MenuItem value="pending">{t('roomBookingManagement.status.pending')}</MenuItem>
-                  <MenuItem value="checked_in">{t('roomBookingManagement.status.checkedIn')}</MenuItem>
-                  <MenuItem value="checked_out">{t('roomBookingManagement.status.checkedOut')}</MenuItem>
-                  <MenuItem value="cancelled">{t('roomBookingManagement.status.cancelled')}</MenuItem>
-                  <MenuItem value="no_show">{t('roomBookingManagement.status.noShow')}</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={filterLabelSx}>
-                {t('roomBookingManagement.filters.roomType')}
-              </Typography>
-              <FormControl fullWidth size="small">
-                <Select
-                  value={roomTypeFilter}
-                  displayEmpty
-                  renderValue={(selected) => (selected ? selected : t('roomBookingManagement.filters.all'))}
-                  onChange={(e) => setRoomTypeFilter(e.target.value)}
-                  sx={selectFieldSx}
-                >
-                  <MenuItem value="">{t('roomBookingManagement.filters.all')}</MenuItem>
-                  <MenuItem value="standard">{t('roomBookingManagement.roomTypes.standard')}</MenuItem>
-                  <MenuItem value="deluxe">{t('roomBookingManagement.roomTypes.deluxe')}</MenuItem>
-                  <MenuItem value="suite">{t('roomBookingManagement.roomTypes.suite')}</MenuItem>
-                  <MenuItem value="presidential">{t('roomBookingManagement.roomTypes.presidential')}</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={filterLabelSx}>
-                {t('roomBookingManagement.filters.payment')}
-              </Typography>
-              <FormControl fullWidth size="small">
-                <Select
-                  value={paymentFilter}
-                  displayEmpty
-                  renderValue={(selected) => (selected ? selected : t('roomBookingManagement.filters.all'))}
-                  onChange={(e) => setPaymentFilter(e.target.value)}
-                  sx={selectFieldSx}
-                >
-                  <MenuItem value="">{t('roomBookingManagement.filters.all')}</MenuItem>
-                  <MenuItem value="paid">{t('roomBookingManagement.filters.paidOption')}</MenuItem>
-                  <MenuItem value="unpaid">{t('roomBookingManagement.filters.unpaidOption')}</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={filterLabelSx}>
-                {t('roomBookingManagement.filters.date')}
-              </Typography>
-              <TextField
-                fullWidth
-                type="date"
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                size="small"
-                sx={softFieldSx}
-              />
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography
-                variant="caption"
-                sx={{ ...filterLabelSx, visibility: 'hidden', userSelect: 'none' }}
-                aria-hidden
-              >
-                {t('roomBookingManagement.actions.reset')}
-              </Typography>
-              <Button
-                variant="outlined"
-                startIcon={<FilterIcon />}
-                onClick={() => {
-                  setSearchTerm('');
-                  setStatusFilter('');
-                  setRoomTypeFilter('');
-                  setPaymentFilter('');
-                  setDateFilter('');
-                }}
-                sx={{
-                  textTransform: 'none',
-                  borderRadius: '12px',
-                  height: 40,
-                  whiteSpace: 'nowrap',
-                  minWidth: 'fit-content',
-                  px: 2,
-                }}
-              >
-                {t('roomBookingManagement.actions.reset')}
-              </Button>
-            </Box>
+            <TextField
+              fullWidth
+              size="small"
+              label={t('roomBookingManagement.filters.search')}
+              placeholder={t('roomBookingManagement.placeholders.search')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={softFieldSx}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="action" fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('roomBookingManagement.filters.status')}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) => (selected ? selected : t('roomBookingManagement.filters.all')),
+              }}
+              sx={selectFieldSx}
+            >
+              <MenuItem value="">{t('roomBookingManagement.filters.all')}</MenuItem>
+              <MenuItem value="confirmed">{t('roomBookingManagement.status.confirmed')}</MenuItem>
+              <MenuItem value="pending">{t('roomBookingManagement.status.pending')}</MenuItem>
+              <MenuItem value="checked_in">{t('roomBookingManagement.status.checkedIn')}</MenuItem>
+              <MenuItem value="checked_out">{t('roomBookingManagement.status.checkedOut')}</MenuItem>
+              <MenuItem value="cancelled">{t('roomBookingManagement.status.cancelled')}</MenuItem>
+              <MenuItem value="no_show">{t('roomBookingManagement.status.noShow')}</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('roomBookingManagement.filters.roomType')}
+              value={roomTypeFilter}
+              onChange={(e) => setRoomTypeFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) => (selected ? selected : t('roomBookingManagement.filters.all')),
+              }}
+              sx={selectFieldSx}
+            >
+              <MenuItem value="">{t('roomBookingManagement.filters.all')}</MenuItem>
+              <MenuItem value="standard">{t('roomBookingManagement.roomTypes.standard')}</MenuItem>
+              <MenuItem value="deluxe">{t('roomBookingManagement.roomTypes.deluxe')}</MenuItem>
+              <MenuItem value="suite">{t('roomBookingManagement.roomTypes.suite')}</MenuItem>
+              <MenuItem value="presidential">{t('roomBookingManagement.roomTypes.presidential')}</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('roomBookingManagement.filters.payment')}
+              value={paymentFilter}
+              onChange={(e) => setPaymentFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) => (selected ? selected : t('roomBookingManagement.filters.all')),
+              }}
+              sx={selectFieldSx}
+            >
+              <MenuItem value="">{t('roomBookingManagement.filters.all')}</MenuItem>
+              <MenuItem value="paid">{t('roomBookingManagement.filters.paidOption')}</MenuItem>
+              <MenuItem value="unpaid">{t('roomBookingManagement.filters.unpaidOption')}</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              type="date"
+              label={t('roomBookingManagement.filters.date')}
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              size="small"
+              InputLabelProps={{ shrink: true }}
+              sx={softFieldSx}
+            />
+            <Button
+              variant="outlined"
+              startIcon={<FilterIcon />}
+              onClick={() => {
+                setSearchTerm('');
+                setStatusFilter('');
+                setRoomTypeFilter('');
+                setPaymentFilter('');
+                setDateFilter('');
+              }}
+              sx={{
+                textTransform: 'none',
+                borderRadius: '12px',
+                height: 40,
+                whiteSpace: 'nowrap',
+                minWidth: 'fit-content',
+                px: 2,
+              }}
+            >
+              {t('roomBookingManagement.actions.reset')}
+            </Button>
           </Box>
         </CardContent>
       </Card>

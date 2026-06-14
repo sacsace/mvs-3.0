@@ -42,6 +42,8 @@ import {
   Step,
   StepLabel,
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { useTheme } from '@mui/material/styles';
 import {
   Add as AddIcon,
@@ -72,15 +74,6 @@ import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { mvsSearchFieldSx } from '../../theme/mvsLayout';
 import * as XLSX from 'xlsx';
 
-const budgetFilterLabelSx = {
-  color: 'text.secondary',
-  fontWeight: 600,
-  mb: 0.5,
-  display: 'block',
-  fontSize: '0.75rem',
-  lineHeight: '18px',
-  minHeight: 18,
-};
 
 const budgetFilterSelectSx = {
   borderRadius: '12px',
@@ -621,23 +614,16 @@ const BudgetManagement: React.FC = () => {
   // 상세 보기 모드
   if (viewMode === 'view' && selectedBudget) {
     return (
-      <Box sx={{ p: 0 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Box>
-            <Typography component="h1" variant="pageTitle" sx={{ fontWeight: 600, letterSpacing: '-0.022em', mb: 0.75 }}>
-              예산 상세
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {selectedBudget.budgetId}
-            </Typography>
-          </Box>
-          <Button
-            variant="outlined"
-            onClick={() => setViewMode('list')}
-          >
-            목록으로
-          </Button>
-        </Box>
+      <Box sx={{ ...mvsPageRootSx }}>
+        <MvsPageHeader
+          title="예산 상세"
+          description={selectedBudget.budgetId}
+          actions={
+            <Button variant="outlined" onClick={() => setViewMode('list')}>
+              목록으로
+            </Button>
+          }
+        />
 
         <Card sx={{ mb: 3 }}>
           <CardContent>
@@ -835,26 +821,22 @@ const BudgetManagement: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 0 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Box>
-          <Typography component="h1" variant="pageTitle" sx={{ fontWeight: 600, letterSpacing: '-0.022em', mb: 0.75 }}>
-            예산 관리
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem' }}>
-            예산을 계획하고, 승인하며, 실시간으로 모니터링하세요.
-          </Typography>
-        </Box>
-        <Button
-          variant="contained"
-          disableElevation
-          startIcon={<AddIcon fontSize="small" />}
-          onClick={handleCreateBudget}
-          sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}
-        >
-          예산 생성
-        </Button>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader
+        title="예산 관리"
+        description="예산을 계획하고, 승인하며, 실시간으로 모니터링하세요."
+        actions={
+          <Button
+            variant="contained"
+            disableElevation
+            startIcon={<AddIcon fontSize="small" />}
+            onClick={handleCreateBudget}
+            sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}
+          >
+            예산 생성
+          </Button>
+        }
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
@@ -945,130 +927,119 @@ const BudgetManagement: React.FC = () => {
             alignItems: 'flex-end',
             ...mvsSearchFieldSx,
           }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={budgetFilterLabelSx}>
-                검색
-              </Typography>
+            <TextField
+              fullWidth
+              size="small"
+              label="검색"
+              placeholder="예산명, 예산번호, 기간 검색..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  height: 40,
+                  '& .MuiOutlinedInput-input': { py: 0 },
+                },
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            {canSelectCompany && (
               <TextField
                 fullWidth
                 size="small"
-                placeholder="예산명, 예산번호, 기간 검색..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    height: 40,
-                    '& .MuiOutlinedInput-input': { py: 0 },
+                select
+                label="회사"
+                value={selectedCompanyId}
+                onChange={(e) => {
+                  const value = String(e.target.value);
+                  if (value === '') {
+                    setSelectedCompanyId('');
+                  } else {
+                    const num = Number(value);
+                    setSelectedCompanyId(isNaN(num) ? '' : num);
+                  }
+                }}
+                InputLabelProps={{ shrink: true }}
+                SelectProps={{
+                  displayEmpty: true,
+                  renderValue: (selected) => {
+                    if (selected === '' || selected == null) return '전체 회사';
+                    const company = companies.find((c) => c.id === selected);
+                    return company?.name ?? '전체 회사';
                   },
                 }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Box>
-            {canSelectCompany && (
-              <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                <Typography variant="caption" sx={budgetFilterLabelSx}>
-                  회사
-                </Typography>
-                <FormControl fullWidth size="small">
-                  <Select
-                    value={selectedCompanyId}
-                    onChange={(e) => {
-                      const value = String(e.target.value);
-                      if (value === '') {
-                        setSelectedCompanyId('');
-                      } else {
-                        const num = Number(value);
-                        setSelectedCompanyId(isNaN(num) ? '' : num);
-                      }
-                    }}
-                    displayEmpty
-                    sx={budgetFilterSelectSx}
-                  >
-                    <MenuItem value="">전체 회사</MenuItem>
-                    {companies.map((company) => (
-                      <MenuItem key={company.id} value={company.id}>
-                        {company.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
+                sx={budgetFilterSelectSx}
+              >
+                <MenuItem value="">전체 회사</MenuItem>
+                {companies.map((company) => (
+                  <MenuItem key={company.id} value={company.id}>
+                    {company.name}
+                  </MenuItem>
+                ))}
+              </TextField>
             )}
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={budgetFilterLabelSx}>
-                상태
-              </Typography>
-              <FormControl fullWidth size="small">
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                displayEmpty
-                sx={budgetFilterSelectSx}
-              >
-                <MenuItem value="all">전체 상태</MenuItem>
-                <MenuItem value="draft">초안</MenuItem>
-                <MenuItem value="pending">승인 대기</MenuItem>
-                <MenuItem value="approved">승인됨</MenuItem>
-                <MenuItem value="active">활성</MenuItem>
-                <MenuItem value="completed">완료</MenuItem>
-                <MenuItem value="cancelled">취소됨</MenuItem>
-              </Select>
-            </FormControl>
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="caption" sx={budgetFilterLabelSx}>
-                유형
-              </Typography>
-              <FormControl fullWidth size="small">
-              <Select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                displayEmpty
-                sx={budgetFilterSelectSx}
-              >
-                <MenuItem value="all">전체 유형</MenuItem>
-                <MenuItem value="annual">연간</MenuItem>
-                <MenuItem value="quarterly">분기</MenuItem>
-                <MenuItem value="monthly">월간</MenuItem>
-                <MenuItem value="project">프로젝트</MenuItem>
-              </Select>
-            </FormControl>
-            </Box>
-            <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-              <Typography
-                variant="caption"
-                sx={{ ...budgetFilterLabelSx, visibility: 'hidden', userSelect: 'none' }}
-                aria-hidden
-              >
-                초기화
-              </Typography>
-              <Button
-                variant="outlined"
-                startIcon={<FilterIcon />}
-                onClick={() => {
-                  setSearchTerm('');
-                  setStatusFilter('all');
-                  setTypeFilter('all');
-                  setSelectedCompanyId('');
-                }}
-                sx={{
-                  height: 40,
-                  whiteSpace: 'nowrap',
-                  minWidth: 'fit-content',
-                  px: 2,
-                  borderRadius: '12px',
-                  textTransform: 'none',
-                }}
-              >
-                초기화
-              </Button>
-            </Box>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="상태"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+              sx={budgetFilterSelectSx}
+            >
+              <MenuItem value="all">전체 상태</MenuItem>
+              <MenuItem value="draft">초안</MenuItem>
+              <MenuItem value="pending">승인 대기</MenuItem>
+              <MenuItem value="approved">승인됨</MenuItem>
+              <MenuItem value="active">활성</MenuItem>
+              <MenuItem value="completed">완료</MenuItem>
+              <MenuItem value="cancelled">취소됨</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="유형"
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+              sx={budgetFilterSelectSx}
+            >
+              <MenuItem value="all">전체 유형</MenuItem>
+              <MenuItem value="annual">연간</MenuItem>
+              <MenuItem value="quarterly">분기</MenuItem>
+              <MenuItem value="monthly">월간</MenuItem>
+              <MenuItem value="project">프로젝트</MenuItem>
+            </TextField>
+            <Button
+              variant="outlined"
+              startIcon={<FilterIcon />}
+              onClick={() => {
+                setSearchTerm('');
+                setStatusFilter('all');
+                setTypeFilter('all');
+                setSelectedCompanyId('');
+              }}
+              sx={{
+                height: 40,
+                whiteSpace: 'nowrap',
+                minWidth: 'fit-content',
+                px: 2,
+                borderRadius: '12px',
+                textTransform: 'none',
+              }}
+            >
+              초기화
+            </Button>
           </Box>
         </CardContent>
       </Card>

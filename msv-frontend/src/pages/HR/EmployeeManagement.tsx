@@ -28,6 +28,8 @@ import {
   Tooltip,
   Alert
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -191,13 +193,8 @@ const EmployeeManagement: React.FC = () => {
   });
 
   return (
-    <Box sx={{ width: '100%', p: 0 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <PersonIcon sx={{ mr: 2, fontSize: '2rem', color: 'primary.main' }} />
-        <Typography variant="pageTitle" component="h1">
-          직원 관리
-        </Typography>
-      </Box>
+    <Box sx={{ ...mvsPageRootSx }}>
+      <MvsPageHeader title="직원 관리" />
 
       {!menuFlags.menusLoading && !menuFlags.canRead && (
         <Alert severity="warning" sx={{ mb: 2 }}>
@@ -253,10 +250,13 @@ const EmployeeManagement: React.FC = () => {
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '4fr 2fr 2fr 2fr' }, gap: 2, alignItems: 'center' }}>
             <TextField
               fullWidth
+              size="small"
+              label="검색"
               placeholder="이름, 사번, 이메일로 검색"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              InputLabelProps={{ shrink: true }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -265,81 +265,39 @@ const EmployeeManagement: React.FC = () => {
                 ),
               }}
             />
-            <FormControl fullWidth sx={{ px: 2, pt: 2 }} disabled={menuFlags.menusLoading || !menuFlags.canRead}>
-              <InputLabel sx={{ 
-                backgroundColor: 'white',
-                px: 1,
-                '&.Mui-focused': {
-                  backgroundColor: 'white',
-                  zIndex: 1
-                }
-              }}>부서</InputLabel>
-              <Select
-                value={departmentFilter}
-                onChange={(e) => setDepartmentFilter(e.target.value)}
-                sx={{
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderTop: 'none',
-                    borderLeft: 'none',
-                    borderRight: 'none',
-                    borderBottom: '1px solid #e0e0e0',
-                    borderRadius: 0
-                  },
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderBottom: '2px solid #1976d2'
-                  },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderBottom: '2px solid #1976d2',
-                    borderTop: 'none',
-                    borderLeft: 'none',
-                    borderRight: 'none'
-                  }
-                }}
-              >
-                <MenuItem value="all">전체</MenuItem>
-                <MenuItem value="개발팀">개발팀</MenuItem>
-                <MenuItem value="마케팅팀">마케팅팀</MenuItem>
-                <MenuItem value="영업팀">영업팀</MenuItem>
-                <MenuItem value="경영진">경영진</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth sx={{ px: 2, pt: 2 }} disabled={menuFlags.menusLoading || !menuFlags.canRead}>
-              <InputLabel sx={{ 
-                backgroundColor: 'white',
-                px: 1,
-                '&.Mui-focused': {
-                  backgroundColor: 'white',
-                  zIndex: 1
-                }
-              }}>상태</InputLabel>
-              <Select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                sx={{
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderTop: 'none',
-                    borderLeft: 'none',
-                    borderRight: 'none',
-                    borderBottom: '1px solid #e0e0e0',
-                    borderRadius: 0
-                  },
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderBottom: '2px solid #1976d2'
-                  },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderBottom: '2px solid #1976d2',
-                    borderTop: 'none',
-                    borderLeft: 'none',
-                    borderRight: 'none'
-                  }
-                }}
-              >
-                <MenuItem value="all">전체</MenuItem>
-                <MenuItem value="active">재직중</MenuItem>
-                <MenuItem value="inactive">퇴사</MenuItem>
-                <MenuItem value="on_leave">휴직</MenuItem>
-              </Select>
-            </FormControl>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="부서"
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="all">전체</MenuItem>
+              <MenuItem value="개발팀">개발팀</MenuItem>
+              <MenuItem value="마케팅팀">마케팅팀</MenuItem>
+              <MenuItem value="영업팀">영업팀</MenuItem>
+              <MenuItem value="경영진">경영진</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label="상태"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              disabled={menuFlags.menusLoading || !menuFlags.canRead}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+            >
+              <MenuItem value="all">전체</MenuItem>
+              <MenuItem value="active">재직중</MenuItem>
+              <MenuItem value="inactive">퇴사</MenuItem>
+              <MenuItem value="on_leave">휴직</MenuItem>
+            </TextField>
             <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
               <span style={{ display: 'inline-flex' }}>
                 <Button

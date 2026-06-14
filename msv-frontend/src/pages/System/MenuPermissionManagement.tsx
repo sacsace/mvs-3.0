@@ -29,6 +29,8 @@ import {
   DialogActions,
   CircularProgress
 } from '@mui/material';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
   Security as SecurityIcon,
@@ -1453,24 +1455,11 @@ const MenuPermissionManagement: React.FC = () => {
       boxSizing: 'border-box'
     }}>
       {/* 헤더 */}
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'flex-start', 
-        gap: 2,
-        mb: 3,
-        flexWrap: 'wrap',
-      }}>
-        <Box sx={{ minWidth: 0, flex: '1 1 240px' }}>
-          <Typography component="h1" sx={{ ...mvsPageTitleSx, mb: 0.75 }}>
-            {t('menuPermissionManagement.title')}
-          </Typography>
-          <Typography sx={mvsPageDescriptionSx}>
-            {t('menuPermissionManagement.description')}
-          </Typography>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1.25, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end' }}>
-          {(selectedUserId || selectedCompanyId) && (
+      <MvsPageHeader
+        title={t('menuPermissionManagement.title')}
+        description={t('menuPermissionManagement.description')}
+        actions={
+          (selectedUserId || selectedCompanyId) ? (
             <>
               {selectedUserId && (
                 <>
@@ -1518,9 +1507,9 @@ const MenuPermissionManagement: React.FC = () => {
                 {saving ? t('menuPermissionManagement.saving') : t('menuPermissionManagement.save')}
               </Button>
             </>
-          )}
-        </Box>
-      </Box>
+          ) : undefined
+        }
+      />
 
       <Box sx={{ 
         display: 'flex',
@@ -1545,30 +1534,28 @@ const MenuPermissionManagement: React.FC = () => {
               
               {/* 사용자 검색 */}
               <Box sx={{ mb: 2 }}>
-                <Typography variant="caption" sx={{ mb: 0.75, color: 'text.secondary', fontSize: '0.75rem', fontWeight: 500, display: 'block' }}>
-                  {t('menuPermissionManagement.userSearch')}
-                </Typography>
                 <TextField
                   fullWidth
                   size="small"
+                  label={t('menuPermissionManagement.userSearch')}
                   placeholder={t('menuPermissionManagement.userSearchPlaceholder')}
                   value={userSearchTerm}
                   onChange={(e) => setUserSearchTerm(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
                   sx={selectionInputSx}
                 />
               </Box>
 
               {/* 회사 검색 */}
               <Box sx={{ mb: 2 }}>
-                <Typography variant="caption" sx={{ mb: 0.75, color: 'text.secondary', fontSize: '0.75rem', fontWeight: 500, display: 'block' }}>
-                  {t('menuPermissionManagement.companySearch')}
-                </Typography>
                 <TextField
                   fullWidth
                   size="small"
+                  label={t('menuPermissionManagement.companySearch')}
                   placeholder={t('menuPermissionManagement.companySearchPlaceholder')}
                   value={companySearchTerm}
                   onChange={(e) => setCompanySearchTerm(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
                   sx={selectionInputSx}
                 />
               </Box>
