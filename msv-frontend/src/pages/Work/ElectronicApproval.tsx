@@ -59,8 +59,11 @@ import {
   FormatAlignCenter as FormatAlignCenterIcon,
   FormatAlignRight as FormatAlignRightIcon,
   Reply as ReplyIcon,
-  Create as CreateIcon
+  Create as CreateIcon,
 } from '@mui/icons-material';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import UndoIcon from '@mui/icons-material/Undo';
+import RedoIcon from '@mui/icons-material/Redo';
 import { useStore } from '../../store';
 import { approvalService, api } from '../../services/api';
 import { filterActiveCompanyUsers, resolveHeaderCompanyInfo, useReferenceDataStore } from '../../store/referenceDataStore';
@@ -69,7 +72,7 @@ import { useTheme, alpha } from '@mui/material/styles';
 import SignaturePad from '../../components/Common/SignaturePad';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import Image from '@tiptap/extension-image';
+import { Image } from '@tiptap/extension-image';
 import { Table as TableExtension } from '@tiptap/extension-table';
 import { TableRow as TableRowExtension } from '@tiptap/extension-table-row';
 import { TableCell as TableCellExtension } from '@tiptap/extension-table-cell';
@@ -207,12 +210,23 @@ const ResizableImage = Image.extend({
 
 const APPROVAL_OUTLINED = mvsOutlinedLabelProps;
 
+const APPROVAL_FORM_BORDER = {
+  field: 'rgba(15, 23, 42, 0.26)',
+  fieldHover: 'rgba(15, 23, 42, 0.38)',
+  section: 'rgba(15, 23, 42, 0.22)',
+  editorLine: 'rgba(15, 23, 42, 0.16)',
+  flowOuter: 'rgba(15, 23, 42, 0.24)',
+  flowStep: 'rgba(15, 23, 42, 0.32)',
+  flowStepBg: 'rgba(15, 23, 42, 0.045)',
+  flowArrow: 'rgba(15, 23, 42, 0.5)',
+} as const;
+
 const approvalWriteFieldSx = {
   '& .MuiOutlinedInput-root': {
     borderRadius: 1,
     bgcolor: 'background.paper',
-    '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
-    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'primary.main' },
+    '& .MuiOutlinedInput-notchedOutline': { borderColor: APPROVAL_FORM_BORDER.field },
+    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: APPROVAL_FORM_BORDER.fieldHover },
     '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderWidth: 2, borderColor: 'primary.main' },
   },
 } as const;
@@ -223,7 +237,7 @@ const ElectronicApproval: React.FC = () => {
   const approvalMenuFlags = useMenuRoutePermissionFlags(WORK_APPROVAL_MENU_ROUTES);
   const { t, i18n } = useTranslation();
   const approvalFlowLabels = useMemo(
-    () => [t('approval.flowDraft'), t('approval.flowReview'), t('approval.flowApprove')],
+    () => [t('approval.flowDraft'), t('approval.flowApprove')],
     [t]
   );
   const dateLocale = i18n.language?.startsWith('en') ? 'en-US' : 'ko-KR';
@@ -271,9 +285,11 @@ const ElectronicApproval: React.FC = () => {
   const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
   const [signingStepId, setSigningStepId] = useState<number | null>(null);
   const [fontSize, setFontSize] = useState('14px');
+  const [fontFamily, setFontFamily] = useState('');
   const [fontColor, setFontColor] = useState('#000000');
   const [backgroundColor, setBackgroundColor] = useState('#ffffff');
   const [companyLogo, setCompanyLogo] = useState('');
+  const usersRef = useRef<any[]>([]);
   const lastSelectionRef = useRef<any>(null);
   const titleInputRef = useRef<HTMLInputElement | null>(null);
   const approverInputRef = useRef<HTMLInputElement | null>(null);
@@ -869,6 +885,61 @@ const ElectronicApproval: React.FC = () => {
     return [];
   }, []);
 
+  const normalizeApprovalStep = useCallback((step: any, userList: any[] = []): ApprovalStep => {
+    const approverId = step.approverId ?? step.approver_id;
+    const matchedUser = userList.find((u) => u.id === approverId);
+    return {
+      id: step.id ?? 0,
+      stepOrder: step.stepOrder ?? step.step_order ?? 0,
+      approverId: Number(approverId),
+      approverName: step.approverName ?? step.approver_name ?? matchedUser?.username ?? t('approval.unknownUser'),
+      approverDepartment: step.approverDepartment ?? step.approver_department ?? matchedUser?.department ?? '-',
+      approverPosition: step.approverPosition ?? step.approver_position ?? matchedUser?.position ?? '-',
+      status: step.status || 'pending',
+      approvedAt: step.approvedAt ?? step.approved_at,
+      comment: step.comment,
+      signature: step.signature,
+      escalated: step.escalated,
+      escalatedToId: step.escalatedToId ?? step.escalated_to_id,
+      escalatedToName: step.escalatedToName ?? step.escalated_to_name,
+      escalatedAt: step.escalatedAt ?? step.escalated_at,
+    };
+  }, [t]);
+
+  const mapApprovalFromApi = useCallback((
+    d: any,
+    userList: any[] = [],
+    options?: { normalizeDescription?: boolean }
+  ): ApprovalDocument => {
+    const rawDescription = d.description || '';
+    const rawFlow = parseJsonArray(d.approval_flow);
+    return {
+      id: d.id,
+      documentId: d.document_id || '',
+      title: d.title || '',
+      type: d.type || 'other',
+      category: d.category || '',
+      amount: d.amount ? parseFloat(d.amount) : undefined,
+      requesterId: d.requester_id,
+      requesterName: d.requester?.username || t('approval.unknownUser'),
+      requesterDepartment: d.requester?.department || '-',
+      requesterPosition: d.requester?.position || '-',
+      description: options?.normalizeDescription
+        ? normalizeEditorHtml(rawDescription)
+        : rawDescription,
+      attachments: parseJsonArray(d.attachments),
+      status: d.status || 'draft',
+      priority: d.priority || 'medium',
+      currentApproverId: d.current_approver_id,
+      currentApproverName: d.currentApprover?.username,
+      approvalFlow: rawFlow.map((step: any) => normalizeApprovalStep(step, userList)),
+      createdAt: d.created_at || new Date().toISOString(),
+      updatedAt: d.updated_at || new Date().toISOString(),
+      dueDate: d.due_date,
+      comments: parseJsonArray(d.comments),
+    };
+  }, [normalizeApprovalStep, normalizeEditorHtml, parseJsonArray, t]);
+
   // 샘플 데이터 (폴백용)
   const sampleData = useMemo<ApprovalDocument[]>(() => [
     {
@@ -996,29 +1067,9 @@ const ElectronicApproval: React.FC = () => {
     try {
       const response = await approvalService.getApprovals();
       if (response.success) {
-        const documentsData: ApprovalDocument[] = (response.data || []).map((d: any) => ({
-          id: d.id,
-          documentId: d.document_id || '',
-          title: d.title || '',
-          type: d.type || 'other',
-          category: d.category || '',
-          amount: d.amount ? parseFloat(d.amount) : undefined,
-          requesterId: d.requester_id,
-          requesterName: d.requester?.username || t('approval.unknownUser'),
-          requesterDepartment: d.requester?.department || '-',
-          requesterPosition: d.requester?.position || '-',
-          description: normalizeEditorHtml(d.description || ''),
-          attachments: parseJsonArray(d.attachments),
-          status: d.status || 'draft',
-          priority: d.priority || 'medium',
-          currentApproverId: d.current_approver_id,
-          currentApproverName: d.currentApprover?.username,
-          approvalFlow: parseJsonArray(d.approval_flow),
-          createdAt: d.created_at || new Date().toISOString(),
-          updatedAt: d.updated_at || new Date().toISOString(),
-          dueDate: d.due_date,
-          comments: parseJsonArray(d.comments)
-        }));
+        const documentsData: ApprovalDocument[] = (response.data || []).map((d: any) =>
+          mapApprovalFromApi(d, usersRef.current)
+        );
         setDocuments(documentsData.length > 0 ? documentsData : sampleData);
       } else {
         setError(response.message || t('approval.errors.loadList'));
@@ -1029,13 +1080,14 @@ const ElectronicApproval: React.FC = () => {
       setError(error.response?.data?.message || t('approval.errors.loadListFailed'));
       setDocuments(sampleData);
     }
-  }, [normalizeEditorHtml, parseJsonArray, sampleData, t]);
+  }, [mapApprovalFromApi, sampleData, t]);
 
   useEffect(() => {
     if (!editor) return;
     const updateToolbarState = () => {
       const textStyleAttrs = editor.getAttributes('textStyle') || {};
       setFontSize(textStyleAttrs.fontSize || '14px');
+      setFontFamily(textStyleAttrs.fontFamily || '');
       setFontColor(textStyleAttrs.color || '#000000');
       setBackgroundColor(textStyleAttrs.backgroundColor || '#ffffff');
       lastSelectionRef.current = editor.state.selection;
@@ -1140,9 +1192,37 @@ const ElectronicApproval: React.FC = () => {
   }, [documents, searchTerm, statusFilter, typeFilter, priorityFilter, activeTab, user?.id, orderBy, order]);
 
   useEffect(() => {
-    loadApprovalData();
+    usersRef.current = users;
+  }, [users]);
+
+  useEffect(() => {
     loadUsers();
-  }, [loadApprovalData, loadUsers]);
+  }, [loadUsers]);
+
+  useEffect(() => {
+    loadApprovalData();
+  }, [loadApprovalData]);
+
+  useEffect(() => {
+    if (users.length === 0) return;
+    setDocuments((prev) => {
+      if (prev.length === 0) return prev;
+      let changed = false;
+      const next = prev.map((doc) => {
+        const nextFlow = doc.approvalFlow.map((step) => normalizeApprovalStep(step, users));
+        const flowUnchanged = nextFlow.every(
+          (step, index) =>
+            step.approverName === doc.approvalFlow[index]?.approverName &&
+            step.approverDepartment === doc.approvalFlow[index]?.approverDepartment &&
+            step.approverPosition === doc.approvalFlow[index]?.approverPosition
+        );
+        if (flowUnchanged) return doc;
+        changed = true;
+        return { ...doc, approvalFlow: nextFlow };
+      });
+      return changed ? next : prev;
+    });
+  }, [users, normalizeApprovalStep]);
 
   useEffect(() => {
     if (!user) {
@@ -1347,9 +1427,203 @@ const ElectronicApproval: React.FC = () => {
   const getEscalationCount = (document: ApprovalDocument) =>
     document.approvalFlow.filter(step => step.escalated).length;
 
-  const handleViewDocument = (document: ApprovalDocument) => {
+  const resolveApprovalFlow = useCallback((document: ApprovalDocument): ApprovalStep[] => {
+    const flow = document.approvalFlow.map((step) => normalizeApprovalStep(step, users));
+    if (flow.length > 0) return flow;
+    if (document.currentApproverId) {
+      const matchedUser = users.find((u) => u.id === document.currentApproverId);
+      return [{
+        id: 1,
+        stepOrder: 1,
+        approverId: document.currentApproverId,
+        approverName: document.currentApproverName ?? matchedUser?.username ?? t('approval.unknownUser'),
+        approverDepartment: matchedUser?.department ?? '-',
+        approverPosition: matchedUser?.position ?? '-',
+        status: document.status === 'approved' ? 'approved' : 'pending',
+      }];
+    }
+    return [];
+  }, [normalizeApprovalStep, t, users]);
+
+  const getApprovalDisplayName = (document: ApprovalDocument) => {
+    const flow = resolveApprovalFlow(document);
+    const pendingStep = flow.find(step => step.status === 'pending');
+    if (pendingStep) return pendingStep.approverName;
+    if (document.status === 'approved') {
+      const lastApproved = [...flow].reverse().find(step => step.status === 'approved');
+      return lastApproved?.approverName || document.currentApproverName || '-';
+    }
+    return flow[0]?.approverName || document.currentApproverName || '-';
+  };
+
+  const getStepStatusLabel = (status: ApprovalStep['status']) => {
+    switch (status) {
+      case 'approved': return t('approval.detail.stepApproved');
+      case 'pending': return t('approval.detail.stepPending');
+      case 'rejected': return t('approval.detail.stepRejected');
+      case 'skipped': return t('approval.detail.stepSkipped');
+      default: return status;
+    }
+  };
+
+  const getStepStatusColor = (status: ApprovalStep['status']) => {
+    switch (status) {
+      case 'approved': return 'success';
+      case 'pending': return 'warning';
+      case 'rejected': return 'error';
+      case 'skipped': return 'info';
+      default: return 'default';
+    }
+  };
+
+  const renderApprovalFlowSummary = (document: ApprovalDocument) => (
+    <Box sx={{
+      display: 'grid',
+      gridTemplateColumns: '1fr auto 1fr',
+      gap: 1.25,
+      alignItems: 'center',
+      border: `1px solid ${APPROVAL_FORM_BORDER.flowOuter}`,
+      borderRadius: '14px',
+      p: 1.5,
+      bgcolor: 'background.paper',
+      boxShadow: '0 1px 4px rgba(15, 23, 42, 0.06)',
+    }}>
+      <Box sx={{
+        border: `1.5px dashed ${APPROVAL_FORM_BORDER.flowStep}`,
+        borderRadius: '12px',
+        minHeight: 62,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: 0.5,
+        bgcolor: APPROVAL_FORM_BORDER.flowStepBg,
+      }}>
+        <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+          {t('approval.flowDraft')}
+        </Typography>
+        <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+          {document.requesterName}
+        </Typography>
+      </Box>
+      <ArrowForwardIcon sx={{ color: APPROVAL_FORM_BORDER.flowArrow, fontSize: 22 }} />
+      <Box sx={{
+        border: `1.5px dashed ${APPROVAL_FORM_BORDER.flowStep}`,
+        borderRadius: '12px',
+        minHeight: 62,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        gap: 0.5,
+        bgcolor: APPROVAL_FORM_BORDER.flowStepBg,
+      }}>
+        <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+          {t('approval.flowApprove')}
+        </Typography>
+        <Typography variant="body2" sx={{ fontWeight: 700, color: 'text.primary' }}>
+          {getApprovalDisplayName(document)}
+        </Typography>
+      </Box>
+    </Box>
+  );
+
+  const renderApprovalFlowTimeline = (document: ApprovalDocument) => {
+    const flow = resolveApprovalFlow(document);
+    return (
+      <Box sx={{ mt: 1.5 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1, fontWeight: 600 }}>
+          {t('approval.detail.flowPath')}
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+            <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: '0.85rem' }}>
+              {document.requesterName.charAt(0)}
+            </Avatar>
+            <Box sx={{ flex: 1, pb: 1.5 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{document.requesterName}</Typography>
+                <Chip label={t('approval.flowDraft')} size="small" variant="outlined" />
+              </Box>
+              <Typography variant="caption" color="text.secondary">
+                {document.requesterDepartment} {document.requesterPosition}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                {t('approval.detail.flowSubmittedAt')}: {formatDateTime(document.createdAt)}
+              </Typography>
+            </Box>
+          </Box>
+          {flow.map((step, idx) => (
+            <Box key={`${step.id}-${idx}`} sx={{ display: 'flex', gap: 1.5 }}>
+              <Box sx={{
+                width: 32,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+              }}>
+                <Box sx={{ width: 2, flex: 1, minHeight: 12, bgcolor: APPROVAL_FORM_BORDER.flowStep }} />
+              </Box>
+              <Box sx={{ flex: 1, pb: idx < flow.length - 1 ? 1.5 : 0 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  {idx === 0
+                    ? t('approval.detail.flowRequestTo', { name: step.approverName })
+                    : t('approval.detail.flowForwardedTo', { name: step.approverName })}
+                </Typography>
+                <Box sx={{
+                  p: 1.25,
+                  border: `1px solid ${APPROVAL_FORM_BORDER.flowOuter}`,
+                  borderRadius: 1.5,
+                  bgcolor: APPROVAL_FORM_BORDER.flowStepBg,
+                }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>{step.approverName}</Typography>
+                    <Chip label={t('approval.flowApprove')} size="small" variant="outlined" />
+                    <Chip
+                      label={getStepStatusLabel(step.status)}
+                      size="small"
+                      color={getStepStatusColor(step.status) as 'success' | 'warning' | 'error' | 'info' | 'default'}
+                    />
+                  </Box>
+                  <Typography variant="caption" color="text.secondary">
+                    {step.approverDepartment} {step.approverPosition}
+                  </Typography>
+                  {step.escalated && step.escalatedToName && (
+                    <Typography variant="caption" color="info.main" sx={{ display: 'block', mt: 0.5 }}>
+                      {t('approval.detail.flowForwardedTo', { name: step.escalatedToName })}
+                    </Typography>
+                  )}
+                  {step.approvedAt && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                      {t('approval.detail.approvalDate')}: {formatDateTime(step.approvedAt)}
+                    </Typography>
+                  )}
+                </Box>
+              </Box>
+            </Box>
+          ))}
+          {flow.length === 0 && (
+            <Typography variant="body2" color="text.secondary" sx={{ pl: 5.5 }}>
+              {t('approval.detail.noApprover')}
+            </Typography>
+          )}
+        </Box>
+      </Box>
+    );
+  };
+
+  const handleViewDocument = async (document: ApprovalDocument) => {
+    setEscalateTo(null);
+    setEscalationComment('');
     setSelectedDocument(document);
     setDetailDialogOpen(true);
+    try {
+      const response = await approvalService.getApproval(document.id);
+      if (response.success && response.data) {
+        setSelectedDocument(mapApprovalFromApi(response.data, users, { normalizeDescription: true }));
+      }
+    } catch (error) {
+      console.error('결재 문서 상세 조회 오류:', error);
+    }
   };
 
   const handleAdd = () => {
@@ -1482,6 +1756,13 @@ const ElectronicApproval: React.FC = () => {
         response = await approvalService.updateApproval(selectedDocument.id, approvalData);
       } else {
         response = await approvalService.createApproval(approvalData);
+        if (response.success && response.data?.id) {
+          const submitResponse = await approvalService.submitApproval(response.data.id);
+          if (!submitResponse.success) {
+            setError(submitResponse.message || t('approval.errors.submitFailed'));
+            return;
+          }
+        }
       }
 
       if (response.success) {
@@ -1535,6 +1816,9 @@ const ElectronicApproval: React.FC = () => {
       if (response.success) {
         setSuccess(t('approval.toast.documentApproved'));
         loadApprovalData();
+        if (detailDialogOpen && selectedDocument?.id === id) {
+          setDetailDialogOpen(false);
+        }
         if (viewMode === 'view' && selectedDocument?.id === id) {
           setViewMode('list');
         }
@@ -1549,7 +1833,7 @@ const ElectronicApproval: React.FC = () => {
 
   const handleRejectDocument = (id: number) => {
     showPrompt(
-      t('approval.validation.rejectionReasonPrompt', { defaultValue: '반려 사유를 입력하세요.' }),
+      '',
       (comment) => {
         void (async () => {
           try {
@@ -1557,6 +1841,9 @@ const ElectronicApproval: React.FC = () => {
             if (response.success) {
               setSuccess(t('approval.toast.documentRejected'));
               loadApprovalData();
+              if (detailDialogOpen && selectedDocument?.id === id) {
+                setDetailDialogOpen(false);
+              }
               if (viewMode === 'view' && selectedDocument?.id === id) {
                 setViewMode('list');
               }
@@ -1570,12 +1857,14 @@ const ElectronicApproval: React.FC = () => {
         })();
       },
       {
-        title: t('approval.rejectDialogTitle', { defaultValue: '결재 반려' }),
-        label: t('approval.rejectReasonLabel', { defaultValue: '반려 사유' }),
+        messageKey: 'approval.validation.rejectionReasonPrompt',
+        titleKey: 'approval.rejectDialogTitle',
+        labelKey: 'approval.rejectReasonLabel',
+        placeholderKey: 'approval.rejectReasonPlaceholder',
         multiline: true,
         minRows: 3,
-        confirmText: t('approval.rejectSubmit', { defaultValue: '반려' }),
-        cancelText: t('common.cancel')
+        confirmTextKey: 'approval.reject',
+        cancelTextKey: 'common.cancel',
       }
     );
   };
@@ -1596,30 +1885,7 @@ const ElectronicApproval: React.FC = () => {
         setSuccess(t('approval.toast.documentEscalated'));
         const updated = await approvalService.getApproval(selectedDocument.id);
         if (updated.success) {
-          const updatedDoc: ApprovalDocument = {
-            id: updated.data.id,
-            documentId: updated.data.document_id || '',
-            title: updated.data.title || '',
-            type: updated.data.type || 'other',
-            category: updated.data.category || '',
-            amount: updated.data.amount ? parseFloat(updated.data.amount) : undefined,
-            requesterId: updated.data.requester_id,
-            requesterName: updated.data.requester?.username || t('approval.unknownUser'),
-            requesterDepartment: updated.data.requester?.department || '-',
-            requesterPosition: updated.data.requester?.position || '-',
-            description: updated.data.description || '',
-            attachments: parseJsonArray(updated.data.attachments),
-            status: updated.data.status || 'draft',
-            priority: updated.data.priority || 'medium',
-            currentApproverId: updated.data.current_approver_id,
-            currentApproverName: updated.data.currentApprover?.username,
-            approvalFlow: parseJsonArray(updated.data.approval_flow),
-            createdAt: updated.data.created_at || new Date().toISOString(),
-            updatedAt: updated.data.updated_at || new Date().toISOString(),
-            dueDate: updated.data.due_date,
-            comments: parseJsonArray(updated.data.comments)
-          };
-          setSelectedDocument(updatedDoc);
+          setSelectedDocument(mapApprovalFromApi(updated.data, users));
         }
         loadApprovalData();
         setEscalateTo(null);
@@ -1633,6 +1899,88 @@ const ElectronicApproval: React.FC = () => {
     } finally {
       setEscalating(false);
     }
+  };
+
+  const renderEscalationSection = (document: ApprovalDocument) => {
+    const escalationCount = getEscalationCount(document);
+    const escalationLimitReached = escalationCount >= 4;
+    const isCurrentApprover = document.currentApproverId === user?.id;
+    const canEscalate =
+      isCurrentApprover &&
+      (document.status === 'submitted' || document.status === 'in_review') &&
+      !escalationLimitReached;
+
+    if (!isCurrentApprover) return null;
+
+    return (
+      <Box>
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.75 }}>
+          {t('approval.detail.escalationSection')}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          {t('approval.forwardHint')}
+        </Typography>
+        <Card
+          variant="outlined"
+          sx={{
+            p: 2,
+            bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.04),
+            borderColor: APPROVAL_FORM_BORDER.flowOuter,
+          }}
+        >
+          <Grid container spacing={2} alignItems="center">
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Autocomplete
+                options={users.filter((u) => u.id !== user?.id && u.id !== document.requesterId)}
+                getOptionLabel={(option) =>
+                  `${option.username}${option.department ? ` (${option.department})` : ''}`
+                }
+                value={users.find((u) => u.id === escalateTo) || null}
+                onChange={(_event, newValue) => setEscalateTo(newValue?.id || null)}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label={t('approval.escalateTo')}
+                    placeholder={t('approval.selectApprover')}
+                    size="small"
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: '12px',
+                        bgcolor: 'background.paper',
+                      },
+                    }}
+                  />
+                )}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <TextField
+                fullWidth
+                label={t('approval.escalationReason')}
+                value={escalationComment}
+                onChange={(e) => setEscalationComment(e.target.value)}
+                size="small"
+              />
+            </Grid>
+            <Grid size={{ xs: 12 }} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+              <Typography variant="caption" color={escalationLimitReached ? 'error.main' : 'text.secondary'}>
+                {t('approval.escalationCount', { current: escalationCount, max: 4 })}
+              </Typography>
+              <Button
+                variant="contained"
+                color="info"
+                startIcon={escalating ? <CircularProgress size={18} color="inherit" /> : <ReplyIcon />}
+                onClick={handleEscalateDocument}
+                disabled={!canEscalate || !escalateTo || escalating}
+                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
+              >
+                {escalating ? t('approval.saving') : t('approval.escalate')}
+              </Button>
+            </Grid>
+          </Grid>
+        </Card>
+      </Box>
+    );
   };
 
   const handleAddComment = async (documentId: number, parentId?: number) => {
@@ -1709,10 +2057,7 @@ const ElectronicApproval: React.FC = () => {
   );
 
   if (viewMode === 'view' && selectedDocument) {
-    const escalationCount = getEscalationCount(selectedDocument);
-    const escalationLimitReached = escalationCount >= 4;
     const isCurrentApprover = selectedDocument.currentApproverId === user?.id;
-    const canEscalate = isCurrentApprover && (selectedDocument.status === 'submitted' || selectedDocument.status === 'in_review') && !escalationLimitReached;
 
     return (
       <Box sx={{ 
@@ -1862,11 +2207,46 @@ const ElectronicApproval: React.FC = () => {
               </Card>
             </Box>
 
-            {/* 결재 흐름 - 카드형(좌측 이미지 스타일) */}
+            {/* 결재 흐름 - 작성 → 승인 2단계 */}
             <Box sx={{ mb: 4 }}>
               <Typography variant="h6" gutterBottom>{t('approval.detail.approvalFlow')}</Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-                {selectedDocument.approvalFlow.map((step) => {
+              <Box sx={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: 1.25,
+                border: `1px solid ${APPROVAL_FORM_BORDER.flowOuter}`,
+                borderRadius: '14px',
+                p: 1.5,
+                bgcolor: 'background.paper',
+                boxShadow: '0 1px 4px rgba(15, 23, 42, 0.06)',
+                mb: 2,
+              }}>
+                {approvalFlowLabels.map((label, flowIdx) => (
+                  <Box key={label} sx={{
+                    border: `1.5px dashed ${APPROVAL_FORM_BORDER.flowStep}`,
+                    borderRadius: '12px',
+                    minHeight: 62,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'column',
+                    gap: 0.5,
+                    bgcolor: APPROVAL_FORM_BORDER.flowStepBg,
+                  }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                      {label}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 700 }}>
+                      {flowIdx === 0
+                        ? selectedDocument.requesterName
+                        : getApprovalDisplayName(selectedDocument)}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+              {renderApprovalFlowTimeline(selectedDocument)}
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 2 }}>
+                {resolveApprovalFlow(selectedDocument).map((step) => {
                   const statusLabel = (() => {
                     switch (step.status) {
                       case 'approved': return t('approval.detail.stepApproved');
@@ -1956,55 +2336,7 @@ const ElectronicApproval: React.FC = () => {
               </Box>
             </Box>
 
-            {/* 에스컬레이션 */}
-            {isCurrentApprover && (
-              <Box sx={{ mb: 4 }}>
-                <Typography variant="h6" gutterBottom>{t('approval.detail.escalationSection')}</Typography>
-                <Card variant="outlined" sx={{ p: 2, bgcolor: 'grey.50' }}>
-                  <Grid container spacing={2} alignItems="center">
-                    <Grid size={{ xs: 12, md: 6 }}>
-                      <Autocomplete
-                        options={users.filter(u => u.id !== user?.id && u.id !== selectedDocument.requesterId)}
-                        getOptionLabel={(option) => `${option.username}${option.department ? ` (${option.department})` : ''}`}
-                        value={users.find(u => u.id === escalateTo) || null}
-                        onChange={(event, newValue) => setEscalateTo(newValue?.id || null)}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label={t('approval.escalateTo')}
-                            placeholder={t('approval.selectApprover')}
-                            size="small"
-                          />
-                        )}
-                      />
-                    </Grid>
-                    <Grid size={{ xs: 12, md: 6 }}>
-                      <TextField
-                        fullWidth
-                        label={t('approval.escalationReason')}
-                        value={escalationComment}
-                        onChange={(e) => setEscalationComment(e.target.value)}
-                        size="small"
-                      />
-                    </Grid>
-                    <Grid size={{ xs: 12 }} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Typography variant="caption" color={escalationLimitReached ? 'error.main' : 'text.secondary'}>
-                        {t('approval.escalationCount', { current: escalationCount, max: 4 })}
-                      </Typography>
-                      <Button
-                        variant="contained"
-                        color="info"
-                        startIcon={<ReplyIcon />}
-                        onClick={handleEscalateDocument}
-                        disabled={!canEscalate || !escalateTo || escalating}
-                      >
-                        {t('approval.escalate')}
-                      </Button>
-                    </Grid>
-                  </Grid>
-                </Card>
-              </Box>
-            )}
+            {renderEscalationSection(selectedDocument)}
 
             {/* 댓글 섹션 */}
             <Box sx={{ mb: 3 }}>
@@ -2165,11 +2497,11 @@ const ElectronicApproval: React.FC = () => {
               >
                 PDF 다운로드
               </Button>
-              {selectedDocument.status === 'in_review' && (
+              {(selectedDocument.status === 'submitted' || selectedDocument.status === 'in_review') && isCurrentApprover && (
                 <>
                   <Button
                     variant="contained"
-                    color="success"
+                    color="error"
                     startIcon={<CheckCircleIcon />}
                     onClick={() => {
                       // 현재 승인 단계 확인
@@ -2187,7 +2519,7 @@ const ElectronicApproval: React.FC = () => {
                   </Button>
                   <Button
                     variant="contained"
-                    color="error"
+                    color="primary"
                     startIcon={<CancelIcon />}
                     onClick={() => handleRejectDocument(selectedDocument.id)}
                   >
@@ -2392,36 +2724,42 @@ const ElectronicApproval: React.FC = () => {
                 </Box>
                 <Box sx={{ 
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
-                  gap: 1,
-                  border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: 1.25,
+                  border: `1px solid ${APPROVAL_FORM_BORDER.flowOuter}`,
                   borderRadius: '14px',
-                  p: 1.25,
+                  p: 1.5,
                   bgcolor: 'background.paper',
-                  boxShadow: '0 1px 6px rgba(15, 23, 42, 0.04)',
+                  boxShadow: '0 1px 4px rgba(15, 23, 42, 0.06)',
                 }}>
-                  {approvalFlowLabels.map((label, flowIdx) => (
-                    <Box key={label} sx={{ 
-                      border: `1px dashed ${alpha(theme.palette.divider, 0.95)}`,
-                      borderRadius: '12px',
-                      minHeight: 58,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexDirection: 'column',
-                      gap: 0.5,
-                      bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
-                    }}>
-                      <Typography variant="caption" color="text.secondary">
-                        {label}
-                      </Typography>
-                      {flowIdx === 0 && user?.username && (
-                        <Typography variant="caption" sx={{ color: 'text.primary', fontWeight: 600 }}>
-                          {user.username}
+                  {approvalFlowLabels.map((label, flowIdx) => {
+                    const selectedApprover = users.find(u => u.id === formData.nextApproverId);
+                    const displayName = flowIdx === 0
+                      ? user?.username
+                      : selectedApprover?.username;
+                    return (
+                      <Box key={label} sx={{ 
+                        border: `1.5px dashed ${APPROVAL_FORM_BORDER.flowStep}`,
+                        borderRadius: '12px',
+                        minHeight: 62,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'column',
+                        gap: 0.5,
+                        bgcolor: APPROVAL_FORM_BORDER.flowStepBg,
+                      }}>
+                        <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                          {label}
                         </Typography>
-                      )}
-                    </Box>
-                  ))}
+                        {displayName && (
+                          <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 700 }}>
+                            {displayName}
+                          </Typography>
+                        )}
+                      </Box>
+                    );
+                  })}
                 </Box>
               </Box>
             </Box>
@@ -2439,7 +2777,7 @@ const ElectronicApproval: React.FC = () => {
                     color: 'text.primary',
                     pb: 1,
                     borderBottom: '1px solid',
-                    borderColor: alpha(theme.palette.divider, 0.9),
+                    borderColor: APPROVAL_FORM_BORDER.section,
                     letterSpacing: '-0.01em',
                   }}>
                     {t('approval.applicantInfo')}
@@ -2479,7 +2817,7 @@ const ElectronicApproval: React.FC = () => {
                     color: 'text.primary',
                     pb: 1,
                     borderBottom: '1px solid',
-                    borderColor: alpha(theme.palette.divider, 0.75),
+                    borderColor: APPROVAL_FORM_BORDER.section,
                     letterSpacing: '-0.01em',
                   }}>
                   {t('approval.approverSectionTitle')}
@@ -2506,7 +2844,7 @@ const ElectronicApproval: React.FC = () => {
                           '& .MuiOutlinedInput-root': {
                             ...(approvalWriteFieldSx['& .MuiOutlinedInput-root'] as Record<string, unknown>),
                             borderRadius: '12px',
-                            bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.1 : 0.05),
+                            bgcolor: 'background.paper',
                           },
                         }}
                       />
@@ -2525,14 +2863,14 @@ const ElectronicApproval: React.FC = () => {
                     color: 'text.primary',
                     pb: 1,
                     borderBottom: '1px solid',
-                    borderColor: alpha(theme.palette.divider, 0.9),
+                    borderColor: APPROVAL_FORM_BORDER.section,
                     letterSpacing: '-0.01em',
                   }}>
                   {t('approval.paymentDetails')}
                 </Typography>
                 <Grid
                   container
-                  spacing={2}
+                  spacing={2.5}
                   alignItems="flex-start"
                   sx={{
                     '& .MuiFormControl-root': { mt: 0 },
@@ -2541,7 +2879,7 @@ const ElectronicApproval: React.FC = () => {
                 >
                   {/* 왼쪽 컬럼 */}
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
                       <TextField
                         fullWidth
                         size="small"
@@ -2585,7 +2923,7 @@ const ElectronicApproval: React.FC = () => {
 
                   {/* 오른쪽 컬럼 */}
                   <Grid size={{ xs: 12, md: 6 }}>
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
                       <TextField
                         fullWidth
                         size="small"
@@ -2634,158 +2972,60 @@ const ElectronicApproval: React.FC = () => {
 
                 {/* 설명 섹션 - 전체 너비 */}
                 <Box
-                  component="fieldset"
                   sx={{
-                    mt: 3,
-                    m: 0,
-                    p: 0,
-                    minWidth: 0,
-                    border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+                    mt: 3.5,
+                    border: `1px solid ${APPROVAL_FORM_BORDER.section}`,
                     borderRadius: '14px',
+                    overflow: 'hidden',
                     bgcolor: 'background.paper',
                     display: 'flex',
                     flexDirection: 'column',
                     minHeight: 280,
-                    boxShadow: `inset 0 0 0 1px ${alpha(theme.palette.divider, 0.06)}`,
                   }}
                 >
-                  <Box
-                    component="legend"
-                    sx={{ px: 0.5, ml: 1.5, fontSize: '0.75rem', fontWeight: 600, color: 'text.secondary' }}
-                  >
-                    {t('approval.description')}
-                  </Box>
-                  <Box sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    flex: 1,
-                    minHeight: 0,
-                    '& .tiptap': {
-                      flex: 1,
-                      minHeight: 230,
-                      p: 2.25,
-                      outline: 'none',
-                      fontSize: '0.875rem',
-                      backgroundImage: `repeating-linear-gradient(to bottom, ${theme.palette.background.paper}, ${theme.palette.background.paper} 27px, ${alpha(theme.palette.divider, 0.35)} 28px)`,
-                      '& p.is-editor-empty:first-child::before': {
-                        content: `"${t('approval.enterDescription')}"`,
-                        color: 'rgba(0, 0, 0, 0.38)',
-                        float: 'left',
-                        height: 0,
-                        pointerEvents: 'none'
-                      },
-                      '& img': {
-                        maxWidth: '100%',
-                        height: 'auto',
-                        display: 'block !important',
-                        border: '2px dashed transparent',
-                        borderRadius: 1,
-                        transition: 'all 0.2s',
-                        margin: '12px auto',
-                        clear: 'both',
-                        '&:hover': {
-                          borderColor: 'primary.main',
-                          opacity: 0.9,
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                        }
-                      },
-                      '& p:has(img)': {
-                        margin: '12px 0 !important',
-                        textAlign: 'center',
-                        display: 'block !important',
-                        clear: 'both',
-                        '& img': {
-                          display: 'block !important',
-                          margin: '12px auto !important',
-                          clear: 'both'
-                        }
-                      },
-                      '& p > img': {
-                        display: 'block !important',
-                        margin: '12px auto !important',
-                        clear: 'both'
-                      },
-                      '& img.editor-image-active': {
-                        borderColor: 'primary.main',
-                        boxShadow: '0 0 0 2px rgba(25, 118, 210, 0.15)'
-                      },
-                      '& .editor-image-resize-handle': {
-                        position: 'absolute',
-                        width: 16,
-                        height: 16,
-                        borderRadius: '50%',
-                        backgroundColor: 'primary.main',
-                        border: '2px solid #fff',
-                        boxShadow: '0 1px 6px rgba(0,0,0,0.3)',
-                        cursor: 'nwse-resize',
-                        zIndex: 1200,
-                        display: 'none'
-                      },
-                      '& table': {
-                        borderCollapse: 'collapse',
-                        width: '100%',
-                        margin: '16px 0',
-                        position: 'relative',
-                        '& td, & th': {
-                          border: '1px solid #ddd',
-                          padding: '8px',
-                          textAlign: 'left',
-                          position: 'relative'
-                        },
-                        '& th': {
-                          backgroundColor: '#f2f2f2',
-                          fontWeight: 'bold'
-                        },
-                        '& tr': {
-                          position: 'relative'
-                        },
-                        '& .table-col-resize-handle': {
-                          position: 'absolute',
-                          top: 0,
-                          right: '-5px',
-                          width: '10px',
-                          height: '100%',
-                          cursor: 'col-resize',
-                          zIndex: 1000,
-                          background: 'transparent',
-                          transition: 'background 0.2s',
-                          '&:hover': {
-                            background: 'rgba(25, 118, 210, 0.3)'
-                          }
-                        },
-                        '& .table-row-resize-handle': {
-                          position: 'absolute',
-                          bottom: '-5px',
-                          left: 0,
-                          width: '100%',
-                          height: '10px',
-                          cursor: 'row-resize',
-                          zIndex: 1000,
-                          background: 'transparent',
-                          transition: 'background 0.2s',
-                          '&:hover': {
-                            background: 'rgba(25, 118, 210, 0.3)'
-                          }
-                        }
-                      },
-                      '& [style*="font-size"]': {
-                        // fontSize 스타일 지원
-                      }
-                    }
-                  }}>
-                          {/* 툴바 */}
+                          {/* 서식 툴바 */}
                           {editor && (
                             <Box sx={{
-                              borderBottom: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+                              borderBottom: `1px solid ${APPROVAL_FORM_BORDER.section}`,
                               bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.05),
                               p: 1.25,
                               display: 'flex',
-                              flexWrap: 'wrap',
-                              gap: 0.65,
-                              alignItems: 'center',
-                              borderTopLeftRadius: 13,
-                              borderTopRightRadius: 13,
+                              flexDirection: 'column',
+                              gap: 0.75,
                             }}>
+                              <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', px: 0.25 }}>
+                                {t('approval.toolbar.label')}
+                              </Typography>
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.65, alignItems: 'center' }}>
+                              <Tooltip title={t('approval.toolbar.undo')}>
+                                <span>
+                                  <Button
+                                    size="small"
+                                    variant="text"
+                                    disableElevation
+                                    disabled={!editor.can().undo()}
+                                    onClick={() => editor.chain().focus().undo().run()}
+                                    sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px' }}
+                                  >
+                                    <UndoIcon fontSize="small" />
+                                  </Button>
+                                </span>
+                              </Tooltip>
+                              <Tooltip title={t('approval.toolbar.redo')}>
+                                <span>
+                                  <Button
+                                    size="small"
+                                    variant="text"
+                                    disableElevation
+                                    disabled={!editor.can().redo()}
+                                    onClick={() => editor.chain().focus().redo().run()}
+                                    sx={{ minWidth: 'auto', px: 1.1, borderRadius: '10px' }}
+                                  >
+                                    <RedoIcon fontSize="small" />
+                                  </Button>
+                                </span>
+                              </Tooltip>
+                              <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
                               <Button
                                 size="small"
                                 variant={editor.isActive('bold') ? 'contained' : 'text'}
@@ -2831,7 +3071,11 @@ const ElectronicApproval: React.FC = () => {
                                       editor.chain().focus().toggleHeading({ level: parseInt(value.replace('h', '')) as 1 | 2 | 3 }).run();
                                     }
                                   }}
-                                  sx={{ height: 32 }}
+                                  sx={{
+                                    height: 32,
+                                    '& .MuiOutlinedInput-notchedOutline': { borderColor: APPROVAL_FORM_BORDER.field },
+                                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: APPROVAL_FORM_BORDER.fieldHover },
+                                  }}
                                 >
                                   <MenuItem value="p">{t('approval.toolbar.body')}</MenuItem>
                                   <MenuItem value="h1">{t('approval.toolbar.heading1')}</MenuItem>
@@ -2848,13 +3092,44 @@ const ElectronicApproval: React.FC = () => {
                                     setFontSize(value);
                                     editor.chain().focus().setMark('textStyle', { fontSize: value }).run();
                                   }}
-                                  sx={{ height: 32 }}
+                                  sx={{
+                                    height: 32,
+                                    '& .MuiOutlinedInput-notchedOutline': { borderColor: APPROVAL_FORM_BORDER.field },
+                                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: APPROVAL_FORM_BORDER.fieldHover },
+                                  }}
                                 >
                                   <MenuItem value="12px">12px</MenuItem>
                                   <MenuItem value="14px">14px</MenuItem>
                                   <MenuItem value="16px">16px</MenuItem>
                                   <MenuItem value="18px">18px</MenuItem>
                                   <MenuItem value="24px">24px</MenuItem>
+                                </Select>
+                              </FormControl>
+                              <FormControl size="small" sx={{ minWidth: 120 }}>
+                                <Select
+                                  value={fontFamily}
+                                  displayEmpty
+                                  onChange={(e) => {
+                                    const value = e.target.value as string;
+                                    setFontFamily(value);
+                                    if (value) {
+                                      editor.chain().focus().setFontFamily(value).run();
+                                    } else {
+                                      editor.chain().focus().unsetFontFamily().run();
+                                    }
+                                  }}
+                                  sx={{
+                                    height: 32,
+                                    '& .MuiOutlinedInput-notchedOutline': { borderColor: APPROVAL_FORM_BORDER.field },
+                                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: APPROVAL_FORM_BORDER.fieldHover },
+                                  }}
+                                >
+                                  <MenuItem value="">{t('approval.toolbar.fontDefault')}</MenuItem>
+                                  <MenuItem value="Arial">Arial</MenuItem>
+                                  <MenuItem value="Georgia">Georgia</MenuItem>
+                                  <MenuItem value="Times New Roman">Times New Roman</MenuItem>
+                                  <MenuItem value="Verdana">Verdana</MenuItem>
+                                  <MenuItem value="Courier New">Courier New</MenuItem>
                                 </Select>
                               </FormControl>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, px: 0.5 }}>
@@ -3049,11 +3324,134 @@ const ElectronicApproval: React.FC = () => {
                               >
                                 {t('approval.toolbar.clear')}
                               </Button>
+                              </Box>
                             </Box>
                           )}
-                    {/* 에디터 */}
-                    <EditorContent editor={editor} />
-                    
+                    <Box sx={{
+                      flex: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      minHeight: 0,
+                      '& > div': {
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        minHeight: 0,
+                      },
+                      '& .tiptap': {
+                        flex: 1,
+                        minHeight: 230,
+                        p: 2.25,
+                        outline: 'none',
+                        fontSize: '0.875rem',
+                        bgcolor: 'background.paper',
+                        border: 'none',
+                        '& p.is-editor-empty:first-child::before': {
+                          content: `"${t('approval.enterDescription')}"`,
+                          color: 'rgba(0, 0, 0, 0.38)',
+                          float: 'left',
+                          height: 0,
+                          pointerEvents: 'none'
+                        },
+                        '& img': {
+                          maxWidth: '100%',
+                          height: 'auto',
+                          display: 'block !important',
+                          border: '2px dashed transparent',
+                          borderRadius: 1,
+                          transition: 'all 0.2s',
+                          margin: '12px auto',
+                          clear: 'both',
+                          '&:hover': {
+                            borderColor: 'primary.main',
+                            opacity: 0.9,
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                          }
+                        },
+                        '& p:has(img)': {
+                          margin: '12px 0 !important',
+                          textAlign: 'center',
+                          display: 'block !important',
+                          clear: 'both',
+                          '& img': {
+                            display: 'block !important',
+                            margin: '12px auto !important',
+                            clear: 'both'
+                          }
+                        },
+                        '& p > img': {
+                          display: 'block !important',
+                          margin: '12px auto !important',
+                          clear: 'both'
+                        },
+                        '& img.editor-image-active': {
+                          borderColor: 'primary.main',
+                          boxShadow: '0 0 0 2px rgba(25, 118, 210, 0.15)'
+                        },
+                        '& .editor-image-resize-handle': {
+                          position: 'absolute',
+                          width: 16,
+                          height: 16,
+                          borderRadius: '50%',
+                          backgroundColor: 'primary.main',
+                          border: '2px solid #fff',
+                          boxShadow: '0 1px 6px rgba(0,0,0,0.3)',
+                          cursor: 'nwse-resize',
+                          zIndex: 1200,
+                          display: 'none'
+                        },
+                        '& table': {
+                          borderCollapse: 'collapse',
+                          width: '100%',
+                          margin: '16px 0',
+                          position: 'relative',
+                          '& td, & th': {
+                            border: '1px solid #ddd',
+                            padding: '8px',
+                            textAlign: 'left',
+                            position: 'relative'
+                          },
+                          '& th': {
+                            backgroundColor: '#f2f2f2',
+                            fontWeight: 'bold'
+                          },
+                          '& tr': {
+                            position: 'relative'
+                          },
+                          '& .table-col-resize-handle': {
+                            position: 'absolute',
+                            top: 0,
+                            right: '-5px',
+                            width: '10px',
+                            height: '100%',
+                            cursor: 'col-resize',
+                            zIndex: 1000,
+                            background: 'transparent',
+                            transition: 'background 0.2s',
+                            '&:hover': {
+                              background: 'rgba(25, 118, 210, 0.3)'
+                            }
+                          },
+                          '& .table-row-resize-handle': {
+                            position: 'absolute',
+                            bottom: '-5px',
+                            left: 0,
+                            width: '100%',
+                            height: '10px',
+                            cursor: 'row-resize',
+                            zIndex: 1000,
+                            background: 'transparent',
+                            transition: 'background 0.2s',
+                            '&:hover': {
+                              background: 'rgba(25, 118, 210, 0.3)'
+                            }
+                          }
+                        },
+                      },
+                    }}>
+                      {editor ? <EditorContent editor={editor} /> : null}
+                    </Box>
+
                     {/* 표 생성 다이얼로그 */}
                     <Dialog 
                       open={tableDialogOpen} 
@@ -3119,7 +3517,6 @@ const ElectronicApproval: React.FC = () => {
                         </Button>
                       </DialogActions>
                     </Dialog>
-                  </Box>
                 </Box>
               </Box>
 
@@ -3134,7 +3531,7 @@ const ElectronicApproval: React.FC = () => {
                   color: 'text.primary',
                   pb: 1,
                   borderBottom: '1px solid',
-                  borderColor: alpha(theme.palette.divider, 0.9),
+                  borderColor: APPROVAL_FORM_BORDER.section,
                   letterSpacing: '-0.01em',
                 }}>
                   {t('approval.attachments')}
@@ -3158,10 +3555,10 @@ const ElectronicApproval: React.FC = () => {
                         textTransform: 'none',
                         fontWeight: 600,
                         borderStyle: 'dashed',
-                        borderColor: alpha(theme.palette.divider, 0.95),
+                        borderColor: APPROVAL_FORM_BORDER.field,
                         color: 'text.secondary',
                         '&:hover': {
-                          borderColor: alpha(theme.palette.primary.main, 0.5),
+                          borderColor: APPROVAL_FORM_BORDER.fieldHover,
                           bgcolor: alpha(theme.palette.primary.main, 0.06),
                           color: 'primary.main',
                         },
@@ -3189,7 +3586,7 @@ const ElectronicApproval: React.FC = () => {
                             mb: 1,
                             borderRadius: '12px',
                             bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.05),
-                            border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+                            border: `1px solid ${APPROVAL_FORM_BORDER.section}`,
                             '&:hover': {
                               bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.12 : 0.08),
                             },
@@ -3248,7 +3645,7 @@ const ElectronicApproval: React.FC = () => {
                           p: 1.5,
                           mb: 1,
                           borderRadius: '12px',
-                          border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+                          border: `1px solid ${APPROVAL_FORM_BORDER.section}`,
                           bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
                         }}
                       >
@@ -3573,6 +3970,9 @@ const ElectronicApproval: React.FC = () => {
                     {t('approval.requester')}
                   </TableSortLabel>
                 </TableCell>
+                {activeTab === 0 && (
+                  <TableCell>{t('approval.flowColumn')}</TableCell>
+                )}
                 <TableCell>
                   <TableSortLabel
                     active={orderBy === 'type'}
@@ -3671,6 +4071,19 @@ const ElectronicApproval: React.FC = () => {
                       </Box>
                     </Box>
                   </TableCell>
+                  {activeTab === 0 && (
+                    <TableCell>
+                      <Typography variant="body2" component="span" color="text.secondary">
+                        {document.requesterName}
+                      </Typography>
+                      <Typography variant="body2" component="span" sx={{ mx: 0.5, color: 'text.disabled' }}>
+                        →
+                      </Typography>
+                      <Typography variant="body2" component="span" sx={{ fontWeight: 600 }}>
+                        {getApprovalDisplayName(document)}
+                      </Typography>
+                    </TableCell>
+                  )}
                   <TableCell>
                     {getTypeChip(document.type)}
                   </TableCell>
@@ -3679,7 +4092,9 @@ const ElectronicApproval: React.FC = () => {
                   <TableCell>{formatDateTime(document.createdAt)}</TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                      {document.status === 'in_review' && (
+                      {activeTab === 1 &&
+                        document.currentApproverId === user?.id &&
+                        (document.status === 'submitted' || document.status === 'in_review') && (
                         <>
                           <Tooltip title={t('approval.approve')}>
                             <IconButton 
@@ -3688,7 +4103,7 @@ const ElectronicApproval: React.FC = () => {
                                 event.stopPropagation();
                                 handleApproveDocument(document.id);
                               }}
-                              color="success"
+                              color="error"
                             >
                               <CheckCircleIcon />
                             </IconButton>
@@ -3700,9 +4115,21 @@ const ElectronicApproval: React.FC = () => {
                                 event.stopPropagation();
                                 handleRejectDocument(document.id);
                               }}
-                              color="error"
+                              color="primary"
                             >
                               <CancelIcon />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title={t('approval.escalate')}>
+                            <IconButton
+                              size="small"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleViewDocument(document);
+                              }}
+                              color="info"
+                            >
+                              <ReplyIcon />
                             </IconButton>
                           </Tooltip>
                         </>
@@ -3768,7 +4195,7 @@ const ElectronicApproval: React.FC = () => {
         fullWidth
       >
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          결재 문서 상세
+          {t('approval.detailPageTitle')}
           <IconButton onClick={() => setDetailDialogOpen(false)}>
             <CloseIcon />
           </IconButton>
@@ -3776,26 +4203,13 @@ const ElectronicApproval: React.FC = () => {
         <DialogContent dividers>
           {selectedDocument && (
             <Box sx={{ display: 'grid', gap: 2 }}>
-              {(() => {
-                const pendingStep = selectedDocument.approvalFlow.find(step => step.status === 'pending');
-                const approverName = pendingStep?.approverName || selectedDocument.currentApproverName || '-';
-                const approverDept = pendingStep?.approverDepartment || '-';
-                const approverPos = pendingStep?.approverPosition || '-';
-                return (
-                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">결재 대상</Typography>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>{approverName}</Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">결재 대상 부서/직책</Typography>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                        {approverDept} {approverPos}
-                      </Typography>
-                    </Box>
-                  </Box>
-                );
-              })()}
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                  {t('approval.detail.approvalFlow')}
+                </Typography>
+                {renderApprovalFlowSummary(selectedDocument)}
+                {renderApprovalFlowTimeline(selectedDocument)}
+              </Box>
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
                 <Box>
                   <Typography variant="caption" color="text.secondary">문서번호</Typography>
@@ -3893,14 +4307,47 @@ const ElectronicApproval: React.FC = () => {
                 </Box>
                 ) : null;
               })()}
+              {renderEscalationSection(selectedDocument)}
             </Box>
           )}
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button onClick={() => setDetailDialogOpen(false)} variant="outlined">
-            닫기
+        <DialogActions sx={{ px: 3, py: 2, flexWrap: 'wrap', gap: 1 }}>
+          <Button
+            onClick={() => {
+              setDetailDialogOpen(false);
+              setEscalateTo(null);
+              setEscalationComment('');
+            }}
+            variant="outlined"
+            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
+          >
+            {t('common.close')}
           </Button>
-          {selectedDocument && (
+          {selectedDocument &&
+            selectedDocument.currentApproverId === user?.id &&
+            (selectedDocument.status === 'submitted' || selectedDocument.status === 'in_review') && (
+              <>
+                <Button
+                  variant="contained"
+                  color="error"
+                  startIcon={<CheckCircleIcon />}
+                  onClick={() => handleApproveDocument(selectedDocument.id)}
+                  sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
+                >
+                  {t('approval.approve')}
+                </Button>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<CancelIcon />}
+                  onClick={() => handleRejectDocument(selectedDocument.id)}
+                  sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
+                >
+                  {t('approval.reject')}
+                </Button>
+              </>
+            )}
+          {selectedDocument && selectedDocument.requesterId === user?.id && (
             <Button
               variant="contained"
               startIcon={<EditIcon />}
@@ -3908,8 +4355,9 @@ const ElectronicApproval: React.FC = () => {
                 setDetailDialogOpen(false);
                 handleEditDocument(selectedDocument);
               }}
+              sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
             >
-              수정
+              {t('approval.update')}
             </Button>
           )}
         </DialogActions>
@@ -3929,14 +4377,20 @@ const ElectronicApproval: React.FC = () => {
       <PromptDialog
         open={promptDialogState.open}
         title={promptDialogState.title}
+        titleKey={promptDialogState.titleKey}
         message={promptDialogState.message}
+        messageKey={promptDialogState.messageKey}
         label={promptDialogState.label}
+        labelKey={promptDialogState.labelKey}
         defaultValue={promptDialogState.defaultValue}
         placeholder={promptDialogState.placeholder}
+        placeholderKey={promptDialogState.placeholderKey}
         multiline={promptDialogState.multiline}
         minRows={promptDialogState.minRows}
         confirmText={promptDialogState.confirmText}
+        confirmTextKey={promptDialogState.confirmTextKey}
         cancelText={promptDialogState.cancelText}
+        cancelTextKey={promptDialogState.cancelTextKey}
         required={promptDialogState.required}
         onConfirm={handlePromptConfirm}
         onCancel={handlePromptCancel}

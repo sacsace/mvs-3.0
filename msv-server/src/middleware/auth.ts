@@ -90,7 +90,25 @@ export const requireRole = (roles: string[]) => {
   };
 };
 
-// audit 권한은 GET 요청만 허용 (검색 및 view만 가능)
+const parseCompanyIdFromRequest = (req: AuthRequest): number | null => {
+  const candidates = [
+    req.body?.company_id,
+    req.body?.companyId,
+    req.query?.company_id,
+    req.query?.companyId,
+  ];
+
+  for (const raw of candidates) {
+    if (raw == null || raw === '') continue;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    const parsed = parseInt(String(value), 10);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  return null;
+};
+
+// audit: 소속 회사는 일반 사용자와 동일하게 변경 가능, 다른 회사는 조회(GET)만 허용
 export const restrictAuditToReadOnly = (req: AuthRequest, res: Response, next: NextFunction) => {
   if (!req.user) {
     return res.status(401).json({ 
@@ -99,11 +117,26 @@ export const restrictAuditToReadOnly = (req: AuthRequest, res: Response, next: N
     });
   }
 
-  // audit 권한이고 GET 요청이 아니면 차단
-  if (req.user.role === 'audit' && req.method !== 'GET') {
-    return res.status(403).json({ 
-      success: false, 
-      message: 'audit 권한은 조회만 가능합니다.' 
+  if (req.user.role !== 'audit') {
+    return next();
+  }
+
+  const readOnlyMethod = req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS';
+  if (readOnlyMethod) {
+    return next();
+  }
+
+  const userCompanyId = Number(req.user.company_id);
+  const targetCompanyId = parseCompanyIdFromRequest(req);
+
+  if (
+    targetCompanyId != null &&
+    Number.isFinite(userCompanyId) &&
+    targetCompanyId !== userCompanyId
+  ) {
+    return res.status(403).json({
+      success: false,
+      message: '다른 회사 데이터는 조회만 가능합니다.',
     });
   }
 

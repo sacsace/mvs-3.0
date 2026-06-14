@@ -31,10 +31,13 @@ export const getApprovals = async (req: RequestWithUser, res: Response) => {
         whereClause.company_id = parseInt(company_id as string);
       } else if (userRole === 'root') {
         // root가 company_id를 지정하지 않으면 모든 회사 조회
-      } else {
-        // audit는 모든 회사 조회 가능
+      } else if (userRole === 'audit') {
+        // audit: 테넌트 내 전체 회사 조회 가능, company_id 쿼리로 필터링 가능
         if (tenantId) whereClause.tenant_id = tenantId;
-        if (companyId) whereClause.company_id = companyId;
+        const requestedCompanyId = parseQueryInt(company_id);
+        if (requestedCompanyId != null) {
+          whereClause.company_id = requestedCompanyId;
+        }
       }
     }
 

@@ -5,14 +5,20 @@ import { useState, useCallback, useRef } from 'react';
  */
 export interface PromptDialogOptions {
   title?: string;
+  titleKey?: string;
   message?: string;
+  messageKey?: string;
   label?: string;
+  labelKey?: string;
   defaultValue?: string;
   placeholder?: string;
+  placeholderKey?: string;
   multiline?: boolean;
   minRows?: number;
   confirmText?: string;
+  confirmTextKey?: string;
   cancelText?: string;
+  cancelTextKey?: string;
   /** false면 빈 문자열도 확인 가능 */
   required?: boolean;
 }

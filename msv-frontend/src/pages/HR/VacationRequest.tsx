@@ -593,7 +593,10 @@ const VacationRequest: React.FC = () => {
                           placeholder={t('vacationManagement.request.approverPlaceholder')}
                           error={!formData.approvedBy}
                           required
-                          sx={{ '& .MuiInputBase-input': { py: 1.5 } }}
+                          sx={{
+                            '& .MuiInputBase-input': { py: 1.5 },
+                            '& .MuiOutlinedInput-root': { bgcolor: 'background.paper' }
+                          }}
                         />
                       )}
                       renderOption={(props, option) => (

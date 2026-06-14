@@ -287,13 +287,18 @@ const sendCardAssignmentNotification = (
 async function userCanAccessBoard(
   user: RequestWithUser['user'],
   board: WorkBoard,
-  isMember: boolean
+  isMember: boolean,
+  forWrite = false
 ): Promise<boolean> {
   if (user.role === 'root') {
     return board.tenant_id === user.tenant_id;
   }
   if (user.role === 'audit') {
-    return board.tenant_id === user.tenant_id;
+    if (board.tenant_id !== user.tenant_id) return false;
+    if (forWrite) {
+      return board.company_id === user.company_id;
+    }
+    return true;
   }
   return (
     board.tenant_id === user.tenant_id &&
@@ -302,7 +307,11 @@ async function userCanAccessBoard(
   );
 }
 
-async function findBoardForUser(boardId: number, user: RequestWithUser['user']) {
+async function findBoardForUser(
+  boardId: number,
+  user: RequestWithUser['user'],
+  forWrite = false
+) {
   await ensureWorkBoardSchema();
   await ensureWorkBoardCardSchema();
   await ensureWorkBoardCardCommentSchema();
@@ -311,7 +320,7 @@ async function findBoardForUser(boardId: number, user: RequestWithUser['user']) 
   const member = await WorkBoardMember.findOne({
     where: { board_id: boardId, user_id: user.id }
   });
-  const can = await userCanAccessBoard(user, board, !!member);
+  const can = await userCanAccessBoard(user, board, !!member, forWrite);
   if (!can) return { board: null, member: null };
   return { board, member };
 }
@@ -511,7 +520,7 @@ export const updateWorkBoard = async (req: RequestWithUser, res: Response) => {
     await ensureWorkBoardSchema();
     const user = req.user!;
     const boardId = parseInt(req.params.boardId, 10);
-    const { board, member } = await findBoardForUser(boardId, user);
+    const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '보드를 찾을 수 없거나 권한이 없습니다.' });
     }
@@ -544,7 +553,7 @@ export const deleteWorkBoard = async (req: RequestWithUser, res: Response) => {
   try {
     const user = req.user!;
     const boardId = parseInt(req.params.boardId, 10);
-    const { board, member } = await findBoardForUser(boardId, user);
+    const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || !member) {
       return res.status(404).json({ success: false, message: '보드를 찾을 수 없거나 권한이 없습니다.' });
     }
@@ -592,7 +601,7 @@ export const createWorkBoardList = async (req: RequestWithUser, res: Response) =
     await ensureWorkBoardListSchema();
     const user = req.user!;
     const boardId = parseInt(req.params.boardId, 10);
-    const { board, member } = await findBoardForUser(boardId, user);
+    const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }
@@ -629,7 +638,7 @@ export const updateWorkBoardList = async (req: RequestWithUser, res: Response) =
     const user = req.user!;
     const boardId = parseInt(req.params.boardId, 10);
     const listId = parseInt(req.params.listId, 10);
-    const { board, member } = await findBoardForUser(boardId, user);
+    const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }
@@ -675,7 +684,7 @@ export const moveWorkBoardList = async (req: RequestWithUser, res: Response) => 
       return res.status(400).json({ success: false, message: 'index(0부터)가 필요합니다.' });
     }
 
-    const { board, member } = await findBoardForUser(boardId, user);
+    const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }
@@ -731,7 +740,7 @@ export const moveWorkBoard = async (req: RequestWithUser, res: Response) => {
       return res.status(400).json({ success: false, message: 'index(0부터)가 필요합니다.' });
     }
 
-    const { board, member } = await findBoardForUser(boardId, user);
+    const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }
@@ -771,7 +780,7 @@ export const deleteWorkBoardList = async (req: RequestWithUser, res: Response) =
     const user = req.user!;
     const boardId = parseInt(req.params.boardId, 10);
     const listId = parseInt(req.params.listId, 10);
-    const { board, member } = await findBoardForUser(boardId, user);
+    const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }
@@ -816,7 +825,7 @@ export const createWorkBoardCard = async (req: RequestWithUser, res: Response) =
     const user = req.user!;
     const boardId = parseInt(req.params.boardId, 10);
     const listId = parseInt(req.params.listId, 10);
-    const { board, member } = await findBoardForUser(boardId, user);
+    const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }
@@ -913,7 +922,7 @@ export const updateWorkBoardCard = async (req: RequestWithUser, res: Response) =
     const user = req.user!;
     const boardId = parseInt(req.params.boardId, 10);
     const cardId = parseInt(req.params.cardId, 10);
-    const { board, member } = await findBoardForUser(boardId, user);
+    const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }
@@ -1024,7 +1033,7 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
       return res.status(400).json({ success: false, message: 'list_id와 index(0부터)가 필요합니다.' });
     }
 
-    const { board, member } = await findBoardForUser(boardId, user);
+    const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }
@@ -1135,7 +1144,7 @@ export const deleteWorkBoardCard = async (req: RequestWithUser, res: Response) =
     const user = req.user!;
     const boardId = parseInt(req.params.boardId, 10);
     const cardId = parseInt(req.params.cardId, 10);
-    const { board, member } = await findBoardForUser(boardId, user);
+    const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }
@@ -1195,7 +1204,7 @@ export const createWorkBoardCardComment = async (req: RequestWithUser, res: Resp
     const boardId = parseInt(req.params.boardId, 10);
     const cardId = parseInt(req.params.cardId, 10);
     const { content, mention_user_ids, parent_id: parentIdBody } = req.body;
-    const { board, member } = await findBoardForUser(boardId, user);
+    const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }
@@ -1333,7 +1342,7 @@ export const deleteWorkBoardCardComment = async (req: RequestWithUser, res: Resp
     const boardId = parseInt(req.params.boardId, 10);
     const cardId = parseInt(req.params.cardId, 10);
     const commentId = parseInt(req.params.commentId, 10);
-    const { board, member } = await findBoardForUser(boardId, user);
+    const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }
@@ -1402,7 +1411,7 @@ export const inviteWorkBoardMember = async (req: RequestWithUser, res: Response)
       return res.status(400).json({ success: false, message: 'user_id가 필요합니다.' });
     }
 
-    const { board, member } = await findBoardForUser(boardId, user);
+    const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }
@@ -1449,7 +1458,7 @@ export const removeWorkBoardMember = async (req: RequestWithUser, res: Response)
     const boardId = parseInt(req.params.boardId, 10);
     const memberUserId = parseInt(req.params.userId, 10);
 
-    const { board, member } = await findBoardForUser(boardId, user);
+    const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }
@@ -1486,7 +1495,7 @@ export const updateWorkBoardMember = async (req: RequestWithUser, res: Response)
       return res.status(400).json({ success: false, message: 'role은 owner 또는 member만 가능합니다.' });
     }
 
-    const { board, member } = await findBoardForUser(boardId, user);
+    const { board, member } = await findBoardForUser(boardId, user, true);
     if (!board || (!member && user.role !== 'root')) {
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }

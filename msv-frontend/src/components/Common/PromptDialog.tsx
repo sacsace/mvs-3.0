@@ -28,14 +28,20 @@ import { useDialogKeyboard } from '../../hooks/useDialogKeyboard';
 export interface PromptDialogProps {
   open: boolean;
   title?: string;
+  titleKey?: string;
   message?: string;
+  messageKey?: string;
   label?: string;
+  labelKey?: string;
   defaultValue?: string;
   placeholder?: string;
+  placeholderKey?: string;
   multiline?: boolean;
   minRows?: number;
   confirmText?: string;
+  confirmTextKey?: string;
   cancelText?: string;
+  cancelTextKey?: string;
   required?: boolean;
   onConfirm: (value: string) => void;
   onCancel: () => void;
@@ -48,14 +54,20 @@ export interface PromptDialogProps {
 const PromptDialog: React.FC<PromptDialogProps> = ({
   open,
   title,
+  titleKey,
   message,
+  messageKey,
   label,
+  labelKey,
   defaultValue = '',
   placeholder,
+  placeholderKey,
   multiline = false,
   minRows = 3,
   confirmText,
+  confirmTextKey,
   cancelText,
+  cancelTextKey,
   required = true,
   onConfirm,
   onCancel
@@ -68,9 +80,12 @@ const PromptDialog: React.FC<PromptDialogProps> = ({
     if (open) setValue(defaultValue);
   }, [open, defaultValue]);
 
-  const titleText = title ?? t('common.input');
-  const confirmLabel = confirmText ?? t('common.confirm');
-  const cancelLabel = cancelText ?? t('common.cancel');
+  const titleText = titleKey ? t(titleKey) : (title ?? t('common.input'));
+  const messageText = messageKey ? t(messageKey) : message;
+  const labelText = labelKey ? t(labelKey) : label;
+  const placeholderText = placeholderKey ? t(placeholderKey) : placeholder;
+  const confirmLabel = confirmTextKey ? t(confirmTextKey) : (confirmText ?? t('common.confirm'));
+  const cancelLabel = cancelTextKey ? t(cancelTextKey) : (cancelText ?? t('common.cancel'));
   const canSubmit = !required || value.trim().length > 0;
 
   const handleSubmit = () => {
@@ -115,16 +130,16 @@ const PromptDialog: React.FC<PromptDialogProps> = ({
       </DialogTitle>
 
       <DialogContent sx={getMvsDialogPromptContentSx(theme)}>
-        {message ? (
+        {messageText ? (
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2, lineHeight: 1.6 }}>
-            {message}
+            {messageText}
           </Typography>
         ) : null}
         <TextField
           autoFocus
           fullWidth
-          label={label}
-          placeholder={placeholder}
+          label={labelText}
+          placeholder={placeholderText}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           multiline={multiline}

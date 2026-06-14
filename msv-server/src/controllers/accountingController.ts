@@ -1672,7 +1672,28 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
     // 전체 인보이스 통계
     const allInvoices = await (Invoice as any).findAll({
       where: invoiceWhereClause,
-      attributes: ['id', 'total_amount', 'status', 'payment_status', 'invoice_date', 'invoice_category']
+      attributes: [
+        'id',
+        'invoice_number',
+        'invoice_date',
+        'due_date',
+        'subtotal',
+        'tax_amount',
+        'total_amount',
+        'status',
+        'payment_status',
+        'invoice_category',
+        'customer_id'
+      ],
+      include: [
+        {
+          model: Customer,
+          as: 'customer',
+          attributes: ['id', 'name'],
+          required: false
+        }
+      ],
+      order: [['invoice_date', 'DESC'], ['id', 'DESC']]
     });
 
     const roomBookingWhere: any = { ...whereClause, is_active: true };
@@ -1681,7 +1702,17 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
     }
     const allRoomBookings = await (RoomBooking as any).findAll({
       where: roomBookingWhere,
-      attributes: ['id', 'total_amount', 'payment_status', 'check_in_date']
+      attributes: [
+        'id',
+        'booking_id',
+        'guest_name',
+        'room_number',
+        'check_in_date',
+        'total_amount',
+        'payment_status',
+        'status'
+      ],
+      order: [['check_in_date', 'DESC'], ['id', 'DESC']]
     });
 
     const expenseWhereClause: any = {
@@ -1697,7 +1728,20 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
     }
     const allExpenses = await (ExpenseReport as any).findAll({
       where: expenseWhereClause,
-      attributes: ['id', 'total_amount', 'status', 'payment_request_status', 'created_at']
+      attributes: [
+        'id',
+        'expense_id',
+        'title',
+        'requester_name',
+        'requester_department',
+        'total_amount',
+        'currency',
+        'purpose',
+        'status',
+        'payment_request_status',
+        'created_at'
+      ],
+      order: [['created_at', 'DESC']]
     });
 
     // 통계 계산 (매출: 발행/예약 기준, 수금: 결제완료 기준)
@@ -1861,6 +1905,66 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
     const revenueGrowth = 0;
     const expenseGrowth = 0;
 
+    const mapInvoiceCategoryLabel = (category?: string | null) => {
+      if (category === 'e_invoice') return '전자세금계산서';
+      return '일반세금계산서';
+    };
+
+    const salesList = [
+      ...allInvoices.map((inv: any) => ({
+        id: inv.id,
+        source: 'invoice',
+        document_number: inv.invoice_number,
+        date: inv.invoice_date,
+        counterparty: inv.customer?.name || '-',
+        category: mapInvoiceCategoryLabel(inv.invoice_category),
+        amount: Number(inv.total_amount || 0),
+        tax_amount: Number(inv.tax_amount || 0),
+        status: inv.status,
+        payment_status: inv.payment_status
+      })),
+      ...allRoomBookings.map((booking: any) => ({
+        id: booking.id,
+        source: 'room_booking',
+        document_number: booking.booking_id,
+        date: booking.check_in_date,
+        counterparty: booking.guest_name || '-',
+        category: '객실예약',
+        amount: Number(booking.total_amount || 0),
+        tax_amount: 0,
+        status: booking.status,
+        payment_status: booking.payment_status
+      }))
+    ].sort((a, b) => {
+      const timeA = new Date(a.date).getTime();
+      const timeB = new Date(b.date).getTime();
+      if (Number.isNaN(timeA) && Number.isNaN(timeB)) return 0;
+      if (Number.isNaN(timeA)) return 1;
+      if (Number.isNaN(timeB)) return -1;
+      return timeB - timeA;
+    });
+
+    const salesTotal = salesList.reduce((sum, row) => sum + row.amount, 0);
+
+    const purchaseList = allExpenses.map((exp: any) => ({
+      id: exp.id,
+      document_number: exp.expense_id,
+      date: exp.created_at,
+      title: exp.title,
+      requester: exp.requester_name,
+      department: exp.requester_department || '-',
+      purpose: exp.purpose,
+      amount: Number(exp.total_amount || 0),
+      currency: exp.currency || 'INR',
+      status: exp.status,
+      payment_status: exp.payment_request_status || '-'
+    }));
+
+    const purchaseTotal = purchaseList.reduce((sum, row) => sum + row.amount, 0);
+    const purchasePaidTotal = purchaseList
+      .filter((row) => row.status === 'paid' || row.payment_status === 'paid')
+      .reduce((sum, row) => sum + row.amount, 0);
+
     res.json({
       success: true,
       data: {
@@ -1884,7 +1988,12 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
         categoryRevenueData,
         invoiceStatusData,
         quarterlyData,
-        dailyData
+        dailyData,
+        salesList,
+        salesTotal,
+        purchaseList,
+        purchaseTotal,
+        purchasePaidTotal
       }
     });
   } catch (error: any) {

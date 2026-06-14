@@ -57,6 +57,27 @@ import {
   Legend
 } from 'recharts';
 import { workBoardService } from '../../services/api';
+import { useStore } from '../../store';
+
+const TEAM_STATS_ROLES = new Set(['root', 'audit', 'admin', 'manager']);
+
+const resolveCardCreatorId = (card: Record<string, unknown>): number | null => {
+  const raw =
+    card.created_by ??
+    card.createdBy ??
+    (card.cardCreator as { id?: number } | undefined)?.id ??
+    (card.creator as { id?: number } | undefined)?.id;
+  if (raw == null) return null;
+  const id = Number(raw);
+  return Number.isFinite(id) ? id : null;
+};
+
+const isCardRelevantToUser = (card: Record<string, unknown>, userId: number): boolean => {
+  const assigneeId = (card.assignee as { id?: number } | undefined)?.id;
+  const assigneeUserId = assigneeId != null ? Number(assigneeId) : null;
+  const creatorId = resolveCardCreatorId(card);
+  return assigneeUserId === userId || creatorId === userId;
+};
 
 interface ProcessingDurationStats {
   count: number;
@@ -363,6 +384,9 @@ const listStatusForStats = (
 const WorkStatistics: React.FC = () => {
   const theme = useTheme();
   const { t } = useTranslation();
+  const { user } = useStore();
+  const isPersonalStatsView = !user?.role || !TEAM_STATS_ROLES.has(user.role);
+  const currentUserId = user?.id != null ? Number(user.id) : null;
   const [statistics, setStatistics] = useState<WorkStatistic[]>([]);
   const [filteredStatistics, setFilteredStatistics] = useState<WorkStatistic[]>([]);
   const [statusSummary, setStatusSummary] = useState<StatusSummary>({ todo: 0, progress: 0, done: 0, unassigned: 0 });
@@ -446,30 +470,47 @@ const WorkStatistics: React.FC = () => {
             completedListId
           );
           for (const card of list.cards || []) {
+            if (isPersonalStatsView && currentUserId != null && !isCardRelevantToUser(card, currentUserId)) {
+              continue;
+            }
+
             if (status === 'done') summary.done += 1;
             else if (status === 'progress') summary.progress += 1;
             else summary.todo += 1;
 
-            const assigneeId = card.assignee?.id;
-            if (!assigneeId) {
+            const assigneeId = card.assignee?.id != null ? Number(card.assignee.id) : null;
+            const statUserId = isPersonalStatsView && currentUserId != null
+              ? currentUserId
+              : assigneeId;
+
+            if (!statUserId) {
               summary.unassigned += 1;
               continue;
             }
 
-            if (!statMap.has(assigneeId)) {
-              const meta = memberMeta.get(assigneeId);
+            if (!statMap.has(statUserId)) {
+              const meta = memberMeta.get(statUserId);
+              const fallbackName = isPersonalStatsView && currentUserId === statUserId
+                ? (user?.username || t('workStatistics.userFallback', { id: statUserId }))
+                : (card.assignee?.username || t('workStatistics.userFallback', { id: statUserId }));
               statMap.set(
-                assigneeId,
+                statUserId,
                 createEmptyAccumulator(
-                  assigneeId,
-                  meta,
-                  card.assignee?.username || t('workStatistics.userFallback', { id: assigneeId }),
+                  statUserId,
+                  meta ?? (isPersonalStatsView && currentUserId === statUserId
+                    ? {
+                        name: user?.username || fallbackName,
+                        department: (user as { department?: string })?.department || '-',
+                        position: (user as { position?: string })?.position || '-',
+                      }
+                    : undefined),
+                  fallbackName,
                   currentPeriod
                 )
               );
             }
 
-            const item = statMap.get(assigneeId)!;
+            const item = statMap.get(statUserId)!;
             item.tasksAssigned += 1;
             if (status === 'done') item.tasksCompleted += 1;
             else if (status === 'progress') item.tasksInProgress += 1;
@@ -525,14 +566,32 @@ const WorkStatistics: React.FC = () => {
         };
       });
 
-      // 담당카드가 0인 멤버도 포함 (보드 멤버 기준)
-      memberMeta.forEach((meta, uid) => {
-        if (!statMap.has(uid)) {
-          rows.push(
-            finalizeStatistic(createEmptyAccumulator(uid, meta, meta.name, currentPeriod))
-          );
-        }
-      });
+      // 담당카드가 0인 멤버도 포함 (보드 멤버 기준, 관리자 뷰만)
+      if (!isPersonalStatsView) {
+        memberMeta.forEach((meta, uid) => {
+          if (!statMap.has(uid)) {
+            rows.push(
+              finalizeStatistic(createEmptyAccumulator(uid, meta, meta.name, currentPeriod))
+            );
+          }
+        });
+      } else if (currentUserId != null && !statMap.has(currentUserId)) {
+        const meta = memberMeta.get(currentUserId);
+        rows.push(
+          finalizeStatistic(
+            createEmptyAccumulator(
+              currentUserId,
+              meta ?? {
+                name: user?.username || t('workStatistics.userFallback', { id: currentUserId }),
+                department: (user as { department?: string })?.department || '-',
+                position: (user as { position?: string })?.position || '-',
+              },
+              user?.username || t('workStatistics.userFallback', { id: currentUserId }),
+              currentPeriod
+            )
+          )
+        );
+      }
 
       rows.sort(
         (a, b) =>
@@ -551,7 +610,7 @@ const WorkStatistics: React.FC = () => {
       setStatusSummary({ todo: 0, progress: 0, done: 0, unassigned: 0 });
       setCompletedDurationSamples([]);
     }
-  }, [currentPeriod, t]);
+  }, [currentPeriod, currentUserId, isPersonalStatsView, t, user]);
 
   const filterStatistics = useCallback(() => {
     let filtered = statistics;

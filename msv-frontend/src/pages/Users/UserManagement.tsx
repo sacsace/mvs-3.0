@@ -171,12 +171,12 @@ function getAccordionFormSx(_theme: Theme) {
     },
     '& .MuiAccordionSummary-content': { my: 0.5 },
     '& .MuiAccordionDetails-root': {
-      pt: 1.5,
-      pb: 2.5,
+      pt: 2,
+      pb: 3,
       px: 0,
     },
     '&.MuiAccordion-root:not(:first-of-type)': {
-      mt: 2.5,
+      mt: 3,
     },
   };
 }
@@ -191,7 +191,7 @@ const userFormSectionTitleSx = {
 const highlightPayrollFieldsSx = {
   display: 'flex',
   flexDirection: 'column' as const,
-  gap: 1.5,
+  gap: 2,
   width: '100%',
   boxSizing: 'border-box' as const,
 };
@@ -215,7 +215,7 @@ const hrHintSx = {
 const highlightBankFieldsSx = {
   display: 'grid',
   gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-  gap: 2,
+  gap: 2.5,
   alignItems: 'flex-start',
   boxSizing: 'border-box' as const,
 };
@@ -1460,7 +1460,7 @@ const UserManagement: React.FC = () => {
                   <Box sx={{
                     display: 'grid',
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 2,
+                    gap: 2.5,
                   }}>
                     <TextField
                       fullWidth
@@ -1586,7 +1586,7 @@ const UserManagement: React.FC = () => {
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     <TextField
                       fullWidth
                       size="small"
@@ -1601,7 +1601,7 @@ const UserManagement: React.FC = () => {
                         ...highlightPayrollFieldsSx,
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 1,
+                        gap: 1.5,
                         width: '100%',
                         boxSizing: 'border-box'
                       }}
@@ -1610,7 +1610,7 @@ const UserManagement: React.FC = () => {
                         sx={{
                           display: 'grid',
                           gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-                          gap: 1,
+                          gap: 1.5,
                           alignItems: 'start',
                           width: '100%'
                         }}
@@ -1661,7 +1661,7 @@ const UserManagement: React.FC = () => {
                           sx={{
                             display: 'grid',
                             gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-                            gap: 1,
+                            gap: 1.5,
                             alignItems: 'start',
                             width: '100%'
                           }}
@@ -1802,7 +1802,7 @@ const UserManagement: React.FC = () => {
                   <Box sx={{
                     display: 'grid',
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 2,
+                    gap: 2.5,
                   }}>
                     {user?.role === 'root' && !editingUser && (
                       <TextField

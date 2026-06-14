@@ -33,6 +33,8 @@ import {
   ShowChart as ShowChartIcon,
   PieChart as PieChartIcon,
   BarChart as BarChartIcon,
+  ReceiptLong as ReceiptLongIcon,
+  ShoppingCart as ShoppingCartIcon,
 } from '@mui/icons-material';
 import {
   Line,
@@ -98,6 +100,33 @@ interface InvoiceStatusRow {
   color: string;
 }
 
+interface SalesListRow {
+  id: number;
+  source: 'invoice' | 'room_booking';
+  document_number: string;
+  date: string;
+  counterparty: string;
+  category: string;
+  amount: number;
+  tax_amount: number;
+  status: string;
+  payment_status: string;
+}
+
+interface PurchaseListRow {
+  id: number;
+  document_number: string;
+  date: string;
+  title: string;
+  requester: string;
+  department: string;
+  purpose: string;
+  amount: number;
+  currency: string;
+  status: string;
+  payment_status: string;
+}
+
 interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
@@ -148,6 +177,11 @@ const AccountingStatistics: React.FC = () => {
   const [invoiceStatusData, setInvoiceStatusData] = useState<InvoiceStatusRow[]>([]);
   const [quarterlyData, setQuarterlyData] = useState<TrendRow[]>([]);
   const [dailyData, setDailyData] = useState<TrendRow[]>([]);
+  const [salesList, setSalesList] = useState<SalesListRow[]>([]);
+  const [salesTotal, setSalesTotal] = useState(0);
+  const [purchaseList, setPurchaseList] = useState<PurchaseListRow[]>([]);
+  const [purchaseTotal, setPurchaseTotal] = useState(0);
+  const [purchasePaidTotal, setPurchasePaidTotal] = useState(0);
 
   useEffect(() => {
     if (canSelectCompany) {
@@ -219,6 +253,11 @@ const AccountingStatistics: React.FC = () => {
         setInvoiceStatusData(Array.isArray(data.invoiceStatusData) ? data.invoiceStatusData : []);
         setQuarterlyData(Array.isArray(data.quarterlyData) ? data.quarterlyData : []);
         setDailyData(Array.isArray(data.dailyData) ? data.dailyData : []);
+        setSalesList(Array.isArray(data.salesList) ? data.salesList : []);
+        setSalesTotal(Number(data.salesTotal) || 0);
+        setPurchaseList(Array.isArray(data.purchaseList) ? data.purchaseList : []);
+        setPurchaseTotal(Number(data.purchaseTotal) || 0);
+        setPurchasePaidTotal(Number(data.purchasePaidTotal) || 0);
       } else {
         setStats({
           totalRevenue: 0,
@@ -243,6 +282,11 @@ const AccountingStatistics: React.FC = () => {
         setInvoiceStatusData([]);
         setQuarterlyData([]);
         setDailyData([]);
+        setSalesList([]);
+        setSalesTotal(0);
+        setPurchaseList([]);
+        setPurchaseTotal(0);
+        setPurchasePaidTotal(0);
       }
     } catch (error) {
       console.error('통계 데이터 로드 실패:', error);
@@ -270,12 +314,52 @@ const AccountingStatistics: React.FC = () => {
       setInvoiceStatusData([]);
       setQuarterlyData([]);
       setDailyData([]);
+      setSalesList([]);
+      setSalesTotal(0);
+      setPurchaseList([]);
+      setPurchaseTotal(0);
+      setPurchasePaidTotal(0);
     } finally {
       setLoading(false);
     }
   };
 
   const formatCurrency = (amount: number) => UTILS.formatCurrency(amount);
+
+  const formatDate = (value?: string) => {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+    return date.toLocaleDateString('ko-KR');
+  };
+
+  const getPaymentStatusChip = (status?: string) => {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'paid') {
+      return <Chip size="small" label="결제완료" color="success" variant="outlined" />;
+    }
+    if (normalized === 'pending') {
+      return <Chip size="small" label="대기" color="warning" variant="outlined" />;
+    }
+    if (normalized === 'partial' || normalized === 'refunded') {
+      return <Chip size="small" label={status} color="default" variant="outlined" />;
+    }
+    return <Chip size="small" label={status || '-'} color="default" variant="outlined" />;
+  };
+
+  const getExpenseStatusChip = (status?: string) => {
+    const map: Record<string, { label: string; color: 'default' | 'success' | 'warning' | 'error' | 'info' }> = {
+      draft: { label: '임시저장', color: 'default' },
+      submitted: { label: '제출', color: 'info' },
+      in_review: { label: '검토중', color: 'warning' },
+      approved: { label: '승인', color: 'success' },
+      rejected: { label: '반려', color: 'error' },
+      paid: { label: '지급완료', color: 'success' },
+    };
+    const key = String(status || '').toLowerCase();
+    const item = map[key] || { label: status || '-', color: 'default' as const };
+    return <Chip size="small" label={item.label} color={item.color} variant="outlined" />;
+  };
 
   const formatAxisAmount = (value: number) => {
     if (Math.abs(value) >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
@@ -368,6 +452,29 @@ const AccountingStatistics: React.FC = () => {
       비중: `${row.percentage}%`
     }));
 
+    const salesRows = salesList.map((row) => ({
+      문서번호: row.document_number,
+      일자: formatDate(row.date),
+      거래처: row.counterparty,
+      유형: row.category,
+      공급가액: row.amount - row.tax_amount,
+      세액: row.tax_amount,
+      합계: row.amount,
+      결제상태: row.payment_status,
+    }));
+
+    const purchaseRows = purchaseList.map((row) => ({
+      문서번호: row.document_number,
+      일자: formatDate(row.date),
+      제목: row.title,
+      신청자: row.requester,
+      부서: row.department,
+      용도: row.purpose,
+      금액: row.amount,
+      상태: row.status,
+      지급상태: row.payment_status,
+    }));
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryRows), '요약');
     XLSX.utils.book_append_sheet(
@@ -393,6 +500,24 @@ const AccountingStatistics: React.FC = () => {
         expenseCategoryRows.length > 0 ? expenseCategoryRows : [{ 카테고리: '-', 금액: 0, 비중: '0%' }]
       ),
       '비용카테고리'
+    );
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
+        salesRows.length > 0
+          ? [...salesRows, { 문서번호: '합계', 일자: '', 거래처: '', 유형: '', 공급가액: '', 세액: '', 합계: salesTotal, 결제상태: '' }]
+          : [{ 문서번호: '-', 일자: '-', 거래처: '-', 유형: '-', 공급가액: 0, 세액: 0, 합계: 0, 결제상태: '-' }]
+      ),
+      '매출통계'
+    );
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.json_to_sheet(
+        purchaseRows.length > 0
+          ? [...purchaseRows, { 문서번호: '합계', 일자: '', 제목: '', 신청자: '', 부서: '', 용도: '', 금액: purchaseTotal, 상태: '', 지급상태: '' }]
+          : [{ 문서번호: '-', 일자: '-', 제목: '-', 신청자: '-', 부서: '-', 용도: '-', 금액: 0, 상태: '-', 지급상태: '-' }]
+      ),
+      '매입통계'
     );
 
     const dateToken = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -671,7 +796,14 @@ const AccountingStatistics: React.FC = () => {
           {/* 탭 섹션 */}
           <Card sx={{ mb: 3 }}>
             <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-              <Tabs value={activeTab} onChange={(_, newValue) => setActiveTab(newValue)}>
+              <Tabs
+                value={activeTab}
+                onChange={(_, newValue) => setActiveTab(newValue)}
+                variant="scrollable"
+                scrollButtons="auto"
+              >
+                <Tab icon={<ReceiptLongIcon />} iconPosition="start" label="매출 통계" />
+                <Tab icon={<ShoppingCartIcon />} iconPosition="start" label="매입 통계" />
                 <Tab icon={<ShowChartIcon />} iconPosition="start" label="수익/비용 추이" />
                 <Tab icon={<PieChartIcon />} iconPosition="start" label="카테고리별 분석" />
                 <Tab icon={<BarChartIcon />} iconPosition="start" label="인보이스 현황" />
@@ -679,8 +811,154 @@ const AccountingStatistics: React.FC = () => {
               </Tabs>
             </Box>
 
-            {/* 수익/비용 추이 */}
+            {/* 매출 통계 */}
             <TabPanel value={activeTab} index={0}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, gap: 2, flexWrap: 'wrap' }}>
+                    <Box>
+                      <Typography variant="h6">매출 통계</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        인보이스 및 객실예약 매출 내역 ({salesList.length}건)
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'right' }}>
+                      <Typography variant="caption" color="text.secondary">합산금</Typography>
+                      <Typography variant="h5" fontWeight={700} color="success.main">
+                        {formatCurrency(salesTotal)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>문서번호</TableCell>
+                          <TableCell>일자</TableCell>
+                          <TableCell>거래처</TableCell>
+                          <TableCell>유형</TableCell>
+                          <TableCell align="right">공급가액</TableCell>
+                          <TableCell align="right">세액</TableCell>
+                          <TableCell align="right">합계</TableCell>
+                          <TableCell align="center">결제상태</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {salesList.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={8} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                              조회 기간에 해당하는 매출 내역이 없습니다.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          salesList.map((row) => (
+                            <TableRow key={`${row.source}-${row.id}`} hover>
+                              <TableCell>{row.document_number}</TableCell>
+                              <TableCell>{formatDate(row.date)}</TableCell>
+                              <TableCell>{row.counterparty}</TableCell>
+                              <TableCell>
+                                <Chip size="small" label={row.category} variant="outlined" />
+                              </TableCell>
+                              <TableCell align="right">{formatCurrency(row.amount - row.tax_amount)}</TableCell>
+                              <TableCell align="right">{formatCurrency(row.tax_amount)}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 600 }}>
+                                {formatCurrency(row.amount)}
+                              </TableCell>
+                              <TableCell align="center">{getPaymentStatusChip(row.payment_status)}</TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                        {salesList.length > 0 && (
+                          <TableRow sx={{ bgcolor: alpha(theme.palette.success.main, 0.08) }}>
+                            <TableCell colSpan={6} sx={{ fontWeight: 700 }}>합산금</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700, color: 'success.main' }}>
+                              {formatCurrency(salesTotal)}
+                            </TableCell>
+                            <TableCell />
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </CardContent>
+              </Card>
+            </TabPanel>
+
+            {/* 매입 통계 */}
+            <TabPanel value={activeTab} index={1}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, gap: 2, flexWrap: 'wrap' }}>
+                    <Box>
+                      <Typography variant="h6">매입 통계</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        지출결의서 매입 내역 ({purchaseList.length}건) · 지급완료 {formatCurrency(purchasePaidTotal)}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'right' }}>
+                      <Typography variant="caption" color="text.secondary">합산금</Typography>
+                      <Typography variant="h5" fontWeight={700} color="error.main">
+                        {formatCurrency(purchaseTotal)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>문서번호</TableCell>
+                          <TableCell>일자</TableCell>
+                          <TableCell>제목</TableCell>
+                          <TableCell>신청자</TableCell>
+                          <TableCell>부서</TableCell>
+                          <TableCell>용도</TableCell>
+                          <TableCell align="right">금액</TableCell>
+                          <TableCell align="center">상태</TableCell>
+                          <TableCell align="center">지급상태</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {purchaseList.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={9} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                              조회 기간에 해당하는 매입 내역이 없습니다.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          purchaseList.map((row) => (
+                            <TableRow key={row.id} hover>
+                              <TableCell>{row.document_number}</TableCell>
+                              <TableCell>{formatDate(row.date)}</TableCell>
+                              <TableCell>{row.title}</TableCell>
+                              <TableCell>{row.requester}</TableCell>
+                              <TableCell>{row.department}</TableCell>
+                              <TableCell sx={{ maxWidth: 220 }}>{row.purpose}</TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 600 }}>
+                                {formatCurrency(row.amount)}
+                              </TableCell>
+                              <TableCell align="center">{getExpenseStatusChip(row.status)}</TableCell>
+                              <TableCell align="center">{getPaymentStatusChip(row.payment_status)}</TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                        {purchaseList.length > 0 && (
+                          <TableRow sx={{ bgcolor: alpha(theme.palette.error.main, 0.08) }}>
+                            <TableCell colSpan={6} sx={{ fontWeight: 700 }}>합산금</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 700, color: 'error.main' }}>
+                              {formatCurrency(purchaseTotal)}
+                            </TableCell>
+                            <TableCell colSpan={2} />
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </CardContent>
+              </Card>
+            </TabPanel>
+
+            {/* 수익/비용 추이 */}
+            <TabPanel value={activeTab} index={2}>
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12 }}>
                   <Card variant="outlined">
@@ -731,7 +1009,7 @@ const AccountingStatistics: React.FC = () => {
             </TabPanel>
 
             {/* 카테고리별 분석 */}
-            <TabPanel value={activeTab} index={1}>
+            <TabPanel value={activeTab} index={3}>
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
                   <Card variant="outlined" sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -841,7 +1119,7 @@ const AccountingStatistics: React.FC = () => {
             </TabPanel>
 
             {/* 인보이스 현황 */}
-            <TabPanel value={activeTab} index={2}>
+            <TabPanel value={activeTab} index={4}>
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12, md: 8 }} sx={{ display: 'flex' }}>
                   <Card variant="outlined" sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -915,7 +1193,7 @@ const AccountingStatistics: React.FC = () => {
             </TabPanel>
 
             {/* 예산 대비 실적 */}
-            <TabPanel value={activeTab} index={3}>
+            <TabPanel value={activeTab} index={5}>
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12 }}>
                   <Card variant="outlined">
