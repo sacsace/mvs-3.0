@@ -5,11 +5,12 @@
 
 const { Sequelize } = require('sequelize');
 const { readdirSync } = require('fs');
-const { join } = require('path');
+const { join, resolve } = require('path');
 const { config } = require('dotenv');
 const { getPostgresDialectOptions } = require('./postgres-dialect-options.cjs');
 
-config();
+config({ path: resolve(__dirname, '../.env') });
+config({ path: resolve(__dirname, '../../.env'), override: false });
 
 const DATABASE_URL = process.env.DATABASE_URL;
 

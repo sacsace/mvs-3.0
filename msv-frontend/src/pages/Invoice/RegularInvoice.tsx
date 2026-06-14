@@ -57,7 +57,9 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../../store';
-import { accountingService, partnerService, companyService, userService } from '../../services/api';
+import { accountingService, partnerService, companyService } from '../../services/api';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
+import AuthMedia from '../../components/Common/AuthMedia';
 
 interface InvoiceItem {
   id?: number;
@@ -544,18 +546,18 @@ const RegularInvoice: React.FC = () => {
         return;
       }
       try {
-        const res = await userService.getUsers({ company_id: Number(user.company_id) });
-        if (res?.success && Array.isArray(res.data)) {
-          setCompanyUsers(
-            res.data
-              .filter((u: { status?: string }) => u.status === 'active')
-              .map((u: { id: number; username?: string; userid?: string; email?: string }) => ({
-                id: u.id,
-                username: u.username || u.userid || '',
-                email: u.email || ''
-              }))
-          );
-        }
+        const users = await useReferenceDataStore.getState().fetchUsers({
+          company_id: Number(user.company_id),
+        });
+        setCompanyUsers(
+          users
+            .filter((u: { status?: string }) => u.status === 'active')
+            .map((u: { id: number; username?: string; userid?: string; email?: string }) => ({
+              id: u.id,
+              username: u.username || u.userid || '',
+              email: u.email || '',
+            }))
+        );
       } catch (e) {
         console.error(e);
       }
@@ -566,11 +568,8 @@ const RegularInvoice: React.FC = () => {
   const loadCompanies = useCallback(async () => {
     try {
       // ??? ?? ? ???? ??
-      const partnersResponse = await partnerService.getPartners();
-      if (partnersResponse?.success) {
-        const partners = Array.isArray(partnersResponse.data) ? partnersResponse.data : [];
-        // ??? ? ??? ??? ?? (customer, customer_partner)
-        const customersOnly = partners.filter((p: any) => {
+      const partners = await useReferenceDataStore.getState().fetchPartners();
+      const customersOnly = partners.filter((p: any) => {
           const type = (p.business_type || p.businessType || '').toLowerCase();
           return type === 'customer' || type === 'customer_partner';
         });
@@ -584,7 +583,6 @@ const RegularInvoice: React.FC = () => {
           gst_numbers: normalizeGstNumbers(p.gst_numbers ?? p.gstNumbers ?? p.business_number)
         }));
         setCompanies(mapped);
-      }
     } catch (error) {
       console.error('???(???) ?? ?? ??:', error);
     }
@@ -1656,8 +1654,7 @@ const RegularInvoice: React.FC = () => {
                           </Typography>
                           {issuerCompany?.company_logo && (
                             <Box sx={{ mt: 1, mb: 0.8, display: 'flex', justifyContent: 'flex-start' }}>
-                              <Box
-                                component="img"
+                              <AuthMedia
                                 src={issuerCompany.company_logo}
                                 alt="Company logo"
                                 sx={{ maxHeight: 60, maxWidth: 220, objectFit: 'contain' }}
@@ -1975,16 +1972,14 @@ const RegularInvoice: React.FC = () => {
                             </Typography>
                             <Box sx={{ position: 'relative', width: '7cm', height: '3cm' }}>
                             {issuerCompany.company_seal && (
-                              <Box
-                                component="img"
+                              <AuthMedia
                                 src={issuerCompany.company_seal}
                                 alt="Company seal"
                                 sx={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
                               />
                             )}
                             {issuerCompany.ceo_signature && (
-                              <Box
-                                component="img"
+                              <AuthMedia
                                 src={issuerCompany.ceo_signature}
                                 alt="Signature"
                                 sx={{
@@ -1993,7 +1988,7 @@ const RegularInvoice: React.FC = () => {
                                   bottom: 0,
                                   width: '100%',
                                   height: '100%',
-                                  objectFit: 'contain'
+                                  objectFit: 'contain',
                                 }}
                               />
                             )}
@@ -2128,8 +2123,7 @@ const RegularInvoice: React.FC = () => {
 
             {issuerCompany?.company_logo && (
               <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-start' }}>
-                <Box
-                  component="img"
+                <AuthMedia
                   src={issuerCompany.company_logo}
                   alt="Company logo"
                   sx={{ maxHeight: 60, maxWidth: 220, objectFit: 'contain' }}
@@ -2802,16 +2796,14 @@ const RegularInvoice: React.FC = () => {
                   <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
                     <Box sx={{ position: 'relative', width: '7cm', height: '3cm' }}>
                       {issuerCompany.company_seal && (
-                        <Box
-                          component="img"
+                        <AuthMedia
                           src={issuerCompany.company_seal}
                           alt="Company seal"
                           sx={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
                         />
                       )}
                       {issuerCompany.ceo_signature && (
-                        <Box
-                          component="img"
+                        <AuthMedia
                           src={issuerCompany.ceo_signature}
                           alt="Signature"
                           sx={{
@@ -2820,7 +2812,7 @@ const RegularInvoice: React.FC = () => {
                             bottom: 0,
                             width: '100%',
                             height: '100%',
-                            objectFit: 'contain'
+                            objectFit: 'contain',
                           }}
                         />
                       )}

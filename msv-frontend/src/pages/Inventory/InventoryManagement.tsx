@@ -55,6 +55,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import { alpha, useTheme } from '@mui/material/styles';
 import { api, inventoryService, partnerService } from '../../services/api';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
+import { resolveMediaUrl } from '../../utils/uploadUrl';
 import { useMenuStore, useStore } from '../../store';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
@@ -68,13 +70,7 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-const resolveProductImageUrl = (p: string | undefined) => {
-  if (!p) return '';
-  if (/^https?:\/\//i.test(p)) return p;
-  const base = (api.defaults.baseURL || '').replace(/\/api\/?$/, '');
-  const path = p.startsWith('/') ? p : `/${p}`;
-  return `${base}${path}`;
-};
+const resolveProductImageUrl = resolveMediaUrl;
 
 /** 재고 목록 테이블 열 비율(상대 가중치) — 합계 대비 %로 너비 분배, 뷰포트에 맞춤 */
 const INV_COL_DEFAULTS: Record<string, number> = {
@@ -2421,7 +2417,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
         inventoryService.getProductCategories(),
         inventoryService.getProductUnits(),
         inventoryService.getInventoryLocations(),
-        partnerService.getPartners()
+        useReferenceDataStore.getState().fetchPartners().then((data) => ({ success: true, data })),
       ]);
       if (catRes?.success && Array.isArray(catRes.data)) {
         setProductCategories(catRes.data.map((r: { id: number; name: string }) => ({ id: r.id, name: r.name })));

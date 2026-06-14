@@ -67,7 +67,9 @@ import {
 } from '@mui/icons-material';
 import { useStore } from '../../store';
 import { useNavigate } from 'react-router-dom';
-import { accountingService, API_BASE_URL, userService, partnerService } from '../../services/api';
+import { accountingService, API_BASE_URL, partnerService } from '../../services/api';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
+import { getUploadUrl } from '../../utils/uploadUrl';
 import QRCode from 'qrcode';
 import { useTranslation } from 'react-i18next';
 import { mvsSearchFieldSx } from '../../theme/mvsLayout';
@@ -333,16 +335,14 @@ const ExpenseApproval: React.FC = () => {
         return;
       }
       try {
-        const response = await userService.getUsers({ company_id: Number(user.company_id) });
-        if (response?.success && Array.isArray(response.data)) {
-          const options = response.data.map((item: any) => ({
-            id: item.id,
-            name: item.username || item.userid || `User ${item.id}`
-          }));
-          setApprovers(options);
-        } else {
-          setApprovers([]);
-        }
+        const users = await useReferenceDataStore.getState().fetchUsers({
+          company_id: Number(user.company_id),
+        });
+        const options = users.map((item: any) => ({
+          id: item.id,
+          name: item.username || item.userid || `User ${item.id}`,
+        }));
+        setApprovers(options);
       } catch (loadError) {
         console.error('승인자 목록 로드 오류:', loadError);
         setApprovers([]);
@@ -354,10 +354,8 @@ const ExpenseApproval: React.FC = () => {
   useEffect(() => {
     const loadPartners = async () => {
       try {
-        const response = await partnerService.getPartners();
-        if (response?.success && Array.isArray(response.data)) {
-          setPartners(response.data);
-        }
+        const partners = await useReferenceDataStore.getState().fetchPartners();
+        setPartners(partners);
       } catch (loadError) {
         console.error('파트너 목록 로드 오류:', loadError);
       }
@@ -1682,8 +1680,8 @@ const ExpenseApproval: React.FC = () => {
                       <ListItemText
                         primary={file}
                         secondary={
-                          <a href={`${apiBaseUrl}/uploads/${file}`} target="_blank" rel="noreferrer">
-                            {`${apiBaseUrl}/uploads/${file}`}
+                          <a href={getUploadUrl(file)} target="_blank" rel="noreferrer">
+                            {getUploadUrl(file)}
                           </a>
                         }
                       />

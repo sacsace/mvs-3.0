@@ -61,6 +61,7 @@ import {
 } from '@mui/icons-material';
 import { useStore } from '../../store';
 import { approvalService, api } from '../../services/api';
+import { filterActiveCompanyUsers, resolveHeaderCompanyInfo, useReferenceDataStore } from '../../store/referenceDataStore';
 import { useTranslation } from 'react-i18next';
 import { useTheme, alpha } from '@mui/material/styles';
 import SignaturePad from '../../components/Common/SignaturePad';
@@ -77,6 +78,8 @@ import { FontFamily } from '@tiptap/extension-font-family';
 import { TextAlign } from '@tiptap/extension-text-align';
 import { Underline } from '@tiptap/extension-underline';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import { getUploadUrl } from '../../utils/uploadUrl';
+import AuthMedia from '../../components/Common/AuthMedia';
 import PromptDialog from '../../components/Common/PromptDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { usePromptDialog } from '../../hooks/usePromptDialog';
@@ -1039,20 +1042,14 @@ const ElectronicApproval: React.FC = () => {
 
   const loadUsers = useCallback(async () => {
     try {
-      const response = await api.get('/users', {
-        params: {
-          status: 'active',
-          company_id: user?.company_id
-        }
+      const allUsers = await useReferenceDataStore.getState().fetchUsers(
+        user?.company_id ? { company_id: Number(user.company_id) } : undefined
+      );
+      const filteredUsers = filterActiveCompanyUsers(allUsers, {
+        companyId: user?.company_id != null ? Number(user.company_id) : undefined,
+        excludeUserId: user?.id != null ? Number(user.id) : undefined,
       });
-      if (response.data.success) {
-        const allUsers = response.data.data || [];
-        // 같은 회사 직원만 필터링하고 자신을 제외
-        const filteredUsers = allUsers.filter((u: any) => 
-          u.company_id === user?.company_id && u.id !== user?.id
-        );
-        setUsers(filteredUsers);
-      }
+      setUsers(filteredUsers);
     } catch (error: any) {
       console.error('사용자 목록 조회 오류:', error);
     }
@@ -1134,31 +1131,12 @@ const ElectronicApproval: React.FC = () => {
   }, [loadApprovalData, loadUsers]);
 
   useEffect(() => {
-    const fetchCompanyLogo = async () => {
-      try {
-        if (user?.company_id) {
-          const response = await api.get(`/company/${user.company_id}`);
-          if (response.data.success) {
-            setCompanyLogo(response.data.data?.company_logo || '');
-            return;
-          }
-        }
-
-        const response = await api.get('/company');
-        if (response.data.success) {
-          const companies = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
-          setCompanyLogo(companies[0]?.company_logo || '');
-        }
-      } catch (error) {
-        console.error('회사 로고 로드 오류:', error);
-        setCompanyLogo('');
-      }
-    };
-
-    if (user) {
-      fetchCompanyLogo();
+    if (!user) {
+      setCompanyLogo('');
+      return;
     }
-  }, [user]);
+    resolveHeaderCompanyInfo(user).then((info) => setCompanyLogo(info.logo || ''));
+  }, [user?.company_id, user?.id]);
 
   useEffect(() => {
     filterDocuments();
@@ -1299,9 +1277,7 @@ const ElectronicApproval: React.FC = () => {
     if (fileName.startsWith('http://') || fileName.startsWith('https://')) {
       return fileName;
     }
-    const apiBase = api.defaults.baseURL || '';
-    const apiRoot = apiBase.replace(/\/api\/?$/, '');
-    return `${apiRoot}/uploads/${encodeURIComponent(fileName)}`;
+    return getUploadUrl(fileName.includes('/') ? fileName : `approvals/${fileName}`);
   };
 
   const handleDownloadAttachment = (file: string | { name?: string; storedName?: string }) => {
@@ -2382,8 +2358,7 @@ const ElectronicApproval: React.FC = () => {
                 </Typography>
                 {companyLogo && (
                   <Box sx={{ mt: 1, display: 'flex', alignItems: 'center' }}>
-                    <Box
-                      component="img"
+                    <AuthMedia
                       src={companyLogo}
                       alt={t('approval.companyLogoAlt')}
                       sx={{ maxHeight: 40, maxWidth: 180, objectFit: 'contain' }}

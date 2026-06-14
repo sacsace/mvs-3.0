@@ -22,6 +22,7 @@ import {
 import { Refresh as RefreshIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { companyService, loginInfoService } from '../../services/api';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useStore } from '../../store';
 
 interface Company {
@@ -70,10 +71,8 @@ const SystemLoginHistoryTab: React.FC = () => {
 
   const loadCompanies = useCallback(async () => {
     try {
-      const response = await companyService.getCompanies();
-      if (response?.success) {
-        const companyList = response.data || [];
-        setCompanies(companyList);
+      const companyList = await useReferenceDataStore.getState().fetchCompanies();
+      setCompanies(companyList);
 
         if (!companyList.length) {
           setSelectedCompanyId('');
@@ -93,7 +92,6 @@ const SystemLoginHistoryTab: React.FC = () => {
           !!userCompanyId && companyList.some((company: Company) => company.id === userCompanyId);
 
         setSelectedCompanyId(hasUserCompany ? Number(userCompanyId) : companyList[0].id);
-      }
     } catch (error: any) {
       console.error('회사 목록 로드 오류:', error);
       setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.loadCompaniesFailed'));

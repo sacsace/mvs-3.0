@@ -38,6 +38,7 @@ import {
 } from '@mui/icons-material';
 import { api } from '../../services/api';
 import { projectService } from '../../services/api';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useStore } from '../../store';
 import { showErrorPopup, showSuccessPopup } from '../../utils/errorHandler';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
@@ -166,14 +167,12 @@ const ProjectManagement: React.FC = () => {
 
   const loadUsers = useCallback(async () => {
     try {
-      const params: any = {};
+      const params: { company_id?: number } = {};
       if (user?.company_id) {
         params.company_id = user.company_id;
       }
-      const response = await api.get('/users', { params });
-      if (response.data.success) {
-        setUsers(response.data.data || []);
-      }
+      const usersData = await useReferenceDataStore.getState().fetchUsers(params);
+      setUsers(usersData);
     } catch (error) {
       console.error('사용자 목록 로드 오류:', error);
     }

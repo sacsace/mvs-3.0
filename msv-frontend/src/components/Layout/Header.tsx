@@ -31,12 +31,14 @@ import {
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
 import { api, userUiPreferencesService } from '../../services/api';
+import { resolveHeaderCompanyInfo } from '../../store/referenceDataStore';
 import { useTranslation } from 'react-i18next';
 import i18n from '../../locales/i18n';
 import { useErrorStore } from '../../store/errorStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { useNavigate, useLocation } from 'react-router-dom';
 import FullMenuOverlay from './FullMenuOverlay';
+import AuthMedia from '../Common/AuthMedia';
 import NotificationDetailDialog from '../Notifications/NotificationDetailDialog';
 import {
   ActionInboxRow,
@@ -46,6 +48,7 @@ import {
   getNotificationChipLabel,
   ServerNotificationItem,
 } from '../../utils/notificationFeed';
+import { useNotificationFeed } from '../../hooks/useNotificationFeed';
 
 interface CalendarScheduleItem {
   id: string;
@@ -84,50 +87,19 @@ const Header: React.FC = () => {
     logo: string;
   } | null>(null);
 
-  // 회사 정보 로드
   useEffect(() => {
-    const fetchCompanyInfo = async () => {
-      try {
-        // 사용자의 company_id로 회사 정보 조회
-        if (user?.company_id) {
-          const response = await api.get(`/company/${user.company_id}`, {
-            headers: { 'x-skip-error-popup': 'true' },
-          });
-          if (response.data.success) {
-            const company = response.data.data;
-            setCompanyInfo({
-              name: company.name || '',
-              logo: company.company_logo || ''
-            });
-            return;
-          }
-        }
-        
-        const response = await api.get('/company', {
-          headers: { 'x-skip-error-popup': 'true' },
-        });
-        if (response.data.success) {
-          const companies = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
-          if (companies.length > 0) {
-            const company = companies[0];
-            setCompanyInfo({
-              name: company.name || '',
-              logo: company.company_logo || ''
-            });
-          } else {
-            setCompanyInfo({ name: '', logo: '' });
-          }
-        }
-      } catch (error) {
-        console.error('회사 정보 로드 오류:', error);
-        setCompanyInfo({ name: '', logo: '' });
-      }
-    };
-
-    if (user) {
-      fetchCompanyInfo();
+    if (!user) {
+      setCompanyInfo(null);
+      return;
     }
-  }, [user]);
+    let cancelled = false;
+    resolveHeaderCompanyInfo(user).then((info) => {
+      if (!cancelled) setCompanyInfo(info);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.company_id, user?.id]);
 
   const cleanCompanyName = (name: string) => {
     if (!name) return '';
@@ -175,56 +147,11 @@ const Header: React.FC = () => {
     i18n.changeLanguage(language);
   }, [language]);
 
-  useEffect(() => {
-    const loadServerNotifications = async () => {
-      try {
-        const response = await api.get('/notifications', {
-          params: { page: 1, limit: 20 }
-        });
-        if (response.data?.success) {
-          const rows = Array.isArray(response.data.data) ? response.data.data : [];
-          setServerNotifications(rows);
-        }
-      } catch (error) {
-        console.error('서버 알림 로드 오류:', error);
-      }
-    };
-
-    void loadServerNotifications();
-    const intervalId = window.setInterval(() => {
-      void loadServerNotifications();
-    }, 30000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!user?.id) {
-      setInboxActions([]);
-      return;
-    }
-    const loadInbox = async () => {
-      try {
-        const response = await api.get('/notifications/inbox');
-        if (response.data?.success && Array.isArray(response.data.data)) {
-          setInboxActions(response.data.data as ActionInboxRow[]);
-        } else {
-          setInboxActions([]);
-        }
-      } catch (error) {
-        console.error('알림 인박스 로드 오류:', error);
-      }
-    };
-    void loadInbox();
-    const inboxInterval = window.setInterval(() => {
-      void loadInbox();
-    }, 45000);
-    return () => {
-      window.clearInterval(inboxInterval);
-    };
-  }, [user?.id]);
+  useNotificationFeed({
+    userId: user?.id,
+    onServerNotifications: setServerNotifications,
+    onInboxActions: setInboxActions,
+  });
 
   useEffect(() => {
     const merged = buildNotificationsFromSources({
@@ -391,7 +318,7 @@ const Header: React.FC = () => {
                   background: 'transparent'
                 }}
               >
-                <img
+                <AuthMedia
                   src={companyInfo.logo}
                   alt={t('common.companyNameFallback')}
                   style={{

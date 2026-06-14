@@ -49,60 +49,13 @@ import {
 import { restrictToWindowEdges, snapCenterToCursor } from '@dnd-kit/modifiers';
 import { api, workBoardService } from '../../services/api';
 import { useMenuStore, useStore } from '../../store';
+import { filterActiveCompanyUsers, useReferenceDataStore } from '../../store/referenceDataStore';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
 import { showErrorPopup, showSuccessPopup, showSuccessToast } from '../../utils/errorHandler';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
-import ReactQuill, { Quill } from 'react-quill';
-import ImageResize from 'quill-image-resize-module-react';
-import 'react-quill/dist/quill.snow.css';
+import RichTextEditor from '../../components/RichTextEditor/RichTextEditor';
 import { alpha, useTheme } from '@mui/material/styles';
-
-if (typeof window !== 'undefined' && !(window as any).Quill) {
-  (window as any).Quill = Quill;
-}
-
-if (!(Quill as any).imports['modules/imageResize']) {
-  Quill.register('modules/imageResize', ImageResize);
-}
-
-const BaseImageFormat = Quill.import('formats/image');
-class ExtendedImageFormat extends (BaseImageFormat as any) {
-  static formats(domNode: HTMLElement) {
-    const formats = ((BaseImageFormat as any).formats?.(domNode) || {}) as Record<string, string>;
-    const width = domNode.getAttribute('width') || domNode.style.width;
-    const height = domNode.getAttribute('height') || domNode.style.height;
-    const style = domNode.getAttribute('style');
-    if (width) formats.width = width;
-    if (height) formats.height = height;
-    if (style) formats.style = style;
-    return formats;
-  }
-
-  format(name: string, value: unknown) {
-    if (name === 'width' || name === 'height') {
-      if (value) {
-        this.domNode.setAttribute(name, String(value));
-        (this.domNode.style as any)[name] = String(value);
-      } else {
-        this.domNode.removeAttribute(name);
-        (this.domNode.style as any)[name] = '';
-      }
-      return;
-    }
-    if (name === 'style') {
-      if (value) {
-        this.domNode.setAttribute('style', String(value));
-      } else {
-        this.domNode.removeAttribute('style');
-      }
-      return;
-    }
-    super.format(name, value);
-  }
-}
-
-Quill.register(ExtendedImageFormat as any, true);
 
 type BoardList = {
   id: number;
@@ -1153,7 +1106,6 @@ const WorkBoardDetailPage: React.FC = () => {
   const [commentSaving, setCommentSaving] = useState(false);
   const [commentDeletingId, setCommentDeletingId] = useState<number | null>(null);
   const [replyParentId, setReplyParentId] = useState<number | null>(null);
-  const quillRef = useRef<ReactQuill | null>(null);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   /** 칸반 인라인으로 마지막 생성된 카드 id — 세부 화면에서 한 번 저장하기 전까지 댓글 잠금 */
   const lastQuickCreatedCardIdRef = useRef<number | null>(null);
@@ -1169,7 +1121,7 @@ const WorkBoardDetailPage: React.FC = () => {
     const silent = options?.silent === true;
     if (!silent) setLoading(true);
     try {
-      const res = await workBoardService.getBoard(boardId);
+      const res = await workBoardService.getBoard(boardId, { light: true });
       if (res.success) {
         setBoard(normalizeBoardData(res.data));
       } else {
@@ -1200,23 +1152,15 @@ const WorkBoardDetailPage: React.FC = () => {
       if ((user?.role === 'root' || user?.role === 'audit') && boardCompanyId > 0) {
         params.company_id = String(boardCompanyId);
       }
-      const res = await api.get('/users', { params });
-      if (res.data?.success) {
-        const list = (res.data.data || []).filter((u: any) => {
-          if (u.id === user?.id || u.status !== 'active') return false;
-          if (Number(u.company_id) !== boardCompanyId) return false;
-          if (
-            boardTenantId != null &&
-            Number.isInteger(boardTenantId) &&
-            u.tenant_id != null &&
-            Number(u.tenant_id) !== boardTenantId
-          ) {
-            return false;
-          }
-          return true;
-        });
-        setCompanyUsers(list);
-      }
+      const allUsers = await useReferenceDataStore.getState().fetchUsers(
+        params.company_id ? { company_id: Number(params.company_id) } : undefined
+      );
+      const list = filterActiveCompanyUsers(allUsers, {
+        companyId: boardCompanyId,
+        tenantId: boardTenantId,
+        excludeUserId: user?.id != null ? Number(user.id) : undefined,
+      });
+      setCompanyUsers(list);
     } catch (e) {
       console.error(e);
     }
@@ -1730,11 +1674,7 @@ const WorkBoardDetailPage: React.FC = () => {
     }
 
     const targetListId = forcedListId ?? cardDetail.listId;
-    const latestEditorHtml = quillRef.current?.getEditor?.().root?.innerHTML;
-    const descriptionForSave =
-      typeof latestEditorHtml === 'string' && latestEditorHtml.length > 0
-        ? latestEditorHtml
-        : cardDetail.description;
+    const descriptionForSave = cardDetail.description;
     setCardSaving(true);
     try {
       const updateRes = await workBoardService.updateCard(boardId, cardDetail.cardId, {
@@ -1945,79 +1885,6 @@ const WorkBoardDetailPage: React.FC = () => {
       { title: '작업 보드 삭제', confirmText: '삭제', confirmColor: 'error' }
     );
   };
-
-  const quillModules = useMemo(
-    () => ({
-      imageResize: {
-        modules: ['Resize'],
-        displayStyles: {
-          display: 'none'
-        },
-        toolbarStyles: {
-          display: 'none'
-        }
-      },
-      toolbar: {
-        container: [
-          [{ header: [1, 2, 3, false] }],
-          [{ size: ['small', false, 'large', 'huge'] }],
-          ['bold', 'italic', 'underline', 'strike'],
-          [{ color: [] }, { background: [] }],
-          [{ list: 'ordered' }, { list: 'bullet' }],
-          [{ align: [] }],
-          ['blockquote', 'code-block'],
-          ['link', 'image'],
-          ['clean']
-        ],
-        handlers: {
-          image: () => {
-            const input = document.createElement('input');
-            input.setAttribute('type', 'file');
-            input.setAttribute('accept', 'image/*');
-            input.click();
-            input.onchange = () => {
-              const file = input.files?.[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = () => {
-                const editor = quillRef.current?.getEditor();
-                if (!editor) return;
-                const range = editor.getSelection(true);
-                editor.insertEmbed(range?.index ?? 0, 'image', reader.result as string, 'user');
-                editor.setSelection((range?.index ?? 0) + 1, 0);
-              };
-              reader.readAsDataURL(file);
-            };
-          }
-        }
-      }
-    }),
-    []
-  );
-
-  const quillFormats = useMemo(
-    () => [
-      'header',
-      'size',
-      'bold',
-      'italic',
-      'underline',
-      'strike',
-      'color',
-      'background',
-      'list',
-      'bullet',
-      'align',
-      'blockquote',
-      'code-block',
-      'link',
-      'image',
-      'width',
-      'height',
-      'style'
-    ],
-    []
-  );
 
   const myMember = board?.members?.find((m: any) => m.user_id === user?.id);
   const isOwner = myMember?.role === 'owner' || user?.role === 'root';
@@ -3046,96 +2913,19 @@ const WorkBoardDetailPage: React.FC = () => {
                 {txt('설명', 'Description')}
               </Typography>
             </Box>
-            <Box
-              sx={{
-                overflow: 'hidden',
-                boxSizing: 'border-box',
-                /* 주의: .ql-snow는 툴바·컨테이너 둘 다에 붙으므로 flex column을 쓰면 툴바 버튼이 세로로 쌓임 */
-                '& .ql-toolbar.ql-snow': {
-                  flexShrink: 0,
-                  display: 'flex',
-                  flexDirection: 'row',
-                  flexWrap: 'wrap',
-                  alignItems: 'center',
-                  width: '100%',
-                  border: 'none',
-                  borderBottom: '1px solid #C5CED9',
-                  bgcolor: '#FFFFFF',
-                  px: 1,
-                  py: 0.5,
-                  '& .ql-formats': {
-                    display: 'inline-flex',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                  },
-                  '& .ql-stroke': {
-                    stroke: '#475569',
-                  },
-                  '& .ql-fill': {
-                    fill: '#475569',
-                  },
-                  '& .ql-picker-label': {
-                    color: '#475569',
-                  },
-                },
-                '& .ql-container.ql-snow': {
-                  border: 'none',
-                  resize: 'vertical',
-                  overflow: 'auto',
-                  minHeight: 160,
-                  maxHeight: 'min(78vh, 900px)',
-                  width: '100%',
-                  boxSizing: 'border-box',
-                  bgcolor: '#FFFFFF',
-                  display: 'block',
-                },
-                '& .ql-editor': {
-                  minHeight: 120,
-                  overflowY: 'auto',
-                  fontSize: '0.9rem',
-                },
-                '& .ql-editor img': {
-                  maxWidth: '100%',
-                  height: 'auto',
-                  display: 'block',
-                },
-                '& .ql-editor .ql-align-center img': {
-                  marginLeft: 'auto',
-                  marginRight: 'auto',
-                },
-                '& .ql-editor .ql-align-right img': {
-                  marginLeft: 'auto',
-                  marginRight: 0,
-                },
-                '& .ql-editor .ql-align-left img': {
-                  marginLeft: 0,
-                  marginRight: 'auto',
-                },
-                '& .ql-image-resize-display': {
-                  display: 'none !important',
-                },
-                '& .ql-image-resize-toolbar': {
-                  display: 'none !important',
-                },
-              }}
-            >
-              <ReactQuill
-                ref={quillRef}
-                theme="snow"
-                readOnly={!menuCanEdit}
-                value={cardDetail?.description || ''}
-                onChange={(value) =>
-                  setCardDetail((prev) => (prev ? { ...prev, description: value } : prev))
-                }
-                modules={quillModules}
-                formats={quillFormats}
-                placeholder={txt(
-                  '설명을 입력하세요. 이미지 업로드, 글자 크기/색상 변경이 가능합니다.',
-                  'Enter description. Image upload and text size/color changes are available.'
-                )}
-              />
-            </Box>
+            <RichTextEditor
+              readOnly={!menuCanEdit}
+              value={cardDetail?.description || ''}
+              onChange={(value) =>
+                setCardDetail((prev) => (prev ? { ...prev, description: value } : prev))
+              }
+              minHeight={160}
+              placeholder={txt(
+                '설명을 입력하세요. 이미지 업로드, 글자 크기/색상 변경이 가능합니다.',
+                'Enter description. Image upload and text size/color changes are available.'
+              )}
+              sx={{ border: 'none', borderRadius: 0 }}
+            />
           </Paper>
 
           <Paper

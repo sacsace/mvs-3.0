@@ -104,6 +104,52 @@ const isMissingCommentsTableError = (error: unknown): boolean => {
   );
 };
 
+const buildCardNestedInclude = (light: boolean) => {
+  const includes: any[] = [
+    { model: User, as: 'assignee', attributes: ['id', 'username', 'userid', 'email'] },
+    { model: User, as: 'cardCreator', attributes: ['id', 'username'] }
+  ];
+  if (!light) {
+    includes.push({
+      model: WorkBoardCardComment,
+      as: 'comments',
+      include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email'] }],
+      separate: true,
+      order: [['created_at', 'ASC']]
+    });
+  }
+  return includes;
+};
+
+const buildBoardDetailInclude = (light: boolean): any[] => [
+  {
+    model: WorkBoardList,
+    as: 'lists',
+    include: [
+      {
+        model: WorkBoardCard,
+        as: 'cards',
+        include: buildCardNestedInclude(light),
+        separate: true,
+        order: [
+          ['position', 'ASC'],
+          ['id', 'ASC']
+        ]
+      }
+    ],
+    order: [
+      ['position', 'ASC'],
+      ['id', 'ASC']
+    ]
+  },
+  {
+    model: WorkBoardMember,
+    as: 'members',
+    include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email', 'department', 'position'] }]
+  },
+  { model: User, as: 'creator', attributes: ['id', 'username', 'userid'] }
+];
+
 const normalizeCardColor = (
   value: unknown
 ): { valid: boolean; value: string | null | undefined } => {
@@ -388,49 +434,12 @@ export const getWorkBoardDetail = async (req: RequestWithUser, res: Response) =>
       return res.status(403).json({ success: false, message: '이 보드의 멤버만 볼 수 있습니다.' });
     }
 
+    const light = String(req.query.light || '') === '1';
+
     let full: any;
     try {
       full = await WorkBoard.findByPk(board.id, {
-        include: [
-          {
-            model: WorkBoardList,
-            as: 'lists',
-            include: [
-              {
-                model: WorkBoardCard,
-                as: 'cards',
-                include: [
-                  { model: User, as: 'assignee', attributes: ['id', 'username', 'userid', 'email'] },
-                  { model: User, as: 'cardCreator', attributes: ['id', 'username'] },
-                  {
-                    model: WorkBoardCardComment,
-                    as: 'comments',
-                    include: [
-                      { model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email'] }
-                    ],
-                    separate: true,
-                    order: [['created_at', 'ASC']]
-                  }
-                ],
-                separate: true,
-                order: [
-                  ['position', 'ASC'],
-                  ['id', 'ASC']
-                ]
-              }
-            ],
-            order: [
-              ['position', 'ASC'],
-              ['id', 'ASC']
-            ]
-          },
-          {
-            model: WorkBoardMember,
-            as: 'members',
-            include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email', 'department', 'position'] }]
-          },
-          { model: User, as: 'creator', attributes: ['id', 'username', 'userid'] }
-        ]
+        include: buildBoardDetailInclude(light)
       });
     } catch (error: any) {
       if (!isMissingCommentsTableError(error)) {
@@ -438,37 +447,7 @@ export const getWorkBoardDetail = async (req: RequestWithUser, res: Response) =>
       }
       // 댓글 테이블 미적용 환경에서도 보드 자체는 조회 가능하도록 폴백
       full = await WorkBoard.findByPk(board.id, {
-        include: [
-          {
-            model: WorkBoardList,
-            as: 'lists',
-            include: [
-              {
-                model: WorkBoardCard,
-                as: 'cards',
-                include: [
-                  { model: User, as: 'assignee', attributes: ['id', 'username', 'userid', 'email'] },
-                  { model: User, as: 'cardCreator', attributes: ['id', 'username'] }
-                ],
-                separate: true,
-                order: [
-                  ['position', 'ASC'],
-                  ['id', 'ASC']
-                ]
-              }
-            ],
-            order: [
-              ['position', 'ASC'],
-              ['id', 'ASC']
-            ]
-          },
-          {
-            model: WorkBoardMember,
-            as: 'members',
-            include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email', 'department', 'position'] }]
-          },
-          { model: User, as: 'creator', attributes: ['id', 'username', 'userid'] }
-        ]
+        include: buildBoardDetailInclude(true)
       });
     }
 

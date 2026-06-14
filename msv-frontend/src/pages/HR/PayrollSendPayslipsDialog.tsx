@@ -20,7 +20,8 @@ import { useTranslation } from 'react-i18next';
 import type { PayrollGridRow } from './payroll/payrollGridTypes';
 import type { PayslipCompanyInfo } from './PayslipContent';
 import { generatePayslipPdfBlob, payslipBlobToBase64 } from './payrollPayslipPdf';
-import { companyService, payrollService } from '../../services/api';
+import { payrollService } from '../../services/api';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useStore } from '../../store';
 
 type Props = {
@@ -53,14 +54,13 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({ open, rows, onClose, onSen
         return;
       }
       try {
-        const res = await companyService.getCompany(user.company_id);
-        const company = res?.data || {};
+        const company = await useReferenceDataStore.getState().fetchCompanyById(Number(user.company_id));
         if (!mounted) return;
         setCompanyInfo({
-          name: company.name || '',
-          address: company.address || '',
-          phone: company.phone || company.phone_number || '',
-          email: company.email || ''
+          name: company?.name || '',
+          address: company?.address || '',
+          phone: company?.phone || company?.phone_number || '',
+          email: company?.email || ''
         });
       } catch {
         if (mounted) setCompanyInfo(null);

@@ -64,6 +64,9 @@ import {
   roomTypeService,
   userUiPreferencesService
 } from '../../services/api';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
+import { getUploadUrl } from '../../utils/uploadUrl';
+import AuthMedia from '../../components/Common/AuthMedia';
 import { generateRoomBookingId } from '../../utils/bookingId';
 
 interface Room {
@@ -447,9 +450,8 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
         return;
       }
       try {
-        const response = await companyService.getCompany(Number(user.company_id));
-        if (response.success && response.data) {
-          const data = response.data;
+        const data = await useReferenceDataStore.getState().fetchCompanyById(Number(user.company_id));
+        if (data) {
           const issuerGstList = Array.isArray(data.gst_numbers)
             ? data.gst_numbers
             : Array.isArray(data.gstNumbers)
@@ -697,12 +699,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     return `${companyPrefix}/${fy}/INV/${seq}`;
   };
 
-  const resolveLogoUrl = (logo?: string) => {
-    if (!logo) return '';
-    if (logo.startsWith('data:')) return logo;
-    if (/^https?:\/\//i.test(logo)) return logo;
-    return `${apiBaseUrl}${logo.startsWith('/') ? '' : '/'}${logo}`;
-  };
+  const resolveLogoUrl = (logo?: string) => getUploadUrl(logo);
 
   const formatCurrency = (value?: string | number) => {
     if (value === null || value === undefined) return '';
@@ -1859,8 +1856,8 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                 </Typography>
                 {issuerCompany?.companyLogo && (
                   <Box sx={{ mt: 1 }}>
-                    <img
-                      src={resolveLogoUrl(issuerCompany.companyLogo)}
+                    <AuthMedia
+                      src={issuerCompany.companyLogo}
                       alt="Company logo"
                       style={{ height: 36, objectFit: 'contain' }}
                     />
@@ -2136,8 +2133,8 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     <Typography variant="caption">Authorised Signature</Typography>
                     {issuerCompany?.authorizedSignature ? (
                       <Box sx={{ mt: 1 }}>
-                        <img
-                          src={resolveLogoUrl(issuerCompany.authorizedSignature)}
+                        <AuthMedia
+                          src={issuerCompany.authorizedSignature}
                           alt="Authorized signature"
                           style={{ width: '4cm', height: '4cm', objectFit: 'contain' }}
                         />

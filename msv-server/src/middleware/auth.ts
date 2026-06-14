@@ -2,6 +2,7 @@ import { Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { User, Company } from '../models';
 import { AuthRequest } from '../types';
+import { getCachedAuthUser, setCachedAuthUser, getCachedAuthCompany, setCachedAuthCompany } from '../utils/authCache';
 
 const maskToken = (tokenValue?: string) => {
   if (!tokenValue) return '없음';
@@ -30,6 +31,12 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
 
     const decoded = jwt.verify(token, jwtSecret) as any;
     
+    const cached = getCachedAuthUser(decoded.userId);
+    if (cached && cached.status === 'active') {
+      req.user = cached as any;
+      return next();
+    }
+
     // 사용자 정보 조회 - 존재하는 컬럼만 명시적으로 지정
     const user = await (User as any).findByPk(decoded.userId, {
       attributes: [
@@ -46,6 +53,7 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     }
 
     req.user = user;
+    setCachedAuthUser(decoded.userId, user.toJSON ? user.toJSON() : user);
     next();
   } catch (error: any) {
     console.error('❌ 토큰 검증 오류:', {
@@ -120,6 +128,17 @@ export const requireRootOrMinsubEmployee = async (req: AuthRequest, res: Respons
   }
 
   try {
+    const cached = getCachedAuthCompany(req.user.company_id);
+    if (cached) {
+      if (!isMinsubCompanyName(cached.name as string)) {
+        return res.status(403).json({
+          success: false,
+          message: '접근 권한이 없습니다.'
+        });
+      }
+      return next();
+    }
+
     const company = await (Company as any).findByPk(req.user.company_id, {
       attributes: ['id', 'name', 'tenant_id']
     });
@@ -131,6 +150,7 @@ export const requireRootOrMinsubEmployee = async (req: AuthRequest, res: Respons
       });
     }
 
+    setCachedAuthCompany(req.user.company_id, company.toJSON ? company.toJSON() : company);
     return next();
   } catch (error) {
     console.error('Minsub 권한 확인 오류:', error);

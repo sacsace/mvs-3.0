@@ -67,6 +67,9 @@ import {
 } from '@mui/icons-material';
 import { useStore } from '../../store';
 import { api } from '../../services/api';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
+import AuthMedia from '../../components/Common/AuthMedia';
+import { getUploadUrl } from '../../utils/uploadUrl';
 import { useTranslation } from 'react-i18next';
 import { alpha, useTheme } from '@mui/material/styles';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
@@ -314,13 +317,7 @@ const CompanyManagement: React.FC = () => {
         
         // root 사용자는 모든 회사 목록, 일반 사용자는 본인 회사만
         if (user.role === 'root') {
-          // root 사용자: 모든 회사 목록 조회
-                    const response = await api.get('/company');
-                    
-          if (response.data && response.data.success) {
-            const companiesData = Array.isArray(response.data.data) ? response.data.data : (response.data.data ? [response.data.data] : []);
-                        
-            // 데이터베이스 필드를 프론트엔드 인터페이스에 맞게 변환
+          const companiesData = await useReferenceDataStore.getState().fetchCompanies();
             const transformedCompanies = companiesData.map((company: any) => {
               // GST 번호 처리: 배열이 아니거나 비어있으면 빈 배열로 설정
               let gstNumbers: string[] = [];
@@ -354,21 +351,12 @@ const CompanyManagement: React.FC = () => {
                 settings: company.settings || {}
               };
             });
-            
-                                    setCompanies(transformedCompanies);
-          } else {
-            console.error('❌ [회사 정보 관리] API 응답 실패:', response.data);
-            setError(response.data?.message || '회사 목록을 불러오는데 실패했습니다.');
-            setCompanies([]);
-          }
+            setCompanies(transformedCompanies);
         } else {
           // 일반 사용자: 본인 회사 정보만 조회
           if (user.company_id) {
-                        const response = await api.get(`/company/${user.company_id}`);
-                        
-            if (response.data && response.data.success && response.data.data) {
-              const company = response.data.data;
-              
+            const company = await useReferenceDataStore.getState().fetchCompanyById(Number(user.company_id));
+            if (company) {
               // GST 번호 처리: 배열이 아니거나 비어있으면 빈 배열로 설정
               let gstNumbers: string[] = [];
               if (Array.isArray(company.gst_numbers) && company.gst_numbers.length > 0) {
@@ -400,10 +388,10 @@ const CompanyManagement: React.FC = () => {
                 timezone: company.timezone || 'Asia/Seoul',
                 settings: company.settings || {}
               };
-                            setCompanies([transformedCompany]);
+              setCompanies([transformedCompany]);
             } else {
-              console.error('❌ [회사 정보 관리] API 응답 실패 또는 데이터 없음:', response.data);
-              setError(response.data?.message || '회사 정보를 불러오는데 실패했습니다.');
+              console.error('❌ [회사 정보 관리] 회사 데이터 없음');
+              setError('회사 정보를 불러오는데 실패했습니다.');
               setCompanies([]);
             }
           } else {
@@ -680,12 +668,8 @@ const CompanyManagement: React.FC = () => {
       }
       
       // 목록 새로고침
-      const response = await api.get('/company');
-      if (response.data.success) {
-        const companiesData = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
-        
-        // 데이터베이스 필드를 프론트엔드 인터페이스에 맞게 변환
-        const transformedCompanies = companiesData.map((company: any) => ({
+      const companiesData = await useReferenceDataStore.getState().fetchCompanies(true);
+      const transformedCompanies = companiesData.map((company: any) => ({
           ...company,
           employee_count: company.employee_count || 0,
           subscription_plan: company.subscription_plan || 'basic',
@@ -706,8 +690,7 @@ const CompanyManagement: React.FC = () => {
         }));
         
         setCompanies(transformedCompanies);
-      }
-      
+
       // 등록 모드에서는 성공 시 다이얼로그 닫기 (수정 모드는 위에서 처리)
       if (dialogMode === 'add') {
         setOpenDialog(false);
@@ -741,11 +724,8 @@ const CompanyManagement: React.FC = () => {
             await api.delete(`/company/${id}`);
             setSuccess('회사가 성공적으로 삭제되었습니다.');
 
-            const response = await api.get('/company');
-            if (response.data.success) {
-              const companiesData = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
-
-              const transformedCompanies = companiesData.map((company: any) => ({
+            const companiesData = await useReferenceDataStore.getState().fetchCompanies(true);
+            const transformedCompanies = companiesData.map((company: any) => ({
                 ...company,
                 employee_count: company.employee_count || 0,
                 subscription_plan: company.subscription_plan || 'basic',
@@ -765,8 +745,7 @@ const CompanyManagement: React.FC = () => {
                 settings: company.settings || {}
               }));
 
-              setCompanies(transformedCompanies);
-            }
+            setCompanies(transformedCompanies);
           } catch (error: any) {
             console.error('회사 삭제 오류:', error);
             setError(error.response?.data?.message || '회사 삭제 중 오류가 발생했습니다.');
@@ -843,7 +822,7 @@ const CompanyManagement: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           {hasImage ? (
             <Box sx={{ position: 'relative', display: 'inline-block' }}>
-              <img
+              <AuthMedia
                 src={imagePreviews[field]}
                 alt={label}
                 style={{
@@ -851,12 +830,10 @@ const CompanyManagement: React.FC = () => {
                   height: 100,
                   objectFit: 'cover',
                   borderRadius: 8,
-                  border: '1px solid #e0e0e0'
+                  border: '1px solid #e0e0e0',
                 }}
-                onError={(e) => {
-                  console.error(`이미지 로드 실패 (${label}):`, e);
-                  // 이미지 로드 실패 시 빈 상태로 설정
-                  setImagePreviews(prev => ({ ...prev, [field]: '' }));
+                onError={() => {
+                  setImagePreviews((prev) => ({ ...prev, [field]: '' }));
                 }}
               />
               {dialogMode !== 'view' && (
@@ -1962,7 +1939,7 @@ const CompanyManagement: React.FC = () => {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                   {companies[0].company_logo ? (
                     <Avatar
-                      src={companies[0].company_logo}
+                      src={getUploadUrl(companies[0].company_logo)}
                       sx={{
                         width: 100,
                         height: 100,

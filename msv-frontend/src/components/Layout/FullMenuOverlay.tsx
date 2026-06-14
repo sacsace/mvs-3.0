@@ -1,17 +1,20 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
   Divider,
   Fade,
   IconButton,
+  InputAdornment,
   Link,
+  TextField,
   Typography
 } from '@mui/material';
 import {
   Close as CloseIcon,
   HomeOutlined as HomeOutlinedIcon,
-  Language as LanguageIcon
+  Language as LanguageIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -51,6 +54,28 @@ const getMenuLabel = (menu: Menu, language: string) => {
     : String(menu.name_en ?? '').trim() || menu.name_ko;
 };
 
+type FlatMenuItem = { id: number; label: string; route: string; trail: string };
+
+const flattenMenus = (items: Menu[], language: string, parents: string[] = []): FlatMenuItem[] => {
+  const rows: FlatMenuItem[] = [];
+  for (const menu of items) {
+    const label = getMenuLabel(menu, language);
+    const trailParts = [...parents, label];
+    if (menu.route && !isRemovedNavMenuRoute(menu.route)) {
+      rows.push({
+        id: menu.id,
+        label,
+        route: menu.route,
+        trail: trailParts.join(' › '),
+      });
+    }
+    if (menu.children?.length) {
+      rows.push(...flattenMenus(menu.children, language, trailParts));
+    }
+  }
+  return rows;
+};
+
 const FullMenuOverlay: React.FC<FullMenuOverlayProps> = ({
   open,
   onClose,
@@ -59,8 +84,24 @@ const FullMenuOverlay: React.FC<FullMenuOverlayProps> = ({
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { menus, language } = useMenuStore();
+  const [query, setQuery] = useState('');
 
   const menuTree = useMemo(() => filterMenus(menus || [], language), [menus, language]);
+  const flatMenus = useMemo(() => flattenMenus(menuTree, language), [menuTree, language]);
+  const searchResults = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return flatMenus
+      .filter(
+        (item) =>
+          item.label.toLowerCase().includes(q) || item.trail.toLowerCase().includes(q)
+      )
+      .slice(0, 12);
+  }, [flatMenus, query]);
+
+  useEffect(() => {
+    if (!open) setQuery('');
+  }, [open]);
 
   const goTo = useCallback(
     (route?: string) => {
@@ -75,6 +116,10 @@ const FullMenuOverlay: React.FC<FullMenuOverlayProps> = ({
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
+      if (e.key === 'Enter' && query.trim() && searchResults.length > 0) {
+        e.preventDefault();
+        goTo(searchResults[0].route);
+      }
     };
     document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', onKeyDown);
@@ -82,7 +127,7 @@ const FullMenuOverlay: React.FC<FullMenuOverlayProps> = ({
       document.body.style.overflow = '';
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [open, onClose]);
+  }, [open, onClose, query, searchResults, goTo]);
 
   const renderLeafLink = (menu: Menu, indent = false) => (
     <Link
@@ -249,6 +294,59 @@ const FullMenuOverlay: React.FC<FullMenuOverlayProps> = ({
                 <CloseIcon fontSize="small" />
               </IconButton>
             </Box>
+          </Box>
+
+          <Box sx={{ px: { xs: 2, sm: 4 }, py: 1.25, borderBottom: '1px solid #F1F5F9' }}>
+            <TextField
+              fullWidth
+              size="small"
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={language === 'en' ? 'Search menus… (Enter to open)' : '메뉴 검색… (Enter로 이동)'}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && searchResults.length > 0) {
+                  e.preventDefault();
+                  goTo(searchResults[0].route);
+                }
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" sx={{ color: '#9CA3AF' }} />
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                maxWidth: 480,
+                '& .MuiOutlinedInput-root': { borderRadius: '10px', bgcolor: '#F9FAFB' },
+              }}
+            />
+            {query.trim() && (
+              <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.5, maxWidth: 480 }}>
+                {searchResults.length === 0 ? (
+                  <Typography variant="caption" color="text.secondary">
+                    {language === 'en' ? 'No matching menus.' : '일치하는 메뉴가 없습니다.'}
+                  </Typography>
+                ) : (
+                  searchResults.map((item) => (
+                    <Button
+                      key={item.id}
+                      size="small"
+                      onClick={() => goTo(item.route)}
+                      sx={{
+                        justifyContent: 'flex-start',
+                        textTransform: 'none',
+                        color: '#374151',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {item.trail}
+                    </Button>
+                  ))
+                )}
+              </Box>
+            )}
           </Box>
 
           {/* 메가 메뉴 그리드 */}

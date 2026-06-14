@@ -417,7 +417,7 @@ export function verifyHeresnowDispatchAuth(headers: Record<string, unknown>) {
   const webhookBearer = process.env.MVS_WEBHOOK_BEARER;
 
   if (!dispatchSecret && !webhookBearer) {
-    return process.env.NODE_ENV !== 'production';
+    return false;
   }
 
   const authHeader = String(headers.authorization || headers.Authorization || '');

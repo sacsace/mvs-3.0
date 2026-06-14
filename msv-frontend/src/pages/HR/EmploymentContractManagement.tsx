@@ -35,6 +35,7 @@ import {
 import { useTheme, alpha } from '@mui/material/styles';
 import { Add as AddIcon, Edit as EditIcon, Draw as DrawIcon, PictureAsPdf as PictureAsPdfIcon } from '@mui/icons-material';
 import { API_BASE_URL, companyService, employmentContractService, userService } from '../../services/api';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useStore, useMenuStore } from '../../store';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
@@ -252,8 +253,7 @@ const EmploymentContractManagement: React.FC = () => {
   const loadCompanies = async () => {
     if (!isRoot) return;
     try {
-      const res = await companyService.getCompanies();
-      const rows = Array.isArray(res?.data) ? res.data : [];
+      const rows = await useReferenceDataStore.getState().fetchCompanies();
       const mapped = rows.map((c: any) => ({ id: Number(c.id), name: String(c.name || `Company ${c.id}`) }));
       setCompanies(mapped);
       if (!selectedCompanyId && mapped.length > 0) {
@@ -270,8 +270,7 @@ const EmploymentContractManagement: React.FC = () => {
   const loadUsers = async () => {
     try {
       const params = isRoot && selectedCompanyId ? { company_id: Number(selectedCompanyId) } : undefined;
-      const res = await userService.getUsers(params);
-      const rows = Array.isArray(res?.data) ? res.data : [];
+      const rows = await useReferenceDataStore.getState().fetchUsers(params);
       const mapped = rows
         .filter((u: any) => String(u.status || 'active') === 'active')
         .map((u: any) => ({

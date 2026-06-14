@@ -48,8 +48,10 @@ import {
 import { useStore } from '../../store';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import AuthMedia from '../../components/Common/AuthMedia';
 import { useTranslation } from 'react-i18next';
 import { companyService, partnerService, quotationService, userService } from '../../services/api';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { downloadQuotationPdf } from '../../utils/quotationPdf';
 import { parseEmailRecipientsList } from '../../utils/emailRecipients';
 
@@ -253,18 +255,16 @@ const QuotationManagement: React.FC = () => {
         setCompanyUsers([]);
         return;
       }
-      const response = await userService.getUsers({ company_id: Number(user.company_id) });
-      if (response?.success && Array.isArray(response.data)) {
-        setCompanyUsers(
-          response.data
-            .filter((u: any) => u.status === 'active')
-            .map((u: any) => ({
-              id: u.id,
-              username: u.username || u.userid || '',
-              email: u.email || ''
-            }))
-        );
-      }
+      const users = await useReferenceDataStore.getState().fetchUsers({ company_id: Number(user.company_id) });
+      setCompanyUsers(
+        users
+          .filter((u: any) => u.status === 'active')
+          .map((u: any) => ({
+            id: u.id,
+            username: u.username || u.userid || '',
+            email: u.email || ''
+          }))
+      );
     } catch (e) {
       console.error('사용자 목록 로드 오류:', e);
     }
@@ -272,10 +272,8 @@ const QuotationManagement: React.FC = () => {
 
   const loadPartners = useCallback(async () => {
     try {
-      const response = await partnerService.getPartners();
-      if (response?.success) {
-        const data = Array.isArray(response.data) ? response.data : (response.data ? [response.data] : []);
-        const mapped = data.map((p: any) => ({
+      const data = await useReferenceDataStore.getState().fetchPartners();
+      const mapped = data.map((p: any) => ({
           name: p.company_name || p.companyName || '',
           email: p.email || '',
           phone: p.phone || '',
@@ -286,7 +284,6 @@ const QuotationManagement: React.FC = () => {
         setPartners(
           mapped.filter((p: PartnerCustomer) => p.name && p.name.toLowerCase() !== 'test industries')
         );
-      }
     } catch (error) {
       console.error('파트너 목록 로드 오류:', error);
     }
@@ -1723,8 +1720,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
         <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mb: 3 }}>
           <Box sx={{ minWidth: 220 }}>
             {issuingCompany?.company_logo ? (
-              <Box
-                component="img"
+              <AuthMedia
                 src={issuingCompany.company_logo}
                 alt={issuingCompany.name || ''}
                 sx={{
@@ -1734,7 +1730,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                   width: 'auto',
                   height: 'auto',
                   objectFit: 'contain',
-                  mb: 1
+                  mb: 1,
                 }}
               />
             ) : null}

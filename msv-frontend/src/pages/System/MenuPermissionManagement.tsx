@@ -45,6 +45,7 @@ import { useStore, useMenuStore } from '../../store';
 import menuService from '../../services/menuService';
 import { Menu } from '../../services/menuService';
 import { api } from '../../services/api';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { showErrorPopup, showSuccessPopup } from '../../utils/errorHandler';
 import { useTranslation } from 'react-i18next';
 import { mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
@@ -666,14 +667,10 @@ const MenuPermissionManagement: React.FC = () => {
         const currentUserCompanyId = user.company_id;
         
         // 사용자 목록 로드
-        const usersResponse = await api.get('/users');
+        const usersArray = await useReferenceDataStore.getState().fetchUsers();
         
         let usersData: User[] = [];
-        if (usersResponse.data && usersResponse.data.success) {
-          const usersArray = Array.isArray(usersResponse.data.data) 
-            ? usersResponse.data.data 
-            : (usersResponse.data.data ? [usersResponse.data.data] : []);
-          
+        if (usersArray.length >= 0) {
           usersData = usersArray
             .filter((u: any) => u.status === 'active') // 비활성 사용자 제외
             .filter((u: any) => {
@@ -694,13 +691,9 @@ const MenuPermissionManagement: React.FC = () => {
         
         // 회사 목록 로드
         try {
-          const companiesResponse = await api.get('/company');
-          
-          if (companiesResponse.data && companiesResponse.data.success) {
-            const companiesData = Array.isArray(companiesResponse.data.data) 
-              ? companiesResponse.data.data 
-              : (companiesResponse.data.data ? [companiesResponse.data.data] : []);
+          const companiesData = await useReferenceDataStore.getState().fetchCompanies();
 
+          if (companiesData.length >= 0) {
             const scopedCompanies = isRoot
               ? companiesData
               : companiesData.filter((c: any) => Number(c.id) === Number(currentUserCompanyId));

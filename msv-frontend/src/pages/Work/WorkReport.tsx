@@ -54,12 +54,9 @@ import {
   AttachFile as AttachFileIcon,
   Send as SendIcon
 } from '@mui/icons-material';
-import ReactQuill from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
-import Quill from 'quill';
-import QuillResize from 'quill-resize-module';
-import 'quill-resize-module/dist/resize.css';
-import { workReportService, api } from '../../services/api';
+import RichTextEditor from '../../components/RichTextEditor/RichTextEditor';
+import { workReportService } from '../../services/api';
+import { filterActiveCompanyUsers, useReferenceDataStore } from '../../store/referenceDataStore';
 import { useTranslation } from 'react-i18next';
 import { useTheme, alpha } from '@mui/material/styles';
 import { useStore } from '../../store';
@@ -67,12 +64,6 @@ import { useSearchParams } from 'react-router-dom';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { mvsPageTitleSx } from '../../theme/mvsLayout';
-
-try {
-  Quill.register('modules/resize', QuillResize);
-} catch {
-  /* HMR 등으로 이미 등록된 경우 */
-}
 
 function stripHtmlToPlain(html: string): string {
   if (!html) return '';
@@ -294,7 +285,7 @@ const WorkReport: React.FC = () => {
   const [feedbackBody, setFeedbackBody] = useState('');
   const [feedbackSending, setFeedbackSending] = useState(false);
   const [companyUserOptions, setCompanyUserOptions] = useState<CompanyUserOption[]>([]);
-  const contentQuillRef = useRef<ReactQuill | null>(null);
+  const fetchUsersCached = useReferenceDataStore((s) => s.fetchUsers);
   const [formState, setFormState] = useState({
     title: '',
     type: 'daily' as WorkReportItem['type'],
@@ -310,111 +301,21 @@ const WorkReport: React.FC = () => {
     attachments: [] as WorkReportAttachmentItem[]
   });
 
-  const quillModules = useMemo(
-    () => ({
-      resize: {
-        modules: ['Resize', 'DisplaySize', 'Toolbar'],
-        keyboardSelect: true,
-        parchment: {
-          image: {
-            attribute: ['width'],
-            limit: {
-              minWidth: 80,
-              maxWidth: 1600
-            }
-          }
-        }
-      },
-      toolbar: {
-        container: [
-          [{ header: [1, 2, 3, false] }],
-          ['bold', 'italic', 'underline', 'strike'],
-          [{ color: [] }, { background: [] }],
-          [{ list: 'ordered' }, { list: 'bullet' }],
-          [{ align: [] }],
-          ['blockquote', 'code-block'],
-          ['link', 'image', 'clean']
-        ],
-        handlers: {
-          image(this: { quill: any }) {
-            const quill = this.quill;
-            if (!quill) return;
-            const input = document.createElement('input');
-            input.setAttribute('type', 'file');
-            input.setAttribute('accept', 'image/*');
-            input.click();
-            input.onchange = async () => {
-              const file = input.files?.[0];
-              if (!file) return;
-              if (!file.type.startsWith('image/')) {
-                setError(tr('이미지 파일만 삽입할 수 있습니다.', 'Only image files can be inserted.'));
-                return;
-              }
-              if (file.size > WORK_REPORT_INLINE_IMAGE_MAX_BYTES) {
-                setError(
-                  tr(
-                    `삽입 이미지는 최대 ${WORK_REPORT_INLINE_IMAGE_MAX_BYTES / (1024 * 1024)}MB까지 가능합니다.`,
-                    `Inline images must be at most ${WORK_REPORT_INLINE_IMAGE_MAX_BYTES / (1024 * 1024)} MB.`
-                  )
-                );
-                return;
-              }
-              try {
-                const dataUrl = await readFileAsDataUrl(file);
-                const range = quill.getSelection(true);
-                const idx = range != null ? range.index : Math.max(0, quill.getLength() - 1);
-                quill.insertEmbed(idx, 'image', dataUrl, 'user');
-                quill.setSelection(idx + 1, 0, 'silent');
-              } catch {
-                setError(tr('이미지를 불러오지 못했습니다.', 'Could not read the image.'));
-              }
-            };
-          }
-        }
-      }
-    }),
-    [tr, setError]
-  );
-
-  const quillFormats = useMemo(
-    () => [
-      'header',
-      'bold',
-      'italic',
-      'underline',
-      'strike',
-      'color',
-      'background',
-      'list',
-      'bullet',
-      'align',
-      'blockquote',
-      'code-block',
-      'link',
-      'image'
-    ],
-    []
-  );
-
   useEffect(() => {
     if (!openDialog) return;
     let cancelled = false;
     (async () => {
       try {
-        const res = await api.get('/users');
-        if (!res.data?.success || cancelled) return;
+        const allUsers = await fetchUsersCached();
+        if (cancelled) return;
         const cid = user?.company_id != null ? Number(user.company_id) : NaN;
         const tid = user?.tenant_id != null ? Number(user.tenant_id) : null;
         const myId = user?.id != null ? Number(user.id) : NaN;
-        const list = (res.data.data || [])
-          .filter((u: any) => {
-            if (u.status !== 'active') return false;
-            if (Number.isInteger(cid) && cid > 0 && Number(u.company_id) !== cid) return false;
-            if (tid != null && Number.isInteger(tid) && u.tenant_id != null && Number(u.tenant_id) !== tid) return false;
-            if (Number.isInteger(myId) && myId > 0 && Number(u.id) === myId) return false;
-            return true;
-          })
-          .map((u: any) => ({
+        const list = filterActiveCompanyUsers(allUsers, {
+          companyId: cid,
+          tenantId: tid,
+          excludeUserId: myId,
+        }).map((u: any) => ({
             id: Number(u.id),
             label: String(u.username || u.userid || u.id),
             userid: String(u.userid || '')
@@ -428,7 +329,7 @@ const WorkReport: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [openDialog, user?.company_id, user?.tenant_id, user?.id]);
+  }, [openDialog, user?.company_id, user?.tenant_id, user?.id, fetchUsersCached]);
 
   const loadReportData = useCallback(async () => {
     setError('');
@@ -752,11 +653,7 @@ const WorkReport: React.FC = () => {
   };
 
   const handleSaveReport = async () => {
-    const latestHtml =
-      typeof contentQuillRef.current?.getEditor?.()?.root?.innerHTML === 'string'
-        ? contentQuillRef.current!.getEditor()!.root.innerHTML
-        : formState.content;
-    const contentForSave = latestHtml || formState.content;
+    const contentForSave = formState.content;
 
     if (!formState.title.trim() || isHtmlContentEmpty(contentForSave)) {
       setError(tr('제목과 내용을 입력해주세요.', 'Please enter title and content.'));
@@ -1951,31 +1848,16 @@ const WorkReport: React.FC = () => {
               <Typography variant="body2" sx={reportDialogFieldLabelSx}>
                 {tr('내용', 'Content')} *
               </Typography>
-              <Box
+              <RichTextEditor
+                value={formState.content}
+                onChange={(html) => setFormState((prev) => ({ ...prev, content: html }))}
+                minHeight={240}
                 sx={{
                   border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
                   borderRadius: '14px',
-                  overflow: 'hidden',
-                  bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
                   boxShadow: `inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.04 : 0.5)}`,
-                  '& .ql-toolbar': {
-                    border: 'none',
-                    borderBottom: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
-                    bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.06),
-                  },
-                  '& .ql-container': { border: 'none', minHeight: 240, fontSize: '0.9375rem' },
-                  '& .ql-editor img': { maxWidth: '100%', height: 'auto', display: 'block' },
                 }}
-              >
-                <ReactQuill
-                  ref={contentQuillRef}
-                  theme="snow"
-                  value={formState.content}
-                  onChange={(html) => setFormState((prev) => ({ ...prev, content: html }))}
-                  modules={quillModules}
-                  formats={quillFormats}
-                />
-              </Box>
+              />
             </Box>
             <Box>
               <Typography variant="body2" sx={reportDialogFieldLabelSx}>

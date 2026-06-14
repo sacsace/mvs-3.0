@@ -12,6 +12,8 @@ import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import path from 'path';
 
+let userListHrFieldsAvailable: boolean | null = null;
+
 /** 사용자 Excel 내보내기 컬럼 순서 (json_to_sheet와 동일) */
 const USER_EXCEL_EXPORT_COLUMNS = [
   '사원번호',
@@ -221,60 +223,51 @@ router.get('/', async (req, res) => {
       attributes: ['id', 'name'],
       required: false
     });
-    
-        
-    // 디버깅: WHERE 절 없이 전체 조회해서 개수 확인
-    const allUsersCount = await (User as any).count();
-        
-    // 먼저 기본 컬럼만 조회 (HR 필드 제외)
-    let users: any[];
+
     const baseAttributes = [
       'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'status', 'last_login', 'created_at',
       'tenant_id', 'company_id', 'is_payment_officer'
     ];
-    
-    try {
+    const hrAttributes = [
+      ...baseAttributes,
+      'employee_number', 'birth_date', 'gender', 'phone', 'address',
+      'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
+      'bank_name', 'bank_account', 'bank_ifsc'
+    ];
+
+    let users: any[];
+    const buildFindOptions = (attributes: string[]) => {
       const findOptions: any = {
         where: whereClause,
-        attributes: baseAttributes,
+        attributes,
         order: [['created_at', 'DESC']]
       };
-      
-      // 회사 정보 포함
       if (includeOptions.length > 0) {
         findOptions.include = includeOptions;
       }
-      
-      users = await (User as any).findAll(findOptions);
-      
-      // HR 필드가 있는지 확인하고 추가 조회 시도
-      try {
-        const hrFindOptions: any = {
-          where: whereClause,
-          attributes: [
-            ...baseAttributes,
-            'employee_number', 'birth_date', 'gender', 'phone', 'address',
-            'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-            'bank_name', 'bank_account', 'bank_ifsc'
-          ],
-          order: [['created_at', 'DESC']],
-          include: includeOptions
-        };
-        
-        users = await (User as any).findAll(hrFindOptions);
-        // HR 필드 조회 성공 (조용히 처리)
-      } catch (hrError: any) {
-        // HR 필드가 없으면 기본 필드만 사용 (첫 실행 시에만 발생할 수 있음)
-        if (hrError.name === 'SequelizeDatabaseError' && 
-            (hrError.message?.includes('칼럼') || hrError.message?.includes('column'))) {
-          // HR 필드가 아직 추가되지 않은 경우 기본 필드만 사용
-          // 경고 메시지는 제거 (스크립트로 필드 추가 후에는 발생하지 않음)
-        } else {
-          throw hrError;
+      return findOptions;
+    };
+
+    try {
+      if (userListHrFieldsAvailable === false) {
+        users = await (User as any).findAll(buildFindOptions(baseAttributes));
+      } else {
+        try {
+          users = await (User as any).findAll(buildFindOptions(hrAttributes));
+          userListHrFieldsAvailable = true;
+        } catch (hrError: any) {
+          if (
+            hrError.name === 'SequelizeDatabaseError' &&
+            (hrError.message?.includes('칼럼') || hrError.message?.includes('column'))
+          ) {
+            userListHrFieldsAvailable = false;
+            users = await (User as any).findAll(buildFindOptions(baseAttributes));
+          } else {
+            throw hrError;
+          }
         }
       }
     } catch (error: any) {
-      // 기본 컬럼 조회 실패 시 최소한의 컬럼만 조회
       console.warn('⚠️ 기본 컬럼 조회 실패, 최소 컬럼만 조회:', error.message);
       try {
         users = await (User as any).findAll({
@@ -288,19 +281,7 @@ router.get('/', async (req, res) => {
       }
     }
 
-    // Sequelize 모델 인스턴스를 JSON으로 변환
     const usersData = users.map((user: any) => user.toJSON ? user.toJSON() : user);
-    
-        if (usersData.length === 0) {
-                  
-      // WHERE 절 없이 조회해서 실제 데이터 확인
-      const allUsers = await (User as any).findAll({
-        attributes: ['id', 'userid', 'username', 'tenant_id', 'company_id', 'role'],
-        limit: 5
-      });
-      const allUsersData = allUsers.map((u: any) => u.toJSON ? u.toJSON() : u);
-          } else {
-          }
 
     res.json({
       success: true,

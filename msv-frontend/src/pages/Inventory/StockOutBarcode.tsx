@@ -18,6 +18,7 @@ import { alpha, useTheme } from '@mui/material/styles';
 import { api, inventoryService } from '../../services/api';
 import { useMenuStore } from '../../store';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+import { resolveMediaUrl } from '../../utils/uploadUrl';
 
 const STOCK_OUT_MENU_ROUTES = ['/inventory/stock-out', '/inventory'] as const;
 
@@ -35,13 +36,7 @@ type ProductPreview = {
   image_url?: string;
 };
 
-const resolveProductImageUrl = (p: string | undefined) => {
-  if (!p) return '';
-  if (/^https?:\/\//i.test(p)) return p;
-  const base = (api.defaults.baseURL || '').replace(/\/api\/?$/, '');
-  const path = p.startsWith('/') ? p : `/${p}`;
-  return `${base}${path}`;
-};
+const resolveProductImageUrl = resolveMediaUrl;
 
 type ResolveStockOutProduct =
   | { product: ProductPreview | null; ambiguous: false; candidates: ProductPreview[] }

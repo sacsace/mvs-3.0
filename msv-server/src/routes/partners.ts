@@ -7,9 +7,19 @@ import multer from 'multer';
 import * as XLSX from 'xlsx';
 import path from 'path';
 import { isMissingTableError } from '../utils/dbErrors';
+import {
+  buildReferenceCacheKey,
+  referenceCacheGet,
+  referenceCacheSet,
+  referenceCacheDel,
+} from '../utils/redisCache';
 
 const router = express.Router();
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const invalidatePartnersCache = async () => {
+  await referenceCacheDel('ref:partners:*');
+};
 
 // Multer 설정 (메모리 스토리지)
 const upload = multer({
@@ -46,14 +56,17 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
     if (userRole !== 'root' && userRole !== 'audit') {
       whereClause.tenant_id = tenantId;
       whereClause.company_id = companyId;
-          } else {
-          }
+    }
 
-    // is_active 필터 추가
     whereClause.is_active = true;
-    
-    const allPartnersCount = await (Partner as any).count();
-        const partners = await (Partner as any).findAll({
+
+    const cacheKey = buildReferenceCacheKey(['ref', 'partners', tenantId, companyId, userRole]);
+    const cached = await referenceCacheGet(cacheKey);
+    if (cached) {
+      return res.json(JSON.parse(cached));
+    }
+
+    const partners = await (Partner as any).findAll({
       where: whereClause,
       include: [{
         model: PartnerGstNumber,
@@ -64,25 +77,15 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
       order: [['created_at', 'DESC']]
     });
 
-        const partnersData = partners.map((partner: any) => {
+    const partnersData = partners.map((partner: any) => {
       const partnerData = partner.toJSON ? partner.toJSON() : partner;
       partnerData.gstNumbers = partnerData.gstNumbers?.map((gst: any) => gst.gst_number) || [];
       return partnerData;
     });
 
-        if (partnersData.length === 0) {
-            // 디버깅: WHERE 절 없이 전체 파트너 조회
-      const allPartners = await (Partner as any).findAll({
-        limit: 5
-      });
-      const allPartnersData = allPartners.map((p: any) => p.toJSON ? p.toJSON() : p);
-          } else {
-          }
-
-    res.json({
-      success: true,
-      data: partnersData
-    });
+    const payload = { success: true, data: partnersData };
+    await referenceCacheSet(cacheKey, JSON.stringify(payload));
+    res.json(payload);
   } catch (error: any) {
     console.error('파트너 목록 조회 오류:', error);
     if (isMissingTableError(error)) {
@@ -225,6 +228,7 @@ router.post(
     const responseData = createdPartner.toJSON();
     responseData.gstNumbers = responseData.gstNumbers?.map((gst: any) => gst.gst_number) || [];
 
+    await invalidatePartnersCache();
     res.status(201).json({
       success: true,
       data: responseData,
@@ -353,6 +357,7 @@ router.put(
     const partnerDataResult = updatedPartner.toJSON();
     partnerDataResult.gstNumbers = partnerDataResult.gstNumbers?.map((gst: any) => gst.gst_number) || [];
 
+    await invalidatePartnersCache();
     res.json({
       success: true,
       data: partnerDataResult,
@@ -394,6 +399,7 @@ router.delete('/:id', authenticateToken, async (req: Request, res: Response) => 
     await (PartnerGstNumber as any).update({ is_active: false }, { where: { partner_id: id } });
     await partner.update({ is_active: false });
 
+    await invalidatePartnersCache();
     res.json({
       success: true,
       message: '파트너가 성공적으로 비활성화되었습니다.'
@@ -749,6 +755,7 @@ router.post('/excel/import', authenticateToken, upload.single('file'), async (re
       }
     }
 
+    await invalidatePartnersCache();
     res.json({
       success: true,
       message: `총 ${results.total}건 중 ${results.success.length}건이 성공적으로 등록되었습니다.`,

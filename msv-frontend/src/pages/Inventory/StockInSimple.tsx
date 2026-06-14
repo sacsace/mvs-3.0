@@ -19,6 +19,8 @@ import { useTranslation } from 'react-i18next';
 import { api, inventoryService } from '../../services/api';
 import { useMenuStore } from '../../store';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+import { resolveMediaUrl } from '../../utils/uploadUrl';
+
 const STOCK_IN_MENU_ROUTES = ['/inventory/stock-in', '/inventory'] as const;
 
 type ProductLookup = {
@@ -31,13 +33,7 @@ type ProductLookup = {
   image_url?: string;
 };
 
-const resolveProductImageUrl = (p: string | undefined) => {
-  if (!p) return '';
-  if (/^https?:\/\//i.test(p)) return p;
-  const base = (api.defaults.baseURL || '').replace(/\/api\/?$/, '');
-  const path = p.startsWith('/') ? p : `/${p}`;
-  return `${base}${path}`;
-};
+const resolveProductImageUrl = resolveMediaUrl;
 
 /** 품목코드와 정확히 일치하는 제품만 조회 (바코드 스캔용) */
 async function findProductByExactCode(code: string): Promise<ProductLookup | null> {

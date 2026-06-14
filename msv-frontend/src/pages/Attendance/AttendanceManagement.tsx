@@ -37,8 +37,9 @@ import {
   mvsInnerCardSx,
   mvsTitleBlockSx,
 } from '../../theme/mvsLayout';
-import { attendanceService, heresnowIntegrationService, officeLocationService, vacationService, api } from '../../services/api';
+import { attendanceService, heresnowIntegrationService, officeLocationService, vacationService } from '../../services/api';
 import { useStore } from '../../store';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 
 interface Attendance {
   id: number;
@@ -198,15 +199,12 @@ const AttendanceManagement: React.FC = () => {
     }
     const fetchUsers = async () => {
       try {
-        const response = await api.get('/users');
-        if (response.data.success) {
-          const usersData = response.data.data || [];
+        const usersData = await useReferenceDataStore.getState().fetchUsers();
           const deptSet = new Set<string>();
           usersData.forEach((u: any) => {
             if (u.department) deptSet.add(u.department);
           });
           setDepartments(Array.from(deptSet).sort());
-        }
       } catch (e) {
         console.error('??? ?? ?? ??:', e);
       }

@@ -597,8 +597,8 @@ const Dashboard: React.FC = () => {
           let initialQuick = fallbackRoutes;
           if (Array.isArray(data.quickActionRoutes) && data.quickActionRoutes.length > 0) {
             const validParsed = data.quickActionRoutes
-              .filter((value) => typeof value === 'string')
-              .filter((route) => routeSet.has(route))
+              .filter((value: unknown) => typeof value === 'string')
+              .filter((route: string) => routeSet.has(route))
               .slice(0, QUICK_ACTION_MAX_COUNT);
             if (validParsed.length > 0) initialQuick = validParsed;
           }
@@ -1187,35 +1187,60 @@ const Dashboard: React.FC = () => {
   // 실제 데이터 로드 함수
   const loadDashboardData = async () => {
     try {
-    setLoading(true);
+      setLoading(true);
       setError(null);
 
-      // 대시보드 통계 로드
-      const statsResponse = await api.get('/dashboard/stats');
-      if (statsResponse.data.success) {
-        setStats(prev => ({
+      const [
+        statsResponse,
+        revenueResponse,
+        inventoryResponse,
+        notificationsResponse,
+        noticesResult,
+        vacationsResult,
+        leaveCalResult,
+        projectsResult,
+        lowStockResult,
+        invoicesResult,
+        usersResult,
+        myTasksResult,
+      ] = await Promise.all([
+        api.get('/dashboard/stats').catch(() => null),
+        api.get('/dashboard/revenue-trend').catch(() => null),
+        api.get('/dashboard/inventory-status').catch(() => null),
+        api.get('/notifications').catch(() => null),
+        noticeService.getNotices({ status: 'published', limit: 5, page: 1 }).catch(() => null),
+        vacationService.getVacations({ status: 'pending' }).catch(() => null),
+        (user?.role === 'admin' || user?.role === 'root'
+          ? vacationService.getVacations()
+          : vacationService.getVacations({ same_department: true })
+        ).catch(() => null),
+        projectService.getProjects({}).catch(() => null),
+        api.get('/inventory/products', { params: { lowStock: true, limit: 5 } }).catch(() => null),
+        api.get('/accounting/invoices', { params: { limit: 5, orderBy: 'created_at', order: 'DESC' } }).catch(() => null),
+        api.get('/users', { params: { status: 'active' } }).catch(() => null),
+        user?.id ? api.get('/dashboard/my-tasks').catch(() => null) : Promise.resolve(null),
+      ]);
+
+      if (statsResponse?.data?.success) {
+        setStats((prev) => ({
           ...prev,
           totalSales: statsResponse.data.data.totalRevenue || 0,
           totalCustomers: statsResponse.data.data.customerCount || 0,
           totalInvoices: statsResponse.data.data.invoiceCount || 0,
-          totalInventory: statsResponse.data.data.inventoryCount || 0
+          totalInventory: statsResponse.data.data.inventoryCount || 0,
         }));
       }
 
-      // 매출 추이 데이터 로드
-      const revenueResponse = await api.get('/dashboard/revenue-trend');
-      if (revenueResponse.data.success) {
+      if (revenueResponse?.data?.success) {
         const revenueData = revenueResponse.data.data.map((item: any) => ({
           name: new Date(item.month).toLocaleDateString('ko-KR', { month: 'short' }),
           sales: parseFloat(item.revenue) || 0,
-          profit: parseFloat(item.revenue) * 0.3 || 0 // 수익률 30% 가정
+          profit: parseFloat(item.revenue) * 0.3 || 0,
         }));
         setSalesData(revenueData);
       }
 
-      // 재고 현황 데이터 로드
-      const inventoryResponse = await api.get('/dashboard/inventory-status');
-      if (inventoryResponse.data.success) {
+      if (inventoryResponse?.data?.success) {
         const inventoryStatus = inventoryResponse.data.data;
         setInventoryData([
           { name: t('dashboard.inventoryLow'), value: inventoryStatus.lowStock || 0, color: '#ff6b6b' },
@@ -1224,173 +1249,60 @@ const Dashboard: React.FC = () => {
         ]);
       }
 
-      // 최근 활동 데이터 로드 (알림 API 사용)
-      const notificationsResponse = await api.get('/notifications');
-      if (notificationsResponse.data.success) {
+      if (notificationsResponse?.data?.success) {
         const activities = notificationsResponse.data.data.slice(0, 4).map((notification: any, index: number) => ({
           id: notification.id || index + 1,
           type: 'notification',
           message: notification.message || t('dashboard.newNotification'),
           time: notification.created_at ? new Date(notification.created_at).toLocaleString('ko-KR') : '',
-          icon: 'notifications'
+          icon: 'notifications',
         }));
         setRecentActivities(activities);
       }
 
-      // 공지사항 데이터 로드
-      try {
-        const noticesResponse = await noticeService.getNotices({ 
-          status: 'published',
-          limit: 5,
-          page: 1
-        });
-        if (noticesResponse.success) {
-          setNotices(noticesResponse.data || []);
-        }
-      } catch (error) {
-        console.error('공지사항 로드 오류:', error);
+      if (noticesResult?.success) {
+        setNotices(noticesResult.data || []);
       }
 
-      // 휴가 승인 대기 로드
-      try {
-        const vacationsResponse = await vacationService.getVacations({ 
-          status: 'pending'
-        });
-        if (vacationsResponse.success) {
-          const vacations = Array.isArray(vacationsResponse.data) ? vacationsResponse.data : [];
-          setPendingVacations(vacations.slice(0, 5));
-          setStats(prev => ({ ...prev, pendingVacations: vacations.length }));
-        }
-      } catch (error) {
-        console.error('휴가 승인 대기 로드 오류:', error);
+      if (vacationsResult?.success) {
+        const vacations = Array.isArray(vacationsResult.data) ? vacationsResult.data : [];
+        setPendingVacations(vacations.slice(0, 5));
+        setStats((prev) => ({ ...prev, pendingVacations: vacations.length }));
       }
 
-      // 대시보드 휴가 달력 (관리자: 전체 후 부서 필터, 일반: 동일 부서)
-      try {
-        let leaveCalRes;
-        if (user?.role === 'admin' || user?.role === 'root') {
-          leaveCalRes = await vacationService.getVacations();
-        } else {
-          leaveCalRes = await vacationService.getVacations({ same_department: true });
-        }
-        if (leaveCalRes.success) {
-          setDashboardLeaveRaw(Array.isArray(leaveCalRes.data) ? leaveCalRes.data : []);
-        } else {
-          setDashboardLeaveRaw([]);
-        }
-      } catch {
+      if (leaveCalResult?.success) {
+        setDashboardLeaveRaw(Array.isArray(leaveCalResult.data) ? leaveCalResult.data : []);
+      } else {
         setDashboardLeaveRaw([]);
       }
 
-      // 내 담당 업무 로드 (업무관리 보드 기준)
-      try {
-        if (user?.id) {
-          const boardsResponse = await workBoardService.getBoards({});
-          if (boardsResponse?.success) {
-            const boardIds: number[] = (boardsResponse.data || []).map((b: any) => b.id).filter(Boolean);
-            const detailResponses = await Promise.all(
-              boardIds.map(async (boardId) => {
-                try {
-                  const boardResponse = await workBoardService.getBoard(boardId);
-                  return boardResponse?.success ? boardResponse.data : null;
-                } catch {
-                  return null;
-                }
-              })
-            );
+      if (projectsResult?.success) {
+        const allProjects = Array.isArray(projectsResult.data) ? projectsResult.data : [];
+        setStats((prev) => ({ ...prev, totalProjects: allProjects.length }));
+      }
 
-            const classifyStatus = (listTitle: string): 'todo' | 'in_progress' | 'done' => {
-              const normalized = (listTitle || '').replace(/\s+/g, '').toLowerCase();
-              if (normalized.includes('완료') || normalized.includes('done')) return 'done';
-              if (normalized.includes('진행') || normalized.includes('doing') || normalized.includes('progress')) return 'in_progress';
-              return 'todo';
-            };
+      if (lowStockResult?.data?.success) {
+        setLowStockItems(lowStockResult.data.data || []);
+      }
 
-            const assignedCards: any[] = [];
-            detailResponses.forEach((board) => {
-              if (!board) return;
-              (board.lists || []).forEach((list: any) => {
-                const status = classifyStatus(list?.title || '');
-                (list?.cards || []).forEach((card: any) => {
-                  if (card?.assignee?.id !== user.id) return;
-                  assignedCards.push({
-                    id: `${board.id}-${card.id}`,
-                    boardId: board.id,
-                    boardName: board.name || '-',
-                    listName: list.title || '-',
-                    title: card.title || (language === 'en' ? 'Untitled' : '제목 없음'),
-                    dueDate: card.due_date,
-                    status
-                  });
-                });
-              });
-            });
+      if (invoicesResult?.data?.success) {
+        setRecentInvoices(invoicesResult.data.data || []);
+      }
 
-            assignedCards.sort((a, b) => {
-              const aTime = a.dueDate ? new Date(a.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
-              const bTime = b.dueDate ? new Date(b.dueDate).getTime() : Number.MAX_SAFE_INTEGER;
-              return aTime - bTime;
-            });
-            setMyTasks(assignedCards.slice(0, 5));
-          }
-        }
-      } catch (error) {
-        console.error('내 담당 업무 로드 오류:', error);
+      if (usersResult?.data?.success) {
+        setStats((prev) => ({ ...prev, totalEmployees: usersResult.data.data?.length || 0 }));
+      }
+
+      // 내 담당 업무 (집계 API)
+      if (myTasksResult?.data?.success) {
+        setMyTasks(Array.isArray(myTasksResult.data.data) ? myTasksResult.data.data : []);
+      } else {
         setMyTasks([]);
       }
 
-      // 전체 프로젝트 수 계산
-      try {
-        const allProjectsResponse = await projectService.getProjects({});
-        if (allProjectsResponse.success) {
-          const allProjects = Array.isArray(allProjectsResponse.data) ? allProjectsResponse.data : [];
-          setStats(prev => ({ ...prev, totalProjects: allProjects.length }));
-        }
-      } catch (error) {
-        console.error('전체 프로젝트 수 로드 오류:', error);
-      }
-
-      // 재고 부족 상품 로드
-      try {
-        const inventoryResponse = await api.get('/inventory/products', {
-          params: { lowStock: true, limit: 5 }
-        });
-        if (inventoryResponse.data.success) {
-          setLowStockItems(inventoryResponse.data.data || []);
-        }
-      } catch (error) {
-        console.error('재고 부족 상품 로드 오류:', error);
-      }
-
-      // 최근 인보이스 로드
-      try {
-        const invoicesResponse = await api.get('/accounting/invoices', {
-          params: { limit: 5, orderBy: 'created_at', order: 'DESC' }
-        });
-        if (invoicesResponse.data.success) {
-          setRecentInvoices(invoicesResponse.data.data || []);
-        }
-      } catch (error) {
-        console.error('최근 인보이스 로드 오류:', error);
-      }
-
-      // 직원 수 로드
-      try {
-        const usersResponse = await api.get('/users', {
-          params: { status: 'active' }
-        });
-        if (usersResponse.data.success) {
-          setStats(prev => ({ ...prev, totalEmployees: usersResponse.data.data?.length || 0 }));
-        }
-      } catch (error) {
-        console.error('직원 수 로드 오류:', error);
-      }
-
-      // 개인 대시보드 데이터 로드
       if (user?.id) {
         await loadPersonalDashboardData();
       }
-
     } catch (error) {
       console.error('대시보드 데이터 로드 오류:', error);
       setError(t('errors.serverError'));
@@ -1406,71 +1318,45 @@ const Dashboard: React.FC = () => {
     try {
       const uid = Number(user.id);
 
-      // 내가 받은 결재 (현재 결재자가 나인 결재 중 진행 건)
-      try {
-        const receivedRes = await approvalService.getApprovals({
-          current_approver_id: uid,
-          status: 'submitted,in_review'
+      const [receivedRes, myApprovals, vacations, myVacations, projects] = await Promise.all([
+        approvalService.getApprovals({ current_approver_id: uid, status: 'submitted,in_review' }).catch(() => null),
+        approvalService.getApprovals({ requester_id: uid }).catch(() => null),
+        vacationService.getVacations({ approved_by: user.id, status: 'pending' }).catch(() => null),
+        vacationService.getVacations({ user_id: user.id }).catch(() => null),
+        projectService.getProjects({ manager_id: user.id }).catch(() => null),
+      ]);
+
+      if (receivedRes?.success) {
+        const list = Array.isArray(receivedRes.data) ? receivedRes.data : [];
+        const received = list.filter((approval: any) => {
+          const approverId = Number(approval.current_approver_id ?? approval.currentApproverId);
+          const st = approval.status;
+          return approverId === uid && (st === 'submitted' || st === 'in_review');
         });
-        if (receivedRes.success) {
-          const list = Array.isArray(receivedRes.data) ? receivedRes.data : [];
-          const received = list.filter((approval: any) => {
-            const approverId = Number(approval.current_approver_id ?? approval.currentApproverId);
-            const st = approval.status;
-            return approverId === uid && (st === 'submitted' || st === 'in_review');
-          });
-          setMyReceivedApprovals(received.slice(0, 5));
-          setStats((prev) => ({ ...prev, pendingApprovals: received.length }));
-        }
-      } catch (error) {
-        console.error('내가 받은 결재 로드 오류:', error);
+        setMyReceivedApprovals(received.slice(0, 5));
+        setStats((prev) => ({ ...prev, pendingApprovals: received.length }));
       }
 
-      // 내가 신청한 결재
-      try {
-        const myApprovals = await approvalService.getApprovals({ requester_id: uid });
-        if (myApprovals.success) {
-          const raw = Array.isArray(myApprovals.data) ? myApprovals.data : [];
-          const approvals = raw.filter((a: any) => Number(a.requester_id) === uid);
-          setMyRequestedApprovals(approvals.slice(0, 5));
-        }
-      } catch (error) {
-        console.error('내가 신청한 결재 로드 오류:', error);
+      if (myApprovals?.success) {
+        const raw = Array.isArray(myApprovals.data) ? myApprovals.data : [];
+        const approvals = raw.filter((a: any) => Number(a.requester_id) === uid);
+        setMyRequestedApprovals(approvals.slice(0, 5));
       }
 
-      // 내가 받은 휴가 승인 요청
-      try {
-        const vacations = await vacationService.getVacations({ approved_by: user.id, status: 'pending' });
-        if (vacations.success) {
-          const vacs = Array.isArray(vacations.data) ? vacations.data : [];
-          setMyReceivedVacations(vacs.slice(0, 5));
-        }
-      } catch (error) {
-        console.error('내가 받은 휴가 승인 요청 로드 오류:', error);
+      if (vacations?.success) {
+        const vacs = Array.isArray(vacations.data) ? vacations.data : [];
+        setMyReceivedVacations(vacs.slice(0, 5));
       }
 
-      // 내가 신청한 휴가
-      try {
-        const myVacations = await vacationService.getVacations({ user_id: user.id });
-        if (myVacations.success) {
-          const vacs = Array.isArray(myVacations.data) ? myVacations.data : [];
-          setMyRequestedVacations(vacs.slice(0, 5));
-        }
-      } catch (error) {
-        console.error('내가 신청한 휴가 로드 오류:', error);
+      if (myVacations?.success) {
+        const vacs = Array.isArray(myVacations.data) ? myVacations.data : [];
+        setMyRequestedVacations(vacs.slice(0, 5));
       }
 
-      // 내 프로젝트
-      try {
-        const projects = await projectService.getProjects({ manager_id: user.id });
-        if (projects.success) {
-          const projs = Array.isArray(projects.data) ? projects.data : [];
-          setMyProjects(projs.slice(0, 5));
-        }
-      } catch (error) {
-        console.error('내 프로젝트 로드 오류:', error);
+      if (projects?.success) {
+        const projs = Array.isArray(projects.data) ? projects.data : [];
+        setMyProjects(projs.slice(0, 5));
       }
-
     } catch (error) {
       console.error('개인 대시보드 데이터 로드 오류:', error);
     }

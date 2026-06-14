@@ -1,0 +1,416 @@
+import { api, API_BASE_URL, getAuthTokenFromStorage } from '../client';
+
+export const projectService = {
+  // ?�로?�트 목록 조회
+  getProjects: async (params?: { page?: number; limit?: number; status?: string; manager_id?: number }) => {
+    try {
+      const response = await api.get('/projects', { params });
+      return response.data;
+    } catch (error) {
+      console.error('?�로?�트 목록 조회 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�로?�트 ?�세 조회
+  getProject: async (id: number) => {
+    try {
+      const response = await api.get(`/projects/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('?�로?�트 ?�세 조회 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�로?�트 ?�성
+  createProject: async (data: any) => {
+    try {
+      const response = await api.post('/projects', data);
+      return response.data;
+    } catch (error) {
+      console.error('?�로?�트 ?�성 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�로?�트 ?�정
+  updateProject: async (id: number, data: any) => {
+    try {
+      const response = await api.put(`/projects/${id}`, data);
+      return response.data;
+    } catch (error) {
+      console.error('?�로?�트 ?�정 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�로?�트 ??��
+  deleteProject: async (id: number) => {
+    try {
+      const response = await api.delete(`/projects/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('?�로?�트 ??�� ?�류:', error);
+      throw error;
+    }
+  }
+};
+
+/** ?�렐로형 ?�업 보드 (/api/work/boards) */
+
+export const workBoardService = {
+  getBoards: async (params?: { company_id?: number }) => {
+    const response = await api.get('/work/boards', { params });
+    return response.data;
+  },
+  createBoard: async (data: { name: string; description?: string; board_color?: string }) => {
+    const response = await api.post('/work/boards', data);
+    return response.data;
+  },
+  getBoard: async (boardId: number, options?: { light?: boolean }) => {
+    const params = options?.light ? { light: '1' } : undefined;
+    const response = await api.get(`/work/boards/${boardId}`, { params });
+    return response.data;
+  },
+  updateBoard: async (boardId: number, data: { name?: string; description?: string | null; board_color?: string | null }) => {
+    const response = await api.put(`/work/boards/${boardId}`, data);
+    return response.data;
+  },
+  moveBoard: async (boardId: number, index: number) => {
+    const response = await api.post(`/work/boards/${boardId}/move`, { index });
+    return response.data;
+  },
+  deleteBoard: async (boardId: number) => {
+    const response = await api.delete(`/work/boards/${boardId}`);
+    return response.data;
+  },
+  createList: async (boardId: number, data: { title: string; description?: string | null }) => {
+    const response = await api.post(`/work/boards/${boardId}/lists`, data);
+    return response.data;
+  },
+  updateList: async (boardId: number, listId: number, data: { title?: string; description?: string | null }) => {
+    const response = await api.put(`/work/boards/${boardId}/lists/${listId}`, data);
+    return response.data;
+  },
+  moveList: async (boardId: number, listId: number, index: number) => {
+    const response = await api.post(`/work/boards/${boardId}/lists/${listId}/move`, { index });
+    return response.data;
+  },
+  deleteList: async (boardId: number, listId: number) => {
+    const response = await api.delete(`/work/boards/${boardId}/lists/${listId}`);
+    return response.data;
+  },
+  createCard: async (boardId: number, listId: number, data: Record<string, unknown>) => {
+    const response = await api.post(`/work/boards/${boardId}/lists/${listId}/cards`, data);
+    return response.data;
+  },
+  updateCard: async (boardId: number, cardId: number, data: Record<string, unknown>) => {
+    const response = await api.put(`/work/boards/${boardId}/cards/${cardId}`, data);
+    return response.data;
+  },
+  moveCard: async (boardId: number, cardId: number, list_id: number, index: number) => {
+    const response = await api.post(`/work/boards/${boardId}/cards/${cardId}/move`, { list_id, index });
+    return response.data;
+  },
+  deleteCard: async (boardId: number, cardId: number) => {
+    const response = await api.delete(`/work/boards/${boardId}/cards/${cardId}`);
+    return response.data;
+  },
+  getCardComments: async (boardId: number, cardId: number) => {
+    const response = await api.get(`/work/boards/${boardId}/cards/${cardId}/comments`);
+    return response.data;
+  },
+  createCardComment: async (
+    boardId: number,
+    cardId: number,
+    content: string,
+    mention_user_ids?: number[],
+    parent_id?: number | null
+  ) => {
+    const payload: any = { content };
+    if (Array.isArray(mention_user_ids) && mention_user_ids.length > 0) {
+      payload.mention_user_ids = mention_user_ids;
+    }
+    if (parent_id != null && Number.isInteger(parent_id) && parent_id > 0) {
+      payload.parent_id = parent_id;
+    }
+    const response = await api.post(`/work/boards/${boardId}/cards/${cardId}/comments`, payload);
+    return response.data;
+  },
+  deleteCardComment: async (boardId: number, cardId: number, commentId: number) => {
+    const response = await api.delete(`/work/boards/${boardId}/cards/${cardId}/comments/${commentId}`);
+    return response.data;
+  },
+  getMembers: async (boardId: number) => {
+    const response = await api.get(`/work/boards/${boardId}/members`);
+    return response.data;
+  },
+  inviteMember: async (boardId: number, user_id: number) => {
+    const response = await api.post(`/work/boards/${boardId}/members`, { user_id });
+    return response.data;
+  },
+  updateMemberRole: async (boardId: number, userId: number, role: 'owner' | 'member') => {
+    const response = await api.put(`/work/boards/${boardId}/members/${userId}`, { role });
+    return response.data;
+  },
+  removeMember: async (boardId: number, userId: number) => {
+    const response = await api.delete(`/work/boards/${boardId}/members/${userId}`);
+    return response.data;
+  }
+};
+
+// ?�무 ?�계 API ?�비??
+export const workStatisticService = {
+  // ?�무 ?�계 목록 조회
+  getWorkStatistics: async (params?: { user_id?: number; period?: string; start_period?: string; end_period?: string }) => {
+    try {
+      const response = await api.get('/work/statistics', { params });
+      return response.data;
+    } catch (error) {
+      console.error('?�무 ?�계 목록 조회 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�무 ?�계 ?�세 조회
+  getWorkStatistic: async (id: number) => {
+    try {
+      const response = await api.get(`/work/statistics/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('?�무 ?�계 ?�세 조회 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�무 ?�계 ?�성
+  createWorkStatistic: async (data: any) => {
+    try {
+      const response = await api.post('/work/statistics', data);
+      return response.data;
+    } catch (error) {
+      console.error('?�무 ?�계 ?�성 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�무 ?�계 ?�정
+  updateWorkStatistic: async (id: number, data: any) => {
+    try {
+      const response = await api.put(`/work/statistics/${id}`, data);
+      return response.data;
+    } catch (error) {
+      console.error('?�무 ?�계 ?�정 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�무 ?�계 ??��
+  deleteWorkStatistic: async (id: number) => {
+    try {
+      const response = await api.delete(`/work/statistics/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('?�무 ?�계 ??�� ?�류:', error);
+      throw error;
+    }
+  }
+};
+
+// ?�자 결제 API ?�비??
+export const approvalService = {
+  // ?�자 결제 목록 조회
+  getApprovals: async (params?: {
+    requester_id?: number;
+    current_approver_id?: number;
+    status?: string;
+    type?: string;
+    priority?: string;
+  }) => {
+    try {
+      const response = await api.get('/work/approvals', { params });
+      return response.data;
+    } catch (error) {
+      console.error('?�자 결제 목록 조회 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�자 결제 ?�세 조회
+  getApproval: async (id: number) => {
+    try {
+      const response = await api.get(`/work/approvals/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('?�자 결제 ?�세 조회 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�자 결제 ?�성
+  createApproval: async (data: any) => {
+    try {
+      const response = await api.post('/work/approvals', data);
+      return response.data;
+    } catch (error) {
+      console.error('?�자 결제 ?�성 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�자 결제 ?�정
+  updateApproval: async (id: number, data: any) => {
+    try {
+      const response = await api.put(`/work/approvals/${id}`, data);
+      return response.data;
+    } catch (error) {
+      console.error('?�자 결제 ?�정 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�자 결제 ??��
+  deleteApproval: async (id: number) => {
+    try {
+      const response = await api.delete(`/work/approvals/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('?�자 결제 ??�� ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�자 결제 ?�출
+  submitApproval: async (id: number) => {
+    try {
+      const response = await api.post(`/work/approvals/${id}/submit`);
+      return response.data;
+    } catch (error) {
+      console.error('?�자 결제 ?�출 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�자 결제 ?�인
+  approveApproval: async (id: number, comment?: string, signature?: string) => {
+    try {
+      const response = await api.post(`/work/approvals/${id}/approve`, { comment, signature });
+      return response.data;
+    } catch (error) {
+      console.error('?�자 결제 ?�인 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�자 결제 거�?
+  rejectApproval: async (id: number, comment?: string) => {
+    try {
+      const response = await api.post(`/work/approvals/${id}/reject`, { comment });
+      return response.data;
+    } catch (error) {
+      console.error('?�자 결제 거�? ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�자 결제 ?�스컬레?�션
+  escalateApproval: async (id: number, data: { next_approver_id: number; comment?: string }) => {
+    try {
+      const response = await api.post(`/work/approvals/${id}/escalate`, data);
+      return response.data;
+    } catch (error) {
+      console.error('?�자 결제 ?�스컬레?�션 ?�류:', error);
+      throw error;
+    }
+  }
+};
+
+// 견적??관�?API ?�비??
+export const workReportService = {
+  // ?�무 보고??목록 조회
+  getWorkReports: async (params?: {
+    author_id?: number;
+    status?: string;
+    type?: string;
+    priority?: string;
+    start_date?: string;
+    end_date?: string;
+    /** `cc`???�버?�서 받�? 보고?��? ?�일?�게 처리(?�전 ?�라?�언???�환) */
+    scope?: 'authored' | 'received' | 'cc';
+  }) => {
+    try {
+      const response = await api.get('/work/reports', { params });
+      return response.data;
+    } catch (error) {
+      console.error('?�무 보고??목록 조회 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�무 보고???�세 조회
+  getWorkReport: async (id: number) => {
+    try {
+      const response = await api.get(`/work/reports/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('?�무 보고???�세 조회 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�무 보고???�성
+  createWorkReport: async (data: any) => {
+    try {
+      const response = await api.post('/work/reports', data);
+      return response.data;
+    } catch (error) {
+      console.error('?�무 보고???�성 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�무 보고???�정
+  updateWorkReport: async (id: number, data: any) => {
+    try {
+      const response = await api.put(`/work/reports/${id}`, data);
+      return response.data;
+    } catch (error) {
+      console.error('?�무 보고???�정 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�무 보고????��
+  deleteWorkReport: async (id: number) => {
+    try {
+      const response = await api.delete(`/work/reports/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('?�무 보고????�� ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�무 보고???�출
+  submitWorkReport: async (id: number) => {
+    try {
+      const response = await api.post(`/work/reports/${id}/submit`);
+      return response.data;
+    } catch (error) {
+      console.error('?�무 보고???�출 ?�류:', error);
+      throw error;
+    }
+  },
+
+  // ?�무 보고??검??(?�인/거�?)
+  reviewWorkReport: async (id: number, status: 'approved' | 'rejected', review_comment?: string) => {
+    try {
+      const response = await api.post(`/work/reports/${id}/review`, { status, review_comment });
+      return response.data;
+    } catch (error) {
+      console.error('?�무 보고??검???�류:', error);
+      throw error;
+    }
+  }
+};

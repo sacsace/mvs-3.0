@@ -55,6 +55,7 @@ import {
 import { useTheme } from '@mui/material/styles';
 import { useStore } from '../../store';
 import { api, userService, accountingService } from '../../services/api';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { AxiosResponse } from 'axios';
 import { useTranslation } from 'react-i18next';
 
@@ -337,14 +338,12 @@ const EInvoiceManagement: React.FC = () => {
         return;
       }
       try {
-        const res = await userService.getUsers({ company_id: Number(user.company_id) });
-        if (res?.success && Array.isArray(res.data)) {
-          setCompanyUsers(
-            res.data
-              .filter((u: any) => u.status === 'active')
-              .map((u: any) => ({ id: u.id, username: u.username || u.userid || '', email: u.email || '' }))
-          );
-        }
+        const users = await useReferenceDataStore.getState().fetchUsers({ company_id: Number(user.company_id) });
+        setCompanyUsers(
+          users
+            .filter((u: any) => u.status === 'active')
+            .map((u: any) => ({ id: u.id, username: u.username || u.userid || '', email: u.email || '' }))
+        );
       } catch (e) {
         console.error(e);
       }

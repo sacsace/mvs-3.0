@@ -28,6 +28,7 @@ import {
   getMvsDialogPrimaryConfirmButtonSx,
   getMvsDialogTitleRowSx
 } from './mvsDialogShell';
+import { useDialogKeyboard } from '../../hooks/useDialogKeyboard';
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -79,6 +80,12 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     ) : (
       <HelpOutlineIcon sx={{ fontSize: 22 }} />
     );
+
+  useDialogKeyboard({
+    open,
+    onConfirm,
+    onCancel,
+  });
 
   return (
     <Dialog

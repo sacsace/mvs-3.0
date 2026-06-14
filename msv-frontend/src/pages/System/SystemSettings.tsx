@@ -35,6 +35,7 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { systemSettingsService } from '../../services/api';
+import { getUploadUrl } from '../../utils/uploadUrl';
 import { useStore, useMenuStore } from '../../store';
 import SystemLoginHistoryTab from './SystemLoginHistoryTab';
 
@@ -595,7 +596,7 @@ const SystemSettings: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.25 }}>
               <Avatar 
                 sx={{ mr: 1.5, width: 48, height: 48 }}
-                src={previewLogo || settings.general.companyLogo}
+                src={getUploadUrl(previewLogo || settings.general.companyLogo)}
               >
                 {settings.general.companyName.charAt(0)}
               </Avatar>
@@ -1260,7 +1261,7 @@ const SystemSettings: React.FC = () => {
               {previewLogo ? (
                 <Box sx={{ mb: 2 }}>
                   <Avatar 
-                    src={previewLogo} 
+                    src={getUploadUrl(previewLogo) || previewLogo || undefined}
                     sx={{ width: 120, height: 120, mx: 'auto', mb: 2 }}
                   />
                   <Typography variant="body2" color="text.secondary">

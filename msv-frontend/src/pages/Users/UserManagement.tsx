@@ -47,6 +47,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useStore, useMenuStore } from '../../store';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
 import { api, departmentService, userService } from '../../services/api';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useTranslation } from 'react-i18next';
@@ -414,13 +415,8 @@ const UserManagement: React.FC = () => {
 
   const fetchCompanies = useCallback(async () => {
     try {
-      const response = await api.get('/company');
-      if (response.data && response.data.success) {
-        const companiesData = Array.isArray(response.data.data) 
-          ? response.data.data 
-          : (response.data.data ? [response.data.data] : []);
-        setCompanies(companiesData.map((c: any) => ({ id: c.id, name: c.name })));
-      }
+      const companiesData = await useReferenceDataStore.getState().fetchCompanies();
+      setCompanies(companiesData.map((c: any) => ({ id: c.id, name: c.name })));
     } catch (error) {
       console.error('회사 목록 조회 오류:', error);
     }
@@ -430,25 +426,17 @@ const UserManagement: React.FC = () => {
     try {
       setLoading(true);
       setError('');
-            
-      const params: any = {};
+
+      const params: { search?: string; company_id?: number } = {};
       if (searchTerm) {
         params.search = searchTerm;
       }
       if ((user?.role === 'root' || user?.role === 'audit') && selectedCompanyId) {
         params.company_id = selectedCompanyId;
       }
-      
-      const response = await api.get('/users', { params });
-            
-      if (response.data && response.data.success) {
-        const usersData = Array.isArray(response.data.data) ? response.data.data : (response.data.data ? [response.data.data] : []);
-                        setUsers(usersData);
-      } else {
-        console.error('❌ [사용자 관리] API 응답 실패:', response.data);
-        setError(response.data?.message || t('userManagement.loadFailed'));
-        setUsers([]);
-      }
+
+      const usersData = await useReferenceDataStore.getState().fetchUsers(params, true);
+      setUsers(usersData);
     } catch (error: any) {
       console.error('❌ [사용자 관리] 사용자 목록 조회 실패:', error);
       console.error('❌ [사용자 관리] 에러 상세:', {

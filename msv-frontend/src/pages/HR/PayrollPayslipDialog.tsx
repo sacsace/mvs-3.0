@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import PayslipContent, { type PayslipCompanyInfo } from './PayslipContent';
 import type { PayrollGridRow } from './payroll/payrollGridTypes';
 import { buildPayslipLabels, downloadPayslipPdf, generatePayslipPdfBlob } from './payrollPayslipPdf';
-import { companyService } from '../../services/api';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useStore } from '../../store';
 
 type Props = {
@@ -28,14 +28,13 @@ const PayrollPayslipDialog: React.FC<Props> = ({ open, row, onClose }) => {
         return;
       }
       try {
-        const res = await companyService.getCompany(user.company_id);
-        const company = res?.data || {};
+        const company = await useReferenceDataStore.getState().fetchCompanyById(Number(user.company_id));
         if (!mounted) return;
         setCompanyInfo({
-          name: company.name || '',
-          address: company.address || '',
-          phone: company.phone || company.phone_number || '',
-          email: company.email || ''
+          name: company?.name || '',
+          address: company?.address || '',
+          phone: company?.phone || company?.phone_number || '',
+          email: company?.email || ''
         });
       } catch {
         if (mounted) setCompanyInfo(null);

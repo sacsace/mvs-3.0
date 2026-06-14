@@ -13,83 +13,73 @@ import Login from './pages/Auth/Login';
 import TermsOfService from './pages/Legal/TermsOfService';
 import PrivacyPolicy from './pages/Legal/PrivacyPolicy';
 import CustomerCenter from './pages/Legal/CustomerCenter';
-import Dashboard from './pages/Dashboard/Dashboard';
-import PersonalDashboard from './pages/Dashboard/PersonalDashboard';
-import TeamDashboard from './pages/Dashboard/TeamDashboard';
-import AdminDashboard from './pages/Dashboard/AdminDashboard';
-import InventoryManagement from './pages/Inventory/InventoryManagement';
-import UserManagement from './pages/Users/UserManagement';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import ErrorDialog from './components/Common/ErrorDialog';
 import NotificationSnackbar from './components/Common/NotificationSnackbar';
 import ErrorBoundary from './components/Common/ErrorBoundary';
-
-// 새로 생성한 페이지 컴포넌트들
-import CompanyManagement from './pages/Company/CompanyManagement';
-import PartnerManagement from './pages/Partners/PartnerManagement';
-import AttendanceManagement from './pages/Attendance/AttendanceManagement';
-import WorkBoardsPage from './pages/Work/WorkBoardsPage';
-import WorkBoardDetailPage from './pages/Work/WorkBoardDetailPage';
-import EInvoiceManagement from './pages/Invoice/EInvoiceManagement';
-import ProformaInvoiceManagement from './pages/Invoice/ProformaInvoiceManagement';
-import QuotationManagement from './pages/Quotation/QuotationManagement';
-import InventoryStatus from './pages/Inventory/InventoryStatus';
-import InventoryReport from './pages/Inventory/InventoryReport';
-import CostAnalysis from './pages/AI/CostAnalysis';
-import EfficiencyMetrics from './pages/AI/EfficiencyMetrics';
-import ForecastingData from './pages/AI/ForecastingData';
-import RecommendationEngine from './pages/AI/RecommendationEngine';
 import UnderDevelopment from './components/Common/UnderDevelopment';
 import ComingSoon from './components/Common/ComingSoon';
+import { lazyPage } from './components/Common/LazyPage';
 
-// 새로 생성된 페이지들
-import StockInSimple from './pages/Inventory/StockInSimple';
-import StockOutBarcode from './pages/Inventory/StockOutBarcode';
-import QuotationList from './pages/Invoice/QuotationList';
-import OrganizationChart from './pages/Organization/OrganizationChart';
-import MenuPermissionManagement from './pages/System/MenuPermissionManagement';
-import VacationManagement from './pages/HR/VacationManagement';
-import VacationRequest from './pages/HR/VacationRequest';
-import SystemSettings from './pages/System/SystemSettings';
-import MailSendTest from './pages/System/MailSendTest';
-import LoginInfoManagement from './pages/System/LoginInfoManagement';
-// import CodeManagement from './pages/System/CodeManagement'; // 시스템관리 메뉴 제거로 인해 주석 처리
-
-// Communication 페이지들
-import NoticeManagement from './pages/Communication/NoticeManagement';
-import NotificationManagement from './pages/Notifications/NotificationManagement';
-import EmailManagement from './pages/Communication/EmailManagement';
-import SMSManagement from './pages/Communication/SMSManagement';
-
-// 새로 추가된 페이지들
-import PayrollManagement from './pages/HR/PayrollManagement';
-import EmploymentContractManagement from './pages/HR/EmploymentContractManagement';
-import AttendanceStatistics from './pages/HR/AttendanceStatistics';
-import WorkStatistics from './pages/Work/WorkStatistics';
-import ElectronicApproval from './pages/Work/ElectronicApproval';
-import RoomBookingManagement from './pages/Work/RoomBookingManagement';
-import WorkReport from './pages/Work/WorkReport';
-import FrontDesk from './pages/Hotel/FrontDesk';
-import Housekeeping from './pages/Hotel/Housekeeping';
-import Fnb from './pages/Hotel/Fnb';
-import ReservationStatus from './pages/Hotel/ReservationStatus';
-import RoomTypeManagement from './pages/Hotel/RoomTypeManagement';
-import EInvoiceCreate from './pages/Invoice/EInvoiceCreate';
-import ExpenseApproval from './pages/Accounting/ExpenseApproval';
-import ExpenseTransferLog from './pages/Accounting/ExpenseTransferLog';
-import BudgetManagement from './pages/Accounting/BudgetManagement';
-import AssetManagement from './pages/Accounting/AssetManagement';
-import AccountingStatistics from './pages/Accounting/AccountingStatistics';
-import AccountingBasicInfo from './pages/Accounting/AccountingBasicInfo';
-import ExpenseReceiptUpload from './pages/Accounting/ExpenseReceiptUpload';
-
-// 고객관리 관련 페이지들
-import ContractManagement from './pages/Sales/ContractManagement';
-import CustomerInformation from './pages/Sales/CustomerInformation';
-
-// Invoice 페이지들
-import RegularInvoice from './pages/Invoice/RegularInvoice';
-import EWayBill from './pages/Invoice/EWayBill';
+// 무거운 페이지는 방문 시에만 로드 (초기 번들·파싱 시간 단축)
+const Dashboard = lazyPage(() => import('./pages/Dashboard/Dashboard'));
+const PersonalDashboard = lazyPage(() => import('./pages/Dashboard/PersonalDashboard'));
+const TeamDashboard = lazyPage(() => import('./pages/Dashboard/TeamDashboard'));
+const AdminDashboard = lazyPage(() => import('./pages/Dashboard/AdminDashboard'));
+const InventoryManagement = lazyPage(() => import('./pages/Inventory/InventoryManagement'));
+const UserManagement = lazyPage(() => import('./pages/Users/UserManagement'));
+const CompanyManagement = lazyPage(() => import('./pages/Company/CompanyManagement'));
+const PartnerManagement = lazyPage(() => import('./pages/Partners/PartnerManagement'));
+const AttendanceManagement = lazyPage(() => import('./pages/Attendance/AttendanceManagement'));
+const WorkBoardsPage = lazyPage(() => import('./pages/Work/WorkBoardsPage'));
+const WorkBoardDetailPage = lazyPage(() => import('./pages/Work/WorkBoardDetailPage'));
+const EInvoiceManagement = lazyPage(() => import('./pages/Invoice/EInvoiceManagement'));
+const ProformaInvoiceManagement = lazyPage(() => import('./pages/Invoice/ProformaInvoiceManagement'));
+const QuotationManagement = lazyPage(() => import('./pages/Quotation/QuotationManagement'));
+const InventoryStatus = lazyPage(() => import('./pages/Inventory/InventoryStatus'));
+const InventoryReport = lazyPage(() => import('./pages/Inventory/InventoryReport'));
+const CostAnalysis = lazyPage(() => import('./pages/AI/CostAnalysis'));
+const EfficiencyMetrics = lazyPage(() => import('./pages/AI/EfficiencyMetrics'));
+const ForecastingData = lazyPage(() => import('./pages/AI/ForecastingData'));
+const RecommendationEngine = lazyPage(() => import('./pages/AI/RecommendationEngine'));
+const StockInSimple = lazyPage(() => import('./pages/Inventory/StockInSimple'));
+const StockOutBarcode = lazyPage(() => import('./pages/Inventory/StockOutBarcode'));
+const QuotationList = lazyPage(() => import('./pages/Invoice/QuotationList'));
+const OrganizationChart = lazyPage(() => import('./pages/Organization/OrganizationChart'));
+const MenuPermissionManagement = lazyPage(() => import('./pages/System/MenuPermissionManagement'));
+const VacationManagement = lazyPage(() => import('./pages/HR/VacationManagement'));
+const VacationRequest = lazyPage(() => import('./pages/HR/VacationRequest'));
+const SystemSettings = lazyPage(() => import('./pages/System/SystemSettings'));
+const MailSendTest = lazyPage(() => import('./pages/System/MailSendTest'));
+const LoginInfoManagement = lazyPage(() => import('./pages/System/LoginInfoManagement'));
+const NoticeManagement = lazyPage(() => import('./pages/Communication/NoticeManagement'));
+const NotificationManagement = lazyPage(() => import('./pages/Notifications/NotificationManagement'));
+const EmailManagement = lazyPage(() => import('./pages/Communication/EmailManagement'));
+const SMSManagement = lazyPage(() => import('./pages/Communication/SMSManagement'));
+const PayrollManagement = lazyPage(() => import('./pages/HR/PayrollManagement'));
+const EmploymentContractManagement = lazyPage(() => import('./pages/HR/EmploymentContractManagement'));
+const AttendanceStatistics = lazyPage(() => import('./pages/HR/AttendanceStatistics'));
+const WorkStatistics = lazyPage(() => import('./pages/Work/WorkStatistics'));
+const ElectronicApproval = lazyPage(() => import('./pages/Work/ElectronicApproval'));
+const RoomBookingManagement = lazyPage(() => import('./pages/Work/RoomBookingManagement'));
+const WorkReport = lazyPage(() => import('./pages/Work/WorkReport'));
+const FrontDesk = lazyPage(() => import('./pages/Hotel/FrontDesk'));
+const Housekeeping = lazyPage(() => import('./pages/Hotel/Housekeeping'));
+const Fnb = lazyPage(() => import('./pages/Hotel/Fnb'));
+const ReservationStatus = lazyPage(() => import('./pages/Hotel/ReservationStatus'));
+const RoomTypeManagement = lazyPage(() => import('./pages/Hotel/RoomTypeManagement'));
+const EInvoiceCreate = lazyPage(() => import('./pages/Invoice/EInvoiceCreate'));
+const ExpenseApproval = lazyPage(() => import('./pages/Accounting/ExpenseApproval'));
+const ExpenseTransferLog = lazyPage(() => import('./pages/Accounting/ExpenseTransferLog'));
+const BudgetManagement = lazyPage(() => import('./pages/Accounting/BudgetManagement'));
+const AssetManagement = lazyPage(() => import('./pages/Accounting/AssetManagement'));
+const AccountingStatistics = lazyPage(() => import('./pages/Accounting/AccountingStatistics'));
+const AccountingBasicInfo = lazyPage(() => import('./pages/Accounting/AccountingBasicInfo'));
+const ExpenseReceiptUpload = lazyPage(() => import('./pages/Accounting/ExpenseReceiptUpload'));
+const ContractManagement = lazyPage(() => import('./pages/Sales/ContractManagement'));
+const CustomerInformation = lazyPage(() => import('./pages/Sales/CustomerInformation'));
+const RegularInvoice = lazyPage(() => import('./pages/Invoice/RegularInvoice'));
+const EWayBill = lazyPage(() => import('./pages/Invoice/EWayBill'));
 
 const Reports = () => {
   const { t } = useTranslation();

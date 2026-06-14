@@ -42,8 +42,8 @@ import ReactFlow, {
   BackgroundVariant
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { api } from '../../services/api';
 import { useStore } from '../../store';
+import { filterActiveCompanyUsers, useReferenceDataStore } from '../../store/referenceDataStore';
 
 // 조직도 노드 타입 정의
 interface OrganizationNode {
@@ -225,12 +225,11 @@ const OrganizationChart: React.FC = () => {
       setLoading(true);
       
       // 회사 정보 가져오기
-      const companyResponse = await api.get(`/company/${user?.company_id}`);
-      const company = companyResponse.data.success ? companyResponse.data.data : null;
-      
-      // 사용자 목록 가져오기
-      const usersResponse = await api.get('/users');
-      const users = usersResponse.data.success ? usersResponse.data.data : [];
+      const company = user?.company_id
+        ? await useReferenceDataStore.getState().fetchCompanyById(Number(user.company_id))
+        : null;
+
+      const users = await useReferenceDataStore.getState().fetchUsers();
       
       // 활성 사용자만 필터링
       const activeUsers = users.filter((u: any) => u.status === 'active');

@@ -32,6 +32,7 @@ import {
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
 import { vacationService, api } from '../../services/api';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
 import { useTranslation } from 'react-i18next';
 
@@ -149,21 +150,13 @@ const VacationRequest: React.FC = () => {
   const loadUsers = async () => {
     try {
       // 같은 회사의 활성 사용자만 조회
-      const response = await api.get('/users', {
-        params: {
-          status: 'active',
-          company_id: user?.company_id // 같은 회사 직원만 필터링
-        }
+      const allUsers = await useReferenceDataStore.getState().fetchUsers({
+        company_id: user?.company_id,
       });
-      if (response.data.success) {
-        const allUsers = response.data.data || [];
-        // 같은 회사 직원만 필터링 (추가 안전장치)
-        // 자신을 제외 (자신에게는 신청할 수 없음)
-        const sameCompanyUsers = allUsers.filter((u: any) => 
-          u.company_id === user?.company_id && u.id !== user?.id
-        );
-        setUsers(sameCompanyUsers);
-      }
+      const sameCompanyUsers = allUsers.filter((u: any) =>
+        u.status === 'active' && u.company_id === user?.company_id && u.id !== user?.id
+      );
+      setUsers(sameCompanyUsers);
     } catch (error: any) {
       console.error('사용자 목록 조회 오류:', error);
     }

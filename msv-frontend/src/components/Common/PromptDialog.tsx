@@ -23,6 +23,7 @@ import {
   getMvsDialogPromptContentSx,
   getMvsDialogTitleRowSx
 } from './mvsDialogShell';
+import { useDialogKeyboard } from '../../hooks/useDialogKeyboard';
 
 export interface PromptDialogProps {
   open: boolean;
@@ -77,6 +78,14 @@ const PromptDialog: React.FC<PromptDialogProps> = ({
     onConfirm(value.trim());
   };
 
+  useDialogKeyboard({
+    open,
+    onConfirm: handleSubmit,
+    onCancel,
+    confirmEnabled: canSubmit,
+    allowEnterInTextarea: multiline,
+  });
+
   return (
     <Dialog
       open={open}
@@ -123,6 +132,10 @@ const PromptDialog: React.FC<PromptDialogProps> = ({
           size="small"
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !multiline && canSubmit) {
+              e.preventDefault();
+              handleSubmit();
+            }
+            if (e.key === 'Enter' && multiline && (e.ctrlKey || e.metaKey) && canSubmit) {
               e.preventDefault();
               handleSubmit();
             }

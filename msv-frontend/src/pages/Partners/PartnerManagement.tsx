@@ -43,6 +43,7 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { partnerService } from '../../services/api';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
@@ -123,10 +124,7 @@ const PartnerManagement: React.FC = () => {
     }
     try {
       setLoading(true);
-            const response = await partnerService.getPartners();
-            
-      if (response && response.success) {
-        const partnersData = Array.isArray(response.data) ? response.data : (response.data ? [response.data] : []);
+      const partnersData = await useReferenceDataStore.getState().fetchPartners(true);
                 
         // API 응답을 프론트엔드 형식으로 변환
         const formattedPartners: Partner[] = partnersData.map((p: any) => ({
@@ -152,11 +150,7 @@ const PartnerManagement: React.FC = () => {
           notes: p.notes || ''
         }));
         
-                        setPartners(formattedPartners);
-      } else {
-        console.error('❌ [파트너 관리] API 응답 실패:', response);
-        setPartners([]);
-      }
+        setPartners(formattedPartners);
     } catch (error: any) {
       console.error('❌ [파트너 관리] 파트너 목록 로드 오류:', error);
       console.error('❌ [파트너 관리] 에러 상세:', {

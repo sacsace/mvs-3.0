@@ -9,8 +9,13 @@ const serverRoot = path.join(__dirname, '..', '..');
 
 function isAuthorized(req: Request): boolean {
   const key = String(req.headers['x-bootstrap-key'] || '').trim();
-  const secret = process.env.BOOTSTRAP_DB_KEY || process.env.JWT_SECRET || '';
-  return Boolean(key && secret && key === secret);
+  const secret = process.env.BOOTSTRAP_DB_KEY || '';
+  if (process.env.NODE_ENV === 'production' && !secret) {
+    return false;
+  }
+  const fallback = process.env.NODE_ENV !== 'production' ? (process.env.JWT_SECRET || '') : '';
+  const effectiveSecret = secret || fallback;
+  return Boolean(key && effectiveSecret && key === effectiveSecret);
 }
 
 router.post('/bootstrap-database', async (req: Request, res: Response) => {
