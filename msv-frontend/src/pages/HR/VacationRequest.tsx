@@ -13,7 +13,6 @@ import {
   Grid,
   Alert,
   CircularProgress,
-  Divider,
   Autocomplete,
   Stepper,
   Step,
@@ -31,12 +30,24 @@ import {
   Work as WorkIcon
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
-import { vacationService, api } from '../../services/api';
+import { vacationService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
 import { useTranslation } from 'react-i18next';
 
 const VACATION_MENU_ROUTES = ['/hr/leave'];
+
+const VACATION_TYPE_KEYS = ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'] as const;
+type VacationTypeKey = (typeof VACATION_TYPE_KEYS)[number];
+
+const VACATION_TYPE_ICONS: Record<VacationTypeKey, React.ReactNode> = {
+  annual: <HomeIcon />,
+  sick: <SickIcon />,
+  personal: <PersonIcon />,
+  study: <StudyIcon />,
+  maternity: <EventIcon />,
+  paternity: <WorkIcon />
+};
 
 interface User {
   id: number;
@@ -67,7 +78,8 @@ const VacationRequest: React.FC = () => {
       canCreate: check('create'),
       canEdit: check('edit')
     };
-  }, [menus, hasMenuPermission, user?.role]);
+  }, [menus, hasMenuPermission, hrElevated]);
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +96,24 @@ const VacationRequest: React.FC = () => {
     approvedBy: null as number | null
   });
 
-  const steps = ['휴가 정보', '승인 정보', '검토 및 확인'];
+  const steps = useMemo(
+    () => [
+      t('vacationManagement.request.stepLeaveInfo'),
+      t('vacationManagement.request.stepApprovalInfo'),
+      t('vacationManagement.request.stepReview')
+    ],
+    [t]
+  );
+
+  const allVacationTypes = useMemo(
+    () =>
+      VACATION_TYPE_KEYS.map((key) => ({
+        key,
+        name: t(`vacationManagement.${key}`),
+        icon: VACATION_TYPE_ICONS[key]
+      })),
+    [t]
+  );
 
   useEffect(() => {
     loadUsers();
@@ -95,7 +124,6 @@ const VacationRequest: React.FC = () => {
     }
   }, [id]);
 
-  /** 메뉴 로드 후 권한 없으면 목록으로 (미로드 시 오판 방지) */
   useEffect(() => {
     if (menusLoading || !user) return;
     const tabIndex = user.role === 'admin' || user.role === 'root' ? 1 : 0;
@@ -131,8 +159,8 @@ const VacationRequest: React.FC = () => {
       if (response.success) {
         setVacationPolicy(response.data);
       }
-    } catch (error: any) {
-      console.error('휴가 정책 조회 오류:', error);
+    } catch (err: any) {
+      console.error('vacation policy load error:', err);
     }
   };
 
@@ -142,23 +170,22 @@ const VacationRequest: React.FC = () => {
       if (response.success) {
         setAnnualLeaveInfo(response.data);
       }
-    } catch (error: any) {
-      console.error('연차 정보 조회 오류:', error);
+    } catch (err: any) {
+      console.error('annual leave info load error:', err);
     }
   };
 
   const loadUsers = async () => {
     try {
-      // 같은 회사의 활성 사용자만 조회
       const allUsers = await useReferenceDataStore.getState().fetchUsers({
-        company_id: user?.company_id,
+        company_id: user?.company_id
       });
-      const sameCompanyUsers = allUsers.filter((u: any) =>
-        u.status === 'active' && u.company_id === user?.company_id && u.id !== user?.id
+      const sameCompanyUsers = allUsers.filter(
+        (u: any) => u.status === 'active' && u.company_id === user?.company_id && u.id !== user?.id
       );
       setUsers(sameCompanyUsers);
-    } catch (error: any) {
-      console.error('사용자 목록 조회 오류:', error);
+    } catch (err: any) {
+      console.error('user list load error:', err);
     }
   };
 
@@ -177,11 +204,11 @@ const VacationRequest: React.FC = () => {
           approvedBy: vacation.approved_by || null
         });
       } else {
-        setError('휴가 정보를 불러올 수 없습니다.');
+        setError(t('vacationManagement.request.loadFailed'));
       }
-    } catch (error: any) {
-      console.error('휴가 조회 오류:', error);
-      setError(error.response?.data?.message || '휴가 정보를 불러오는 중 오류가 발생했습니다.');
+    } catch (err: any) {
+      console.error('vacation load error:', err);
+      setError(err.response?.data?.message || t('vacationManagement.request.loadError'));
     } finally {
       setLoading(false);
     }
@@ -192,48 +219,49 @@ const VacationRequest: React.FC = () => {
     const start = new Date(startDate);
     const end = new Date(endDate);
     const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-    return diffDays;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
   };
 
   const handleNext = () => {
-    // 단계별 유효성 검사
     if (activeStep === 0) {
       if (!formData.vacationType) {
-        setError('휴가 유형을 선택해주세요.');
+        setError(t('vacationManagement.request.selectLeaveType'));
         return;
       }
       if (!formData.startDate || !formData.endDate) {
-        setError('시작일과 종료일을 입력해주세요.');
+        setError(t('vacationManagement.request.enterDates'));
         return;
       }
       if (new Date(formData.startDate) > new Date(formData.endDate)) {
-        setError('시작일이 종료일보다 늦을 수 없습니다.');
+        setError(t('vacationManagement.request.startAfterEnd'));
         return;
       }
-      // 연차 선택 시 사용 가능 여부 확인
       if (formData.vacationType === 'annual') {
         if (!annualLeaveInfo || !annualLeaveInfo.canUseAnnualLeave) {
-          setError('연차를 사용할 수 없습니다. 연차 사용 가능일을 확인해주세요.');
+          setError(t('vacationManagement.request.cannotUseAnnualLeave'));
           return;
         }
         if (annualLeaveInfo.availableDays <= 0) {
-          setError('사용 가능한 연차가 없습니다.');
+          setError(t('vacationManagement.request.noAnnualLeaveAvailable'));
           return;
         }
         const requestedDays = calculateDays(formData.startDate, formData.endDate);
         if (requestedDays > annualLeaveInfo.availableDays) {
-          setError(`사용 가능한 연차(${annualLeaveInfo.availableDays}일)를 초과했습니다.`);
+          setError(
+            t('vacationManagement.request.exceedsAnnualLeave', {
+              days: annualLeaveInfo.availableDays
+            })
+          );
           return;
         }
       }
     } else if (activeStep === 1) {
       if (!formData.approvedBy) {
-        setError('승인자를 선택해주세요.');
+        setError(t('vacationManagement.request.selectApprover'));
         return;
       }
       if (!formData.reason.trim()) {
-        setError('휴가 사유를 입력해주세요.');
+        setError(t('vacationManagement.request.enterReason'));
         return;
       }
     }
@@ -264,74 +292,61 @@ const VacationRequest: React.FC = () => {
     setSaving(true);
     try {
       const vacationData: any = {
-        user_id: user?.id, // 본인 신청 시 로그인 사용자 ID 전달
+        user_id: user?.id,
         vacation_type: formData.vacationType,
         start_date: formData.startDate,
         end_date: formData.endDate,
-        days: days,
+        days,
         reason: formData.reason
       };
 
-      // 승인자 지정 (신청 시에만)
       if (formData.approvedBy) {
         vacationData.approved_by = formData.approvedBy;
       }
 
-      let response;
-      if (id) {
-        // 수정
-        response = await vacationService.updateVacation(parseInt(id), vacationData);
-      } else {
-        // 신청
-        response = await vacationService.createVacation(vacationData);
-      }
+      const response = id
+        ? await vacationService.updateVacation(parseInt(id), vacationData)
+        : await vacationService.createVacation(vacationData);
 
       if (response.success) {
-        setSuccess(id ? '휴가 신청이 수정되었습니다.' : '휴가 신청이 완료되었습니다.');
+        setSuccess(
+          id ? t('vacationManagement.request.updateSuccess') : t('vacationManagement.request.createSuccess')
+        );
         setTimeout(() => {
-          // "내가 신청한 휴가" 탭으로 이동 (admin이면 1번, 아니면 0번)
           const tabIndex = user?.role === 'admin' || user?.role === 'root' ? 1 : 0;
           navigate(`/hr/leave?tab=${tabIndex}`);
         }, 1500);
       } else {
-        setError(response.message || '휴가 신청에 실패했습니다.');
+        setError(response.message || t('vacationManagement.request.submitFailed'));
       }
-    } catch (error: any) {
-      console.error('휴가 저장 오류:', error);
-      setError(error.response?.data?.message || '휴가 신청 중 오류가 발생했습니다.');
+    } catch (err: any) {
+      console.error('vacation save error:', err);
+      setError(err.response?.data?.message || t('vacationManagement.request.submitError'));
     } finally {
       setSaving(false);
     }
   };
 
-  const allVacationTypes = [
-    { key: 'annual', name: '연차', icon: <HomeIcon /> },
-    { key: 'sick', name: '병가', icon: <SickIcon /> },
-    { key: 'personal', name: '개인사유', icon: <PersonIcon /> },
-    { key: 'study', name: '교육', icon: <StudyIcon /> },
-    { key: 'maternity', name: '출산', icon: <EventIcon /> },
-    { key: 'paternity', name: '육아', icon: <WorkIcon /> }
-  ];
-
-  // 회사가 제공하는 휴가 유형만 필터링
-  const vacationTypes = React.useMemo(() => {
+  const vacationTypes = useMemo(() => {
     if (!vacationPolicy?.availableTypes || vacationPolicy.availableTypes.length === 0) {
-      // 정책이 없으면 모든 유형 표시 (기본값)
       return allVacationTypes;
     }
-    return allVacationTypes.filter(type => 
-      vacationPolicy.availableTypes!.includes(type.key)
-    );
-  }, [vacationPolicy?.availableTypes]);
+    return allVacationTypes.filter((type) => vacationPolicy.availableTypes!.includes(type.key));
+  }, [allVacationTypes, vacationPolicy?.availableTypes]);
 
-  // 선택된 휴가 유형이 제공되지 않는 경우 첫 번째 제공되는 유형으로 변경
-  React.useEffect(() => {
-    if (vacationTypes.length > 0 && !vacationTypes.find(t => t.key === formData.vacationType)) {
-      setFormData({ ...formData, vacationType: vacationTypes[0].key });
+  useEffect(() => {
+    if (vacationTypes.length > 0 && !vacationTypes.find((type) => type.key === formData.vacationType)) {
+      setFormData((prev) => ({ ...prev, vacationType: vacationTypes[0].key }));
     }
-  }, [vacationTypes]);
+  }, [vacationTypes, formData.vacationType]);
 
-  const selectedApprover = users.find(u => u.id === formData.approvedBy);
+  const selectedApprover = users.find((u) => u.id === formData.approvedBy);
+  const selectedVacationType = vacationTypes.find((type) => type.key === formData.vacationType);
+
+  const navigateToList = () => {
+    const tabIndex = user?.role === 'admin' || user?.role === 'root' ? 1 : 0;
+    navigate(`/hr/leave?tab=${tabIndex}`);
+  };
 
   if (loading) {
     return (
@@ -343,22 +358,12 @@ const VacationRequest: React.FC = () => {
 
   return (
     <Box sx={{ p: 0, backgroundColor: 'workArea.main', borderRadius: 2, minHeight: '100%' }}>
-      {/* 헤더 */}
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <Button
-          startIcon={<ArrowBackIcon />}
-          onClick={() => {
-            // 사용자 역할에 따라 "내가 신청한 휴가" 탭으로 이동
-            // admin/root: tab=1, 일반 사용자: tab=0
-            const tabIndex = (user?.role === 'admin' || user?.role === 'root') ? 1 : 0;
-            navigate(`/hr/leave?tab=${tabIndex}`);
-          }}
-          sx={{ mr: 2 }}
-        >
-          목록으로
+        <Button startIcon={<ArrowBackIcon />} onClick={navigateToList} sx={{ mr: 2 }}>
+          {t('vacationManagement.request.backToList')}
         </Button>
         <Typography variant="h5" sx={{ fontWeight: 600 }}>
-          {id ? '휴가 신청 수정' : '새 휴가 신청'}
+          {id ? t('vacationManagement.request.editLeaveRequest') : t('vacationManagement.request.newLeaveRequest')}
         </Typography>
       </Box>
 
@@ -374,40 +379,38 @@ const VacationRequest: React.FC = () => {
         </Alert>
       )}
 
-      {/* Stepper 폼 */}
       <Card sx={{ boxShadow: 2, borderRadius: 2 }}>
         <CardContent sx={{ p: 4 }}>
           <Stepper activeStep={activeStep} orientation="vertical">
-            {/* 1단계: 휴가 정보 */}
             <Step>
               <StepLabel>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  휴가 정보
+                  {steps[0]}
                 </Typography>
               </StepLabel>
               <StepContent>
                 <Grid container spacing={3} sx={{ mt: 1 }}>
                   <Grid size={{ xs: 12, md: 6 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                      휴가 유형 *
+                      {t('vacationManagement.request.leaveTypeLabel')} *
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      휴가 유형을 선택하세요
+                      {t('vacationManagement.request.leaveTypeHint')}
                     </Typography>
                     <FormControl fullWidth required>
                       <Select
                         value={formData.vacationType}
                         onChange={(e) => setFormData({ ...formData, vacationType: e.target.value })}
                         displayEmpty
-                        sx={{ 
-                          '& .MuiSelect-select': { 
-                            display: 'flex', 
+                        sx={{
+                          '& .MuiSelect-select': {
+                            display: 'flex',
                             alignItems: 'center',
                             py: 1.5
                           }
                         }}
                       >
-                        {vacationTypes.map(type => (
+                        {vacationTypes.map((type) => (
                           <MenuItem key={type.key} value={type.key}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                               <Box sx={{ display: 'flex', alignItems: 'center', color: 'primary.main' }}>
@@ -422,13 +425,11 @@ const VacationRequest: React.FC = () => {
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
                     {formData.vacationType === 'annual' && annualLeaveInfo && (
-                      <Alert 
+                      <Alert
                         severity={annualLeaveInfo.canUseAnnualLeave ? 'info' : 'warning'}
-                        sx={{ 
+                        sx={{
                           borderRadius: 1,
-                          '& .MuiAlert-message': {
-                            fontWeight: 500
-                          }
+                          '& .MuiAlert-message': { fontWeight: 500 }
                         }}
                       >
                         {annualLeaveInfo.canUseAnnualLeave ? (
@@ -442,54 +443,57 @@ const VacationRequest: React.FC = () => {
                                 })}
                               </Typography>
                             )}
-                            남은 연차: <strong>{annualLeaveInfo.availableDays}일</strong>
+                            {t('vacationManagement.remainingAnnualLeave', {
+                              days: annualLeaveInfo.availableDays
+                            })}
                             {annualLeaveInfo.usedDays > 0 && (
-                              <> (사용: {annualLeaveInfo.usedDays}일)</>
+                              <> ({t('vacationManagement.usedDays', { days: annualLeaveInfo.usedDays })})</>
                             )}
                             {annualLeaveInfo.totalEarnedDays > 0 && (
-                              <> / 총 획득: {annualLeaveInfo.totalEarnedDays}일</>
+                              <> / {t('vacationManagement.totalEarnedDays', { days: annualLeaveInfo.totalEarnedDays })}</>
                             )}
                           </>
                         ) : (
                           <>
-                            연차 사용 가능까지 <strong>{annualLeaveInfo.daysUntilEligible}일</strong> 남았습니다.
+                            <Typography component="span">
+                              {t('vacationManagement.request.daysUntilEligible', {
+                                days: annualLeaveInfo.daysUntilEligible
+                              })}
+                            </Typography>
                             <br />
                             <Typography variant="caption" sx={{ mt: 0.5, display: 'block' }}>
-                              {vacationPolicy && vacationPolicy.annualLeaveStartDays === 0 
-                                ? '연차는 즉시 사용 가능합니다.'
-                                : `입사일로부터 ${vacationPolicy?.annualLeaveStartDays || 240}일 이후부터 사용 가능합니다.`}
+                              {vacationPolicy && vacationPolicy.annualLeaveStartDays === 0
+                                ? t('vacationManagement.request.annualLeaveImmediate')
+                                : t('vacationManagement.request.annualLeaveAfterDays', {
+                                    days: vacationPolicy?.annualLeaveStartDays || 240
+                                  })}
                             </Typography>
                           </>
                         )}
                       </Alert>
                     )}
-                    {(formData.startDate && formData.endDate) && formData.vacationType !== 'annual' && (
-                      <Alert 
-                        severity="info" 
-                        sx={{ 
-                          borderRadius: 1,
-                          '& .MuiAlert-message': {
-                            fontWeight: 500
-                          }
-                        }}
-                      >
-                        총 휴가 일수: <strong>{calculateDays(formData.startDate, formData.endDate)}일</strong>
+                    {formData.startDate && formData.endDate && formData.vacationType !== 'annual' && (
+                      <Alert severity="info" sx={{ borderRadius: 1, '& .MuiAlert-message': { fontWeight: 500 } }}>
+                        {t('vacationManagement.request.totalLeaveDays')}:{' '}
+                        <strong>
+                          {t('vacationManagement.request.daysCount', {
+                            count: calculateDays(formData.startDate, formData.endDate)
+                          })}
+                        </strong>
                       </Alert>
                     )}
-                    {(formData.startDate && formData.endDate) && formData.vacationType === 'annual' && (
-                      <Alert 
-                        severity="info" 
-                        sx={{ 
-                          borderRadius: 1,
-                          '& .MuiAlert-message': {
-                            fontWeight: 500
-                          }
-                        }}
-                      >
-                        신청 휴가 일수: <strong>{calculateDays(formData.startDate, formData.endDate)}일</strong>
+                    {formData.startDate && formData.endDate && formData.vacationType === 'annual' && (
+                      <Alert severity="info" sx={{ borderRadius: 1, '& .MuiAlert-message': { fontWeight: 500 } }}>
+                        {t('vacationManagement.request.requestedLeaveDays')}:{' '}
+                        <strong>
+                          {t('vacationManagement.request.daysCount', {
+                            count: calculateDays(formData.startDate, formData.endDate)
+                          })}
+                        </strong>
                         {annualLeaveInfo && annualLeaveInfo.canUseAnnualLeave && (
                           <>
-                            {' '}/ 남은 연차: <strong>{annualLeaveInfo.availableDays}일</strong>
+                            {' '}
+                            / {t('vacationManagement.remainingAnnualLeave', { days: annualLeaveInfo.availableDays })}
                           </>
                         )}
                       </Alert>
@@ -497,10 +501,10 @@ const VacationRequest: React.FC = () => {
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                      시작일 *
+                      {t('vacationManagement.request.startDateLabel')} *
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      휴가 시작일을 선택하세요
+                      {t('vacationManagement.request.startDateHint')}
                     </Typography>
                     <TextField
                       fullWidth
@@ -508,19 +512,15 @@ const VacationRequest: React.FC = () => {
                       value={formData.startDate}
                       onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
                       required
-                      sx={{
-                        '& .MuiInputBase-input': {
-                          py: 1.5
-                        }
-                      }}
+                      sx={{ '& .MuiInputBase-input': { py: 1.5 } }}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                      종료일 *
+                      {t('vacationManagement.request.endDateLabel')} *
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      휴가 종료일을 선택하세요
+                      {t('vacationManagement.request.endDateHint')}
                     </Typography>
                     <TextField
                       fullWidth
@@ -528,11 +528,7 @@ const VacationRequest: React.FC = () => {
                       value={formData.endDate}
                       onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
                       required
-                      sx={{
-                        '& .MuiInputBase-input': {
-                          py: 1.5
-                        }
-                      }}
+                      sx={{ '& .MuiInputBase-input': { py: 1.5 } }}
                     />
                   </Grid>
                 </Grid>
@@ -541,8 +537,8 @@ const VacationRequest: React.FC = () => {
                     variant="contained"
                     onClick={handleNext}
                     disabled={
-                      formData.vacationType === 'annual' && 
-                      annualLeaveInfo && 
+                      formData.vacationType === 'annual' &&
+                      annualLeaveInfo &&
                       (!annualLeaveInfo.canUseAnnualLeave || annualLeaveInfo.availableDays <= 0)
                     }
                     sx={{
@@ -553,22 +549,21 @@ const VacationRequest: React.FC = () => {
                       fontWeight: 600
                     }}
                   >
-                    다음
+                    {t('vacationManagement.request.next')}
                   </Button>
                 </Box>
               </StepContent>
             </Step>
 
-            {/* 2단계: 승인 정보 */}
             <Step>
               <StepLabel>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    승인 정보
+                    {steps[1]}
                   </Typography>
                   {!formData.approvedBy && (
                     <Typography variant="body2" sx={{ color: 'error.main', fontWeight: 500 }}>
-                      (승인자를 선택해주세요)
+                      {t('vacationManagement.request.selectApproverHint')}
                     </Typography>
                   )}
                 </Box>
@@ -577,30 +572,28 @@ const VacationRequest: React.FC = () => {
                 <Grid container spacing={3} sx={{ mt: 1 }}>
                   <Grid size={{ xs: 12 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                      승인자 *
+                      {t('vacationManagement.request.approverLabel')} *
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      휴가를 승인할 사람을 선택하세요
+                      {t('vacationManagement.request.approverHint')}
                     </Typography>
                     <Autocomplete
                       options={users}
-                      getOptionLabel={(option) => `${option.username}${option.department ? ` (${option.department})` : ''}`}
+                      getOptionLabel={(option) =>
+                        `${option.username}${option.department ? ` (${option.department})` : ''}`
+                      }
                       value={selectedApprover || null}
-                      onChange={(event, newValue) => {
+                      onChange={(_event, newValue) => {
                         setFormData({ ...formData, approvedBy: newValue?.id || null });
-                        setError(null); // 승인자 선택 시 오류 메시지 제거
+                        setError(null);
                       }}
                       renderInput={(params) => (
                         <TextField
                           {...params}
-                          placeholder="승인자를 선택하세요"
+                          placeholder={t('vacationManagement.request.approverPlaceholder')}
                           error={!formData.approvedBy}
                           required
-                          sx={{
-                            '& .MuiInputBase-input': {
-                              py: 1.5
-                            }
-                          }}
+                          sx={{ '& .MuiInputBase-input': { py: 1.5 } }}
                         />
                       )}
                       renderOption={(props, option) => (
@@ -621,10 +614,10 @@ const VacationRequest: React.FC = () => {
                   </Grid>
                   <Grid size={{ xs: 12 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                      휴가 사유 *
+                      {t('vacationManagement.request.reasonLabel')} *
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      휴가 사유를 입력하세요
+                      {t('vacationManagement.request.reasonHint')}
                     </Typography>
                     <TextField
                       fullWidth
@@ -633,12 +626,8 @@ const VacationRequest: React.FC = () => {
                       value={formData.reason}
                       onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                       required
-                      placeholder="휴가 주세요."
-                      sx={{
-                        '& .MuiInputBase-root': {
-                          alignItems: 'flex-start'
-                        }
-                      }}
+                      placeholder={t('vacationManagement.request.reasonPlaceholder')}
+                      sx={{ '& .MuiInputBase-root': { alignItems: 'flex-start' } }}
                     />
                   </Grid>
                 </Grid>
@@ -653,7 +642,7 @@ const VacationRequest: React.FC = () => {
                       fontWeight: 500
                     }}
                   >
-                    이전
+                    {t('vacationManagement.request.previous')}
                   </Button>
                   <Button
                     variant="contained"
@@ -667,17 +656,16 @@ const VacationRequest: React.FC = () => {
                       fontWeight: 600
                     }}
                   >
-                    다음
+                    {t('vacationManagement.request.next')}
                   </Button>
                 </Box>
               </StepContent>
             </Step>
 
-            {/* 3단계: 검토 및 확인 */}
             <Step>
               <StepLabel>
                 <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  검토 및 확인
+                  {steps[2]}
                 </Typography>
               </StepLabel>
               <StepContent>
@@ -685,28 +673,30 @@ const VacationRequest: React.FC = () => {
                   <Grid container spacing={2}>
                     <Grid size={{ xs: 12, md: 6 }}>
                       <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                        휴가 유형
+                        {t('vacationManagement.request.leaveTypeLabel')}
                       </Typography>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                        {vacationTypes.find(t => t.key === formData.vacationType)?.icon}
+                        {selectedVacationType?.icon}
                         <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                          {vacationTypes.find(t => t.key === formData.vacationType)?.name}
+                          {selectedVacationType?.name}
                         </Typography>
                       </Box>
                     </Grid>
                     <Grid size={{ xs: 12, md: 6 }}>
                       <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                        휴가 일수
+                        {t('vacationManagement.request.leaveDaysLabel')}
                       </Typography>
                       <Typography variant="body1" sx={{ fontWeight: 500, mb: 2 }}>
-                        {formData.startDate && formData.endDate 
-                          ? `${calculateDays(formData.startDate, formData.endDate)}일`
+                        {formData.startDate && formData.endDate
+                          ? t('vacationManagement.request.daysCount', {
+                              count: calculateDays(formData.startDate, formData.endDate)
+                            })
                           : '-'}
                       </Typography>
                     </Grid>
                     <Grid size={{ xs: 12, md: 6 }}>
                       <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                        시작일
+                        {t('vacationManagement.request.startDateLabel')}
                       </Typography>
                       <Typography variant="body1" sx={{ fontWeight: 500, mb: 2 }}>
                         {formData.startDate || '-'}
@@ -714,7 +704,7 @@ const VacationRequest: React.FC = () => {
                     </Grid>
                     <Grid size={{ xs: 12, md: 6 }}>
                       <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                        종료일
+                        {t('vacationManagement.request.endDateLabel')}
                       </Typography>
                       <Typography variant="body1" sx={{ fontWeight: 500, mb: 2 }}>
                         {formData.endDate || '-'}
@@ -722,17 +712,19 @@ const VacationRequest: React.FC = () => {
                     </Grid>
                     <Grid size={{ xs: 12 }}>
                       <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                        승인자
+                        {t('vacationManagement.approver')}
                       </Typography>
                       <Typography variant="body1" sx={{ fontWeight: 500, mb: 2 }}>
-                        {selectedApprover 
-                          ? `${selectedApprover.username}${selectedApprover.department ? ` (${selectedApprover.department})` : ''}`
-                          : '미지정'}
+                        {selectedApprover
+                          ? `${selectedApprover.username}${
+                              selectedApprover.department ? ` (${selectedApprover.department})` : ''
+                            }`
+                          : t('vacationManagement.unspecified')}
                       </Typography>
                     </Grid>
                     <Grid size={{ xs: 12 }}>
                       <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                        휴가 사유
+                        {t('vacationManagement.reason')}
                       </Typography>
                       <Typography variant="body1" sx={{ fontWeight: 500, whiteSpace: 'pre-wrap' }}>
                         {formData.reason || '-'}
@@ -751,17 +743,12 @@ const VacationRequest: React.FC = () => {
                       fontWeight: 500
                     }}
                   >
-                    이전
+                    {t('vacationManagement.request.previous')}
                   </Button>
                   <Box sx={{ display: 'flex', gap: 2 }}>
                     <Button
                       variant="outlined"
-                      onClick={() => {
-                        // 사용자 역할에 따라 "내가 신청한 휴가" 탭으로 이동
-                        // admin/root: tab=1, 일반 사용자: tab=0
-                        const tabIndex = (user?.role === 'admin' || user?.role === 'root') ? 1 : 0;
-                        navigate(`/hr/leave?tab=${tabIndex}`);
-                      }}
+                      onClick={navigateToList}
                       disabled={saving}
                       sx={{
                         minWidth: 100,
@@ -771,7 +758,7 @@ const VacationRequest: React.FC = () => {
                         fontWeight: 500
                       }}
                     >
-                      취소
+                      {t('vacationManagement.request.cancel')}
                     </Button>
                     <Button
                       variant="contained"
@@ -788,7 +775,7 @@ const VacationRequest: React.FC = () => {
                         boxShadow: '0 3px 5px 2px rgba(33, 203, 243, .3)',
                         '&:hover': {
                           background: 'linear-gradient(45deg, #1976D2 30%, #1CB5E0 90%)',
-                          boxShadow: '0 4px 8px 2px rgba(33, 203, 243, .4)',
+                          boxShadow: '0 4px 8px 2px rgba(33, 203, 243, .4)'
                         },
                         '&:disabled': {
                           background: '#cbd5e0',
@@ -796,7 +783,7 @@ const VacationRequest: React.FC = () => {
                         }
                       }}
                     >
-                      {saving ? '저장 중...' : '저장'}
+                      {saving ? t('vacationManagement.request.saving') : t('vacationManagement.request.save')}
                     </Button>
                   </Box>
                 </Box>
@@ -810,5 +797,3 @@ const VacationRequest: React.FC = () => {
 };
 
 export default VacationRequest;
-
-
