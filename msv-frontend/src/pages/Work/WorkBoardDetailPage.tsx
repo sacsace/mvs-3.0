@@ -39,7 +39,6 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
-  MeasuringFrequency,
   MeasuringStrategy,
   PointerSensor,
   useDraggable,
@@ -305,7 +304,8 @@ const formatDateTime = (value?: string): string => {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
 };
 
-const DRAG_TRANSITION = 'transform 90ms cubic-bezier(0.2, 0, 0, 1)';
+const DRAG_TRANSITION = 'transform 40ms ease-out';
+const DRAG_LAYOUT_TRANSITION = 'none';
 
 /** 칸반 열·카드·칩 모서리 — 완전 각진 톤 */
 const KANBAN_SURFACE_RADIUS = '0';
@@ -687,7 +687,7 @@ const DraggableCard = memo(function DraggableCard({
         borderRadius: KANBAN_CARD_RADIUS,
         overflow: 'hidden',
         boxShadow: KANBAN_CARD_SHADOW,
-        transition: isDragging ? 'none' : `${DRAG_TRANSITION}, box-shadow 0.2s ease`,
+        transition: isDragging ? 'none' : DRAG_LAYOUT_TRANSITION,
         willChange: isDragging ? 'transform' : 'auto',
         zIndex: isDragging ? 20 : 1,
         '&:hover': {
@@ -1269,11 +1269,20 @@ const WorkBoardDetailPage: React.FC = () => {
   }, [isKanbanDragging]);
 
   const handleDragEnd = async (event: DragEndEvent) => {
-    setActiveCard(null);
-    setActiveList(null);
-    if (!menuCanEdit) return;
+    const clearDragOverlay = () => {
+      setActiveCard(null);
+      setActiveList(null);
+    };
+
+    if (!menuCanEdit) {
+      clearDragOverlay();
+      return;
+    }
     const { active, over } = event;
-    if (!over || !board) return;
+    if (!over || !board) {
+      clearDragOverlay();
+      return;
+    }
 
     const activeIdStr = String(active.id);
     const overId = String(over.id);
@@ -1298,32 +1307,45 @@ const WorkBoardDetailPage: React.FC = () => {
         }
       }
 
-      if (!targetListId || targetListId === activeListId) return;
+      if (!targetListId || targetListId === activeListId) {
+        clearDragOverlay();
+        return;
+      }
       const orderedLists = [...lists].sort((a, b) => a.position - b.position);
       const targetIndex = orderedLists.findIndex((l) => l.id === targetListId);
-      if (targetIndex < 0) return;
+      if (targetIndex < 0) {
+        clearDragOverlay();
+        return;
+      }
 
       const prevBoard = board;
-      setBoard((p: any) => normalizeBoardData(applyOptimisticListMove(p, activeListId, targetIndex)));
+      setBoard((p: any) => applyOptimisticListMove(p, activeListId, targetIndex));
+      clearDragOverlay();
       try {
         const res = await workBoardService.moveList(boardId, activeListId, targetIndex);
         if (!res.success) {
-          setBoard(normalizeBoardData(prevBoard));
+          setBoard(prevBoard);
           showErrorPopup(res.message || '대분류 이동 실패', '작업 보드');
         }
       } catch (e: any) {
-        setBoard(normalizeBoardData(prevBoard));
+        setBoard(prevBoard);
         showErrorPopup(e, '작업 보드');
       }
       return;
     }
 
-    if (!activeIdStr.startsWith('card-')) return;
+    if (!activeIdStr.startsWith('card-')) {
+      clearDragOverlay();
+      return;
+    }
     const activeCardId = parseInt(activeIdStr.replace('card-', ''), 10);
 
     if (overId.startsWith('card-')) {
       const overCardIdEarly = parseInt(overId.replace('card-', ''), 10);
-      if (overCardIdEarly === activeCardId) return;
+      if (overCardIdEarly === activeCardId) {
+        clearDragOverlay();
+        return;
+      }
     }
 
     let targetListId: number;
@@ -1343,12 +1365,16 @@ const WorkBoardDetailPage: React.FC = () => {
           break;
         }
       }
-      if (!found) return;
+      if (!found) {
+        clearDragOverlay();
+        return;
+      }
       targetListId = found.id;
       const filtered = (found.cards || []).filter((c) => c.id !== activeCardId);
       const idx = filtered.findIndex((c) => c.id === overCardId);
       targetIndex = idx >= 0 ? idx : filtered.length;
     } else {
+      clearDragOverlay();
       return;
     }
 
@@ -1358,19 +1384,21 @@ const WorkBoardDetailPage: React.FC = () => {
       before.listId === targetListId &&
       before.index === targetIndex
     ) {
+      clearDragOverlay();
       return;
     }
 
     const prevBoard = board;
-    setBoard((p: any) => normalizeBoardData(applyOptimisticCardMove(p, activeCardId, targetListId, targetIndex)));
+    setBoard((p: any) => applyOptimisticCardMove(p, activeCardId, targetListId, targetIndex));
+    clearDragOverlay();
     try {
       const res = await workBoardService.moveCard(boardId, activeCardId, targetListId, targetIndex);
       if (!res.success) {
-        setBoard(normalizeBoardData(prevBoard));
+        setBoard(prevBoard);
         showErrorPopup(res.message || '이동 실패', '작업 보드');
       }
     } catch (e: any) {
-      setBoard(normalizeBoardData(prevBoard));
+      setBoard(prevBoard);
       showErrorPopup(e, '작업 보드');
     }
   };
@@ -2450,9 +2478,8 @@ const WorkBoardDetailPage: React.FC = () => {
           collisionDetection={kanbanCollisionDetection}
           measuring={{
             droppable: {
-              strategy: MeasuringStrategy.WhileDragging,
-              frequency: MeasuringFrequency.Optimized
-            }
+              strategy: MeasuringStrategy.BeforeDragging,
+            },
           }}
           onDragStart={handleDragStart}
           onDragCancel={handleDragCancel}
