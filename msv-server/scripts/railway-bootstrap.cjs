@@ -1,5 +1,5 @@
 /**
- * Railway 기동: API 서버를 먼저 띄우고(Healthcheck), 백그라운드에서 마이그레이션·시드 실행
+ * Railway 기동: 마이그레이션 후 API 서버 시작
  */
 const { spawn } = require('child_process');
 const path = require('path');
@@ -23,29 +23,30 @@ function run(command, args, label) {
   });
 }
 
-console.log('🚀 Railway bootstrap: API 서버 시작...');
-const server = spawn('npx', ['ts-node', 'src/index.ts'], {
-  cwd: rootDir,
-  env: process.env,
-  stdio: 'inherit',
-  shell: process.platform === 'win32',
-});
+function startServer() {
+  console.log('\n🚀 Railway bootstrap: API 서버 시작...');
+  const server = spawn('npx', ['ts-node', 'src/index.ts'], {
+    cwd: rootDir,
+    env: process.env,
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+  });
 
-server.on('error', (err) => {
-  console.error('❌ 서버 시작 실패:', err);
-  process.exit(1);
-});
+  server.on('error', (err) => {
+    console.error('❌ 서버 시작 실패:', err);
+    process.exit(1);
+  });
 
-server.on('exit', (code) => {
-  console.log(`서버 종료 (code=${code})`);
-  process.exit(code ?? 0);
-});
+  server.on('exit', (code) => {
+    console.log(`서버 종료 (code=${code})`);
+    process.exit(code ?? 0);
+  });
+}
 
 (async () => {
-  await new Promise((r) => setTimeout(r, 6000));
-
   if (process.env.SKIP_DB_BOOTSTRAP === '1') {
     console.log('⏭️ SKIP_DB_BOOTSTRAP=1 — 마이그레이션/시드 건너뜀');
+    startServer();
     return;
   }
 
@@ -63,6 +64,9 @@ server.on('exit', (code) => {
       console.log('\n⏭️ DB 시드 건너뜀 (MVS_RUN_DB_SEED=1 이면 시드 실행). 마이그레이션만 적용됨');
     }
   } catch (error) {
-    console.error('\n⚠️ DB bootstrap 실패 (API는 계속 실행):', error.message);
+    console.error('\n⚠️ DB bootstrap 실패:', error.message);
+    console.error('마이그레이션 실패 시에도 서버를 기동합니다 (ensureAttendanceSchema 등 런타임 보정).');
   }
+
+  startServer();
 })();
