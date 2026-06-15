@@ -647,6 +647,7 @@ router.put(
   '/:id',
   requireAdminRootOrUserMenuPermission('can_edit'),
   validateBody({
+    userid: { type: 'string', minLength: 2, maxLength: 50 },
     username: { type: 'string', minLength: 1, maxLength: 100 },
     email: { type: 'string', maxLength: 255, pattern: emailPattern },
     password: { type: 'string', minLength: 8, maxLength: 128 },
@@ -663,7 +664,7 @@ router.put(
     const tenantId = (req as any).user.tenant_id;
     const companyId = (req as any).user.company_id;
     const {
-      username, email, password, role, department, position, status,
+      userid, username, email, password, role, department, position, status,
       employee_number, birth_date, gender, phone, address,
       emergency_contact, emergency_phone, hire_date, employment_type, salary,
       bank_name, bank_account, bank_ifsc,
@@ -770,11 +771,44 @@ router.put(
       }
     }
 
+    // 사용자 ID 변경 (root만 가능)
+    if (userid !== undefined && userid !== user.userid) {
+      if (currentUserRole !== 'root') {
+        return res.status(403).json({
+          success: false,
+          message: '사용자 ID 변경은 root 권한만 가능합니다.'
+        });
+      }
+      const trimmedUserid = String(userid).trim();
+      if (!trimmedUserid) {
+        return res.status(400).json({
+          success: false,
+          message: '사용자 ID를 입력해주세요.'
+        });
+      }
+      const existingUserid = await (User as any).findOne({
+        where: {
+          userid: trimmedUserid,
+          id: { [Op.ne]: id }
+        },
+        attributes: ['id', 'userid']
+      });
+      if (existingUserid) {
+        return res.status(409).json({
+          success: false,
+          message: '이미 존재하는 사용자 ID입니다.'
+        });
+      }
+    }
+
     // 업데이트 데이터 구성
     const updateData: any = {};
 
     if (username !== undefined) updateData.username = username;
     if (email !== undefined) updateData.email = email;
+    if (userid !== undefined && currentUserRole === 'root') {
+      updateData.userid = String(userid).trim();
+    }
     if (role !== undefined) updateData.role = role;
     if (status !== undefined) updateData.status = status;
 

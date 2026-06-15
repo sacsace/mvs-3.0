@@ -1843,7 +1843,7 @@ const UserManagement: React.FC = () => {
                       value={formData.userid}
                       onChange={(e) => setFormData({ ...formData, userid: e.target.value })}
                       required
-                      disabled={!!editingUser}
+                      disabled={!!editingUser && user?.role !== 'root'}
                     />
                     <TextField
                       fullWidth
