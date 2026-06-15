@@ -476,6 +476,12 @@ router.post(
         message: 'root 역할은 root 권한을 가진 사용자만 부여할 수 있습니다.'
       });
     }
+    if (role === 'audit' && currentUserRole !== 'root') {
+      return res.status(403).json({
+        success: false,
+        message: 'audit 역할은 root 권한을 가진 사용자만 부여할 수 있습니다.'
+      });
+    }
 
     // 중복 확인
     const existingUser = await (User as any).findOne({
@@ -737,6 +743,12 @@ router.put(
       return res.status(403).json({
         success: false,
         message: 'root 역할은 root 권한을 가진 사용자만 부여할 수 있습니다.'
+      });
+    }
+    if (role !== undefined && role === 'audit' && currentUserRole !== 'root' && user.role !== 'audit') {
+      return res.status(403).json({
+        success: false,
+        message: 'audit 역할은 root 권한을 가진 사용자만 부여할 수 있습니다.'
       });
     }
 
@@ -1254,6 +1266,19 @@ router.post(
         }
         const passwordHash = await hashPassword(password);
 
+        const importRole = (row['역할 (root/admin/user/audit)'] && ['root', 'admin', 'user', 'audit'].includes(row['역할 (root/admin/user/audit)'].toString().toLowerCase()))
+          ? row['역할 (root/admin/user/audit)'].toString().toLowerCase()
+          : 'user';
+
+        if (importRole === 'audit' && userRole !== 'root') {
+          results.failed.push({
+            row: i + 2,
+            data: row,
+            error: 'audit 역할은 root 권한을 가진 사용자만 부여할 수 있습니다.'
+          });
+          continue;
+        }
+
         // 사용자 생성
         const user = await (User as any).create({
           tenant_id: tenantId,
@@ -1262,9 +1287,7 @@ router.post(
           username: row['이름'].toString().trim(),
           email: row['이메일'].toString().trim(),
           password_hash: passwordHash,
-          role: (row['역할 (root/admin/user/audit)'] && ['root', 'admin', 'user', 'audit'].includes(row['역할 (root/admin/user/audit)'].toString().toLowerCase()))
-            ? row['역할 (root/admin/user/audit)'].toString().toLowerCase()
-            : 'user',
+          role: importRole,
           department: row['부서'] ? row['부서'].toString().trim() : null,
           position: row['직책'] ? row['직책'].toString().trim() : null,
           employee_number: employeeNumber || null,

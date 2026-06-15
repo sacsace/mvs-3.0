@@ -1931,7 +1931,7 @@ const WorkBoardDetailPage: React.FC = () => {
       return;
     }
     showConfirm(
-      '이 카드를 삭제하시겠습니까? 삭제 후 복구할 수 없습니다.',
+      '',
       () => {
         void (async () => {
           setCardSaving(true);
@@ -1940,18 +1940,27 @@ const WorkBoardDetailPage: React.FC = () => {
             if (res.success) {
               closeCardDetail();
               await loadBoard();
-              showSuccessToast('카드가 삭제되었습니다.');
+              showSuccessToast(txt('카드가 삭제되었습니다.', 'Card deleted.'));
             } else {
-              showErrorPopup(res.message || '카드 삭제에 실패했습니다.', '카드 세부사항');
+              showErrorPopup(
+                res.message || txt('카드 삭제에 실패했습니다.', 'Failed to delete card.'),
+                txt('카드 세부사항', 'Card details')
+              );
             }
           } catch (error: any) {
-            showErrorPopup(error, '카드 세부사항');
+            showErrorPopup(error, txt('카드 세부사항', 'Card details'));
           } finally {
             setCardSaving(false);
           }
         })();
       },
-      { title: '카드 삭제', confirmText: '삭제', confirmColor: 'error' }
+      {
+        titleKey: 'workBoards.cardDetail.deleteTitle',
+        messageKey: 'workBoards.cardDetail.deleteConfirmMessage',
+        confirmTextKey: 'common.delete',
+        cancelTextKey: 'common.cancel',
+        confirmColor: 'error',
+      }
     );
   };
 
@@ -3461,8 +3470,13 @@ const WorkBoardDetailPage: React.FC = () => {
       <ConfirmDialog
         open={dialogState.open}
         title={dialogState.title}
+        titleKey={dialogState.titleKey}
         message={dialogState.message}
+        messageKey={dialogState.messageKey}
         confirmText={dialogState.confirmText}
+        confirmTextKey={dialogState.confirmTextKey}
+        cancelText={dialogState.cancelText}
+        cancelTextKey={dialogState.cancelTextKey}
         confirmColor={dialogState.confirmColor}
         onConfirm={handleConfirm}
         onCancel={handleCancel}

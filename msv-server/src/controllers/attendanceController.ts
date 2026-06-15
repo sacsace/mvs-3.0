@@ -4,6 +4,26 @@ import { Attendance, Company, User } from '../models';
 import { Op } from 'sequelize';
 import sequelize from '../config/database';
 
+let attendanceSchemaReady: Promise<void> | null = null;
+
+/** 운영 DB에 is_active 컬럼이 없을 때 자동 보정 (마이그레이션 누락 대비) */
+const ensureAttendanceSchema = async () => {
+  if (!attendanceSchemaReady) {
+    attendanceSchemaReady = (async () => {
+      try {
+        await sequelize.query(`
+          ALTER TABLE "attendances"
+          ADD COLUMN IF NOT EXISTS "is_active" BOOLEAN NOT NULL DEFAULT true;
+        `);
+      } catch (error) {
+        console.warn('[attendance] ensureAttendanceSchema skipped:', error);
+        attendanceSchemaReady = null;
+      }
+    })();
+  }
+  return attendanceSchemaReady;
+};
+
 const toRadians = (value: number) => (value * Math.PI) / 180;
 
 const calculateDistanceMeters = (
@@ -222,6 +242,7 @@ const computeCheckoutFields = (attendance: any, checkOutTime: Date): CheckoutCom
 // 근태 목록 조회 — 항상 로그인한 본인 기록만 (근태 관리 «근태 현황» 등)
 export const getAttendances = async (req: AuthRequest, res: Response) => {
   try {
+    await ensureAttendanceSchema();
     const tenantId = req.user?.tenant_id;
     const companyId = req.user?.company_id;
     const userRole = req.user?.role;
@@ -288,6 +309,7 @@ export const getAttendances = async (req: AuthRequest, res: Response) => {
 /** 회사 전체 근태 목록 — HR «근태 통계» 등 (admin / root / audit 만) */
 export const getCompanyAttendances = async (req: AuthRequest, res: Response) => {
   try {
+    await ensureAttendanceSchema();
     const userRole = req.user?.role;
     if (userRole !== 'root' && userRole !== 'audit' && userRole !== 'admin') {
       return res.status(403).json({
@@ -364,6 +386,7 @@ export const getCompanyAttendances = async (req: AuthRequest, res: Response) => 
 // 근태 상세 조회
 export const getAttendance = async (req: AuthRequest, res: Response) => {
   try {
+    await ensureAttendanceSchema();
     const { id } = req.params;
     const tenantId = req.user?.tenant_id;
     const companyId = req.user?.company_id;
@@ -411,6 +434,7 @@ export const getAttendance = async (req: AuthRequest, res: Response) => {
 // 출근 처리
 export const checkIn = async (req: AuthRequest, res: Response) => {
   try {
+    await ensureAttendanceSchema();
     const userId = req.user?.id;
     const tenantId = req.user?.tenant_id;
     const companyId = req.user?.company_id;
@@ -865,6 +889,7 @@ export const updateAttendance = async (req: AuthRequest, res: Response) => {
 // 근태 삭제
 export const deleteAttendance = async (req: AuthRequest, res: Response) => {
   try {
+    await ensureAttendanceSchema();
     const { id } = req.params;
     const tenantId = req.user?.tenant_id;
     const companyId = req.user?.company_id;
@@ -991,6 +1016,8 @@ export const runAutoCheckoutOpenAttendances = async (): Promise<number> => {
   if (process.env.DISABLE_ATTENDANCE_AUTO_CHECKOUT === 'true') {
     return 0;
   }
+
+  await ensureAttendanceSchema();
 
   const { date: todayStr } = getServerNowInTimeZone();
   const { hour } = getHourMinuteInAttendanceZone();

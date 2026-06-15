@@ -17,6 +17,7 @@ interface AttendanceAttributes {
   work_hours?: number;
   status: 'normal' | 'late' | 'early' | 'overtime' | 'absent';
   notes?: string;
+  is_active?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -39,6 +40,7 @@ class Attendance extends Model<AttendanceAttributes, AttendanceCreationAttribute
   public work_hours?: number;
   public status!: 'normal' | 'late' | 'early' | 'overtime' | 'absent';
   public notes?: string;
+  public is_active?: boolean;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
 }
@@ -106,6 +108,11 @@ Attendance.init(
     notes: {
       type: DataTypes.TEXT,
       allowNull: true
+    },
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true
     }
   },
   {

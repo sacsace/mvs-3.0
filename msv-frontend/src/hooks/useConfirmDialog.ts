@@ -6,24 +6,31 @@ import { useState, useCallback, useRef } from 'react';
  */
 interface ConfirmDialogOptions {
   title?: string;
-  message: string;
+  titleKey?: string;
+  message?: string;
+  messageKey?: string;
   confirmText?: string;
+  confirmTextKey?: string;
   cancelText?: string;
+  cancelTextKey?: string;
   confirmColor?: 'primary' | 'error' | 'warning';
 }
 
 export interface ConfirmDialogState {
   open: boolean;
-  message: string;
+  message?: string;
+  messageKey?: string;
   title?: string;
+  titleKey?: string;
   confirmText?: string;
+  confirmTextKey?: string;
   cancelText?: string;
+  cancelTextKey?: string;
   confirmColor?: 'primary' | 'error' | 'warning';
 }
 
 const closedState: ConfirmDialogState = {
   open: false,
-  message: ''
 };
 
 export const useConfirmDialog = () => {
@@ -31,15 +38,19 @@ export const useConfirmDialog = () => {
   const onConfirmRef = useRef<(() => void) | null>(null);
 
   const showConfirm = useCallback(
-    (message: string, onConfirm: () => void, options?: Omit<ConfirmDialogOptions, 'message'>) => {
+    (message: string, onConfirm: () => void, options?: ConfirmDialogOptions) => {
       onConfirmRef.current = onConfirm;
       setDialogState({
         open: true,
-        message,
+        message: message || options?.message,
+        messageKey: options?.messageKey,
         title: options?.title,
+        titleKey: options?.titleKey,
         confirmText: options?.confirmText,
+        confirmTextKey: options?.confirmTextKey,
         cancelText: options?.cancelText,
-        confirmColor: options?.confirmColor
+        cancelTextKey: options?.cancelTextKey,
+        confirmColor: options?.confirmColor,
       });
     },
     []

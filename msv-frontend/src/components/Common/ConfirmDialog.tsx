@@ -33,9 +33,13 @@ import { useDialogKeyboard } from '../../hooks/useDialogKeyboard';
 export interface ConfirmDialogProps {
   open: boolean;
   title?: string;
-  message: string;
+  titleKey?: string;
+  message?: string;
+  messageKey?: string;
   confirmText?: string;
+  confirmTextKey?: string;
   cancelText?: string;
+  cancelTextKey?: string;
   onConfirm: () => void;
   onCancel: () => void;
   /** primary: 일반 확인 / error·warning: 삭제·위험 작업 */
@@ -51,18 +55,23 @@ export interface ConfirmDialogProps {
 const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   open,
   title,
+  titleKey,
   message,
+  messageKey,
   confirmText,
+  confirmTextKey,
   cancelText,
+  cancelTextKey,
   onConfirm,
   onCancel,
   confirmColor = 'primary'
 }) => {
   const theme = useTheme();
   const { t } = useTranslation();
-  const titleText = title ?? t('common.confirm');
-  const confirmLabel = confirmText ?? t('common.confirm');
-  const cancelLabel = cancelText ?? t('common.cancel');
+  const titleText = titleKey ? t(titleKey) : (title ?? t('common.confirm'));
+  const messageText = messageKey ? t(messageKey) : (message ?? '');
+  const confirmLabel = confirmTextKey ? t(confirmTextKey) : (confirmText ?? t('common.confirm'));
+  const cancelLabel = cancelTextKey ? t(cancelTextKey) : (cancelText ?? t('common.cancel'));
 
   const isDanger = confirmColor === 'error' || confirmColor === 'warning';
   const accent =
@@ -121,7 +130,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
       <DialogContent id="mvs-confirm-message" sx={getMvsDialogMessageContentSx(theme)}>
         <Typography variant="body1" sx={{ color: 'text.primary', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
-          {message}
+          {messageText}
         </Typography>
       </DialogContent>
 

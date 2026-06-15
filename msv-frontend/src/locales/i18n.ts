@@ -408,6 +408,7 @@ const ko = {
       roleAdmin: '관리자',
       roleUser: '사용자',
       roleAudit: '감사',
+      auditRoleRootOnly: 'Audit 권한은 Root 사용자만 부여할 수 있습니다.',
       statusActive: '활성',
       statusInactive: '비활성',
       selectUsers: '삭제할 사용자를 선택해주세요.',
@@ -1231,6 +1232,16 @@ const ko = {
         loadListFailed: '목록을 불러올 수 없습니다.',
         createFailed: '생성에 실패했습니다.',
         reorderFailed: '보드 순서를 변경하지 못했습니다.'
+      },
+      cardDetail: {
+        title: '카드 세부사항',
+        deleteTitle: '카드 삭제',
+        deleteConfirmMessage: '이 카드를 삭제하시겠습니까? 삭제 후 복구할 수 없습니다.',
+        deleteSuccess: '카드가 삭제되었습니다.',
+        deleteFailed: '카드 삭제에 실패했습니다.',
+        noDeletePermission: '카드를 삭제할 권한이 없습니다.',
+        commentPlaceholder: '댓글을 입력하세요',
+        noComments: '아직 댓글이 없습니다.'
       }
     },
     workStatistics: {
@@ -3615,6 +3626,7 @@ const en = {
       roleAdmin: 'Admin',
       roleUser: 'User',
       roleAudit: 'Audit',
+      auditRoleRootOnly: 'Only Root users can assign the Audit role.',
       statusActive: 'Active',
       statusInactive: 'Inactive',
       selectUsers: 'Please select users to delete.',
@@ -4370,6 +4382,16 @@ const en = {
         loadListFailed: 'Unable to load the list.',
         createFailed: 'Failed to create.',
         reorderFailed: 'Could not reorder boards.'
+      },
+      cardDetail: {
+        title: 'Card details',
+        deleteTitle: 'Delete Card',
+        deleteConfirmMessage: 'Are you sure you want to delete this card? It cannot be recovered after deletion.',
+        deleteSuccess: 'Card deleted.',
+        deleteFailed: 'Failed to delete card.',
+        noDeletePermission: 'You do not have permission to delete cards.',
+        commentPlaceholder: 'Write a comment',
+        noComments: 'No comments yet.'
       }
     },
     workStatistics: {

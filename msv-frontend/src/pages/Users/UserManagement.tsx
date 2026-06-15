@@ -764,6 +764,15 @@ const UserManagement: React.FC = () => {
         submitData.department_id = Number(submitData.department_id);
       }
 
+      if (
+        submitData.role === 'audit' &&
+        user?.role !== 'root' &&
+        !(editingUser && editingUser.role === 'audit')
+      ) {
+        setError(t('userManagement.auditRoleRootOnly'));
+        return;
+      }
+
       if (editingUser) {
         // 수정 시 비밀번호가 없으면 제외
         if (!submitData.password) {
@@ -1860,7 +1869,13 @@ const UserManagement: React.FC = () => {
                     >
                       <MenuItem value="user">{t('userManagement.roleUser')}</MenuItem>
                       <MenuItem value="admin">{t('userManagement.roleAdmin')}</MenuItem>
-                      <MenuItem value="audit">{t('userManagement.roleAudit')}</MenuItem>
+                      {user?.role === 'root' ? (
+                        <MenuItem value="audit">{t('userManagement.roleAudit')}</MenuItem>
+                      ) : editingUser?.role === 'audit' ? (
+                        <MenuItem value="audit" disabled>
+                          {t('userManagement.roleAudit')}
+                        </MenuItem>
+                      ) : null}
                       {user?.role === 'root' && (
                         <MenuItem value="root">Root</MenuItem>
                       )}
