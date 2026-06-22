@@ -6,7 +6,7 @@ import Header from './Header';
 import Sidebar, { SIDEBAR_WIDTH_EASING, SIDEBAR_WIDTH_TRANSITION_MS } from './Sidebar';
 import { useStore, useMenuStore } from '../../store';
 import { userUiPreferencesService } from '../../services/api';
-import i18n from '../../locales/i18n';
+import i18n, { ensureI18nLanguage } from '../../locales/i18n';
 import { mvsPageShellSx, mvsWorkBoardPageBg } from '../../theme/mvsLayout';
 
 /** 서버 prefs의 ko가 클라이언트 영어 선택보다 늦게 도착할 때 UI 언어를 덮어쓰지 않음 */
@@ -93,11 +93,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         if (prefs.language === 'ko' || prefs.language === 'en') {
           const current = useMenuStore.getState().language;
           if (!shouldApplyPrefsLanguage(prefs.language, current)) {
-            void i18n.changeLanguage(current);
+            void ensureI18nLanguage(current);
             return;
           }
           setLanguage(prefs.language);
-          void i18n.changeLanguage(prefs.language);
+          void ensureI18nLanguage(prefs.language);
         }
       })
       .catch(() => {});

@@ -2,8 +2,6 @@ import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { Box } from '@mui/material';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
 import i18n from '../../locales/i18n';
 import { theme } from '../../theme';
 import PayslipContent, { type PayslipLabels, type PayslipCompanyInfo } from './PayslipContent';
@@ -74,6 +72,10 @@ export async function generatePayslipPdfBlob(
   await new Promise<void>((resolve) => setTimeout(resolve, 400));
 
   try {
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+      import('html2canvas'),
+      import('jspdf'),
+    ]);
     const target = container.firstElementChild as HTMLElement;
     const inner = (target?.firstElementChild as HTMLElement) || target;
     const canvas = await html2canvas(inner, {

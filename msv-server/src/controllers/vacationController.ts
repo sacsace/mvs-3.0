@@ -4,6 +4,8 @@ import { Vacation, User, Company } from '../models';
 import { Op } from 'sequelize';
 import { calculateAnnualLeave, validateVacationLeaveRequest } from '../utils/vacationCalculator';
 import * as XLSX from 'xlsx';
+import { pushNotification } from './notificationController';
+import SocketService from '../services/socketService';
 
 // 휴가 목록 조회
 export const getVacations = async (req: AuthRequest, res: Response) => {
@@ -269,7 +271,31 @@ export const createVacation = async (req: AuthRequest, res: Response) => {
       ]
     });
 
-    res.status(201).json({ 
+    if (approved_by && Number(approved_by) !== userId) {
+      const applicantName =
+        (vacationWithUser as any)?.user?.username || req.user?.username || '신청자';
+      const socketService = (req as any).socketService as SocketService | undefined;
+      pushNotification(
+        {
+          title: '휴가 승인 요청',
+          message: `${applicantName}님이 휴가를 신청했습니다. (${start_date} ~ ${end_date})`,
+          type: 'info',
+          target_type: 'user',
+          target_id: Number(approved_by),
+          tenant_id: tenantId,
+          company_id: companyId,
+          sender_user_id: userId,
+          data: {
+            feature: 'vacation',
+            vacation_id: vacation.id,
+            href: '/hr/leave'
+          }
+        },
+        socketService
+      );
+    }
+
+    res.status(201).json({
       success: true, 
       data: vacationWithUser 
     });

@@ -52,7 +52,6 @@ import {
   Legend,
   ComposedChart,
 } from 'recharts';
-import * as XLSX from 'xlsx';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useStore } from '../../store';
 import { accountingService } from '../../services/api';
@@ -389,7 +388,8 @@ const AccountingStatistics: React.FC = () => {
     }
   };
 
-  const handleDownloadReport = () => {
+  const handleDownloadReport = async () => {
+    const XLSX = await import('xlsx');
     const periodLabelMap: Record<string, string> = {
       day: '일간',
       week: '주간',

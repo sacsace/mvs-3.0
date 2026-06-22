@@ -6,8 +6,8 @@ import reportWebVitals from './reportWebVitals';
 import { useErrorStore } from './store/errorStore';
 import i18n from './locales/i18n';
 
-// Completely disable service worker in development
-if ('serviceWorker' in navigator) {
+// Completely disable service worker in development only
+if (process.env.NODE_ENV === 'development' && 'serviceWorker' in navigator) {
   // Unregister all existing service workers
   navigator.serviceWorker.getRegistrations().then((registrations) => {
     for (const registration of registrations) {

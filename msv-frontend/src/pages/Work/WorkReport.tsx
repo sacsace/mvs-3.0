@@ -318,6 +318,17 @@ const WorkReport: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const isEnglish = i18n.language.startsWith('en');
   const tr = useCallback((ko: string, en: string) => (isEnglish ? en : ko), [isEnglish]);
+  const withEmailDeliveryNotice = useCallback(
+    (baseMsg: string, response: { email_delivery?: { sent?: boolean; reason?: string } }) => {
+      const delivery = response?.email_delivery;
+      if (!delivery || delivery.sent) return baseMsg;
+      const reason =
+        delivery.reason ||
+        tr('수신자에게 메일을 보내지 못했습니다.', 'Could not send email to the recipient.');
+      return `${baseMsg} ${tr('(메일 미발송:', '(Email not sent:')} ${reason})`;
+    },
+    [tr]
+  );
   const theme = useTheme();
   const reportDialogFieldSx = useMemo(() => getReportDialogFieldSx(theme), [theme]);
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
@@ -779,11 +790,10 @@ const WorkReport: React.FC = () => {
         : await workReportService.createWorkReport(payload);
 
       if (response.success) {
-        setSuccess(
-          selectedReport
-            ? tr('보고서가 수정되었습니다.', 'Report has been updated.')
-            : tr('보고서가 제출되었습니다.', 'Report has been submitted.')
-        );
+        const baseMsg = selectedReport
+          ? tr('보고서가 수정되었습니다.', 'Report has been updated.')
+          : tr('보고서가 제출되었습니다.', 'Report has been submitted.');
+        setSuccess(withEmailDeliveryNotice(baseMsg, response));
         setOpenDialog(false);
         loadReportData();
       } else {
@@ -830,7 +840,13 @@ const WorkReport: React.FC = () => {
       const response = await workReportService.submitWorkReport(id);
       if (response.success) {
         setSuccess(
-          tr('보고서가 제출되었습니다. 수신자가 승인할 수 있습니다.', 'Report submitted. The recipient can approve it.')
+          withEmailDeliveryNotice(
+            tr(
+              '보고서가 제출되었습니다. 수신자가 승인할 수 있습니다.',
+              'Report submitted. The recipient can approve it.'
+            ),
+            response
+          )
         );
         setViewMode('list');
         setSelectedReport(null);

@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import {
   Box,
   Typography,
@@ -752,6 +750,10 @@ const RegularInvoice: React.FC = () => {
     if (!invoicePrintRef.current) {
       throw new Error('Invoice area not found.');
     }
+    const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+      import('html2canvas'),
+      import('jspdf'),
+    ]);
     const invoiceElement = invoicePrintRef.current;
     const pageElements = Array.from(
       invoiceElement.querySelectorAll('.invoice-page')

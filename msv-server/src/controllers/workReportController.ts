@@ -4,6 +4,7 @@ import { WorkReport, User } from '../models';
 import { Op } from 'sequelize';
 import sequelize from '../config/database';
 import { pushNotification } from './notificationController';
+import { sendWorkReportSubmittedEmail, WorkReportMailResult } from '../utils/workReportMail';
 
 function normalizeCcUserIdsRaw(raw: unknown): number[] {
   if (raw == null) return [];
@@ -121,6 +122,8 @@ async function notifyElevatedUsersWorkReportSubmitted(
           target_type: 'user',
           target_id: rid,
           tenant_id: tenantId,
+          company_id: companyId,
+          sender_user_id: authorUserId,
           data: {
             feature: 'work_report',
             id: reportDbId,
@@ -134,6 +137,19 @@ async function notifyElevatedUsersWorkReportSubmitted(
     }
   } catch {
     /* 알림 보조 경로 실패 시 제출 본편은 유지 */
+  }
+}
+
+async function trySendWorkReportSubmittedEmail(params: Parameters<typeof sendWorkReportSubmittedEmail>[0]): Promise<WorkReportMailResult> {
+  try {
+    const result = await sendWorkReportSubmittedEmail(params);
+    if (!result.sent) {
+      console.warn('[workReport] email not sent:', result.reason);
+    }
+    return result;
+  } catch (error: any) {
+    console.error('[workReport] email send error:', error?.message || error);
+    return { sent: false, reason: '메일 발송 중 오류가 발생했습니다.' };
   }
 }
 
@@ -461,6 +477,9 @@ export const createWorkReport = async (req: RequestWithUser, res: Response) => {
             target_type: 'user',
             target_id: recipientNum,
             tenant_id: tenantId,
+            company_id: companyId,
+            sender_user_id: Number(userId),
+            skip_email: true,
             data: {
               feature: 'work_report',
               id: report.id,
@@ -480,6 +499,8 @@ export const createWorkReport = async (req: RequestWithUser, res: Response) => {
             target_type: 'user',
             target_id: recipientNum,
             tenant_id: tenantId,
+            company_id: companyId,
+            sender_user_id: Number(userId),
             data: {
               feature: 'work_report',
               id: report.id,
@@ -522,6 +543,9 @@ export const createWorkReport = async (req: RequestWithUser, res: Response) => {
             target_type: 'user',
             target_id: ccUid,
             tenant_id: tenantId,
+            company_id: companyId,
+            sender_user_id: Number(userId),
+            skip_email: true,
             data: {
               feature: 'work_report',
               id: report.id,
@@ -538,9 +562,35 @@ export const createWorkReport = async (req: RequestWithUser, res: Response) => {
     const plainCreate = reportWithUser.get({ plain: true });
     await batchAttachCcUsers([plainCreate]);
 
+    let emailDelivery: WorkReportMailResult | undefined;
+    if (initialStatus === 'submitted' && Number.isInteger(recipientNum) && recipientNum > 0) {
+      emailDelivery = await trySendWorkReportSubmittedEmail({
+        tenantId,
+        companyId,
+        senderUserId: Number(userId),
+        report: {
+          id: report.id,
+          report_id: reportIdFinal,
+          title: String(title),
+          content: String(content),
+          summary: summaryVal,
+          report_date,
+          type: String(type)
+        },
+        authorName:
+          (reportWithUser as any)?.author?.username ||
+          (reportWithUser as any)?.author?.userid ||
+          req.user?.username ||
+          '작성자',
+        recipientUserId: recipientNum,
+        ccUserIds: ccIdsFinal
+      });
+    }
+
     res.status(201).json({ 
       success: true, 
-      data: plainCreate 
+      data: plainCreate,
+      email_delivery: emailDelivery
     });
   } catch (error: any) {
     console.error('업무 보고서 생성 오류:', error);
@@ -656,6 +706,10 @@ export const updateWorkReport = async (req: RequestWithUser, res: Response) => {
     const summaryVal =
       summary !== undefined ? (summary != null && String(summary).trim() ? String(summary).trim() : '') : undefined;
 
+    const prevStatus = String((report as any).status || '');
+    const nextStatus = status !== undefined ? String(status) : prevStatus;
+    const becomingSubmitted = prevStatus === 'draft' && nextStatus === 'submitted';
+
     await report.update({
       title: title !== undefined ? title : report.title,
       type: type !== undefined ? type : report.type,
@@ -702,9 +756,38 @@ export const updateWorkReport = async (req: RequestWithUser, res: Response) => {
     const plainUp = reportWithUser.get({ plain: true });
     await batchAttachCcUsers([plainUp]);
 
+    let emailDelivery: WorkReportMailResult | undefined;
+    if (becomingSubmitted) {
+      const recipId =
+        (plainUp as any).recipient_id != null ? Number((plainUp as any).recipient_id) : NaN;
+      if (Number.isInteger(recipId) && recipId > 0) {
+        emailDelivery = await trySendWorkReportSubmittedEmail({
+          tenantId,
+          companyId,
+          senderUserId: Number((plainUp as any).author_id || userId),
+          report: {
+            id: Number((plainUp as any).id),
+            report_id: String((plainUp as any).report_id || ''),
+            title: String((plainUp as any).title || ''),
+            content: String((plainUp as any).content || ''),
+            summary: (plainUp as any).summary,
+            report_date: (plainUp as any).report_date,
+            type: String((plainUp as any).type || '')
+          },
+          authorName:
+            (plainUp as any)?.author?.username ||
+            (plainUp as any)?.author?.userid ||
+            '작성자',
+          recipientUserId: recipId,
+          ccUserIds: normalizeCcUserIdsRaw((plainUp as any).cc_user_ids)
+        });
+      }
+    }
+
     res.json({ 
       success: true, 
-      data: plainUp 
+      data: plainUp,
+      email_delivery: emailDelivery
     });
   } catch (error: any) {
     console.error('업무 보고서 수정 오류:', error);
@@ -830,6 +913,9 @@ export const submitWorkReport = async (req: RequestWithUser, res: Response) => {
           target_type: 'user',
           target_id: recipientIdNum,
           tenant_id: tenantId,
+          company_id: companyId,
+          sender_user_id: Number.isInteger(authorIdNum) ? authorIdNum : Number(userId),
+          skip_email: true,
           data: {
             feature: 'work_report',
             id: report.id,
@@ -869,6 +955,9 @@ export const submitWorkReport = async (req: RequestWithUser, res: Response) => {
           target_type: 'user',
           target_id: ccUid,
           tenant_id: tenantId,
+          company_id: companyId,
+          sender_user_id: Number.isInteger(authorIdNum) ? authorIdNum : Number(userId),
+          skip_email: true,
           data: {
             feature: 'work_report',
             id: report.id,
@@ -884,9 +973,31 @@ export const submitWorkReport = async (req: RequestWithUser, res: Response) => {
     const plainSub = reportWithUser.get({ plain: true });
     await batchAttachCcUsers([plainSub]);
 
+    let emailDelivery: WorkReportMailResult | undefined;
+    if (Number.isInteger(recipientIdNum) && recipientIdNum > 0) {
+      emailDelivery = await trySendWorkReportSubmittedEmail({
+        tenantId,
+        companyId,
+        senderUserId: Number.isInteger(authorIdNum) ? authorIdNum : Number(userId),
+        report: {
+          id: report.id,
+          report_id: String(report.report_id || ''),
+          title: String(report.title || ''),
+          content: String(report.content || ''),
+          summary: (report as any).summary,
+          report_date: (report as any).report_date,
+          type: String((report as any).type || '')
+        },
+        authorName,
+        recipientUserId: recipientIdNum,
+        ccUserIds: ccListSubmit
+      });
+    }
+
     res.json({ 
       success: true, 
-      data: plainSub 
+      data: plainSub,
+      email_delivery: emailDelivery
     });
   } catch (error: any) {
     console.error('업무 보고서 제출 오류:', error);
@@ -1018,6 +1129,8 @@ export const reviewWorkReport = async (req: RequestWithUser, res: Response) => {
             target_type: 'user',
             target_id: authorNotifyId,
             tenant_id: tenantId,
+            company_id: companyId,
+            sender_user_id: uid,
             data: {
               feature: 'work_report',
               id: report.id,
@@ -1038,6 +1151,8 @@ export const reviewWorkReport = async (req: RequestWithUser, res: Response) => {
             target_type: 'user',
             target_id: authorNotifyId,
             tenant_id: tenantId,
+            company_id: companyId,
+            sender_user_id: uid,
             data: {
               feature: 'work_report',
               id: report.id,

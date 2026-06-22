@@ -228,13 +228,8 @@ const Dashboard: React.FC = () => {
     { name: t('dashboard.inventoryHigh'), value: 0, color: '#ffe66d' },
   ];
 
-  const getDefaultRecentActivities = () => [
-    { id: 1, type: 'invoice', message: t('dashboard.loading'), time: '', icon: 'receipt' },
-  ];
-
   const [salesData, setSalesData] = useState(defaultSalesData);
   const [inventoryData, setInventoryData] = useState(getDefaultInventoryData());
-  const [recentActivities, setRecentActivities] = useState(getDefaultRecentActivities());
   const [notices, setNotices] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1190,35 +1185,48 @@ const Dashboard: React.FC = () => {
       setLoading(true);
       setError(null);
 
+      const uid = user?.id ? Number(user.id) : null;
+      const isAdminLeave = user?.role === 'admin' || user?.role === 'root';
+
       const [
         statsResponse,
         revenueResponse,
         inventoryResponse,
-        notificationsResponse,
         noticesResult,
         vacationsResult,
         leaveCalResult,
         projectsResult,
         lowStockResult,
         invoicesResult,
-        usersResult,
         myTasksResult,
+        receivedRes,
+        myApprovals,
+        myApprovalVacations,
+        myVacations,
+        myProjects,
       ] = await Promise.all([
         api.get('/dashboard/stats').catch(() => null),
         api.get('/dashboard/revenue-trend').catch(() => null),
         api.get('/dashboard/inventory-status').catch(() => null),
-        api.get('/notifications').catch(() => null),
         noticeService.getNotices({ status: 'published', limit: 5, page: 1 }).catch(() => null),
         vacationService.getVacations({ status: 'pending' }).catch(() => null),
-        (user?.role === 'admin' || user?.role === 'root'
+        (isAdminLeave
           ? vacationService.getVacations()
           : vacationService.getVacations({ same_department: true })
         ).catch(() => null),
         projectService.getProjects({}).catch(() => null),
         api.get('/inventory/products', { params: { lowStock: true, limit: 5 } }).catch(() => null),
         api.get('/accounting/invoices', { params: { limit: 5, orderBy: 'created_at', order: 'DESC' } }).catch(() => null),
-        api.get('/users', { params: { status: 'active' } }).catch(() => null),
-        user?.id ? api.get('/dashboard/my-tasks').catch(() => null) : Promise.resolve(null),
+        uid ? api.get('/dashboard/my-tasks').catch(() => null) : Promise.resolve(null),
+        uid
+          ? approvalService.getApprovals({ current_approver_id: uid, status: 'submitted,in_review' }).catch(() => null)
+          : Promise.resolve(null),
+        uid ? approvalService.getApprovals({ requester_id: uid }).catch(() => null) : Promise.resolve(null),
+        uid
+          ? vacationService.getVacations({ approved_by: user!.id, status: 'pending' }).catch(() => null)
+          : Promise.resolve(null),
+        uid ? vacationService.getVacations({ user_id: user!.id }).catch(() => null) : Promise.resolve(null),
+        uid ? projectService.getProjects({ manager_id: user!.id }).catch(() => null) : Promise.resolve(null),
       ]);
 
       if (statsResponse?.data?.success) {
@@ -1228,6 +1236,7 @@ const Dashboard: React.FC = () => {
           totalCustomers: statsResponse.data.data.customerCount || 0,
           totalInvoices: statsResponse.data.data.invoiceCount || 0,
           totalInventory: statsResponse.data.data.inventoryCount || 0,
+          totalEmployees: statsResponse.data.data.employeeCount || 0,
         }));
       }
 
@@ -1247,17 +1256,6 @@ const Dashboard: React.FC = () => {
           { name: t('dashboard.inventoryNormal'), value: inventoryStatus.normalStock || 0, color: '#4ecdc4' },
           { name: t('dashboard.inventoryHigh'), value: inventoryStatus.overStock || 0, color: '#ffe66d' },
         ]);
-      }
-
-      if (notificationsResponse?.data?.success) {
-        const activities = notificationsResponse.data.data.slice(0, 4).map((notification: any, index: number) => ({
-          id: notification.id || index + 1,
-          type: 'notification',
-          message: notification.message || t('dashboard.newNotification'),
-          time: notification.created_at ? new Date(notification.created_at).toLocaleString('ko-KR') : '',
-          icon: 'notifications',
-        }));
-        setRecentActivities(activities);
       }
 
       if (noticesResult?.success) {
@@ -1289,44 +1287,13 @@ const Dashboard: React.FC = () => {
         setRecentInvoices(invoicesResult.data.data || []);
       }
 
-      if (usersResult?.data?.success) {
-        setStats((prev) => ({ ...prev, totalEmployees: usersResult.data.data?.length || 0 }));
-      }
-
-      // 내 담당 업무 (집계 API)
       if (myTasksResult?.data?.success) {
         setMyTasks(Array.isArray(myTasksResult.data.data) ? myTasksResult.data.data : []);
       } else {
         setMyTasks([]);
       }
 
-      if (user?.id) {
-        await loadPersonalDashboardData();
-      }
-    } catch (error) {
-      console.error('대시보드 데이터 로드 오류:', error);
-      setError(t('errors.serverError'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 개인 대시보드 데이터 로드 함수
-  const loadPersonalDashboardData = async () => {
-    if (!user?.id) return;
-
-    try {
-      const uid = Number(user.id);
-
-      const [receivedRes, myApprovals, vacations, myVacations, projects] = await Promise.all([
-        approvalService.getApprovals({ current_approver_id: uid, status: 'submitted,in_review' }).catch(() => null),
-        approvalService.getApprovals({ requester_id: uid }).catch(() => null),
-        vacationService.getVacations({ approved_by: user.id, status: 'pending' }).catch(() => null),
-        vacationService.getVacations({ user_id: user.id }).catch(() => null),
-        projectService.getProjects({ manager_id: user.id }).catch(() => null),
-      ]);
-
-      if (receivedRes?.success) {
+      if (uid && receivedRes?.success) {
         const list = Array.isArray(receivedRes.data) ? receivedRes.data : [];
         const received = list.filter((approval: any) => {
           const approverId = Number(approval.current_approver_id ?? approval.currentApproverId);
@@ -1337,28 +1304,31 @@ const Dashboard: React.FC = () => {
         setStats((prev) => ({ ...prev, pendingApprovals: received.length }));
       }
 
-      if (myApprovals?.success) {
+      if (uid && myApprovals?.success) {
         const raw = Array.isArray(myApprovals.data) ? myApprovals.data : [];
         const approvals = raw.filter((a: any) => Number(a.requester_id) === uid);
         setMyRequestedApprovals(approvals.slice(0, 5));
       }
 
-      if (vacations?.success) {
-        const vacs = Array.isArray(vacations.data) ? vacations.data : [];
+      if (uid && myApprovalVacations?.success) {
+        const vacs = Array.isArray(myApprovalVacations.data) ? myApprovalVacations.data : [];
         setMyReceivedVacations(vacs.slice(0, 5));
       }
 
-      if (myVacations?.success) {
+      if (uid && myVacations?.success) {
         const vacs = Array.isArray(myVacations.data) ? myVacations.data : [];
         setMyRequestedVacations(vacs.slice(0, 5));
       }
 
-      if (projects?.success) {
-        const projs = Array.isArray(projects.data) ? projects.data : [];
+      if (uid && myProjects?.success) {
+        const projs = Array.isArray(myProjects.data) ? myProjects.data : [];
         setMyProjects(projs.slice(0, 5));
       }
     } catch (error) {
-      console.error('개인 대시보드 데이터 로드 오류:', error);
+      console.error('대시보드 데이터 로드 오류:', error);
+      setError(t('errors.serverError'));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1498,7 +1468,7 @@ const Dashboard: React.FC = () => {
     );
   };
 
-  const QuickActionCard = ({ title, description, icon, color, onClick, disabled = false }: any) => (
+  const QuickActionCard = ({ title, icon, color, onClick, disabled = false }: any) => (
     <Card
       sx={{
         cursor: disabled ? 'not-allowed' : 'pointer',
@@ -1554,19 +1524,11 @@ const Dashboard: React.FC = () => {
             sx={{
               fontSize: '0.9375rem',
               fontWeight: 600,
-              mb: 0.35,
               lineHeight: 1.35,
               letterSpacing: '-0.015em',
             }}
           >
             {title}
-          </Typography>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ fontSize: '0.8125rem', lineHeight: 1.45, display: 'block', letterSpacing: '0.01em' }}
-          >
-            {description}
           </Typography>
         </Box>
       </CardContent>
@@ -1778,7 +1740,6 @@ const Dashboard: React.FC = () => {
                     <QuickActionCard
                       key={action.route}
                       title={action.title}
-                      description={action.description}
                       icon={action.icon}
                       color={action.color}
                       disabled={disabled}

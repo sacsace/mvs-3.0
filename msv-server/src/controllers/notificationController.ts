@@ -3,6 +3,7 @@ import SocketService from '../services/socketService';
 import { ExpenseReport, Vacation, Quotation, User, Customer } from '../models';
 import { Op } from 'sequelize';
 import { isMissingTableError } from '../utils/dbErrors';
+import { sendUserNotificationEmail } from '../utils/userNotificationMail';
 
 type NotificationTarget = 'user' | 'tenant' | 'all';
 
@@ -253,6 +254,10 @@ interface NotificationPayload {
   target_id?: number;
   data?: any;
   tenant_id?: number;
+  company_id?: number;
+  sender_user_id?: number;
+  /** true면 인앱·소켓만 전송(업무 보고서 등 별도 메일 템플릿 사용 시) */
+  skip_email?: boolean;
 }
 
 export const pushNotification = (
@@ -266,7 +271,10 @@ export const pushNotification = (
     target_type,
     target_id,
     data,
-    tenant_id
+    tenant_id,
+    company_id,
+    sender_user_id,
+    skip_email
   } = payload;
 
   const notification: NotificationRecord = {
@@ -300,6 +308,19 @@ export const pushNotification = (
         socketService.sendSystemNotification(notification);
         break;
     }
+  }
+
+  if (target_type === 'user' && target_id && !skip_email) {
+    void sendUserNotificationEmail({
+      targetUserId: Number(target_id),
+      title,
+      message,
+      data: data && typeof data === 'object' ? data : undefined,
+      tenantId: tenant_id,
+      companyId: company_id
+    }).catch((err) => {
+      console.error('[pushNotification] email:', err?.message || err);
+    });
   }
 
   return notification;

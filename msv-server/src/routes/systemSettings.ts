@@ -3,7 +3,7 @@ import path from 'path';
 import nodemailer from 'nodemailer';
 import { Company, User } from '../models';
 import { authenticateToken, requireRole } from '../middleware/auth';
-import { buildNodemailerTransportOptions, getResolvedMailTransportOptions } from '../utils/mailConfig';
+import { buildNodemailerTransportOptions, getSystemMailTransportOptions } from '../utils/mailConfig';
 
 const router = express.Router();
 
@@ -76,32 +76,30 @@ const buildDefaultSettings = (company: Company) => ({
 
 const buildSettingsResponse = (company: Company, user?: User | null) => {
   const defaultSettings = buildDefaultSettings(company);
-  const companySettings = company.settings || {};
-  const userSettings = user?.settings || {};
+  const companySettings = (company.settings || {}) as Record<string, unknown>;
+  const userSettings = (user?.settings || {}) as Record<string, unknown>;
 
-  /** SMTP 폼·저장: 사용자 `settings.mailServer`만 (회사 SMTP는 발송 시 폴백으로만 사용) */
-  const userMail = ((userSettings as any).mailServer || {}) as Record<string, unknown>;
-  const { authPass: _omitPass, ...userMailSafe } = userMail;
-
-  const loginEmail = (user?.email && String(user.email).trim()) || '';
-  const loginName = (user?.username && String(user.username).trim()) || '';
-
-  const authUserSaved = userMail.authUser != null ? String(userMail.authUser).trim() : '';
-  const fromEmailSaved = userMail.fromEmail != null ? String(userMail.fromEmail).trim() : '';
-  const fromNameSaved = userMail.fromName != null ? String(userMail.fromName).trim() : '';
+  /** SMTP: 회사 시스템 설정. 구버전 사용자별 저장값은 회사에 없을 때만 표시 폴백 */
+  const companyMail = (companySettings.mailServer || {}) as Record<string, unknown>;
+  const legacyUserMail = (userSettings.mailServer || {}) as Record<string, unknown>;
+  const sourceMail =
+    companyMail.host != null && String(companyMail.host).trim()
+      ? companyMail
+      : legacyUserMail;
+  const { authPass: _omitPass, ...mailSafe } = sourceMail;
 
   const mergedMail = {
     ...defaultSettings.mailServer,
-    ...userMailSafe,
-    port: userMail.port != null ? Number(userMail.port) || 587 : defaultSettings.mailServer.port,
+    ...mailSafe,
+    port: sourceMail.port != null ? Number(sourceMail.port) || 587 : defaultSettings.mailServer.port,
     secure:
-      userMail.secure !== undefined && userMail.secure !== null
-        ? Boolean(userMail.secure)
+      sourceMail.secure !== undefined && sourceMail.secure !== null
+        ? Boolean(sourceMail.secure)
         : defaultSettings.mailServer.secure,
-    authUser: authUserSaved || loginEmail,
-    fromEmail: fromEmailSaved || loginEmail,
-    fromName: fromNameSaved || loginName,
-    authPassConfigured: Boolean(userMail.authPass)
+    authUser: sourceMail.authUser != null ? String(sourceMail.authUser).trim() : '',
+    fromEmail: sourceMail.fromEmail != null ? String(sourceMail.fromEmail).trim() : '',
+    fromName: sourceMail.fromName != null ? String(sourceMail.fromName).trim() : '',
+    authPassConfigured: Boolean(sourceMail.authPass)
   };
 
   return {
@@ -324,6 +322,46 @@ router.put('/', authenticateToken, async (req, res) => {
         settingsToSave.backup = backup;
       }
 
+      if (settings.mailServer && typeof settings.mailServer === 'object') {
+        const inc = settings.mailServer as Record<string, unknown>;
+        const prevCompanyMail = (existingCompanySettings.mailServer || {}) as Record<string, unknown>;
+        const prevUserMail = (((user.settings || {}) as Record<string, unknown>).mailServer ||
+          {}) as Record<string, unknown>;
+        const passwordUnchanged = !inc.authPass || String(inc.authPass).trim() === '';
+        const effectivePrevPass =
+          (prevCompanyMail.authPass && String(prevCompanyMail.authPass).trim()) ||
+          (prevUserMail.authPass && String(prevUserMail.authPass).trim()) ||
+          '';
+        settingsToSave.mailServer = {
+          host: inc.host != null ? String(inc.host).trim() : prevCompanyMail.host || '',
+          port: inc.port != null ? Math.max(1, Number(inc.port) || 587) : prevCompanyMail.port || 587,
+          secure: inc.secure != null ? Boolean(inc.secure) : Boolean(prevCompanyMail.secure),
+          authUser: inc.authUser != null ? String(inc.authUser).trim() : prevCompanyMail.authUser || '',
+          authPass: passwordUnchanged ? effectivePrevPass : String(inc.authPass).trim(),
+          fromEmail: inc.fromEmail != null ? String(inc.fromEmail).trim() : prevCompanyMail.fromEmail || '',
+          fromName: inc.fromName != null ? String(inc.fromName).trim() : prevCompanyMail.fromName || ''
+        };
+      } else {
+        const prevCompanyMail = (existingCompanySettings.mailServer || {}) as Record<string, unknown>;
+        const prevUserMail = (((user.settings || {}) as Record<string, unknown>).mailServer ||
+          {}) as Record<string, unknown>;
+        const companyHasMail =
+          prevCompanyMail.host != null && String(prevCompanyMail.host).trim().length > 0;
+        const legacyHasMail =
+          prevUserMail.host != null && String(prevUserMail.host).trim().length > 0;
+        if (!companyHasMail && legacyHasMail) {
+          settingsToSave.mailServer = {
+            host: String(prevUserMail.host).trim(),
+            port: prevUserMail.port != null ? Math.max(1, Number(prevUserMail.port) || 587) : 587,
+            secure: prevUserMail.secure != null ? Boolean(prevUserMail.secure) : false,
+            authUser: prevUserMail.authUser != null ? String(prevUserMail.authUser).trim() : '',
+            authPass: prevUserMail.authPass != null ? String(prevUserMail.authPass).trim() : '',
+            fromEmail: prevUserMail.fromEmail != null ? String(prevUserMail.fromEmail).trim() : '',
+            fromName: prevUserMail.fromName != null ? String(prevUserMail.fromName).trim() : ''
+          };
+        }
+      }
+
       await company.update({
         settings: settingsToSave as any
       });
@@ -344,23 +382,7 @@ router.put('/', authenticateToken, async (req, res) => {
       };
     }
 
-    if (settings.mailServer && typeof settings.mailServer === 'object') {
-      const inc = settings.mailServer as Record<string, unknown>;
-      const prevUserMail = (existingUserSettings.mailServer || {}) as Record<string, unknown>;
-      const passwordUnchanged = !inc.authPass || String(inc.authPass).trim() === '';
-      const effectivePrevPass = (prevUserMail.authPass && String(prevUserMail.authPass).trim()) || '';
-      nextUserSettings.mailServer = {
-        host: inc.host != null ? String(inc.host).trim() : prevUserMail.host || '',
-        port: inc.port != null ? Math.max(1, Number(inc.port) || 587) : prevUserMail.port || 587,
-        secure: inc.secure != null ? Boolean(inc.secure) : Boolean(prevUserMail.secure),
-        authUser: inc.authUser != null ? String(inc.authUser).trim() : prevUserMail.authUser || '',
-        authPass: passwordUnchanged ? effectivePrevPass : String(inc.authPass).trim(),
-        fromEmail: inc.fromEmail != null ? String(inc.fromEmail).trim() : prevUserMail.fromEmail || '',
-        fromName: inc.fromName != null ? String(inc.fromName).trim() : prevUserMail.fromName || ''
-      };
-    }
-
-    if (settings.appearance || (settings.mailServer && typeof settings.mailServer === 'object')) {
+    if (settings.appearance) {
       updatedUser = await user.update({
         settings: nextUserSettings as any
       });
@@ -637,17 +659,12 @@ router.post('/test-mail', authenticateToken, requireRole(['root', 'admin']), asy
       });
     }
 
-    const userRow = await User.findOne({
-      where: { id: userId, tenant_id: tenantId, company_id: companyId },
-      attributes: ['id', 'settings']
-    });
-
-    const mailOpts = getResolvedMailTransportOptions(companyRow, userRow);
+    const mailOpts = getSystemMailTransportOptions(companyRow);
     if (!mailOpts) {
       return res.status(503).json({
         success: false,
         message:
-          '메일 서버가 설정되지 않았습니다. 시스템 설정의 SMTP(호스트·계정·비밀번호) 또는 서버 환경변수(EMAIL_*)를 설정하세요. (로그인한 사용자별 SMTP가 우선 적용됩니다.)'
+          '메일 서버가 설정되지 않았습니다. 시스템 설정 > 보내는 메일 서버(SMTP)에 호스트·계정·비밀번호를 저장하거나, 서버 환경변수(EMAIL_*)를 설정하세요.'
       });
     }
 

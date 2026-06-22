@@ -2,6 +2,40 @@ import { Response } from 'express';
 import { RequestWithUser } from '../types';
 import { Approval, User } from '../models';
 import { Op } from 'sequelize';
+import { pushNotification } from './notificationController';
+import SocketService from '../services/socketService';
+
+const notifyApprovalUser = (
+  req: RequestWithUser,
+  targetUserId: number | null | undefined,
+  title: string,
+  message: string,
+  approval: { id: number; document_id?: string; title?: string },
+  type: 'info' | 'success' | 'warning' | 'error' = 'info'
+) => {
+  if (!targetUserId) return;
+  const socketService = (req as any).socketService as SocketService | undefined;
+  pushNotification(
+    {
+      title,
+      message,
+      type,
+      target_type: 'user',
+      target_id: targetUserId,
+      tenant_id: req.user?.tenant_id,
+      company_id: req.user?.company_id,
+      sender_user_id: req.user?.id,
+      data: {
+        feature: 'approval',
+        approval_id: approval.id,
+        document_id: approval.document_id,
+        approval_title: approval.title,
+        href: '/work/approval'
+      }
+    },
+    socketService
+  );
+};
 
 const parseQueryInt = (value: unknown): number | null => {
   if (value == null || value === '') return null;
@@ -411,6 +445,17 @@ export const submitApproval = async (req: RequestWithUser, res: Response) => {
       current_approver_id: firstApprover ? firstApprover.approverId : null
     });
 
+    if (firstApprover?.approverId) {
+      const requesterName = req.user?.username || '요청자';
+      notifyApprovalUser(
+        req,
+        Number(firstApprover.approverId),
+        '전자결재 승인 요청',
+        `${requesterName}님이 "${approval.title}" 결재를 요청했습니다.`,
+        approval
+      );
+    }
+
     // 사용자 정보 포함하여 반환
     const approvalWithUser = await (Approval as any).findByPk(approval.id, {
       include: [
@@ -489,6 +534,14 @@ export const approveApproval = async (req: RequestWithUser, res: Response) => {
         current_approver_id: nextStep.approverId,
         approval_flow: JSON.stringify(approvalFlow)
       });
+      const approverName = req.user?.username || '승인자';
+      notifyApprovalUser(
+        req,
+        Number(nextStep.approverId),
+        '전자결재 승인 요청',
+        `${approverName}님이 "${approval.title}" 결재를 승인했습니다. 다음 승인이 필요합니다.`,
+        approval
+      );
     } else {
       // 모든 승인이 완료되면 approved 상태로 변경
       await approval.update({
@@ -496,6 +549,15 @@ export const approveApproval = async (req: RequestWithUser, res: Response) => {
         current_approver_id: null,
         approval_flow: JSON.stringify(approvalFlow)
       });
+      const approverName = req.user?.username || '승인자';
+      notifyApprovalUser(
+        req,
+        Number(approval.requester_id),
+        '전자결재 승인 완료',
+        `${approverName}님이 "${approval.title}" 결재를 최종 승인했습니다.`,
+        approval,
+        'success'
+      );
     }
 
     // 사용자 정보 포함하여 반환
@@ -656,6 +718,16 @@ export const rejectApproval = async (req: RequestWithUser, res: Response) => {
       approval_flow: JSON.stringify(approvalFlow)
     });
 
+    const approverName = req.user?.username || '승인자';
+    notifyApprovalUser(
+      req,
+      Number(approval.requester_id),
+      '전자결재 반려',
+      `${approverName}님이 "${approval.title}" 결재를 반려했습니다.`,
+      approval,
+      'warning'
+    );
+
     // 사용자 정보 포함하여 반환
     const approvalWithUser = await (Approval as any).findByPk(approval.id, {
       include: [
@@ -802,6 +874,15 @@ export const escalateApproval = async (req: RequestWithUser, res: Response) => {
       current_approver_id: nextApprover.id,
       approval_flow: JSON.stringify(approvalFlow)
     });
+
+    const actorName = req.user?.username || '승인자';
+    notifyApprovalUser(
+      req,
+      Number(nextApprover.id),
+      '전자결재 에스컬레이션',
+      `${actorName}님이 "${approval.title}" 결재를 회원님에게 전달했습니다.`,
+      approval
+    );
 
     const approvalWithUser = await (Approval as any).findByPk(approval.id, {
       include: [

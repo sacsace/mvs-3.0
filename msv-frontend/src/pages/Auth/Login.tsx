@@ -23,6 +23,7 @@ import { useStore, useMenuStore } from '../../store';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { api, API_BASE_URL } from '../../services/api';
 import { useTranslation } from 'react-i18next';
+import { ensureI18nLanguage } from '../../locales/i18n';
 import { alpha, useTheme } from '@mui/material/styles';
 
 const Login: React.FC = () => {
@@ -320,7 +321,7 @@ const Login: React.FC = () => {
 
   const handleLoginLanguage = (_event: React.MouseEvent<HTMLElement>, newLang: 'ko' | 'en' | null) => {
     if (newLang === null) return;
-    void i18n.changeLanguage(newLang);
+    void ensureI18nLanguage(newLang);
     setMenuLanguage(newLang);
   };
 

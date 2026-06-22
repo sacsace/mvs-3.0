@@ -111,36 +111,13 @@ function mailServerFromSettingsBlob(settings: unknown): MailTransportResolved | 
   return resolveMailServerRecord(raw);
 }
 
-/** 사용자 SMTP에 비어 있는 계정·발신 필드를 로그인 정보로 보강한 뒤 해석 */
-function mailServerFromUserWithLoginFallback(
-  user: { settings?: unknown; email?: string | null; username?: string | null } | null | undefined
-): MailTransportResolved | null {
-  if (!user) return null;
-  const parsed = parseCompanySettings(user.settings);
-  const raw = ((parsed?.mailServer || {}) as MailServerRaw) || {};
-  const loginEmail = user.email != null ? String(user.email).trim() : '';
-  const loginName = user.username != null ? String(user.username).trim() : '';
-  const authUser = String(raw.authUser || '').trim() || loginEmail;
-  const fromEmail = String(raw.fromEmail || '').trim() || loginEmail;
-  const fromName = String(raw.fromName || '').trim() || loginName;
-  return resolveMailServerRecord({
-    ...raw,
-    authUser: authUser || undefined,
-    fromEmail: fromEmail || undefined,
-    fromName: fromName || undefined
-  });
-}
-
 /**
- * SMTP 우선순위: 사용자 `settings.mailServer`(계정·발신은 로그인 이메일·이름으로 보강) → 회사 `settings.mailServer` → 환경변수 EMAIL_*.
+ * 회사 시스템 설정(`Company.settings.mailServer`) → 환경변수 EMAIL_* 순으로 SMTP 해석.
+ * 알림·견적·인보이스 등 모든 자동/수동 발송은 이 설정만 사용한다.
  */
-export function getResolvedMailTransportOptions(
-  company: { settings?: unknown } | null | undefined,
-  user?: { settings?: unknown; email?: string | null; username?: string | null } | null | undefined
+export function getSystemMailTransportOptions(
+  company: { settings?: unknown } | null | undefined
 ): MailTransportResolved | null {
-  const fromUser = mailServerFromUserWithLoginFallback(user);
-  if (fromUser) return fromUser;
-
   const fromCompany = mailServerFromSettingsBlob(company?.settings);
   if (fromCompany) return fromCompany;
 
@@ -156,4 +133,15 @@ export function getResolvedMailTransportOptions(
   }
 
   return null;
+}
+
+/**
+ * SMTP — 회사 시스템 설정만 사용 (`getSystemMailTransportOptions`).
+ * 두 번째 인자(user)는 하위 호환용이며 무시된다.
+ */
+export function getResolvedMailTransportOptions(
+  company: { settings?: unknown } | null | undefined,
+  _user?: { settings?: unknown; email?: string | null; username?: string | null } | null | undefined
+): MailTransportResolved | null {
+  return getSystemMailTransportOptions(company);
 }

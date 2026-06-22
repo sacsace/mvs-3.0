@@ -9,6 +9,7 @@ import {
   WorkBoardList,
   WorkBoardCard,
   WorkBoardMember,
+  User,
 } from '../models';
 import { AuthRequest } from '../types';
 
@@ -27,6 +28,7 @@ const resolveTenantId = (req: AuthRequest): number => {
 router.get('/stats', async (req: AuthRequest, res) => {
   try {
     const tenantId = resolveTenantId(req);
+    const user = req.user;
     const invoiceBaseWhere: any = {
       tenant_id: tenantId,
       is_active: true,
@@ -61,7 +63,15 @@ router.get('/stats', async (req: AuthRequest, res) => {
       }
     };
 
-    const [totalRevenue, roomBookingRevenue, customerCount, invoiceCount, inventoryCount] = await Promise.all([
+    const employeeWhere: any = {
+      tenant_id: tenantId,
+      status: 'active',
+    };
+    if (user && user.role !== 'root' && user.role !== 'audit') {
+      employeeWhere.company_id = user.company_id;
+    }
+
+    const [totalRevenue, roomBookingRevenue, customerCount, invoiceCount, inventoryCount, employeeCount] = await Promise.all([
       safeSum(() => Invoice.sum('total_amount', {
         where: {
           ...invoiceBaseWhere,
@@ -73,7 +83,8 @@ router.get('/stats', async (req: AuthRequest, res) => {
       })),
       safeCount(() => Customer.count({ where: { tenant_id: tenantId } })),
       safeCount(() => Invoice.count({ where: invoiceBaseWhere })),
-      safeSum(() => Product.sum('stock_quantity', { where: { tenant_id: tenantId } }))
+      safeSum(() => Product.sum('stock_quantity', { where: { tenant_id: tenantId } })),
+      safeCount(() => User.count({ where: employeeWhere })),
     ]);
 
     res.json({
@@ -82,7 +93,8 @@ router.get('/stats', async (req: AuthRequest, res) => {
         totalRevenue: totalRevenue + roomBookingRevenue,
         customerCount,
         invoiceCount,
-        inventoryCount
+        inventoryCount,
+        employeeCount,
       }
     });
   } catch (error: any) {

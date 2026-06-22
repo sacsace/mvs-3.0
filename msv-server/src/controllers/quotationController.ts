@@ -12,6 +12,8 @@ import {
   toTitleCaseWords
 } from '../utils/quotationMailPdf';
 import { isParseEmailRecipientsFailure, parseEmailRecipientsList } from '../utils/emailRecipients';
+import { pushNotification } from './notificationController';
+import SocketService from '../services/socketService';
 
 function escapeHtml(s: string): string {
   return String(s)
@@ -449,7 +451,32 @@ export const createQuotation = async (req: RequestWithUser, res: Response) => {
       ]
     });
 
-    res.status(201).json({ 
+    if (initialStatus === 'pending_approval') {
+      const creatorName =
+        (quotationWithRelations as any)?.creator?.username || req.user?.username || '작성자';
+      const socketService = (req as any).socketService as SocketService | undefined;
+      pushNotification(
+        {
+          title: '견적서 승인 요청',
+          message: `${creatorName}님이 견적서 ${qn} 승인을 요청했습니다.`,
+          type: 'info',
+          target_type: 'user',
+          target_id: Number(approver_user_id),
+          tenant_id: tenantId,
+          company_id: companyId,
+          sender_user_id: userId,
+          data: {
+            feature: 'quotation',
+            quotation_id: quotation.id,
+            quotation_number: qn,
+            href: '/work/quotation'
+          }
+        },
+        socketService
+      );
+    }
+
+    res.status(201).json({
       success: true, 
       data: quotationWithRelations 
     });

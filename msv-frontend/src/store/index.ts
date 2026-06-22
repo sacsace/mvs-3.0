@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Menu, UserPermission } from '../services/menuService';
-import i18n from '../locales/i18n';
+import i18n, { ensureI18nLanguage } from '../locales/i18n';
 
 export interface User {
   id: number;
@@ -160,7 +160,7 @@ export const useMenuStore = create<MenuState>()(
       partialize: (state) => ({ language: state.language }),
       onRehydrateStorage: () => (state) => {
         if (state?.language === 'ko' || state?.language === 'en') {
-          void i18n.changeLanguage(state.language);
+          void ensureI18nLanguage(state.language);
         }
       }
     }

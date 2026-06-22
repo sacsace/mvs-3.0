@@ -278,7 +278,9 @@ const sendCardAssignmentNotification = (
         card_id: payload.cardId,
         card_title: payload.cardTitle
       },
-      tenant_id: req.user?.tenant_id
+      tenant_id: req.user?.tenant_id,
+      company_id: req.user?.company_id,
+      sender_user_id: req.user?.id
     },
     socketService
   );
@@ -1316,7 +1318,9 @@ export const createWorkBoardCardComment = async (req: RequestWithUser, res: Resp
               card_title: card.title,
               comment_id: comment.id
             },
-            tenant_id: user.tenant_id
+            tenant_id: user.tenant_id,
+            company_id: user.company_id,
+            sender_user_id: user.id
           },
           socketService
         );

@@ -33,7 +33,7 @@ import { useStore, useMenuStore } from '../../store';
 import { api, userUiPreferencesService } from '../../services/api';
 import { resolveHeaderCompanyInfo } from '../../store/referenceDataStore';
 import { useTranslation } from 'react-i18next';
-import i18n from '../../locales/i18n';
+import i18n, { ensureI18nLanguage } from '../../locales/i18n';
 import { useErrorStore } from '../../store/errorStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -147,14 +147,14 @@ const Header: React.FC<HeaderProps> = ({
 
   const handleLanguageChange = (lang: 'ko' | 'en') => {
     setLanguage(lang);
-    i18n.changeLanguage(lang);
+    void ensureI18nLanguage(lang);
     userUiPreferencesService.patch({ language: lang }).catch(() => {});
     handleLanguageClose();
   };
 
   // 컴포넌트 마운트 시 i18n 언어 동기화
   useEffect(() => {
-    i18n.changeLanguage(language);
+    void ensureI18nLanguage(language);
   }, [language]);
 
   useNotificationFeed({

@@ -172,9 +172,8 @@ router.get('/', async (req, res) => {
     const tenantId = (req as any).user.tenant_id;
     const companyId = (req as any).user.company_id;
     const userRole = (req as any).user.role;
-    const { search, company_id } = req.query;
-    
-        
+    const { search, company_id, status, count_only } = req.query;
+
     // root나 audit 권한이면 모든 사용자 조회 가능, 아니면 자신의 회사 사용자만
     const whereClause: any = {};
     if (userRole !== 'root' && userRole !== 'audit') {
@@ -187,7 +186,16 @@ router.get('/', async (req, res) => {
       whereClause.tenant_id = tenantId;
       whereClause.company_id = parseInt(String(company_id), 10);
     }
-    
+
+    if (status && typeof status === 'string') {
+      whereClause.status = status;
+    }
+
+    if (count_only === 'true' || count_only === '1') {
+      const count = await (User as any).count({ where: whereClause });
+      return res.json({ success: true, data: count });
+    }
+
     // 검색 기능 (이름, 사용자 ID, 회사명으로 검색)
     const includeOptions: any[] = [];
     let companyIdsForSearch: number[] = [];

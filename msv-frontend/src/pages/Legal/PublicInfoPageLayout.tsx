@@ -11,6 +11,7 @@ import {
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
+import { ensureI18nLanguage } from '../../locales/i18n';
 import { Link as RouterLink } from 'react-router-dom';
 import { useMenuStore } from '../../store';
 
@@ -33,7 +34,7 @@ const PublicInfoPageLayout: React.FC<PublicInfoPageLayoutProps> = ({
 
   const handleLanguageChange = (_event: React.MouseEvent<HTMLElement>, newLang: 'ko' | 'en' | null) => {
     if (newLang === null) return;
-    void i18n.changeLanguage(newLang);
+    void ensureI18nLanguage(newLang);
     setMenuLanguage(newLang);
   };
 

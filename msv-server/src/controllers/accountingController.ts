@@ -812,6 +812,20 @@ export const deleteInvoice = async (req: RequestWithUser, res: Response) => {
       }
     });
 
+    notifyUser(
+      req,
+      approver_user_id,
+      '인보이스 삭제 승인 요청',
+      `${username || '사용자'}님이 인보이스 ${invoice.invoice_number} 삭제 승인을 요청했습니다.`,
+      'info',
+      {
+        feature: 'approval',
+        invoice_id: invoice.id,
+        invoice_number: invoice.invoice_number,
+        href: '/work/approval'
+      }
+    );
+
     res.json({ success: true, message: '인보이스 삭제 승인 요청이 등록되었습니다.' });
   } catch (error) {
     console.error('인보이스 삭제 오류:', error);
@@ -2103,6 +2117,10 @@ export const createExpenseReport = async (req: RequestWithUser, res: Response) =
       is_active: true
     });
 
+    if (status === 'submitted') {
+      notifyExpenseReportSubmitted(req, expense);
+    }
+
     res.status(201).json({ success: true, data: expense });
   } catch (error: any) {
     console.error('지출결의서 생성 오류:', error);
@@ -2123,7 +2141,15 @@ export const updateExpenseReport = async (req: RequestWithUser, res: Response) =
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
     }
 
+    const prevStatus = expense.status;
     await expense.update({ ...req.body });
+    await expense.reload();
+
+    const nextStatus = expense.status;
+    if (nextStatus === 'submitted' && prevStatus !== 'submitted') {
+      notifyExpenseReportSubmitted(req, expense);
+    }
+
     res.json({ success: true, data: expense });
   } catch (error: any) {
     console.error('지출결의서 수정 오류:', error);
@@ -2166,7 +2192,14 @@ export const updateExpenseReportStatus = async (req: RequestWithUser, res: Respo
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
     }
 
+    const prevStatus = expense.status;
     await expense.update({ status });
+    await expense.reload();
+
+    if (status === 'submitted' && prevStatus !== 'submitted') {
+      notifyExpenseReportSubmitted(req, expense);
+    }
+
     res.json({ success: true, data: expense });
   } catch (error: any) {
     console.error('지출결의서 상태 변경 오류:', error);
@@ -2298,9 +2331,38 @@ const notifyUser = (
       target_type: 'user',
       target_id: targetId,
       data,
-      tenant_id: req.user.tenant_id
+      tenant_id: req.user.tenant_id,
+      company_id: req.user.company_id,
+      sender_user_id: req.user.id
     },
     (req as any).socketService
+  );
+};
+
+const notifyExpenseReportSubmitted = (req: RequestWithUser, expense: any) => {
+  const meta = parseExpenseItemsMeta(expense.items);
+  const approverId =
+    meta.approvedById != null
+      ? Number(meta.approvedById)
+      : expense.current_approver_id != null
+        ? Number(expense.current_approver_id)
+        : null;
+  if (!approverId || approverId === req.user.id) return;
+
+  const requesterName = expense.requester_name || req.user.username || '작성자';
+  const titleShort = String(expense.title || expense.expense_id || '지출결의서').slice(0, 80);
+  notifyUser(
+    req,
+    approverId,
+    '지출결의서 제출',
+    `${requesterName}님이 "${titleShort}" 지출결의서를 제출했습니다. 검토해 주세요.`,
+    'info',
+    {
+      feature: 'expense_report',
+      expense_id: expense.id,
+      expense_no: expense.expense_id,
+      href: '/accounting/expense'
+    }
   );
 };
 
@@ -2409,7 +2471,12 @@ export const requestExpensePayment = async (req: RequestWithUser, res: Response)
       '결제 요청',
       `${expense.requester_name || '작성자'}님이 결제 요청을 보냈습니다.`,
       'info',
-      { expenseId: expense.id, expenseNo: expense.expense_id }
+      {
+        feature: 'expense_report',
+        expense_id: expense.id,
+        expense_no: expense.expense_id,
+        href: '/accounting/expense'
+      }
     );
 
     res.json({ success: true, data: expense });

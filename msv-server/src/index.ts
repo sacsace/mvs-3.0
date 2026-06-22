@@ -2,6 +2,7 @@
 
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 // 환경 변수 로드 (env.ts에서 monorepo .env 포함 로드)
@@ -91,6 +92,13 @@ connectDB()
 const socketService = new SocketService(server);
 
 // 미들웨어 설정
+app.use(compression({
+  filter: (req, res) => {
+    if (req.path === '/health' || req.path === '/api/health') return false;
+    return compression.filter(req, res);
+  },
+  threshold: 1024,
+}));
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginResourcePolicy: { policy: 'cross-origin' }

@@ -1,6 +1,3 @@
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
-
 /** 로컬 저장: 선명도 우선. 메일 첨부: Gmail(~25MB) 제한을 피하기 위해 JPEG·낮은 scale */
 type QuotationPdfPurpose = 'download' | 'email';
 
@@ -92,7 +89,11 @@ function buildHtml2CanvasOptions(scale: number) {
 async function quotationElementToJsPdf(
   element: HTMLElement,
   purpose: QuotationPdfPurpose
-): Promise<jsPDF> {
+) {
+  const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+    import('html2canvas'),
+    import('jspdf'),
+  ]);
   const isEmail = purpose === 'email';
   /** 메일: PNG 대비 용량 대폭 감소. 저장: 기존과 동일 품질 */
   const scale = isEmail ? 1.35 : 2;

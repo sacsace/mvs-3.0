@@ -53,8 +53,6 @@ import {
   Download as DownloadIcon
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import {
@@ -1715,6 +1713,10 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     marginLeft?: number;
   }) => {
     if (!invoiceRef.current) return;
+    const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+      import('html2canvas'),
+      import('jspdf'),
+    ]);
     let canvas: HTMLCanvasElement;
     try {
       canvas = await html2canvas(invoiceRef.current, {
