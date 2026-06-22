@@ -90,36 +90,6 @@ const NotificationDetailDialog: React.FC<NotificationDetailDialogProps> = ({
         <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
           {notification.message}
         </Typography>
-
-        {notification.details ? (
-          <Box sx={{ mt: 2 }}>
-            <Typography
-              variant="subtitle2"
-              sx={{ fontWeight: 600, mb: 0.75, color: 'text.secondary' }}
-            >
-              {t('notifications.detailSection')}
-            </Typography>
-            <Box
-              component="pre"
-              sx={{
-                m: 0,
-                p: 1.5,
-                borderRadius: 1,
-                bgcolor: 'action.hover',
-                border: '1px solid',
-                borderColor: 'divider',
-                fontSize: '0.75rem',
-                lineHeight: 1.5,
-                overflow: 'auto',
-                maxHeight: 240,
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-              }}
-            >
-              {notification.details}
-            </Box>
-          </Box>
-        ) : null}
       </DialogContent>
 
       <DialogActions sx={{ px: 2, pb: 2, gap: 1 }}>

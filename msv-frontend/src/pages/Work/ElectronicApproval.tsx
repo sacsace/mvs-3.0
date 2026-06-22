@@ -221,6 +221,38 @@ const APPROVAL_FORM_BORDER = {
   flowArrow: 'rgba(15, 23, 42, 0.5)',
 } as const;
 
+/** 목록 상단 통계·필터 — 대비·테두리 선명도 */
+const approvalListHeaderCardSx = (mode: 'light' | 'dark') => ({
+  borderRadius: '16px',
+  border: '1px solid',
+  borderColor: mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : 'divider',
+  boxShadow: mode === 'light' ? '0 4px 14px rgba(15, 23, 42, 0.08)' : '0 2px 12px rgba(0,0,0,0.28)',
+  bgcolor: 'background.paper',
+});
+
+const approvalListFilterFieldSx = {
+  bgcolor: 'background.paper',
+  borderRadius: '12px',
+  '& .MuiInputLabel-root': {
+    color: '#4B5563',
+    fontWeight: 600,
+    fontSize: '0.8125rem',
+  },
+  '& .MuiOutlinedInput-root': {
+    borderRadius: '12px',
+    '& fieldset': {
+      borderColor: APPROVAL_FORM_BORDER.field,
+    },
+    '&:hover fieldset': {
+      borderColor: APPROVAL_FORM_BORDER.fieldHover,
+    },
+    '&.Mui-focused fieldset': {
+      borderColor: 'primary.main',
+      borderWidth: '1.5px',
+    },
+  },
+} as const;
+
 const approvalWriteFieldSx = {
   '& .MuiOutlinedInput-root': {
     borderRadius: 1,
@@ -3755,23 +3787,23 @@ const ElectronicApproval: React.FC = () => {
             <Card
               key={stat.label}
               elevation={0}
-              sx={{
-                borderRadius: '16px',
-                border: '1px solid',
-                borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-                boxShadow:
-                  theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
-                bgcolor: 'background.paper',
-              }}
+              sx={approvalListHeaderCardSx(theme.palette.mode)}
             >
-              <CardContent sx={{ py: 2, px: 2.5 }}>
+              <CardContent sx={{ py: 2.25, px: 2.5 }}>
                 <Typography
                   variant="caption"
-                  sx={{ fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em', color: 'text.secondary' }}
+                  sx={{
+                    fontWeight: 600,
+                    display: 'block',
+                    mb: 1,
+                    letterSpacing: '0.03em',
+                    fontSize: '0.8125rem',
+                    color: theme.palette.mode === 'light' ? '#4B5563' : 'text.secondary',
+                  }}
                 >
                   {stat.label}
                 </Typography>
-                <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: stat.color }}>
+                <Typography variant="kpiNumber" sx={{ fontWeight: 700, color: stat.color, lineHeight: 1.2 }}>
                   {stat.value}
                 </Typography>
               </CardContent>
@@ -3785,14 +3817,11 @@ const ElectronicApproval: React.FC = () => {
         <Card
           elevation={0}
           sx={{
+            ...approvalListHeaderCardSx(theme.palette.mode),
             mb: 3,
-            borderRadius: '16px',
-            border: 'none',
-            boxShadow: 'none',
-            bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.06) : alpha(theme.palette.common.black, 0.03),
           }}
         >
-        <CardContent sx={{ py: 2, px: 2.5 }}>
+        <CardContent sx={{ py: 2.25, px: 2.5 }}>
           <Box sx={{ 
             display: 'grid', 
             gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr 1fr' },
@@ -3810,20 +3839,11 @@ const ElectronicApproval: React.FC = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                    <SearchIcon sx={{ color: '#6B7280', fontSize: 20 }} />
                   </InputAdornment>
                 ),
               }}
-              sx={{
-                bgcolor: 'background.paper',
-                borderRadius: '12px',
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '12px',
-                  '& fieldset': {
-                    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : undefined,
-                  },
-                },
-              }}
+              sx={approvalListFilterFieldSx}
             />
             <TextField
               fullWidth
@@ -3834,6 +3854,7 @@ const ElectronicApproval: React.FC = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
               InputLabelProps={{ shrink: true }}
               SelectProps={{ displayEmpty: true }}
+              sx={approvalListFilterFieldSx}
             >
               <MenuItem value="">{t('approval.all')}</MenuItem>
               <MenuItem value="draft">{t('approval.draft')}</MenuItem>
@@ -3852,6 +3873,7 @@ const ElectronicApproval: React.FC = () => {
               onChange={(e) => setTypeFilter(e.target.value)}
               InputLabelProps={{ shrink: true }}
               SelectProps={{ displayEmpty: true }}
+              sx={approvalListFilterFieldSx}
             >
               <MenuItem value="">{t('approval.all')}</MenuItem>
               <MenuItem value="expense">{t('approval.expense')}</MenuItem>
@@ -3868,6 +3890,7 @@ const ElectronicApproval: React.FC = () => {
               onChange={(e) => setPriorityFilter(e.target.value)}
               InputLabelProps={{ shrink: true }}
               SelectProps={{ displayEmpty: true }}
+              sx={approvalListFilterFieldSx}
             >
               <MenuItem value="">{t('approval.all')}</MenuItem>
               <MenuItem value="low">{t('approval.low')}</MenuItem>
@@ -3889,10 +3912,10 @@ const ElectronicApproval: React.FC = () => {
                 borderRadius: '12px',
                 textTransform: 'none',
                 fontWeight: 600,
-                borderColor: 'divider',
-                color: 'text.secondary',
+                borderColor: APPROVAL_FORM_BORDER.field,
+                color: theme.palette.mode === 'light' ? '#4B5563' : 'text.secondary',
                 '&:hover': {
-                  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
+                  borderColor: APPROVAL_FORM_BORDER.fieldHover,
                   bgcolor: 'action.hover',
                   color: 'text.primary',
                 },

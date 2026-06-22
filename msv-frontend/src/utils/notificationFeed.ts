@@ -53,7 +53,6 @@ export const mapInboxRowToNotification = (
 ): AppNotification => {
   const ts = row.timestamp || new Date().toISOString();
   const p = row.payload || {};
-  const details = JSON.stringify(p, null, 2);
 
   if (row.kind === 'expense_payment') {
     return {
@@ -65,7 +64,6 @@ export const mapInboxRowToNotification = (
         amount: String(p.amount ?? ''),
         currency: String(p.currency ?? ''),
       }),
-      details,
       timestamp: ts,
       severity: 'warning',
       read: false,
@@ -85,7 +83,6 @@ export const mapInboxRowToNotification = (
         end: String(p.end ?? ''),
         days: String(p.days ?? ''),
       }),
-      details,
       timestamp: ts,
       severity: 'info',
       read: false,
@@ -102,7 +99,6 @@ export const mapInboxRowToNotification = (
       customer: String(p.customerName ?? '—'),
       number: String(p.quotationNumber ?? ''),
     }),
-    details,
     timestamp: ts,
     severity: 'success',
     read: false,
@@ -140,15 +136,10 @@ export function buildNotificationsFromSources(params: {
 
   serverNotifications.forEach((item) => {
     const href = hrefFromServerNotificationData(item.data);
-    const details =
-      item.data && Object.keys(item.data).length > 0
-        ? JSON.stringify(item.data, null, 2)
-        : undefined;
     items.push({
       id: `server-${item.id}`,
       title: item.title || t('common.notification'),
       message: item.message,
-      details,
       timestamp: item.timestamp || new Date().toISOString(),
       severity: (item.type || 'info') as AppNotification['severity'],
       read: Boolean(item.read),
@@ -174,7 +165,6 @@ export function buildNotificationsFromSources(params: {
       id: `error-${item.id}`,
       title: item.title || t('common.notification'),
       message: item.message,
-      details: item.details,
       timestamp: item.timestamp.toISOString(),
       severity: (item.type || 'error') as AppNotification['severity'],
       read: false,
