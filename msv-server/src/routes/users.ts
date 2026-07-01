@@ -542,7 +542,7 @@ router.post(
       const userCount = await (User as any).count({
         where: {
           tenant_id: targetTenantId,
-          status: { [Op.ne]: 'deleted' }
+          status: { [Op.ne]: 'inactive' }
         }
       });
       if (userCount >= tenant.max_users) {
