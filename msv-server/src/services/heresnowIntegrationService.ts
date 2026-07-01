@@ -1,10 +1,29 @@
 import { Attendance, Company, User } from '../models';
+import { Op } from 'sequelize';
 
 const TIME_ZONE = 'Asia/Kolkata';
 
 export type HeresnowCompanySettings = {
   enabled?: boolean;
+  companyId?: string;
   externalCompanyId?: string;
+  apiKey?: string;
+  unregisteredUsers?: Array<{
+    email?: string;
+    name?: string;
+    externalEmployeeId?: string;
+    lastSeenAt?: string;
+  }>;
+  unregisteredAttendanceRecords?: Array<{
+    email?: string;
+    name?: string;
+    externalEmployeeId?: string;
+    date?: string;
+    checkIn?: string;
+    checkOut?: string;
+    status?: string;
+    lastSeenAt?: string;
+  }>;
   lastSyncAt?: string | null;
   lastSyncError?: string | null;
   lastSyncCount?: number;
@@ -16,6 +35,8 @@ export type HeresnowAttendanceRecord = {
   employeeId?: string;
   userId?: string | number;
   date?: string;
+  local_date?: string;
+  attendanceDate?: string;
   checkIn?: string | null;
   checkOut?: string | null;
   check_in?: string | null;
@@ -27,6 +48,75 @@ export type HeresnowAttendanceRecord = {
   timestamp?: string;
   id?: string;
   eventId?: string;
+  localDate?: string;
+  employeeEmail?: string;
+  email?: string;
+  employeeName?: string;
+  name?: string;
+};
+
+type HeresnowMvsEvent = {
+  attendanceId?: string;
+  localDate?: string;
+  timestamp?: string;
+  type?: 'CHECK_IN' | 'CHECK_OUT' | string;
+  employee?: {
+    externalEmployeeId?: string | null;
+    id?: string | null;
+    email?: string | null;
+    name?: string | null;
+  } | null;
+};
+
+type HeresnowMonthlyAttendanceRow = {
+  date?: string;
+  localDate?: string;
+  attendanceDate?: string;
+  checkIn?: string | { timestamp?: string | null; localTime?: string | null; time?: string | null } | null;
+  checkOut?: string | { timestamp?: string | null; localTime?: string | null; time?: string | null } | null;
+  check_in?: string | { timestamp?: string | null; localTime?: string | null; time?: string | null } | null;
+  check_out?: string | { timestamp?: string | null; localTime?: string | null; time?: string | null } | null;
+  inTime?: string | null;
+  outTime?: string | null;
+  clockIn?: string | null;
+  clockOut?: string | null;
+  status?: string;
+  employeeExternalId?: string | null;
+  externalEmployeeId?: string | null;
+  employeeId?: string | null;
+  userId?: string | number | null;
+  employeeEmail?: string | null;
+  email?: string | null;
+  employeeName?: string | null;
+  name?: string | null;
+  employee?: {
+    externalEmployeeId?: string | null;
+    id?: string | null;
+    email?: string | null;
+    name?: string | null;
+  } | null;
+};
+
+type HeresnowMonthlyEmployeeBundle = {
+  employeeExternalId?: string | null;
+  externalEmployeeId?: string | null;
+  employeeId?: string | null;
+  userId?: string | number | null;
+  employeeEmail?: string | null;
+  email?: string | null;
+  employeeName?: string | null;
+  name?: string | null;
+  employee?: {
+    externalEmployeeId?: string | null;
+    id?: string | null;
+    email?: string | null;
+    name?: string | null;
+  } | null;
+  attendances?: HeresnowMonthlyAttendanceRow[];
+  attendanceRecords?: HeresnowMonthlyAttendanceRow[];
+  records?: HeresnowMonthlyAttendanceRow[];
+  data?: HeresnowMonthlyAttendanceRow[];
+  rows?: HeresnowMonthlyAttendanceRow[];
 };
 
 const pad2 = (value: number) => value.toString().padStart(2, '0');
@@ -41,10 +131,229 @@ const getDateInTimeZone = (value: Date) => {
   return formatter.format(value);
 };
 
-const parseTimestamp = (value?: string | null) => {
-  if (!value || typeof value !== 'string') return null;
-  const date = new Date(value);
+const looksLikeCuid = (value: string) => /^c[a-z0-9]{20,}$/i.test(value.trim());
+
+const parseTimestamp = (value?: string | { timestamp?: string | null } | null) => {
+  const raw =
+    typeof value === 'string'
+      ? value
+      : value && typeof value === 'object' && typeof value.timestamp === 'string'
+        ? value.timestamp
+        : null;
+  if (!raw || typeof raw !== 'string') return null;
+  const date = new Date(raw);
   return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const normalizeTimeString = (value?: string | null) => {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const full = raw.match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (full) {
+    const hh = full[1];
+    const mm = full[2];
+    const ss = full[3] || '00';
+    return `${hh}:${mm}:${ss}`;
+  }
+  return null;
+};
+
+const combineDateAndTimeToIso = (dateYmd?: string, time?: string | null) => {
+  if (!dateYmd || !/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) return undefined;
+  const normalizedTime = normalizeTimeString(time);
+  if (!normalizedTime) return undefined;
+  return `${dateYmd}T${normalizedTime}+05:30`;
+};
+
+const getPunchTimestamp = (
+  value?: string | { timestamp?: string | null } | null
+) => (value && typeof value === 'object' ? value.timestamp || undefined : typeof value === 'string' ? value : undefined);
+
+const getPunchLocalTime = (
+  value?: string | { localTime?: string | null; time?: string | null } | null
+) => (value && typeof value === 'object' ? value.localTime ?? value.time ?? undefined : typeof value === 'string' ? value : undefined);
+
+const getRecordDate = (record: HeresnowAttendanceRecord): string | null => {
+  if (record.local_date && /^\d{4}-\d{2}-\d{2}/.test(record.local_date)) {
+    return record.local_date.slice(0, 10);
+  }
+  if (record.attendanceDate && /^\d{4}-\d{2}-\d{2}/.test(record.attendanceDate)) {
+    return record.attendanceDate.slice(0, 10);
+  }
+  if (record.localDate && /^\d{4}-\d{2}-\d{2}/.test(record.localDate)) {
+    return record.localDate.slice(0, 10);
+  }
+  if (record.date && /^\d{4}-\d{2}-\d{2}/.test(record.date)) {
+    return record.date.slice(0, 10);
+  }
+  const byOccurred = parseTimestamp(record.occurredAt || record.timestamp);
+  if (byOccurred) return getDateInTimeZone(byOccurred);
+  const byCheckIn = parseTimestamp(record.checkIn || record.check_in);
+  if (byCheckIn) return getDateInTimeZone(byCheckIn);
+  const byCheckOut = parseTimestamp(record.checkOut || record.check_out);
+  if (byCheckOut) return getDateInTimeZone(byCheckOut);
+  return null;
+};
+
+const mapMvsEventToRecord = (event: HeresnowMvsEvent): HeresnowAttendanceRecord => {
+  const normalizedType = String(event.type || '').toUpperCase();
+  const employeeId = String(
+    event.employee?.externalEmployeeId
+    ?? event.employee?.id
+    ?? ''
+  ).trim();
+  return {
+    employeeExternalId: employeeId || undefined,
+    externalEmployeeId: employeeId || undefined,
+    date: event.localDate ? String(event.localDate).slice(0, 10) : undefined,
+    type:
+      normalizedType === 'CHECK_IN'
+        ? 'check_in'
+        : normalizedType === 'CHECK_OUT'
+          ? 'check_out'
+          : normalizedType.toLowerCase(),
+    occurredAt: event.timestamp,
+    eventId: event.attendanceId,
+    employeeEmail: event.employee?.email || undefined,
+    employeeName: event.employee?.name || undefined
+  };
+};
+
+const mapMonthlyAttendanceRowToRecord = (row: HeresnowMonthlyAttendanceRow): HeresnowAttendanceRecord => {
+  const dateYmd =
+    (typeof row.date === 'string' && row.date.slice(0, 10))
+    || (typeof row.localDate === 'string' && row.localDate.slice(0, 10))
+    || (typeof row.attendanceDate === 'string' && row.attendanceDate.slice(0, 10))
+    || undefined;
+  const checkIn =
+    getPunchTimestamp(row.checkIn)
+    || getPunchTimestamp(row.check_in)
+    || combineDateAndTimeToIso(dateYmd, getPunchLocalTime(row.checkIn) ?? getPunchLocalTime(row.check_in) ?? row.inTime ?? row.clockIn)
+    || (typeof row.checkIn === 'string' ? row.checkIn : undefined)
+    || (typeof row.check_in === 'string' ? row.check_in : undefined);
+  const checkOut =
+    getPunchTimestamp(row.checkOut)
+    || getPunchTimestamp(row.check_out)
+    || combineDateAndTimeToIso(dateYmd, getPunchLocalTime(row.checkOut) ?? getPunchLocalTime(row.check_out) ?? row.outTime ?? row.clockOut)
+    || (typeof row.checkOut === 'string' ? row.checkOut : undefined)
+    || (typeof row.check_out === 'string' ? row.check_out : undefined);
+  const externalEmployeeId = String(
+    row.employeeExternalId
+    ?? row.externalEmployeeId
+    ?? row.employeeId
+    ?? row.userId
+    ?? row.employee?.externalEmployeeId
+    ?? row.employee?.id
+    ?? ''
+  ).trim();
+
+  return {
+    date: dateYmd,
+    checkIn,
+    checkOut,
+    check_in: checkIn,
+    check_out: checkOut,
+    status: typeof row.status === 'string' ? row.status : undefined,
+    employeeExternalId: externalEmployeeId || undefined,
+    externalEmployeeId: externalEmployeeId || undefined,
+    employeeEmail: String(row.employeeEmail ?? row.email ?? row.employee?.email ?? '').trim() || undefined,
+    employeeName: String(row.employeeName ?? row.name ?? row.employee?.name ?? '').trim() || undefined
+  };
+};
+
+const mapMonthlyEmployeeBundleToRecords = (bundle: HeresnowMonthlyEmployeeBundle): HeresnowAttendanceRecord[] => {
+  const rows =
+    (Array.isArray(bundle.attendances) && bundle.attendances)
+    || (Array.isArray(bundle.attendanceRecords) && bundle.attendanceRecords)
+    || (Array.isArray(bundle.records) && bundle.records)
+    || (Array.isArray(bundle.data) && bundle.data)
+    || (Array.isArray(bundle.rows) && bundle.rows)
+    || [];
+
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+
+  const inheritedExternalId = String(
+    bundle.employeeExternalId
+    ?? bundle.externalEmployeeId
+    ?? bundle.employeeId
+    ?? bundle.userId
+    ?? bundle.employee?.externalEmployeeId
+    ?? bundle.employee?.id
+    ?? ''
+  ).trim();
+  const inheritedEmail = String(bundle.employeeEmail ?? bundle.email ?? bundle.employee?.email ?? '').trim();
+  const inheritedName = String(bundle.employeeName ?? bundle.name ?? bundle.employee?.name ?? '').trim();
+
+  return rows.map((row) => {
+    const mapped = mapMonthlyAttendanceRowToRecord(row);
+    if (!mapped.employeeExternalId && inheritedExternalId) {
+      mapped.employeeExternalId = inheritedExternalId;
+      mapped.externalEmployeeId = inheritedExternalId;
+    }
+    if (!mapped.employeeEmail && inheritedEmail) mapped.employeeEmail = inheritedEmail;
+    if (!mapped.employeeName && inheritedName) mapped.employeeName = inheritedName;
+    return mapped;
+  });
+};
+
+const extractAttendanceRowsFromPayload = (payload: any): HeresnowAttendanceRecord[] => {
+  if (Array.isArray(payload)) return payload as HeresnowAttendanceRecord[];
+  if (!payload || typeof payload !== 'object') return [];
+
+  const rootMonthly = Array.isArray(payload.employeeAttendance)
+    ? payload.employeeAttendance.flatMap((entry: HeresnowMonthlyAttendanceRow | HeresnowMonthlyEmployeeBundle) => {
+      const bundle = entry as HeresnowMonthlyEmployeeBundle;
+      if (
+        bundle
+        && typeof bundle === 'object'
+        && (
+          Array.isArray(bundle.attendances)
+          || Array.isArray(bundle.attendanceRecords)
+          || Array.isArray(bundle.records)
+          || Array.isArray(bundle.data)
+          || Array.isArray(bundle.rows)
+        )
+      ) {
+        return mapMonthlyEmployeeBundleToRecords(bundle);
+      }
+      return [mapMonthlyAttendanceRowToRecord(entry as HeresnowMonthlyAttendanceRow)];
+    })
+    : [];
+  if (rootMonthly.length > 0) return rootMonthly;
+
+  if (Array.isArray(payload.data)) return payload.data as HeresnowAttendanceRecord[];
+
+  if (payload.data && typeof payload.data === 'object') {
+    const nestedMonthly = Array.isArray(payload.data.employeeAttendance)
+      ? payload.data.employeeAttendance.flatMap((entry: HeresnowMonthlyAttendanceRow | HeresnowMonthlyEmployeeBundle) => {
+        const bundle = entry as HeresnowMonthlyEmployeeBundle;
+        if (
+          bundle
+          && typeof bundle === 'object'
+          && (
+            Array.isArray(bundle.attendances)
+            || Array.isArray(bundle.attendanceRecords)
+            || Array.isArray(bundle.records)
+            || Array.isArray(bundle.data)
+            || Array.isArray(bundle.rows)
+          )
+        ) {
+          return mapMonthlyEmployeeBundleToRecords(bundle);
+        }
+        return [mapMonthlyAttendanceRowToRecord(entry as HeresnowMonthlyAttendanceRow)];
+      })
+      : [];
+    if (nestedMonthly.length > 0) return nestedMonthly;
+    if (Array.isArray(payload.data.records)) return payload.data.records as HeresnowAttendanceRecord[];
+    if (Array.isArray(payload.data.items)) return payload.data.items as HeresnowAttendanceRecord[];
+  }
+
+  if (Array.isArray(payload.records)) return payload.records as HeresnowAttendanceRecord[];
+  if (Array.isArray(payload.items)) return payload.items as HeresnowAttendanceRecord[];
+  if (Array.isArray(payload.attendanceRecords)) return payload.attendanceRecords as HeresnowAttendanceRecord[];
+  if (Array.isArray(payload.events)) return payload.events.map((event: HeresnowMvsEvent) => mapMvsEventToRecord(event));
+  return [];
 };
 
 const calculateWorkHours = (checkIn: Date | null, checkOut: Date | null) => {
@@ -72,13 +381,52 @@ const getEmployeeExternalId = (record: HeresnowAttendanceRecord) =>
     ?? ''
   ).trim();
 
+const getEmployeeEmail = (record: HeresnowAttendanceRecord) =>
+  String(record.employeeEmail ?? record.email ?? '').trim().toLowerCase();
+
+const getAttendanceIdentityKey = (record: HeresnowAttendanceRecord) => {
+  const explicitId = String(record.id ?? record.eventId ?? '').trim();
+  if (explicitId) return `id:${explicitId}`;
+
+  const employeeKey =
+    getEmployeeEmail(record)
+    || getEmployeeExternalId(record)
+    || String(record.userId ?? '').trim()
+    || 'unknown_employee';
+  const dateKey = getRecordDate(record) || 'unknown_date';
+  const eventType = normalizeEventType(record);
+  const checkIn = parseTimestamp(record.checkIn ?? record.check_in)?.toISOString() || String(record.checkIn ?? record.check_in ?? '').trim();
+  const checkOut = parseTimestamp(record.checkOut ?? record.check_out)?.toISOString() || String(record.checkOut ?? record.check_out ?? '').trim();
+
+  return `composite:${employeeKey}|${dateKey}|${eventType}|${checkIn}|${checkOut}`;
+};
+
+const dedupeAttendanceRows = (rows: HeresnowAttendanceRecord[]) => {
+  const seen = new Set<string>();
+  const unique: HeresnowAttendanceRecord[] = [];
+
+  for (const row of rows) {
+    const key = getAttendanceIdentityKey(row);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(row);
+  }
+
+  return unique;
+};
+
 export const getHeresnowSettings = (company: Company): HeresnowCompanySettings => {
   const settings = (company.settings || {}) as Record<string, unknown>;
   const integrations = (settings.integrations || {}) as Record<string, unknown>;
   const heresnow = (integrations.heresnow || {}) as HeresnowCompanySettings;
+  const apiKey = typeof heresnow.apiKey === 'string' ? heresnow.apiKey.trim() : '';
   return {
     enabled: Boolean(heresnow.enabled),
+    companyId: heresnow.companyId ? String(heresnow.companyId) : String(company.id),
     externalCompanyId: heresnow.externalCompanyId ? String(heresnow.externalCompanyId) : String(company.id),
+    apiKey: apiKey || undefined,
+    unregisteredUsers: Array.isArray(heresnow.unregisteredUsers) ? heresnow.unregisteredUsers : [],
+    unregisteredAttendanceRecords: Array.isArray(heresnow.unregisteredAttendanceRecords) ? heresnow.unregisteredAttendanceRecords : [],
     lastSyncAt: heresnow.lastSyncAt ?? null,
     lastSyncError: heresnow.lastSyncError ?? null,
     lastSyncCount: typeof heresnow.lastSyncCount === 'number' ? heresnow.lastSyncCount : 0
@@ -113,7 +461,13 @@ export async function findCompanyByExternalId(externalCompanyId: string) {
   const companies = await Company.findAll();
   for (const company of companies) {
     const hn = getHeresnowSettings(company);
-    if (hn.enabled && hn.externalCompanyId === normalized) {
+    if (
+      hn.enabled
+      && (
+        hn.externalCompanyId === normalized
+        || hn.companyId === normalized
+      )
+    ) {
       return company;
     }
   }
@@ -156,6 +510,25 @@ export async function findUserByExternalEmployeeId(company: Company, externalEmp
       status: 'active'
     }
   });
+}
+
+export async function findUserByHeresnowRecord(company: Company, record: HeresnowAttendanceRecord) {
+  const email = getEmployeeEmail(record);
+  if (email) {
+    const byEmail = await User.findOne({
+      where: {
+        email,
+        company_id: company.id,
+        tenant_id: company.tenant_id,
+        status: 'active'
+      }
+    });
+    if (byEmail) return byEmail;
+  }
+
+  const externalEmployeeId = getEmployeeExternalId(record);
+  if (!externalEmployeeId) return null;
+  return findUserByExternalEmployeeId(company, externalEmployeeId);
 }
 
 async function upsertAttendanceRecord(
@@ -229,13 +602,15 @@ async function upsertAttendanceRecord(
 
 export async function applyHeresnowRecord(company: Company, record: HeresnowAttendanceRecord) {
   const employeeExternalId = getEmployeeExternalId(record);
-  if (!employeeExternalId) {
+  const employeeEmail = getEmployeeEmail(record);
+  if (!employeeExternalId && !employeeEmail) {
     throw new Error('EMPLOYEE_ID_REQUIRED');
   }
 
-  const user = await findUserByExternalEmployeeId(company, employeeExternalId);
+  const user = await findUserByHeresnowRecord(company, record);
   if (!user) {
-    throw new Error(`EMPLOYEE_NOT_FOUND:${employeeExternalId}`);
+    const key = employeeEmail || employeeExternalId;
+    throw new Error(`EMPLOYEE_NOT_FOUND:${key}`);
   }
 
   const occurredAt = parseTimestamp(record.occurredAt || record.timestamp);
@@ -340,76 +715,330 @@ export async function processHeresnowDispatch(body: any) {
   return { companyId: company.id, applied, total: events.length, results };
 }
 
-export async function pullHeresnowAttendance(company: Company, options?: { since?: string }) {
+export async function pullHeresnowAttendance(company: Company, options?: { since?: string; dryRun?: boolean }) {
   const hn = getHeresnowSettings(company);
   if (!hn.enabled) {
     throw new Error('INTEGRATION_DISABLED');
   }
 
-  const apiKey = process.env.MVS_INTEGRATION_API_KEY || process.env.HERESNOW_INTEGRATION_API_KEY;
+  const apiKey =
+    (typeof hn.apiKey === 'string' && hn.apiKey.trim())
+    || process.env.MVS_INTEGRATION_API_KEY
+    || process.env.HERESNOW_INTEGRATION_API_KEY;
   if (!apiKey) {
     throw new Error('API_KEY_NOT_CONFIGURED');
   }
 
   const baseUrl = (process.env.HERESNOW_API_BASE_URL || 'https://www.heresnow.in').replace(/\/+$/, '');
   const url = new URL(`${baseUrl}/api/integrations/mvs/attendance`);
-  url.searchParams.set('companyId', hn.externalCompanyId || String(company.id));
-  if (options?.since) {
-    url.searchParams.set('since', options.since);
-  }
+  const companyId = hn.companyId || String(company.id);
+  const externalCompanyId = hn.externalCompanyId || String(company.id);
+  url.searchParams.set('companyId', companyId);
+  url.searchParams.set('externalCompanyId', externalCompanyId);
+  // since 파라미터는 HeresNow 쿼리 의미가 월 조회와 다를 수 있어
+  // 여기서는 원격에 전달하지 않고 MVS에서 월 범위를 강제 필터링한다.
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
-    Accept: 'application/json'
+    Accept: 'application/json',
+    'x-mvs-api-key': apiKey
   };
   const webhookBearer = process.env.MVS_WEBHOOK_BEARER;
   if (webhookBearer) {
     headers['X-MVS-Webhook-Bearer'] = webhookBearer;
   }
 
-  const response = await fetch(url.toString(), { headers });
-  const payload = (await response.json().catch(() => ({}))) as {
-    message?: string;
-    data?: HeresnowAttendanceRecord[];
-    records?: HeresnowAttendanceRecord[];
-  } | HeresnowAttendanceRecord[];
+  type PullStatusKey = 'NO_STATUS' | 'PENDING' | 'DELIVERED';
+  const queryModes: Array<{ key: PullStatusKey; status?: 'PENDING' | 'DELIVERED' }> = options?.since
+    ? [
+      { key: 'NO_STATUS' },
+      { key: 'PENDING', status: 'PENDING' },
+      { key: 'DELIVERED', status: 'DELIVERED' }
+    ]
+    : [{ key: 'NO_STATUS' }, { key: 'PENDING', status: 'PENDING' }];
+  const sinceYmd = options?.since && /^\d{4}-\d{2}-\d{2}/.test(options.since) ? options.since.slice(0, 10) : null;
+  const monthParam = sinceYmd ? sinceYmd.slice(0, 7) : undefined;
+  let monthEndYmd: string | null = null;
+  if (sinceYmd) {
+    const year = parseInt(sinceYmd.slice(0, 4), 10);
+    const month = parseInt(sinceYmd.slice(5, 7), 10);
+    const endMonth = month === 12 ? 1 : month + 1;
+    const endYear = month === 12 ? year + 1 : year;
+    monthEndYmd = `${endYear}-${pad2(endMonth)}-01`;
+  }
+  const rows: HeresnowAttendanceRecord[] = [];
+  const debug = {
+    sinceYmd,
+    monthEndYmd,
+    fetch: {
+      NO_STATUS: { pages: 0, rawRows: 0, acceptedRows: 0, errors: 0, statuses: [] as number[], firstKeys: [] as string[] },
+      PENDING: { pages: 0, rawRows: 0, acceptedRows: 0, errors: 0, statuses: [] as number[], firstKeys: [] as string[] },
+      DELIVERED: { pages: 0, rawRows: 0, acceptedRows: 0, errors: 0, statuses: [] as number[], firstKeys: [] as string[] }
+    },
+    sampleDates: [] as string[],
+    dedup: {
+      before: 0,
+      after: 0,
+      removed: 0
+    }
+  };
 
-  if (!response.ok) {
-    const message = typeof payload === 'object' && payload && !Array.isArray(payload) && typeof payload.message === 'string'
-      ? payload.message
-      : `HeresNow API ${response.status}`;
-    throw new Error(message);
+  let successfulModeCount = 0;
+  for (const mode of queryModes) {
+    let cursor: string | null = null;
+    for (let i = 0; i < 50; i += 1) {
+      const pageUrl = new URL(url.toString());
+      if (mode.status) {
+        pageUrl.searchParams.set('status', mode.status);
+      }
+      if (monthParam) {
+        pageUrl.searchParams.set('month', monthParam);
+      }
+      pageUrl.searchParams.set('limit', '200');
+      if (cursor) pageUrl.searchParams.set('cursor', cursor);
+
+      const response = await fetch(pageUrl.toString(), { headers });
+      const payload = (await response.json().catch(() => ({}))) as any;
+      debug.fetch[mode.key].statuses.push(response.status);
+      if (debug.fetch[mode.key].pages === 0 && payload && typeof payload === 'object' && !Array.isArray(payload)) {
+        debug.fetch[mode.key].firstKeys = Object.keys(payload).slice(0, 20);
+      }
+
+      if (!response.ok) {
+        debug.fetch[mode.key].errors += 1;
+        // 일부 환경에서 status 쿼리를 허용하지 않을 수 있으므로 모드 단위 실패는 건너뛴다.
+        if (i === 0) break;
+        const message =
+          typeof payload === 'object' && payload && !Array.isArray(payload)
+            ? (typeof payload.message === 'string'
+              ? payload.message
+              : typeof payload.error === 'string'
+                ? payload.error
+                : `HeresNow API ${response.status}`)
+            : `HeresNow API ${response.status}`;
+        throw new Error(message);
+      }
+      successfulModeCount += i === 0 ? 1 : 0;
+
+      const pageRows = extractAttendanceRowsFromPayload(payload);
+      debug.fetch[mode.key].pages += 1;
+      debug.fetch[mode.key].rawRows += pageRows.length;
+
+      if (sinceYmd) {
+        const accepted = pageRows.filter((row) => {
+          const rowDate = getRecordDate(row);
+          if (rowDate && debug.sampleDates.length < 8) debug.sampleDates.push(rowDate);
+          return rowDate
+            ? (rowDate >= sinceYmd && (!monthEndYmd || rowDate < monthEndYmd))
+            : false;
+        });
+        debug.fetch[mode.key].acceptedRows += accepted.length;
+        rows.push(...accepted);
+      } else {
+        rows.push(...pageRows);
+        debug.fetch[mode.key].acceptedRows += pageRows.length;
+      }
+
+      const nextCursor =
+        !Array.isArray(payload) && payload
+          ? (payload.nextCursor || payload.next_cursor || payload.cursor || null)
+          : null;
+      if (
+        !payload
+        || Array.isArray(payload)
+        || !nextCursor
+      ) {
+        break;
+      }
+      cursor = nextCursor;
+    }
+  }
+  if (successfulModeCount === 0) {
+    throw new Error('HeresNow API 응답을 확인할 수 없습니다. status 파라미터/권한 설정을 확인해주세요.');
   }
 
-  const rows: HeresnowAttendanceRecord[] = Array.isArray(payload)
-    ? payload
-    : Array.isArray(payload?.data)
-      ? payload.data
-      : Array.isArray(payload?.records)
-        ? payload.records
-        : [];
+  const uniqueRows = dedupeAttendanceRows(rows);
+  debug.dedup.before = rows.length;
+  debug.dedup.after = uniqueRows.length;
+  debug.dedup.removed = rows.length - uniqueRows.length;
+
+  if (options?.dryRun) {
+    return {
+      applied: 0,
+      total: uniqueRows.length,
+      errors: [],
+      unregisteredUsers: [],
+      debug
+    };
+  }
 
   let applied = 0;
   const errors: string[] = [];
+  const unregisteredMap = new Map<string, {
+    email?: string;
+    name?: string;
+    externalEmployeeId?: string;
+    lastSeenAt: string;
+  }>();
+  const unregisteredAttendanceMap = new Map<string, {
+    email?: string;
+    name?: string;
+    externalEmployeeId?: string;
+    date?: string;
+    checkIn?: string;
+    checkOut?: string;
+    status?: string;
+    lastSeenAt: string;
+  }>();
 
-  for (const row of rows) {
+  if (sinceYmd && /^\d{4}-\d{2}-\d{2}$/.test(sinceYmd)) {
+    const nextMonthStart = monthEndYmd as string;
+
+    await Attendance.destroy({
+      where: {
+        tenant_id: company.tenant_id,
+        company_id: company.id,
+        date: {
+          [Op.gte]: sinceYmd,
+          [Op.lt]: nextMonthStart
+        }
+      }
+    });
+  }
+
+  for (const row of uniqueRows) {
     try {
       await applyHeresnowRecord(company, row);
       applied += 1;
     } catch (error: any) {
-      errors.push(error?.message || 'sync_failed');
+      const message = error?.message || 'sync_failed';
+      errors.push(message);
+      if (typeof message === 'string' && message.startsWith('EMPLOYEE_NOT_FOUND:')) {
+        const email = getEmployeeEmail(row) || undefined;
+        const externalEmployeeId = getEmployeeExternalId(row) || undefined;
+        const name = String(row.employeeName ?? row.name ?? '').trim() || undefined;
+        const key = email || externalEmployeeId || message;
+        if (!unregisteredMap.has(key)) {
+          unregisteredMap.set(key, {
+            email,
+            name,
+            externalEmployeeId,
+            lastSeenAt: new Date().toISOString()
+          });
+        }
+
+        const date = getRecordDate(row) || undefined;
+        const identity = email || externalEmployeeId || name || '';
+        if (date && identity) {
+          const attendanceKey = `${identity}:${date}`;
+          const checkIn =
+            parseTimestamp(row.checkIn ?? row.check_in)?.toISOString()
+            || (typeof row.checkIn === 'string' ? row.checkIn : undefined)
+            || (typeof row.check_in === 'string' ? row.check_in : undefined);
+          const checkOut =
+            parseTimestamp(row.checkOut ?? row.check_out)?.toISOString()
+            || (typeof row.checkOut === 'string' ? row.checkOut : undefined)
+            || (typeof row.check_out === 'string' ? row.check_out : undefined);
+          const current = unregisteredAttendanceMap.get(attendanceKey);
+          const currentScore =
+            (current?.checkIn ? 1 : 0)
+            + (current?.checkOut ? 2 : 0)
+            + (current?.status === 'absent' ? 1 : 0);
+          const nextScore =
+            (checkIn ? 1 : 0)
+            + (checkOut ? 2 : 0)
+            + (row.status === 'absent' ? 1 : 0);
+          if (!current || nextScore >= currentScore) {
+            unregisteredAttendanceMap.set(attendanceKey, {
+              email,
+              name,
+              externalEmployeeId,
+              date,
+              checkIn,
+              checkOut,
+              status: typeof row.status === 'string' ? row.status : undefined,
+              lastSeenAt: new Date().toISOString()
+            });
+          }
+        }
+      }
     }
   }
+
+  const unregisteredUsers = Array.from(unregisteredMap.values());
+  const unregisteredAttendanceRecords = Array.from(unregisteredAttendanceMap.values())
+    .sort((a, b) => {
+      const aKey = `${a.email || ''}|${a.externalEmployeeId || ''}|${a.date || ''}`;
+      const bKey = `${b.email || ''}|${b.externalEmployeeId || ''}|${b.date || ''}`;
+      return aKey.localeCompare(bKey);
+    });
 
   await company.update({
     settings: mergeHeresnowSettings(company, {
       lastSyncAt: new Date().toISOString(),
       lastSyncCount: applied,
-      lastSyncError: errors.length ? errors.slice(0, 3).join('; ') : null
+      lastSyncError: errors.length ? errors.slice(0, 3).join('; ') : null,
+      unregisteredUsers,
+      unregisteredAttendanceRecords
     })
   });
 
-  return { applied, total: rows.length, errors };
+  return { applied, total: uniqueRows.length, errors, unregisteredUsers, unregisteredAttendanceRecords, debug };
+}
+
+export async function testHeresnowConnection(company: Company) {
+  const hn = getHeresnowSettings(company);
+  if (!hn.enabled) {
+    throw new Error('INTEGRATION_DISABLED');
+  }
+
+  const apiKey =
+    (typeof hn.apiKey === 'string' && hn.apiKey.trim())
+    || process.env.MVS_INTEGRATION_API_KEY
+    || process.env.HERESNOW_INTEGRATION_API_KEY;
+  if (!apiKey) {
+    throw new Error('API_KEY_NOT_CONFIGURED');
+  }
+
+  const baseUrl = (process.env.HERESNOW_API_BASE_URL || 'https://www.heresnow.in').replace(/\/+$/, '');
+  const url = new URL(`${baseUrl}/api/integrations/mvs/attendance`);
+  const companyId = hn.companyId || String(company.id);
+  const externalCompanyId = hn.externalCompanyId || String(company.id);
+  url.searchParams.set('companyId', companyId);
+  url.searchParams.set('externalCompanyId', externalCompanyId);
+  url.searchParams.set('limit', '1');
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    Accept: 'application/json',
+    'x-mvs-api-key': apiKey
+  };
+
+  const response = await fetch(url.toString(), { headers });
+  const payload = (await response.json().catch(() => ({}))) as {
+    message?: string;
+    error?: unknown;
+    count?: number;
+  };
+
+  if (!response.ok) {
+    const message =
+      typeof payload === 'object' && payload
+        ? (typeof payload.message === 'string'
+          ? payload.message
+          : typeof payload.error === 'string'
+            ? payload.error
+            : `HeresNow API ${response.status}`)
+        : `HeresNow API ${response.status}`;
+    throw new Error(message);
+  }
+
+  return {
+    ok: true,
+    companyId: hn.companyId || String(company.id),
+    externalCompanyId: hn.externalCompanyId || String(company.id),
+    previewCount: typeof payload.count === 'number' ? payload.count : 0
+  };
 }
 
 export function verifyHeresnowDispatchAuth(headers: Record<string, unknown>) {
@@ -435,12 +1064,34 @@ export function verifyHeresnowDispatchAuth(headers: Record<string, unknown>) {
 
 export async function getHeresnowIntegrationStatus(company: Company) {
   const hn = getHeresnowSettings(company);
-  const apiConfigured = Boolean(process.env.MVS_INTEGRATION_API_KEY || process.env.HERESNOW_INTEGRATION_API_KEY);
+  const effectiveApiKey =
+    (typeof hn.apiKey === 'string' && hn.apiKey.trim())
+    || process.env.MVS_INTEGRATION_API_KEY
+    || process.env.HERESNOW_INTEGRATION_API_KEY;
+  const apiConfigured = Boolean(effectiveApiKey);
   const dispatchConfigured = Boolean(process.env.INTEGRATION_DISPATCH_SECRET || process.env.MVS_WEBHOOK_BEARER);
+  const apiKeyHint =
+    typeof effectiveApiKey === 'string' && effectiveApiKey.trim().length >= 4
+      ? `••••${effectiveApiKey.trim().slice(-4)}`
+      : null;
+  const apiKeyMasked = (() => {
+    if (typeof effectiveApiKey !== 'string') return null;
+    const raw = effectiveApiKey.trim();
+    if (!raw) return null;
+    const maskLength = Math.max(1, Math.floor(raw.length * 0.7));
+    const visible = raw.slice(maskLength);
+    return `${'*'.repeat(maskLength)}${visible}`;
+  })();
 
   return {
     enabled: hn.enabled,
+    companyId: hn.companyId || String(company.id),
     externalCompanyId: hn.externalCompanyId || String(company.id),
+    apiKeyHint,
+    apiKeyMasked,
+    unregisteredUsers: hn.unregisteredUsers || [],
+    unregisteredAttendanceRecords: hn.unregisteredAttendanceRecords || [],
+    unregisteredCount: Array.isArray(hn.unregisteredUsers) ? hn.unregisteredUsers.length : 0,
     lastSyncAt: hn.lastSyncAt,
     lastSyncError: hn.lastSyncError,
     lastSyncCount: hn.lastSyncCount ?? 0,

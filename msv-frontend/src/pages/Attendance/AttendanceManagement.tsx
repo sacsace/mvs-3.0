@@ -17,17 +17,14 @@ import {
   MenuItem,
   Alert,
   CircularProgress,
-  Switch,
-  FormControlLabel
+  AlertTitle
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Login as CheckInIcon,
   Logout as CheckOutIcon,
-  Refresh as RefreshIcon,
-  Sync as SyncIcon,
-  OpenInNew as OpenInNewIcon
+  Refresh as RefreshIcon
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useTheme, alpha } from '@mui/material/styles';
@@ -35,11 +32,9 @@ import {
   mvsFilterToolbarSx,
   mvsSearchFieldSx,
   mvsInnerCardSx,
-  mvsTitleBlockSx,
 } from '../../theme/mvsLayout';
-import { attendanceService, heresnowIntegrationService, officeLocationService, vacationService } from '../../services/api';
+import { attendanceService, officeLocationService, vacationService } from '../../services/api';
 import { useStore } from '../../store';
-import { useReferenceDataStore } from '../../store/referenceDataStore';
 
 interface Attendance {
   id: number;
@@ -115,20 +110,14 @@ const AttendanceManagement: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [todayAttendance, setTodayAttendance] = useState<Attendance | null>(null);
-  const [departments, setDepartments] = useState<string[]>([]);
   const [filter, setFilter] = useState({
-    department: 'all',
     status: 'all'
   });
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [checkOutLoading, setCheckOutLoading] = useState(false);
   const [vacationDaysInMonth, setVacationDaysInMonth] = useState(0);
   const [officeLocation, setOfficeLocation] = useState<{ latitude: number; longitude: number; radiusMeters?: number } | null>(null);
-  const [heresnowStatus, setHeresnowStatus] = useState<any>(null);
-  const [heresnowSyncLoading, setHeresnowSyncLoading] = useState(false);
-  /** admin / root / audit: ?? ???? ?? ????? ?? (?? ??? ???) */
-  const canListCompanyAttendance = ['admin', 'root', 'audit'].includes(String(user?.role || ''));
-  const canManageHeresnow = ['admin', 'root'].includes(String(user?.role || ''));
+  /** 근태관리는 개인화 화면으로 고정: 로그인 사용자 데이터만 조회 */
   const TIME_ZONE = 'Asia/Kolkata';
   const IST_OFFSET_MINUTES = 330;
   const pad2 = (value: number) => value.toString().padStart(2, '0');
@@ -193,32 +182,6 @@ const AttendanceManagement: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!canListCompanyAttendance) {
-      setDepartments([]);
-      return;
-    }
-    const fetchUsers = async () => {
-      try {
-        const usersData = await useReferenceDataStore.getState().fetchUsers();
-          const deptSet = new Set<string>();
-          usersData.forEach((u: any) => {
-            if (u.department) deptSet.add(u.department);
-          });
-          setDepartments(Array.from(deptSet).sort());
-      } catch (e) {
-        console.error('??? ?? ?? ??:', e);
-      }
-    };
-    fetchUsers();
-  }, [canListCompanyAttendance]);
-
-  useEffect(() => {
-    if (!canListCompanyAttendance) {
-      setFilter((f) => (f.department !== 'all' ? { ...f, department: 'all' } : f));
-    }
-  }, [canListCompanyAttendance]);
-
-  useEffect(() => {
     const fetchOfficeLocation = async () => {
       try {
         const response = await officeLocationService.getOfficeLocation();
@@ -241,22 +204,6 @@ const AttendanceManagement: React.FC = () => {
 
     fetchOfficeLocation();
   }, []);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    let cancelled = false;
-    heresnowIntegrationService
-      .getStatus()
-      .then((res) => {
-        if (!cancelled && res.success) setHeresnowStatus(res.data);
-      })
-      .catch(() => {
-        if (!cancelled) setHeresnowStatus(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
 
   const getCurrentPosition = () =>
     new Promise<GeolocationPosition>((resolve, reject) => {
@@ -345,13 +292,8 @@ const AttendanceManagement: React.FC = () => {
       if (filter.status !== 'all') {
         params.status = filter.status;
       }
-      if (canListCompanyAttendance && filter.department !== 'all') {
-        params.department = filter.department;
-      }
 
-      const response = canListCompanyAttendance
-        ? await attendanceService.getCompanyAttendances(params)
-        : await attendanceService.getAttendances(params);
+      const response = await attendanceService.getAttendances(params);
       if (response.success) {
         setAttendances(response.data || []);
       } else {
@@ -365,45 +307,9 @@ const AttendanceManagement: React.FC = () => {
     }
   };
 
-  const handleHeresnowSync = async () => {
-    setHeresnowSyncLoading(true);
-    setError(null);
-    setSuccess(null);
-    try {
-      const res = await heresnowIntegrationService.sync();
-      if (res.success) {
-        setSuccess(res.message || t('attendanceManagement.heresnowSyncSuccess'));
-        const statusRes = await heresnowIntegrationService.getStatus();
-        if (statusRes.success) setHeresnowStatus(statusRes.data);
-        await fetchAttendances();
-        const todayRes = await attendanceService.getTodayAttendance(getClientDate());
-        if (todayRes.success) setTodayAttendance(todayRes.data);
-      } else {
-        setError(res.message || t('attendanceManagement.heresnowSyncFailed'));
-      }
-    } catch (e: any) {
-      setError(e?.response?.data?.message || t('attendanceManagement.heresnowSyncFailed'));
-    } finally {
-      setHeresnowSyncLoading(false);
-    }
-  };
-
-  const handleHeresnowToggle = async (enabled: boolean) => {
-    if (!canManageHeresnow) return;
-    try {
-      const res = await heresnowIntegrationService.updateSettings({ enabled });
-      if (res.success) {
-        setHeresnowStatus(res.data);
-        setSuccess(enabled ? t('attendanceManagement.heresnowActive') : t('attendanceManagement.heresnowInactive'));
-      }
-    } catch (e: any) {
-      setError(e?.response?.data?.message || t('attendanceManagement.heresnowSyncFailed'));
-    }
-  };
-
   useEffect(() => {
     fetchAttendances();
-  }, [filter.department, filter.status, canListCompanyAttendance]);
+  }, [filter.status]);
 
   // ?? ??
   const handleCheckIn = async () => {
@@ -558,7 +464,7 @@ const AttendanceManagement: React.FC = () => {
       const istDate = new Date(istMs);
       const hours = istDate.getUTCHours();
       const minutes = istDate.getUTCMinutes();
-      const period = hours >= 12 ? '??' : '??';
+      const period = hours >= 12 ? '오후' : '오전';
       const displayHour = hours % 12 === 0 ? 12 : hours % 12;
       return `${period} ${pad2(displayHour)}:${pad2(minutes)}`;
     } catch (error) {
@@ -573,7 +479,7 @@ const AttendanceManagement: React.FC = () => {
     if (!match) return null;
     const hours = Number(match[1]);
     const minutes = match[2];
-    const period = hours >= 12 ? '??' : '??';
+    const period = hours >= 12 ? '오후' : '오전';
     const displayHour = hours % 12 === 0 ? 12 : hours % 12;
     return `${period} ${pad2(displayHour)}:${minutes}`;
   };
@@ -618,7 +524,6 @@ const AttendanceManagement: React.FC = () => {
   const filteredAttendances = attendances.filter((attendance) => {
     const ymd = toYmd(attendance.date);
     if (ymd < boundsThisMonth.start_date || ymd > boundsThisMonth.end_date) return false;
-    if (filter.department !== 'all' && attendance.user?.department !== filter.department) return false;
     if (filter.status !== 'all' && attendance.status !== filter.status) return false;
     return true;
   });
@@ -650,99 +555,10 @@ const AttendanceManagement: React.FC = () => {
         </Alert>
       )}
 
-      <Card
-        elevation={0}
-        sx={{
-          ...mvsInnerCardSx,
-          mb: 3,
-          p: 2,
-        }}
-      >
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 2,
-            flexWrap: 'wrap',
-          }}
-        >
-          <Box sx={{ flex: '1 1 280px', minWidth: 0 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
-              <Typography sx={{ fontWeight: 700, fontSize: '0.9375rem', color: valueColor }}>
-                {t('attendanceManagement.heresnowTitle')}
-              </Typography>
-              <Chip
-                size="small"
-                label={
-                  heresnowStatus?.enabled
-                    ? t('attendanceManagement.heresnowActive')
-                    : t('attendanceManagement.heresnowInactive')
-                }
-                color={heresnowStatus?.enabled ? 'success' : 'default'}
-                sx={{ height: 24, fontWeight: 600 }}
-              />
-            </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1, lineHeight: 1.55 }}>
-              {t('attendanceManagement.heresnowDescription')}
-            </Typography>
-            {heresnowStatus?.externalCompanyId && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                {t('attendanceManagement.heresnowExternalCompanyId')}: {heresnowStatus.externalCompanyId}
-              </Typography>
-            )}
-            {heresnowStatus?.lastSyncAt && (
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                {t('attendanceManagement.heresnowLastSync')}:{' '}
-                {new Date(heresnowStatus.lastSyncAt).toLocaleString()}
-              </Typography>
-            )}
-            {heresnowStatus?.apiConfigured === false && canManageHeresnow && (
-              <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.75 }}>
-                {t('attendanceManagement.heresnowApiNotConfigured')}
-              </Typography>
-            )}
-          </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-            {canManageHeresnow && (
-              <FormControlLabel
-                control={
-                  <Switch
-                    size="small"
-                    checked={Boolean(heresnowStatus?.enabled)}
-                    onChange={(e) => handleHeresnowToggle(e.target.checked)}
-                  />
-                }
-                label={t('attendanceManagement.heresnowActive')}
-                sx={{ mr: 0 }}
-              />
-            )}
-            {canManageHeresnow && (
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={heresnowSyncLoading ? <CircularProgress size={16} /> : <SyncIcon />}
-                disabled={heresnowSyncLoading || !heresnowStatus?.enabled}
-                onClick={handleHeresnowSync}
-                sx={{ textTransform: 'none', fontWeight: 600 }}
-              >
-                {t('attendanceManagement.heresnowSync')}
-              </Button>
-            )}
-            <Button
-              href="https://www.heresnow.in"
-              target="_blank"
-              rel="noopener noreferrer"
-              variant="text"
-              size="small"
-              endIcon={<OpenInNewIcon sx={{ fontSize: '1rem !important' }} />}
-              sx={{ textTransform: 'none', fontWeight: 600 }}
-            >
-              {t('attendanceManagement.heresnowOpen')}
-            </Button>
-          </Box>
-        </Box>
-      </Card>
+      <Alert severity="info" sx={{ mb: 2 }}>
+        <AlertTitle>{t('attendanceManagement.heresnowTitle')}</AlertTitle>
+        {t('attendanceManagement.personalViewNotice')}
+      </Alert>
 
       <Box
         sx={{
@@ -1019,30 +835,6 @@ const AttendanceManagement: React.FC = () => {
                 {boundsThisMonth.start_date} ~ {boundsThisMonth.end_date}
               </Typography>
             </Box>
-            {canListCompanyAttendance && (
-              <TextField
-                fullWidth
-                size="small"
-                select
-                label={t('attendanceManagement.department')}
-                value={filter.department}
-                onChange={(e) => setFilter({ ...filter, department: e.target.value })}
-                InputLabelProps={{ shrink: true }}
-                SelectProps={{
-                  displayEmpty: true,
-                  renderValue: (selected) =>
-                    selected === 'all' ? t('attendanceManagement.all') : String(selected),
-                }}
-                sx={{ flex: '1 1 180px', minWidth: 160 }}
-              >
-                <MenuItem value="all">{t('attendanceManagement.all')}</MenuItem>
-                {departments.map((dept) => (
-                  <MenuItem key={dept} value={dept}>
-                    {dept}
-                  </MenuItem>
-                ))}
-              </TextField>
-            )}
             <TextField
               fullWidth
               size="small"
@@ -1128,9 +920,7 @@ const AttendanceManagement: React.FC = () => {
                     }}
                   >
                       <TableRow>
-                        <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('attendanceManagement.employeeId')}</TableCell>
                         <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('attendanceManagement.employeeName')}</TableCell>
-                        <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('attendanceManagement.department')}</TableCell>
                         <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('attendanceManagement.date')}</TableCell>
                         <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('attendanceManagement.checkInTimeShort')}</TableCell>
                         <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('attendanceManagement.checkOutTimeShort')}</TableCell>
@@ -1169,9 +959,7 @@ const AttendanceManagement: React.FC = () => {
                               },
                             }}
                           >
-                            <TableCell>{attendance.user?.employee_number || '-'}</TableCell>
                             <TableCell sx={{ fontWeight: 500 }}>{attendance.user?.username || '-'}</TableCell>
-                            <TableCell>{attendance.user?.department || '-'}</TableCell>
                             <TableCell>{formatDate(attendance.date)}</TableCell>
                             <TableCell>{displayTime(
                               attendance.check_in,

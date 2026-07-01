@@ -187,6 +187,14 @@ router.get('/', async (req, res) => {
       whereClause.company_id = parseInt(String(company_id), 10);
     }
 
+    // 일반 사용자(user)는 메뉴 권한이 있어도 비활성 사용자를 볼 수 없음
+    if (userRole === 'user') {
+      whereClause[Op.and] = [
+        ...(Array.isArray(whereClause[Op.and]) ? whereClause[Op.and] : []),
+        { status: { [Op.ne]: 'inactive' } }
+      ];
+    }
+
     if (status && typeof status === 'string') {
       whereClause.status = status;
     }
@@ -373,6 +381,9 @@ router.get('/:id', async (req, res) => {
     if (userRole !== 'root' && userRole !== 'audit') {
       whereClause.tenant_id = tenantId;
       whereClause.company_id = companyId;
+    }
+    if (userRole === 'user') {
+      whereClause.status = { [Op.ne]: 'inactive' };
     }
     
     let user: any;

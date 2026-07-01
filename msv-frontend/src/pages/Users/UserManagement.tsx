@@ -489,6 +489,58 @@ const UserManagement: React.FC = () => {
     }, { replace: true });
   }, [searchParams, setSearchParams, menusLoading, hrElevated, userMgmtMenuFlags.canCreate]);
 
+  useEffect(() => {
+    const prefillEmailRaw = searchParams.get('prefill_email');
+    if (!prefillEmailRaw) return;
+    const prefillEmail = prefillEmailRaw.trim().toLowerCase();
+    if (!prefillEmail) return;
+    if (!hrElevated && !userMgmtMenuFlags.canCreate) {
+      setError(t('userManagement.tabDisabledNoCreate'));
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('prefill_email');
+        return next;
+      }, { replace: true });
+      return;
+    }
+
+    setEditingUser(null);
+    setFormData({
+      employee_number: '',
+      username: prefillEmail.split('@')[0] || '',
+      birth_date: '',
+      gender: '',
+      phone: '',
+      email: prefillEmail,
+      address: '',
+      emergency_contact: '',
+      emergency_phone: '',
+      hire_date: '',
+      department: '',
+      department_id: '' as number | '',
+      position: '',
+      employment_type: 'fulltime',
+      salary: '',
+      bank_name: '',
+      bank_account: '',
+      bank_ifsc: '',
+      userid: prefillEmail,
+      password: '',
+      role: 'user',
+      status: 'active',
+      is_payment_officer: false,
+      company_id: loginUserCompanyId
+    } as any);
+    setPageTab(1);
+    setViewMode('create');
+    setSuccess(t('userManagement.prefillReady'));
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('prefill_email');
+      return next;
+    }, { replace: true });
+  }, [searchParams, setSearchParams, hrElevated, userMgmtMenuFlags.canCreate, loginUserCompanyId, t]);
+
   /** 메뉴 로드 후 권한 없는 탭에 머물러 있으면 목록으로 */
   useEffect(() => {
     if (menusLoading) return;

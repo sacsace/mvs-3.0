@@ -98,7 +98,15 @@ export const heresnowIntegrationService = {
     const response = await api.post('/hr/attendances/heresnow/sync', payload || {});
     return response.data;
   },
-  updateSettings: async (payload: { enabled?: boolean; externalCompanyId?: string }) => {
+  preview: async (payload?: { since?: string }) => {
+    const response = await api.post('/hr/attendances/heresnow/preview', payload || {});
+    return response.data;
+  },
+  testConnection: async () => {
+    const response = await api.post('/hr/attendances/heresnow/test', {});
+    return response.data;
+  },
+  updateSettings: async (payload: { enabled?: boolean; companyId?: string; externalCompanyId?: string; apiKey?: string }) => {
     const response = await api.put('/hr/attendances/heresnow/settings', payload);
     return response.data;
   }
