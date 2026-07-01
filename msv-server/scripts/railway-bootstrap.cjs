@@ -25,7 +25,7 @@ function run(command, args, label) {
 
 function startServer() {
   console.log('\n🚀 Railway bootstrap: API 서버 시작...');
-  const server = spawn('npx', ['ts-node', 'src/index.ts'], {
+  const server = spawn(process.execPath, ['--require', 'ts-node/register', 'src/index.ts'], {
     cwd: rootDir,
     env: process.env,
     stdio: 'inherit',
@@ -58,7 +58,7 @@ function startServer() {
       process.env.FORCE_DB_SEED === '1';
 
     if (shouldSeed) {
-      await run('npx', ['ts-node', 'scripts/seed-data.ts'], 'DB 시드 (root/admin 계정)');
+      await run(process.execPath, ['--require', 'ts-node/register', 'scripts/seed-data.ts'], 'DB 시드 (root/admin 계정)');
       console.log('\n✅ DB bootstrap 완료 — root / admin123 로 로그인 가능');
     } else {
       console.log('\n⏭️ DB 시드 건너뜀 (MVS_RUN_DB_SEED=1 이면 시드 실행). 마이그레이션만 적용됨');

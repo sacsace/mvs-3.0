@@ -10,13 +10,6 @@ const comparePassword = async (password: string, hash: string): Promise<boolean>
   return await bcrypt.compare(password, hash);
 };
 
-interface LoginRequest extends Request {
-  body: {
-    userid: string;
-    password: string;
-  };
-}
-
 const getClientIp = (req: Request): string | null => {
   const forwarded = req.headers['x-forwarded-for'];
   if (typeof forwarded === 'string' && forwarded.trim()) {
@@ -458,9 +451,9 @@ export const register = async (req: Request, res: Response) => {
   }
 };
 
-export const login = async (req: LoginRequest, res: Response) => {
+export const login = async (req: Request, res: Response) => {
   try {
-    const { userid, password } = req.body;
+    const { userid, password } = req.body as { userid?: string; password?: string };
     const clientIp = getClientIp(req);
     const userAgent = String(req.headers['user-agent'] || '').slice(0, 500) || null;
 
