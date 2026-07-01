@@ -209,7 +209,6 @@ const AttendanceStatistics: React.FC = () => {
   const [heresnowTestLoading, setHeresnowTestLoading] = useState(false);
   const [heresnowSettingsLoading, setHeresnowSettingsLoading] = useState(false);
   const [heresnowCompanyId, setHeresnowCompanyId] = useState('');
-  const [heresnowExternalCompanyId, setHeresnowExternalCompanyId] = useState('');
   const [heresnowApiKey, setHeresnowApiKey] = useState('');
   const [heresnowMessage, setHeresnowMessage] = useState<string | null>(null);
   const [heresnowError, setHeresnowError] = useState<string | null>(null);
@@ -261,8 +260,6 @@ const AttendanceStatistics: React.FC = () => {
 
   const canManageHeresnow = ['admin', 'root'].includes(String(user?.role || ''));
   const normalizedCompanyId = String(heresnowCompanyId || heresnowStatus?.companyId || '').trim();
-  const normalizedExternalCompanyId = String(heresnowExternalCompanyId || heresnowStatus?.externalCompanyId || '').trim();
-  const showExternalCompanyId = Boolean(normalizedExternalCompanyId && normalizedExternalCompanyId !== normalizedCompanyId);
 
   const applyMonth = (ym: string) => {
     const range = monthRangeFromYm(ym);
@@ -305,8 +302,8 @@ const AttendanceStatistics: React.FC = () => {
       .then((res) => {
         if (cancelled || !res?.success) return;
         setHeresnowStatus(res.data);
-        setHeresnowCompanyId(String(res.data?.companyId || ''));
-        setHeresnowExternalCompanyId(String(res.data?.externalCompanyId || ''));
+        const companyId = String(res.data?.companyId || res.data?.externalCompanyId || '');
+        setHeresnowCompanyId(companyId);
       })
       .catch(() => {
         if (!cancelled) setHeresnowStatus(null);
@@ -328,8 +325,7 @@ const AttendanceStatistics: React.FC = () => {
       const res = await heresnowIntegrationService.updateSettings({ enabled });
       if (res.success) {
         setHeresnowStatus(res.data);
-        setHeresnowCompanyId(String(res.data?.companyId || heresnowCompanyId || ''));
-        setHeresnowExternalCompanyId(String(res.data?.externalCompanyId || heresnowExternalCompanyId || ''));
+        setHeresnowCompanyId(String(res.data?.companyId || res.data?.externalCompanyId || heresnowCompanyId || ''));
         setHeresnowMessage(enabled ? t('attendanceManagement.heresnowActive') : t('attendanceManagement.heresnowInactive'));
       }
     } catch (e: any) {
@@ -345,15 +341,13 @@ const AttendanceStatistics: React.FC = () => {
     try {
       const payload: { companyId?: string; externalCompanyId?: string; apiKey?: string } = {};
       const companyId = String(heresnowCompanyId || '').trim();
-      const ext = String(heresnowExternalCompanyId || '').trim() || companyId;
       if (companyId) payload.companyId = companyId;
-      if (ext) payload.externalCompanyId = ext;
+      if (companyId) payload.externalCompanyId = companyId;
       if (heresnowApiKey.trim()) payload.apiKey = heresnowApiKey.trim();
       const res = await heresnowIntegrationService.updateSettings(payload);
       if (res.success) {
         setHeresnowStatus(res.data);
-        setHeresnowCompanyId(String(res.data?.companyId || companyId || ''));
-        setHeresnowExternalCompanyId(String(res.data?.externalCompanyId || ext || ''));
+        setHeresnowCompanyId(String(res.data?.companyId || res.data?.externalCompanyId || companyId || ''));
         setHeresnowApiKey('');
         setHeresnowMessage(t('attendanceManagement.heresnowSettingsSaved'));
       } else {
@@ -710,9 +704,7 @@ const AttendanceStatistics: React.FC = () => {
                 sx={{
                   mt: 1.5,
                   display: 'grid',
-                  gridTemplateColumns: showExternalCompanyId
-                    ? { xs: '1fr', lg: '1fr 1fr 1fr auto' }
-                    : { xs: '1fr', lg: '1fr 1fr auto' },
+                  gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr auto' },
                   alignItems: { xs: 'stretch', lg: 'center' },
                   gap: 1,
                   p: { xs: 1.2, sm: 1.5 },
@@ -724,19 +716,10 @@ const AttendanceStatistics: React.FC = () => {
                 <TextField
                   size="small"
                   label={t('attendanceManagement.heresnowCompanyId')}
-                  value={heresnowCompanyId}
+                  value={normalizedCompanyId}
                   onChange={(e) => setHeresnowCompanyId(e.target.value)}
                   sx={{ minWidth: 0 }}
                 />
-                {showExternalCompanyId && (
-                  <TextField
-                    size="small"
-                    label={t('attendanceManagement.heresnowExternalCompanyId')}
-                    value={heresnowExternalCompanyId}
-                    onChange={(e) => setHeresnowExternalCompanyId(e.target.value)}
-                    sx={{ minWidth: 0 }}
-                  />
-                )}
                 <TextField
                   size="small"
                   label={t('attendanceManagement.heresnowApiKeyLabel')}
