@@ -1033,6 +1033,17 @@ const AttendanceStatistics: React.FC = () => {
                     <TableHead sx={softTableHeadSx}>
                       <TableRow>
                         <TableCell
+                          align="center"
+                          sx={{
+                            width: '42px',
+                            minWidth: '42px',
+                            maxWidth: '42px',
+                            px: 0.5,
+                          }}
+                        >
+                          No.
+                        </TableCell>
+                        <TableCell
                           sx={{
                             width: `${nameColumnWidth}px`,
                             minWidth: `${nameColumnWidth}px`,
@@ -1061,15 +1072,30 @@ const AttendanceStatistics: React.FC = () => {
                     <TableBody>
                       {matrixUsers.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={Math.max(2, dayColumns.length + 1)} align="center" sx={{ py: 4 }}>
+                          <TableCell colSpan={Math.max(3, dayColumns.length + 2)} align="center" sx={{ py: 4 }}>
                             <Typography variant="body2" sx={{ color: labelColor }}>
                               {t('attendanceStatistics.empty')}
                             </Typography>
                           </TableCell>
                         </TableRow>
                       ) : (
-                        matrixUsers.map((u) => (
+                        matrixUsers.map((u, index) => (
                           <TableRow key={u.key} hover>
+                            <TableCell
+                              align="center"
+                              sx={{
+                                py: 1.1,
+                                px: 0.5,
+                                width: '42px',
+                                minWidth: '42px',
+                                maxWidth: '42px',
+                                color: 'text.secondary',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                              }}
+                            >
+                              {index + 1}
+                            </TableCell>
                             <TableCell
                               sx={{
                                 py: 1.1,

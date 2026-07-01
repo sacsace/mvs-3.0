@@ -164,6 +164,9 @@ const AttendanceManagement: React.FC = () => {
       month: mb
     };
   };
+  const initialBounds = getMonthBoundsIST();
+  const [startDate, setStartDate] = useState(initialBounds.start_date);
+  const [endDate, setEndDate] = useState(initialBounds.end_date);
   const getClientTimeISO = () => {
     const { year, month, day, hour, minute, second } = getClientTimeParts();
     return `${year}-${month}-${day}T${hour}:${minute}:${second}+05:30`;
@@ -241,19 +244,18 @@ const AttendanceManagement: React.FC = () => {
       setVacationDaysInMonth(0);
       return;
     }
-    const bounds = getMonthBoundsIST();
     let cancelled = false;
     vacationService
       .getVacations({
         user_id: user.id,
         status: 'approved',
-        start_date: bounds.start_date,
-        end_date: bounds.end_date
+        start_date: startDate,
+        end_date: endDate
       })
       .then((res) => {
         if (cancelled || !res.success || !res.data) return;
         const list = Array.isArray(res.data) ? res.data : [];
-        setVacationDaysInMonth(countVacationOverlapDaysInMonth(list, bounds.start_date, bounds.end_date));
+        setVacationDaysInMonth(countVacationOverlapDaysInMonth(list, startDate, endDate));
       })
       .catch(() => {
         if (!cancelled) setVacationDaysInMonth(0);
@@ -261,33 +263,31 @@ const AttendanceManagement: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [user?.id, startDate, endDate]);
 
   const myMonthStats = useMemo(() => {
-    const bounds = getMonthBoundsIST();
     if (!user?.id) {
       return { workingDays: 0, lateDays: 0 };
     }
     const myRows = attendances.filter((a) => {
       const ymd = toYmd(a.date);
-      return a.user_id === user.id && ymd >= bounds.start_date && ymd <= bounds.end_date;
+      return a.user_id === user.id && ymd >= startDate && ymd <= endDate;
     });
     const workingDays = new Set(myRows.map((a) => toYmd(a.date))).size;
     const lateDays = myRows.filter(
       (a) => a.status === 'late' && !isWeekendYmd(toYmd(a.date))
     ).length;
     return { workingDays, lateDays };
-  }, [attendances, user?.id]);
+  }, [attendances, user?.id, startDate, endDate]);
 
   // ?? ?? ??
   const fetchAttendances = async () => {
     setLoading(true);
     setError(null);
     try {
-      const bounds = getMonthBoundsIST();
       const params: any = {
-        start_date: bounds.start_date,
-        end_date: bounds.end_date
+        start_date: startDate,
+        end_date: endDate
       };
       if (filter.status !== 'all') {
         params.status = filter.status;
@@ -308,8 +308,10 @@ const AttendanceManagement: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return;
+    if (startDate > endDate) return;
     fetchAttendances();
-  }, [filter.status]);
+  }, [filter.status, startDate, endDate]);
 
   // ?? ??
   const handleCheckIn = async () => {
@@ -520,18 +522,12 @@ const AttendanceManagement: React.FC = () => {
     }
   };
 
-  const boundsThisMonth = getMonthBoundsIST();
   const filteredAttendances = attendances.filter((attendance) => {
     const ymd = toYmd(attendance.date);
-    if (ymd < boundsThisMonth.start_date || ymd > boundsThisMonth.end_date) return false;
+    if (ymd < startDate || ymd > endDate) return false;
     if (filter.status !== 'all' && attendance.status !== filter.status) return false;
     return true;
   });
-
-  const monthPeriodLabel = (() => {
-    const b = getMonthBoundsIST();
-    return t('attendanceManagement.monthPeriodLabel', { year: b.year, month: b.month });
-  })();
 
   const todayYmd = getClientDate();
   const todayIsWeekend = isWeekendYmd(todayYmd);
@@ -828,12 +824,26 @@ const AttendanceManagement: React.FC = () => {
               <Typography variant="body2" sx={{ mb: 0.5, color: labelColor, fontSize: '0.8125rem', fontWeight: 600 }}>
                 {t('attendanceManagement.currentMonthRange')}
               </Typography>
-              <Typography variant="body1" fontWeight={600} sx={{ color: valueColor }}>
-                {monthPeriodLabel}
-              </Typography>
-              <Typography variant="caption" sx={{ color: labelColor }}>
-                {boundsThisMonth.start_date} ~ {boundsThisMonth.end_date}
-              </Typography>
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <TextField
+                  size="small"
+                  type="date"
+                  label={t('attendanceManagement.startDate')}
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ minWidth: 170 }}
+                />
+                <TextField
+                  size="small"
+                  type="date"
+                  label={t('attendanceManagement.endDate')}
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ minWidth: 170 }}
+                />
+              </Box>
             </Box>
             <TextField
               fullWidth
