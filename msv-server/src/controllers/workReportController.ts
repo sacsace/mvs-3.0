@@ -143,7 +143,7 @@ async function notifyElevatedUsersWorkReportSubmitted(
 async function trySendWorkReportSubmittedEmail(params: Parameters<typeof sendWorkReportSubmittedEmail>[0]): Promise<WorkReportMailResult> {
   try {
     const result = await sendWorkReportSubmittedEmail(params);
-    if (!result.sent) {
+    if (result.sent === false) {
       console.warn('[workReport] email not sent:', result.reason);
     }
     return result;

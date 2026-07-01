@@ -109,12 +109,12 @@ const buildSettingsResponse = (company: Company, user?: User | null) => {
       ...defaultSettings.general,
       companyName: company.name || defaultSettings.general.companyName,
       timezone: company.timezone || defaultSettings.general.timezone,
-      ...(companySettings.general || {})
+      ...((companySettings.general || {}) as Record<string, unknown>)
     },
     appearance: {
       ...defaultSettings.appearance,
-      ...(companySettings.appearance || {}),
-      ...(userSettings.appearance || {})
+      ...((companySettings.appearance || {}) as Record<string, unknown>),
+      ...((userSettings.appearance || {}) as Record<string, unknown>)
     },
     mailServer: mergedMail
   };
