@@ -19,6 +19,8 @@ const CRITICAL_COLUMNS = [
   { table: 'invoices', column: 'is_active' },
   { table: 'quotations', column: 'is_active' },
   { table: 'work_board_cards', column: 'completed_at' },
+  { table: 'projects', column: 'is_active' },
+  { table: 'approvals', column: 'is_active' },
   { table: 'users', column: 'is_payment_officer' },
   { table: 'users', column: 'department_id' },
 ];

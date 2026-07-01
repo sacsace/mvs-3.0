@@ -19,6 +19,7 @@ interface ApprovalAttributes {
   approval_flow?: any; // JSON
   due_date?: Date;
   comments?: any; // JSON
+  is_active?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -43,6 +44,7 @@ class Approval extends Model<ApprovalAttributes, ApprovalCreationAttributes> imp
   public approval_flow?: any;
   public due_date?: Date;
   public comments?: any;
+  public is_active?: boolean;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
 }
@@ -122,6 +124,11 @@ Approval.init(
       type: DataTypes.JSONB,
       allowNull: true,
       defaultValue: '[]'
+    },
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true
     }
   },
   {
