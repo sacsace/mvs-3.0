@@ -1250,7 +1250,7 @@ const WorkBoardDetailPage: React.FC = () => {
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [companyUsers, setCompanyUsers] = useState<any[]>([]);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [selectedUsers, setSelectedUsers] = useState<any[]>([]);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [memberRoleUpdatingId, setMemberRoleUpdatingId] = useState<number | null>(null);
   const [memberRemovingId, setMemberRemovingId] = useState<number | null>(null);
@@ -1965,7 +1965,7 @@ const WorkBoardDetailPage: React.FC = () => {
   };
 
   const handleInvite = async () => {
-    if (!selectedUser?.id) return;
+    if (!selectedUsers.length) return;
     if (!menuCanEdit) {
       showErrorPopup(
         txt('멤버를 초대할 권한이 없습니다.', 'You do not have permission to invite members.'),
@@ -1975,17 +1975,47 @@ const WorkBoardDetailPage: React.FC = () => {
     }
     setInviteLoading(true);
     try {
-      const res = await workBoardService.inviteMember(boardId, selectedUser.id);
-      if (res.success) {
-        showSuccessToast('초대되었습니다.');
+      const settled = await Promise.allSettled(
+        selectedUsers.map((member) => workBoardService.inviteMember(boardId, Number(member.id)))
+      );
+      let successCount = 0;
+      const failedMessages: string[] = [];
+      settled.forEach((entry) => {
+        if (entry.status === 'fulfilled') {
+          if (entry.value?.success) {
+            successCount += 1;
+          } else {
+            failedMessages.push(String(entry.value?.message || txt('초대 실패', 'Invite failed')));
+          }
+          return;
+        }
+        failedMessages.push(String(entry.reason?.message || txt('초대 실패', 'Invite failed')));
+      });
+
+      if (successCount > 0) {
+        showSuccessToast(
+          successCount === 1
+            ? txt('1명이 초대되었습니다.', '1 member has been invited.')
+            : txt(`${successCount}명이 초대되었습니다.`, `${successCount} members have been invited.`)
+        );
         setInviteOpen(false);
-        setSelectedUser(null);
+        setSelectedUsers([]);
         await loadBoard();
       } else {
-        showErrorPopup(res.message || '초대 실패', '작업 보드');
+        showErrorPopup(
+          failedMessages[0] || txt('초대 실패', 'Invite failed'),
+          txt('작업 보드', 'Work board')
+        );
+      }
+
+      if (successCount > 0 && failedMessages.length > 0) {
+        showErrorPopup(
+          txt('일부 사용자는 이미 초대되었거나 초대에 실패했습니다.', 'Some users were already invited or failed to be invited.'),
+          txt('작업 보드', 'Work board')
+        );
       }
     } catch (e: any) {
-      showErrorPopup(e, '작업 보드');
+      showErrorPopup(e, txt('작업 보드', 'Work board'));
     } finally {
       setInviteLoading(false);
     }
@@ -2208,7 +2238,7 @@ const WorkBoardDetailPage: React.FC = () => {
             variant="outlined"
             color="primary"
             onClick={() => {
-              setSelectedUser(null);
+              setSelectedUsers([]);
               setInviteOpen(true);
               loadUsers();
             }}
@@ -3442,10 +3472,12 @@ const WorkBoardDetailPage: React.FC = () => {
             {txt('사용자 검색', 'Search User')}
           </Typography>
           <Autocomplete
+            multiple
             options={inviteUserOptions}
             getOptionLabel={(o) => `${o.username} (${o.userid})`}
-            value={selectedUser}
-            onChange={(_e, v) => setSelectedUser(v)}
+            value={selectedUsers}
+            onChange={(_e, v) => setSelectedUsers(Array.isArray(v) ? v : [])}
+            isOptionEqualToValue={(option, value) => Number(option.id) === Number(value.id)}
             renderInput={(params) => (
               <TextField {...params} variant="outlined" hiddenLabel placeholder={txt('이름 또는 아이디', 'Name or User ID')} />
             )}
@@ -3461,7 +3493,7 @@ const WorkBoardDetailPage: React.FC = () => {
           <Button onClick={() => setInviteOpen(false)} disabled={inviteLoading}>
             {txt('닫기', 'Close')}
           </Button>
-          <Button variant="contained" onClick={handleInvite} disabled={inviteLoading || !selectedUser}>
+          <Button variant="contained" onClick={handleInvite} disabled={inviteLoading || selectedUsers.length === 0}>
             {inviteLoading ? <CircularProgress size={22} /> : txt('초대', 'Invite')}
           </Button>
         </DialogActions>

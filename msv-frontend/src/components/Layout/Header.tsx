@@ -624,9 +624,22 @@ const Header: React.FC<HeaderProps> = ({
                   sx={{
                     alignItems: 'flex-start',
                     whiteSpace: 'normal',
-                    py: 1,
-                    borderRadius: 1,
-                    bgcolor: item.read ? 'transparent' : 'action.hover'
+                    py: 1.1,
+                    px: 1.1,
+                    mx: 0.75,
+                    my: 0.6,
+                    borderRadius: 2,
+                    border: '1px solid',
+                    borderColor: item.read
+                      ? (theme) => theme.palette.divider
+                      : (theme) => theme.palette.mode === 'light' ? 'rgba(25, 118, 210, 0.22)' : 'rgba(144, 202, 249, 0.35)',
+                    bgcolor: item.read
+                      ? 'background.paper'
+                      : (theme) => theme.palette.mode === 'light' ? 'rgba(25, 118, 210, 0.06)' : 'rgba(144, 202, 249, 0.12)',
+                    boxShadow: item.read ? 'none' : '0 2px 8px rgba(15, 23, 42, 0.06)',
+                    '&:hover': {
+                      bgcolor: (theme) => theme.palette.mode === 'light' ? 'rgba(25, 118, 210, 0.12)' : 'rgba(144, 202, 249, 0.2)',
+                    }
                   }}
                 >
                   <ListItemIcon sx={{ mt: 0.25, minWidth: 24 }}>
@@ -640,7 +653,7 @@ const Header: React.FC<HeaderProps> = ({
                   <ListItemText
                     primary={item.title}
                     secondary={
-                      <Box component="span" sx={{ display: 'inline-block' }}>
+                      <Box component="span" sx={{ display: 'inline-block', mt: 0.25 }}>
                         <Typography component="span" variant="body2" sx={{ display: 'block', color: 'text.primary' }}>
                           {item.message}
                         </Typography>
@@ -649,7 +662,7 @@ const Header: React.FC<HeaderProps> = ({
                         </Typography>
                       </Box>
                     }
-                    primaryTypographyProps={{ fontSize: '0.8rem', fontWeight: 600 }}
+                    primaryTypographyProps={{ fontSize: '0.8rem', fontWeight: 700 }}
                     secondaryTypographyProps={{ component: 'div' }}
                   />
                 </MenuItem>

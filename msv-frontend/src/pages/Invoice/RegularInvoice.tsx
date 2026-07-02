@@ -179,6 +179,9 @@ interface CompanyInfo {
   ifsc_code?: string;
 }
 
+const EXCEL_BASE_FONT_SIZE = '9pt';
+const EXCEL_BASE_LINE_HEIGHT = '20px';
+
 const RegularInvoice: React.FC = () => {
   const { user } = useStore();
   const { i18n } = useTranslation();
@@ -785,16 +788,17 @@ const RegularInvoice: React.FC = () => {
             box-sizing: border-box !important;
           }
           .invoice-page * {
-            font-size: 9pt;
+            font-size: ${EXCEL_BASE_FONT_SIZE};
+            line-height: ${EXCEL_BASE_LINE_HEIGHT};
           }
             .invoice-page .tax-summary-label {
               white-space: nowrap !important;
               word-break: keep-all !important;
             }
             .invoice-page .tax-summary-table td {
-              padding-top: 0 !important;
-              padding-bottom: 0 !important;
-              line-height: 1.12 !important;
+              padding-top: 2px !important;
+              padding-bottom: 2px !important;
+              line-height: ${EXCEL_BASE_LINE_HEIGHT} !important;
             }
         `;
         clonedDoc.head.appendChild(style);
@@ -1620,7 +1624,15 @@ const RegularInvoice: React.FC = () => {
       {isViewing && selectedInvoice ? (
         <Card sx={{ mb: 3, bgcolor: 'white', border: '1px solid', borderColor: 'grey.300' }}>
           <CardContent sx={{ p: { xs: 2.5, md: 4 } }}>
-            <Box ref={invoicePrintRef}>
+            <Box
+              ref={invoicePrintRef}
+              sx={{
+                '& .invoice-page .MuiTypography-root, & .invoice-page .MuiTableCell-root': {
+                  fontSize: EXCEL_BASE_FONT_SIZE,
+                  lineHeight: EXCEL_BASE_LINE_HEIGHT,
+                },
+              }}
+            >
             {itemPages.map((pageItems, pageIndex) => {
               const isFirst = pageIndex === 0;
               const isLast = pageIndex === itemPages.length - 1;
@@ -1733,7 +1745,15 @@ const RegularInvoice: React.FC = () => {
                   )}
 
                   <TableContainer component={Paper} variant="outlined" sx={{ mb: 2, borderColor: 'grey.300' }}>
-                    <Table size="small">
+                    <Table
+                      size="small"
+                      sx={{
+                        '& .MuiTableCell-root': {
+                          fontSize: EXCEL_BASE_FONT_SIZE,
+                          lineHeight: EXCEL_BASE_LINE_HEIGHT,
+                        },
+                      }}
+                    >
                       <TableHead
                         sx={{
                           bgcolor: 'background.paper',
@@ -1775,7 +1795,7 @@ const RegularInvoice: React.FC = () => {
                           const baseAmount = Number(item.total_price || 0);
                           const lineAmount = uniformGstRate !== null ? baseAmount : baseAmount + Number(item.tax_amount || 0);
                           return (
-                            <TableRow key={item.id ?? itemNumber} sx={{ '& td': { py: 0.6 } }}>
+                            <TableRow key={item.id ?? itemNumber} sx={{ '& td': { py: 0.85 } }}>
                               <TableCell align="center" sx={{ width: '6%' }}>{itemNumber}</TableCell>
                               <TableCell align="left" sx={{ width: '50%' }}>{item.item_name}</TableCell>
                               <TableCell align="center" sx={{ width: '10%' }}>{item.description}</TableCell>
@@ -1810,10 +1830,10 @@ const RegularInvoice: React.FC = () => {
                               borderCollapse: 'collapse',
                               tableLayout: 'fixed',
                               '& .MuiTableCell-root': {
-                                py: 0,
+                                py: 0.25,
                                 px: 1,
-                                fontSize: '0.75rem',
-                                lineHeight: 1.12,
+                                fontSize: EXCEL_BASE_FONT_SIZE,
+                                lineHeight: EXCEL_BASE_LINE_HEIGHT,
                               },
                             }}
                           >

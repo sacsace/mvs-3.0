@@ -1156,17 +1156,26 @@ const ElectronicApproval: React.FC = () => {
 
   const filterDocuments = useCallback(() => {
     let filtered = documents;
+    const isPrivilegedUser = user?.role === 'root' || user?.role === 'audit';
 
     // 탭에 따라 필터링
     if (activeTab === 0) {
-      // 내가 요청한 결제
-      filtered = filtered.filter(doc => doc.requesterId === user?.id);
+      // 내가 요청한 결제 (root/audit는 전체 조회)
+      if (!isPrivilegedUser) {
+        filtered = filtered.filter(doc => doc.requesterId === user?.id);
+      }
     } else if (activeTab === 1) {
-      // 받은 결제 (승인 대기 중인 결제)
-      filtered = filtered.filter(doc => 
-        doc.currentApproverId === user?.id && 
-        (doc.status === 'submitted' || doc.status === 'in_review')
-      );
+      // 받은 결제 (root/audit는 전체 승인대기 조회)
+      if (isPrivilegedUser) {
+        filtered = filtered.filter(
+          (doc) => doc.status === 'submitted' || doc.status === 'in_review'
+        );
+      } else {
+        filtered = filtered.filter(doc =>
+          doc.currentApproverId === user?.id &&
+          (doc.status === 'submitted' || doc.status === 'in_review')
+        );
+      }
     }
 
     if (searchTerm) {
@@ -1221,7 +1230,7 @@ const ElectronicApproval: React.FC = () => {
     }
 
     setFilteredDocuments(filtered);
-  }, [documents, searchTerm, statusFilter, typeFilter, priorityFilter, activeTab, user?.id, orderBy, order]);
+  }, [documents, searchTerm, statusFilter, typeFilter, priorityFilter, activeTab, user?.id, user?.role, orderBy, order]);
 
   useEffect(() => {
     usersRef.current = users;
@@ -1319,10 +1328,13 @@ const ElectronicApproval: React.FC = () => {
         label={label}
         size="small"
         sx={{
-          height: 26,
-          borderRadius: '8px',
-          fontWeight: 600,
-          fontSize: '0.6875rem',
+          height: 22,
+          borderRadius: '7px',
+          fontWeight: 500,
+          fontSize: '0.65rem',
+          '& .MuiChip-label': {
+            px: 0.8,
+          },
           border: `1px solid ${border}`,
           bgcolor: bg,
           color,
@@ -3933,12 +3945,12 @@ const ElectronicApproval: React.FC = () => {
         <Card
           elevation={0}
           sx={{
-            borderRadius: '20px',
+            borderRadius: '14px',
             overflow: 'hidden',
             border: '1px solid',
             borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
             boxShadow:
-              theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
+              theme.palette.mode === 'light' ? '0 1px 8px rgba(15, 23, 42, 0.04)' : '0 2px 10px rgba(0,0,0,0.24)',
             bgcolor: 'background.paper',
           }}
         >
@@ -3956,17 +3968,17 @@ const ElectronicApproval: React.FC = () => {
             <TableHead
               sx={{
                 '& .MuiTableCell-head': {
-                  bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
+                  bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.015)' : alpha(theme.palette.common.white, 0.03),
                   color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
-                  fontWeight: 600,
-                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  fontSize: '0.72rem',
                   textTransform: 'none',
-                  letterSpacing: '0.01em',
+                  letterSpacing: '0.005em',
                   borderBottom: `1px solid ${
                     theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
                   }`,
-                  py: 1.5,
-                  px: 2,
+                  py: 1.1,
+                  px: 1.5,
                   '& .MuiTableSortLabel-root': { color: 'inherit' },
                   '& .MuiTableSortLabel-root.Mui-active': {
                     color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.92)' : theme.palette.grey[100],
@@ -3975,6 +3987,17 @@ const ElectronicApproval: React.FC = () => {
               }}
             >
               <TableRow>
+                <TableCell
+                  align="center"
+                  sx={{
+                    width: 58,
+                    minWidth: 58,
+                    maxWidth: 58,
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  No.
+                </TableCell>
                 <TableCell>
                   <TableSortLabel
                     active={orderBy === 'title'}
@@ -4038,9 +4061,9 @@ const ElectronicApproval: React.FC = () => {
             <TableBody
               sx={{
                 '& .MuiTableCell-body': {
-                  py: 1.5,
-                  px: 2,
-                  fontSize: '0.875rem',
+                  py: 1.1,
+                  px: 1.5,
+                  fontSize: '0.82rem',
                   borderBottom: `1px solid ${
                     theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
                   }`,
@@ -4050,7 +4073,7 @@ const ElectronicApproval: React.FC = () => {
                 },
               }}
             >
-              {paginatedDocuments.map((document) => (
+              {paginatedDocuments.map((document, index) => (
                 <TableRow 
                   key={document.id} 
                   hover 
@@ -4061,12 +4084,15 @@ const ElectronicApproval: React.FC = () => {
                   }}
                   onClick={() => handleViewDocument(document)}
                 >
+                  <TableCell align="center" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                    {(page - 1) * itemsPerPage + index + 1}
+                  </TableCell>
                   <TableCell>
                     <Box>
-                      <Typography variant="subtitle2" fontWeight="bold">
+                      <Typography variant="body2" fontWeight={600}>
                         {document.title}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary">
                         {document.documentId}
                       </Typography>
                     </Box>
@@ -4075,17 +4101,17 @@ const ElectronicApproval: React.FC = () => {
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       <Avatar
                         sx={{
-                          mr: 1.5,
-                          width: 36,
-                          height: 36,
+                          mr: 1,
+                          width: 30,
+                          height: 30,
                           bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.12),
                           color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.55)' : theme.palette.grey[300],
                         }}
                       >
-                        <PersonIcon sx={{ fontSize: 20 }} />
+                        <PersonIcon sx={{ fontSize: 16 }} />
                       </Avatar>
                       <Box>
-                        <Typography variant="body2" fontWeight="bold">
+                        <Typography variant="body2" fontWeight={600}>
                           {document.requesterName}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
@@ -4096,13 +4122,13 @@ const ElectronicApproval: React.FC = () => {
                   </TableCell>
                   {activeTab === 0 && (
                     <TableCell>
-                      <Typography variant="body2" component="span" color="text.secondary">
+                      <Typography variant="caption" component="span" color="text.secondary">
                         {document.requesterName}
                       </Typography>
-                      <Typography variant="body2" component="span" sx={{ mx: 0.5, color: 'text.disabled' }}>
+                      <Typography variant="caption" component="span" sx={{ mx: 0.5, color: 'text.disabled' }}>
                         →
                       </Typography>
-                      <Typography variant="body2" component="span" sx={{ fontWeight: 600 }}>
+                      <Typography variant="caption" component="span" sx={{ fontWeight: 600 }}>
                         {getApprovalDisplayName(document)}
                       </Typography>
                     </TableCell>
@@ -4112,9 +4138,9 @@ const ElectronicApproval: React.FC = () => {
                   </TableCell>
                   <TableCell>{getStatusChip(document.status)}</TableCell>
                   <TableCell>{getPriorityChip(document.priority)}</TableCell>
-                  <TableCell>{formatDateTime(document.createdAt)}</TableCell>
+                  <TableCell sx={{ color: 'text.secondary', fontSize: '0.78rem' }}>{formatDateTime(document.createdAt)}</TableCell>
                   <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Box sx={{ display: 'flex', gap: 0.5 }}>
                       {activeTab === 1 &&
                         document.currentApproverId === user?.id &&
                         (document.status === 'submitted' || document.status === 'in_review') && (
@@ -4127,8 +4153,9 @@ const ElectronicApproval: React.FC = () => {
                                 handleApproveDocument(document.id);
                               }}
                               color="error"
+                              sx={{ p: 0.6 }}
                             >
-                              <CheckCircleIcon />
+                              <CheckCircleIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title={t('approval.reject')}>
@@ -4139,8 +4166,9 @@ const ElectronicApproval: React.FC = () => {
                                 handleRejectDocument(document.id);
                               }}
                               color="primary"
+                              sx={{ p: 0.6 }}
                             >
-                              <CancelIcon />
+                              <CancelIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                           <Tooltip title={t('approval.escalate')}>
@@ -4151,8 +4179,9 @@ const ElectronicApproval: React.FC = () => {
                                 void handleViewDocument(document);
                               }}
                               color="info"
+                              sx={{ p: 0.6 }}
                             >
-                              <ReplyIcon />
+                              <ReplyIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
                         </>
@@ -4165,6 +4194,7 @@ const ElectronicApproval: React.FC = () => {
                             handleDeleteDocument(document.id);
                           }}
                           sx={{
+                            p: 0.6,
                             color: 'text.secondary',
                             borderRadius: '10px',
                             '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.08) },
@@ -4182,7 +4212,7 @@ const ElectronicApproval: React.FC = () => {
         </TableContainer>
 
         {/* 페이지네이션 */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 2.5, px: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 1.8, px: 1.5 }}>
           <Pagination
             count={Math.ceil(filteredDocuments.length / itemsPerPage)}
             page={page}
@@ -4193,9 +4223,9 @@ const ElectronicApproval: React.FC = () => {
             sx={{
               '& .MuiPaginationItem-root': {
                 borderRadius: '10px',
-                fontWeight: 600,
-                minWidth: 36,
-                height: 36,
+                fontWeight: 500,
+                minWidth: 32,
+                height: 32,
               },
               '& .Mui-selected': {
                 bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.12),

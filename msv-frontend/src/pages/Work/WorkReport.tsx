@@ -1605,6 +1605,17 @@ const WorkReport: React.FC = () => {
               }}
             >
               <TableRow>
+                <TableCell
+                  align="center"
+                  sx={{
+                    width: 58,
+                    minWidth: 58,
+                    maxWidth: 58,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  No.
+                </TableCell>
                 <TableCell>{tr('보고서 정보', 'Report')}</TableCell>
                 <TableCell>{tr('작성자', 'Author')}</TableCell>
                 <TableCell>{tr('유형', 'Type')}</TableCell>
@@ -1628,7 +1639,7 @@ const WorkReport: React.FC = () => {
                 },
               }}
             >
-              {paginatedReports.map((report) => (
+              {paginatedReports.map((report, index) => (
                 <TableRow
                   key={report.id}
                   hover
@@ -1639,6 +1650,9 @@ const WorkReport: React.FC = () => {
                     '&:hover': { bgcolor: 'action.hover' },
                   }}
                 >
+                  <TableCell align="center" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+                    {(page - 1) * itemsPerPage + index + 1}
+                  </TableCell>
                   <TableCell>
                     <Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>

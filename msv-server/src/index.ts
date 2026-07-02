@@ -44,6 +44,7 @@ validateEnv();
 if (process.env.NODE_ENV === 'development') {
   printEnvInfo();
 }
+const processBootAt = Date.now();
 
 const app = express();
 /** Railway 등 리버스 프록시 뒤에서 클라이언트 IP·Rate limit이 올바르게 동작하도록 */
@@ -206,7 +207,8 @@ app.get('/health', (req, res) => {
   const baseHealth = {
     status: 'ok',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    bootDurationMs: Date.now() - processBootAt,
   };
 
   if (process.env.NODE_ENV === 'development') {
@@ -227,6 +229,7 @@ app.get('/api/health', (req, res) => {
     message: 'API is healthy',
     timestamp: new Date().toISOString(),
     redis: isRedisCacheReady() ? 'connected' : 'memory-fallback',
+    bootDurationMs: Date.now() - processBootAt,
   });
 });
 

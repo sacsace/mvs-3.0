@@ -5,6 +5,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 
 const rootDir = path.join(__dirname, '..');
+const bootStartedAt = Date.now();
 
 function run(command, args, label) {
   return new Promise((resolve, reject) => {
@@ -25,9 +26,13 @@ function run(command, args, label) {
 
 function startServer() {
   console.log('\n🚀 Railway bootstrap: API 서버 시작...');
-  const server = spawn(process.execPath, ['--require', 'ts-node/register', 'src/index.ts'], {
+  const server = spawn(process.execPath, ['--require', 'ts-node/register/transpile-only', 'src/index.ts'], {
     cwd: rootDir,
-    env: process.env,
+    env: {
+      ...process.env,
+      TS_NODE_TRANSPILE_ONLY: process.env.TS_NODE_TRANSPILE_ONLY || '1',
+      TS_NODE_FILES: process.env.TS_NODE_FILES || 'false',
+    },
     stdio: 'inherit',
     shell: process.platform === 'win32',
   });
@@ -44,21 +49,32 @@ function startServer() {
 }
 
 (async () => {
+  console.log(`🕒 Railway bootstrap started at ${new Date(bootStartedAt).toISOString()}`);
   if (process.env.SKIP_DB_BOOTSTRAP === '1') {
     console.log('⏭️ SKIP_DB_BOOTSTRAP=1 — 마이그레이션/시드 건너뜀');
+    console.log(`⏱️ Bootstrap duration: ${Date.now() - bootStartedAt}ms`);
     startServer();
     return;
   }
 
   try {
-    await run('node', ['scripts/run-migrations.cjs'], 'DB 마이그레이션');
+    const shouldRunMigrations =
+      process.env.RUN_DB_MIGRATIONS_ON_BOOT === '1' ||
+      process.env.MVS_RUN_DB_MIGRATIONS_ON_BOOT === '1';
+
+    if (shouldRunMigrations) {
+      await run('node', ['scripts/run-migrations.cjs'], 'DB 마이그레이션');
+    } else {
+      console.log('⏭️ RUN_DB_MIGRATIONS_ON_BOOT!=1 — 부팅 시 마이그레이션 건너뜀');
+      console.log('   필요 시 수동 실행: npm run db:migrate:railway');
+    }
 
     const shouldSeed =
       process.env.MVS_RUN_DB_SEED === '1' ||
       process.env.FORCE_DB_SEED === '1';
 
     if (shouldSeed) {
-      await run(process.execPath, ['--require', 'ts-node/register', 'scripts/seed-data.ts'], 'DB 시드 (root/admin 계정)');
+      await run(process.execPath, ['--require', 'ts-node/register/transpile-only', 'scripts/seed-data.ts'], 'DB 시드 (root/admin 계정)');
       console.log('\n✅ DB bootstrap 완료 — root / admin123 로 로그인 가능');
     } else {
       console.log('\n⏭️ DB 시드 건너뜀 (MVS_RUN_DB_SEED=1 이면 시드 실행). 마이그레이션만 적용됨');
@@ -68,5 +84,6 @@ function startServer() {
     console.error('마이그레이션 실패 시에도 서버를 기동합니다 (ensureAttendanceSchema 등 런타임 보정).');
   }
 
+  console.log(`⏱️ Bootstrap duration: ${Date.now() - bootStartedAt}ms`);
   startServer();
 })();

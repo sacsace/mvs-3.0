@@ -1100,15 +1100,15 @@ const WorkStatistics: React.FC = () => {
                   '& .MuiTableCell-head': {
                     bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
                     color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
-                    fontWeight: 600,
-                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    fontSize: '0.72rem',
                     textTransform: 'none',
                     letterSpacing: '0.01em',
                     borderBottom: `1px solid ${
                       theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
                     }`,
-                    py: 1.5,
-                    px: 2,
+                    py: 1.15,
+                    px: 1.5,
                   },
                 }}
               >
@@ -1130,9 +1130,9 @@ const WorkStatistics: React.FC = () => {
               <TableBody
                 sx={{
                   '& .MuiTableCell-body': {
-                    py: 1.5,
-                    px: 2,
-                    fontSize: '0.875rem',
+                    py: 1.1,
+                    px: 1.5,
+                    fontSize: '0.82rem',
                     borderBottom: `1px solid ${
                       theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
                     }`,
@@ -1155,21 +1155,18 @@ const WorkStatistics: React.FC = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         <Avatar
                           sx={{
-                            mr: 2,
-                            width: 40,
-                            height: 40,
+                            mr: 1.25,
+                            width: 34,
+                            height: 34,
                             bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.12),
                             color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.55)' : theme.palette.grey[300],
                           }}
                         >
-                          <PersonIcon sx={{ fontSize: 20 }} />
+                          <PersonIcon sx={{ fontSize: 17 }} />
                         </Avatar>
                         <Box>
-                          <Typography variant="subtitle2" fontWeight="bold" sx={{ color: 'text.primary' }}>
+                          <Typography variant="body2" fontWeight={600} sx={{ color: 'text.primary' }}>
                             {stat.employeeName}
-                          </Typography>
-                          <Typography variant="body2" sx={{ color: 'text.primary', opacity: 0.68, mt: 0.25 }}>
-                            {stat.position} • {stat.department}
                           </Typography>
                         </Box>
                       </Box>
