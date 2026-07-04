@@ -232,7 +232,7 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
                       height: 28,
                       color: headerText,
                       bgcolor: alpha(headerText, 0.12),
-                      touchAction: 'none',
+                      touchAction: 'pan-y',
                       cursor: 'grab',
                       '&:hover': { bgcolor: alpha(headerText, 0.2) },
                     }}
@@ -388,7 +388,7 @@ const WorkBoardsPage: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await workBoardService.getBoards();
+      const res = await workBoardService.getBoards({ light: true });
       if (res.success) {
         setBoards(res.data || []);
       } else {

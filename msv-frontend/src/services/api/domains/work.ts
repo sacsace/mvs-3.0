@@ -60,7 +60,7 @@ export const projectService = {
 /** ?�렐로형 ?�업 보드 (/api/work/boards) */
 
 export const workBoardService = {
-  getBoards: async (params?: { company_id?: number }) => {
+  getBoards: async (params?: { company_id?: number; light?: boolean }) => {
     const response = await api.get('/work/boards', { params });
     return response.data;
   },

@@ -332,6 +332,21 @@ export const getWorkBoards = async (req: RequestWithUser, res: Response) => {
     await ensureWorkBoardSchema();
     const user = req.user!;
     const { company_id } = req.query;
+    const light = String(req.query.light || '') === '1';
+    const memberUserAttributes = light
+      ? ['id', 'username', 'userid']
+      : ['id', 'username', 'userid', 'email'];
+    const boardAttributes = light
+      ? ['id', 'tenant_id', 'company_id', 'name', 'description', 'board_color', 'position', 'created_by', 'created_at', 'updated_at']
+      : undefined;
+    const memberInclude = {
+      model: WorkBoardMember,
+      as: 'members',
+      attributes: ['id', 'board_id', 'user_id', 'role', 'invited_by', 'created_at'],
+      separate: true as const,
+      include: [{ model: User, as: 'user', attributes: memberUserAttributes }],
+      order: [['id', 'ASC']] as any,
+    };
 
     let boards: WorkBoard[];
 
@@ -342,13 +357,10 @@ export const getWorkBoards = async (req: RequestWithUser, res: Response) => {
       }
       boards = await WorkBoard.findAll({
         where,
+        attributes: boardAttributes as any,
         include: [
           { model: User, as: 'creator', attributes: ['id', 'username', 'userid'] },
-          {
-            model: WorkBoardMember,
-            as: 'members',
-            include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email'] }]
-          }
+          memberInclude
         ],
         order: [
           ['position', 'ASC'],
@@ -370,13 +382,10 @@ export const getWorkBoards = async (req: RequestWithUser, res: Response) => {
             tenant_id: user.tenant_id,
             company_id: user.company_id
           },
+          attributes: boardAttributes as any,
           include: [
             { model: User, as: 'creator', attributes: ['id', 'username', 'userid'] },
-            {
-              model: WorkBoardMember,
-              as: 'members',
-              include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email'] }]
-            }
+            memberInclude
           ],
           order: [
             ['position', 'ASC'],

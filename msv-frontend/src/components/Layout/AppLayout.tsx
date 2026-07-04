@@ -340,6 +340,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 width: '100%',
                 overflowX: 'hidden',
                 overflowY: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                overscrollBehaviorY: 'contain',
                 color: 'text.primary',
                 fontSize: '13.5px',
                 lineHeight: 1.6,

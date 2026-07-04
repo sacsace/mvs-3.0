@@ -744,7 +744,7 @@ const DraggableCard = memo(function DraggableCard({
         display: 'flex',
         flexDirection: 'column',
         cursor: dragDisabled ? 'pointer' : 'grab',
-        touchAction: dragDisabled ? undefined : 'none',
+        touchAction: 'pan-y',
         userSelect: 'none',
         bgcolor: cardBg,
         border: theme.palette.mode === 'light' ? KANBAN_CARD_BORDER : 'none',
