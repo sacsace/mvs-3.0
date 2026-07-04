@@ -314,25 +314,28 @@ const kanbanMetaChipSx = {
 
 const cardDetailFieldLabelSx = {
   display: 'block',
-  mb: 0.5,
+  mb: 0.65,
   fontWeight: 700,
   fontSize: '0.75rem',
-  lineHeight: '18px',
+  lineHeight: '20px',
   color: '#475569',
 } as const;
 
 const cardDetailSectionPaperSx = {
-  p: 1.5,
+  p: 1.25,
   flexShrink: 0,
   borderRadius: KANBAN_SURFACE_RADIUS,
-  border: '1px solid #C5CED9',
-  bgcolor: '#FFFFFF',
+  border: 'none',
+  bgcolor: 'transparent',
   boxShadow: 'none',
 } as const;
 
 const cardDetailFormSectionSx = {
   borderRadius: KANBAN_SURFACE_RADIUS,
-  p: 1.5,
+  p: 0,
+  border: 'none',
+  bgcolor: 'transparent',
+  boxShadow: 'none',
   flexShrink: 0,
 } as const;
 
@@ -408,7 +411,7 @@ const cardDetailOutlinedWhiteSx = {
   '& .MuiOutlinedInput-root': {
     ...(cardDetailInputSx['& .MuiOutlinedInput-root'] as Record<string, unknown>),
     bgcolor: '#FFFFFF',
-    height: 40,
+    height: 46,
     '&:hover': { bgcolor: '#F8FAFC' },
     '&.Mui-focused': { bgcolor: '#FFFFFF' },
     '&.Mui-disabled': { bgcolor: '#F1F5F9' },
@@ -1364,6 +1367,10 @@ const WorkBoardDetailPage: React.FC = () => {
 
   useEffect(() => {
     if (!isKanbanDragging) return;
+    const isCoarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    if (!isCoarsePointer) {
+      return;
+    }
     const prevBodyOverflow = document.body.style.overflow;
     const prevHtmlOverflow = document.documentElement.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -2699,7 +2706,7 @@ const WorkBoardDetailPage: React.FC = () => {
             return {
               mt: 1.5,
               height: 'auto',
-              maxHeight: 'none',
+              maxHeight: 'calc(100vh - 190px)',
               borderRadius: KANBAN_DETAIL_SHELL_RADIUS,
               boxShadow: '0 1px 0 #C5CED9, 0 4px 14px rgba(15, 23, 42, 0.07)',
               overflow: 'hidden',
@@ -2717,9 +2724,9 @@ const WorkBoardDetailPage: React.FC = () => {
             alignItems: 'center',
             gap: 1,
             borderBottom: '1px solid #C5CED9',
-            bgcolor: '#F0F4F8',
-            py: 1.25,
-            px: 2,
+            bgcolor: '#FFFFFF',
+            py: 1,
+            px: 1.5,
           }}
         >
           <Button
@@ -2784,24 +2791,26 @@ const WorkBoardDetailPage: React.FC = () => {
         </Box>
         <Box
           sx={{
-            pt: 1.5,
-            px: 1.5,
-            pb: 1.5,
+            pt: 1.25,
+            px: 1.25,
+            pb: 1.25,
             display: 'flex',
             flexDirection: 'column',
-            gap: 1.25,
+            flex: 1,
+            minHeight: 0,
+            gap: 1.4,
             bgcolor: '#F8FAFC',
-            overflowY: 'visible',
+            overflowY: 'auto',
             overflowX: 'hidden',
-            minHeight: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehaviorY: 'auto',
           }}
         >
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.42 }}>
           <Box
             sx={{
               ...cardDetailFormSectionSx,
-              bgcolor: '#F0F4F8',
-              border: '1px solid #C5CED9',
+              py: 0.32,
             }}
           >
           <TextField
@@ -2825,15 +2834,14 @@ const WorkBoardDetailPage: React.FC = () => {
           <Box
             sx={{
               ...cardDetailFormSectionSx,
-              bgcolor: '#F0F4F8',
-              border: '1px solid #C5CED9',
+              py: 0.37,
             }}
           >
           <Box
             sx={{
               display: 'grid',
               gridTemplateColumns: { xs: '1fr', md: 'repeat(3, minmax(0, 1fr))' },
-              gap: 1
+                gap: 1.58
             }}
           >
             <TextField
@@ -2916,8 +2924,7 @@ const WorkBoardDetailPage: React.FC = () => {
           <Box
             sx={{
               ...cardDetailFormSectionSx,
-              bgcolor: '#F0F4F8',
-              border: '1px solid #C5CED9',
+              py: 0.37,
             }}
           >
             <Autocomplete
@@ -2953,9 +2960,9 @@ const WorkBoardDetailPage: React.FC = () => {
                     '& .MuiOutlinedInput-root': {
                       ...(cardDetailOutlinedWhiteSx['& .MuiOutlinedInput-root'] as Record<string, unknown>),
                       height: 'auto',
-                      minHeight: 40,
+                      minHeight: 46,
                       alignItems: 'center',
-                      py: 0.5,
+                      py: 0.68,
                     },
                   }}
                 />
@@ -2964,22 +2971,17 @@ const WorkBoardDetailPage: React.FC = () => {
           </Box>
 
           <Box
-            component="fieldset"
             sx={{
               ...cardDetailFormSectionSx,
-              bgcolor: '#F0F4F8',
-              border: '1px solid #C5CED9',
-              borderRadius: KANBAN_CONTROL_RADIUS,
-              m: 0,
-              minWidth: 0,
+              borderRadius: KANBAN_SURFACE_RADIUS,
             }}
           >
-            <Box
-              component="legend"
-              sx={{ px: 0.5, ml: 0.5, fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}
+            <Typography
+              variant="caption"
+              sx={{ ...cardDetailFieldLabelSx, mb: 0.5 }}
             >
               {txt('카드 색상', 'Card Color')}
-            </Box>
+            </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75 }}>
             <TextField
               type="color"
@@ -3056,24 +3058,22 @@ const WorkBoardDetailPage: React.FC = () => {
           </Box>
 
           <Box
-            component="fieldset"
             sx={{
-              border: '1px solid #C5CED9',
+              border: 'none',
               borderRadius: KANBAN_SURFACE_RADIUS,
-              m: 0,
               p: 0,
               minWidth: 0,
               flexShrink: 0,
               overflow: 'hidden',
-              bgcolor: '#FFFFFF',
+              bgcolor: 'transparent',
             }}
           >
-            <Box
-              component="legend"
-              sx={{ px: 0.5, ml: 1, fontSize: '0.75rem', fontWeight: 600, color: '#475569' }}
+            <Typography
+              variant="caption"
+              sx={{ ...cardDetailFieldLabelSx, mb: 0.5, ml: 0.25 }}
             >
               {txt('설명', 'Description')}
-            </Box>
+            </Typography>
             <RichTextEditor
               readOnly={!menuCanEdit}
               value={cardDetail?.description || ''}
@@ -3085,7 +3085,7 @@ const WorkBoardDetailPage: React.FC = () => {
                 '설명을 입력하세요. 이미지 업로드, 글자 크기/색상 변경이 가능합니다.',
                 'Enter description. Image upload and text size/color changes are available.'
               )}
-              sx={{ border: 'none', borderRadius: 0, width: '100%' }}
+              sx={{ borderRadius: KANBAN_CONTROL_RADIUS, width: '100%' }}
             />
           </Box>
 

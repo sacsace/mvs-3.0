@@ -642,7 +642,13 @@ const Header: React.FC<HeaderProps> = ({
                     }
                   }}
                 >
-                  <ListItemIcon sx={{ mt: 0.25, minWidth: 24 }}>
+                  <ListItemIcon
+                    sx={{
+                      mt: 0.25,
+                      minWidth: 72,
+                      mr: 0.5,
+                    }}
+                  >
                     <Chip
                       size="small"
                       label={getNotificationChipLabel(item, t)}

@@ -3,12 +3,22 @@ import { Box, IconButton, Divider, SxProps, Theme, Tooltip } from '@mui/material
 import {
   FormatBold,
   FormatItalic,
+  FormatStrikethrough,
   FormatUnderlined,
   FormatListBulleted,
   FormatListNumbered,
   FormatAlignLeft,
   FormatAlignCenter,
   FormatAlignRight,
+  FormatQuote,
+  HorizontalRule,
+  Redo,
+  TableChart,
+  Title,
+  Undo,
+  ZoomIn,
+  ZoomOut,
+  Straighten,
   Image as ImageIcon,
 } from '@mui/icons-material';
 import { useEditor, EditorContent } from '@tiptap/react';
@@ -35,10 +45,7 @@ const ResizableImage = Image.extend({
         parseHTML: (element) => element.getAttribute('width'),
         renderHTML: (attributes) => {
           if (!attributes.width) return {};
-          return {
-            width: attributes.width,
-            style: `width: ${attributes.width}px; height: auto; display: block;`,
-          };
+          return { width: attributes.width };
         },
       },
       height: {
@@ -47,6 +54,23 @@ const ResizableImage = Image.extend({
         renderHTML: (attributes) => {
           if (!attributes.height) return {};
           return { height: attributes.height };
+        },
+      },
+      align: {
+        default: 'center',
+        parseHTML: (element) => element.getAttribute('data-align') || 'center',
+        renderHTML: (attributes) => {
+          const align = String(attributes.align || 'center');
+          const marginStyle =
+            align === 'left'
+              ? '12px auto 12px 0'
+              : align === 'right'
+                ? '12px 0 12px auto'
+                : '12px auto';
+          return {
+            'data-align': align,
+            style: `display:block; margin:${marginStyle};`,
+          };
         },
       },
     };
@@ -70,13 +94,14 @@ const editorContentSx = (minHeight: number): SxProps<Theme> => ({
     px: 1.5,
     py: 1.25,
     fontSize: '0.875rem',
-    lineHeight: 1.6,
-    '& p': { margin: '0.35em 0' },
+    lineHeight: 1.68,
+    '& p': { margin: '0.42em 0' },
     '& img': {
       maxWidth: '100%',
       height: 'auto',
       display: 'block',
       margin: '12px auto',
+      borderRadius: 4,
     },
     '& table': {
       borderCollapse: 'collapse',
@@ -214,18 +239,43 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
     const reader = new FileReader();
     reader.onload = (e) => {
       const result = e.target?.result as string;
-      if (result) editor.chain().focus().setImage({ src: result }).run();
+      if (result) editor.chain().focus().setImage({ src: result }).updateAttributes('image', { align: 'center' }).run();
     };
     reader.readAsDataURL(file);
+  };
+
+  const setAlign = (align: 'left' | 'center' | 'right') => {
+    if (!editor) return;
+    if (editor.isActive('image')) {
+      editor.chain().focus().updateAttributes('image', { align }).run();
+      return;
+    }
+    editor.chain().focus().setTextAlign(align).run();
+  };
+
+  const adjustImageWidth = (deltaPx: number) => {
+    if (!editor || !editor.isActive('image')) return;
+    const attrs = editor.getAttributes('image') as { width?: string | number };
+    const currentRaw = attrs.width;
+    const currentWidth = currentRaw ? parseInt(String(currentRaw), 10) : 420;
+    const safeCurrent = Number.isFinite(currentWidth) ? currentWidth : 420;
+    const nextWidth = Math.max(120, Math.min(1200, safeCurrent + deltaPx));
+    editor.chain().focus().updateAttributes('image', { width: nextWidth }).run();
+  };
+
+  const resetImageWidth = () => {
+    if (!editor || !editor.isActive('image')) return;
+    editor.chain().focus().updateAttributes('image', { width: null }).run();
   };
 
   return (
     <Box
       sx={{
         border: '1px solid #C5CED9',
-        borderRadius: 0,
+        borderRadius: 10,
         overflow: 'hidden',
         bgcolor: '#fff',
+        boxSizing: 'border-box',
         ...sx,
       }}
     >
@@ -240,6 +290,8 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
             py: 0.5,
             borderBottom: '1px solid #C5CED9',
             bgcolor: '#F5F7FA',
+            borderTopLeftRadius: 'inherit',
+            borderTopRightRadius: 'inherit',
           }}
         >
           <ToolbarBtn title="Bold" onClick={() => editor.chain().focus().toggleBold().run()}>
@@ -251,6 +303,16 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
           <ToolbarBtn title="Underline" onClick={() => editor.chain().focus().toggleUnderline().run()}>
             <FormatUnderlined fontSize="small" />
           </ToolbarBtn>
+          <ToolbarBtn title="Strike" onClick={() => editor.chain().focus().toggleStrike().run()}>
+            <FormatStrikethrough fontSize="small" />
+          </ToolbarBtn>
+          <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
+          <ToolbarBtn title="Heading" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
+            <Title fontSize="small" />
+          </ToolbarBtn>
+          <ToolbarBtn title="Quote" onClick={() => editor.chain().focus().toggleBlockquote().run()}>
+            <FormatQuote fontSize="small" />
+          </ToolbarBtn>
           <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
           <ToolbarBtn title="Bullet list" onClick={() => editor.chain().focus().toggleBulletList().run()}>
             <FormatListBulleted fontSize="small" />
@@ -259,18 +321,49 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
             <FormatListNumbered fontSize="small" />
           </ToolbarBtn>
           <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
-          <ToolbarBtn title="Align left" onClick={() => editor.chain().focus().setTextAlign('left').run()}>
+          <ToolbarBtn title="Align left" onClick={() => setAlign('left')}>
             <FormatAlignLeft fontSize="small" />
           </ToolbarBtn>
-          <ToolbarBtn title="Align center" onClick={() => editor.chain().focus().setTextAlign('center').run()}>
+          <ToolbarBtn title="Align center" onClick={() => setAlign('center')}>
             <FormatAlignCenter fontSize="small" />
           </ToolbarBtn>
-          <ToolbarBtn title="Align right" onClick={() => editor.chain().focus().setTextAlign('right').run()}>
+          <ToolbarBtn title="Align right" onClick={() => setAlign('right')}>
             <FormatAlignRight fontSize="small" />
+          </ToolbarBtn>
+          <ToolbarBtn title="Image smaller" onClick={() => adjustImageWidth(-40)}>
+            <ZoomOut fontSize="small" />
+          </ToolbarBtn>
+          <ToolbarBtn title="Image larger" onClick={() => adjustImageWidth(40)}>
+            <ZoomIn fontSize="small" />
+          </ToolbarBtn>
+          <ToolbarBtn title="Image default size" onClick={resetImageWidth}>
+            <Straighten fontSize="small" />
           </ToolbarBtn>
           <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
           <ToolbarBtn title="Insert image" onClick={() => imageInputRef.current?.click()}>
             <ImageIcon fontSize="small" />
+          </ToolbarBtn>
+          <ToolbarBtn
+            title="Insert table"
+            onClick={() =>
+              editor
+                .chain()
+                .focus()
+                .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+                .run()
+            }
+          >
+            <TableChart fontSize="small" />
+          </ToolbarBtn>
+          <ToolbarBtn title="Horizontal line" onClick={() => editor.chain().focus().setHorizontalRule().run()}>
+            <HorizontalRule fontSize="small" />
+          </ToolbarBtn>
+          <Divider orientation="vertical" flexItem sx={{ mx: 0.25 }} />
+          <ToolbarBtn title="Undo" onClick={() => editor.chain().focus().undo().run()}>
+            <Undo fontSize="small" />
+          </ToolbarBtn>
+          <ToolbarBtn title="Redo" onClick={() => editor.chain().focus().redo().run()}>
+            <Redo fontSize="small" />
           </ToolbarBtn>
           <input
             ref={imageInputRef}
@@ -287,6 +380,8 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
       <Box
         sx={{
           ...editorContentSx(minHeight),
+          borderBottomLeftRadius: 'inherit',
+          borderBottomRightRadius: 'inherit',
           ...(placeholder
             ? {
                 '& .tiptap p.is-editor-empty:first-child::before': {

@@ -104,7 +104,7 @@ const AttendanceManagement: React.FC = () => {
   /** ???: ??, ??: ??? ?? */
   const inkFg = theme.palette.mode === 'dark' ? theme.palette.common.white : theme.palette.common.black;
   const { user } = useStore();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,7 +119,8 @@ const AttendanceManagement: React.FC = () => {
   const [officeLocation, setOfficeLocation] = useState<{ latitude: number; longitude: number; radiusMeters?: number } | null>(null);
   /** 근태관리는 개인화 화면으로 고정: 로그인 사용자 데이터만 조회 */
   const TIME_ZONE = 'Asia/Kolkata';
-  const IST_OFFSET_MINUTES = 330;
+  const locale = i18n.language?.toLowerCase().startsWith('en') ? 'en-US' : 'ko-KR';
+  const isEnglish = locale.startsWith('en');
   const pad2 = (value: number) => value.toString().padStart(2, '0');
   const parseUtcDate = (value: string) => {
     const hasTimeZone = /[zZ]|[+-]\d{2}:\d{2}$/.test(value);
@@ -462,17 +463,24 @@ const AttendanceManagement: React.FC = () => {
     try {
       const date = parseUtcDate(dateString);
       if (Number.isNaN(date.getTime())) return dateString;
-      const istMs = date.getTime() + IST_OFFSET_MINUTES * 60 * 1000;
-      const istDate = new Date(istMs);
-      const hours = istDate.getUTCHours();
-      const minutes = istDate.getUTCMinutes();
-      const period = hours >= 12 ? '오후' : '오전';
-      const displayHour = hours % 12 === 0 ? 12 : hours % 12;
-      return `${period} ${pad2(displayHour)}:${pad2(minutes)}`;
+      return new Intl.DateTimeFormat(locale, {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: TIME_ZONE,
+      }).format(date);
     } catch (error) {
       console.error('?? ??? ??:', error, dateString);
       return dateString;
     }
+  };
+
+  const formatHourMinute = (hours: number, minutes: string) => {
+    const period = hours >= 12
+      ? (isEnglish ? 'PM' : '오후')
+      : (isEnglish ? 'AM' : '오전');
+    const displayHour = hours % 12 === 0 ? 12 : hours % 12;
+    return `${period} ${pad2(displayHour)}:${minutes}`;
   };
 
   const formatClientTimeString = (value?: string) => {
@@ -481,9 +489,27 @@ const AttendanceManagement: React.FC = () => {
     if (!match) return null;
     const hours = Number(match[1]);
     const minutes = match[2];
-    const period = hours >= 12 ? '오후' : '오전';
-    const displayHour = hours % 12 === 0 ? 12 : hours % 12;
-    return `${period} ${pad2(displayHour)}:${minutes}`;
+    return formatHourMinute(hours, minutes);
+  };
+
+  const formatLocalClockTime = (value?: string) => {
+    if (!value) return null;
+    const match = String(value).match(/(\d{1,2}):(\d{2})/);
+    if (!match) return null;
+    const hours = Number(match[1]);
+    const minutes = match[2];
+    if (Number.isNaN(hours) || hours < 0 || hours > 23) return null;
+    return formatHourMinute(hours, minutes);
+  };
+
+  const normalizeServerDisplayTime = (value?: string) => {
+    if (!value) return null;
+    const raw = String(value).trim();
+    if (!raw) return null;
+    if (isEnglish) {
+      return raw.replace(/^오전\s*/i, 'AM ').replace(/^오후\s*/i, 'PM ');
+    }
+    return raw.replace(/^AM\s*/i, '오전 ').replace(/^PM\s*/i, '오후 ');
   };
 
   const displayTime = (
@@ -496,11 +522,16 @@ const AttendanceManagement: React.FC = () => {
     if (clientDisplay) {
       return clientDisplay;
     }
-    if (displayTimeValue) {
-      return displayTimeValue;
-    }
     if (rawTime) {
       return formatTime(rawTime);
+    }
+    const localDisplay = formatLocalClockTime(localTime);
+    if (localDisplay) {
+      return localDisplay;
+    }
+    const serverDisplay = normalizeServerDisplayTime(displayTimeValue);
+    if (serverDisplay) {
+      return serverDisplay;
     }
     if (localTime) {
       return localTime;
@@ -511,7 +542,7 @@ const AttendanceManagement: React.FC = () => {
   const formatDate = (dateString: string) => {
     try {
       const date = new Date(dateString);
-      return date.toLocaleDateString('ko-KR', {
+      return date.toLocaleDateString(locale, {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
