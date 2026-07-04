@@ -38,6 +38,7 @@ import path from 'path';
 import { authenticateUploadAccess } from './middleware/uploadAuth';
 import { isCorsAllowLanEnabled, isPrivateLanHttpOrigin } from './utils/corsPrivateLan';
 import { initRedisCache, isRedisCacheReady } from './utils/redisCache';
+import { requestProfiler } from './middleware/requestProfiler';
 
 // 환경 변수 검증 및 출력
 validateEnv();
@@ -161,6 +162,7 @@ app.use(cors({
 const REQUEST_BODY_LIMIT = process.env.REQUEST_BODY_LIMIT || '50mb';
 app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: true, limit: REQUEST_BODY_LIMIT }));
+app.use(requestProfiler);
 
 // Rate limiting — 프로덕션은 더 엄격하게
 const limiter = rateLimit({

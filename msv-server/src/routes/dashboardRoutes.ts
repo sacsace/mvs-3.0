@@ -12,8 +12,36 @@ import {
   User,
 } from '../models';
 import { AuthRequest } from '../types';
+import {
+  buildReferenceCacheKey,
+  referenceCacheGet,
+  referenceCacheSet,
+} from '../utils/redisCache';
 
 const router = express.Router();
+const DASHBOARD_CACHE_TTL_SEC = Number(process.env.DASHBOARD_CACHE_TTL_SEC || 30);
+const DASHBOARD_TASK_CACHE_TTL_SEC = Number(process.env.DASHBOARD_TASK_CACHE_TTL_SEC || 15);
+const useDashboardCache = process.env.DISABLE_DASHBOARD_CACHE !== '1';
+
+async function getCachedJson<T>(key: string): Promise<T | null> {
+  if (!useDashboardCache) return null;
+  try {
+    const raw = await referenceCacheGet(key);
+    if (!raw) return null;
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function setCachedJson(key: string, value: unknown, ttlSec: number): Promise<void> {
+  if (!useDashboardCache) return;
+  try {
+    await referenceCacheSet(key, JSON.stringify(value), ttlSec);
+  } catch {
+    // ignore cache write failures
+  }
+}
 
 const resolveTenantId = (req: AuthRequest): number => {
   const user = req.user;
@@ -25,10 +53,25 @@ const resolveTenantId = (req: AuthRequest): number => {
   return user.tenant_id;
 };
 
+const queryTenantValue = (req: AuthRequest): string => (
+  typeof req.query.tenantId === 'string' ? req.query.tenantId : ''
+);
+
 router.get('/stats', async (req: AuthRequest, res) => {
   try {
     const tenantId = resolveTenantId(req);
     const user = req.user;
+    const cacheKey = buildReferenceCacheKey([
+      'dashboard',
+      'stats',
+      tenantId,
+      user?.company_id || 'all',
+      queryTenantValue(req),
+    ]);
+    const cached = await getCachedJson<{ success: true; data: any }>(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
     const invoiceBaseWhere: any = {
       tenant_id: tenantId,
       is_active: true,
@@ -87,7 +130,7 @@ router.get('/stats', async (req: AuthRequest, res) => {
       safeCount(() => User.count({ where: employeeWhere })),
     ]);
 
-    res.json({
+    const payload = {
       success: true,
       data: {
         totalRevenue: totalRevenue + roomBookingRevenue,
@@ -96,7 +139,9 @@ router.get('/stats', async (req: AuthRequest, res) => {
         inventoryCount,
         employeeCount,
       }
-    });
+    };
+    await setCachedJson(cacheKey, payload, DASHBOARD_CACHE_TTL_SEC);
+    res.json(payload);
   } catch (error: any) {
     console.error('대시보드 통계 조회 오류:', error);
     res.status(500).json({
@@ -110,6 +155,16 @@ router.get('/stats', async (req: AuthRequest, res) => {
 router.get('/revenue-trend', async (req: AuthRequest, res) => {
   try {
     const tenantId = resolveTenantId(req);
+    const cacheKey = buildReferenceCacheKey([
+      'dashboard',
+      'revenue-trend',
+      tenantId,
+      queryTenantValue(req),
+    ]);
+    const cached = await getCachedJson<{ success: true; data: any[] }>(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
     const twelveMonthsAgo = new Date();
     twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
 
@@ -178,7 +233,9 @@ router.get('/revenue-trend', async (req: AuthRequest, res) => {
       .map(([month, revenue]) => ({ month, revenue }))
       .sort((a, b) => (a.month < b.month ? -1 : 1));
 
-    res.json({ success: true, data: combinedRevenueData });
+    const payload = { success: true, data: combinedRevenueData };
+    await setCachedJson(cacheKey, payload, DASHBOARD_CACHE_TTL_SEC);
+    res.json(payload);
   } catch (error: any) {
     console.error('매출 추이 조회 오류:', error);
     res.status(500).json({
@@ -192,6 +249,16 @@ router.get('/revenue-trend', async (req: AuthRequest, res) => {
 router.get('/inventory-status', async (req: AuthRequest, res) => {
   try {
     const tenantId = resolveTenantId(req);
+    const cacheKey = buildReferenceCacheKey([
+      'dashboard',
+      'inventory-status',
+      tenantId,
+      queryTenantValue(req),
+    ]);
+    const cached = await getCachedJson<{ success: true; data: any }>(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
     const lowStockThreshold = parseInt(process.env.LOW_STOCK_THRESHOLD || '10', 10);
     const highStockThreshold = parseInt(process.env.HIGH_STOCK_THRESHOLD || '100', 10);
 
@@ -210,10 +277,12 @@ router.get('/inventory-status', async (req: AuthRequest, res) => {
       countStock({ stock_quantity: { [Op.gt]: highStockThreshold } })
     ]);
 
-    res.json({
+    const payload = {
       success: true,
       data: { lowStock, normalStock, overStock }
-    });
+    };
+    await setCachedJson(cacheKey, payload, DASHBOARD_CACHE_TTL_SEC);
+    res.json(payload);
   } catch (error: any) {
     console.error('재고 현황 조회 오류:', error);
     res.status(500).json({
@@ -243,6 +312,17 @@ router.get('/my-tasks', async (req: AuthRequest, res) => {
     const user = req.user;
     if (!user?.id) {
       return res.json({ success: true, data: [] });
+    }
+    const cacheKey = buildReferenceCacheKey([
+      'dashboard',
+      'my-tasks',
+      user.id,
+      user.tenant_id,
+      user.company_id || 'all',
+    ]);
+    const cached = await getCachedJson<{ success: true; data: any[] }>(cacheKey);
+    if (cached) {
+      return res.json(cached);
     }
 
     const memberships = await WorkBoardMember.findAll({
@@ -307,7 +387,9 @@ router.get('/my-tasks', async (req: AuthRequest, res) => {
       return aTime - bTime;
     });
 
-    res.json({ success: true, data: tasks.slice(0, 5) });
+    const payload = { success: true, data: tasks.slice(0, 5) };
+    await setCachedJson(cacheKey, payload, DASHBOARD_TASK_CACHE_TTL_SEC);
+    res.json(payload);
   } catch (error: any) {
     console.error('내 담당 업무 조회 오류:', error);
     res.status(500).json({

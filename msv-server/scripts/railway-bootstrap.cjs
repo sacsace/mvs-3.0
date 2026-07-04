@@ -3,6 +3,7 @@
  */
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
 const rootDir = path.join(__dirname, '..');
 const bootStartedAt = Date.now();
@@ -26,7 +27,15 @@ function run(command, args, label) {
 
 function startServer() {
   console.log('\n🚀 Railway bootstrap: API 서버 시작...');
-  const server = spawn(process.execPath, ['--require', 'ts-node/register/transpile-only', 'src/index.ts'], {
+  const distEntry = path.join(rootDir, 'dist', 'index.js');
+  const useDistRuntime = fs.existsSync(distEntry);
+  if (!useDistRuntime) {
+    console.warn('⚠️ dist/index.js를 찾지 못해 ts-node 런타임으로 폴백합니다. (권장: 빌드 아티팩트로 기동)');
+  }
+  const startArgs = useDistRuntime
+    ? [distEntry]
+    : ['--require', 'ts-node/register/transpile-only', 'src/index.ts'];
+  const server = spawn(process.execPath, startArgs, {
     cwd: rootDir,
     env: {
       ...process.env,
