@@ -27,7 +27,23 @@ import {
   Alert
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx, mvsFilterToolbarSx, mvsSearchFieldSx, mvsOutlinedLabelProps } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsSearchFieldSx,
+  mvsOutlinedLabelProps,
+  mvsKpiCardSx,
+  mvsFilterFieldHeightSx,
+  mvsBodyCardSx,
+  mvsBodySectionHeaderSx,
+  mvsBodyFilterWrapSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+  mvsTableScrollSx,
+} from '../../theme/mvsLayout';
 import {
   Warning as WarningIcon,
   CheckCircle as CheckCircleIcon,
@@ -63,11 +79,9 @@ const INVENTORY_REPORT_MENU_ROUTES = ['/inventory/report', '/inventory'] as cons
 const FILTER_OUTLINED = mvsOutlinedLabelProps;
 
 const reportFilterFieldSx = {
+  ...(mvsSearchFieldSx as Record<string, unknown>),
+  ...mvsFilterFieldHeightSx,
   minWidth: 160,
-  '& .MuiOutlinedInput-root': {
-    height: 40,
-    '& .MuiOutlinedInput-input': { py: 0 },
-  },
 } as const;
 
 interface InventoryStats {
@@ -491,48 +505,17 @@ const InventoryReport: React.FC = () => {
     return softChipSx('default');
   };
 
-  const kpiCardSx = {
-    borderRadius: '14px',
-    border: '1px solid #C5CED9',
-    boxShadow:
-      theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.08)' : '0 2px 12px rgba(0,0,0,0.25)',
-    bgcolor: '#FFFFFF',
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    py: { xs: 6, sm: 8 },
+    px: 3,
+    gap: 1.5,
   } as const;
-
-  const kpiLabelSx = {
-    fontWeight: 700,
-    fontSize: '0.75rem',
-    lineHeight: '18px',
-    letterSpacing: '0.01em',
-    color: theme.palette.mode === 'light' ? '#475569' : 'text.secondary',
-  } as const;
-
-  const kpiValueSx = {
-    mt: 0.75,
-    fontWeight: 700,
-    fontSize: '1.375rem',
-    lineHeight: 1.25,
-    letterSpacing: '-0.02em',
-  } as const;
-
-  const kpiHintSx = {
-    display: 'block',
-    mt: 0.5,
-    fontSize: '0.75rem',
-    lineHeight: 1.4,
-    color: theme.palette.mode === 'light' ? '#64748B' : 'text.secondary',
-  } as const;
-
-  const outlineToolbarBtnSx = {
-    textTransform: 'none' as const,
-    borderRadius: '12px',
-    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.14)' : 'divider',
-    color: 'text.primary',
-    '&:hover': {
-      borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.22)' : theme.palette.grey[500],
-      bgcolor: 'action.hover',
-    },
-  };
 
   return (
     <Box sx={{ ...mvsPageRootSx }}>
@@ -554,9 +537,9 @@ const InventoryReport: React.FC = () => {
       ) : null}
 
       {/* 필터 및 액션 */}
-      <Card elevation={0} sx={{ mb: 3, ...mvsFilterToolbarSx, ...mvsSearchFieldSx }}>
-        <CardContent sx={{ py: 2, px: 2, '&:last-child': { pb: 2 } }}>
-          <Stack direction="row" spacing={2} alignItems="flex-end" justifyContent="space-between" flexWrap="wrap" useFlexGap sx={mvsSearchFieldSx}>
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Box sx={mvsBodyFilterWrapSx}>
+          <Stack direction="row" spacing={2} alignItems="flex-end" justifyContent="space-between" flexWrap="wrap" useFlexGap>
             <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap alignItems="flex-end">
               <TextField
                 size="small"
@@ -602,7 +585,7 @@ const InventoryReport: React.FC = () => {
                 startIcon={<RefreshIcon fontSize="small" />}
                 onClick={loadReportData}
                 disabled={loading || menuFlags.menusLoading || !menuFlags.canRead}
-                sx={outlineToolbarBtnSx}
+                sx={mvsBodyOutlinedBtnSx}
               >
                 {t('inventoryReport.refresh')}
               </Button>
@@ -610,7 +593,7 @@ const InventoryReport: React.FC = () => {
                 variant="outlined"
                 startIcon={<PrintIcon fontSize="small" />}
                 disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                sx={outlineToolbarBtnSx}
+                sx={mvsBodyOutlinedBtnSx}
               >
                 {t('inventoryReport.print')}
               </Button>
@@ -619,13 +602,13 @@ const InventoryReport: React.FC = () => {
                 disableElevation
                 startIcon={<DownloadIcon fontSize="small" />}
                 disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}
+                sx={mvsBodyPrimaryBtnSx}
               >
                 {t('inventoryReport.downloadReport')}
               </Button>
             </Stack>
           </Stack>
-        </CardContent>
+        </Box>
       </Card>
 
       {/* 주요 지표 카드 */}
@@ -640,54 +623,54 @@ const InventoryReport: React.FC = () => {
           mb: 3,
         }}
       >
-        <Card elevation={0} sx={kpiCardSx}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
           <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-            <Typography variant="caption" sx={kpiLabelSx}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
               {t('inventoryReport.statsTotalProducts')}
             </Typography>
-            <Typography variant="h5" sx={{ ...kpiValueSx, color: 'text.primary' }}>
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
               {loading ? '…' : stats.totalProducts}
             </Typography>
-            <Typography variant="caption" sx={kpiHintSx}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
               {t('inventoryReport.statsActiveProducts')}
             </Typography>
           </CardContent>
         </Card>
-        <Card elevation={0} sx={kpiCardSx}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
           <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-            <Typography variant="caption" sx={kpiLabelSx}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
               {t('inventoryReport.statsTotalValue')}
             </Typography>
-            <Typography variant="h5" sx={{ ...kpiValueSx, color: 'text.primary' }}>
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
               {loading ? '…' : formatCurrency(stats.totalValue)}
             </Typography>
-            <Typography variant="caption" sx={kpiHintSx}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
               {t('inventoryReport.statsTotalValueHint')}
             </Typography>
           </CardContent>
         </Card>
-        <Card elevation={0} sx={kpiCardSx}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
           <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-            <Typography variant="caption" sx={kpiLabelSx}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
               {t('inventoryReport.statsLowStock')}
             </Typography>
-            <Typography variant="h5" sx={{ ...kpiValueSx, color: 'warning.main' }}>
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'warning.main' }}>
               {loading ? '…' : stats.lowStockItems}
             </Typography>
-            <Typography variant="caption" sx={kpiHintSx}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
               {t('inventoryReport.statsLowStockHint')}
             </Typography>
           </CardContent>
         </Card>
-        <Card elevation={0} sx={kpiCardSx}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
           <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-            <Typography variant="caption" sx={kpiLabelSx}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
               {t('inventoryReport.statsAvgTurnover')}
             </Typography>
-            <Typography variant="h5" sx={{ ...kpiValueSx, color: 'info.main' }}>
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'info.main' }}>
               {loading ? '…' : `${stats.averageTurnover}x`}
             </Typography>
-            <Typography variant="caption" sx={kpiHintSx}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
               {t('inventoryReport.statsAvgTurnoverHint')}
             </Typography>
           </CardContent>
@@ -698,11 +681,13 @@ const InventoryReport: React.FC = () => {
       <Grid container spacing={3} sx={{ mb: 3 }}>
         {/* 월별 재고 추이 */}
         <Grid size={{ xs: 12, md: 8 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
+          <Card elevation={0} sx={mvsBodyCardSx}>
+            <Box sx={mvsBodySectionHeaderSx}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
                 {t('inventoryReport.chartMonthlyTrend')}
               </Typography>
+            </Box>
+            <CardContent sx={{ px: { xs: 2, sm: 2.5 }, py: 2.5, '&:last-child': { pb: 2.5 } }}>
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={monthlyData}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -731,11 +716,13 @@ const InventoryReport: React.FC = () => {
 
         {/* 카테고리별 재고 분포 */}
         <Grid size={{ xs: 12, md: 4 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
+          <Card elevation={0} sx={mvsBodyCardSx}>
+            <Box sx={mvsBodySectionHeaderSx}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
                 {t('inventoryReport.chartCategoryDistribution')}
               </Typography>
+            </Box>
+            <CardContent sx={{ px: { xs: 2, sm: 2.5 }, py: 2.5, '&:last-child': { pb: 2.5 } }}>
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
@@ -781,11 +768,13 @@ const InventoryReport: React.FC = () => {
 
         {/* 회전율 분석 */}
         <Grid size={{ xs: 12 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
+          <Card elevation={0} sx={mvsBodyCardSx}>
+            <Box sx={mvsBodySectionHeaderSx}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
                 {t('inventoryReport.chartTurnoverByCategory')}
               </Typography>
+            </Box>
+            <CardContent sx={{ px: { xs: 2, sm: 2.5 }, py: 2.5, '&:last-child': { pb: 2.5 } }}>
               <ResponsiveContainer width="100%" height={250}>
                 <BarChart data={turnoverData}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -803,102 +792,62 @@ const InventoryReport: React.FC = () => {
       </Grid>
 
       {/* 상세 재고 현황 테이블 */}
-      <Card
-        elevation={0}
-        sx={{
-          borderRadius: '20px',
-          border: '1px solid',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-          boxShadow:
-            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
-          bgcolor: 'background.paper',
-          overflow: 'hidden',
-        }}
-      >
-        <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: 2,
-              px: 2.5,
-              pt: 2.5,
-              pb: 2,
-              borderBottom: '1px solid',
-              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : 'divider',
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 0 }}>
+        <Box sx={mvsBodySectionHeaderSx}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+            {t('inventoryReport.detailTableTitle')}
+          </Typography>
+          <TextField
+            size="small"
+            label={t('common.search')}
+            {...FILTER_OUTLINED}
+            placeholder={t('inventoryReport.searchPlaceholder')}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            disabled={menuFlags.menusLoading || !menuFlags.canRead}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
+                </InputAdornment>
+              ),
             }}
-          >
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, letterSpacing: '-0.01em', color: 'text.primary' }}>
-              {t('inventoryReport.detailTableTitle')}
+            sx={{ ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx, minWidth: 260 }}
+          />
+        </Box>
+      </Card>
+
+      <Box sx={mvsBodyListZoneSx}>
+        {loading ? (
+          <Box sx={listStateBoxSx}>
+            <CircularProgress size={36} />
+            <Typography variant="body2" color="text.secondary">
+              {t('inventoryManagement.empty.loading')}
             </Typography>
-            <TextField
-              size="small"
-              label={t('common.search')}
-              {...FILTER_OUTLINED}
-              placeholder={t('inventoryReport.searchPlaceholder')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              disabled={menuFlags.menusLoading || !menuFlags.canRead}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                minWidth: 260,
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '12px',
-                  bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.03)' : alpha(theme.palette.common.white, 0.04),
-                  '& fieldset': {
-                    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : 'divider',
-                  },
-                },
-              }}
-            />
           </Box>
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-              <CircularProgress />
-            </Box>
-          ) : filteredProducts.length === 0 ? (
-            <Typography color="text.secondary" sx={{ py: 4, px: 2.5, textAlign: 'center' }}>
+        ) : filteredProducts.length === 0 ? (
+          <Box sx={listStateBoxSx}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
               {t('inventoryReport.emptyFiltered')}
             </Typography>
-          ) : (
-            <TableContainer sx={{ bgcolor: 'transparent' }}>
-              <Table
-                size="small"
-                sx={{
-                  borderCollapse: 'collapse',
-                  '& .MuiTableCell-root': {
-                    borderLeft: 'none',
-                    borderRight: 'none',
-                    borderTop: 'none',
-                  },
-                }}
-              >
-                <TableHead
-                  sx={{
-                    '& .MuiTableCell-head': {
-                      bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
-                      color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
-                      fontWeight: 600,
-                      fontSize: '0.75rem',
-                      textTransform: 'none',
-                      letterSpacing: '0.01em',
-                      borderBottom: `1px solid ${
-                        theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                      }`,
-                      py: 1.5,
-                      px: 2,
-                      '& .MuiTableSortLabel-root': { color: 'inherit' },
-                    },
-                  }}
-                >
+          </Box>
+        ) : (
+          <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+            <Table
+              size="small"
+              sx={{
+                width: '100%',
+                minWidth: 1200,
+                borderCollapse: 'collapse',
+                bgcolor: 'transparent',
+                '& .MuiTableCell-root': {
+                  borderLeft: 'none',
+                  borderRight: 'none',
+                  borderTop: 'none',
+                },
+              }}
+            >
+              <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
                     <TableCell sortDirection={reportOrderBy === 'productCode' ? reportOrder : false}>
                       <TableSortLabel
@@ -1012,21 +961,7 @@ const InventoryReport: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 </TableHead>
-                <TableBody
-                  sx={{
-                    '& .MuiTableCell-body': {
-                      py: 1.5,
-                      px: 2,
-                      fontSize: '0.875rem',
-                      borderBottom: `1px solid ${
-                        theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                      }`,
-                    },
-                    '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
-                      borderBottom: 'none',
-                    },
-                  }}
-                >
+                <TableBody sx={mvsTableBodyRowSx}>
                   {sortedFilteredProducts.map((product) => {
                     const stockLevel = getStockLevel(product.currentStock, product.minStock, product.maxStock);
                     const statusInfo = getStatusInfo(product);
@@ -1036,12 +971,9 @@ const InventoryReport: React.FC = () => {
                     return (
                       <TableRow
                         key={product.id}
-                        hover
                         onClick={menuFlags.canRead ? () => void openTxDialog(product) : undefined}
                         sx={{
                           cursor: menuFlags.canRead ? 'pointer' : 'default',
-                          transition: 'background-color 0.15s ease',
-                          '&:hover': { bgcolor: 'action.hover' },
                           '&:active': { bgcolor: menuFlags.canRead ? 'action.selected' : undefined },
                         }}
                       >
@@ -1133,9 +1065,8 @@ const InventoryReport: React.FC = () => {
                 </TableBody>
               </Table>
             </TableContainer>
-          )}
-        </CardContent>
-      </Card>
+        )}
+      </Box>
 
       <Dialog open={txDialogOpen} onClose={closeTxDialog} maxWidth="md" fullWidth scroll="paper">
         <DialogTitle sx={{ pr: 6 }}>
@@ -1167,25 +1098,9 @@ const InventoryReport: React.FC = () => {
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
                 {t('inventoryStatus.txDialog.totalShown', { total: txTotal })}
               </Typography>
-              <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '12px', overflow: 'hidden' }}>
-                <Table size="small">
-                  <TableHead
-                    sx={{
-                      '& .MuiTableCell-head': {
-                        bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
-                        color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
-                        fontWeight: 600,
-                        fontSize: '0.75rem',
-                        textTransform: 'none',
-                        letterSpacing: '0.01em',
-                        borderBottom: `1px solid ${
-                          theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                        }`,
-                        py: 1.25,
-                        px: 1.5,
-                      },
-                    }}
-                  >
+              <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx, borderRadius: '14px', overflow: 'hidden' }}>
+                <Table size="small" sx={{ borderCollapse: 'collapse', bgcolor: 'transparent' }}>
+                  <TableHead sx={mvsTableHeadHighlightSx}>
                     <TableRow>
                       <TableCell width={160}>{t('inventoryStatus.txColumns.datetime')}</TableCell>
                       <TableCell width={100}>{t('inventoryStatus.txColumns.type')}</TableCell>
@@ -1196,7 +1111,7 @@ const InventoryReport: React.FC = () => {
                       <TableCell>{t('inventoryStatus.txColumns.notes')}</TableCell>
                     </TableRow>
                   </TableHead>
-                  <TableBody>
+                  <TableBody sx={mvsTableBodyRowSx}>
                     {txRows.map((tx) => {
                       const tinfo = formatTxTypeChip(tx.transaction_type);
                       const qty = Number(tx.quantity ?? 0);
@@ -1226,12 +1141,7 @@ const InventoryReport: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button
-            onClick={closeTxDialog}
-            variant="contained"
-            disableElevation
-            sx={{ textTransform: 'none', borderRadius: '12px', px: 2.5 }}
-          >
+          <Button onClick={closeTxDialog} variant="contained" disableElevation sx={mvsBodyPrimaryBtnSx}>
             {t('inventoryStatus.txDialog.close')}
           </Button>
         </DialogActions>

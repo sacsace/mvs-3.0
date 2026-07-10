@@ -248,7 +248,7 @@ router.get('/', async (req, res) => {
       ...baseAttributes,
       'employee_number', 'birth_date', 'gender', 'phone', 'address',
       'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-      'bank_name', 'bank_account', 'bank_ifsc'
+      'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible'
     ];
 
     let users: any[];
@@ -402,7 +402,7 @@ router.get('/:id', async (req, res) => {
             ...baseAttributes,
             'employee_number', 'birth_date', 'gender', 'phone', 'address', 
             'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-            'bank_name', 'bank_account', 'bank_ifsc'
+            'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible'
           ]
         });
         if (userWithHrFields) {
@@ -467,7 +467,8 @@ router.post(
     department: { type: 'string', maxLength: 100 },
     position: { type: 'string', maxLength: 100 },
     status: { type: 'string', maxLength: 50 },
-    is_payment_officer: { type: 'boolean' }
+    is_payment_officer: { type: 'boolean' },
+    ot_eligible: { type: 'boolean' }
   }),
   async (req, res) => {
   try {
@@ -476,7 +477,8 @@ router.post(
       employee_number, birth_date, gender, phone, address,
       emergency_contact, emergency_phone, hire_date, employment_type, salary,
       bank_name, bank_account, bank_ifsc,
-      is_payment_officer
+      is_payment_officer,
+      ot_eligible
     } = req.body;
 
     // 필수 필드 검증
@@ -639,6 +641,7 @@ router.post(
     if (is_payment_officer !== undefined) {
       userData.is_payment_officer = Boolean(is_payment_officer);
     }
+    userData.ot_eligible = ot_eligible !== undefined ? Boolean(ot_eligible) : true;
 
     const user = await (User as any).create(userData);
 
@@ -674,7 +677,8 @@ router.put(
     department: { type: 'string', maxLength: 100 },
     position: { type: 'string', maxLength: 100 },
     status: { type: 'string', maxLength: 50 },
-    is_payment_officer: { type: 'boolean' }
+    is_payment_officer: { type: 'boolean' },
+    ot_eligible: { type: 'boolean' }
   }),
   async (req, res) => {
   try {
@@ -687,7 +691,8 @@ router.put(
       employee_number, birth_date, gender, phone, address,
       emergency_contact, emergency_phone, hire_date, employment_type, salary,
       bank_name, bank_account, bank_ifsc,
-      is_payment_officer
+      is_payment_officer,
+      ot_eligible
     } = req.body;
 
     // root나 audit 권한이면 모든 사용자 조회 가능, 아니면 자신의 회사 사용자만
@@ -719,7 +724,7 @@ router.put(
               ...baseAttributes,
               'employee_number', 'birth_date', 'gender', 'phone', 'address', 
               'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-              'bank_name', 'bank_account', 'bank_ifsc'
+              'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible'
             ]
           });
           if (userWithHrFields) {
@@ -863,6 +868,9 @@ router.put(
     if (is_payment_officer !== undefined) {
       updateData.is_payment_officer = Boolean(is_payment_officer);
     }
+    if (ot_eligible !== undefined) {
+      updateData.ot_eligible = Boolean(ot_eligible);
+    }
 
     // 비밀번호 변경 (있는 경우만)
     if (password) {
@@ -901,7 +909,7 @@ router.put(
             ...responseBaseAttributes,
             'employee_number', 'birth_date', 'gender', 'phone', 'address', 
             'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-            'bank_name', 'bank_account', 'bank_ifsc'
+            'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible'
           ]
         });
         if (userWithHrFields) {

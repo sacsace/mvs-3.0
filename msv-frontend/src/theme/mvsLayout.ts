@@ -85,6 +85,24 @@ export const mvsTableZoneSx: SxProps<Theme> = {
   border: '1px solid #C5CED9',
 };
 
+/** KPI·요약 카드 — 재고·회계 등 목록 상단 통계 */
+export const mvsKpiCardSx: SxProps<Theme> = (theme) => ({
+  borderRadius: '16px',
+  border: '1px solid',
+  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+  boxShadow:
+    theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
+  bgcolor: 'background.paper',
+});
+
+/** 필터 입력 높이(40px) — mvsSearchFieldSx와 함께 spread */
+export const mvsFilterFieldHeightSx: MvsStyleObject = {
+  '& .MuiOutlinedInput-root': {
+    height: 40,
+    '& .MuiOutlinedInput-input': { py: 0 },
+  },
+};
+
 /** 모바일에서 넓은 테이블 가로 스크롤 */
 export const mvsTableScrollSx: SxProps<Theme> = {
   width: '100%',
@@ -117,7 +135,7 @@ export const mvsTableHeadHighlightSx: SxProps<Theme> = (theme) => {
   const light = theme.palette.mode === 'light';
   const headBg = light ? '#F1F5F9' : theme.palette.grey[800];
   const headFg = light ? '#475569' : theme.palette.grey[200];
-  const headBorder = light ? '#C5CED9' : theme.palette.divider;
+  const headBorder = light ? '#A8B4C0' : theme.palette.divider;
   return {
     bgcolor: headBg,
     '& .MuiTableCell-head': {
@@ -127,10 +145,187 @@ export const mvsTableHeadHighlightSx: SxProps<Theme> = (theme) => {
       fontSize: '0.8125rem',
       textTransform: 'none',
       letterSpacing: '0.02em',
+      overflow: 'hidden',
       borderBottom: `1px solid ${headBorder}`,
       borderTop: '2px solid',
       borderTopColor: 'primary.main',
       py: 1.5,
+    },
+    '& .MuiTableCell-head.MuiTableCell-paddingCheckbox': {
+      overflow: 'visible',
+      width: 56,
+      minWidth: 56,
+      maxWidth: 56,
+      pl: { xs: 1.5, sm: 2 },
+      pr: 1,
+      boxSizing: 'border-box',
+    },
+  };
+};
+
+/** Body 페이지네이션 — 배경·외곽 박스 없음 */
+export const mvsBodyPaginationSx: MvsStyleObject = {
+  display: 'flex',
+  justifyContent: 'center',
+  py: 2,
+  bgcolor: 'transparent',
+};
+
+/** Body 리스트 영역 — 외곽 박스·배경 없음 (컨트롤 카드 아래) */
+export const mvsBodyListZoneSx: MvsStyleObject = {
+  width: '100%',
+  bgcolor: 'transparent',
+  mt: { xs: 2, sm: 2.5 },
+};
+
+/** Body 카드·리스트 공통 외곽 톤 */
+export const mvsBodyFrameBorder = '1px solid #C5CED9';
+export const mvsBodyFrameShadow = '0 4px 14px rgba(15, 23, 42, 0.07)';
+export const mvsBodyFrameRadius = { xs: '14px', sm: '20px' } as const;
+
+/** Body 리스트 테이블 래퍼 — 컨트롤 카드와 동일 외곽 톤 */
+export const mvsBodyListTableSx: MvsStyleObject = {
+  width: '100%',
+  maxWidth: '100%',
+  overflow: 'auto',
+  overflowX: 'auto',
+  WebkitOverflowScrolling: 'touch',
+  bgcolor: '#FFFFFF',
+  borderRadius: mvsBodyFrameRadius,
+  border: mvsBodyFrameBorder,
+  boxShadow: mvsBodyFrameShadow,
+  '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:first-of-type': {
+    borderTopLeftRadius: { xs: '12px', sm: '18px' },
+  },
+  '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:last-of-type': {
+    borderTopRightRadius: { xs: '12px', sm: '18px' },
+  },
+  '& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-body:first-of-type': {
+    borderBottomLeftRadius: { xs: '12px', sm: '18px' },
+  },
+  '& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-body:last-of-type': {
+    borderBottomRightRadius: { xs: '12px', sm: '18px' },
+  },
+};
+
+/** ── Body 영역 표준 (KPI 아래 리스트·테이블 본문) ── */
+
+/** Body 카드 — 흰색 외곽 컨테이너 */
+export const mvsBodyCardSx: MvsStyleObject = {
+  backgroundColor: '#FFFFFF',
+  borderRadius: mvsBodyFrameRadius,
+  boxShadow: mvsBodyFrameShadow,
+  border: mvsBodyFrameBorder,
+  overflow: 'hidden',
+};
+
+/** Body 섹션 헤더 — 제목 + 주요 액션 */
+export const mvsBodySectionHeaderSx: MvsStyleObject = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  flexWrap: 'wrap',
+  gap: 1.5,
+  px: { xs: 2, sm: 2.5 },
+  py: 2,
+  borderBottom: '1px solid #C5CED9',
+  bgcolor: '#FFFFFF',
+};
+
+/** Body 보조 도구 버튼 줄 */
+export const mvsBodyToolbarSx: MvsStyleObject = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: 1,
+  px: { xs: 2, sm: 2.5 },
+  py: 1.5,
+  bgcolor: '#F8FAFC',
+  borderBottom: '1px solid #C5CED9',
+};
+
+/** Body 보조 outlined 버튼 — primary(추가)와 구분되는 연한 슬레이트 톤 */
+export const mvsBodyOutlinedBtnSx: MvsStyleObject = {
+  textTransform: 'none',
+  borderRadius: '10px',
+  fontWeight: 600,
+  fontSize: '0.8125rem',
+  minHeight: 36,
+  px: 1.5,
+  borderColor: '#B8C4D0',
+  color: '#334155',
+  bgcolor: '#F1F5F9',
+  boxShadow: 'none',
+  '& .MuiButton-startIcon': { mr: '6px', color: '#64748B' },
+  '&:hover': {
+    borderColor: '#94A3B8',
+    bgcolor: '#E8EDF3',
+    color: '#1E293B',
+    '& .MuiButton-startIcon': { color: '#475569' },
+  },
+};
+
+/** Body 통일 primary 버튼 */
+export const mvsBodyPrimaryBtnSx: MvsStyleObject = {
+  textTransform: 'none',
+  borderRadius: '10px',
+  fontWeight: 600,
+  fontSize: '0.8125rem',
+  minHeight: 36,
+  px: 2,
+  boxShadow: 'none',
+};
+
+/** Body 필터 래퍼 */
+export const mvsBodyFilterWrapSx: MvsStyleObject = {
+  px: { xs: 2, sm: 2.5 },
+  py: 2,
+  bgcolor: '#F0F4F8',
+};
+
+/** Body 테이블 인셋 — 회색 배경, 좌우 대칭 패딩으로 리스트 중앙 정렬 */
+export const mvsBodyTableInsetSx: MvsStyleObject = {
+  px: { xs: 2, sm: 2.5 },
+  py: { xs: 2, sm: 2.5 },
+  bgcolor: '#E8EDF3',
+};
+
+/** Body 테이블 프레임 — 인셋 안 흰 테이블 카드 */
+export const mvsBodyTableFrameSx: MvsStyleObject = {
+  width: '100%',
+  maxWidth: '100%',
+  mx: 'auto',
+  borderRadius: '14px',
+  border: '1px solid #C5CED9',
+  overflow: 'hidden',
+  bgcolor: '#FFFFFF',
+  boxShadow: '0 2px 8px rgba(15, 23, 42, 0.06)',
+};
+
+/** Body 테이블 바디 — 줄무늬·호버·구분선 (외곽 박스 없이 행 색으로 구분) */
+export const mvsTableBodyRowSx: SxProps<Theme> = (theme) => {
+  const oddBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
+  const stripe = theme.palette.mode === 'light' ? '#F4F7FB' : 'rgba(255,255,255,0.04)';
+  const hover = theme.palette.mode === 'light' ? '#EFF6FF' : 'action.hover';
+  const border = theme.palette.mode === 'light' ? '#D1DAE4' : theme.palette.divider;
+  return {
+    '& .MuiTableCell-body': {
+      py: 1.5,
+      px: 2,
+      fontSize: '0.875rem',
+      borderBottom: `1px solid ${border}`,
+    },
+    '& .MuiTableRow-root:nth-of-type(odd)': {
+      bgcolor: oddBg,
+    },
+    '& .MuiTableRow-root:nth-of-type(even)': {
+      bgcolor: stripe,
+    },
+    '& .MuiTableRow-root:hover': {
+      bgcolor: hover,
+    },
+    '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
+      borderBottom: 'none',
     },
   };
 };

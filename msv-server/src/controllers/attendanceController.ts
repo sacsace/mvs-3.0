@@ -3,6 +3,7 @@ import { AuthRequest } from '../types';
 import { Attendance, Company, User } from '../models';
 import { Op } from 'sequelize';
 import sequelize from '../config/database';
+import { isManualAttendanceDisabled } from '../services/heresnowIntegrationService';
 
 let attendanceSchemaReady: Promise<void> | null = null;
 
@@ -478,6 +479,13 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
       });
     }
 
+    if (isManualAttendanceDisabled(company)) {
+      return res.status(403).json({
+        success: false,
+        message: 'HeresNow 연동 사용자는 MVS에서 직접 출근할 수 없습니다. HeresNow 기록만 조회할 수 있습니다.'
+      });
+    }
+
     if (!shouldSkipGeo) {
       const settings: any = company.settings || {};
       const officeLocation = settings.general?.officeLocation;
@@ -607,6 +615,20 @@ export const checkOut = async (req: AuthRequest, res: Response) => {
       });
     }
     const today = getDateInTimeZone(checkOutTime);
+
+    const company = await Company.findOne({
+      where: { id: companyId, tenant_id: tenantId },
+    });
+    if (!company) {
+      return res.status(404).json({ success: false, message: '회사를 찾을 수 없습니다.' });
+    }
+    if (isManualAttendanceDisabled(company)) {
+      return res.status(403).json({
+        success: false,
+        message: 'HeresNow 연동 사용자는 MVS에서 직접 퇴근할 수 없습니다. HeresNow 기록만 조회할 수 있습니다.',
+      });
+    }
+
         // 출근 기록이 있지만 퇴근 기록이 없는 가장 최근 근태 기록 찾기
     // 하루가 지나더라도 출근 기록이 있으면 퇴근 가능
     const attendance = await (Attendance as any).findOne({

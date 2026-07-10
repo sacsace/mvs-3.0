@@ -425,13 +425,13 @@ const Header: React.FC<HeaderProps> = ({
             </Button>
           </Tooltip>
 
-          <Tooltip title={language === 'en' ? 'AI Analysis' : 'AI 분석'}>
+          <Tooltip title={language === 'en' ? 'Analysis' : '분석'}>
             <Button
               variant="text"
               size="small"
               startIcon={<AutoAwesomeIcon sx={{ fontSize: '1.125rem !important' }} />}
               onClick={() => navigate('/ai')}
-              aria-label={language === 'en' ? 'AI Analysis' : 'AI 분석'}
+              aria-label={language === 'en' ? 'Analysis' : '분석'}
               sx={{
                 minWidth: 'auto',
                 px: 0.75,
@@ -451,7 +451,7 @@ const Header: React.FC<HeaderProps> = ({
               }}
             >
               <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
-                {language === 'en' ? 'AI Analysis' : 'AI 분석'}
+                {language === 'en' ? 'Analysis' : '분석'}
               </Box>
             </Button>
           </Tooltip>

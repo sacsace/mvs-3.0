@@ -30,6 +30,7 @@ interface UserAttributes {
   bank_account?: string;
   bank_ifsc?: string;
   is_payment_officer?: boolean;
+  ot_eligible?: boolean;
   settings?: any;
   created_at?: Date;
   updated_at?: Date;
@@ -66,6 +67,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   public bank_account?: string;
   public bank_ifsc?: string;
   public is_payment_officer?: boolean;
+  public ot_eligible?: boolean;
   public settings?: any;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
@@ -190,6 +192,11 @@ User.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false
+    },
+    ot_eligible: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true
     },
     settings: {
       type: DataTypes.JSON,

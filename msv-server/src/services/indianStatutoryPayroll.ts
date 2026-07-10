@@ -4,15 +4,18 @@
  * Sum Total(Gross): 시트 기준 (기본급 / 월 총일) × 근무일 + 연장 + 상여.
  *
  * PF 모드
- * - gross_6pct(기본): Sum Total × 6% = 직원·고용주 각각 (참고 시트: 120,000×6%=7,200).
- * - epf_12pct_half: Gross×50%×12%, 상한 1,800 옵션 — 예전 EPF 엑셀식.
+ * - basic_12pct(기본): ROUND(MIN(Basic×12%, 1,800), 0) — 엑셀 K9
+ * - gross_6pct: Sum Total × 6% = 직원·고용주 각각
+ * - epf_12pct_half: Gross×50%×12%, 상한 1,800 옵션
  *
- * ESI: 월 기본급(L)>21,000 이면 면제. 금액은 Gross×0.75% / 3.25%.
+ * ESI: 지급합계(Q)>21,000 이면 면제. 직원 Q×0.75% / 사업주 Q×3.25%.
  * PT: Gross≥25,000 → 200(설정 가능).
  * TDS: 구 세제 간이 추정(그리드에서 수정 가능).
  */
 
-export type PfMode = 'gross_6pct' | 'epf_12pct_half';
+import { computeProfessionalTaxByState } from '../utils/indianProfessionalTax';
+
+export type PfMode = 'basic_12pct' | 'gross_6pct' | 'epf_12pct_half';
 
 export type IndianStatutoryOptions = {
   /** AD="A" 에 해당: PF/ESI/PT 적용 (false면 모두 0) */
@@ -21,12 +24,16 @@ export type IndianStatutoryOptions = {
   pfMode?: PfMode;
   /** epf_12pct_half 일 때만: true면 min(50%×Gross×12%, 1800) */
   pfCapAt1800?: boolean;
-  /** ESI: 기본급(L)이 이 금액을 초과하면 ESI 미적용(엑셀 L>21000). 기본 21000 */
+  /** ESI: 지급합계(Q)가 이 금액을 초과하면 면제. 기본 21000 */
   esiBasicCeiling?: number;
-  /** PT 부과 최소 Gross, 기본 25000 */
+  /** @deprecated 주별 PT 사용 — registeredStateCode 권장 */
   ptGrossThreshold?: number;
-  /** PT 금액, 기본 200 */
+  /** @deprecated 주별 PT 사용 — registeredStateCode 권장 */
   ptAmount?: number;
+  /** 회사 등록 주 GST state code (예: 29 Karnataka) */
+  registeredStateCode?: string | null;
+  /** YYYY-MM — Maharashtra 2월 PT 특례 */
+  payrollMonth?: string | null;
   /** TDS 자동 추정 사용 여부 (false면 0) */
   estimateTds?: boolean;
   /** 월 기본급(L) — ESI 면제(L>21000) 판단. 생략 시 Gross로 간주 */
@@ -35,7 +42,7 @@ export type IndianStatutoryOptions = {
 
 const DEFAULTS = {
   statutoryApplicable: true,
-  pfMode: 'gross_6pct' as PfMode,
+  pfMode: 'basic_12pct' as PfMode,
   pfCapAt1800: true,
   esiBasicCeiling: 21000,
   ptGrossThreshold: 25000,
@@ -104,20 +111,28 @@ export function computePfEmployerMatchEmployee(pfEmployee: number): number {
   return rupee(pfEmployee);
 }
 
+/** PF 직원·사업주 = ROUND(MIN(Basic × 12%, 1,800), 0) */
+export function computePfFromBasicSalary(basicSalary: number): { pf_employee: number; pf_employer: number } {
+  const basic = Math.max(0, basicSalary);
+  const amount = Math.round(Math.min(basic * 0.12, 1800));
+  return { pf_employee: amount, pf_employer: amount };
+}
+
 /** 참고 시트: PF 직원·고용주 각각 Sum Total의 6% */
 export function computePfSixPercentOfGross(gross: number): { pf_employee: number; pf_employer: number } {
   const x = rupee(gross * 0.06);
   return { pf_employee: x, pf_employer: x };
 }
 
-/** ESI: 기본급(L)이 상한을 넘으면 면제. 금액은 Gross(Q)에 비율 적용(엑셀 Q*0.75% / Q*3.25%) */
-export function computeEsiEmployee(gross: number, basicSalary: number, esiBasicCeiling: number): number {
-  if (basicSalary > esiBasicCeiling) return 0;
+/** ESIC 직원 = IF(Q>21,000, 0, Q×0.75%) */
+export function computeEsiEmployee(gross: number, esiSumCeiling = 21000): number {
+  if (gross > esiSumCeiling) return 0;
   return rupee(gross * 0.0075);
 }
 
-export function computeEsiEmployer(gross: number, basicSalary: number, esiBasicCeiling: number): number {
-  if (basicSalary > esiBasicCeiling) return 0;
+/** ESIC 사업주 = IF(Q>21,000, 0, Q×3.25%) */
+export function computeEsiEmployer(gross: number, esiSumCeiling = 21000): number {
+  if (gross > esiSumCeiling) return 0;
   return rupee(gross * 0.0325);
 }
 
@@ -150,6 +165,39 @@ export function computeMonthlyTdsEstimateOldRegime(monthlyGross: number): number
   const taxable = Math.max(0, annualGross - 50000);
   const annualTax = computeAnnualIncomeTaxOldRegimeSimplified(taxable);
   return Math.max(0, Math.round(annualTax / 12));
+}
+
+function slabTaxNewRegime(taxable: number, cap: number, floor: number, rate: number): number {
+  return Math.max(0, Math.min(taxable, cap) - floor) * rate;
+}
+
+/**
+ * 신규 세제 LET TDS — 월 지급 합계(sum_total) 기준
+ * 표준공제 75,000 · 87A 리베이트(과세≤12L) · 한계완화 · 4% cess
+ */
+export function computeMonthlyTdsFromSumTotal(monthlySumTotal: number): number {
+  const monthly = Math.max(0, monthlySumTotal);
+  if (monthly <= 0) return 0;
+
+  const annual = monthly * 12;
+  const taxable = Math.max(0, annual - 75000);
+
+  const baseTax =
+    slabTaxNewRegime(taxable, 800000, 400000, 0.05) +
+    slabTaxNewRegime(taxable, 1200000, 800000, 0.1) +
+    slabTaxNewRegime(taxable, 1600000, 1200000, 0.15) +
+    slabTaxNewRegime(taxable, 2000000, 1600000, 0.2) +
+    slabTaxNewRegime(taxable, 2400000, 2000000, 0.25) +
+    Math.max(0, taxable - 2400000) * 0.3;
+
+  const taxAfterRebate = taxable <= 1200000 ? 0 : baseTax;
+
+  let taxAfterRelief = taxAfterRebate;
+  if (taxable > 1200000 && taxAfterRebate * 1.04 > taxable - 1200000) {
+    taxAfterRelief = (taxable - 1200000) / 1.04;
+  }
+
+  return Math.round((taxAfterRelief * 1.04) / 12);
 }
 
 export type IndianDeductionBreakdown = {
@@ -187,7 +235,14 @@ export function computeIndianStatutoryPayroll(
 
   if (o.statutoryApplicable) {
     const mode = o.pfMode ?? DEFAULTS.pfMode;
-    if (mode === 'gross_6pct') {
+    const basicForPf =
+      o.basicSalary != null && Number.isFinite(o.basicSalary) ? rupee(o.basicSalary as number) : epfWageBase(gross);
+
+    if (mode === 'basic_12pct') {
+      const pf = computePfFromBasicSalary(basicForPf);
+      pf_employee = pf.pf_employee;
+      pf_employer = pf.pf_employer;
+    } else if (mode === 'gross_6pct') {
       const p6 = computePfSixPercentOfGross(gross);
       pf_employee = p6.pf_employee;
       pf_employer = p6.pf_employer;
@@ -195,10 +250,17 @@ export function computeIndianStatutoryPayroll(
       pf_employee = computePfEmployeeEpfHalf(gross, o.pfCapAt1800);
       pf_employer = computePfEmployerMatchEmployee(pf_employee);
     }
-    esic_employee = computeEsiEmployee(gross, basicForEsi, o.esiBasicCeiling);
-    esic_employer = computeEsiEmployer(gross, basicForEsi, o.esiBasicCeiling);
-    pt = computePt(gross, o.ptGrossThreshold, o.ptAmount);
-    tds = o.estimateTds ? computeMonthlyTdsEstimateOldRegime(gross) : 0;
+    esic_employee = computeEsiEmployee(gross, o.esiBasicCeiling);
+    esic_employer = computeEsiEmployer(gross, o.esiBasicCeiling);
+    pt = computeProfessionalTaxByState({
+      grossMonthly: gross,
+      stateCode: o.registeredStateCode,
+      payrollMonth: o.payrollMonth
+    });
+    if (pt === 0 && !o.registeredStateCode) {
+      pt = computePt(gross, o.ptGrossThreshold, o.ptAmount);
+    }
+    tds = o.estimateTds ? computeMonthlyTdsFromSumTotal(gross) : 0;
   }
 
   const totalEmployeeDeductions = rupee(pf_employee + esic_employee + tds + pt);

@@ -1,4 +1,4 @@
-import { api, API_BASE_URL, getAuthTokenFromStorage } from '../client';
+import { api } from '../client';
 
 export const projectService = {
   // ?�로?�트 목록 조회

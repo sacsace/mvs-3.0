@@ -22,7 +22,15 @@ import {
   Tab
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx, mvsOutlinedLabelProps } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsOutlinedLabelProps,
+  mvsKpiCardSx,
+  mvsBodyCardSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyListZoneSx,
+} from '../../theme/mvsLayout';
 import {
   Settings as SettingsIcon,
   Notifications as NotificationsIcon,
@@ -33,6 +41,8 @@ import {
   Email as EmailIcon,
   DisplaySettings as DisplaySettingsIcon,
   Download as DownloadIcon,
+  ViewSidebar as ViewSidebarIcon,
+  NotificationsOutlined as NotificationsOutlinedIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { systemSettingsService } from '../../services/api';
@@ -61,14 +71,22 @@ const SWITCH_ROW = {
   rowGap: 1.25,
 } as const;
 
-/** 설정 카드 — 테두리·얕은 그림자로 블록 구분 */
+/** 화면 설정 토글 — 제목·설명(좌) + 스위치(우) 세로 나열 */
+const APPEARANCE_TOGGLE_ROW_SX = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 2,
+  py: 1.75,
+  borderBottom: (theme: { palette: { mode: string; divider: string } }) =>
+    `1px solid ${theme.palette.mode === 'light' ? '#E8EDF3' : theme.palette.divider}`,
+  '&:last-child': { borderBottom: 'none', pb: 0 },
+} as const;
+
+/** 설정 섹션 카드 — MVS Body 외곽 톤 */
 const SETTINGS_CARD_SX = {
-  border: '1px solid',
-  borderColor: 'divider',
-  borderRadius: 2,
-  boxShadow: '0 1px 4px rgba(15, 23, 42, 0.07)',
-  bgcolor: 'background.paper',
-  overflow: 'hidden'
+  ...mvsBodyCardSx,
+  overflow: 'hidden',
 } as const;
 
 /** 우측 열(화면·알림·보안) — 카드별 내용 높이에 맞춤(잘림 방지) */
@@ -397,15 +415,13 @@ const SystemSettings: React.FC = () => {
           severity: 'success'
         });
         
-        // 언어 설정이 변경되면 store 업데이트
+        // 언어 설정이 변경되면 store 업데이트 후 새로고침
         if (canManageAll && settings.general.language !== language) {
           setLanguage(settings.general.language as 'ko' | 'en');
+          setTimeout(() => {
+            window.location.reload();
+          }, 300);
         }
-
-        // 테마 모드 변경 반영
-        setTimeout(() => {
-          window.location.reload();
-        }, 300);
       }
     } catch (error: any) {
       console.error('설정 저장 오류:', error);
@@ -566,19 +582,41 @@ const SystemSettings: React.FC = () => {
 
   if (loading) {
     return (
-      <Box sx={{ 
-        p: 0, 
-        backgroundColor: 'workArea.main',
-        borderRadius: 2,
-        minHeight: '100%',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center'
-      }}>
-        <CircularProgress />
+      <Box sx={{ ...mvsPageRootSx, display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 320 }}>
+        <CircularProgress size={36} />
       </Box>
     );
   }
+
+  const smtpConfigured = Boolean(
+    settings.mailServer.host?.trim() &&
+      (settings.mailServer.authPassConfigured || settings.mailServer.authPass?.trim())
+  );
+
+  const kpiItems =
+    settingsTab === 0
+      ? [
+          {
+            key: 'language',
+            label: t('systemSettings.stats.language'),
+            value: settings.general.language === 'en' ? 'English' : '한국어',
+          },
+          {
+            key: 'smtp',
+            label: t('systemSettings.stats.smtp'),
+            value: smtpConfigured ? t('systemSettings.stats.configured') : t('systemSettings.stats.notConfigured'),
+          },
+          ...(isRoot
+            ? [
+                {
+                  key: 'backup',
+                  label: t('systemSettings.stats.backupFiles'),
+                  value: String(backupFiles.length),
+                },
+              ]
+            : []),
+        ]
+      : [];
 
   const showMailPassMask =
     settings.mailServer.authPassConfigured &&
@@ -588,46 +626,89 @@ const SystemSettings: React.FC = () => {
   return (
     <Box sx={{ ...mvsPageRootSx }}>
       <MvsPageHeader
-        title="시스템 설정"
-        description="시스템 전반의 설정을 관리하는 페이지입니다."
-        mb={2}
-        actions={
-          settingsTab === 0 ? (
-            <Button
-              variant="contained"
-              size="small"
-              startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <SaveIcon sx={{ fontSize: 18 }} />}
-              onClick={handleSave}
-              disabled={saving}
-              sx={{ borderRadius: 1.5, py: 0.75 }}
-            >
-              {saving ? '저장 중...' : '설정 저장'}
-            </Button>
-          ) : undefined
-        }
+        title={t('systemSettings.pageTitle')}
+        description={t('systemSettings.pageDescription')}
       />
 
-      <Card sx={{ mb: 1.5 }}>
-        <CardContent sx={{ py: 0.25, '&:last-child': { pb: 0.25 } }}>
+      {settingsTab === 0 && kpiItems.length > 0 ? (
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, 1fr)',
+              md: `repeat(${Math.min(kpiItems.length, 4)}, 1fr)`,
+            },
+            gap: 2.5,
+            mb: 3,
+          }}
+        >
+          {kpiItems.map((item) => (
+            <Card key={item.key} elevation={0} sx={mvsKpiCardSx}>
+              <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                  {item.label}
+                </Typography>
+                <Typography
+                  variant="h5"
+                  sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary', fontSize: '1.125rem' }}
+                  noWrap
+                  title={item.value}
+                >
+                  {item.value}
+                </Typography>
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
+      ) : null}
+
+      <Card elevation={0} sx={mvsBodyCardSx}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1,
+            px: { xs: 2, sm: 2.5 },
+            py: 1,
+            bgcolor: '#FFFFFF',
+          }}
+        >
           <Tabs
             value={settingsTab}
             onChange={(_, v) => setSettingsTab(v)}
             sx={{
-              minHeight: 38,
+              minHeight: 40,
               '& .MuiTab-root': {
-                minHeight: 38,
+                minHeight: 40,
                 textTransform: 'none',
                 fontSize: '0.8125rem',
-                py: 0.75
-              }
+                py: 0.75,
+              },
             }}
           >
             <Tab label={t('systemSettings.tabs.basic')} />
             <Tab label={t('systemSettings.tabs.systemLoginHistory')} />
           </Tabs>
-        </CardContent>
+          {settingsTab === 0 ? (
+            <Button
+              variant="contained"
+              disableElevation
+              size="small"
+              startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon fontSize="small" />}
+              onClick={handleSave}
+              disabled={saving}
+              sx={mvsBodyPrimaryBtnSx}
+            >
+              {saving ? t('systemSettings.actions.saving') : t('systemSettings.actions.save')}
+            </Button>
+          ) : null}
+        </Box>
       </Card>
 
+      <Box sx={mvsBodyListZoneSx}>
       {settingsTab === 1 && <SystemLoginHistoryTab />}
 
       {settingsTab === 0 && (
@@ -640,7 +721,7 @@ const SystemSettings: React.FC = () => {
         }}
       >
         {/* 일반 설정 — 좌측 */}
-        <Card sx={{ ...SETTINGS_CARD_SX, display: 'flex', flexDirection: 'column' }}>
+        <Card elevation={0} sx={{ ...SETTINGS_CARD_SX, display: 'flex', flexDirection: 'column' }}>
           <CardContent sx={{ ...CARD_CONTENT_COMPACT, flex: 1, display: 'flex', flexDirection: 'column' }}>
             <Box sx={SECTION_HEADER}>
               <SettingsIcon sx={{ mr: 0.75, color: 'primary.main', fontSize: 20 }} />
@@ -740,7 +821,7 @@ const SystemSettings: React.FC = () => {
                     onClick={handleUseCurrentLocation}
                     disabled={locatingOffice || !canManageAll}
                     fullWidth
-                    sx={{ py: 1 }}
+                    sx={{ ...mvsBodyOutlinedBtnSx, py: 1 }}
                   >
                     {locatingOffice ? '위치 확인 중...' : '현재 위치 가져오기'}
                   </Button>
@@ -806,7 +887,7 @@ const SystemSettings: React.FC = () => {
         {/* 우측: 화면 설정 → 알림 설정 → 보안 설정 (md: 좌측과 동일 행 높이) */}
         <Box sx={SETTINGS_RIGHT_STACK_SX}>
         {/* 외관 설정 */}
-        <Card sx={SETTINGS_RIGHT_CARD_SX}>
+        <Card elevation={0} sx={SETTINGS_RIGHT_CARD_SX}>
           <CardContent sx={SETTINGS_RIGHT_CARD_CONTENT_SX}>
             <Box sx={SECTION_HEADER}>
               <DisplaySettingsIcon sx={{ mr: 0.75, color: 'primary.main', fontSize: 20 }} />
@@ -814,92 +895,58 @@ const SystemSettings: React.FC = () => {
             </Box>
             <Divider sx={SECTION_DIVIDER} />
 
-            <Box sx={FIELD_BLOCK}>
-              <TextField
-                fullWidth
+            <Box sx={APPEARANCE_TOGGLE_ROW_SX}>
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25, minWidth: 0, flex: 1 }}>
+                <ViewSidebarIcon sx={{ fontSize: 20, color: 'primary.main', mt: 0.15, flexShrink: 0 }} />
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8125rem', lineHeight: 1.4 }}>
+                    사이드바 자동 접기
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block', mt: 0.35, fontSize: '0.7rem', lineHeight: 1.45 }}
+                  >
+                    로그인 후 사이드바를 접힌 상태로 시작합니다.
+                  </Typography>
+                </Box>
+              </Box>
+              <Switch
                 size="small"
-                select
-                label="테마"
-                {...OUTLINED_FIELD}
-                value={(() => {
-                  const rawTheme = String(settings.appearance.theme || 'light');
-                  const normalizedTheme = rawTheme === 'ocean' ? 'forest' : rawTheme;
-                  return ['light', 'dark', 'forest', 'sunset', 'lavender', 'graphite'].includes(normalizedTheme) ? normalizedTheme : 'light';
-                })()}
-                onChange={(e) => handleSettingChange('appearance', 'theme', e.target.value)}
-                SelectProps={{
-                  displayEmpty: true,
-                  renderValue: (selected) => {
-                    const labelMap: Record<string, string> = {
-                      light: '라이트 테마',
-                      dark: '다크 테마',
-                      forest: '포레스트 테마',
-                      sunset: '선셋 테마',
-                      lavender: '라벤더 테마',
-                      graphite: '그래파이트 테마'
-                    };
-                    return labelMap[String(selected)] || '라이트 테마';
-                  },
-                }}
-                sx={{
-                  '& .MuiSelect-select': {
-                    color: 'text.primary',
-                    WebkitTextFillColor: (theme) => theme.palette.text.primary
-                  },
-                  '& .MuiSvgIcon-root': {
-                    color: 'text.primary'
-                  }
-                }}
-              >
-                <MenuItem value="light">라이트 테마</MenuItem>
-                <MenuItem value="dark">다크 테마</MenuItem>
-                <MenuItem value="forest">포레스트 테마</MenuItem>
-                <MenuItem value="sunset">선셋 테마</MenuItem>
-                <MenuItem value="lavender">라벤더 테마</MenuItem>
-                <MenuItem value="graphite">그래파이트 테마</MenuItem>
-              </TextField>
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: 'block', fontSize: '0.7rem', lineHeight: 1.45 }}>
-                {{
-                  light: '밝고 깔끔한 기본 테마',
-                  dark: '중성 다크 톤의 기본 야간 테마',
-                  forest: '차분한 딥그린 계열 테마 (헤더/카드/선택영역이 녹색 계열로 표현됨)',
-                  sunset: '따뜻한 오렌지 계열 라이트 테마',
-                  lavender: '부드러운 보라 계열 라이트 테마',
-                  graphite: '무채색 중심의 고대비 다크 테마'
-                }[(String(settings.appearance.theme) === 'ocean' ? 'forest' : String(settings.appearance.theme))] || '밝고 깔끔한 기본 테마'}
-              </Typography>
+                checked={settings.appearance.sidebarCollapsed}
+                onChange={(e) => handleSettingChange('appearance', 'sidebarCollapsed', e.target.checked)}
+                sx={{ flexShrink: 0 }}
+              />
             </Box>
 
-            <Box sx={SWITCH_ROW}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    size="small"
-                    checked={settings.appearance.sidebarCollapsed}
-                    onChange={(e) => handleSettingChange('appearance', 'sidebarCollapsed', e.target.checked)}
-                  />
-                }
-                label="사이드바 자동 접기"
-                sx={{ ...SWITCH_LABEL, mb: 0 }}
-              />
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    size="small"
-                    checked={settings.appearance.showNotifications}
-                    onChange={(e) => handleSettingChange('appearance', 'showNotifications', e.target.checked)}
-                  />
-                }
-                label="알림 표시"
-                sx={{ ...SWITCH_LABEL, mb: 0 }}
+            <Box sx={APPEARANCE_TOGGLE_ROW_SX}>
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25, minWidth: 0, flex: 1 }}>
+                <NotificationsOutlinedIcon sx={{ fontSize: 20, color: 'secondary.main', mt: 0.15, flexShrink: 0 }} />
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8125rem', lineHeight: 1.4 }}>
+                    알림 표시
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: 'block', mt: 0.35, fontSize: '0.7rem', lineHeight: 1.45 }}
+                  >
+                    헤더 영역에 알림 벨 아이콘을 표시합니다.
+                  </Typography>
+                </Box>
+              </Box>
+              <Switch
+                size="small"
+                checked={settings.appearance.showNotifications}
+                onChange={(e) => handleSettingChange('appearance', 'showNotifications', e.target.checked)}
+                sx={{ flexShrink: 0 }}
               />
             </Box>
           </CardContent>
         </Card>
 
         {/* 알림 설정 */}
-        <Card sx={SETTINGS_RIGHT_CARD_SX}>
+        <Card elevation={0} sx={SETTINGS_RIGHT_CARD_SX}>
           <CardContent sx={SETTINGS_RIGHT_CARD_CONTENT_SX}>
             <Box sx={SECTION_HEADER}>
               <NotificationsIcon sx={{ mr: 0.75, color: 'primary.main', fontSize: 20 }} />
@@ -1020,7 +1067,7 @@ const SystemSettings: React.FC = () => {
         </Card>
 
         {/* 보안 설정 */}
-        <Card sx={SETTINGS_RIGHT_CARD_SX}>
+        <Card elevation={0} sx={SETTINGS_RIGHT_CARD_SX}>
           <CardContent sx={SETTINGS_RIGHT_CARD_CONTENT_SX}>
             <Box sx={SECTION_HEADER}>
               <SecurityIcon sx={{ mr: 0.75, color: 'primary.main', fontSize: 20 }} />
@@ -1102,7 +1149,7 @@ const SystemSettings: React.FC = () => {
         </Box>
 
         {/* 보내는 메일 서버 (SMTP) */}
-        <Card sx={{ ...SETTINGS_CARD_SX, gridColumn: { xs: '1', md: '1 / -1' } }}>
+        <Card elevation={0} sx={{ ...SETTINGS_CARD_SX, gridColumn: { xs: '1', md: '1 / -1' } }}>
           <CardContent sx={CARD_CONTENT_COMPACT}>
             <Box sx={SECTION_HEADER}>
               <EmailIcon sx={{ mr: 0.75, color: 'primary.main', fontSize: 20 }} />
@@ -1120,7 +1167,7 @@ const SystemSettings: React.FC = () => {
                 size="small"
                 variant="outlined"
                 onClick={applyGmailMailPreset}
-                sx={{ mb: 2, textTransform: 'none', fontSize: '0.8125rem' }}
+                sx={{ ...mvsBodyOutlinedBtnSx, mb: 2 }}
               >
                 {t('systemSettings.mailServer.gmailPreset')}
               </Button>
@@ -1228,7 +1275,7 @@ const SystemSettings: React.FC = () => {
 
         {/* 백업 설정 — root 전용 */}
         {isRoot && (
-        <Card sx={{ ...SETTINGS_CARD_SX, gridColumn: { xs: '1', md: '1 / -1' } }}>
+        <Card elevation={0} sx={{ ...SETTINGS_CARD_SX, gridColumn: { xs: '1', md: '1 / -1' } }}>
           <CardContent sx={CARD_CONTENT_COMPACT}>
             <Box sx={SECTION_HEADER}>
               <StorageIcon sx={{ mr: 0.75, color: 'primary.main', fontSize: 20 }} />
@@ -1319,7 +1366,7 @@ const SystemSettings: React.FC = () => {
                   startIcon={<CloudUploadIcon sx={{ fontSize: 18 }} />}
                   onClick={handleBackupNow}
                   disabled={BACKUP_UI_DISABLED || !isRoot}
-                  sx={{ mb: 1 }}
+                  sx={{ ...mvsBodyOutlinedBtnSx, mb: 1 }}
                 >
                   지금 백업하기
                 </Button>
@@ -1383,7 +1430,7 @@ const SystemSettings: React.FC = () => {
                         }
                         onClick={() => void handleDownloadBackup(file.filename)}
                         disabled={BACKUP_UI_DISABLED || downloadingBackupName === file.filename}
-                        sx={{ textTransform: 'none', flexShrink: 0 }}
+                        sx={{ ...mvsBodyOutlinedBtnSx, flexShrink: 0 }}
                       >
                         {downloadingBackupName === file.filename
                           ? t('systemSettings.backup.downloading')
@@ -1399,6 +1446,7 @@ const SystemSettings: React.FC = () => {
         )}
       </Box>
       )}
+      </Box>
 
       {/* 다이얼로그 */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>

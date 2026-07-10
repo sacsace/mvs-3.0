@@ -40,7 +40,9 @@ import {
   PostAdd,
   QrCodeScanner,
   Business,
-  Email
+  Email,
+  RequestQuote,
+  MenuBook
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
@@ -74,8 +76,29 @@ export const SIDEBAR_WIDTH_TRANSITION_MS = 300;
 export const SIDEBAR_WIDTH_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 /** 마우스 이탈 후 접기 — 살짝 여유를 두어 자연스럽게 */
 const SIDEBAR_HOVER_CLOSE_DELAY_MS = 380;
-/** 선택 영역·좌측 강조선 모서리 직각 */
+/** 선택 메뉴 — 브랜드 컬러 한 가지 + 연한 배경만 */
 const MENU_ITEM_RADIUS_PX = 10;
+const MENU_ACTIVE_COLOR = '#007A83';
+
+const menuItemButtonSx = (
+  theme: { palette: { action: { hover: string } } },
+  isActive: boolean,
+  extra: Record<string, unknown>
+) => ({
+  ...extra,
+  borderLeft: 'none',
+  backgroundColor: isActive ? alpha(MENU_ACTIVE_COLOR, 0.12) : 'transparent',
+  color: isActive ? MENU_ACTIVE_COLOR : '#4B5563',
+  transition: 'background-color 0.2s ease, color 0.2s ease',
+  '&:hover': {
+    backgroundColor: isActive ? alpha(MENU_ACTIVE_COLOR, 0.18) : theme.palette.action.hover,
+  },
+});
+
+const menuItemIconSx = (extra: Record<string, unknown>) => ({
+  ...extra,
+  color: 'inherit',
+});
 
 const normalizeMenuPath = (path: string) => {
   const [pathname] = String(path || '').trim().split(/[?#]/);
@@ -288,8 +311,8 @@ const Sidebar: React.FC<SidebarProps> = ({
       const route = String(m.route || '');
       if (route.startsWith('/ai')) return true;
       if (/^\/(cost-analysis|efficiency|forecasting|recommendations)(\/|$)/.test(route)) return true;
-      if (m.name_ko === 'AI 분석') return true;
-      if (/^ai\s*analysis$/i.test(String(m.name_en || '').trim())) return true;
+      if (m.name_ko === 'AI 분석' || m.name_ko === '분석') return true;
+      if (/^analysis$/i.test(String(m.name_en || '').trim())) return true;
       return false;
     };
 
@@ -430,8 +453,16 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (normalized.includes('/inventory/transaction')) return <AttachMoney />;
     if (normalized.includes('/inventory/report')) return <ReceiptLong />;
 
+    if (normalized.includes('/accounting/books')) return <MenuBook />;
+    if (normalized.includes('/accounting/chart-of-accounts')) return <AccountBalance />;
+    if (normalized.includes('/accounting/vouchers')) return <ReceiptLong />;
+    if (normalized.includes('/accounting/ledger')) return <Description />;
+    if (normalized.includes('/accounting/trial-balance')) return <Assessment />;
+    if (normalized.includes('/accounting/quotation')) return <RequestQuote />;
     if (normalized.includes('/accounting/e-invoice')) return <ReceiptLong />;
+    if (normalized.includes('/accounting/invoice')) return <Description />;
     if (normalized.includes('/accounting/eway-bill')) return <LocalShipping />;
+    if (normalized.includes('/accounting/auto-voucher')) return <ReceiptLong />;
     if (normalized.includes('/accounting/expense')) return <AttachMoney />;
     if (normalized.includes('/accounting/budget')) return <AttachMoney />;
     if (normalized.includes('/accounting/assets')) return <AccountBalance />;
@@ -453,7 +484,8 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (normalized.startsWith('/work')) return <ViewKanban />;
     if (normalized.startsWith('/hotel')) return <Dashboard />;
     if (normalized.startsWith('/inventory')) return <Inventory />;
-    if (normalized.startsWith('/accounting')) return <AttachMoney />;
+    if (normalized.startsWith('/sales')) return <TrendingUp />;
+    if (normalized.startsWith('/accounting')) return <AccountBalance />;
     if (normalized.startsWith('/customers')) return <TrendingUp />;
     if (normalized.startsWith('/communication')) return <Notifications />;
     if (normalized.startsWith('/ai')) return <Psychology />;
@@ -498,6 +530,11 @@ const Sidebar: React.FC<SidebarProps> = ({
       }
 
       setLoading(true);
+      const timeoutId = window.setTimeout(() => {
+        setLoading(false);
+        setError('메뉴 로드 시간이 초과되었습니다. 새로고침 후 다시 시도해주세요.');
+      }, 20000);
+
       try {
         const [menusResponse, permissionsResponse] = await Promise.all([
           menuService.getUserMenus(user.id, user.tenant_id, language),
@@ -512,21 +549,21 @@ const Sidebar: React.FC<SidebarProps> = ({
           setUserPermissions(permissionsResponse.data);
         }
         
-        // 성공 시 에러 초기화
         setError(null);
       } catch (error: any) {
         console.error('메뉴 로드 오류:', error);
         
-        // 429 오류인 경우 재시도
         if (error.response?.status === 429 && retryCount < 3) {
+          window.clearTimeout(timeoutId);
           setTimeout(() => {
             loadMenus(retryCount + 1);
-          }, (retryCount + 1) * 2000); // 2초, 4초, 6초 후 재시도
+          }, (retryCount + 1) * 2000);
           return;
         }
         
         setError('메뉴를 불러오는데 실패했습니다.');
       } finally {
+        window.clearTimeout(timeoutId);
         setLoading(false);
       }
     };
@@ -597,25 +634,19 @@ const Sidebar: React.FC<SidebarProps> = ({
             <Tooltip title={labelText} placement="right">
               <ListItemButton
                 onClick={() => handleMenuClick(menu)}
-                sx={(theme) => ({
-                  pl: 1,
-                  py: isActive ? activePaddingY : itemPaddingY,
-                  justifyContent: 'center',
-                  borderRadius: MENU_ITEM_RADIUS_PX,
-                  borderLeft: 'none',
-                  backgroundColor: isActive ? '#EAF2FF' : 'transparent',
-                  color: isActive ? '#007A83' : '#4B5563',
-                  transition: 'all 0.2s ease',
-                  '&:hover': {
-                    backgroundColor: isActive ? '#E0EBFA' : theme.palette.action.hover,
-                    transform: 'translateY(-1px)',
-                  },
-                })}
+                sx={(theme) =>
+                  menuItemButtonSx(theme, isActive, {
+                    pl: 1,
+                    py: isActive ? activePaddingY : itemPaddingY,
+                    justifyContent: 'center',
+                    borderRadius: MENU_ITEM_RADIUS_PX,
+                  })
+                }
               >
                 <ListItemIcon
-                  sx={(theme) => ({
-                    color: isActive ? 'primary.main' : alpha(theme.palette.text.primary, 0.45),
+                  sx={menuItemIconSx({
                     minWidth: '24px',
+                    opacity: isActive ? 1 : 0.55,
                     '& .MuiSvgIcon-root': {
                       fontSize: '1rem',
                     },
@@ -628,25 +659,19 @@ const Sidebar: React.FC<SidebarProps> = ({
           ) : (
             <ListItemButton
               onClick={() => handleMenuClick(menu)}
-              sx={(theme) => ({
-                pl: 2 + level * 2,
-                py: isActive ? activePaddingY : itemPaddingY,
-                minHeight: level === 0 ? topLevelMinHeight : 'auto',
-                borderRadius: MENU_ITEM_RADIUS_PX,
-                borderLeft: 'none',
-                backgroundColor: isActive ? '#EAF2FF' : 'transparent',
-                color: isActive ? '#007A83' : '#4B5563',
-                transition: 'all 0.2s ease',
-                '&:hover': {
-                  backgroundColor: isActive ? '#E0EBFA' : theme.palette.action.hover,
-                  transform: 'translateY(-1px)',
-                },
-              })}
+              sx={(theme) =>
+                menuItemButtonSx(theme, isActive, {
+                  pl: 2 + level * 2,
+                  py: isActive ? activePaddingY : itemPaddingY,
+                  minHeight: level === 0 ? topLevelMinHeight : 'auto',
+                  borderRadius: MENU_ITEM_RADIUS_PX,
+                })
+              }
             >
               <ListItemIcon
-                sx={(theme) => ({
-                  color: isActive ? 'primary.main' : alpha(theme.palette.text.primary, 0.45),
+                sx={menuItemIconSx({
                   minWidth: '36px',
+                  opacity: isActive ? 1 : 0.55,
                   '& .MuiSvgIcon-root': {
                     fontSize: '1rem',
                   },
@@ -666,7 +691,8 @@ const Sidebar: React.FC<SidebarProps> = ({
                   whiteSpace: 'nowrap',
                   '& .MuiListItemText-primary': {
                     fontSize: '13px',
-                    fontWeight: isActive ? 500 : 400,
+                    fontWeight: isActive ? 600 : 400,
+                    color: 'inherit',
                     lineHeight: level === 0 ? (isEnglish ? 1.2 : 0.94) : (isEnglish ? 1.28 : 1.12)
                   },
                   '& .MuiListItemText-secondary': {

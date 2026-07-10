@@ -77,6 +77,13 @@ const AssetManagement = lazyPage(() => import('./pages/Accounting/AssetManagemen
 const AccountingStatistics = lazyPage(() => import('./pages/Accounting/AccountingStatistics'));
 const AccountingBasicInfo = lazyPage(() => import('./pages/Accounting/AccountingBasicInfo'));
 const ExpenseReceiptUpload = lazyPage(() => import('./pages/Accounting/ExpenseReceiptUpload'));
+const AIAutoVoucher = lazyPage(() => import('./pages/Accounting/AIAutoVoucher'));
+const VoucherEntry = lazyPage(() => import('./pages/Accounting/VoucherEntry'));
+const VoucherList = lazyPage(() => import('./pages/Accounting/VoucherList'));
+const AccountingMasters = lazyPage(() => import('./pages/Accounting/AccountingMasters'));
+const GeneralLedger = lazyPage(() => import('./pages/Accounting/GeneralLedger'));
+const ProfitAndLoss = lazyPage(() => import('./pages/Accounting/ProfitAndLoss'));
+const ChartOfAccounts = lazyPage(() => import('./pages/Accounting/ChartOfAccounts'));
 const ContractManagement = lazyPage(() => import('./pages/Sales/ContractManagement'));
 const CustomerInformation = lazyPage(() => import('./pages/Sales/CustomerInformation'));
 const RegularInvoice = lazyPage(() => import('./pages/Invoice/RegularInvoice'));
@@ -288,13 +295,14 @@ function App() {
             <Route path="eway-bill/send" element={<Navigate to="/accounting/eway-bill" replace />} />
             <Route path="eway-bill/track" element={<Navigate to="/accounting/eway-bill" replace />} />
             
-            {/* 고객관리 */}
+            {/* 매출 관리 */}
+            <Route path="sales" element={<Navigate to="/customers/info" replace />} />
             <Route path="customers" element={<Navigate to="/customers/info" replace />} />
             <Route path="customers/info" element={<CustomerInformation />} />
             <Route path="customers/contracts" element={<ContractManagement />} />
             
-            {/* 회계관리 */}
-            <Route path="accounting" element={<Navigate to="/accounting/e-invoice" replace />} />
+            {/* 회계 관리 */}
+            <Route path="accounting" element={<Navigate to="/accounting/basic-info" replace />} />
             <Route path="accounting/quotation" element={<QuotationManagement />} />
             <Route path="accounting/e-invoice" element={<EInvoiceManagement />} />
             <Route path="accounting/e-invoice/create" element={<EInvoiceCreate />} />
@@ -306,6 +314,17 @@ function App() {
             <Route path="accounting/assets" element={<AssetManagement />} />
             <Route path="accounting/statistics" element={<AccountingStatistics />} />
             <Route path="accounting/basic-info" element={<AccountingBasicInfo />} />
+            <Route path="accounting/books" element={<GeneralLedger />} />
+            <Route path="accounting/chart-of-accounts" element={<ChartOfAccounts />} />
+            <Route path="accounting/vouchers" element={<Navigate to="/accounting/books?tab=vouchers" replace />} />
+            <Route path="accounting/ledger" element={<Navigate to="/accounting/books?tab=ledger" replace />} />
+            <Route path="accounting/trial-balance" element={<Navigate to="/accounting/books?tab=trial" replace />} />
+            <Route path="accounting/profit-and-loss" element={<ProfitAndLoss />} />
+            <Route path="accounting/voucher-entry" element={<VoucherEntry />} />
+            <Route path="accounting/voucher-list" element={<VoucherList />} />
+            <Route path="accounting/settings/masters" element={<AccountingMasters />} />
+            <Route path="accounting/auto-voucher" element={<Navigate to="/accounting/voucher-entry" replace />} />
+            <Route path="accounting/document-voucher" element={<AIAutoVoucher />} />
             
             {/* 보고서 */}
             <Route path="reports" element={<Reports />} />

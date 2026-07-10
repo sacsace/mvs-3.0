@@ -12,16 +12,54 @@ import {
   TableRow,
   TableCell,
   TableBody,
+  TableContainer,
   TextField,
   Alert,
   CircularProgress,
-  Autocomplete
+  Autocomplete,
+  InputAdornment,
+  Pagination,
 } from '@mui/material';
-import { Refresh as RefreshIcon } from '@mui/icons-material';
+import { RestartAlt as ResetIcon, Search as SearchIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { companyService, loginInfoService } from '../../services/api';
+import { loginInfoService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useStore } from '../../store';
+import {
+  mvsKpiCardSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsTableHeadHighlightSx,
+  mvsTableScrollSx,
+  mvsBodyPaginationSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsOutlinedLabelProps,
+} from '../../theme/mvsLayout';
+import { type SxProps, type Theme } from '@mui/material/styles';
+
+const LOGS_PER_PAGE = 10;
+const LOGIN_FILTER_OUTLINED = mvsOutlinedLabelProps;
+const loginFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
+
+const loginHistoryTableBodyRowSx: SxProps<Theme> = (theme) => {
+  const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
+  const hoverBg = theme.palette.mode === 'light' ? '#EFF6FF' : theme.palette.action.hover;
+  return {
+    '& .MuiTableRow-root': { bgcolor: rowBg },
+    '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
+    '& .MuiTableCell-body': {
+      py: 1.5,
+      px: 2,
+      fontSize: '0.875rem',
+      borderBottom: `1px solid ${theme.palette.mode === 'light' ? '#D1DAE4' : theme.palette.divider}`,
+    },
+    '& .MuiTableRow-root:last-of-type .MuiTableCell-body': { borderBottom: 'none' },
+  };
+};
 
 interface Company {
   id: number;
@@ -55,11 +93,12 @@ const SystemLoginHistoryTab: React.FC = () => {
   const [loginLogs, setLoginLogs] = useState<LoginLog[]>([]);
   const [logLoading, setLogLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const [logFilters, setLogFilters] = useState({
     userid: '',
     status: '' as '' | 'success' | 'failure',
     start_date: '',
-    end_date: ''
+    end_date: '',
   });
 
   const selectedCompany = useMemo(
@@ -67,29 +106,58 @@ const SystemLoginHistoryTab: React.FC = () => {
     [companies, selectedCompanyId]
   );
 
+  const logStats = useMemo(
+    () => ({
+      total: loginLogs.length,
+      success: loginLogs.filter((log) => log.status === 'success').length,
+      failure: loginLogs.filter((log) => log.status === 'failure').length,
+    }),
+    [loginLogs]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(loginLogs.length / LOGS_PER_PAGE));
+  const paginatedLogs = useMemo(
+    () => loginLogs.slice((page - 1) * LOGS_PER_PAGE, page * LOGS_PER_PAGE),
+    [loginLogs, page]
+  );
+
+  const hasActiveFilters = Boolean(
+    logFilters.userid.trim() || logFilters.status || logFilters.start_date || logFilters.end_date
+  );
+
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    py: { xs: 6, sm: 8 },
+    px: 3,
+    gap: 1.5,
+  } as const;
+
   const loadCompanies = useCallback(async () => {
     try {
       const companyList = await useReferenceDataStore.getState().fetchCompanies();
       setCompanies(companyList);
 
-        if (!companyList.length) {
-          setSelectedCompanyId('');
-          return;
-        }
+      if (!companyList.length) {
+        setSelectedCompanyId('');
+        return;
+      }
 
-        const hasSelectedCompany =
-          selectedCompanyId !== '' &&
-          companyList.some((company: Company) => company.id === selectedCompanyId);
+      const hasSelectedCompany =
+        selectedCompanyId !== '' && companyList.some((company: Company) => company.id === selectedCompanyId);
 
-        if (hasSelectedCompany) {
-          return;
-        }
+      if (hasSelectedCompany) {
+        return;
+      }
 
-        const userCompanyId = user?.company_id;
-        const hasUserCompany =
-          !!userCompanyId && companyList.some((company: Company) => company.id === userCompanyId);
+      const userCompanyId = user?.company_id;
+      const hasUserCompany = !!userCompanyId && companyList.some((company: Company) => company.id === userCompanyId);
 
-        setSelectedCompanyId(hasUserCompany ? Number(userCompanyId) : companyList[0].id);
+      setSelectedCompanyId(hasUserCompany ? Number(userCompanyId) : companyList[0].id);
     } catch (error: any) {
       console.error('회사 목록 로드 오류:', error);
       setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.loadCompaniesFailed'));
@@ -97,17 +165,17 @@ const SystemLoginHistoryTab: React.FC = () => {
   }, [selectedCompanyId, t, user?.company_id]);
 
   const loadLoginLogs = useCallback(
-    async (companyId?: number) => {
+    async (companyId?: number, filters = logFilters) => {
       setLogLoading(true);
       setErrorMessage(null);
       try {
         const response = await loginInfoService.getLoginLogs({
           company_id: companyId,
-          userid: logFilters.userid.trim() || undefined,
-          status: logFilters.status || undefined,
-          start_date: logFilters.start_date || undefined,
-          end_date: logFilters.end_date || undefined,
-          limit: 300
+          userid: filters.userid.trim() || undefined,
+          status: filters.status || undefined,
+          start_date: filters.start_date || undefined,
+          end_date: filters.end_date || undefined,
+          limit: 300,
         });
         if (response?.success) {
           setLoginLogs(response.data || []);
@@ -122,7 +190,7 @@ const SystemLoginHistoryTab: React.FC = () => {
         setLogLoading(false);
       }
     },
-    [logFilters.end_date, logFilters.start_date, logFilters.status, logFilters.userid, t]
+    [logFilters, t]
   );
 
   useEffect(() => {
@@ -131,11 +199,21 @@ const SystemLoginHistoryTab: React.FC = () => {
 
   useEffect(() => {
     if (selectedCompanyId) {
-      loadLoginLogs(Number(selectedCompanyId));
+      void loadLoginLogs(Number(selectedCompanyId));
     } else {
       setLoginLogs([]);
     }
   }, [loadLoginLogs, selectedCompanyId]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [selectedCompanyId, logFilters]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
 
   const handleLogSearch = async () => {
     if (!selectedCompanyId) {
@@ -150,7 +228,7 @@ const SystemLoginHistoryTab: React.FC = () => {
       userid: '',
       status: '' as '' | 'success' | 'failure',
       start_date: '',
-      end_date: ''
+      end_date: '',
     };
     setLogFilters(nextFilters);
 
@@ -159,24 +237,7 @@ const SystemLoginHistoryTab: React.FC = () => {
       return;
     }
 
-    setLogLoading(true);
-    try {
-      const response = await loginInfoService.getLoginLogs({
-        company_id: Number(selectedCompanyId),
-        limit: 300
-      });
-      if (response?.success) {
-        setLoginLogs(response.data || []);
-      } else {
-        setLoginLogs([]);
-      }
-    } catch (error: any) {
-      console.error('로그인 로그 초기화 조회 오류:', error);
-      setLoginLogs([]);
-      setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.loadLogsFailed'));
-    } finally {
-      setLogLoading(false);
-    }
+    await loadLoginLogs(Number(selectedCompanyId), nextFilters);
   };
 
   const formatDateTime = (value?: string) => {
@@ -186,168 +247,222 @@ const SystemLoginHistoryTab: React.FC = () => {
     return date.toLocaleString(i18n.language === 'en' ? 'en-US' : 'ko-KR', { hour12: false });
   };
 
-  const fieldLabelSx = {
-    display: 'block',
-    mb: 0.75,
-    ml: 0.5,
-    fontWeight: 500,
-    color: 'text.secondary'
-  };
-
   return (
     <Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
         {t('systemSettings.loginHistoryHint')}
       </Typography>
 
       {errorMessage && (
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setErrorMessage(null)}>
           {errorMessage}
         </Alert>
       )}
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: '2fr 1fr 1fr 1fr auto auto' },
-              gap: 1.5,
-              alignItems: 'center'
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
+          gap: 2.5,
+          mb: 3,
+        }}
+      >
+        {[
+          { key: 'total', label: t('systemSettings.stats.logTotal'), value: logStats.total },
+          { key: 'success', label: t('systemSettings.stats.logSuccess'), value: logStats.success },
+          { key: 'failure', label: t('systemSettings.stats.logFailure'), value: logStats.failure },
+        ].map((item) => (
+          <Card key={item.key} elevation={0} sx={mvsKpiCardSx}>
+            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                {item.label}
+              </Typography>
+              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                {item.value}
+              </Typography>
+            </CardContent>
+          </Card>
+        ))}
+      </Box>
+
+      <Card elevation={0} sx={mvsBodyCardSx}>
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            ...(mvsSearchFieldSx as Record<string, unknown>),
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, minmax(0, 1fr))',
+              lg: 'minmax(280px, 360px) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto auto',
+            },
+            gap: 2,
+            alignItems: 'flex-end',
+          }}
+        >
+          <Autocomplete
+            options={companies}
+            value={selectedCompany || null}
+            onChange={(_, newValue) => setSelectedCompanyId(newValue?.id ?? '')}
+            getOptionLabel={(option) => option.name}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            sx={{ width: '100%', minWidth: 0 }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                size="small"
+                label={t('loginInfoManagement.fields.company')}
+                {...LOGIN_FILTER_OUTLINED}
+                placeholder={t('loginInfoManagement.placeholders.selectCompany')}
+                sx={loginFilterFieldSx}
+              />
+            )}
+          />
+          <TextField
+            fullWidth
+            size="small"
+            label={t('loginInfoManagement.fields.searchUserId')}
+            {...LOGIN_FILTER_OUTLINED}
+            placeholder={t('loginInfoManagement.placeholders.searchUserId')}
+            value={logFilters.userid}
+            onChange={(event) => setLogFilters((prev) => ({ ...prev, userid: event.target.value }))}
+            sx={loginFilterFieldSx}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
+                </InputAdornment>
+              ),
             }}
+          />
+          <TextField
+            fullWidth
+            size="small"
+            select
+            label={t('loginInfoManagement.fields.result')}
+            {...LOGIN_FILTER_OUTLINED}
+            value={logFilters.status}
+            SelectProps={{ displayEmpty: true }}
+            onChange={(event) =>
+              setLogFilters((prev) => ({
+                ...prev,
+                status: event.target.value as '' | 'success' | 'failure',
+              }))
+            }
+            sx={loginFilterFieldSx}
           >
-            <Autocomplete
-              options={companies}
-              value={selectedCompany || null}
-              onChange={(_, newValue) => setSelectedCompanyId(newValue?.id ?? '')}
-              getOptionLabel={(option) => option.name}
-              isOptionEqualToValue={(option, value) => option.id === value.id}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  size="small"
-                  label={t('loginInfoManagement.fields.company')}
-                  InputLabelProps={{ shrink: true }}
-                  placeholder={t('loginInfoManagement.placeholders.selectCompany')}
-                />
-              )}
-            />
-            <TextField
-              size="small"
-              label={t('loginInfoManagement.fields.searchUserId')}
-              placeholder={t('loginInfoManagement.placeholders.searchUserId')}
-              value={logFilters.userid}
-              onChange={(event) => setLogFilters((prev) => ({ ...prev, userid: event.target.value }))}
-              InputLabelProps={{ shrink: true }}
-              fullWidth
-            />
-            <TextField
-              size="small"
-              select
-              label={t('loginInfoManagement.fields.result')}
-              value={logFilters.status}
-              InputLabelProps={{ shrink: true }}
-              SelectProps={{ displayEmpty: true }}
-              fullWidth
-              onChange={(event) =>
-                setLogFilters((prev) => ({
-                  ...prev,
-                  status: event.target.value as '' | 'success' | 'failure'
-                }))
-              }
-            >
-              <MenuItem value="">{t('loginInfoManagement.filters.all')}</MenuItem>
-              <MenuItem value="success">{t('loginInfoManagement.status.success')}</MenuItem>
-              <MenuItem value="failure">{t('loginInfoManagement.status.failure')}</MenuItem>
-            </TextField>
-            <TextField
-              size="small"
-              type="date"
-              label={t('loginInfoManagement.fields.startDate')}
-              placeholder={t('loginInfoManagement.placeholders.date')}
-              value={logFilters.start_date}
-              onChange={(event) => setLogFilters((prev) => ({ ...prev, start_date: event.target.value }))}
-              InputLabelProps={{ shrink: true }}
-              fullWidth
-            />
-            <TextField
-              size="small"
-              type="date"
-              label={t('loginInfoManagement.fields.endDate')}
-              placeholder={t('loginInfoManagement.placeholders.date')}
-              value={logFilters.end_date}
-              onChange={(event) => setLogFilters((prev) => ({ ...prev, end_date: event.target.value }))}
-              InputLabelProps={{ shrink: true }}
-              fullWidth
-            />
-            <Button
-              variant="outlined"
-              onClick={handleLogFilterReset}
-              sx={{
-                alignSelf: 'end',
-                height: 40,
-                mb: 0.1,
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {t('loginInfoManagement.actions.reset')}
-            </Button>
-            <Button variant="contained" onClick={handleLogSearch} startIcon={<RefreshIcon />}>
-              {t('loginInfoManagement.actions.search')}
-            </Button>
-          </Box>
-        </CardContent>
+            <MenuItem value="">{t('loginInfoManagement.filters.all')}</MenuItem>
+            <MenuItem value="success">{t('loginInfoManagement.status.success')}</MenuItem>
+            <MenuItem value="failure">{t('loginInfoManagement.status.failure')}</MenuItem>
+          </TextField>
+          <TextField
+            fullWidth
+            size="small"
+            type="date"
+            label={t('loginInfoManagement.fields.startDate')}
+            {...LOGIN_FILTER_OUTLINED}
+            value={logFilters.start_date}
+            onChange={(event) => setLogFilters((prev) => ({ ...prev, start_date: event.target.value }))}
+            InputLabelProps={{ ...LOGIN_FILTER_OUTLINED.InputLabelProps, shrink: true }}
+            sx={loginFilterFieldSx}
+          />
+          <TextField
+            fullWidth
+            size="small"
+            type="date"
+            label={t('loginInfoManagement.fields.endDate')}
+            {...LOGIN_FILTER_OUTLINED}
+            value={logFilters.end_date}
+            onChange={(event) => setLogFilters((prev) => ({ ...prev, end_date: event.target.value }))}
+            InputLabelProps={{ ...LOGIN_FILTER_OUTLINED.InputLabelProps, shrink: true }}
+            sx={loginFilterFieldSx}
+          />
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<ResetIcon fontSize="small" />}
+            onClick={() => void handleLogFilterReset()}
+            sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
+          >
+            {t('loginInfoManagement.actions.reset')}
+          </Button>
+          <Button
+            variant="contained"
+            disableElevation
+            size="small"
+            startIcon={<SearchIcon fontSize="small" />}
+            onClick={() => void handleLogSearch()}
+            sx={mvsBodyPrimaryBtnSx}
+          >
+            {t('loginInfoManagement.actions.search')}
+          </Button>
+        </Box>
       </Card>
 
-      <Card>
-        <CardContent>
-          <Box
-            sx={{
-              mb: 1.5,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 1,
-              flexWrap: 'wrap'
-            }}
-          >
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-              {t('systemSettings.tabs.systemLoginHistory')}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {t('loginInfoManagement.recentCount', { count: loginLogs.length })}
+      <Box sx={{ ...mvsBodyListZoneSx, mt: 2.5 }}>
+        {logLoading ? (
+          <Box sx={listStateBoxSx}>
+            <CircularProgress size={36} />
+            <Typography variant="body2" color="text.secondary">
+              {t('loginInfoManagement.empty.loading')}
             </Typography>
           </Box>
-
-          {logLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ width: 70 }}>No</TableCell>
-                  <TableCell sx={{ width: 190 }}>{t('loginInfoManagement.fields.loginAt')}</TableCell>
-                  <TableCell sx={{ width: 110 }}>{t('loginInfoManagement.fields.result')}</TableCell>
-                  <TableCell sx={{ minWidth: 120 }}>{t('loginInfoManagement.fields.userId')}</TableCell>
-                  <TableCell sx={{ minWidth: 120 }}>{t('loginInfoManagement.fields.userName')}</TableCell>
-                  <TableCell sx={{ minWidth: 130 }}>IP</TableCell>
-                  <TableCell sx={{ minWidth: 170 }}>{t('loginInfoManagement.fields.reason')}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loginLogs.length === 0 ? (
+        ) : loginLogs.length === 0 ? (
+          <Box sx={listStateBoxSx}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+              {hasActiveFilters ? t('loginInfoManagement.empty.noResults') : t('loginInfoManagement.empty.noData')}
+            </Typography>
+            {hasActiveFilters ? (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<ResetIcon fontSize="small" />}
+                onClick={() => void handleLogFilterReset()}
+                sx={mvsBodyOutlinedBtnSx}
+              >
+                {t('loginInfoManagement.actions.reset')}
+              </Button>
+            ) : null}
+          </Box>
+        ) : (
+          <>
+            <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+              <Table
+                size="small"
+                sx={{
+                  tableLayout: 'fixed',
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  bgcolor: 'transparent',
+                  '& .MuiTableCell-root': {
+                    borderLeft: 'none',
+                    borderRight: 'none',
+                    borderTop: 'none',
+                  },
+                }}
+              >
+                <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
-                    <TableCell colSpan={7} align="center">
-                      {t('loginInfoManagement.empty.noData')}
-                    </TableCell>
+                    <TableCell sx={{ width: 56 }}>No</TableCell>
+                    <TableCell sx={{ width: 170 }}>{t('loginInfoManagement.fields.loginAt')}</TableCell>
+                    <TableCell sx={{ width: 96 }}>{t('loginInfoManagement.fields.result')}</TableCell>
+                    <TableCell>{t('loginInfoManagement.fields.userId')}</TableCell>
+                    <TableCell>{t('loginInfoManagement.fields.userName')}</TableCell>
+                    <TableCell sx={{ width: 120 }}>IP</TableCell>
+                    <TableCell>{t('loginInfoManagement.fields.reason')}</TableCell>
                   </TableRow>
-                ) : (
-                  loginLogs.map((log, index) => (
+                </TableHead>
+                <TableBody sx={loginHistoryTableBodyRowSx}>
+                  {paginatedLogs.map((log, index) => (
                     <TableRow key={log.id}>
-                      <TableCell>{index + 1}</TableCell>
-                      <TableCell>{formatDateTime(log.logged_at)}</TableCell>
+                      <TableCell>{(page - 1) * LOGS_PER_PAGE + index + 1}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" noWrap title={formatDateTime(log.logged_at)}>
+                          {formatDateTime(log.logged_at)}
+                        </Typography>
+                      </TableCell>
                       <TableCell>
                         <Chip
                           size="small"
@@ -360,18 +475,50 @@ const SystemLoginHistoryTab: React.FC = () => {
                           variant={log.status === 'success' ? 'filled' : 'outlined'}
                         />
                       </TableCell>
-                      <TableCell>{log.userid || '-'}</TableCell>
-                      <TableCell>{log.user?.username || '-'}</TableCell>
-                      <TableCell>{log.ip_address || '-'}</TableCell>
-                      <TableCell>{log.reason || '-'}</TableCell>
+                      <TableCell>
+                        <Typography variant="body2" noWrap title={log.userid || '-'}>
+                          {log.userid || '-'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" noWrap title={log.user?.username || '-'}>
+                          {log.user?.username || '-'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" noWrap title={log.ip_address || '-'}>
+                          {log.ip_address || '-'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" noWrap title={log.reason || '-'}>
+                          {log.reason || '-'}
+                        </Typography>
+                      </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            <Box sx={mvsBodyPaginationSx}>
+              <Pagination
+                count={totalPages}
+                page={page}
+                onChange={(_, value) => setPage(value)}
+                color="primary"
+                shape="rounded"
+                sx={{
+                  '& .MuiPaginationItem-root': {
+                    borderRadius: '10px',
+                    fontWeight: 500,
+                  },
+                }}
+              />
+            </Box>
+          </>
+        )}
+      </Box>
     </Box>
   );
 };

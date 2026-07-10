@@ -2293,7 +2293,7 @@ const Dashboard: React.FC = () => {
           value={stats.totalCustomers}
           icon={<People />}
           color="success"
-          onClick={() => navigate('/customers')}
+          onClick={() => navigate('/sales')}
         />
         <StatCard
           title={t('dashboard.invoiceCount')}

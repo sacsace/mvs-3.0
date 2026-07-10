@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -19,6 +19,8 @@ import {
   FormControl,
   Select,
   MenuItem,
+  Menu,
+  ListItemIcon,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -26,8 +28,12 @@ import {
   Tooltip,
   Snackbar,
   Alert,
-  CircularProgress
+  CircularProgress,
+  useMediaQuery,
+  Checkbox,
+  Pagination,
 } from '@mui/material';
+import { alpha, useTheme, type SxProps, type Theme } from '@mui/material/styles';
 import {
   Handshake as HandshakeIcon,
   Edit as EditIcon,
@@ -39,7 +45,9 @@ import {
   Download as DownloadIcon,
   Upload as UploadIcon,
   RemoveCircleOutline as RemoveIcon,
-  FileDownload as FileDownloadIcon
+  FileDownload as FileDownloadIcon,
+  RestartAlt as ResetIcon,
+  MoreHoriz as MoreHorizIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { partnerService } from '../../services/api';
@@ -47,19 +55,88 @@ import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsOutlinedLabelProps,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+  mvsTableScrollSx,
+  mvsBodyPaginationSx,
+} from '../../theme/mvsLayout';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
-import { mvsSearchFieldSx } from '../../theme/mvsLayout';
-
-const partnerFilterSelectSx = {
-  borderRadius: '12px',
-  bgcolor: '#FFFFFF',
-  height: 40,
-  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
-  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
-};
 
 const PARTNER_MENU_ROUTES = ['/basic-info/partners', '/basic-info'] as const;
+const PARTNERS_PER_PAGE = 10;
+
+const PARTNER_FILTER_OUTLINED = mvsOutlinedLabelProps;
+const partnerFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
+
+const PART_COL_DEFAULTS: Record<string, number> = {
+  select: 48,
+  company: 240,
+  representative: 120,
+  type: 120,
+  industry: 120,
+  contact: 160,
+  contract: 150,
+  status: 100,
+  actions: 72,
+};
+
+const PART_COL_TOTAL = Object.values(PART_COL_DEFAULTS).reduce((s, n) => s + n, 0);
+
+const PART_COL_ALIGN: Record<string, 'left' | 'right' | 'center'> = {
+  select: 'center',
+  company: 'left',
+  representative: 'left',
+  type: 'left',
+  industry: 'left',
+  contact: 'left',
+  contract: 'left',
+  status: 'left',
+  actions: 'center',
+};
+
+const PART_COL_MIN_WIDTH: Record<string, number> = {
+  select: 48,
+  company: 120,
+  representative: 88,
+  type: 88,
+  industry: 72,
+  contact: 100,
+  contract: 120,
+  status: 72,
+  actions: 56,
+};
+
+function partColWidthPct(key: string): string {
+  const w = PART_COL_DEFAULTS[key] ?? 80;
+  return `${(w / PART_COL_TOTAL) * 100}%`;
+}
+
+function partColTableAlign(key: string): 'left' | 'right' | 'center' {
+  return PART_COL_ALIGN[key] ?? 'left';
+}
+
+const partnerTableBodyRowSx: SxProps<Theme> = (theme) => {
+  const base = typeof mvsTableBodyRowSx === 'function' ? mvsTableBodyRowSx(theme) : mvsTableBodyRowSx;
+  const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
+  const hoverBg = theme.palette.mode === 'light' ? '#EFF6FF' : theme.palette.action.hover;
+  return {
+    ...(base as object),
+    '& .MuiTableRow-root:nth-of-type(odd)': { bgcolor: rowBg },
+    '& .MuiTableRow-root:nth-of-type(even)': { bgcolor: rowBg },
+    '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
+  };
+};
 
 interface Partner {
   id: number;
@@ -87,6 +164,8 @@ interface Partner {
 
 const PartnerManagement: React.FC = () => {
   const { t } = useTranslation();
+  const theme = useTheme();
+  const isCompactToolbar = useMediaQuery(theme.breakpoints.down('md'));
   const menuFlags = useMenuRoutePermissionFlags(PARTNER_MENU_ROUTES);
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -106,6 +185,40 @@ const PartnerManagement: React.FC = () => {
     message: string;
     severity: 'error' | 'success' | 'info' | 'warning';
   } | null>(null);
+  const [toolbarMenuAnchor, setToolbarMenuAnchor] = useState<null | HTMLElement>(null);
+  const [selectedPartnerIds, setSelectedPartnerIds] = useState<number[]>([]);
+  const [page, setPage] = useState(1);
+
+  const formatPartners = useCallback((partnersData: any[]): Partner[] => {
+    return partnersData.map((p: any) => ({
+      id: p.id,
+      companyName: p.company_name,
+      businessNumber: p.business_number,
+      panNumber: p.pan_number || '',
+      gstNumbers: p.gstNumbers || (Array.isArray(p.gst_numbers) ? p.gst_numbers : []),
+      representative: p.representative || '',
+      businessType: p.business_type,
+      industry: p.industry || '',
+      address: p.address || '',
+      phone: p.phone || '',
+      email: p.email,
+      website: p.website || '',
+      bankName: p.bank_name || '',
+      accountNumber: p.account_number || '',
+      ifsc: p.bank_ifsc || '',
+      accountHolder: p.account_holder || '',
+      contractStartDate: p.contract_start_date ? p.contract_start_date.split('T')[0] : '',
+      contractEndDate: p.contract_end_date ? p.contract_end_date.split('T')[0] : '',
+      status: p.status,
+      notes: p.notes || '',
+    }));
+  }, []);
+
+  const removePartnersFromList = useCallback((ids: number[]) => {
+    const idSet = new Set(ids);
+    setPartners((prev) => prev.filter((partner) => !idSet.has(partner.id)));
+    setSelectedPartnerIds((prev) => prev.filter((id) => !idSet.has(id)));
+  }, []);
 
   // 파트너 목록 불러오기
   const loadPartners = useCallback(async () => {
@@ -116,33 +229,16 @@ const PartnerManagement: React.FC = () => {
     }
     try {
       setLoading(true);
-      const partnersData = await useReferenceDataStore.getState().fetchPartners(true);
-                
-        // API 응답을 프론트엔드 형식으로 변환
-        const formattedPartners: Partner[] = partnersData.map((p: any) => ({
-          id: p.id,
-          companyName: p.company_name,
-          businessNumber: p.business_number,
-          panNumber: p.pan_number || '',
-          gstNumbers: p.gstNumbers || (Array.isArray(p.gst_numbers) ? p.gst_numbers : []),
-          representative: p.representative || '',
-          businessType: p.business_type,
-          industry: p.industry || '',
-          address: p.address || '',
-          phone: p.phone || '',
-          email: p.email,
-          website: p.website || '',
-          bankName: p.bank_name || '',
-          accountNumber: p.account_number || '',
-          ifsc: p.bank_ifsc || '',
-          accountHolder: p.account_holder || '',
-          contractStartDate: p.contract_start_date ? p.contract_start_date.split('T')[0] : '',
-          contractEndDate: p.contract_end_date ? p.contract_end_date.split('T')[0] : '',
-          status: p.status,
-          notes: p.notes || ''
-        }));
-        
-        setPartners(formattedPartners);
+      const response = await partnerService.getPartners();
+      const partnersData = Array.isArray(response?.data)
+        ? response.data
+        : Array.isArray(response)
+          ? response
+          : [];
+      useReferenceDataStore.setState({
+        partners: { data: partnersData, fetchedAt: Date.now(), promise: null },
+      });
+      setPartners(formatPartners(partnersData));
     } catch (error: any) {
       console.error('❌ [파트너 관리] 파트너 목록 로드 오류:', error);
       console.error('❌ [파트너 관리] 에러 상세:', {
@@ -154,7 +250,7 @@ const PartnerManagement: React.FC = () => {
     } finally {
       setLoading(false);
           }
-  }, [menuFlags.menusLoading, menuFlags.canRead]);
+  }, [menuFlags.menusLoading, menuFlags.canRead, formatPartners]);
 
   useEffect(() => {
     void loadPartners();
@@ -288,22 +384,63 @@ const PartnerManagement: React.FC = () => {
     setFormData({ ...formData, gstNumbers: newGstNumbers });
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = (id: number) => {
     showConfirm(
       t('partnerManagement.confirmDelete'),
-      async () => {
-        try {
-          await partnerService.deletePartner(id);
-          // 목록 다시 불러오기
-          loadPartners();
-        } catch (error: any) {
-          setNotify({
-            message: error.response?.data?.message || t('partnerManagement.deleteError'),
-            severity: 'error'
-          });
-        }
+      () => {
+        void (async () => {
+          try {
+            await partnerService.deletePartner(id);
+            removePartnersFromList([id]);
+            setNotify({
+              message: t('partnerManagement.deleteSelectedSuccess', { count: 1 }),
+              severity: 'success',
+            });
+            await loadPartners();
+          } catch (error: any) {
+            setNotify({
+              message: error.response?.data?.message || t('partnerManagement.deleteError'),
+              severity: 'error',
+            });
+          }
+        })();
       },
       { confirmColor: 'error' }
+    );
+  };
+
+  const handleDeleteSelected = () => {
+    if (!menuFlags.canDelete) return;
+    if (selectedPartnerIds.length === 0) return;
+
+    const idsToDelete = [...selectedPartnerIds];
+
+    showConfirm(
+      t('partnerManagement.deleteSelectedConfirm', { count: idsToDelete.length }),
+      () => {
+        void (async () => {
+          try {
+            await Promise.all(idsToDelete.map((id) => partnerService.deletePartner(id)));
+            removePartnersFromList(idsToDelete);
+            setNotify({
+              message: t('partnerManagement.deleteSelectedSuccess', { count: idsToDelete.length }),
+              severity: 'success',
+            });
+            await loadPartners();
+          } catch (error: any) {
+            setNotify({
+              message: error.response?.data?.message || t('partnerManagement.deleteError'),
+              severity: 'error',
+            });
+          }
+        })();
+      },
+      {
+        title: t('common.confirm'),
+        confirmColor: 'error',
+        confirmText: t('common.delete'),
+        cancelText: t('common.cancel'),
+      }
     );
   };
 
@@ -417,67 +554,133 @@ const PartnerManagement: React.FC = () => {
     return matchesSearch && matchesStatus && matchesType;
   });
 
+  const partnerStats = useMemo(() => ({
+    total: partners.length,
+    active: partners.filter((p) => p.status === 'active').length,
+  }), [partners]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPartners.length / PARTNERS_PER_PAGE));
+
+  const paginatedPartners = useMemo(
+    () => filteredPartners.slice((page - 1) * PARTNERS_PER_PAGE, page * PARTNERS_PER_PAGE),
+    [filteredPartners, page]
+  );
+
+  const visiblePartnerIds = useMemo(
+    () => paginatedPartners.map((partner) => partner.id),
+    [paginatedPartners]
+  );
+
+  const allVisibleSelected =
+    visiblePartnerIds.length > 0 && visiblePartnerIds.every((id) => selectedPartnerIds.includes(id));
+  const someVisibleSelected = visiblePartnerIds.some((id) => selectedPartnerIds.includes(id));
+
+  useEffect(() => {
+    setPage(1);
+    setSelectedPartnerIds([]);
+  }, [searchTerm, statusFilter, typeFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!menuFlags.canDelete) return;
+    if (event.target.checked) {
+      setSelectedPartnerIds(visiblePartnerIds);
+    } else {
+      setSelectedPartnerIds([]);
+    }
+  };
+
+  const handleToggleSelectPartner = (id: number) => {
+    if (!menuFlags.canDelete) return;
+    setSelectedPartnerIds((prev) =>
+      prev.includes(id) ? prev.filter((partnerId) => partnerId !== id) : [...prev, id]
+    );
+  };
+
+  const hasActiveFilters = Boolean(
+    searchTerm.trim() || statusFilter !== 'all' || typeFilter !== 'all'
+  );
+
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setTypeFilter('all');
+  };
+
+  const closeToolbarMenu = () => setToolbarMenuAnchor(null);
+
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    py: { xs: 6, sm: 8 },
+    px: 3,
+    gap: 1.5,
+  } as const;
+
+  const thLabelEllipsisSx = {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    minWidth: 0,
+    flex: '1 1 auto',
+  } as const;
+
+  const thSx = (key: string) => ({
+    width: partColWidthPct(key),
+    minWidth: PART_COL_MIN_WIDTH[key] ?? 0,
+    maxWidth: partColWidthPct(key),
+    overflow: 'hidden',
+    textAlign: partColTableAlign(key),
+    verticalAlign: 'middle' as const,
+    boxSizing: 'border-box' as const,
+  });
+
+  const tdSx = (key: string) => ({
+    width: partColWidthPct(key),
+    minWidth: PART_COL_MIN_WIDTH[key] ?? 0,
+    maxWidth: partColWidthPct(key),
+    overflow:
+      key === 'company' ||
+      key === 'representative' ||
+      key === 'industry' ||
+      key === 'contact' ||
+      key === 'contract'
+        ? ('hidden' as const)
+        : ('visible' as const),
+    textOverflow:
+      key === 'company' ||
+      key === 'representative' ||
+      key === 'industry' ||
+      key === 'contact' ||
+      key === 'contract'
+        ? ('ellipsis' as const)
+        : undefined,
+    verticalAlign: 'middle' as const,
+    boxSizing: 'border-box' as const,
+  });
+
+  const renderHeadCell = (key: string, label: string) => (
+    <TableCell key={key} align={partColTableAlign(key)} sx={thSx(key)}>
+      <Box component="span" sx={thLabelEllipsisSx} title={label}>
+        {label}
+      </Box>
+    </TableCell>
+  );
+
   return (
     <Box sx={{ ...mvsPageRootSx }}>
       <MvsPageHeader
         title={t('partnerManagement.pageTitle')}
         description={t('partnerManagement.description')}
-        actions={
-          <>
-          <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
-            <span style={{ display: 'inline-flex' }}>
-              <Button
-                variant="outlined"
-                startIcon={<DownloadIcon />}
-                disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                onClick={handleDownloadSample}
-                sx={{ borderRadius: 2 }}
-              >
-                {t('partnerManagement.excelSampleDownload')}
-              </Button>
-            </span>
-          </Tooltip>
-          <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
-            <span style={{ display: 'inline-flex' }}>
-              <Button
-                variant="outlined"
-                startIcon={<FileDownloadIcon />}
-                disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                onClick={handleExportExcel}
-                sx={{ borderRadius: 2 }}
-              >
-                {t('partnerManagement.excelExport')}
-              </Button>
-            </span>
-          </Tooltip>
-          <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canMutate}>
-            <span style={{ display: 'inline-flex' }}>
-              <Button
-                variant="outlined"
-                startIcon={<UploadIcon />}
-                disabled={menuFlags.menusLoading || !menuFlags.canMutate}
-                onClick={() => setImportDialogOpen(true)}
-                sx={{ borderRadius: 2 }}
-              >
-                {t('partnerManagement.excelImport')}
-              </Button>
-            </span>
-          </Tooltip>
-          <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
-            <span style={{ display: 'inline-flex' }}>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                disabled={menuFlags.menusLoading || !menuFlags.canCreate}
-                onClick={handleAdd}
-                sx={{ borderRadius: 2 }}
-              >
-                {t('partnerManagement.addPartner')}
-              </Button>
-            </span>
-          </Tooltip>
-          </>
-        }
       />
 
       {!menuFlags.menusLoading && !menuFlags.canRead && (
@@ -486,270 +689,545 @@ const PartnerManagement: React.FC = () => {
         </Alert>
       )}
 
-      {/* 검색 및 필터 */}
-      <Card
-        elevation={0}
+      <Box
         sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+          gap: 2.5,
           mb: 3,
-          borderRadius: '18px',
-          border: '1px solid #C5CED9',
-          bgcolor: '#F0F4F8',
-          boxShadow: 'none',
         }}
       >
-        <CardContent sx={{ py: 2, px: 2, '&:last-child': { pb: 2 } }}>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr' },
-              gap: 2,
-              alignItems: 'flex-end',
-              ...mvsSearchFieldSx,
-            }}
-          >
-            <TextField
-              fullWidth
-              size="small"
-              label={t('partnerManagement.searchLabel')}
-              placeholder={t('partnerManagement.searchPlaceholder')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              disabled={menuFlags.menusLoading || !menuFlags.canRead}
-              InputLabelProps={{ shrink: true }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  height: 40,
-                  bgcolor: '#FFFFFF',
-                  '& .MuiOutlinedInput-input': { py: 0 },
-                },
-              }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-              }}
-            />
-            <TextField
-              fullWidth
-              size="small"
-              select
-              label={t('partnerManagement.status')}
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              disabled={menuFlags.menusLoading || !menuFlags.canRead}
-              InputLabelProps={{ shrink: true }}
-              SelectProps={{ displayEmpty: true }}
-              sx={partnerFilterSelectSx}
-            >
-              <MenuItem value="all">{t('partnerManagement.allStatus')}</MenuItem>
-              <MenuItem value="active">{t('partnerManagement.active')}</MenuItem>
-              <MenuItem value="inactive">{t('partnerManagement.inactive')}</MenuItem>
-              <MenuItem value="suspended">{t('partnerManagement.suspended')}</MenuItem>
-            </TextField>
-            <TextField
-              fullWidth
-              size="small"
-              select
-              label={t('partnerManagement.companyType')}
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              disabled={menuFlags.menusLoading || !menuFlags.canRead}
-              InputLabelProps={{ shrink: true }}
-              SelectProps={{ displayEmpty: true }}
-              sx={partnerFilterSelectSx}
-            >
-              <MenuItem value="all">{t('partnerManagement.allTypes')}</MenuItem>
-              <MenuItem value="partner">{t('partnerManagement.typePartner')}</MenuItem>
-              <MenuItem value="customer">{t('partnerManagement.typeCustomer')}</MenuItem>
-              <MenuItem value="customer_partner">{t('partnerManagement.typeCustomerPartner')}</MenuItem>
-              <MenuItem value="other">{t('partnerManagement.typeOther')}</MenuItem>
-            </TextField>
-          </Box>
-        </CardContent>
-      </Card>
+        {[
+          { key: 'active', label: t('partnerManagement.stats.activePartners'), value: partnerStats.active },
+          { key: 'total', label: t('partnerManagement.stats.totalPartners'), value: partnerStats.total },
+        ].map((item) => (
+          <Card key={item.key} elevation={0} sx={mvsKpiCardSx}>
+            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                {item.label}
+              </Typography>
+              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                {item.value}
+              </Typography>
+            </CardContent>
+          </Card>
+        ))}
+      </Box>
 
-      {/* 파트너 목록 테이블 */}
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <Card>
-          <TableContainer
-            sx={{
-              borderTopLeftRadius: 8,
-              borderTopRightRadius: 8,
-              overflow: 'hidden'
-            }}
-          >
-            <Table sx={{ borderCollapse: 'collapse' }}>
-              <TableHead>
-                <TableRow
-                  sx={{
-                    '& .MuiTableCell-head': {
-                      backgroundColor: '#F5F6F8',
-                      color: '#64748B',
-                      fontWeight: 700,
-                      fontSize: '0.8125rem',
-                      py: 1.25,
-                      borderBottom: '1px solid #E2E8F0',
-                      borderRight: 'none',
-                      borderLeft: 'none',
-                      borderTop: 'none'
-                    }
+      <Card elevation={0} sx={mvsBodyCardSx}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', md: 'row' },
+            flexWrap: 'wrap',
+            alignItems: { xs: 'stretch', md: 'center' },
+            justifyContent: { md: 'space-between' },
+            gap: { xs: 1.25, md: 1 },
+            px: { xs: 2, sm: 2.5 },
+            py: 1.5,
+            bgcolor: '#FFFFFF',
+          }}
+        >
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
+            {isCompactToolbar ? (
+              <>
+                <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
+                  <span style={{ display: 'inline-flex' }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<MoreHorizIcon fontSize="small" />}
+                      disabled={menuFlags.menusLoading}
+                      onClick={(e) => setToolbarMenuAnchor(e.currentTarget)}
+                      sx={mvsBodyOutlinedBtnSx}
+                    >
+                      {t('partnerManagement.moreTools')}
+                    </Button>
+                  </span>
+                </Tooltip>
+                <Menu
+                  anchorEl={toolbarMenuAnchor}
+                  open={Boolean(toolbarMenuAnchor)}
+                  onClose={closeToolbarMenu}
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                  transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                  slotProps={{
+                    paper: {
+                      sx: {
+                        mt: 0.5,
+                        minWidth: 220,
+                        borderRadius: '12px',
+                        border: '1px solid #C5CED9',
+                        boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
+                      },
+                    },
                   }}
                 >
-                  <TableCell>{t('partnerManagement.companyInfo')}</TableCell>
-                  <TableCell>{t('partnerManagement.representative')}</TableCell>
-                  <TableCell>{t('partnerManagement.companyType')}</TableCell>
-                  <TableCell>{t('partnerManagement.industry')}</TableCell>
-                  <TableCell>{t('partnerManagement.contact')}</TableCell>
-                  <TableCell>{t('partnerManagement.contractPeriod')}</TableCell>
-                  <TableCell>{t('partnerManagement.status')}</TableCell>
-                  <TableCell sx={{ textAlign: 'center' }}>{t('partnerManagement.actions')}</TableCell>
+                  <MenuItem
+                    disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                    onClick={() => {
+                      closeToolbarMenu();
+                      handleDownloadSample();
+                    }}
+                  >
+                    <ListItemIcon>
+                      <DownloadIcon fontSize="small" />
+                    </ListItemIcon>
+                    {t('partnerManagement.excelSampleDownload')}
+                  </MenuItem>
+                  <MenuItem
+                    disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                    onClick={() => {
+                      closeToolbarMenu();
+                      handleExportExcel();
+                    }}
+                  >
+                    <ListItemIcon>
+                      <FileDownloadIcon fontSize="small" />
+                    </ListItemIcon>
+                    {t('partnerManagement.excelExport')}
+                  </MenuItem>
+                  <MenuItem
+                    disabled={menuFlags.menusLoading || !menuFlags.canMutate}
+                    onClick={() => {
+                      closeToolbarMenu();
+                      setImportDialogOpen(true);
+                    }}
+                  >
+                    <ListItemIcon>
+                      <UploadIcon fontSize="small" />
+                    </ListItemIcon>
+                    {t('partnerManagement.excelImport')}
+                  </MenuItem>
+                </Menu>
+              </>
+            ) : (
+              <>
+                <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
+                  <span style={{ display: 'inline-flex' }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<DownloadIcon fontSize="small" />}
+                      disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                      onClick={handleDownloadSample}
+                      sx={mvsBodyOutlinedBtnSx}
+                    >
+                      {t('partnerManagement.excelSampleDownload')}
+                    </Button>
+                  </span>
+                </Tooltip>
+                <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
+                  <span style={{ display: 'inline-flex' }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<FileDownloadIcon fontSize="small" />}
+                      disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                      onClick={handleExportExcel}
+                      sx={mvsBodyOutlinedBtnSx}
+                    >
+                      {t('partnerManagement.excelExport')}
+                    </Button>
+                  </span>
+                </Tooltip>
+                <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canMutate}>
+                  <span style={{ display: 'inline-flex' }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<UploadIcon fontSize="small" />}
+                      disabled={menuFlags.menusLoading || !menuFlags.canMutate}
+                      onClick={() => setImportDialogOpen(true)}
+                      sx={mvsBodyOutlinedBtnSx}
+                    >
+                      {t('partnerManagement.excelImport')}
+                    </Button>
+                  </span>
+                </Tooltip>
+              </>
+            )}
+          </Box>
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: 1,
+              flexShrink: 0,
+              width: { xs: '100%', md: 'auto' },
+              ml: { md: 'auto' },
+            }}
+          >
+            {selectedPartnerIds.length > 0 ? (
+              <Tooltip title={t('common.menuNoDelete')} disableHoverListener={menuFlags.menusLoading || menuFlags.canDelete}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="contained"
+                    color="error"
+                    disableElevation
+                    size="small"
+                    startIcon={<DeleteIcon fontSize="small" />}
+                    disabled={menuFlags.menusLoading || !menuFlags.canDelete}
+                    onClick={handleDeleteSelected}
+                    sx={{
+                      textTransform: 'none',
+                      borderRadius: '10px',
+                      fontWeight: 600,
+                      fontSize: '0.8125rem',
+                      minHeight: 36,
+                      px: 2,
+                      boxShadow: 'none',
+                    }}
+                  >
+                    {t('partnerManagement.deleteSelected')} ({selectedPartnerIds.length})
+                  </Button>
+                </span>
+              </Tooltip>
+            ) : null}
+            <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
+              <span style={{ display: 'inline-flex', flexShrink: 0 }}>
+                <Button
+                  variant="contained"
+                  disableElevation
+                  size="small"
+                  startIcon={<AddIcon fontSize="small" />}
+                  disabled={menuFlags.menusLoading || !menuFlags.canCreate}
+                  onClick={handleAdd}
+                  sx={mvsBodyPrimaryBtnSx}
+                >
+                  {t('partnerManagement.addPartner')}
+                </Button>
+              </span>
+            </Tooltip>
+          </Box>
+        </Box>
+
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            ...(mvsSearchFieldSx as Record<string, unknown>),
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, minmax(0, 1fr))',
+              lg: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto',
+            },
+            gap: 2,
+            alignItems: 'flex-end',
+          }}
+        >
+          <TextField
+            fullWidth
+            size="small"
+            label={t('common.search')}
+            {...PARTNER_FILTER_OUTLINED}
+            placeholder={t('partnerManagement.searchPlaceholder')}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            disabled={menuFlags.menusLoading || !menuFlags.canRead}
+            sx={partnerFilterFieldSx}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <TextField
+            fullWidth
+            size="small"
+            select
+            label={t('partnerManagement.status')}
+            {...PARTNER_FILTER_OUTLINED}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            disabled={menuFlags.menusLoading || !menuFlags.canRead}
+            SelectProps={{ displayEmpty: true }}
+            sx={partnerFilterFieldSx}
+          >
+            <MenuItem value="all">{t('partnerManagement.allStatus')}</MenuItem>
+            <MenuItem value="active">{t('partnerManagement.active')}</MenuItem>
+            <MenuItem value="inactive">{t('partnerManagement.inactive')}</MenuItem>
+            <MenuItem value="suspended">{t('partnerManagement.suspended')}</MenuItem>
+          </TextField>
+          <TextField
+            fullWidth
+            size="small"
+            select
+            label={t('partnerManagement.companyType')}
+            {...PARTNER_FILTER_OUTLINED}
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            disabled={menuFlags.menusLoading || !menuFlags.canRead}
+            SelectProps={{ displayEmpty: true }}
+            sx={partnerFilterFieldSx}
+          >
+            <MenuItem value="all">{t('partnerManagement.allTypes')}</MenuItem>
+            <MenuItem value="partner">{t('partnerManagement.typePartner')}</MenuItem>
+            <MenuItem value="customer">{t('partnerManagement.typeCustomer')}</MenuItem>
+            <MenuItem value="customer_partner">{t('partnerManagement.typeCustomerPartner')}</MenuItem>
+            <MenuItem value="other">{t('partnerManagement.typeOther')}</MenuItem>
+          </TextField>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<ResetIcon fontSize="small" />}
+            onClick={handleResetFilters}
+            disabled={menuFlags.menusLoading || !menuFlags.canRead}
+            sx={{
+              ...mvsBodyOutlinedBtnSx,
+              height: 40,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {t('partnerManagement.reset')}
+          </Button>
+        </Box>
+      </Card>
+
+      <Box sx={mvsBodyListZoneSx}>
+        {loading ? (
+          <Box sx={listStateBoxSx}>
+            <CircularProgress size={36} />
+            <Typography variant="body2" color="text.secondary">
+              {t('partnerManagement.empty.loading')}
+            </Typography>
+          </Box>
+        ) : filteredPartners.length === 0 ? (
+          <Box sx={listStateBoxSx}>
+            <HandshakeIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.3 }} />
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+              {hasActiveFilters
+                ? t('partnerManagement.empty.noResults')
+                : t('partnerManagement.empty.noItems')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
+              {hasActiveFilters
+                ? t('partnerManagement.empty.noResultsHint')
+                : t('partnerManagement.empty.noItemsHint')}
+            </Typography>
+            {hasActiveFilters ? (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<ResetIcon fontSize="small" />}
+                onClick={handleResetFilters}
+                sx={mvsBodyOutlinedBtnSx}
+              >
+                {t('partnerManagement.reset')}
+              </Button>
+            ) : (
+              <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="contained"
+                    disableElevation
+                    size="small"
+                    startIcon={<AddIcon fontSize="small" />}
+                    disabled={menuFlags.menusLoading || !menuFlags.canCreate}
+                    onClick={handleAdd}
+                    sx={mvsBodyPrimaryBtnSx}
+                  >
+                    {t('partnerManagement.addPartner')}
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
+          </Box>
+        ) : (
+          <>
+            <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+              <Table
+                size="small"
+                sx={{
+                  tableLayout: 'fixed',
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  bgcolor: 'transparent',
+                  '& .MuiTableCell-root': {
+                    borderLeft: 'none',
+                    borderRight: 'none',
+                    borderTop: 'none',
+                  },
+                }}
+              >
+              <TableHead sx={mvsTableHeadHighlightSx}>
+                <TableRow>
+                  <TableCell padding="checkbox" align="center" sx={thSx('select')}>
+                    <Checkbox
+                      size="small"
+                      disabled={menuFlags.menusLoading || !menuFlags.canDelete || paginatedPartners.length === 0}
+                      indeterminate={someVisibleSelected && !allVisibleSelected}
+                      checked={allVisibleSelected}
+                      onChange={handleSelectAll}
+                      inputProps={{ 'aria-label': t('partnerManagement.selectAll') }}
+                    />
+                  </TableCell>
+                  {renderHeadCell('company', t('partnerManagement.companyInfo'))}
+                  {renderHeadCell('representative', t('partnerManagement.representative'))}
+                  {renderHeadCell('type', t('partnerManagement.companyType'))}
+                  {renderHeadCell('industry', t('partnerManagement.industry'))}
+                  {renderHeadCell('contact', t('partnerManagement.contact'))}
+                  {renderHeadCell('contract', t('partnerManagement.contractExpiryDate'))}
+                  {renderHeadCell('status', t('partnerManagement.status'))}
+                  {renderHeadCell('actions', t('partnerManagement.actions'))}
                 </TableRow>
               </TableHead>
-              <TableBody>
-                {filteredPartners.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                        <HandshakeIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.3 }} />
-                        <Typography variant="body1" color="text.secondary">
-                          {searchTerm || statusFilter !== 'all' || typeFilter !== 'all'
-                            ? t('partnerManagement.noPartnersMatch')
-                            : t('partnerManagement.noPartners')}
-                        </Typography>
-                        {!searchTerm && statusFilter === 'all' && typeFilter === 'all' && (
-                          <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
-                            <span style={{ display: 'inline-flex' }}>
-                          <Button
-                            variant="outlined"
-                            startIcon={<AddIcon />}
-                            disabled={menuFlags.menusLoading || !menuFlags.canCreate}
-                            onClick={() => {
-                              setDialogMode('add');
-                              setSelectedPartner(null);
-                              setFormData({
-                                companyName: '',
-                                businessNumber: '',
-                                gstNumbers: [''],
-                                representative: '',
-                                businessType: 'partner',
-                                industry: '',
-                                address: '',
-                                phone: '',
-                                email: '',
-                                website: '',
-                                bankName: '',
-                                accountNumber: '',
-                                ifsc: '',
-                                accountHolder: '',
-                                contractStartDate: '',
-                                contractEndDate: '',
-                                status: 'active',
-                                notes: ''
-                              });
-                              setOpenDialog(true);
-                            }}
-                            sx={{ mt: 1 }}
-                          >
-                            {t('partnerManagement.firstPartnerAdd')}
-                          </Button>
-                            </span>
-                          </Tooltip>
-                        )}
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredPartners.map((partner) => (
-                  <TableRow 
-                    key={partner.id} 
-                    hover
+              <TableBody sx={partnerTableBodyRowSx}>
+                {paginatedPartners.map((partner) => (
+                  <TableRow
+                    key={partner.id}
                     onClick={() => {
                       if (!menuFlags.menusLoading && menuFlags.canRead) handleView(partner);
                     }}
-                    sx={{ 
+                    sx={{
                       cursor: menuFlags.menusLoading || !menuFlags.canRead ? 'default' : 'pointer',
-                      '&:hover': {
-                        backgroundColor: menuFlags.menusLoading || !menuFlags.canRead ? undefined : '#f5f5f5'
-                      }
+                      '&:hover .partner-delete-btn:not(.Mui-disabled)': {
+                        color: 'error.main',
+                        bgcolor: alpha(theme.palette.error.main, 0.08),
+                      },
                     }}
                   >
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <Avatar sx={{ mr: 2, bgcolor: 'primary.main', width: 32, height: 32 }}>
+                    <TableCell
+                      padding="checkbox"
+                      align="center"
+                      sx={tdSx('select')}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Checkbox
+                        size="small"
+                        disabled={menuFlags.menusLoading || !menuFlags.canDelete}
+                        checked={selectedPartnerIds.includes(partner.id)}
+                        onChange={() => handleToggleSelectPartner(partner.id)}
+                        inputProps={{ 'aria-label': t('partnerManagement.selectItem', { name: partner.companyName }) }}
+                      />
+                    </TableCell>
+                    <TableCell align={partColTableAlign('company')} sx={tdSx('company')}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'hidden' }}>
+                        <Avatar
+                          sx={{
+                            mr: 1.5,
+                            width: 36,
+                            height: 36,
+                            fontSize: '0.875rem',
+                            fontWeight: 600,
+                            flexShrink: 0,
+                            bgcolor:
+                              theme.palette.mode === 'light'
+                                ? 'rgba(15, 23, 42, 0.08)'
+                                : alpha(theme.palette.common.white, 0.12),
+                            color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.75)' : theme.palette.grey[200],
+                          }}
+                        >
                           {partner.companyName.charAt(0)}
                         </Avatar>
-                        <Box>
-                          <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                            {partner.companyName}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {t('partnerManagement.businessNumberLabel')}: {partner.businessNumber}
-                          </Typography>
-                        </Box>
+                        <Typography
+                          variant="subtitle2"
+                          fontWeight={600}
+                          noWrap
+                          title={partner.companyName}
+                          sx={{ minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                        >
+                          {partner.companyName}
+                        </Typography>
                       </Box>
                     </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <PersonIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary' }} />
-                        {partner.representative}
+                    <TableCell align={partColTableAlign('representative')} sx={tdSx('representative')}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'hidden' }}>
+                        <PersonIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary', flexShrink: 0 }} />
+                        <Typography variant="body2" noWrap title={partner.representative}>
+                          {partner.representative}
+                        </Typography>
                       </Box>
                     </TableCell>
-                    <TableCell>
+                    <TableCell align={partColTableAlign('type')} sx={tdSx('type')}>
                       <Chip
                         label={getTypeLabel(partner.businessType)}
                         color={getTypeColor(partner.businessType) as any}
                         size="small"
                       />
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">
+                    <TableCell align={partColTableAlign('industry')} sx={tdSx('industry')}>
+                      <Typography variant="body2" color="text.secondary" noWrap title={partner.industry}>
                         {partner.industry}
                       </Typography>
                     </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        <EmailIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary' }} />
-                        <Typography variant="body2">{partner.email || '-'}</Typography>
+                    <TableCell align={partColTableAlign('contact')} sx={tdSx('contact')}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'hidden' }}>
+                        <EmailIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary', flexShrink: 0 }} />
+                        <Typography variant="body2" noWrap title={partner.email || '-'}>
+                          {partner.email || '-'}
+                        </Typography>
                       </Box>
                     </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" color="text.secondary">
-                        {partner.contractStartDate} ~ {partner.contractEndDate}
+                    <TableCell align={partColTableAlign('contract')} sx={tdSx('contract')}>
+                      <Typography
+                        variant="body2"
+                        color="text.secondary"
+                        noWrap
+                        title={partner.contractEndDate || '-'}
+                      >
+                        {partner.contractEndDate || '-'}
                       </Typography>
                     </TableCell>
-                    <TableCell>
+                    <TableCell align={partColTableAlign('status')} sx={tdSx('status')}>
                       {getStatusChip(partner.status)}
                     </TableCell>
-                    <TableCell align="center" onClick={(e) => e.stopPropagation()}>
+                    <TableCell align={partColTableAlign('actions')} sx={tdSx('actions')} onClick={(e) => e.stopPropagation()}>
                       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
                         <Tooltip title={menuFlags.menusLoading || !menuFlags.canDelete ? t('common.menuNoDelete') : t('partnerManagement.delete')}>
                           <span style={{ display: 'inline-flex' }}>
                             <IconButton
+                              className="partner-delete-btn"
                               size="small"
                               disabled={menuFlags.menusLoading || !menuFlags.canDelete}
                               onClick={() => handleDelete(partner.id)}
-                              color="error"
+                              aria-label={t('partnerManagement.delete')}
+                              sx={{
+                                color: alpha(theme.palette.text.secondary, theme.palette.mode === 'light' ? 0.72 : 1),
+                                borderRadius: '10px',
+                                transition: 'color 0.15s ease, background-color 0.15s ease',
+                                '&:hover': {
+                                  color: 'error.main',
+                                  bgcolor: alpha(theme.palette.error.main, 0.12),
+                                },
+                              }}
                             >
-                              <DeleteIcon />
+                              <DeleteIcon fontSize="small" />
                             </IconButton>
                           </span>
                         </Tooltip>
                       </Box>
                     </TableCell>
                   </TableRow>
-                  ))
-                )}
+                ))}
               </TableBody>
             </Table>
           </TableContainer>
-        </Card>
-      )}
+
+          <Box sx={mvsBodyPaginationSx}>
+            <Pagination
+              count={totalPages}
+              page={page}
+              onChange={(_, value) => setPage(value)}
+              color="primary"
+              shape="rounded"
+              sx={{
+                '& .MuiPaginationItem-root': {
+                  borderRadius: '10px',
+                  fontWeight: 500,
+                },
+              }}
+            />
+          </Box>
+          </>
+        )}
+      </Box>
 
       {/* 파트너 추가/수정/보기 다이얼로그 */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>

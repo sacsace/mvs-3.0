@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -42,7 +42,21 @@ import {
   type AutocompleteRenderInputParams,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx, mvsPageTitleSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsBodyPaginationSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsTableScrollSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+} from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -147,8 +161,6 @@ function isHtmlContentEmpty(html: string): boolean {
 
 const WORK_REPORT_MAX_ATTACHMENTS = 15;
 const WORK_REPORT_MAX_FILE_BYTES = 8 * 1024 * 1024;
-/** 본문 HTML에 넣는 인라인 이미지(data URL) 상한 */
-const WORK_REPORT_INLINE_IMAGE_MAX_BYTES = 3 * 1024 * 1024;
 
 interface WorkReportAttachmentItem {
   id: string;
@@ -224,6 +236,40 @@ function newAttachmentId(): string {
     return crypto.randomUUID();
   }
   return `att-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+}
+
+function formatReviewTimestamp(raw: string | undefined, locale: string): { date: string; time: string } {
+  if (!raw || !String(raw).trim()) {
+    return { date: '-', time: '-' };
+  }
+
+  const value = String(raw).trim();
+  const isoMatch = value.match(/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}:\d{2}(?::\d{2})?)/);
+  if (isoMatch) {
+    return {
+      date: isoMatch[1],
+      time: isoMatch[2],
+    };
+  }
+
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    return {
+      date: new Intl.DateTimeFormat(locale, {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(parsed),
+      time: new Intl.DateTimeFormat(locale, {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      }).format(parsed),
+    };
+  }
+
+  return { date: value, time: '-' };
 }
 
 interface WorkReportItem {
@@ -807,34 +853,6 @@ const WorkReport: React.FC = () => {
     }
   };
 
-  const handleDeleteReport = (id: number) => {
-    showConfirm(
-      tr('정말로 이 보고서를 삭제하시겠습니까?', 'Are you sure you want to delete this report?'),
-      () => {
-        void (async () => {
-          try {
-            const response = await workReportService.deleteWorkReport(id);
-            if (response.success) {
-              setSuccess(tr('보고서가 성공적으로 삭제되었습니다.', 'Report deleted successfully.'));
-              loadReportData();
-            } else {
-              setError(response.message || tr('보고서 삭제에 실패했습니다.', 'Failed to delete report.'));
-            }
-          } catch (error: any) {
-            console.error('삭제 오류:', error);
-            setError(error.response?.data?.message || tr('삭제 중 오류가 발생했습니다.', 'An error occurred while deleting.'));
-          }
-        })();
-      },
-      {
-        title: tr('삭제 확인', 'Confirm delete'),
-        confirmColor: 'error',
-        confirmText: tr('삭제', 'Delete'),
-        cancelText: tr('취소', 'Cancel')
-      }
-    );
-  };
-
   const handleSubmitReport = async (id: number) => {
     try {
       const response = await workReportService.submitWorkReport(id);
@@ -1030,32 +1048,21 @@ const WorkReport: React.FC = () => {
       selectedReport.status === 'submitted' &&
       !isReportAuthor &&
       (isReportRecipient || isElevatedReviewer || inCcList);
+    const reviewTimestamp = formatReviewTimestamp(
+      selectedReport.reviewedAt,
+      isEnglish ? 'en-US' : 'ko-KR'
+    );
 
     return (
       <>
-        <Box
-          sx={{
-            p: 0,
-            width: '100%',
-            maxWidth: '100%',
-            bgcolor: 'transparent',
-            minHeight: '100%',
-          }}
-        >
+        <Box sx={{ ...mvsPageRootSx }}>
         <MvsPageHeader
           title={tr('업무 보고서 상세', 'Work Report Detail')}
           actions={
             <Button
               variant="outlined"
               onClick={() => setViewMode('list')}
-              sx={{
-                borderRadius: '12px',
-                textTransform: 'none',
-                fontWeight: 600,
-                borderColor: 'divider',
-                color: 'text.secondary',
-                '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
-              }}
+              sx={mvsBodyOutlinedBtnSx}
             >
               {tr('목록으로', 'Back to List')}
             </Button>
@@ -1082,7 +1089,7 @@ const WorkReport: React.FC = () => {
           </Alert>
         )}
 
-        <Card>
+        <Card elevation={0} sx={mvsBodyCardSx}>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
               <Box>
@@ -1252,9 +1259,27 @@ const WorkReport: React.FC = () => {
                   <Typography variant="body1" gutterBottom>
                     <strong>{tr('검토자', 'Reviewer')}:</strong> {selectedReport.reviewerName}
                   </Typography>
-                  <Typography variant="body1" gutterBottom>
-                    <strong>{tr('검토일', 'Reviewed At')}:</strong> {selectedReport.reviewedAt}
-                  </Typography>
+                  <Divider sx={{ my: 1.25 }} />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, flexWrap: 'wrap', mb: 1 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ minWidth: 58, fontWeight: 600 }}>
+                      {tr('날짜', 'Date')}
+                    </Typography>
+                    <Chip
+                      size="small"
+                      label={reviewTimestamp.date}
+                      variant="outlined"
+                      sx={{ fontWeight: 600, borderColor: 'divider' }}
+                    />
+                    <Typography variant="body2" color="text.secondary" sx={{ minWidth: 58, fontWeight: 600 }}>
+                      {tr('시간', 'Time')}
+                    </Typography>
+                    <Chip
+                      size="small"
+                      label={reviewTimestamp.time}
+                      variant="outlined"
+                      sx={{ fontWeight: 600, borderColor: 'divider' }}
+                    />
+                  </Box>
                   {selectedReport.reviewComment && (
                     <Typography variant="body1">
                       <strong>
@@ -1277,8 +1302,10 @@ const WorkReport: React.FC = () => {
                   <Button
                     variant="contained"
                     color="primary"
+                    disableElevation
                     startIcon={<SendIcon />}
                     onClick={() => handleSubmitReport(selectedReport.id)}
+                    sx={mvsBodyPrimaryBtnSx}
                   >
                     {tr('제출', 'Submit')}
                   </Button>
@@ -1287,8 +1314,10 @@ const WorkReport: React.FC = () => {
                 <Button
                   variant="contained"
                   color="success"
+                  disableElevation
                   startIcon={<CheckCircleIcon />}
                   onClick={() => handleApproveReport(selectedReport.id)}
+                  sx={mvsBodyPrimaryBtnSx}
                 >
                   {tr('승인', 'Approve')}
                 </Button>
@@ -1297,8 +1326,10 @@ const WorkReport: React.FC = () => {
                 <Button
                   variant="contained"
                   color="primary"
+                  disableElevation
                   startIcon={<FeedbackIcon />}
                   onClick={() => openFeedbackDialog(selectedReport.id)}
+                  sx={mvsBodyPrimaryBtnSx}
                 >
                   {tr('피드백', 'Feedback')}
                 </Button>
@@ -1312,13 +1343,9 @@ const WorkReport: React.FC = () => {
     );
   }
 
-  const kpiCardSx = {
-    borderRadius: '16px',
-    border: '1px solid',
-    borderColor: alpha(theme.palette.divider, theme.palette.mode === 'light' ? 0.1 : 0.35),
-    boxShadow:
-      theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 2px 12px rgba(0,0,0,0.25)',
-    bgcolor: 'background.paper',
+  const reportFilterFieldSx = {
+    ...mvsSearchFieldSx,
+    ...mvsFilterFieldHeightSx,
   } as const;
 
   return (
@@ -1332,24 +1359,14 @@ const WorkReport: React.FC = () => {
             disableElevation
             startIcon={<AddIcon sx={{ fontSize: 20 }} />}
             onClick={handleOpenCreate}
-            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+            sx={mvsBodyPrimaryBtnSx}
           >
             {tr('보고서 제출', 'Submit report')}
           </Button>
         }
       />
 
-      <Card
-        elevation={0}
-        sx={{
-          mb: 2,
-          borderRadius: '16px',
-          overflow: 'hidden',
-          border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'light' ? 0.1 : 0.35)}`,
-          boxShadow:
-            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 2px 12px rgba(0,0,0,0.25)',
-        }}
-      >
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 2 }}>
         <Tabs
           value={listTab}
           onChange={(_, v) => {
@@ -1357,23 +1374,25 @@ const WorkReport: React.FC = () => {
             setPage(1);
           }}
           sx={{
-            minHeight: 48,
-            px: 1,
+            minHeight: 40,
+            px: { xs: 1, sm: 1.5 },
+            bgcolor: '#FFFFFF',
             '& .MuiTabs-indicator': {
-              height: 2,
-              borderRadius: '2px 2px 0 0',
-              bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.85)' : theme.palette.grey[300],
+              height: 3,
+              borderRadius: '3px 3px 0 0',
             },
             '& .MuiTab-root': {
               textTransform: 'none',
               fontWeight: 500,
-              fontSize: '0.875rem',
+              fontSize: '0.8125rem',
+              minHeight: 40,
+              py: 0.75,
+              letterSpacing: '-0.01em',
               color: 'text.secondary',
-              minHeight: 48,
             },
             '& .MuiTab-root.Mui-selected': {
-              color: 'text.primary',
-              fontWeight: 600,
+              color: 'primary.main',
+              fontWeight: 700,
             },
           }}
         >
@@ -1387,12 +1406,12 @@ const WorkReport: React.FC = () => {
         sx={{
           display: 'grid',
           gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
-          gap: 2,
+          gap: 2.5,
           mb: 3,
         }}
       >
-        <Card elevation={0} sx={kpiCardSx}>
-          <CardContent sx={{ py: 2, px: 2.5 }}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {tr('대기중인 보고서', 'Pending Reports')}
             </Typography>
@@ -1401,8 +1420,8 @@ const WorkReport: React.FC = () => {
             </Typography>
           </CardContent>
         </Card>
-        <Card elevation={0} sx={kpiCardSx}>
-          <CardContent sx={{ py: 2, px: 2.5 }}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {tr('승인된 보고서', 'Approved Reports')}
             </Typography>
@@ -1411,8 +1430,8 @@ const WorkReport: React.FC = () => {
             </Typography>
           </CardContent>
         </Card>
-        <Card elevation={0} sx={kpiCardSx}>
-          <CardContent sx={{ py: 2, px: 2.5 }}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {tr('피드백 보고서', 'Reports with feedback')}
             </Typography>
@@ -1421,8 +1440,8 @@ const WorkReport: React.FC = () => {
             </Typography>
           </CardContent>
         </Card>
-        <Card elevation={0} sx={kpiCardSx}>
-          <CardContent sx={{ py: 2, px: 2.5 }}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {tr('긴급 보고서', 'Urgent Reports')}
             </Typography>
@@ -1434,29 +1453,27 @@ const WorkReport: React.FC = () => {
       </Box>
 
       {/* 필터 및 검색 */}
-      <Card
-        elevation={0}
-        sx={{
-          mb: 3,
-          borderRadius: '16px',
-          border: 'none',
-          boxShadow: 'none',
-          bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.06) : alpha(theme.palette.common.black, 0.03),
-        }}
-      >
-        <CardContent sx={{ py: 2, px: 2.5 }}>
-          <Box sx={{ 
-            display: 'grid', 
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            ...reportFilterFieldSx,
+            display: 'grid',
             gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr 1fr' },
-            gap: 2, 
-            alignItems: 'center' 
-          }}>
+            gap: 2,
+            alignItems: 'flex-end',
+          }}
+        >
             <TextField
               fullWidth
               size="small"
+              label={tr('검색', 'Search')}
               placeholder={tr('제목, 보고서번호, 작성자, 내용 검색', 'Search title, report no, author, content')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              InputLabelProps={{ shrink: true }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -1464,18 +1481,9 @@ const WorkReport: React.FC = () => {
                   </InputAdornment>
                 ),
               }}
-              sx={{
-                bgcolor: 'background.paper',
-                borderRadius: '12px',
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '12px',
-                  '& fieldset': {
-                    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : undefined,
-                  },
-                },
-              }}
+              sx={reportFilterFieldSx}
             />
-            <FormControl fullWidth size="small" variant="outlined">
+            <FormControl fullWidth size="small" variant="outlined" sx={reportFilterFieldSx}>
               <InputLabel id="work-report-filter-status-label" shrink>
                 {tr('상태', 'Status')}
               </InputLabel>
@@ -1493,7 +1501,7 @@ const WorkReport: React.FC = () => {
                 <MenuItem value="rejected">{tr('피드백', 'Feedback')}</MenuItem>
               </Select>
             </FormControl>
-            <FormControl fullWidth size="small" variant="outlined">
+            <FormControl fullWidth size="small" variant="outlined" sx={reportFilterFieldSx}>
               <InputLabel id="work-report-filter-type-label" shrink>
                 {tr('유형', 'Type')}
               </InputLabel>
@@ -1514,7 +1522,7 @@ const WorkReport: React.FC = () => {
                 <MenuItem value="other">{tr('기타', 'Other')}</MenuItem>
               </Select>
             </FormControl>
-            <FormControl fullWidth size="small" variant="outlined">
+            <FormControl fullWidth size="small" variant="outlined" sx={reportFilterFieldSx}>
               <InputLabel id="work-report-filter-priority-label" shrink>
                 {tr('우선순위', 'Priority')}
               </InputLabel>
@@ -1544,42 +1552,21 @@ const WorkReport: React.FC = () => {
                 setTypeFilter('');
                 setPriorityFilter('');
               }}
-              sx={{
-                borderRadius: '12px',
-                textTransform: 'none',
-                fontWeight: 600,
-                borderColor: 'divider',
-                color: 'text.secondary',
-                '&:hover': {
-                  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
-                  bgcolor: 'action.hover',
-                  color: 'text.primary',
-                },
-              }}
+              sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
             >
               {tr('초기화', 'Reset')}
             </Button>
-          </Box>
-        </CardContent>
+        </Box>
       </Card>
 
       {/* 보고서 목록 테이블 */}
-      <Card
-        elevation={0}
-        sx={{
-          borderRadius: '20px',
-          overflow: 'hidden',
-          border: '1px solid',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-          boxShadow:
-            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
-          bgcolor: 'background.paper',
-        }}
-      >
-        <TableContainer sx={{ bgcolor: 'transparent', width: '100%', maxWidth: '100%', overflowX: 'auto' }}>
+      <Box sx={mvsBodyListZoneSx}>
+        <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
           <Table
+            size="small"
             sx={{
               borderCollapse: 'collapse',
+              bgcolor: 'transparent',
               '& .MuiTableCell-root': {
                 borderLeft: 'none',
                 borderRight: 'none',
@@ -1587,23 +1574,7 @@ const WorkReport: React.FC = () => {
               },
             }}
           >
-            <TableHead
-              sx={{
-                '& .MuiTableCell-head': {
-                  bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
-                  color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
-                  fontWeight: 600,
-                  fontSize: '0.75rem',
-                  textTransform: 'none',
-                  letterSpacing: '0.01em',
-                  borderBottom: `1px solid ${
-                    theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                  }`,
-                  py: 1.5,
-                  px: 2,
-                },
-              }}
-            >
+            <TableHead sx={mvsTableHeadHighlightSx}>
               <TableRow>
                 <TableCell
                   align="center"
@@ -1624,31 +1595,12 @@ const WorkReport: React.FC = () => {
                 <TableCell>{tr('작성일', 'Date')}</TableCell>
               </TableRow>
             </TableHead>
-            <TableBody
-              sx={{
-                '& .MuiTableCell-body': {
-                  py: 1.5,
-                  px: 2,
-                  fontSize: '0.875rem',
-                  borderBottom: `1px solid ${
-                    theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                  }`,
-                },
-                '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
-                  borderBottom: 'none',
-                },
-              }}
-            >
+            <TableBody sx={mvsTableBodyRowSx}>
               {paginatedReports.map((report, index) => (
                 <TableRow
                   key={report.id}
-                  hover
                   onClick={() => handleViewReport(report)}
-                  sx={{
-                    cursor: 'pointer',
-                    transition: 'background-color 0.15s ease',
-                    '&:hover': { bgcolor: 'action.hover' },
-                  }}
+                  sx={{ cursor: 'pointer' }}
                 >
                   <TableCell align="center" sx={{ color: 'text.secondary', fontWeight: 600 }}>
                     {(page - 1) * itemsPerPage + index + 1}
@@ -1718,31 +1670,15 @@ const WorkReport: React.FC = () => {
           </Table>
         </TableContainer>
 
-        {/* 페이지네이션 */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 2.5, px: 2 }}>
+        <Box sx={mvsBodyPaginationSx}>
           <Pagination
             count={Math.ceil(filteredReports.length / itemsPerPage)}
             page={page}
             onChange={(_, value) => setPage(value)}
             shape="rounded"
-            sx={{
-              '& .MuiPaginationItem-root': {
-                borderRadius: '10px',
-                fontWeight: 600,
-                minWidth: 36,
-                height: 36,
-              },
-              '& .Mui-selected': {
-                bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.12),
-                color: 'text.primary',
-                '&:hover': {
-                  bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.12)' : alpha(theme.palette.common.white, 0.16),
-                },
-              },
-            }}
           />
         </Box>
-      </Card>
+      </Box>
 
       {/* 보고서 제출(신규) / 수정 다이얼로그 */}
       <Dialog

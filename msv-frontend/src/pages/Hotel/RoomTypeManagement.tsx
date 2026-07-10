@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Card,
-  CardContent,
   Typography,
   Button,
   TextField,
@@ -12,7 +11,6 @@ import {
   TableCell,
   TableBody,
   TableContainer,
-  Paper,
   IconButton,
   Dialog,
   DialogTitle,
@@ -29,7 +27,19 @@ import { useTranslation } from 'react-i18next';
 import { roomTypeService } from '../../services/api';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsTableScrollSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+} from '../../theme/mvsLayout';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
 type RoomType = {
@@ -41,6 +51,21 @@ type RoomType = {
   isActive: boolean;
   createdAt: string;
 };
+
+const roomTypeFilterFieldSx = {
+  ...(mvsSearchFieldSx as Record<string, unknown>),
+  ...mvsFilterFieldHeightSx,
+} as const;
+
+const listStateBoxSx = {
+  ...mvsBodyListTableSx,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  py: 6,
+  px: 2,
+} as const;
 
 const RoomTypeManagement: React.FC = () => {
   const { t } = useTranslation();
@@ -197,22 +222,30 @@ const RoomTypeManagement: React.FC = () => {
       <MvsPageHeader
         title={t('roomTypeManagement.title')}
         actions={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate}>
+          <Button
+            variant="contained"
+            disableElevation
+            startIcon={<AddIcon />}
+            onClick={handleOpenCreate}
+            sx={mvsBodyPrimaryBtnSx}
+          >
             {t('roomTypeManagement.actions.register')}
           </Button>
         }
       />
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr' },
-              gap: 2,
-              alignItems: 'end'
-            }}
-          >
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr auto' },
+            gap: 2,
+            alignItems: 'flex-end',
+          }}
+        >
             <TextField
               fullWidth
               size="small"
@@ -224,10 +257,11 @@ const RoomTypeManagement: React.FC = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
+                    <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
                   </InputAdornment>
-                )
+                ),
               }}
+              sx={roomTypeFilterFieldSx}
             />
             <TextField
               fullWidth
@@ -241,6 +275,7 @@ const RoomTypeManagement: React.FC = () => {
                 displayEmpty: true,
                 renderValue: (selected) => (selected ? selected : t('roomTypeManagement.filters.statusAll')),
               }}
+              sx={roomTypeFilterFieldSx}
             >
               <MenuItem value="">{t('roomTypeManagement.filters.statusAll')}</MenuItem>
               <MenuItem value="active">{t('roomTypeManagement.status.active')}</MenuItem>
@@ -252,59 +287,53 @@ const RoomTypeManagement: React.FC = () => {
                 setSearchTerm('');
                 setStatusFilter('');
               }}
+              sx={mvsBodyOutlinedBtnSx}
             >
               {t('roomTypeManagement.actions.reset')}
             </Button>
-          </Box>
-        </CardContent>
+        </Box>
       </Card>
 
-      <Card>
-        <TableContainer component={Box} sx={{ borderRadius: 2, overflow: 'hidden' }}>
-          <Table size="small" stickyHeader>
-            <TableHead
-              sx={{
-                bgcolor: 'background.paper',
-                '& .MuiTableCell-head': {
-                  bgcolor: 'background.paper',
-                  color: 'text.primary',
-                  fontWeight: 600,
-                  fontSize: '0.875rem',
-                  textTransform: 'none',
-                  letterSpacing: 'normal',
-                  borderBottom: '2px solid',
-                  borderColor: 'primary.main',
-                  py: 1.25
-                },
-                '& .MuiTableCell-head:last-of-type': {
-                  textAlign: 'center'
-                }
-              }}
-            >
-              <TableRow>
-                {[
-                  t('roomTypeManagement.columns.roomType'),
-                  t('roomTypeManagement.columns.roomCount'),
-                  t('roomTypeManagement.columns.nightlyRate'),
-                  t('roomTypeManagement.columns.description'),
-                  t('roomTypeManagement.columns.status'),
-                  t('roomTypeManagement.columns.actions')
-                ].map((label) => (
-                  <TableCell key={label}>{label}</TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredRoomTypes.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    <Typography variant="body2" color="text.secondary">
-                      {t('roomTypeManagement.empty.noData')}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              )}
-              {filteredRoomTypes.map((roomType) => (
+      <Card elevation={0} sx={mvsBodyCardSx}>
+        <Box sx={{ ...mvsBodyListZoneSx, px: { xs: 2, sm: 2.5 }, pb: 2.5, mt: 0 }}>
+          {filteredRoomTypes.length === 0 ? (
+            <Box sx={listStateBoxSx}>
+              <Typography variant="body2" color="text.secondary">
+                {t('roomTypeManagement.empty.noData')}
+              </Typography>
+            </Box>
+          ) : (
+            <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+              <Table
+                size="small"
+                sx={{
+                  borderCollapse: 'collapse',
+                  bgcolor: 'transparent',
+                  '& .MuiTableCell-root': {
+                    borderLeft: 'none',
+                    borderRight: 'none',
+                    borderTop: 'none',
+                  },
+                }}
+              >
+                <TableHead sx={mvsTableHeadHighlightSx}>
+                  <TableRow>
+                    {[
+                      t('roomTypeManagement.columns.roomType'),
+                      t('roomTypeManagement.columns.roomCount'),
+                      t('roomTypeManagement.columns.nightlyRate'),
+                      t('roomTypeManagement.columns.description'),
+                      t('roomTypeManagement.columns.status'),
+                      t('roomTypeManagement.columns.actions'),
+                    ].map((label, index) => (
+                      <TableCell key={label} align={index === 5 ? 'center' : 'left'}>
+                        {label}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody sx={mvsTableBodyRowSx}>
+                  {filteredRoomTypes.map((roomType) => (
                 <TableRow key={roomType.id} hover>
                   <TableCell sx={{ fontSize: 13 }}>{roomType.name}</TableCell>
                   <TableCell sx={{ fontSize: 13 }}>{roomType.count}</TableCell>
@@ -320,7 +349,7 @@ const RoomTypeManagement: React.FC = () => {
                     />
                   </TableCell>
                   <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
                       <IconButton size="small" onClick={() => handleEdit(roomType)}>
                         <EditIcon fontSize="small" />
                       </IconButton>
@@ -331,9 +360,11 @@ const RoomTypeManagement: React.FC = () => {
                   </TableCell>
                 </TableRow>
               ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </Box>
       </Card>
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>

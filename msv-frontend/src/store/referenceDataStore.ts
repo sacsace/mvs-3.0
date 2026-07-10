@@ -51,14 +51,18 @@ export const useReferenceDataStore = create<ReferenceDataState>((set, get) => ({
     const existing = get().companies;
     if (!force && isFresh(existing)) return existing!.data;
 
-    const promise = loadOnce(existing, async () => {
+    const promise = (async () => {
       const res = await companyService.getCompanies();
       return unwrapList(res);
-    });
+    })();
 
-    if (!existing?.promise) {
-      set({ companies: { data: [], fetchedAt: 0, promise } });
-    }
+    set({
+      companies: {
+        data: force ? [] : (existing?.data ?? []),
+        fetchedAt: Date.now(),
+        promise,
+      },
+    });
 
     try {
       const data = await promise;
@@ -100,14 +104,18 @@ export const useReferenceDataStore = create<ReferenceDataState>((set, get) => ({
     const existing = get().partners;
     if (!force && isFresh(existing)) return existing!.data;
 
-    const promise = loadOnce(existing, async () => {
+    const promise = (async () => {
       const res = await partnerService.getPartners();
       return unwrapList(res);
-    });
+    })();
 
-    if (!existing?.promise) {
-      set({ partners: { data: [], fetchedAt: Date.now(), promise } });
-    }
+    set({
+      partners: {
+        data: force ? [] : (existing?.data ?? []),
+        fetchedAt: Date.now(),
+        promise,
+      },
+    });
 
     try {
       const data = await promise;

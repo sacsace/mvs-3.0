@@ -90,6 +90,12 @@ const assertManagerPermission = (req: RequestWithUser, res: Response, actionLabe
   return false;
 };
 
+const assertRootPermission = (req: RequestWithUser, res: Response, actionLabel: string): boolean => {
+  if (String(req.user?.role || '').toLowerCase() === 'root') return true;
+  res.status(403).json({ success: false, message: `${actionLabel} 권한이 없습니다.` });
+  return false;
+};
+
 const renderTemplate = (templateHtml: string, variables: Record<string, string | number | null | undefined>) =>
   templateHtml.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_matched, key) => {
     const value = variables[key];
@@ -120,6 +126,21 @@ const buildTemplateVariables = (contract: any) => ({
   company_signer_name: '',
   company_signer_title: ''
 });
+
+const stripHtmlToText = (html: string): string =>
+  String(html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
 
 const createEmploymentContractPdf = async (
   contract: any,
@@ -156,7 +177,14 @@ const createEmploymentContractPdf = async (
   doc.text(`Company Signed At: ${contract.company_signed_at || '-'}`);
   doc.text(`Employee Signed At: ${contract.employee_signed_at || '-'}`);
   doc.moveDown();
-  doc.text(`Finalized By: ${signerType} (${signerId})`);
+  const bodyText = stripHtmlToText(contract.rendered_content_html || '');
+  if (bodyText) {
+    doc.fontSize(11).text('Contract Body', { underline: true });
+    doc.moveDown(0.5);
+    doc.fontSize(10).text(bodyText, { align: 'left' });
+    doc.moveDown();
+  }
+  doc.fontSize(10).text(`Finalized By: ${signerType} (${signerId})`);
   doc.text(`Generated At: ${new Date().toISOString()}`);
 
   doc.end();
@@ -343,7 +371,7 @@ export const updateEmploymentContractTemplate = async (req: RequestWithUser, res
 
 export const deleteEmploymentContractTemplate = async (req: RequestWithUser, res: Response) => {
   try {
-    if (!assertManagerPermission(req, res, '템플릿 삭제')) return;
+    if (!assertRootPermission(req, res, '템플릿 삭제')) return;
 
     const id = toIntOrNull(req.params.id);
     if (!id) return res.status(400).json({ success: false, message: '유효하지 않은 템플릿 ID입니다.' });
@@ -440,6 +468,11 @@ export const getEmploymentContract = async (req: RequestWithUser, res: Response)
     const contract = await (EmploymentContract as any).findOne({
       where: whereClause,
       include: [
+        {
+          model: Company,
+          as: 'company',
+          attributes: ['id', 'name']
+        },
         {
           model: User,
           as: 'employee',
@@ -719,7 +752,7 @@ export const updateEmploymentContract = async (req: RequestWithUser, res: Respon
 
 export const deleteEmploymentContract = async (req: RequestWithUser, res: Response) => {
   try {
-    if (!assertManagerPermission(req, res, '계약 삭제')) return;
+    if (!assertRootPermission(req, res, '계약 삭제')) return;
 
     const id = toIntOrNull(req.params.id);
     if (!id) return res.status(400).json({ success: false, message: '유효하지 않은 계약 ID입니다.' });
@@ -862,9 +895,26 @@ export const signEmploymentContract = async (req: RequestWithUser, res: Response
     }
 
     if (hasCompanySign && hasEmployeeSign) {
+      const fullContract = await (EmploymentContract as any).findOne({
+        where: { id: contract.id },
+        include: [
+          { model: Company, as: 'company', attributes: ['id', 'name'] },
+          { model: User, as: 'employee', attributes: ['id', 'userid', 'username', 'department', 'position'] },
+          {
+            model: EmploymentContractTemplate,
+            as: 'template',
+            attributes: ['id', 'name', 'version', 'language', 'contract_type', 'content_html']
+          }
+        ]
+      });
+      const fullContractJson = fullContract?.toJSON?.() || contract.toJSON();
+      const renderedContentHtml = fullContractJson.template?.content_html
+        ? renderTemplate(fullContractJson.template.content_html, buildTemplateVariables(fullContractJson))
+        : '';
       const nextContractSnapshot = {
-        ...contract.toJSON(),
-        ...updates
+        ...fullContractJson,
+        ...updates,
+        rendered_content_html: renderedContentHtml
       };
       const generated = await createEmploymentContractPdf(nextContractSnapshot, signerType, req.user.id);
       updates.pdf_url = generated.pdfUrl;
@@ -894,6 +944,75 @@ export const signEmploymentContract = async (req: RequestWithUser, res: Response
   } catch (error) {
     console.error('전자근로계약 서명 오류:', error);
     return res.status(500).json({ success: false, message: '전자근로계약 서명 중 오류가 발생했습니다.' });
+  }
+};
+
+export const sendEmploymentContractToEmployee = async (req: RequestWithUser, res: Response) => {
+  try {
+    if (!assertManagerPermission(req, res, '계약 발송')) return;
+
+    const id = toIntOrNull(req.params.id);
+    if (!id) return res.status(400).json({ success: false, message: '유효하지 않은 계약 ID입니다.' });
+
+    const whereClause: any = { id };
+    if (req.user.role !== 'root') {
+      whereClause.tenant_id = req.user.tenant_id;
+      whereClause.company_id = req.user.company_id;
+    }
+
+    const contract = await (EmploymentContract as any).findOne({ where: whereClause });
+    if (!contract) return res.status(404).json({ success: false, message: '전자근로계약을 찾을 수 없습니다.' });
+
+    const contractStatus = normalizeStatus(contract.status);
+    if (!['draft', 'in_review'].includes(contractStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: '초안 또는 검토중 상태의 계약만 직원에게 보낼 수 있습니다.'
+      });
+    }
+
+    const existingCompanySign = await (EmploymentContractSignature as any).findOne({
+      where: { contract_id: contract.id, signer_type: 'company' }
+    });
+    if (!existingCompanySign) {
+      await (EmploymentContractSignature as any).create({
+        contract_id: contract.id,
+        signer_type: 'company',
+        signer_id: req.user.id,
+        signed_at: new Date(),
+        sign_ip: String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '').slice(0, 64) || null,
+        sign_method: 'internal_ack',
+        signature_data: JSON.stringify({
+          provider: 'company_send',
+          sent_by: req.user.id,
+          sent_at: new Date().toISOString()
+        })
+      });
+    }
+
+    await contract.update({
+      status: 'awaiting_employee_sign',
+      company_signed_at: contract.company_signed_at || new Date(),
+      updated_by: req.user.id
+    });
+
+    await writeAuditLog(req, 'contract_send_to_employee', {
+      contractId: contract.id,
+      companyId: contract.company_id,
+      details: {
+        employee_id: contract.employee_id,
+        status_after: 'awaiting_employee_sign'
+      }
+    });
+
+    return res.json({
+      success: true,
+      message: '직원에게 계약서가 발송되었습니다.',
+      data: contract
+    });
+  } catch (error) {
+    console.error('전자근로계약 발송 오류:', error);
+    return res.status(500).json({ success: false, message: '계약 발송 중 오류가 발생했습니다.' });
   }
 };
 

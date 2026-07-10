@@ -32,7 +32,21 @@ import {
   DialogActions
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsBodyPaginationSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsTableScrollSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+} from '../../theme/mvsLayout';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import {
   Add as AddIcon,
@@ -170,6 +184,11 @@ const QUOTATION_APPROVE_BUTTON_SX = {
     outlineColor: 'primary.light',
     outlineOffset: 2
   }
+} as const;
+
+const quotationFilterFieldSx = {
+  ...(mvsSearchFieldSx as Record<string, unknown>),
+  ...mvsFilterFieldHeightSx,
 } as const;
 
 /** 오늘(로컬) 기준 N일 후 YYYY-MM-DD — 견적 만료일 기본값 등 */
@@ -779,17 +798,7 @@ const QuotationManagement: React.FC = () => {
   }, [selectedQuotation, user?.id, user?.role]);
 
   return (
-    <Box
-      sx={{
-        p: 0,
-        backgroundColor: 'workArea.main',
-        minHeight: '100%',
-        maxWidth: '100%',
-        overflowX: 'visible',
-        overflowY: 'visible',
-        boxSizing: 'border-box'
-      }}
-    >
+    <Box sx={{ ...mvsPageRootSx }}>
       <MvsPageHeader
         title={t('quotationManagement.title')}
         actions={
@@ -797,12 +806,7 @@ const QuotationManagement: React.FC = () => {
             <Button
               variant="outlined"
               onClick={handleCancelForm}
-              sx={{
-                borderRadius: '12px',
-                textTransform: 'none',
-                flexShrink: 0,
-                overflow: 'visible'
-              }}
+              sx={mvsBodyOutlinedBtnSx}
             >
               {t('common.back')}
             </Button>
@@ -812,12 +816,7 @@ const QuotationManagement: React.FC = () => {
               disableElevation
               startIcon={<AddIcon fontSize="small" />}
               onClick={handleAddQuotation}
-              sx={{
-                borderRadius: '12px',
-                textTransform: 'none',
-                flexShrink: 0,
-                overflow: 'visible'
-              }}
+              sx={mvsBodyPrimaryBtnSx}
             >
               {t('quotationManagement.create')}
             </Button>
@@ -826,48 +825,48 @@ const QuotationManagement: React.FC = () => {
       />
 
       {/* 통계 카드 */}
-      <Box sx={{ 
-        display: 'grid', 
+      <Box sx={{
+        display: 'grid',
         gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
-        gap: 3, 
-        mb: 3 
+        gap: 2.5,
+        mb: 3
       }}>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
               {t('quotationManagement.totalQuotations')}
             </Typography>
-            <Typography variant="h4">
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
               {quotations.length}
             </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
               {t('quotationManagement.totalAmount')}
             </Typography>
-            <Typography variant="h4">
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
               Rs. {totalAmountActive.toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
               {t('quotationManagement.approvedQuotations')}
             </Typography>
-            <Typography variant="h4" color="success.main">
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'success.main' }}>
               {approvedQuotations}
             </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
               {t('quotationManagement.pendingQuotations')}
             </Typography>
-            <Typography variant="h4" color="warning.main">
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'warning.main' }}>
               {myPendingApprovals}
             </Typography>
           </CardContent>
@@ -875,8 +874,8 @@ const QuotationManagement: React.FC = () => {
       </Box>
 
       {isCreating || isEditing ? (
-        <Card>
-          <CardContent>
+        <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+          <CardContent sx={{ px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
             <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 600 }}>
               {selectedQuotation ? t('quotationManagement.detailTitle') : t('quotationManagement.create')}
             </Typography>
@@ -931,7 +930,7 @@ const QuotationManagement: React.FC = () => {
                   borderColor: 'divider'
                 }}
               >
-                <Button variant="outlined" onClick={handleCancelForm}>
+                <Button variant="outlined" onClick={handleCancelForm} sx={mvsBodyOutlinedBtnSx}>
                   {t('quotationManagement.backToList')}
                 </Button>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'flex-end' }}>
@@ -941,7 +940,7 @@ const QuotationManagement: React.FC = () => {
                         variant="contained"
                         disableElevation
                         onClick={() => void handleApproveQuotation(selectedQuotation.id)}
-                        sx={QUOTATION_APPROVE_BUTTON_SX}
+                        sx={{ ...mvsBodyPrimaryBtnSx, ...QUOTATION_APPROVE_BUTTON_SX }}
                       >
                         {t('quotationManagement.approve')}
                       </Button>
@@ -949,6 +948,7 @@ const QuotationManagement: React.FC = () => {
                         variant="outlined"
                         color="error"
                         onClick={() => openRejectDialog(selectedQuotation.id)}
+                        sx={mvsBodyOutlinedBtnSx}
                       >
                         {t('quotationManagement.reject')}
                       </Button>
@@ -961,6 +961,7 @@ const QuotationManagement: React.FC = () => {
                         startIcon={pdfSaving ? <CircularProgress size={16} color="inherit" /> : <EmailIcon />}
                         disabled={pdfSaving}
                         onClick={() => void handleEmailQuotation(selectedQuotation)}
+                        sx={mvsBodyOutlinedBtnSx}
                       >
                         {t('quotationManagement.sendEmail')}
                       </Button>
@@ -968,6 +969,7 @@ const QuotationManagement: React.FC = () => {
                         variant="outlined"
                         startIcon={<PrintIcon />}
                         onClick={() => handlePrintQuotation(selectedQuotation)}
+                        sx={mvsBodyOutlinedBtnSx}
                       >
                         {t('quotationManagement.print')}
                       </Button>
@@ -976,13 +978,14 @@ const QuotationManagement: React.FC = () => {
                         startIcon={pdfSaving ? <CircularProgress size={16} color="inherit" /> : <PictureAsPdfIcon />}
                         disabled={pdfSaving}
                         onClick={() => void handleSaveQuotationPdf(selectedQuotation)}
+                        sx={mvsBodyOutlinedBtnSx}
                       >
                         {t('quotationManagement.savePdf')}
                       </Button>
                     </>
                   )}
                   {!quotationFormReadOnly && (
-                    <Button type="submit" form="quotation-detail-form" variant="contained" color="primary">
+                    <Button type="submit" form="quotation-detail-form" variant="contained" color="primary" disableElevation sx={mvsBodyPrimaryBtnSx}>
                       {t('quotationManagement.save')}
                     </Button>
                   )}
@@ -993,28 +996,52 @@ const QuotationManagement: React.FC = () => {
         </Card>
       ) : (
         <>
-          <Box sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
+          <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
             <Tabs
               value={listTab}
               onChange={(_, v) => setListTab(v)}
-              sx={{ minHeight: 40, '& .MuiTab-root': { minHeight: 40, textTransform: 'none' } }}
+              sx={{
+                minHeight: 40,
+                px: { xs: 1, sm: 1.5 },
+                bgcolor: '#FFFFFF',
+                '& .MuiTabs-indicator': {
+                  height: 3,
+                  borderRadius: '3px 3px 0 0',
+                },
+                '& .MuiTab-root': {
+                  textTransform: 'none',
+                  fontWeight: 500,
+                  fontSize: '0.8125rem',
+                  minHeight: 40,
+                  py: 0.75,
+                  letterSpacing: '-0.01em',
+                  color: 'text.secondary',
+                },
+                '& .MuiTab-root.Mui-selected': {
+                  color: 'primary.main',
+                  fontWeight: 700,
+                },
+              }}
             >
               <Tab value="requested" label={t('quotationManagement.tabRequested')} />
               <Tab value="pending" label={t('quotationManagement.tabPendingApproval')} />
             </Tabs>
-          </Box>
+          </Card>
 
           {/* 필터 및 검색 */}
-          <Card sx={{ mb: 3 }}>
-            <CardContent>
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr auto' },
-                  gap: 2,
-                  alignItems: 'center'
-                }}
-              >
+          <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+            <Box
+              sx={{
+                px: { xs: 2, sm: 2.5 },
+                py: 2,
+                bgcolor: '#FFFFFF',
+                ...quotationFilterFieldSx,
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr auto' },
+                gap: 2,
+                alignItems: 'flex-end',
+              }}
+            >
                 <TextField
                   fullWidth
                   size="small"
@@ -1026,10 +1053,11 @@ const QuotationManagement: React.FC = () => {
                   InputProps={{
                     startAdornment: (
                       <InputAdornment position="start">
-                        <SearchIcon />
+                        <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
                       </InputAdornment>
                     ),
                   }}
+                  sx={quotationFilterFieldSx}
                 />
                 <TextField
                   fullWidth
@@ -1040,6 +1068,7 @@ const QuotationManagement: React.FC = () => {
                   onChange={(e) => setStatusFilter(e.target.value)}
                   InputLabelProps={{ shrink: true }}
                   SelectProps={{ displayEmpty: true }}
+                  sx={quotationFilterFieldSx}
                 >
                   <MenuItem value="">{t('menuPermissionManagement.all')}</MenuItem>
                   <MenuItem value="draft">{t('quotationManagement.statusDraft')}</MenuItem>
@@ -1057,73 +1086,41 @@ const QuotationManagement: React.FC = () => {
                   value={customerFilter}
                   onChange={(e) => setCustomerFilter(e.target.value)}
                   InputLabelProps={{ shrink: true }}
+                  sx={quotationFilterFieldSx}
                 />
                 <Button
                   variant="outlined"
-                  startIcon={<FilterIcon />}
+                  startIcon={<FilterIcon sx={{ fontSize: 18 }} />}
                   onClick={() => {
                     setSearchTerm('');
                     setStatusFilter('');
                     setCustomerFilter('');
                   }}
-                  sx={{
-                    width: { xs: '100%', sm: 'auto' },
-                    minWidth: { sm: 120 },
-                    flexShrink: 0,
-                    borderRadius: '12px',
-                    textTransform: 'none',
-                    justifySelf: { xs: 'stretch', sm: 'end' },
-                    whiteSpace: 'nowrap'
-                  }}
+                  sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap', width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 120 } }}
                 >
                   {t('common.reset')}
                 </Button>
               </Box>
-            </CardContent>
           </Card>
 
-          {/* 견적서 목록 테이블 — minWidth 합으로 가로 스크롤 나지 않게 % + fixed 레이아웃만 사용 */}
-          <Card sx={{ maxWidth: '100%', overflow: 'hidden', boxSizing: 'border-box' }}>
-            <TableContainer
-              sx={{
-                width: '100%',
-                maxWidth: '100%',
-                overflowX: 'hidden',
-                boxSizing: 'border-box'
-              }}
-            >
+          {/* 견적서 목록 테이블 */}
+          <Box sx={mvsBodyListZoneSx}>
+            <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
               <Table
                 size="small"
                 sx={{
                   tableLayout: 'fixed',
                   width: '100%',
-                  maxWidth: '100%'
+                  borderCollapse: 'collapse',
+                  bgcolor: 'transparent',
+                  '& .MuiTableCell-root': {
+                    borderLeft: 'none',
+                    borderRight: 'none',
+                    borderTop: 'none',
+                  },
                 }}
               >
-                <TableHead
-                  sx={{
-                    bgcolor: 'background.paper',
-                    '& .MuiTableCell-head': {
-                      bgcolor: 'background.paper',
-                      color: 'text.primary',
-                      fontWeight: 600,
-                      fontSize: { xs: '0.75rem', sm: '0.8125rem' },
-                      textTransform: 'none',
-                      letterSpacing: 'normal',
-                      borderBottom: '2px solid',
-                      borderColor: 'primary.main',
-                      py: 1,
-                      px: { xs: 0.5, sm: 1 },
-                      minWidth: 0,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    },
-                    '& .MuiTableCell-head:last-of-type': {
-                      textAlign: 'center'
-                    }
-                  }}
-                >
+                <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
                     <TableCell sx={{ width: '9%' }}>{t('quotationManagement.status')}</TableCell>
                     <TableCell sx={{ width: '10%' }}>{t('quotationManagement.quotationNumber')}</TableCell>
@@ -1137,13 +1134,12 @@ const QuotationManagement: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 </TableHead>
-                <TableBody>
+                <TableBody sx={mvsTableBodyRowSx}>
                   {paginatedQuotations.map((quotation) => (
                     <TableRow
                       key={quotation.id}
-                      hover
                       onClick={() => handleOpenQuotationDetail(quotation)}
-                      sx={{ cursor: 'pointer' }}
+                      sx={{ cursor: 'pointer', '&:active': { bgcolor: 'action.selected' } }}
                     >
                       <TableCell sx={{ py: 0.75, px: { xs: 0.5, sm: 1 }, verticalAlign: 'middle', minWidth: 0 }}>
                         <Box
@@ -1328,8 +1324,7 @@ const QuotationManagement: React.FC = () => {
               </Table>
             </TableContainer>
 
-            {/* 페이지네이션 */}
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+            <Box sx={mvsBodyPaginationSx}>
               <Pagination
                 count={Math.max(1, Math.ceil(tabFilteredQuotations.length / itemsPerPage))}
                 page={page}
@@ -1337,7 +1332,7 @@ const QuotationManagement: React.FC = () => {
                 color="primary"
               />
             </Box>
-          </Card>
+          </Box>
         </>
       )}
 
@@ -1386,14 +1381,16 @@ const QuotationManagement: React.FC = () => {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={closeRejectDialog} disabled={rejectSubmitting}>
+          <Button onClick={closeRejectDialog} disabled={rejectSubmitting} sx={mvsBodyOutlinedBtnSx}>
             {t('quotationManagement.cancel')}
           </Button>
           <Button
             variant="contained"
             color="error"
+            disableElevation
             onClick={() => void handleConfirmReject()}
             disabled={rejectSubmitting || !rejectReasonInput.trim()}
+            sx={mvsBodyPrimaryBtnSx}
           >
             {t('quotationManagement.reject')}
           </Button>

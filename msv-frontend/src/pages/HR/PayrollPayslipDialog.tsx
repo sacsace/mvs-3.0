@@ -6,6 +6,7 @@ import type { PayrollGridRow } from './payroll/payrollGridTypes';
 import { buildPayslipLabels, downloadPayslipPdf, generatePayslipPdfBlob } from './payrollPayslipPdf';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useStore } from '../../store';
+import { mvsBodyOutlinedBtnSx, mvsBodyPrimaryBtnSx } from '../../theme/mvsLayout';
 
 type Props = {
   open: boolean;
@@ -63,7 +64,7 @@ const PayrollPayslipDialog: React.FC<Props> = ({ open, row, onClose }) => {
       <DialogTitle sx={{ fontWeight: 700, fontSize: '1.1rem', pb: 1 }}>
         {t('payrollManagement.payslip.title')}
       </DialogTitle>
-      <DialogContent dividers sx={{ pt: 2, bgcolor: 'grey.50', px: { xs: 2, sm: 3 } }}>
+      <DialogContent dividers sx={{ pt: 2, bgcolor: 'bodyArea.main', px: { xs: 2, sm: 3 } }}>
         {row ? (
           <Box sx={{ width: '100%', minWidth: 0 }}>
             <PayslipContent row={row} labels={labels} companyInfo={companyInfo} showTitle={false} wide />
@@ -71,12 +72,16 @@ const PayrollPayslipDialog: React.FC<Props> = ({ open, row, onClose }) => {
         ) : null}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>{t('common.cancel')}</Button>
+        <Button onClick={onClose} sx={mvsBodyOutlinedBtnSx}>
+          {t('common.cancel')}
+        </Button>
         <Button
           variant="contained"
+          disableElevation
           onClick={handleDownload}
           disabled={!row || downloading}
           startIcon={downloading ? <CircularProgress size={18} color="inherit" /> : undefined}
+          sx={mvsBodyPrimaryBtnSx}
         >
           {t('payrollManagement.payslip.downloadPdf')}
         </Button>

@@ -29,15 +29,26 @@ import {
   Typography
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsTableScrollSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+} from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Business as BusinessIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
-  Email as EmailIcon,
   People as CustomerIcon,
-  Phone as PhoneIcon,
   Search as SearchIcon,
   TrendingUp as TrendingUpIcon
 } from '@mui/icons-material';
@@ -90,7 +101,7 @@ const initialFormData: CustomerFormData = {
   status: 'active'
 };
 
-const CUSTOMER_MENU_ROUTES = ['/customers/info', '/customers'];
+const CUSTOMER_MENU_ROUTES = ['/customers/info', '/sales', '/customers'];
 
 const CustomerInformation: React.FC = () => {
   const { user } = useStore();
@@ -347,55 +358,105 @@ const CustomerInformation: React.FC = () => {
     return date.toLocaleDateString(language === 'en' ? 'en-US' : 'ko-KR');
   };
 
+  const customerFilterFieldSx = {
+    ...mvsSearchFieldSx,
+    ...mvsFilterFieldHeightSx,
+  } as const;
+
   return (
     <Box sx={{ ...mvsPageRootSx }}>
       <MvsPageHeader title={txt('고객 정보 관리', 'Customer information')} />
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2.5, mb: 3 }}>
-        <Card variant="outlined" sx={{ borderRadius: '18px' }}>
-          <CardContent sx={{ py: 2.5, px: 2.5 }}>
-            <Typography color="text.secondary" variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography color="text.secondary" variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.75, letterSpacing: '0.02em' }}>
               {txt('총 고객', 'Total customers')}
             </Typography>
-            <Typography sx={{ fontSize: '1.375rem', fontWeight: 700 }}>{stats.total}</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>{stats.total}</Typography>
           </CardContent>
         </Card>
-        <Card variant="outlined" sx={{ borderRadius: '18px' }}>
-          <CardContent sx={{ py: 2.5, px: 2.5 }}>
-            <Typography color="text.secondary" variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography color="text.secondary" variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.75, letterSpacing: '0.02em' }}>
               {txt('활성 고객', 'Active customers')}
             </Typography>
-            <Typography sx={{ fontSize: '1.375rem', fontWeight: 700, color: '#15803D' }}>{stats.active}</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 600, letterSpacing: '-0.02em', color: 'success.dark' }}>{stats.active}</Typography>
           </CardContent>
         </Card>
-        <Card variant="outlined" sx={{ borderRadius: '18px' }}>
-          <CardContent sx={{ py: 2.5, px: 2.5 }}>
-            <Typography color="text.secondary" variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography color="text.secondary" variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.75, letterSpacing: '0.02em' }}>
               {txt('비활성 고객', 'Inactive customers')}
             </Typography>
-            <Typography sx={{ fontSize: '1.375rem', fontWeight: 700, color: '#B45309' }}>{stats.inactive}</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 600, letterSpacing: '-0.02em', color: 'warning.dark' }}>{stats.inactive}</Typography>
           </CardContent>
         </Card>
-        <Card variant="outlined" sx={{ borderRadius: '18px' }}>
-          <CardContent sx={{ py: 2.5, px: 2.5 }}>
-            <Typography color="text.secondary" variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 1 }}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography color="text.secondary" variant="caption" sx={{ fontWeight: 600, display: 'block', mb: 0.75, letterSpacing: '0.02em' }}>
               {txt('이메일 등록 고객', 'With email on file')}
             </Typography>
-            <Typography sx={{ fontSize: '1.375rem', fontWeight: 700, color: '#1D4ED8' }}>{stats.withEmail}</Typography>
+            <Typography variant="h5" sx={{ fontWeight: 600, letterSpacing: '-0.02em', color: 'primary.main' }}>{stats.withEmail}</Typography>
           </CardContent>
         </Card>
       </Box>
 
-      <Card sx={{ mb: 3, borderRadius: '18px', bgcolor: '#F0F4F8', border: '1px solid #C5CED9', boxShadow: 'none' }} variant="outlined">
-        <CardContent sx={{ py: 2.5, px: 2.5 }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '3fr 1fr auto' }, gap: 2, alignItems: 'center' }}>
+      <Card elevation={0} sx={mvsBodyCardSx}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 1,
+            px: { xs: 2, sm: 2.5 },
+            py: 1.5,
+            bgcolor: '#FFFFFF',
+            borderBottom: '1px solid #C5CED9',
+          }}
+        >
+          <Tooltip
+            title={
+              !customerMenuFlags.canCreate && !menusLoading
+                ? txt('등록 권한이 없습니다.', 'No permission to create.')
+                : ''
+            }
+          >
+            <span>
+              <Button
+                variant="contained"
+                disableElevation
+                size="small"
+                startIcon={<AddIcon fontSize="small" />}
+                onClick={openCreateDialog}
+                disabled={menusLoading || !customerMenuFlags.canCreate}
+                sx={mvsBodyPrimaryBtnSx}
+              >
+                {txt('고객 추가', 'Add customer')}
+              </Button>
+            </span>
+          </Tooltip>
+        </Box>
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            ...customerFilterFieldSx,
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: '3fr 1fr' },
+            gap: 2,
+            alignItems: 'flex-end',
+          }}
+        >
             <TextField
               fullWidth
               size="small"
               label={txt('검색', 'Search')}
               placeholder={txt(
-                '고객명, 사업자번호, 담당자, 연락처, 이메일 검색',
-                'Search by name, business no., contact, phone, email'
+                '고객명, 사업자번호, 담당자, 이메일 검색',
+                'Search by name, business no., contact person, email'
               )}
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
@@ -407,9 +468,9 @@ const CustomerInformation: React.FC = () => {
                   </InputAdornment>
                 )
               }}
-              sx={{ bgcolor: '#fff', borderRadius: '14px', '& .MuiInputBase-input::placeholder': { color: '#9CA3AF', opacity: 1 } }}
+              sx={customerFilterFieldSx}
             />
-            <FormControl fullWidth size="small">
+            <FormControl fullWidth size="small" sx={customerFilterFieldSx}>
               <InputLabel shrink>{txt('상태', 'Status')}</InputLabel>
               <Select
                 label={txt('상태', 'Status')}
@@ -422,68 +483,40 @@ const CustomerInformation: React.FC = () => {
                 <MenuItem value="room_guest">{txt('숙박손님', 'Hotel guest')}</MenuItem>
               </Select>
             </FormControl>
-            <Tooltip
-              title={
-                !customerMenuFlags.canCreate && !menusLoading
-                  ? txt('등록 권한이 없습니다.', 'No permission to create.')
-                  : ''
-              }
-            >
-              <span>
-                <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={openCreateDialog}
-                  disabled={menusLoading || !customerMenuFlags.canCreate}
-                >
-                  {txt('고객 추가', 'Add customer')}
-                </Button>
-              </span>
-            </Tooltip>
-          </Box>
-        </CardContent>
+        </Box>
       </Card>
 
-      <Card sx={{ borderRadius: '20px', overflow: 'hidden' }}>
-        <TableContainer>
-          <Table>
-            <TableHead
-              sx={{
-                bgcolor: '#F8FAFC',
-                '& .MuiTableCell-head': {
-                  bgcolor: '#F8FAFC',
-                  color: '#475569',
-                  fontWeight: 600,
-                  fontSize: '0.8125rem',
-                  textTransform: 'none',
-                  letterSpacing: '0.02em',
-                  borderBottom: '1px solid #EEF2F7',
-                  borderTop: '2px solid',
-                  borderTopColor: 'primary.main',
-                  py: 1.5
-                },
-                '& .MuiTableCell-head:last-of-type': {
-                  textAlign: 'center'
-                }
-              }}
-            >
+      <Box sx={mvsBodyListZoneSx}>
+        <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+          <Table
+            size="small"
+            sx={{
+              borderCollapse: 'collapse',
+              bgcolor: 'transparent',
+              '& .MuiTableCell-root': {
+                borderLeft: 'none',
+                borderRight: 'none',
+                borderTop: 'none',
+              },
+            }}
+          >
+            <TableHead sx={mvsTableHeadHighlightSx}>
               <TableRow>
                 <TableCell>{txt('고객명', 'Customer name')}</TableCell>
                 <TableCell>{txt('사업자번호', 'Business no.')}</TableCell>
                 <TableCell>{txt('담당자', 'Contact person')}</TableCell>
-                <TableCell>{txt('연락처', 'Contact')}</TableCell>
                 <TableCell sx={{ minWidth: 88, maxWidth: 140, whiteSpace: 'normal', wordBreak: 'break-word' }}>
                   {txt('업종', 'Industry')}
                 </TableCell>
                 <TableCell>{txt('상태', 'Status')}</TableCell>
                 <TableCell>{txt('등록일', 'Registered')}</TableCell>
-                <TableCell>{txt('작업', 'Actions')}</TableCell>
+                <TableCell sx={{ textAlign: 'center' }}>{txt('작업', 'Actions')}</TableCell>
               </TableRow>
             </TableHead>
-            <TableBody>
+            <TableBody sx={mvsTableBodyRowSx}>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
+                  <TableCell colSpan={7} align="center">
                     <Box sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
                       <CircularProgress size={28} />
                     </Box>
@@ -491,7 +524,7 @@ const CustomerInformation: React.FC = () => {
                 </TableRow>
               ) : filteredCustomers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center">
+                  <TableCell colSpan={7} align="center">
                     <Typography sx={{ py: 4, color: 'text.secondary' }}>
                       {txt('표시할 고객 정보가 없습니다.', 'No customers to display.')}
                     </Typography>
@@ -499,7 +532,7 @@ const CustomerInformation: React.FC = () => {
                 </TableRow>
               ) : (
                 filteredCustomers.map((customer) => (
-                  <TableRow key={customer.id} hover>
+                  <TableRow key={customer.id}>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <BusinessIcon sx={{ fontSize: '1rem', color: 'text.secondary' }} />
@@ -511,18 +544,6 @@ const CustomerInformation: React.FC = () => {
                     </TableCell>
                     <TableCell>{customer.business_number || '-'}</TableCell>
                     <TableCell>{customer.ceo_name || '-'}</TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <PhoneIcon sx={{ fontSize: '1rem', color: 'text.secondary', flexShrink: 0 }} />
-                          <Typography variant="body2" sx={{ color: 'text.primary' }}>{customer.phone || '-'}</Typography>
-                        </Box>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <EmailIcon sx={{ fontSize: '1rem', color: 'text.secondary', flexShrink: 0 }} />
-                          <Typography variant="body2" sx={{ color: 'text.primary' }}>{customer.email || '-'}</Typography>
-                        </Box>
-                      </Box>
-                    </TableCell>
                     <TableCell sx={{ minWidth: 88, maxWidth: 160, whiteSpace: 'normal', wordBreak: 'break-word' }}>
                       {customer.industry || '-'}
                     </TableCell>
@@ -584,7 +605,7 @@ const CustomerInformation: React.FC = () => {
             </TableBody>
           </Table>
         </TableContainer>
-      </Card>
+      </Box>
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>
         <DialogTitle>
@@ -657,9 +678,9 @@ const CustomerInformation: React.FC = () => {
             />
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>{txt('취소', 'Cancel')}</Button>
-          <Button variant="contained" onClick={handleSave} disabled={saving}>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={() => setOpenDialog(false)} sx={mvsBodyOutlinedBtnSx}>{txt('취소', 'Cancel')}</Button>
+          <Button variant="contained" disableElevation onClick={handleSave} disabled={saving} sx={mvsBodyPrimaryBtnSx}>
             {saving ? txt('저장 중...', 'Saving...') : txt('저장', 'Save')}
           </Button>
         </DialogActions>

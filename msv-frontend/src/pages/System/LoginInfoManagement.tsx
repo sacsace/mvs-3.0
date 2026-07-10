@@ -17,10 +17,25 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  InputAdornment
+  InputAdornment,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  useMediaQuery,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsOutlinedLabelProps,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+} from '../../theme/mvsLayout';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import {
@@ -28,9 +43,11 @@ import {
   Edit as EditIcon,
   DeleteOutline as DeleteOutlineIcon,
   FileDownload as FileDownloadIcon,
-  Refresh as RefreshIcon,
+  Upload as UploadIcon,
+  RestartAlt as ResetIcon,
   Search as SearchIcon,
-  ViewColumn as ViewColumnIcon
+  ViewColumn as ViewColumnIcon,
+  MoreHoriz as MoreHorizIcon,
 } from '@mui/icons-material';
 import { companyService, loginInfoService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
@@ -39,6 +56,8 @@ import LoginInfoExcelGrid, { LoginInfoColumnSchema, LoginInfoExcelGridHandle } f
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 
 const LOGIN_INFO_MENU_ROUTES = ['/basic-info/login-info', '/basic-info'] as const;
+const LOGIN_FILTER_OUTLINED = mvsOutlinedLabelProps;
+const loginFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
 
 interface Company {
   id: number;
@@ -78,41 +97,12 @@ function normalizeForRowSearch(s: string): string {
 const LoginInfoManagement: React.FC = () => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
+  const isCompactToolbar = useMediaQuery(theme.breakpoints.down('md'));
   const { t } = useTranslation();
   const { user } = useStore();
   const menuFlags = useMenuRoutePermissionFlags(LOGIN_INFO_MENU_ROUTES);
   const gridRef = useRef<LoginInfoExcelGridHandle>(null);
-  const fieldLabelSx = {
-    display: 'block',
-    mb: 0.75,
-    ml: 0.5,
-    fontWeight: 500,
-    color: isDark ? 'rgba(224, 235, 255, 0.9)' : theme.palette.text.secondary
-  };
-  const toolbarCardSx = isDark
-    ? {}
-    : {
-        borderRadius: '18px',
-        border: '1px solid #C5CED9',
-        bgcolor: '#F0F4F8',
-        boxShadow: 'none',
-      };
-  const toolbarInputSx = isDark
-    ? { '& .MuiOutlinedInput-root': { borderRadius: '12px' } }
-    : {
-        '& .MuiOutlinedInput-root': {
-          borderRadius: '12px',
-          bgcolor: 'background.paper',
-          '& fieldset': { borderColor: '#C5CED9' },
-          '&:hover fieldset': { borderColor: '#B8C4D0' },
-        },
-      };
-  const toolbarOutlinedBtnSx = isDark
-    ? {}
-    : {
-        borderColor: '#C5CED9',
-        '&:hover': { borderColor: '#B8C4D0', bgcolor: 'background.paper' },
-      };
+  const [toolbarMenuAnchor, setToolbarMenuAnchor] = useState<null | HTMLElement>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>('');
   const [tabs, setTabs] = useState<LoginInfoTabRow[]>([]);
@@ -156,6 +146,33 @@ const LoginInfoManagement: React.FC = () => {
       return parts.some((p) => normalizeForRowSearch(String(p ?? '')).includes(q));
     });
   }, [loginInfos, rowSearchQuery]);
+
+  const loginStats = useMemo(
+    () => ({
+      totalRows: loginInfos.length,
+      filteredRows: filteredLoginInfos.length,
+      tabs: tabs.length,
+    }),
+    [loginInfos.length, filteredLoginInfos.length, tabs.length]
+  );
+
+  const hasActiveFilters = Boolean(rowSearchQuery.trim());
+
+  const handleResetFilters = () => setRowSearchQuery('');
+
+  const closeToolbarMenu = () => setToolbarMenuAnchor(null);
+
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    py: { xs: 6, sm: 8 },
+    px: 3,
+    gap: 1.5,
+  } as const;
 
   const dialogPaperSx = useMemo(
     () =>
@@ -430,13 +447,13 @@ const LoginInfoManagement: React.FC = () => {
   return (
     <Box
       sx={{
-        p: 0,
+        ...mvsPageRootSx,
         color: 'text.primary',
         '& .MuiCard-root': isDark
           ? {
               backgroundColor: 'rgba(10, 20, 44, 0.72)',
               border: '1px solid rgba(255, 255, 255, 0.16)',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)'
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
             }
           : undefined,
         '& .MuiTypography-root': isDark ? { color: 'rgba(245, 248, 255, 0.92)' } : undefined,
@@ -444,88 +461,32 @@ const LoginInfoManagement: React.FC = () => {
         '& .MuiInputBase-input': isDark ? { color: 'rgba(246, 249, 255, 0.95)' } : undefined,
         '& .MuiInputBase-input::placeholder': isDark ? { color: 'rgba(223, 232, 255, 0.56)', opacity: 1 } : undefined,
         '& .MuiOutlinedInput-notchedOutline': isDark ? { borderColor: 'rgba(222, 231, 255, 0.32)' } : undefined,
-        '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': isDark ? { borderColor: 'rgba(181, 206, 255, 0.48)' } : undefined,
-        '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': isDark ? { borderColor: 'rgba(138, 181, 255, 0.82)' } : undefined,
-        '& .MuiAutocomplete-popupIndicator, & .MuiAutocomplete-clearIndicator': isDark ? { color: 'rgba(220, 231, 255, 0.8)' } : undefined
+        '& .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline': isDark
+          ? { borderColor: 'rgba(181, 206, 255, 0.48)' }
+          : undefined,
+        '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': isDark
+          ? { borderColor: 'rgba(138, 181, 255, 0.82)' }
+          : undefined,
+        '& .MuiAutocomplete-popupIndicator, & .MuiAutocomplete-clearIndicator': isDark
+          ? { color: 'rgba(220, 231, 255, 0.8)' }
+          : undefined,
       }}
     >
       <MvsPageHeader
         title={t('loginInfoManagement.title')}
         description={
           <>
-            <Typography
-              variant="body2"
-              sx={{
-                color: isDark ? 'rgba(200, 214, 235, 0.88)' : 'text.secondary',
-                lineHeight: 1.5,
-                whiteSpace: { xs: 'normal', md: 'nowrap' },
-              }}
-            >
+            <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5 }}>
               {t('loginInfoManagement.description')}
             </Typography>
             <Typography
               variant="body2"
-              sx={{
-                mt: 1,
-                color: isDark ? 'rgba(180, 200, 230, 0.85)' : 'text.secondary',
-                lineHeight: 1.5,
-                maxWidth: 900,
-                fontSize: '0.8125rem',
-              }}
+              color="text.secondary"
+              sx={{ mt: 1, lineHeight: 1.5, maxWidth: 900, fontSize: '0.8125rem' }}
             >
               {t('loginInfoManagement.excelHint')}
             </Typography>
           </>
-        }
-        mb={2}
-        actions={
-          <Box
-            sx={{
-              display: 'flex',
-              gap: 1,
-              flexWrap: 'wrap',
-              flexShrink: 0,
-              alignItems: 'center',
-              '& .MuiButton-root': { height: 40 },
-              '& .MuiButton-outlined': toolbarOutlinedBtnSx,
-            }}
-          >
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={handleFileChange}
-            style={{ display: 'none' }}
-          />
-          <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canMutate}>
-            <span style={{ display: 'inline-flex' }}>
-              <Button
-                variant="outlined"
-                onClick={handleImportClick}
-                disabled={
-                  menuFlags.menusLoading ||
-                  !menuFlags.canMutate ||
-                  !selectedCompanyId ||
-                  selectedTabId === ''
-                }
-              >
-                {t('loginInfoManagement.actions.importExcel')}
-              </Button>
-            </span>
-          </Tooltip>
-          <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
-            <span style={{ display: 'inline-flex' }}>
-              <Button
-                variant="outlined"
-                startIcon={<FileDownloadIcon />}
-                onClick={() => gridRef.current?.exportToExcel()}
-                disabled={menuFlags.menusLoading || !menuFlags.canRead || !selectedCompanyId || selectedTabId === ''}
-              >
-                {t('loginInfoManagement.actions.exportExcel')}
-              </Button>
-            </span>
-          </Tooltip>
-          </Box>
         }
       />
 
@@ -540,265 +501,400 @@ const LoginInfoManagement: React.FC = () => {
         </Alert>
       )}
 
-      <Card elevation={0} sx={{ mb: 3, ...toolbarCardSx }}>
-        <CardContent sx={{ py: 2, px: 2, '&:last-child': { pb: 2 } }}>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                md: 'minmax(300px, 380px) minmax(220px, 1fr) auto',
-              },
-              gap: 2,
-              alignItems: { xs: 'stretch', md: 'flex-end' },
-            }}
-          >
-            <Box sx={{ width: '100%', minWidth: { md: 300 }, ...toolbarInputSx }}>
-              <Autocomplete
-                options={companies}
-                value={selectedCompany || null}
-                onChange={(_, newValue) => setSelectedCompanyId(newValue?.id ?? '')}
-                getOptionLabel={(option) => option.name}
-                isOptionEqualToValue={(option, value) => option.id === value.id}
-                disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                sx={{ width: '100%' }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    size="small"
-                    label={t('loginInfoManagement.fields.company')}
-                    InputLabelProps={{ shrink: true }}
-                    placeholder={t('loginInfoManagement.placeholders.selectCompany')}
-                    sx={{ '& .MuiInputBase-root': { height: 40 } }}
-                  />
-                )}
-              />
-            </Box>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+          gap: 2.5,
+          mb: 3,
+        }}
+      >
+        {[
+          { key: 'rows', label: t('loginInfoManagement.stats.totalRows'), value: loginStats.totalRows },
+          { key: 'tabs', label: t('loginInfoManagement.stats.tabs'), value: loginStats.tabs },
+        ].map((item) => (
+          <Card key={item.key} elevation={0} sx={mvsKpiCardSx}>
+            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                {item.label}
+              </Typography>
+              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                {item.value}
+              </Typography>
+            </CardContent>
+          </Card>
+        ))}
+      </Box>
 
-            <TextField
-              size="small"
-              label={t('common.search')}
-              placeholder={t('loginInfoManagement.placeholders.searchRows')}
-              value={rowSearchQuery}
-              onChange={(e) => setRowSearchQuery(e.target.value)}
-              disabled={menuFlags.menusLoading || !menuFlags.canRead || !selectedCompanyId || selectedTabId === ''}
-              InputLabelProps={{ shrink: true }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" color="action" />
-                  </InputAdornment>
-                )
-              }}
-              sx={{
-                width: '100%',
-                minWidth: 0,
-                '& .MuiInputBase-root': { height: 40 },
-                ...toolbarInputSx,
-              }}
+      <Card elevation={0} sx={mvsBodyCardSx}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', md: 'row' },
+            flexWrap: 'wrap',
+            alignItems: { xs: 'stretch', md: 'center' },
+            justifyContent: { md: 'space-between' },
+            gap: { xs: 1.25, md: 1 },
+            px: { xs: 2, sm: 2.5 },
+            py: 1.5,
+            bgcolor: '#FFFFFF',
+          }}
+        >
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFileChange}
+              style={{ display: 'none' }}
             />
-
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: { xs: 'flex-start', md: 'flex-end' },
-                gap: 1,
-                flexWrap: 'wrap',
-                alignSelf: { xs: 'stretch', md: 'flex-end' },
-                '& .MuiButton-root': {
-                  height: 40
-                },
-                '& .MuiButton-outlined': toolbarOutlinedBtnSx,
-              }}
-            >
-              <Tooltip
-                title={
-                  menuFlags.menusLoading || !menuFlags.canRead
-                    ? t('common.menuNoView')
-                    : t('loginInfoManagement.actions.refresh')
-                }
-              >
-                <span style={{ display: 'inline-flex' }}>
-                  <Button
-                    variant="outlined"
-                    onClick={() =>
-                      selectedCompanyId &&
-                      selectedTabId !== '' &&
-                      loadLoginInfos(Number(selectedCompanyId), Number(selectedTabId))
-                    }
-                    disabled={menuFlags.menusLoading || !menuFlags.canRead || !selectedCompanyId || selectedTabId === ''}
-                    aria-label={t('loginInfoManagement.actions.refresh')}
-                    sx={{ minWidth: 40, width: 40, px: 0 }}
-                  >
-                    <RefreshIcon fontSize="small" />
-                  </Button>
-                </span>
-              </Tooltip>
-              <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
-                <span style={{ display: 'inline-flex' }}>
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => gridRef.current?.addRow()}
+            {isCompactToolbar ? (
+              <>
+                <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canMutate}>
+                  <span style={{ display: 'inline-flex' }}>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<MoreHorizIcon fontSize="small" />}
+                      disabled={menuFlags.menusLoading}
+                      onClick={(e) => setToolbarMenuAnchor(e.currentTarget)}
+                      sx={mvsBodyOutlinedBtnSx}
+                    >
+                      {t('loginInfoManagement.moreTools')}
+                    </Button>
+                  </span>
+                </Tooltip>
+                <Menu
+                  anchorEl={toolbarMenuAnchor}
+                  open={Boolean(toolbarMenuAnchor)}
+                  onClose={closeToolbarMenu}
+                  anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                  transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                  slotProps={{
+                    paper: {
+                      sx: {
+                        mt: 0.5,
+                        minWidth: 220,
+                        borderRadius: '12px',
+                        border: '1px solid #C5CED9',
+                        boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
+                      },
+                    },
+                  }}
+                >
+                  <MenuItem
                     disabled={
                       menuFlags.menusLoading ||
-                      !menuFlags.canCreate ||
+                      !menuFlags.canMutate ||
                       !selectedCompanyId ||
                       selectedTabId === ''
                     }
+                    onClick={() => {
+                      closeToolbarMenu();
+                      handleImportClick();
+                    }}
                   >
-                    {t('loginInfoManagement.actions.addNew')}
-                  </Button>
-                </span>
-              </Tooltip>
-            </Box>
-          </Box>
-        </CardContent>
-      </Card>
-
-      <Card
-        sx={{
-          borderRadius: '6px',
-          overflow: 'hidden'
-        }}
-      >
-        <CardContent>
-          {!selectedCompanyId ? (
-            <Typography color="text.secondary">{t('loginInfoManagement.errors.selectCompanyFirst')}</Typography>
-          ) : tabsLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-              <CircularProgress />
-            </Box>
-          ) : tabs.length === 0 ? (
-            <Typography color="text.secondary">{t('loginInfoManagement.errors.noTabs')}</Typography>
-          ) : (
-            <>
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  alignItems: 'center',
-                  gap: 0.5,
-                  mb: 1
-                }}
-              >
-                <Tabs
-                  value={selectedTabId === '' ? false : selectedTabId}
-                  onChange={(_, v) => setSelectedTabId(v as number)}
-                  variant="scrollable"
-                  scrollButtons="auto"
-                  sx={{
-                    flex: 1,
-                    minWidth: 0,
-                    borderBottom: 1,
-                    borderColor: 'divider',
-                    '& .MuiTab-root': {
-                      textTransform: 'none',
-                      ...(isDark ? { color: 'rgba(200, 214, 235, 0.75)' } : {})
-                    },
-                    '& .Mui-selected': isDark ? { color: 'rgba(199, 217, 255, 0.98) !important' } : undefined
-                  }}
-                >
-                  {tabs.map((tab) => (
-                    <Tab key={tab.id} value={tab.id} label={tab.name} disabled={menuFlags.menusLoading} />
-                  ))}
-                </Tabs>
-                <Tooltip
-                  title={
-                    menuFlags.menusLoading || !menuFlags.canCreate
-                      ? t('common.menuNoCreate')
-                      : t('loginInfoManagement.tabs.addTab')
-                  }
-                >
+                    <ListItemIcon>
+                      <UploadIcon fontSize="small" />
+                    </ListItemIcon>
+                    {t('loginInfoManagement.actions.importExcel')}
+                  </MenuItem>
+                  <MenuItem
+                    disabled={menuFlags.menusLoading || !menuFlags.canRead || !selectedCompanyId || selectedTabId === ''}
+                    onClick={() => {
+                      closeToolbarMenu();
+                      void gridRef.current?.exportToExcel();
+                    }}
+                  >
+                    <ListItemIcon>
+                      <FileDownloadIcon fontSize="small" />
+                    </ListItemIcon>
+                    {t('loginInfoManagement.actions.exportExcel')}
+                  </MenuItem>
+                </Menu>
+              </>
+            ) : (
+              <>
+                <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canMutate}>
                   <span style={{ display: 'inline-flex' }}>
-                    <IconButton
+                    <Button
+                      variant="outlined"
                       size="small"
-                      onClick={openAddTabDialog}
-                      disabled={menuFlags.menusLoading || !menuFlags.canCreate}
-                      aria-label={t('loginInfoManagement.tabs.addTab')}
-                    >
-                      <AddIcon fontSize="small" />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-                <Tooltip
-                  title={
-                    menuFlags.menusLoading || !menuFlags.canMutate
-                      ? t('common.menuNoMutate')
-                      : t('loginInfoManagement.actions.addColumn')
-                  }
-                >
-                  <span style={{ display: 'inline-flex' }}>
-                    <IconButton
-                      size="small"
-                      onClick={() => gridRef.current?.openAddColumnDialog()}
+                      startIcon={<UploadIcon fontSize="small" />}
+                      onClick={handleImportClick}
                       disabled={
                         menuFlags.menusLoading ||
                         !menuFlags.canMutate ||
                         !selectedCompanyId ||
                         selectedTabId === ''
                       }
-                      aria-label={t('loginInfoManagement.actions.addColumn')}
+                      sx={mvsBodyOutlinedBtnSx}
                     >
-                      <ViewColumnIcon fontSize="small" />
-                    </IconButton>
+                      {t('loginInfoManagement.actions.importExcel')}
+                    </Button>
                   </span>
                 </Tooltip>
-                <Tooltip
-                  title={
-                    menuFlags.menusLoading || !menuFlags.canEdit
-                      ? t('common.menuNoEdit')
-                      : t('loginInfoManagement.tabs.renameTab')
-                  }
-                >
+                <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
                   <span style={{ display: 'inline-flex' }}>
-                    <IconButton
+                    <Button
+                      variant="outlined"
                       size="small"
-                      onClick={openRenameDialog}
-                      disabled={menuFlags.menusLoading || !menuFlags.canEdit || !activeTab}
-                      aria-label={t('loginInfoManagement.tabs.renameTab')}
+                      startIcon={<FileDownloadIcon fontSize="small" />}
+                      onClick={() => void gridRef.current?.exportToExcel()}
+                      disabled={menuFlags.menusLoading || !menuFlags.canRead || !selectedCompanyId || selectedTabId === ''}
+                      sx={mvsBodyOutlinedBtnSx}
                     >
-                      <EditIcon fontSize="small" />
-                    </IconButton>
+                      {t('loginInfoManagement.actions.exportExcel')}
+                    </Button>
                   </span>
                 </Tooltip>
-                <Tooltip
-                  title={
-                    menuFlags.menusLoading || !menuFlags.canDelete
-                      ? t('common.menuNoDelete')
-                      : t('loginInfoManagement.tabs.deleteTab')
+              </>
+            )}
+          </Box>
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: 1,
+              flexShrink: 0,
+              width: { xs: '100%', md: 'auto' },
+              ml: { md: 'auto' },
+            }}
+          >
+            <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
+              <span style={{ display: 'inline-flex', flexShrink: 0 }}>
+                <Button
+                  variant="contained"
+                  disableElevation
+                  size="small"
+                  startIcon={<AddIcon fontSize="small" />}
+                  onClick={() => gridRef.current?.addRow()}
+                  disabled={
+                    menuFlags.menusLoading ||
+                    !menuFlags.canCreate ||
+                    !selectedCompanyId ||
+                    selectedTabId === ''
                   }
+                  sx={mvsBodyPrimaryBtnSx}
                 >
-                  <span style={{ display: 'inline-flex' }}>
-                    <IconButton
-                      size="small"
-                      onClick={() => void handleDeleteTab()}
-                      disabled={
-                        menuFlags.menusLoading ||
-                        !menuFlags.canDelete ||
-                        !activeTab ||
-                        tabs.length <= 1
-                      }
-                      aria-label={t('loginInfoManagement.tabs.deleteTab')}
-                    >
-                      <DeleteOutlineIcon fontSize="small" />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </Box>
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                  {t('loginInfoManagement.companyInfoTitleWithTab', {
-                    companyName: selectedCompany?.name ?? '',
-                    tabName: activeTab?.name ?? ''
-                  })}
+                  {t('loginInfoManagement.actions.addNew')}
+                </Button>
+              </span>
+            </Tooltip>
+          </Box>
+        </Box>
+
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            ...(mvsSearchFieldSx as Record<string, unknown>),
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              md: 'minmax(280px, 360px) minmax(0, 1fr) auto',
+            },
+            gap: 2,
+            alignItems: 'flex-end',
+          }}
+        >
+          <Autocomplete
+            options={companies}
+            value={selectedCompany || null}
+            onChange={(_, newValue) => setSelectedCompanyId(newValue?.id ?? '')}
+            getOptionLabel={(option) => option.name}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            disabled={menuFlags.menusLoading || !menuFlags.canRead}
+            sx={{ width: '100%', minWidth: 0 }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                size="small"
+                label={t('loginInfoManagement.fields.company')}
+                {...LOGIN_FILTER_OUTLINED}
+                placeholder={t('loginInfoManagement.placeholders.selectCompany')}
+                sx={loginFilterFieldSx}
+              />
+            )}
+          />
+          <TextField
+            fullWidth
+            size="small"
+            label={t('common.search')}
+            {...LOGIN_FILTER_OUTLINED}
+            placeholder={t('loginInfoManagement.placeholders.searchRows')}
+            value={rowSearchQuery}
+            onChange={(e) => setRowSearchQuery(e.target.value)}
+            disabled={menuFlags.menusLoading || !menuFlags.canRead || !selectedCompanyId || selectedTabId === ''}
+            sx={loginFilterFieldSx}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<ResetIcon fontSize="small" />}
+            onClick={handleResetFilters}
+            disabled={menuFlags.menusLoading || !menuFlags.canRead}
+            sx={{
+              ...mvsBodyOutlinedBtnSx,
+              height: 40,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {t('loginInfoManagement.actions.reset')}
+          </Button>
+        </Box>
+      </Card>
+
+      <Box sx={mvsBodyListZoneSx}>
+        {!selectedCompanyId ? (
+          <Box sx={listStateBoxSx}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+              {t('loginInfoManagement.empty.selectCompany')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
+              {t('loginInfoManagement.errors.selectCompanyFirst')}
+            </Typography>
+          </Box>
+        ) : tabsLoading ? (
+          <Box sx={listStateBoxSx}>
+            <CircularProgress size={36} />
+            <Typography variant="body2" color="text.secondary">
+              {t('loginInfoManagement.empty.loading')}
+            </Typography>
+          </Box>
+        ) : tabs.length === 0 ? (
+          <Box sx={listStateBoxSx}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+              {t('loginInfoManagement.errors.noTabs')}
+            </Typography>
+            <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
+              <span style={{ display: 'inline-flex' }}>
+                <Button
+                  variant="contained"
+                  disableElevation
+                  size="small"
+                  startIcon={<AddIcon fontSize="small" />}
+                  disabled={menuFlags.menusLoading || !menuFlags.canCreate}
+                  onClick={openAddTabDialog}
+                  sx={mvsBodyPrimaryBtnSx}
+                >
+                  {t('loginInfoManagement.tabs.addTab')}
+                </Button>
+              </span>
+            </Tooltip>
+          </Box>
+        ) : (
+          <>
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 0.5,
+                mb: 1.5,
+                px: { xs: 0.5, sm: 0 },
+              }}
+            >
+              <Tabs
+                value={selectedTabId === '' ? false : selectedTabId}
+                onChange={(_, v) => setSelectedTabId(v as number)}
+                variant="scrollable"
+                scrollButtons="auto"
+                sx={{
+                  flex: 1,
+                  minWidth: 0,
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                  '& .MuiTab-root': { textTransform: 'none' },
+                }}
+              >
+                {tabs.map((tab) => (
+                  <Tab key={tab.id} value={tab.id} label={tab.name} disabled={menuFlags.menusLoading} />
+                ))}
+              </Tabs>
+              <Tooltip
+                title={menuFlags.menusLoading || !menuFlags.canCreate ? t('common.menuNoCreate') : t('loginInfoManagement.tabs.addTab')}
+              >
+                <span style={{ display: 'inline-flex' }}>
+                  <IconButton size="small" onClick={openAddTabDialog} disabled={menuFlags.menusLoading || !menuFlags.canCreate}>
+                    <AddIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip
+                title={menuFlags.menusLoading || !menuFlags.canMutate ? t('common.menuNoMutate') : t('loginInfoManagement.actions.addColumn')}
+              >
+                <span style={{ display: 'inline-flex' }}>
+                  <IconButton
+                    size="small"
+                    onClick={() => gridRef.current?.openAddColumnDialog()}
+                    disabled={menuFlags.menusLoading || !menuFlags.canMutate || !selectedCompanyId || selectedTabId === ''}
+                  >
+                    <ViewColumnIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip
+                title={menuFlags.menusLoading || !menuFlags.canEdit ? t('common.menuNoEdit') : t('loginInfoManagement.tabs.renameTab')}
+              >
+                <span style={{ display: 'inline-flex' }}>
+                  <IconButton size="small" onClick={openRenameDialog} disabled={menuFlags.menusLoading || !menuFlags.canEdit || !activeTab}>
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip
+                title={menuFlags.menusLoading || !menuFlags.canDelete ? t('common.menuNoDelete') : t('loginInfoManagement.tabs.deleteTab')}
+              >
+                <span style={{ display: 'inline-flex' }}>
+                  <IconButton
+                    size="small"
+                    onClick={() => void handleDeleteTab()}
+                    disabled={menuFlags.menusLoading || !menuFlags.canDelete || !activeTab || tabs.length <= 1}
+                  >
+                    <DeleteOutlineIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Box>
+
+            {loading && loginInfos.length === 0 ? (
+              <Box sx={listStateBoxSx}>
+                <CircularProgress size={36} />
+                <Typography variant="body2" color="text.secondary">
+                  {t('loginInfoManagement.empty.loading')}
                 </Typography>
               </Box>
-              {loading && loginInfos.length === 0 ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                  <CircularProgress />
-                </Box>
-              ) : selectedTabId !== '' ? (
+            ) : filteredLoginInfos.length === 0 && hasActiveFilters ? (
+              <Box sx={listStateBoxSx}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+                  {t('loginInfoManagement.empty.noResults')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
+                  {t('loginInfoManagement.empty.noResultsHint')}
+                </Typography>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<ResetIcon fontSize="small" />}
+                  onClick={handleResetFilters}
+                  sx={mvsBodyOutlinedBtnSx}
+                >
+                  {t('loginInfoManagement.actions.reset')}
+                </Button>
+              </Box>
+            ) : selectedTabId !== '' ? (
+              <Box sx={{ ...mvsBodyListTableSx, p: { xs: 1, sm: 1.5 } }}>
                 <LoginInfoExcelGrid
                   key={`${selectedCompanyId}-${selectedTabId}`}
                   ref={gridRef}
@@ -821,11 +917,11 @@ const LoginInfoManagement: React.FC = () => {
                   }}
                   onError={setErrorMessage}
                 />
-              ) : null}
-            </>
-          )}
-        </CardContent>
-      </Card>
+              </Box>
+            ) : null}
+          </>
+        )}
+      </Box>
 
       <Dialog
         open={addDialogOpen}

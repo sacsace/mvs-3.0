@@ -14,7 +14,13 @@ import {
   Tooltip
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsBodyCardSx,
+  mvsBodyPrimaryBtnSx,
+  mvsSearchFieldSx,
+  mvsInnerCardSx,
+} from '../../theme/mvsLayout';
 import { useTranslation } from 'react-i18next';
 import { alpha, useTheme } from '@mui/material/styles';
 import { api, inventoryService } from '../../services/api';
@@ -240,17 +246,62 @@ const StockOutBarcode: React.FC = () => {
     }
   }, [barcode, quantity, releaseReason, txt, language, perm.canMutate, t]);
 
-  const inputOutlineSx = {
+  const appleInputSx = {
+    ...(mvsSearchFieldSx as Record<string, unknown>),
     '& .MuiOutlinedInput-root': {
       borderRadius: '12px',
-      '& fieldset': {
-        borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.12)' : 'divider',
+      bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.05),
+      minHeight: 48,
+      transition: theme.transitions.create(['background-color', 'box-shadow', 'border-color'], { duration: 180 }),
+      '& .MuiOutlinedInput-notchedOutline': {
+        borderColor: '#C5CED9',
       },
+      '&:hover .MuiOutlinedInput-notchedOutline': {
+        borderColor: '#B8C4D0',
+      },
+      '& fieldset': {
+        borderColor: '#C5CED9',
+      },
+      '&:hover fieldset': {
+        borderColor: '#B8C4D0',
+      },
+      '&:hover': {
+        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.14 : 0.08),
+      },
+      '&.Mui-focused': {
+        bgcolor: 'background.paper',
+        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}`,
+        '& fieldset': {
+          borderColor: alpha(theme.palette.divider, 0.95),
+          borderWidth: 1,
+        },
+      },
+      '&.Mui-disabled': {
+        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
+      },
+    },
+    '& .MuiOutlinedInput-input': {
+      py: 1.35,
+      fontSize: '0.9375rem',
+      letterSpacing: '-0.02em',
+    },
+    '& .MuiOutlinedInput-input::placeholder': {
+      color: alpha(theme.palette.text.secondary, 0.85),
+      opacity: 1,
+    },
+    '& .MuiFormHelperText-root': {
+      mt: 1.25,
+      mx: 0,
+      px: 0.25,
+      letterSpacing: '-0.01em',
+      fontSize: '0.75rem',
+      lineHeight: 1.5,
+      color: alpha(theme.palette.text.secondary, 0.95),
     },
   };
 
   return (
-    <Box sx={{ ...mvsPageRootSx, p: 2, maxWidth: 920, mx: 'auto' }}>
+    <Box sx={{ ...mvsPageRootSx, maxWidth: 920, mx: 'auto' }}>
       <MvsPageHeader
         title={txt('출고 관리', 'Outbound management')}
         description={txt(
@@ -259,16 +310,8 @@ const StockOutBarcode: React.FC = () => {
         )}
       />
 
-      <Card
-        elevation={0}
-        sx={{
-          border: '1px solid',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-          borderRadius: '20px',
-          boxShadow: theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
-        }}
-      >
-        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: { xs: 2.5, sm: 3 } }}>
+      <Card elevation={0} sx={mvsBodyCardSx}>
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
           <TextField
             disabled={perm.menusLoading || !perm.canMutate}
             inputRef={barcodeRef}
@@ -281,7 +324,7 @@ const StockOutBarcode: React.FC = () => {
             autoFocus
             fullWidth
             size="medium"
-            sx={inputOutlineSx}
+            sx={appleInputSx}
           />
           <TextField
             label={txt('수량', 'Quantity')}
@@ -292,7 +335,7 @@ const StockOutBarcode: React.FC = () => {
             fullWidth
             size="medium"
             disabled={perm.menusLoading || !perm.canMutate}
-            sx={inputOutlineSx}
+            sx={appleInputSx}
           />
           <TextField
             label={txt('출고 이유', 'Reason (optional)')}
@@ -310,7 +353,7 @@ const StockOutBarcode: React.FC = () => {
               '입력 시 재고 거래 내역 비고에 함께 저장됩니다.',
               'If set, it is saved with the inventory transaction notes.'
             )}
-            sx={inputOutlineSx}
+            sx={appleInputSx}
           />
 
           <Divider sx={{ my: 0.5 }} />
@@ -319,12 +362,9 @@ const StockOutBarcode: React.FC = () => {
           </Typography>
           <Box
             sx={{
+              ...mvsInnerCardSx,
               minHeight: 120,
-              border: '1px solid',
-              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-              borderRadius: '14px',
               p: 1.5,
-              bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
             }}
           >
             {previewLoading && (
@@ -366,17 +406,15 @@ const StockOutBarcode: React.FC = () => {
                 {previewProduct.image_url ? (
                   <Box
                     sx={{
+                      ...mvsInnerCardSx,
                       width: { xs: '100%', sm: 240 },
                       maxWidth: 336,
                       flexShrink: 0,
                       alignSelf: { xs: 'stretch', sm: 'flex-start' },
-                      borderRadius: 1,
+                      p: 0,
                       overflow: 'hidden',
-                      border: '1px solid',
-                      borderColor: 'divider',
-                      bgcolor: 'background.paper',
                       aspectRatio: '1',
-                      maxHeight: 312
+                      maxHeight: 312,
                     }}
                   >
                     <Box
@@ -458,7 +496,12 @@ const StockOutBarcode: React.FC = () => {
                 }
                 onClick={submit}
                 fullWidth
-                sx={{ borderRadius: '12px', py: 1.25, textTransform: 'none', fontWeight: 600 }}
+                sx={{
+                  ...mvsBodyPrimaryBtnSx,
+                  py: 1.35,
+                  minHeight: 48,
+                  fontSize: '0.95rem',
+                }}
               >
                 {txt('출고', 'Ship out')}
               </Button>

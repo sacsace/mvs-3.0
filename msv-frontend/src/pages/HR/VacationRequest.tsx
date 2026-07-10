@@ -434,12 +434,12 @@ const VacationRequest: React.FC = () => {
                       >
                         {annualLeaveInfo.canUseAnnualLeave ? (
                           <>
-                            {annualLeaveInfo.fiscalYearLabel && (
+                            {annualLeaveInfo.leaveYearLabel && (
                               <Typography variant="caption" sx={{ display: 'block', mb: 0.5, opacity: 0.85 }}>
-                                {t('vacationManagement.annualLeaveFiscalYear', {
-                                  label: annualLeaveInfo.fiscalYearLabel,
-                                  start: annualLeaveInfo.fiscalYearStart,
-                                  end: annualLeaveInfo.fiscalYearEnd
+                                {t('vacationManagement.annualLeaveYear', {
+                                  label: annualLeaveInfo.leaveYearLabel || annualLeaveInfo.fiscalYearLabel,
+                                  start: annualLeaveInfo.leaveYearStart || annualLeaveInfo.fiscalYearStart,
+                                  end: annualLeaveInfo.leaveYearEnd || annualLeaveInfo.fiscalYearEnd
                                 })}
                               </Typography>
                             )}

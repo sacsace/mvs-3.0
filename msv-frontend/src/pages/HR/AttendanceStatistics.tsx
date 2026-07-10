@@ -4,14 +4,12 @@ import {
   Typography,
   Card,
   CardContent,
-  Grid,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   TextField,
   Button,
   CircularProgress,
@@ -24,23 +22,33 @@ import {
   Chip,
   Switch,
   FormControlLabel,
-  Slider
+  Slider,
+  Pagination,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
-import { Refresh as RefreshIcon } from '@mui/icons-material';
+import {
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsOutlinedLabelProps,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+  mvsBodyPaginationSx,
+  mvsInnerCardSx,
+} from '../../theme/mvsLayout';
+import { Refresh as RefreshIcon, RestartAlt as ResetIcon, Schedule as ScheduleIcon } from '@mui/icons-material';
 import {
   Sync as SyncIcon,
   OpenInNew as OpenInNewIcon
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { useTheme, alpha } from '@mui/material/styles';
-import {
-  mvsFilterToolbarSx,
-  mvsSearchFieldSx,
-  mvsInnerCardSx,
-  mvsTitleBlockSx,
-} from '../../theme/mvsLayout';
+import { useTheme, alpha, type SxProps, type Theme } from '@mui/material/styles';
 import { attendanceService } from '../../services/api';
 import { heresnowIntegrationService } from '../../services/api';
 import { useStore } from '../../store';
@@ -155,6 +163,134 @@ function rowDateYmd(dateVal: string) {
   return m ? m[1] : s.slice(0, 10);
 }
 
+const STANDARD_WORK_DAY_HOURS = 8;
+const STANDARD_CHECK_IN_HOUR_IST = 9;
+const IST_OFFSET = '+05:30';
+
+function parseAttendanceCheckInMs(row: AttendanceRow): number | null {
+  if (row.check_in) {
+    const d = new Date(row.check_in);
+    if (!Number.isNaN(d.getTime())) return d.getTime();
+  }
+
+  const local = row.check_in_local || row.check_in_display;
+  if (!local) return null;
+
+  const ymd = rowDateYmd(row.date);
+  const ko = local.match(/(오전|오후)\s*(\d{1,2}):(\d{2})/);
+  if (ko) {
+    let hour = parseInt(ko[2], 10);
+    const minute = parseInt(ko[3], 10);
+    if (ko[1] === '오후' && hour !== 12) hour += 12;
+    if (ko[1] === '오전' && hour === 12) hour = 0;
+    const d = new Date(
+      `${ymd}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00${IST_OFFSET}`
+    );
+    return Number.isNaN(d.getTime()) ? null : d.getTime();
+  }
+
+  const en = local.match(/(AM|PM)\s*(\d{1,2}):(\d{2})/i);
+  if (en) {
+    let hour = parseInt(en[2], 10);
+    const minute = parseInt(en[3], 10);
+    const period = en[1].toUpperCase();
+    if (period === 'PM' && hour !== 12) hour += 12;
+    if (period === 'AM' && hour === 12) hour = 0;
+    const d = new Date(
+      `${ymd}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00${IST_OFFSET}`
+    );
+    return Number.isNaN(d.getTime()) ? null : d.getTime();
+  }
+
+  const plain = local.match(/(\d{1,2}):(\d{2})/);
+  if (plain) {
+    const hour = parseInt(plain[1], 10);
+    const minute = parseInt(plain[2], 10);
+    const d = new Date(
+      `${ymd}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00${IST_OFFSET}`
+    );
+    return Number.isNaN(d.getTime()) ? null : d.getTime();
+  }
+
+  return null;
+}
+
+function computeLateHours(row: AttendanceRow): number {
+  const checkInMs = parseAttendanceCheckInMs(row);
+  if (checkInMs == null) return 0;
+  const ymd = rowDateYmd(row.date);
+  const standardMs = new Date(`${ymd}T${String(STANDARD_CHECK_IN_HOUR_IST).padStart(2, '0')}:00:00${IST_OFFSET}`).getTime();
+  if (checkInMs <= standardMs) return 0;
+  return roundHours((checkInMs - standardMs) / (1000 * 60 * 60));
+}
+
+function isWeekendYmd(ymd: string) {
+  const matched = ymd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!matched) return false;
+  const y = parseInt(matched[1], 10);
+  const mo = parseInt(matched[2], 10);
+  const d = parseInt(matched[3], 10);
+  const dt = new Date(`${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}T12:00:00+05:30`);
+  const day = dt.getDay();
+  return day === 0 || day === 6;
+}
+
+function roundHours(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function formatHoursDisplay(value: number) {
+  return `${roundHours(value).toFixed(2)} h`;
+}
+
+type AttendanceDetailSummary = {
+  otHours: number;
+  absentHours: number;
+  holidayWorkHours: number;
+  totalWorkHours: number;
+  recordCount: number;
+  absentDays: number;
+};
+
+function computeAttendanceDetailSummary(rows: AttendanceRow[]): AttendanceDetailSummary {
+  let otHours = 0;
+  let absentHours = 0;
+  let holidayWorkHours = 0;
+  let totalWorkHours = 0;
+  let absentDays = 0;
+
+  for (const row of rows) {
+    const ymd = rowDateYmd(row.date);
+    const workHours = Number(row.work_hours) || 0;
+
+    if (row.status === 'absent') {
+      absentDays += 1;
+      absentHours += STANDARD_WORK_DAY_HOURS;
+      continue;
+    }
+
+    totalWorkHours += workHours;
+
+    if (isWeekendYmd(ymd) && workHours > 0) {
+      holidayWorkHours += workHours;
+      continue;
+    }
+
+    const lateHours = computeLateHours(row);
+    const dayOt = Math.max(0, workHours - STANDARD_WORK_DAY_HOURS - lateHours);
+    otHours += dayOt;
+  }
+
+  return {
+    otHours: roundHours(otHours),
+    absentHours: roundHours(absentHours),
+    holidayWorkHours: roundHours(holidayWorkHours),
+    totalWorkHours: roundHours(totalWorkHours),
+    recordCount: rows.length,
+    absentDays
+  };
+}
+
 function enumerateYmdRange(start: string, end: string): string[] {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end) || start > end) return [];
   const cursor = new Date(`${start}T00:00:00`);
@@ -184,6 +320,67 @@ function displayClockCell(
   }
 }
 
+const ATTENDANCE_USERS_PER_PAGE = 10;
+const ATTENDANCE_FILTER_OUTLINED = mvsOutlinedLabelProps;
+const attendanceFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
+const matrixNoColWidth = 42;
+const thEllipsisSx = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  display: 'block',
+  minWidth: 0,
+} as const;
+
+const attendanceTableBodyRowSx: SxProps<Theme> = (theme) => {
+  const base = typeof mvsTableBodyRowSx === 'function' ? mvsTableBodyRowSx(theme) : mvsTableBodyRowSx;
+  const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
+  const hoverBg = theme.palette.mode === 'light' ? '#EFF6FF' : theme.palette.action.hover;
+  return {
+    ...(base as object),
+    '& .MuiTableRow-root:nth-of-type(odd)': { bgcolor: rowBg },
+    '& .MuiTableRow-root:nth-of-type(even)': { bgcolor: rowBg },
+    '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
+  };
+};
+
+const detailDialogTableBodySx: SxProps<Theme> = (theme) => {
+  const border = theme.palette.mode === 'light' ? '#D1DAE4' : theme.palette.divider;
+  const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
+  const hoverBg = theme.palette.mode === 'light' ? '#F8FAFC' : theme.palette.action.hover;
+  return {
+    '& .MuiTableCell-body': {
+      py: 0.45,
+      px: 1.25,
+      fontSize: '0.8125rem',
+      lineHeight: 1.3,
+      borderBottom: `1px solid ${border}`,
+    },
+    '& .MuiTableRow-root': { bgcolor: rowBg },
+    '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
+    '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
+      borderBottom: 'none',
+    },
+  };
+};
+
+const detailDialogTableSx = {
+  tableLayout: 'fixed',
+  width: '100%',
+  borderCollapse: 'collapse',
+  '& .MuiTableCell-root': {
+    borderLeft: 'none',
+    borderRight: 'none',
+    borderTop: 'none',
+  },
+  '& .MuiTableHead-root .MuiTableCell-root': {
+    py: 0.65,
+    px: 1.25,
+    fontSize: '0.78rem',
+    lineHeight: 1.25,
+  },
+} as const;
+
 const AttendanceStatistics: React.FC = () => {
   const navigate = useNavigate();
   const theme = useTheme();
@@ -212,6 +409,7 @@ const AttendanceStatistics: React.FC = () => {
   const [heresnowApiKey, setHeresnowApiKey] = useState('');
   const [heresnowMessage, setHeresnowMessage] = useState<string | null>(null);
   const [heresnowError, setHeresnowError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
   const [nameColumnWidth, setNameColumnWidth] = useState<number>(() => {
     if (typeof window === 'undefined') return 110;
     const saved = Number(window.localStorage.getItem('attendanceStats.nameColumnWidth') || 110);
@@ -225,6 +423,8 @@ const AttendanceStatistics: React.FC = () => {
       .filter((r) => r.user_id === detailUserId)
       .sort((a, b) => rowDateYmd(b.date).localeCompare(rowDateYmd(a.date)));
   }, [rows, detailUserId]);
+
+  const detailSummary = useMemo(() => computeAttendanceDetailSummary(detailRows), [detailRows]);
 
   const statusLabel = useCallback(
     (status: string) => {
@@ -244,6 +444,53 @@ const AttendanceStatistics: React.FC = () => {
       }
     },
     [t]
+  );
+
+  const detailStatusLabel = useCallback(
+    (row: AttendanceRow) => {
+      const ymd = rowDateYmd(row.date);
+      if (row.status !== 'absent' && isWeekendYmd(ymd)) {
+        return t('attendanceManagement.statusHolidayWork');
+      }
+      return statusLabel(row.status);
+    },
+    [statusLabel, t]
+  );
+
+  const detailSummaryItems = useMemo(
+    () => [
+      {
+        key: 'otHours',
+        label: t('attendanceStatistics.detail.summary.otHours'),
+        value: formatHoursDisplay(detailSummary.otHours),
+        color: 'primary.main' as const
+      },
+      {
+        key: 'absentHours',
+        label: t('attendanceStatistics.detail.summary.absentHours'),
+        value: formatHoursDisplay(detailSummary.absentHours),
+        color: 'error.main' as const
+      },
+      {
+        key: 'holidayWorkHours',
+        label: t('attendanceStatistics.detail.summary.holidayWorkHours'),
+        value: formatHoursDisplay(detailSummary.holidayWorkHours),
+        color: 'warning.dark' as const
+      },
+      {
+        key: 'totalWorkHours',
+        label: t('attendanceStatistics.detail.summary.totalWorkHours'),
+        value: formatHoursDisplay(detailSummary.totalWorkHours),
+        color: valueColor
+      },
+      {
+        key: 'recordCount',
+        label: t('attendanceStatistics.detail.summary.recordCount'),
+        value: String(detailSummary.recordCount),
+        color: valueColor
+      }
+    ],
+    [detailSummary, t, valueColor]
   );
 
   const openDetail = (agg: UserAggregate) => {
@@ -466,17 +713,23 @@ const AttendanceStatistics: React.FC = () => {
     };
   }, [aggregates, rows.length]);
 
-  const fieldPaperSx = {
-    borderRadius: '12px',
-    bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'background.paper',
-    '& .MuiOutlinedInput-root': {
-      borderRadius: '12px',
-      minHeight: 44,
-      '& fieldset': {
-        borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : undefined,
-      },
-    },
+  const handleResetFilters = () => {
+    const nowDate = new Date();
+    const ym = formatYm(nowDate);
+    applyMonth(ym);
   };
+
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    py: { xs: 6, sm: 8 },
+    px: 3,
+    gap: 1.5,
+  } as const;
 
   const kpiCards = [
     { key: 'people', label: t('attendanceStatistics.cards.people'), value: totals.people, valueSx: { color: valueColor } },
@@ -502,6 +755,18 @@ const AttendanceStatistics: React.FC = () => {
   ] as const;
 
   const dayColumns = useMemo(() => enumerateYmdRange(startDate, endDate), [startDate, endDate]);
+
+  const matrixDayColSx = useMemo(() => {
+    const count = Math.max(dayColumns.length, 1);
+    return {
+      width: `calc((100% - ${matrixNoColWidth}px - ${nameColumnWidth}px) / ${count})`,
+      minWidth: 0,
+      maxWidth: `calc((100% - ${matrixNoColWidth}px - ${nameColumnWidth}px) / ${count})`,
+      overflow: 'hidden',
+      px: 0,
+      boxSizing: 'border-box' as const,
+    };
+  }, [dayColumns.length, nameColumnWidth]);
 
   const unregisteredAttendanceRows = useMemo(() => {
     const records = Array.isArray(heresnowStatus?.unregisteredAttendanceRecords)
@@ -616,24 +881,22 @@ const AttendanceStatistics: React.FC = () => {
     return { complete, partial, absent };
   }, [matrixMap]);
 
-  const softTableHeadSx = {
-    bgcolor:
-      theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
-    '& .MuiTableCell-head': {
-      bgcolor:
-        theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
-      color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
-      fontWeight: 600,
-      fontSize: '0.75rem',
-      letterSpacing: '0.01em',
-      borderBottom: `1px solid ${
-        theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-      }`,
-      borderTop: 'none',
-      py: 1.5,
-      px: 2,
-    },
-  };
+  const totalMatrixPages = Math.max(1, Math.ceil(matrixUsers.length / ATTENDANCE_USERS_PER_PAGE));
+
+  const paginatedMatrixUsers = useMemo(
+    () => matrixUsers.slice((page - 1) * ATTENDANCE_USERS_PER_PAGE, page * ATTENDANCE_USERS_PER_PAGE),
+    [matrixUsers, page]
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [startDate, endDate]);
+
+  useEffect(() => {
+    if (page > totalMatrixPages) {
+      setPage(totalMatrixPages);
+    }
+  }, [page, totalMatrixPages]);
 
   return (
     <Box sx={{ ...mvsPageRootSx }}>
@@ -653,7 +916,7 @@ const AttendanceStatistics: React.FC = () => {
         </Alert>
       )}
 
-      <Card elevation={0} sx={{ ...mvsInnerCardSx, mb: 3, p: { xs: 1.75, sm: 2.5 } }}>
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3, p: { xs: 1.75, sm: 2.5 } }}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75 }}>
           <Box sx={{ minWidth: 0 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
@@ -817,503 +1080,512 @@ const AttendanceStatistics: React.FC = () => {
         </Box>
       </Card>
 
-      <Card
-        elevation={0}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      <Box
         sx={{
-          borderRadius: '20px',
-          border: '1px solid',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-          boxShadow:
-            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
-          bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'background.paper',
-          overflow: 'hidden',
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(3, 1fr)', md: 'repeat(5, 1fr)' },
+          gap: 2.5,
+          mb: 3,
         }}
       >
-        <CardContent sx={{ py: 3, px: 3, display: 'flex', flexDirection: 'column', gap: 0 }}>
-          {error && (
-            <Alert severity="error" sx={{ mb: 2.5 }} onClose={() => setError(null)}>
-              {error}
-            </Alert>
-          )}
+        {kpiCards.map((item) => (
+          <Card key={item.key} elevation={0} sx={mvsKpiCardSx}>
+            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                {item.label}
+              </Typography>
+              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', ...item.valueSx }}>
+                {item.value}
+              </Typography>
+            </CardContent>
+          </Card>
+        ))}
+      </Box>
 
-          <Box
-            sx={{
-              ...mvsFilterToolbarSx,
-              ...mvsSearchFieldSx,
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'flex-end',
-              gap: 2,
-              marginBottom: 0,
-              backgroundColor:
-                theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.06) : alpha(theme.palette.common.black, 0.03),
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            ...(mvsSearchFieldSx as Record<string, unknown>),
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, minmax(0, 1fr))',
+              lg: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto auto',
+            },
+            gap: 2,
+            alignItems: 'flex-end',
+          }}
+        >
+          <TextField
+            fullWidth
+            size="small"
+            type="month"
+            label={t('attendanceStatistics.monthLabel')}
+            {...ATTENDANCE_FILTER_OUTLINED}
+            value={selectedMonth}
+            onChange={(e) => {
+              const ym = e.target.value;
+              setSelectedMonth(ym);
+              const range = monthRangeFromYm(ym);
+              if (range) {
+                setStartDate(range.start);
+                setEndDate(range.end);
+              }
             }}
-          >
-            <Grid container spacing={2} alignItems="flex-end" sx={{ width: '100%', m: 0 }}>
-              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                <TextField
-                  fullWidth
-                  type="month"
-                  label={t('attendanceStatistics.monthLabel')}
-                  value={selectedMonth}
-                  onChange={(e) => {
-                    const ym = e.target.value;
-                    setSelectedMonth(ym);
-                    const range = monthRangeFromYm(ym);
-                    if (range) {
-                      setStartDate(range.start);
-                      setEndDate(range.end);
-                    }
-                  }}
-                  InputLabelProps={{ shrink: true }}
-                  size="small"
-                  sx={fieldPaperSx}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-                <Box sx={{ display: 'flex', gap: 1, minHeight: 44 }}>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    color="inherit"
-                    onClick={() => applyMonth(formatYm(new Date()))}
-                    sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
-                  >
-                    {t('attendanceStatistics.thisMonth')}
-                  </Button>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    color="inherit"
-                    onClick={() => {
-                      const d = new Date();
-                      d.setMonth(d.getMonth() - 1);
-                      applyMonth(formatYm(d));
-                    }}
-                    sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
-                  >
-                    {t('attendanceStatistics.lastMonth')}
-                  </Button>
-                </Box>
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, md: 'grow' }}>
-                <TextField
-                  fullWidth
-                  type="date"
-                  label={t('attendanceStatistics.startDate')}
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  size="small"
-                  sx={fieldPaperSx}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, md: 'grow' }}>
-                <TextField
-                  fullWidth
-                  type="date"
-                  label={t('attendanceStatistics.endDate')}
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  size="small"
-                  sx={fieldPaperSx}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, md: 'auto' }} sx={{ display: 'flex', justifyContent: { xs: 'stretch', md: 'flex-end' } }}>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  disableElevation
-                  startIcon={<RefreshIcon sx={{ fontSize: 18 }} />}
-                  onClick={load}
-                  disabled={loading}
-                  sx={{
-                    minHeight: 44,
-                    px: 3,
-                    borderRadius: '12px',
-                    fontWeight: 600,
-                    textTransform: 'none',
-                    boxShadow: 'none',
-                    width: { xs: '100%', md: 'auto' },
-                  }}
-                >
-                  {t('attendanceStatistics.refresh')}
-                </Button>
-              </Grid>
-            </Grid>
+            sx={attendanceFilterFieldSx}
+          />
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button
+              fullWidth
+              variant="outlined"
+              size="small"
+              onClick={() => applyMonth(formatYm(new Date()))}
+              sx={mvsBodyOutlinedBtnSx}
+            >
+              {t('attendanceStatistics.thisMonth')}
+            </Button>
+            <Button
+              fullWidth
+              variant="outlined"
+              size="small"
+              onClick={() => {
+                const d = new Date();
+                d.setMonth(d.getMonth() - 1);
+                applyMonth(formatYm(d));
+              }}
+              sx={mvsBodyOutlinedBtnSx}
+            >
+              {t('attendanceStatistics.lastMonth')}
+            </Button>
           </Box>
+          <TextField
+            fullWidth
+            size="small"
+            type="date"
+            label={t('attendanceStatistics.startDate')}
+            {...ATTENDANCE_FILTER_OUTLINED}
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            sx={attendanceFilterFieldSx}
+          />
+          <TextField
+            fullWidth
+            size="small"
+            type="date"
+            label={t('attendanceStatistics.endDate')}
+            {...ATTENDANCE_FILTER_OUTLINED}
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            sx={attendanceFilterFieldSx}
+          />
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<ResetIcon fontSize="small" />}
+            onClick={handleResetFilters}
+            sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
+          >
+            {t('attendanceStatistics.reset')}
+          </Button>
+          <Button
+            variant="contained"
+            disableElevation
+            size="small"
+            startIcon={<RefreshIcon fontSize="small" />}
+            onClick={load}
+            disabled={loading}
+            sx={{ ...mvsBodyPrimaryBtnSx, height: 40, whiteSpace: 'nowrap' }}
+          >
+            {t('attendanceStatistics.refresh')}
+          </Button>
+        </Box>
+      </Card>
 
+      <Box sx={mvsBodyListZoneSx}>
+        {loading ? (
+          <Box sx={listStateBoxSx}>
+            <CircularProgress size={36} />
+            <Typography variant="body2" color="text.secondary">
+              {t('attendanceStatistics.empty.loading')}
+            </Typography>
+          </Box>
+        ) : matrixUsers.length === 0 ? (
+          <Box sx={listStateBoxSx}>
+            <ScheduleIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.3 }} />
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+              {t('attendanceStatistics.empty.noItems')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
+              {t('attendanceStatistics.empty.noItemsHint')}
+            </Typography>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<RefreshIcon fontSize="small" />}
+              onClick={load}
+              sx={mvsBodyOutlinedBtnSx}
+            >
+              {t('attendanceStatistics.refresh')}
+            </Button>
+          </Box>
+        ) : (
           <Box
             sx={{
-              mt: 2.5,
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(3, 1fr)', md: 'repeat(5, 1fr)' },
-              gap: 2,
+              ...mvsBodyListTableSx,
+              overflow: 'hidden',
+              '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:first-of-type': {
+                borderTopLeftRadius: 0,
+              },
+              '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:last-of-type': {
+                borderTopRightRadius: 0,
+              },
             }}
           >
-            {kpiCards.map((item) => (
-              <Card
-                key={item.key}
-                elevation={0}
+            <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: 2, pb: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
+                <Typography variant="body2" sx={{ color: labelColor, fontWeight: 600 }}>
+                  {t('attendanceStatistics.matrix.legendTitle')}
+                </Typography>
+                <Chip size="small" label={`✓ ${t('attendanceStatistics.matrix.complete')} ${matrixLegend.complete}`} color="success" variant="outlined" />
+                <Chip size="small" label={`◐ ${t('attendanceStatistics.matrix.partial')} ${matrixLegend.partial}`} color="warning" variant="outlined" />
+                <Chip size="small" label={`✕ ${t('attendanceStatistics.matrix.absent')} ${matrixLegend.absent}`} color="error" variant="outlined" />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: { xs: 0, md: 1 } }}>
+                  <Typography variant="caption" sx={{ color: labelColor, whiteSpace: 'nowrap', fontWeight: 600 }}>
+                    {t('attendanceStatistics.matrix.nameColumnWidth')}
+                  </Typography>
+                  <Slider
+                    size="small"
+                    min={90}
+                    max={220}
+                    step={2}
+                    value={nameColumnWidth}
+                    onChange={(_, v) => setNameColumnWidth(Number(v))}
+                    sx={{ width: 120 }}
+                  />
+                </Box>
+              </Box>
+            </Box>
+            <TableContainer sx={{ width: '100%', overflow: 'hidden' }}>
+              <Table
+                size="small"
                 sx={{
-                  ...mvsInnerCardSx,
-                  p: 0,
-                  overflow: 'hidden',
-                  bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'background.paper',
-                  border: '1px solid',
-                  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-                  boxShadow:
-                    theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
+                  tableLayout: 'fixed',
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  bgcolor: 'transparent',
+                  '& .MuiTableCell-root': {
+                    borderLeft: 'none',
+                    borderRight: 'none',
+                    borderTop: 'none',
+                  },
                 }}
               >
-                <CardContent sx={{ py: 2, px: 2.25 }}>
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      color: labelColor,
-                      display: 'block',
-                      fontWeight: 600,
-                      letterSpacing: '0.02em',
-                      mb: 1,
-                    }}
-                  >
-                    {item.label}
-                  </Typography>
-                  <Typography variant="kpiNumber" sx={item.valueSx}>
-                    {item.value}
-                  </Typography>
-                </CardContent>
-              </Card>
-            ))}
-          </Box>
-
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6, mt: 2.5 }}>
-              <CircularProgress size={32} />
-            </Box>
-          ) : (
-            <>
-              <Box sx={{ mt: 2.5 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap', mb: 1.25 }}>
-                  <Typography variant="body2" sx={{ color: labelColor, fontWeight: 600 }}>
-                    {t('attendanceStatistics.matrix.legendTitle')}
-                  </Typography>
-                  <Chip size="small" label={`✓ ${t('attendanceStatistics.matrix.complete')} ${matrixLegend.complete}`} color="success" variant="outlined" />
-                  <Chip size="small" label={`◐ ${t('attendanceStatistics.matrix.partial')} ${matrixLegend.partial}`} color="warning" variant="outlined" />
-                  <Chip size="small" label={`✕ ${t('attendanceStatistics.matrix.absent')} ${matrixLegend.absent}`} color="error" variant="outlined" />
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: { xs: 0, md: 1 } }}>
-                    <Typography variant="caption" sx={{ color: labelColor, whiteSpace: 'nowrap', fontWeight: 600 }}>
-                      {t('attendanceStatistics.matrix.nameColumnWidth')}
-                    </Typography>
-                    <Slider
-                      size="small"
-                      min={90}
-                      max={220}
-                      step={2}
-                      value={nameColumnWidth}
-                      onChange={(_, v) => setNameColumnWidth(Number(v))}
-                      sx={{ width: 120 }}
-                    />
-                  </Box>
-                </Box>
-                <TableContainer
-                  component={Paper}
-                  elevation={0}
-                  sx={{
-                    borderRadius: '12px',
-                    border: '1px solid',
-                    borderColor: theme.palette.mode === 'light' ? 'rgba(15,23,42,0.08)' : 'divider',
-                    overflowX: 'hidden',
-                    overflowY: 'auto',
-                    bgcolor: 'transparent',
-                  }}
-                >
-                  <Table size="small" stickyHeader sx={{ tableLayout: 'fixed', width: '100%' }}>
-                    <TableHead sx={softTableHeadSx}>
-                      <TableRow>
-                        <TableCell
-                          align="center"
-                          sx={{
-                            width: '42px',
-                            minWidth: '42px',
-                            maxWidth: '42px',
-                            px: 0.5,
-                          }}
-                        >
-                          No.
-                        </TableCell>
-                        <TableCell
-                          sx={{
-                            width: `${nameColumnWidth}px`,
-                            minWidth: `${nameColumnWidth}px`,
-                            maxWidth: `${nameColumnWidth}px`,
-                            px: 0.75,
-                          }}
-                        >
-                          {t('attendanceStatistics.table.name')}
-                        </TableCell>
-                        {dayColumns.map((ymd) => (
-                          <TableCell
-                            key={ymd}
-                            align="center"
-                            sx={{
-                              minWidth: 0,
-                              px: 0.05,
-                              fontSize: '0.5rem',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {Number(ymd.slice(8, 10))}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {matrixUsers.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={Math.max(3, dayColumns.length + 2)} align="center" sx={{ py: 4 }}>
-                            <Typography variant="body2" sx={{ color: labelColor }}>
-                              {t('attendanceStatistics.empty')}
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        matrixUsers.map((u, index) => (
-                          <TableRow key={u.key} hover>
-                            <TableCell
-                              align="center"
-                              sx={{
-                                py: 1.1,
-                                px: 0.5,
-                                width: '42px',
-                                minWidth: '42px',
-                                maxWidth: '42px',
-                                color: 'text.secondary',
-                                fontSize: '0.75rem',
-                                fontWeight: 600,
+                <TableHead sx={mvsTableHeadHighlightSx}>
+                  <TableRow>
+                    <TableCell
+                      align="center"
+                      sx={{ width: matrixNoColWidth, minWidth: matrixNoColWidth, maxWidth: matrixNoColWidth, px: 0.5, overflow: 'hidden' }}
+                    >
+                      <Box component="span" sx={thEllipsisSx} title="No.">
+                        No.
+                      </Box>
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        width: `${nameColumnWidth}px`,
+                        minWidth: `${nameColumnWidth}px`,
+                        maxWidth: `${nameColumnWidth}px`,
+                        px: 0.75,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <Box component="span" sx={thEllipsisSx} title={t('attendanceStatistics.table.name')}>
+                        {t('attendanceStatistics.table.name')}
+                      </Box>
+                    </TableCell>
+                    {dayColumns.map((ymd) => (
+                      <TableCell key={ymd} align="center" sx={{ ...matrixDayColSx, fontSize: '0.6875rem' }}>
+                        <Box component="span" sx={thEllipsisSx} title={ymd}>
+                          {Number(ymd.slice(8, 10))}
+                        </Box>
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody sx={attendanceTableBodyRowSx}>
+                  {paginatedMatrixUsers.map((u, index) => (
+                    <TableRow key={u.key}>
+                      <TableCell
+                        align="center"
+                        sx={{
+                          py: 1.1,
+                          px: 0.5,
+                          width: matrixNoColWidth,
+                          minWidth: matrixNoColWidth,
+                          maxWidth: matrixNoColWidth,
+                          color: 'text.secondary',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {(page - 1) * ATTENDANCE_USERS_PER_PAGE + index + 1}
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          py: 1.1,
+                          px: 0.75,
+                          width: `${nameColumnWidth}px`,
+                          minWidth: `${nameColumnWidth}px`,
+                          maxWidth: `${nameColumnWidth}px`,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {u.isUnregistered ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, minWidth: 0 }}>
+                            <Link
+                              component="button"
+                              type="button"
+                              variant="body2"
+                              onClick={() => {
+                                if (!u.prefillEmail) return;
+                                navigate(`/users?prefill_email=${encodeURIComponent(u.prefillEmail)}`);
                               }}
-                            >
-                              {index + 1}
-                            </TableCell>
-                            <TableCell
                               sx={{
-                                py: 1.1,
-                                px: 0.75,
-                                width: `${nameColumnWidth}px`,
-                                minWidth: `${nameColumnWidth}px`,
-                                maxWidth: `${nameColumnWidth}px`,
+                                fontWeight: 600,
+                                color: 'text.primary',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
+                                textDecoration: 'none',
+                                cursor: u.prefillEmail ? 'pointer' : 'default',
+                                '&:hover': u.prefillEmail ? { textDecoration: 'underline' } : undefined,
                               }}
                             >
-                              {u.isUnregistered ? (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.6, minWidth: 0 }}>
-                                  <Link
-                                    component="button"
-                                    type="button"
-                                    variant="body2"
-                                    onClick={() => {
-                                      if (!u.prefillEmail) return;
-                                      navigate(`/users?prefill_email=${encodeURIComponent(u.prefillEmail)}`);
-                                    }}
-                                    sx={{
-                                      fontWeight: 600,
-                                      color: 'text.primary',
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap',
-                                      textDecoration: 'none',
-                                      cursor: u.prefillEmail ? 'pointer' : 'default',
-                                      '&:hover': u.prefillEmail ? { textDecoration: 'underline' } : undefined
-                                    }}
-                                  >
-                                    {u.name}
-                                  </Link>
-                                  <Chip
-                                    size="small"
-                                    label={t('attendanceStatistics.matrix.unregistered')}
-                                    color="warning"
-                                    variant="outlined"
-                                    sx={{ height: 20, '& .MuiChip-label': { px: 0.8, fontSize: '0.66rem', fontWeight: 700 } }}
-                                  />
-                                </Box>
-                              ) : (
-                                <Link
-                                  component="button"
-                                  type="button"
-                                  variant="body2"
-                                  onClick={() =>
-                                    openDetail({
-                                      userId: Number(u.userId),
-                                      name: u.name,
-                                      department: u.department,
-                                      recordCount: 0,
-                                      totalHours: 0,
-                                      lateCount: 0,
-                                      absentCount: 0,
-                                      normalCount: 0
-                                    })
-                                  }
-                                  sx={{
-                                    cursor: 'pointer',
-                                    fontWeight: 600,
-                                    color: 'text.primary',
-                                    textDecoration: 'none',
-                                    '&:hover': { textDecoration: 'underline' }
-                                  }}
-                                >
-                                  {u.name}
-                                </Link>
-                              )}
-                            </TableCell>
-                            {dayColumns.map((ymd) => {
-                              const row = matrixMap.get(`${u.key}:${ymd}`);
-                              const type = getMatrixCellType(row);
-                              const text = type === 'complete' ? '✓' : type === 'partial' ? '◐' : type === 'absent' ? '✕' : '·';
-                              const color =
-                                type === 'complete'
-                                  ? 'success.main'
-                                  : type === 'partial'
-                                    ? 'warning.main'
-                                    : type === 'absent'
-                                      ? 'error.main'
-                                      : 'text.disabled';
-                              return (
-                                <TableCell key={`${u.key}-${ymd}`} align="center" sx={{ py: 0.6, px: 0.2 }}>
-                                  <Box
-                                    sx={{
-                                      width: 16,
-                                      height: 16,
-                                      borderRadius: '5px',
-                                      border: '1px solid',
-                                      borderColor:
-                                        type === 'empty'
-                                          ? (theme.palette.mode === 'light' ? 'rgba(15,23,42,0.08)' : 'rgba(255,255,255,0.12)')
-                                          : 'transparent',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      fontSize: '0.58rem',
-                                      fontWeight: 700,
-                                      color,
-                                      bgcolor:
-                                        type === 'empty'
-                                          ? 'transparent'
-                                          : (theme.palette.mode === 'light' ? 'rgba(15,23,42,0.04)' : 'rgba(255,255,255,0.06)')
-                                    }}
-                                  >
-                                    {text}
-                                  </Box>
-                                </TableCell>
-                              );
-                            })}
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                              {u.name}
+                            </Link>
+                            <Chip
+                              size="small"
+                              label={t('attendanceStatistics.matrix.unregistered')}
+                              color="warning"
+                              variant="outlined"
+                              sx={{ height: 20, '& .MuiChip-label': { px: 0.8, fontSize: '0.66rem', fontWeight: 700 } }}
+                            />
+                          </Box>
+                        ) : (
+                          <Link
+                            component="button"
+                            type="button"
+                            variant="body2"
+                            onClick={() =>
+                              openDetail({
+                                userId: Number(u.userId),
+                                name: u.name,
+                                department: u.department,
+                                recordCount: 0,
+                                totalHours: 0,
+                                lateCount: 0,
+                                absentCount: 0,
+                                normalCount: 0,
+                              })
+                            }
+                            sx={{
+                              cursor: 'pointer',
+                              fontWeight: 600,
+                              color: 'text.primary',
+                              textDecoration: 'none',
+                              '&:hover': { textDecoration: 'underline' },
+                            }}
+                          >
+                            {u.name}
+                          </Link>
+                        )}
+                      </TableCell>
+                      {dayColumns.map((ymd) => {
+                        const row = matrixMap.get(`${u.key}:${ymd}`);
+                        const type = getMatrixCellType(row);
+                        const text = type === 'complete' ? '✓' : type === 'partial' ? '◐' : type === 'absent' ? '✕' : '·';
+                        const color =
+                          type === 'complete'
+                            ? 'success.main'
+                            : type === 'partial'
+                              ? 'warning.main'
+                              : type === 'absent'
+                                ? 'error.main'
+                                : 'text.disabled';
+                        return (
+                          <TableCell key={`${u.key}-${ymd}`} align="center" sx={{ ...matrixDayColSx, py: 0.6 }}>
+                            <Box
+                              sx={{
+                                width: '100%',
+                                maxWidth: 16,
+                                height: 16,
+                                mx: 'auto',
+                                borderRadius: '5px',
+                                border: '1px solid',
+                                borderColor:
+                                  type === 'empty'
+                                    ? theme.palette.mode === 'light'
+                                      ? 'rgba(15,23,42,0.08)'
+                                      : 'rgba(255,255,255,0.12)'
+                                    : 'transparent',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '0.58rem',
+                                fontWeight: 700,
+                                color,
+                                bgcolor:
+                                  type === 'empty'
+                                    ? 'transparent'
+                                    : theme.palette.mode === 'light'
+                                      ? 'rgba(15,23,42,0.04)'
+                                      : 'rgba(255,255,255,0.06)',
+                              }}
+                            >
+                              {text}
+                            </Box>
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            <Box sx={mvsBodyPaginationSx}>
+              <Pagination
+                count={totalMatrixPages}
+                page={page}
+                onChange={(_, value) => setPage(value)}
+                color="primary"
+                shape="rounded"
+                sx={{
+                  '& .MuiPaginationItem-root': {
+                    borderRadius: '10px',
+                    fontWeight: 500,
+                  },
+                }}
+              />
+            </Box>
+          </Box>
+        )}
+      </Box>
+
+      <Dialog open={detailOpen} onClose={closeDetail} maxWidth="md" fullWidth scroll="paper">
+        <DialogTitle sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
+          {t('attendanceStatistics.detail.dialogTitle', { name: detailUserName || '—' })}
+        </DialogTitle>
+        <DialogContent dividers>
+          {detailRows.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              {t('attendanceStatistics.detail.empty')}
+            </Typography>
+          ) : (
+            <>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(3, minmax(0, 1fr))' },
+                  gap: 1.25,
+                  mb: 2.5
+                }}
+              >
+                {detailSummaryItems.map((item) => (
+                  <Box
+                    key={item.key}
+                    sx={{
+                      ...mvsInnerCardSx,
+                      py: 1.25,
+                      px: 1.5,
+                      borderRadius: '12px'
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', fontWeight: 600, mb: 0.35 }}
+                    >
+                      {item.label}
+                    </Typography>
+                    <Typography sx={{ fontWeight: 700, fontSize: '1.05rem', color: item.color, lineHeight: 1.2 }}>
+                      {item.value}
+                    </Typography>
+                  </Box>
+                ))}
               </Box>
 
-              <Dialog open={detailOpen} onClose={closeDetail} maxWidth="md" fullWidth scroll="paper">
-                <DialogTitle sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
-                  {t('attendanceStatistics.detail.dialogTitle', { name: detailUserName || '—' })}
-                </DialogTitle>
-                <DialogContent dividers>
-                  {detailRows.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                      {t('attendanceStatistics.detail.empty')}
-                    </Typography>
-                  ) : (
-                    <TableContainer
-                      component={Paper}
-                      elevation={0}
-                      sx={{
-                        borderRadius: 0,
-                        overflow: 'visible',
-                        border: 'none',
-                        boxShadow: 'none',
-                        bgcolor: 'transparent',
-                      }}
-                    >
-                      <Table
-                        size="small"
-                        sx={{
-                          borderCollapse: 'collapse',
-                          '& .MuiTableCell-root': {
-                            borderLeft: 'none',
-                            borderRight: 'none',
-                            borderTop: 'none',
-                          },
-                        }}
-                      >
-                        <TableHead sx={softTableHeadSx}>
-                          <TableRow>
-                            <TableCell>{t('attendanceStatistics.detail.date')}</TableCell>
-                            <TableCell>{t('attendanceStatistics.detail.checkIn')}</TableCell>
-                            <TableCell>{t('attendanceStatistics.detail.checkOut')}</TableCell>
-                            <TableCell align="right">{t('attendanceStatistics.detail.workHours')}</TableCell>
-                            <TableCell>{t('attendanceStatistics.detail.status')}</TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody
-                          sx={{
-                            '& .MuiTableCell-body': {
-                              py: 1.5,
-                              px: 2,
-                              fontSize: '0.875rem',
-                              borderBottom: `1px solid ${
-                                theme.palette.mode === 'light'
-                                  ? 'rgba(15, 23, 42, 0.06)'
-                                  : theme.palette.divider
-                              }`,
-                            },
-                            '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
-                              borderBottom: 'none',
-                            },
-                          }}
-                        >
-                          {detailRows.map((row) => (
-                            <TableRow key={row.id} hover sx={{ '&:hover': { bgcolor: 'action.hover' } }}>
-                              <TableCell>{rowDateYmd(row.date)}</TableCell>
-                              <TableCell>
-                                {displayClockCell(
-                                  row.check_in_display,
-                                  row.check_in_local,
-                                  row.check_in ?? null
-                                )}
-                              </TableCell>
-                              <TableCell>
-                                {displayClockCell(
-                                  row.check_out_display,
-                                  row.check_out_local,
-                                  row.check_out ?? null
-                                )}
-                              </TableCell>
-                              <TableCell align="right">
-                                {row.work_hours != null ? Number(row.work_hours).toFixed(2) : '—'}
-                              </TableCell>
-                              <TableCell>{statusLabel(row.status)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  )}
-                </DialogContent>
-                <DialogActions sx={{ px: 3, py: 2 }}>
-                  <Button onClick={closeDetail} variant="outlined" color="inherit" sx={{ borderRadius: '12px', textTransform: 'none' }}>
-                    {t('attendanceStatistics.detail.close')}
-                  </Button>
-                </DialogActions>
-              </Dialog>
-
+              <TableContainer sx={{ ...mvsBodyListTableSx, boxShadow: 'none', border: 'none' }}>
+              <Table size="small" sx={detailDialogTableSx}>
+                <TableHead sx={mvsTableHeadHighlightSx}>
+                  <TableRow>
+                    <TableCell>
+                      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t('attendanceStatistics.detail.date')}
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t('attendanceStatistics.detail.checkIn')}
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t('attendanceStatistics.detail.checkOut')}
+                      </Box>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t('attendanceStatistics.detail.workHours')}
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {t('attendanceStatistics.detail.status')}
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody sx={detailDialogTableBodySx}>
+                  {detailRows.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell>{rowDateYmd(row.date)}</TableCell>
+                      <TableCell>
+                        {displayClockCell(row.check_in_display, row.check_in_local, row.check_in ?? null)}
+                      </TableCell>
+                      <TableCell>
+                        {displayClockCell(row.check_out_display, row.check_out_local, row.check_out ?? null)}
+                      </TableCell>
+                      <TableCell align="right">
+                        {row.work_hours != null ? Number(row.work_hours).toFixed(2) : '—'}
+                      </TableCell>
+                      <TableCell>{detailStatusLabel(row)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
             </>
           )}
-        </CardContent>
-      </Card>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={closeDetail} variant="outlined" sx={mvsBodyOutlinedBtnSx}>
+            {t('attendanceStatistics.detail.close')}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

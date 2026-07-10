@@ -1062,6 +1062,10 @@ export function verifyHeresnowDispatchAuth(headers: Record<string, unknown>) {
   return false;
 }
 
+export function isManualAttendanceDisabled(company: Company): boolean {
+  return Boolean(getHeresnowSettings(company).enabled);
+}
+
 export async function getHeresnowIntegrationStatus(company: Company) {
   const hn = getHeresnowSettings(company);
   const effectiveApiKey =
@@ -1098,6 +1102,7 @@ export async function getHeresnowIntegrationStatus(company: Company) {
     heresnowUrl: process.env.HERESNOW_API_BASE_URL || 'https://www.heresnow.in',
     apiConfigured,
     dispatchConfigured,
-    webhookPath: '/api/integrations/mvs/dispatch'
+    webhookPath: '/api/integrations/mvs/dispatch',
+    manualClockDisabled: Boolean(hn.enabled),
   };
 }

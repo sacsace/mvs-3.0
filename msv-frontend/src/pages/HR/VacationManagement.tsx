@@ -11,13 +11,11 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Button,
   IconButton,
   Chip,
   Avatar,
   InputAdornment,
-  Divider,
   Grid,
   Tooltip,
   Tabs,
@@ -33,31 +31,48 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Menu,
+  ListItemIcon,
   Checkbox,
   FormControlLabel,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TableSortLabel
+  TableSortLabel,
+  Pagination,
+  useMediaQuery,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsOutlinedLabelProps,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+  mvsBodyPaginationSx,
+} from '../../theme/mvsLayout';
+import { alpha, useTheme, type SxProps, type Theme } from '@mui/material/styles';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
   PieChart, Pie, Cell, Legend
 } from 'recharts';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
   Delete as DeleteIcon,
-  Visibility as ViewIcon,
   CheckCircle as ApproveIcon,
-  CheckCircle as CheckCircleIcon,
   Cancel as RejectIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
   Download as DownloadIcon,
+  RestartAlt as ResetIcon,
   CalendarToday as CalendarIcon,
   Person as PersonIcon,
   Work as WorkIcon,
@@ -65,7 +80,8 @@ import {
   LocalHospital as SickIcon,
   School as StudyIcon,
   Event as EventIcon,
-  Schedule as ScheduleIcon
+  Schedule as ScheduleIcon,
+  MoreHoriz as MoreHorizIcon,
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
@@ -98,16 +114,40 @@ interface VacationRequest {
 }
 
 const VACATION_MENU_ROUTES = ['/hr/leave'];
+const VACATIONS_PER_PAGE = 10;
+const VACATION_FILTER_OUTLINED = mvsOutlinedLabelProps;
+const vacationFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
 
-/** 휴가 현황 상단 통계 카드 */
-const vacationStatCardSx = {
-  bgcolor: '#F0F4F8',
-  border: '1px solid #E2E8F0',
-  borderRadius: '12px',
-  boxShadow: 'none',
-} as const;
+const DEFAULT_LEAVE_TYPE_DAYS: Record<string, number> = {
+  sick: 6,
+  personal: 6,
+  study: 0,
+  maternity: 182,
+  paternity: 15,
+};
+
+type VacationPolicyState = {
+  annualLeaveStartDays: number;
+  annualLeaveEarnDays: number;
+  availableTypes?: string[];
+  leaveTypeDays?: Record<string, number>;
+};
+
+const vacationTableBodyRowSx: SxProps<Theme> = (theme) => {
+  const base = typeof mvsTableBodyRowSx === 'function' ? mvsTableBodyRowSx(theme) : mvsTableBodyRowSx;
+  const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
+  const hoverBg = theme.palette.mode === 'light' ? '#EFF6FF' : theme.palette.action.hover;
+  return {
+    ...(base as object),
+    '& .MuiTableRow-root:nth-of-type(odd)': { bgcolor: rowBg },
+    '& .MuiTableRow-root:nth-of-type(even)': { bgcolor: rowBg },
+    '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
+  };
+};
 
 const VacationManagement: React.FC = () => {
+  const theme = useTheme();
+  const isCompactToolbar = useMediaQuery(theme.breakpoints.down('md'));
   const { t, i18n } = useTranslation();
   const { user } = useStore();
   const { menus, hasMenuPermission, loading: menusLoading } = useMenuStore();
@@ -120,6 +160,8 @@ const VacationManagement: React.FC = () => {
   } = usePromptDialog();
 
   const hrElevated = user?.role === 'root' || user?.role === 'admin';
+  const isRootUser = user?.role === 'root';
+  const canPerformVacationApproval = !isRootUser;
   const vacationMenuFlags = useMemo(() => {
     const check = (action: 'view' | 'create' | 'edit' | 'delete') => {
       if (hrElevated) return true;
@@ -165,7 +207,7 @@ const VacationManagement: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
 
   const [vacationRequests, setVacationRequests] = useState<VacationRequest[]>([]);
-  const [vacationPolicy, setVacationPolicy] = useState<{ annualLeaveStartDays: number; annualLeaveEarnDays: number; availableTypes?: string[] } | null>(null);
+  const [vacationPolicy, setVacationPolicy] = useState<VacationPolicyState | null>(null);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [selectedVacation, setSelectedVacation] = useState<VacationRequest | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
@@ -173,7 +215,11 @@ const VacationManagement: React.FC = () => {
   const [orderBy, setOrderBy] = useState<string>('');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
-  const [calendarDept, setCalendarDept] = useState<string>('');
+  const [calendarDept, setCalendarDept] = useState<string>(CALENDAR_DEPARTMENT_ALL_VALUE);
+  const [page, setPage] = useState(1);
+  const [pendingPage, setPendingPage] = useState(1);
+  const [processedPage, setProcessedPage] = useState(1);
+  const [toolbarMenuAnchor, setToolbarMenuAnchor] = useState<null | HTMLElement>(null);
   const canEditPolicy = user?.role === 'admin' || user?.role === 'root';
 
   useEffect(() => {
@@ -195,8 +241,12 @@ const VacationManagement: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      // 모든 휴가 조회 (필터 없이)
-      const response = await vacationService.getVacations();
+      // 회사 전체 휴가 조회 (root/admin)
+      const params: { company_id?: number } = {};
+      if (user?.company_id) {
+        params.company_id = user.company_id;
+      }
+      const response = await vacationService.getVacations(params);
       if (response.success) {
         const vacations: VacationRequest[] = (response.data || []).map((v: any) => ({
           id: v.id,
@@ -261,10 +311,14 @@ const VacationManagement: React.FC = () => {
         // 내가 신청한 휴가
         params.user_id = user?.id;
       } else if (adjustedTab === 2) {
-        // 휴가 결제 (승인 요청된 휴가)
-        // approved_by가 현재 사용자이고 status가 pending인 휴가만 조회
-        params.approved_by = user?.id;
-        params.status = 'pending';
+        // 휴가 결재: root는 등록 회사 전체 조회(읽기 전용), 그 외는 본인 결재 대상만
+        if (isRootUser) {
+          if (user?.company_id) {
+            params.company_id = user.company_id;
+          }
+        } else {
+          params.approved_by = user?.id;
+        }
       }
       
       const response = await vacationService.getVacations(params);
@@ -337,7 +391,8 @@ const VacationManagement: React.FC = () => {
       const response = await vacationService.updateVacationPolicy({
         annualLeaveStartDays: startDays,
         annualLeaveEarnDays: vacationPolicy?.annualLeaveEarnDays || 20,
-        availableTypes: vacationPolicy?.availableTypes || ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity']
+        availableTypes: vacationPolicy?.availableTypes || ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'],
+        leaveTypeDays: vacationPolicy?.leaveTypeDays || DEFAULT_LEAVE_TYPE_DAYS,
       });
       if (response.success) {
         setSuccess('휴가 정책이 저장되었습니다.');
@@ -370,7 +425,8 @@ const VacationManagement: React.FC = () => {
       const response = await vacationService.updateVacationPolicy({
         annualLeaveStartDays: vacationPolicy?.annualLeaveStartDays || 240,
         annualLeaveEarnDays: vacationPolicy?.annualLeaveEarnDays || 20,
-        availableTypes: newTypes
+        availableTypes: newTypes,
+        leaveTypeDays: vacationPolicy?.leaveTypeDays || DEFAULT_LEAVE_TYPE_DAYS,
       });
       if (response.success) {
         setSuccess('휴가 정책이 저장되었습니다.');
@@ -384,6 +440,68 @@ const VacationManagement: React.FC = () => {
     } finally {
       setSavingPolicy(false);
     }
+  };
+
+  const handleSaveLeaveTypeDays = async (vacationType: string, days: number) => {
+    if (!canEditPolicy) {
+      setError('관리자만 휴가 형태를 수정할 수 있습니다.');
+      return;
+    }
+
+    setSavingPolicy(true);
+    setError(null);
+    try {
+      const response = await vacationService.updateVacationPolicy({
+        annualLeaveStartDays: vacationPolicy?.annualLeaveStartDays ?? 240,
+        annualLeaveEarnDays: vacationPolicy?.annualLeaveEarnDays ?? 20,
+        availableTypes: vacationPolicy?.availableTypes || ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'],
+        leaveTypeDays: {
+          ...DEFAULT_LEAVE_TYPE_DAYS,
+          ...(vacationPolicy?.leaveTypeDays || {}),
+          [vacationType]: days,
+        },
+      });
+      if (response.success) {
+        setSuccess('휴가 정책이 저장되었습니다.');
+        setVacationPolicy(response.data);
+      } else {
+        setError(response.message || '휴가 정책 저장에 실패했습니다.');
+      }
+    } catch (error: any) {
+      console.error('휴가 정책 저장 오류:', error);
+      setError(error.response?.data?.message || '휴가 정책 저장 중 오류가 발생했습니다.');
+    } finally {
+      setSavingPolicy(false);
+    }
+  };
+
+  const renderLeaveDaysInput = (typeKey: string) => {
+    const currentDays = vacationPolicy?.leaveTypeDays?.[typeKey] ?? DEFAULT_LEAVE_TYPE_DAYS[typeKey] ?? 0;
+    return (
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
+          {t('vacationManagement.leaveTypeDaysLabel')}
+        </Typography>
+        <TextField
+          type="number"
+          size="small"
+          sx={{ width: 120 }}
+          defaultValue={currentDays}
+          key={`${typeKey}-${currentDays}`}
+          inputProps={{ min: 0, max: 365, step: 1 }}
+          onBlur={(e) => {
+            const next = Math.max(0, parseInt(e.target.value, 10) || 0);
+            if (next !== currentDays) {
+              void handleSaveLeaveTypeDays(typeKey, next);
+            }
+          }}
+          disabled={savingPolicy || !canEditPolicy}
+        />
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75, lineHeight: 1.5 }}>
+          {t('vacationManagement.leaveTypeDaysHint')}
+        </Typography>
+      </Box>
+    );
   };
 
   const handleAdd = () => {
@@ -409,8 +527,13 @@ const VacationManagement: React.FC = () => {
         // 내가 신청한 휴가
         params.user_id = user?.id;
       } else if (adjustedTab === 2) {
-        // 휴가 결제 (승인 요청된 휴가)
-        params.approved_by = user?.id;
+        if (isRootUser) {
+          if (user?.company_id) {
+            params.company_id = user.company_id;
+          }
+        } else {
+          params.approved_by = user?.id;
+        }
       }
       
       // 필터 적용
@@ -669,29 +792,19 @@ const VacationManagement: React.FC = () => {
   }, [vacationRequests, user?.role, activeTab]);
 
   const calendarVacationsFiltered = React.useMemo(() => {
-    if ((user?.role !== 'admin' && user?.role !== 'root') || activeTab !== 0 || !calendarDept) return [];
-    if (calendarDept === CALENDAR_DEPARTMENT_ALL_VALUE) return vacationRequests;
+    if ((user?.role !== 'admin' && user?.role !== 'root') || activeTab !== 0) return [];
+    if (!calendarDept || calendarDept === CALENDAR_DEPARTMENT_ALL_VALUE) return vacationRequests;
     return vacationRequests.filter((r) => r.department === calendarDept);
   }, [vacationRequests, user?.role, activeTab, calendarDept]);
 
   useEffect(() => {
     if ((user?.role !== 'admin' && user?.role !== 'root') || activeTab !== 0) return;
-    if (deptOptionsForCalendar.length === 0) {
-      if (vacationRequests.length > 0) {
-        setCalendarDept(CALENDAR_DEPARTMENT_ALL_VALUE);
-      } else {
-        setCalendarDept('');
-      }
-      return;
-    }
     setCalendarDept((prev) => {
       if (prev === CALENDAR_DEPARTMENT_ALL_VALUE) return CALENDAR_DEPARTMENT_ALL_VALUE;
       if (prev && deptOptionsForCalendar.includes(prev)) return prev;
-      const u = user?.department?.trim();
-      if (u && deptOptionsForCalendar.includes(u)) return u;
-      return deptOptionsForCalendar[0];
+      return CALENDAR_DEPARTMENT_ALL_VALUE;
     });
-  }, [activeTab, user?.role, user?.department, deptOptionsForCalendar, vacationRequests.length]);
+  }, [activeTab, user?.role, deptOptionsForCalendar]);
 
   const handleSort = (property: string) => {
     const isAsc = orderBy === property && order === 'asc';
@@ -699,22 +812,361 @@ const VacationManagement: React.FC = () => {
     setOrderBy(property);
   };
 
+  const adjustedTab = (user?.role === 'admin' || user?.role === 'root') ? activeTab : activeTab + 1;
+  const vacationPolicyTab = (user?.role === 'admin' || user?.role === 'root') ? 3 : 2;
+  const showStatusKpi = (user?.role === 'admin' || user?.role === 'root') && activeTab === 0;
+  const showMyRequestKpi = adjustedTab === 1;
+  const showApprovalKpi = adjustedTab === 2;
+  const showPolicyKpi = adjustedTab === vacationPolicyTab && canEditPolicy;
+  const showListFilters = adjustedTab !== vacationPolicyTab && adjustedTab !== 0;
+
+  const hasActiveFilters = Boolean(
+    searchTerm.trim() || statusFilter !== 'all' || typeFilter !== 'all'
+  );
+
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setTypeFilter('all');
+  };
+
+  useEffect(() => {
+    setPage(1);
+    setPendingPage(1);
+    setProcessedPage(1);
+  }, [searchTerm, statusFilter, typeFilter, activeTab]);
+
+  const statusKpiStats = useMemo(() => {
+    const totalRequests = vacationRequests.length;
+    const totalPending = vacationRequests.filter((req) => req.status === 'pending').length;
+    const totalApproved = vacationRequests.filter((req) => req.status === 'approved').length;
+    const totalDays = vacationRequests.reduce((sum, req) => sum + req.days, 0);
+    return { totalRequests, totalPending, totalApproved, totalDays };
+  }, [vacationRequests]);
+
+  const approvalKpiStats = useMemo(() => {
+    const total = vacationRequests.length;
+    const pending = vacationRequests.filter((req) => req.status === 'pending').length;
+    const approved = vacationRequests.filter((req) => req.status === 'approved').length;
+    const rejected = vacationRequests.filter((req) => req.status === 'rejected').length;
+    return { total, pending, approved, rejected };
+  }, [vacationRequests]);
+
+  const policyKpiStats = useMemo(() => {
+    const enabledTypes = vacationPolicy?.availableTypes?.length ?? 6;
+    const startDays = vacationPolicy?.annualLeaveStartDays ?? 240;
+    const sickDays = vacationPolicy?.leaveTypeDays?.sick ?? DEFAULT_LEAVE_TYPE_DAYS.sick;
+    const personalDays = vacationPolicy?.leaveTypeDays?.personal ?? DEFAULT_LEAVE_TYPE_DAYS.personal;
+    return { enabledTypes, startDays, sickDays, personalDays };
+  }, [vacationPolicy]);
+
+  const kpiItems = useMemo((): Array<{ key: string; label: string; value: string; valueColor?: string }> => {
+    if (showStatusKpi || showMyRequestKpi) {
+      return [
+        { key: 'total', label: t('vacationManagement.totalRequests'), value: `${statusKpiStats.totalRequests}${t('vacationManagement.casesUnit')}` },
+        { key: 'pending', label: t('vacationManagement.pendingRequests'), value: `${statusKpiStats.totalPending}${t('vacationManagement.casesUnit')}`, valueColor: 'warning.main' as const },
+        { key: 'approved', label: t('vacationManagement.approvedRequests'), value: `${statusKpiStats.totalApproved}${t('vacationManagement.casesUnit')}`, valueColor: 'success.main' as const },
+        { key: 'days', label: t('vacationManagement.totalDays'), value: `${statusKpiStats.totalDays}${t('vacationManagement.daysUnit')}`, valueColor: 'info.main' as const },
+      ];
+    }
+    if (showApprovalKpi) {
+      return [
+        { key: 'total', label: t('vacationManagement.totalRequests'), value: `${approvalKpiStats.total}${t('vacationManagement.casesUnit')}` },
+        { key: 'pending', label: t('vacationManagement.pendingRequests'), value: `${approvalKpiStats.pending}${t('vacationManagement.casesUnit')}`, valueColor: 'warning.main' as const },
+        { key: 'approved', label: t('vacationManagement.approvedRequests'), value: `${approvalKpiStats.approved}${t('vacationManagement.casesUnit')}`, valueColor: 'success.main' as const },
+        { key: 'rejected', label: t('vacationManagement.rejectedRequests'), value: `${approvalKpiStats.rejected}${t('vacationManagement.casesUnit')}`, valueColor: 'error.main' as const },
+      ];
+    }
+    if (showPolicyKpi) {
+      const startLabel =
+        policyKpiStats.startDays === 0
+          ? t('vacationManagement.annualStartImmediate')
+          : t('vacationManagement.kpi.annualStartAfter', { days: policyKpiStats.startDays });
+      return [
+        { key: 'types', label: t('vacationManagement.kpi.providedTypes'), value: `${policyKpiStats.enabledTypes}${t('vacationManagement.kpi.typesUnit')}` },
+        { key: 'annual', label: t('vacationManagement.kpi.annualStart'), value: startLabel },
+        { key: 'sick', label: t('vacationManagement.kpi.sickDays'), value: `${policyKpiStats.sickDays}${t('vacationManagement.daysUnit')}` },
+        { key: 'personal', label: t('vacationManagement.kpi.personalDays'), value: `${policyKpiStats.personalDays}${t('vacationManagement.daysUnit')}` },
+      ];
+    }
+    return [];
+  }, [
+    showStatusKpi,
+    showMyRequestKpi,
+    showApprovalKpi,
+    showPolicyKpi,
+    statusKpiStats,
+    approvalKpiStats,
+    policyKpiStats,
+    t,
+  ]);
+
+  const showKpi = kpiItems.length > 0;
+
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    py: { xs: 6, sm: 8 },
+    px: 3,
+    gap: 1.5,
+  } as const;
+
+  const vacationListCardSx = {
+    ...mvsBodyListTableSx,
+    overflow: 'hidden',
+  } as const;
+
+  const renderVacationTable = (
+    requests: VacationRequest[],
+    options: {
+      showDelete?: boolean;
+      showApproveReject?: boolean;
+      showProcessedDate?: boolean;
+      showApplyCta?: boolean;
+      sectionTitle?: string;
+      pageNum: number;
+      onPageChange: (page: number) => void;
+      emptyTitle: string;
+      emptyHint?: string;
+    }
+  ) => {
+    const totalPages = Math.max(1, Math.ceil(requests.length / VACATIONS_PER_PAGE));
+    const paginated = requests.slice((options.pageNum - 1) * VACATIONS_PER_PAGE, options.pageNum * VACATIONS_PER_PAGE);
+
+    if (loading) {
+      return (
+        <Box sx={listStateBoxSx}>
+          <CircularProgress size={36} />
+          <Typography variant="body2" color="text.secondary">
+            {t('vacationManagement.empty.loading')}
+          </Typography>
+        </Box>
+      );
+    }
+
+    if (requests.length === 0) {
+      return (
+        <Box sx={listStateBoxSx}>
+          <ScheduleIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.3 }} />
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+            {options.emptyTitle}
+          </Typography>
+          {options.emptyHint ? (
+            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
+              {options.emptyHint}
+            </Typography>
+          ) : null}
+          {hasActiveFilters ? (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<ResetIcon fontSize="small" />}
+              onClick={handleResetFilters}
+              sx={mvsBodyOutlinedBtnSx}
+            >
+              {t('vacationManagement.reset')}
+            </Button>
+          ) : options.showApplyCta ? (
+            <Tooltip
+              title={!hrElevated && !vacationMenuFlags.canCreate ? t('vacationManagement.noPermissionCreate') : ''}
+            >
+              <span style={{ display: 'inline-flex' }}>
+                <Button
+                  variant="contained"
+                  disableElevation
+                  size="small"
+                  startIcon={<AddIcon fontSize="small" />}
+                  onClick={handleAdd}
+                  disabled={!menusLoading && !hrElevated && !vacationMenuFlags.canCreate}
+                  sx={mvsBodyPrimaryBtnSx}
+                >
+                  {t('vacationManagement.applyLeave')}
+                </Button>
+              </span>
+            </Tooltip>
+          ) : null}
+        </Box>
+      );
+    }
+
+    return (
+      <Box sx={vacationListCardSx}>
+        {options.sectionTitle ? (
+          <Box
+            sx={{
+              px: { xs: 2, sm: 2.5 },
+              py: 1.5,
+              borderBottom: '1px solid #C5CED9',
+              bgcolor: '#FFFFFF',
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+              {options.sectionTitle}
+            </Typography>
+          </Box>
+        ) : null}
+        <TableContainer sx={{ width: '100%', overflow: 'hidden', boxShadow: 'none', border: 'none' }}>
+          <Table
+            size="small"
+            sx={{
+              tableLayout: 'fixed',
+              width: '100%',
+              borderCollapse: 'collapse',
+              bgcolor: 'transparent',
+              '& .MuiTableCell-root': {
+                borderLeft: 'none',
+                borderRight: 'none',
+                borderTop: 'none',
+              },
+            }}
+          >
+            <TableHead sx={mvsTableHeadHighlightSx}>
+              <TableRow>
+                {[
+                  ['employeeName', t('vacationManagement.employee')],
+                  ['vacationType', t('vacationManagement.leaveTypeFilter')],
+                  ['startDate', t('vacationManagement.period')],
+                  ['days', t('vacationManagement.days')],
+                  ['reason', t('vacationManagement.reason')],
+                  ['status', t('vacationManagement.status')],
+                  ['appliedDate', t('vacationManagement.applicationDate')],
+                  ...(options.showProcessedDate ? [['processedDate', t('vacationManagement.processingDate')]] : []),
+                ].map(([key, label]) => (
+                  <TableCell key={key} sortDirection={orderBy === key ? order : false}>
+                    <TableSortLabel
+                      active={orderBy === key}
+                      direction={orderBy === key ? order : 'asc'}
+                      onClick={() => handleSort(key)}
+                    >
+                      <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {label}
+                      </Box>
+                    </TableSortLabel>
+                  </TableCell>
+                ))}
+                <TableCell align="center">
+                  <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {t('vacationManagement.actions')}
+                  </Box>
+                </TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody sx={vacationTableBodyRowSx}>
+              {paginated.map((request) => (
+                <TableRow
+                  key={request.id}
+                  onClick={() => handleRowClick(request)}
+                  sx={{ cursor: 'pointer', '&:hover .vacation-delete-btn:not(.Mui-disabled)': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.08) } }}
+                >
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+                      <Avatar sx={{ mr: 1.5, bgcolor: 'primary.main', width: 32, height: 32, flexShrink: 0 }}>
+                        {request.employeeName.charAt(0)}
+                      </Avatar>
+                      <Box sx={{ minWidth: 0, overflow: 'hidden' }}>
+                        <Typography variant="body2" fontWeight={600} noWrap title={request.employeeName}>
+                          {request.employeeName}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap>
+                          {request.department} • {request.position}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </TableCell>
+                  <TableCell>{getTypeChip(request.vacationType)}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2" noWrap title={`${request.startDate} ~ ${request.endDate}`}>
+                      {request.startDate} ~ {request.endDate}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip label={`${request.days}${t('vacationManagement.daysUnit')}`} color="info" size="small" />
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="body2" noWrap title={request.reason}>
+                      {request.reason}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>{getStatusChip(request.status)}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      {request.appliedDate}
+                    </Typography>
+                  </TableCell>
+                  {options.showProcessedDate ? (
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary" noWrap>
+                        {request.approvedDate || '-'}
+                      </Typography>
+                    </TableCell>
+                  ) : null}
+                  <TableCell align="center" onClick={(e) => e.stopPropagation()}>
+                    {options.showDelete && request.status === 'pending' && vacationMenuFlags.canDelete ? (
+                      <Tooltip title={t('vacationManagement.delete')}>
+                        <span style={{ display: 'inline-flex' }}>
+                          <IconButton
+                            className="vacation-delete-btn"
+                            size="small"
+                            onClick={() => handleDelete(request.id)}
+                            aria-label={t('vacationManagement.delete')}
+                            sx={{
+                              color: alpha(theme.palette.text.secondary, theme.palette.mode === 'light' ? 0.72 : 1),
+                              borderRadius: '10px',
+                            }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    ) : null}
+                    {options.showApproveReject && canPerformVacationApproval ? (
+                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                        <Tooltip title={t('vacationManagement.approve')}>
+                          <IconButton size="small" onClick={() => handleApprove(request.id)} sx={{ color: 'success.main' }}>
+                            <ApproveIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title={t('vacationManagement.reject')}>
+                          <IconButton size="small" onClick={() => handleReject(request.id)} sx={{ color: alpha(theme.palette.text.secondary, 0.72) }}>
+                            <RejectIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    ) : null}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <Box sx={mvsBodyPaginationSx}>
+          <Pagination
+            count={totalPages}
+            page={options.pageNum}
+            onChange={(_, value) => options.onPageChange(value)}
+            color="primary"
+            shape="rounded"
+            sx={{ '& .MuiPaginationItem-root': { borderRadius: '10px', fontWeight: 500 } }}
+          />
+        </Box>
+      </Box>
+    );
+  };
+
   const getTabContent = () => {
     // admin이 아닌 경우 탭 인덱스 조정
     const adjustedTab = (user?.role === 'admin' || user?.role === 'root') ? activeTab : activeTab + 1;
     
     switch (adjustedTab) {
-      case 0:
-        // 회사 전체 휴가 통계 계산
-        const totalRequests = vacationRequests.length;
+      case 0: {
         const totalPending = vacationRequests.filter(req => req.status === 'pending').length;
         const totalApproved = vacationRequests.filter(req => req.status === 'approved').length;
         const totalRejected = vacationRequests.filter(req => req.status === 'rejected').length;
         const totalCancelled = vacationRequests.filter(req => req.status === 'cancelled').length;
-        const totalDays = vacationRequests.reduce((sum, req) => sum + req.days, 0);
-        const approvedDays = vacationRequests
-          .filter(req => req.status === 'approved')
-          .reduce((sum, req) => sum + req.days, 0);
         
         // 부서별 통계
         const departmentStats: { [key: string]: { count: number; days: number } } = {};
@@ -729,60 +1181,8 @@ const VacationManagement: React.FC = () => {
 
         return (
           <Box>
-            {/* 전체 통계 카드 */}
-            <Grid container spacing={3} sx={{ mb: 3 }}>
-              <Grid size={{ xs: 12, md: 6, lg: 3 }}>
-                <Card sx={vacationStatCardSx}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      {t('vacationManagement.totalRequests')}
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                      {totalRequests}{t('vacationManagement.casesUnit')}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid size={{ xs: 12, md: 6, lg: 3 }}>
-                <Card sx={vacationStatCardSx}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      {t('vacationManagement.pendingRequests')}
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'warning.main' }}>
-                      {totalPending}{t('vacationManagement.casesUnit')}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid size={{ xs: 12, md: 6, lg: 3 }}>
-                <Card sx={vacationStatCardSx}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      {t('vacationManagement.approvedRequests')}
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'success.main' }}>
-                      {totalApproved}{t('vacationManagement.casesUnit')}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid size={{ xs: 12, md: 6, lg: 3 }}>
-                <Card sx={vacationStatCardSx}>
-                  <CardContent>
-                    <Typography variant="body2" color="text.secondary" gutterBottom>
-                      {t('vacationManagement.totalDays')}
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 'bold', color: 'info.main' }}>
-                      {totalDays}{t('vacationManagement.daysUnit')}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            </Grid>
-
             {/* 부서별 휴가 달력 (휴가 현황) */}
-            <Card sx={{ mb: 2 }}>
+            <Card sx={{ mb: 2, borderRadius: '20px', border: '1px solid #C5CED9', boxShadow: '0 2px 14px rgba(15, 23, 42, 0.05)' }}>
               <CardContent>
                 <Box
                   sx={{
@@ -920,535 +1320,75 @@ const VacationManagement: React.FC = () => {
             </Card>
           </Box>
         );
+      }
       case 1:
-        // 내가 신청한 휴가 (admin이면 1번, 일반 사용자는 0번이지만 adjustedTab으로 1번)
         return (
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-                <ScheduleIcon sx={{ mr: 1 }} />
-                {t('vacationManagement.myRequestedLeave')} ({filteredRequests.length}{t('common.count')})
-              </Typography>
-              {loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
-                  <CircularProgress />
-                </Box>
-              ) : filteredRequests.length === 0 ? (
-                <Box sx={{ textAlign: 'center', py: 4 }}>
-                  <Typography variant="body2" color="text.secondary">
-                    {vacationRequests.length === 0 ? t('vacationManagement.noLeaveRequests') : t('vacationManagement.noSearchResults')}
-                  </Typography>
-                </Box>
-              ) : (
-                <TableContainer>
-                  <Table>
-                    <TableHead>
-                      <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                        <TableCell sortDirection={orderBy === 'employeeName' ? order : false}>
-                          <TableSortLabel
-                            active={orderBy === 'employeeName'}
-                            direction={orderBy === 'employeeName' ? order : 'asc'}
-                            onClick={() => handleSort('employeeName')}
-                            sx={{ fontWeight: 'bold' }}
-                          >
-                            {t('vacationManagement.employee')}
-                          </TableSortLabel>
-                        </TableCell>
-                        <TableCell sortDirection={orderBy === 'vacationType' ? order : false}>
-                          <TableSortLabel
-                            active={orderBy === 'vacationType'}
-                            direction={orderBy === 'vacationType' ? order : 'asc'}
-                            onClick={() => handleSort('vacationType')}
-                            sx={{ fontWeight: 'bold' }}
-                          >
-                            {t('vacationManagement.leaveTypeFilter')}
-                          </TableSortLabel>
-                        </TableCell>
-                        <TableCell sortDirection={orderBy === 'startDate' ? order : false}>
-                          <TableSortLabel
-                            active={orderBy === 'startDate'}
-                            direction={orderBy === 'startDate' ? order : 'asc'}
-                            onClick={() => handleSort('startDate')}
-                            sx={{ fontWeight: 'bold' }}
-                          >
-                            {t('vacationManagement.period')}
-                          </TableSortLabel>
-                        </TableCell>
-                        <TableCell sortDirection={orderBy === 'days' ? order : false}>
-                          <TableSortLabel
-                            active={orderBy === 'days'}
-                            direction={orderBy === 'days' ? order : 'asc'}
-                            onClick={() => handleSort('days')}
-                            sx={{ fontWeight: 'bold' }}
-                          >
-                            {t('vacationManagement.days')}
-                          </TableSortLabel>
-                        </TableCell>
-                        <TableCell sortDirection={orderBy === 'reason' ? order : false}>
-                          <TableSortLabel
-                            active={orderBy === 'reason'}
-                            direction={orderBy === 'reason' ? order : 'asc'}
-                            onClick={() => handleSort('reason')}
-                            sx={{ fontWeight: 'bold' }}
-                          >
-                            {t('vacationManagement.reason')}
-                          </TableSortLabel>
-                        </TableCell>
-                        <TableCell sortDirection={orderBy === 'status' ? order : false}>
-                          <TableSortLabel
-                            active={orderBy === 'status'}
-                            direction={orderBy === 'status' ? order : 'asc'}
-                            onClick={() => handleSort('status')}
-                            sx={{ fontWeight: 'bold' }}
-                          >
-                            {t('vacationManagement.status')}
-                          </TableSortLabel>
-                        </TableCell>
-                        <TableCell sortDirection={orderBy === 'appliedDate' ? order : false}>
-                          <TableSortLabel
-                            active={orderBy === 'appliedDate'}
-                            direction={orderBy === 'appliedDate' ? order : 'asc'}
-                            onClick={() => handleSort('appliedDate')}
-                            sx={{ fontWeight: 'bold' }}
-                          >
-                            {t('vacationManagement.applicationDate')}
-                          </TableSortLabel>
-                        </TableCell>
-                        <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>{t('vacationManagement.actions')}</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {filteredRequests.map((request) => (
-                      <TableRow 
-                        key={request.id} 
-                        hover
-                        onClick={() => handleRowClick(request)}
-                        sx={{ cursor: 'pointer' }}
-                      >
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <Avatar sx={{ mr: 2, bgcolor: 'primary.main', width: 32, height: 32 }}>
-                              {request.employeeName.charAt(0)}
-                            </Avatar>
-                            <Box>
-                              <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                                {request.employeeName}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                {request.department} • {request.position}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          {getTypeChip(request.vacationType)}
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <CalendarIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary' }} />
-                            <Typography variant="body2">
-                              {request.startDate} ~ {request.endDate}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Chip label={`${request.days}${t('vacationManagement.daysUnit')}`} color="info" size="small" />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {request.reason}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          {getStatusChip(request.status)}
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" color="text.secondary">
-                            {request.appliedDate}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                          {request.status === 'pending' && vacationMenuFlags.canDelete && (
-                            <Tooltip title={t('vacationManagement.delete')}>
-                              <IconButton size="small" onClick={() => handleDelete(request.id)} color="error">
-                                <DeleteIcon />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </CardContent>
-          </Card>
-        );
-      case 2:
-        // 휴가 결제 (admin이면 2번, 일반 사용자는 1번이지만 adjustedTab으로 2번)
-        // 미결제(대기)와 결제 완료/거부로 분리
-        const pendingRequests = filteredRequests.filter(req => req.status === 'pending');
-        const processedRequests = filteredRequests.filter(req => req.status === 'approved' || req.status === 'rejected');
-        
-        return (
-          <Box>
-            {/* 미결제 리스트 */}
-            <Card sx={{ mb: 3 }}>
-              <CardContent>
-                <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-                  <WorkIcon sx={{ mr: 1 }} />
-                  {t('vacationManagement.pending')} ({pendingRequests.length}{t('common.count')})
-                </Typography>
-                {loading ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
-                    <CircularProgress />
-                  </Box>
-                ) : pendingRequests.length === 0 ? (
-                  <Box sx={{ textAlign: 'center', py: 4 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('vacationManagement.noPendingLeave')}
-                    </Typography>
-                  </Box>
-                ) : (
-                  <TableContainer>
-                    <Table>
-                      <TableHead>
-                        <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                          <TableCell sortDirection={orderBy === 'employeeName' ? order : false}>
-                            <TableSortLabel
-                              active={orderBy === 'employeeName'}
-                              direction={orderBy === 'employeeName' ? order : 'asc'}
-                              onClick={() => handleSort('employeeName')}
-                              sx={{ fontWeight: 'bold' }}
-                            >
-                              {t('vacationManagement.employee')}
-                            </TableSortLabel>
-                          </TableCell>
-                          <TableCell sortDirection={orderBy === 'vacationType' ? order : false}>
-                            <TableSortLabel
-                              active={orderBy === 'vacationType'}
-                              direction={orderBy === 'vacationType' ? order : 'asc'}
-                              onClick={() => handleSort('vacationType')}
-                              sx={{ fontWeight: 'bold' }}
-                            >
-                              {t('vacationManagement.leaveTypeFilter')}
-                            </TableSortLabel>
-                          </TableCell>
-                          <TableCell sortDirection={orderBy === 'startDate' ? order : false}>
-                            <TableSortLabel
-                              active={orderBy === 'startDate'}
-                              direction={orderBy === 'startDate' ? order : 'asc'}
-                              onClick={() => handleSort('startDate')}
-                              sx={{ fontWeight: 'bold' }}
-                            >
-                              {t('vacationManagement.period')}
-                            </TableSortLabel>
-                          </TableCell>
-                          <TableCell sortDirection={orderBy === 'days' ? order : false}>
-                            <TableSortLabel
-                              active={orderBy === 'days'}
-                              direction={orderBy === 'days' ? order : 'asc'}
-                              onClick={() => handleSort('days')}
-                              sx={{ fontWeight: 'bold' }}
-                            >
-                              {t('vacationManagement.days')}
-                            </TableSortLabel>
-                          </TableCell>
-                          <TableCell sortDirection={orderBy === 'reason' ? order : false}>
-                            <TableSortLabel
-                              active={orderBy === 'reason'}
-                              direction={orderBy === 'reason' ? order : 'asc'}
-                              onClick={() => handleSort('reason')}
-                              sx={{ fontWeight: 'bold' }}
-                            >
-                              {t('vacationManagement.reason')}
-                            </TableSortLabel>
-                          </TableCell>
-                          <TableCell sortDirection={orderBy === 'status' ? order : false}>
-                            <TableSortLabel
-                              active={orderBy === 'status'}
-                              direction={orderBy === 'status' ? order : 'asc'}
-                              onClick={() => handleSort('status')}
-                              sx={{ fontWeight: 'bold' }}
-                            >
-                              {t('vacationManagement.status')}
-                            </TableSortLabel>
-                          </TableCell>
-                          <TableCell sortDirection={orderBy === 'appliedDate' ? order : false}>
-                            <TableSortLabel
-                              active={orderBy === 'appliedDate'}
-                              direction={orderBy === 'appliedDate' ? order : 'asc'}
-                              onClick={() => handleSort('appliedDate')}
-                              sx={{ fontWeight: 'bold' }}
-                            >
-                              {t('vacationManagement.applicationDate')}
-                            </TableSortLabel>
-                          </TableCell>
-                          <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>{t('vacationManagement.actions')}</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {pendingRequests.map((request) => (
-                        <TableRow 
-                          key={request.id} 
-                          hover 
-                          onClick={() => handleRowClick(request)}
-                          sx={{ cursor: 'pointer' }}
-                        >
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <Avatar sx={{ mr: 2, bgcolor: 'primary.main', width: 32, height: 32 }}>
-                                {request.employeeName.charAt(0)}
-                              </Avatar>
-                              <Box>
-                                <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                                  {request.employeeName}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {request.department} • {request.position}
-                                </Typography>
-                              </Box>
-                            </Box>
-                          </TableCell>
-                          <TableCell>
-                            {getTypeChip(request.vacationType)}
-                          </TableCell>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <CalendarIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary' }} />
-                              <Typography variant="body2">
-                                {request.startDate} ~ {request.endDate}
-                              </Typography>
-                            </Box>
-                          </TableCell>
-                          <TableCell>
-                            <Chip label={`${request.days}${t('vacationManagement.daysUnit')}`} color="info" size="small" />
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {request.reason}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            {getStatusChip(request.status)}
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" color="text.secondary">
-                              {request.appliedDate}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="center" onClick={(e) => e.stopPropagation()}>
-                            <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                              <Tooltip title={t('vacationManagement.approve')}>
-                                <IconButton size="small" onClick={() => handleApprove(request.id)} color="success">
-                                  <ApproveIcon />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title={t('vacationManagement.reject')}>
-                                <IconButton size="small" onClick={() => handleReject(request.id)} color="error">
-                                  <RejectIcon />
-                                </IconButton>
-                              </Tooltip>
-                            </Box>
-                          </TableCell>
-                        </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* 결제 완료/거부 리스트 */}
-            <Card>
-              <CardContent>
-                <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-                  <CheckCircleIcon sx={{ mr: 1 }} />
-                  {t('vacationManagement.completed')} ({processedRequests.length}{t('common.count')})
-                </Typography>
-                {loading ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
-                    <CircularProgress />
-                  </Box>
-                ) : processedRequests.length === 0 ? (
-                  <Box sx={{ textAlign: 'center', py: 4 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('vacationManagement.noProcessedLeave')}
-                    </Typography>
-                  </Box>
-                ) : (
-                  <TableContainer>
-                    <Table>
-                      <TableHead>
-                        <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                          <TableCell sx={{ fontWeight: 'bold' }}>
-                            <TableSortLabel
-                              active={orderBy === 'employeeName'}
-                              direction={orderBy === 'employeeName' ? order : 'asc'}
-                              onClick={() => handleSort('employeeName')}
-                            >
-                              {t('vacationManagement.employee')}
-                            </TableSortLabel>
-                          </TableCell>
-                          <TableCell sx={{ fontWeight: 'bold' }}>
-                            <TableSortLabel
-                              active={orderBy === 'vacationType'}
-                              direction={orderBy === 'vacationType' ? order : 'asc'}
-                              onClick={() => handleSort('vacationType')}
-                            >
-                              {t('vacationManagement.leaveTypeFilter')}
-                            </TableSortLabel>
-                          </TableCell>
-                          <TableCell sx={{ fontWeight: 'bold' }}>
-                            <TableSortLabel
-                              active={orderBy === 'startDate'}
-                              direction={orderBy === 'startDate' ? order : 'asc'}
-                              onClick={() => handleSort('startDate')}
-                            >
-                              {t('vacationManagement.period')}
-                            </TableSortLabel>
-                          </TableCell>
-                          <TableCell sx={{ fontWeight: 'bold' }}>
-                            <TableSortLabel
-                              active={orderBy === 'days'}
-                              direction={orderBy === 'days' ? order : 'asc'}
-                              onClick={() => handleSort('days')}
-                            >
-                              {t('vacationManagement.days')}
-                            </TableSortLabel>
-                          </TableCell>
-                          <TableCell sx={{ fontWeight: 'bold' }}>
-                            <TableSortLabel
-                              active={orderBy === 'reason'}
-                              direction={orderBy === 'reason' ? order : 'asc'}
-                              onClick={() => handleSort('reason')}
-                            >
-                              {t('vacationManagement.reason')}
-                            </TableSortLabel>
-                          </TableCell>
-                          <TableCell sx={{ fontWeight: 'bold' }}>
-                            <TableSortLabel
-                              active={orderBy === 'status'}
-                              direction={orderBy === 'status' ? order : 'asc'}
-                              onClick={() => handleSort('status')}
-                            >
-                              {t('vacationManagement.status')}
-                            </TableSortLabel>
-                          </TableCell>
-                          <TableCell sx={{ fontWeight: 'bold' }}>
-                            <TableSortLabel
-                              active={orderBy === 'appliedDate'}
-                              direction={orderBy === 'appliedDate' ? order : 'asc'}
-                              onClick={() => handleSort('appliedDate')}
-                            >
-                              {t('vacationManagement.applicationDate')}
-                            </TableSortLabel>
-                          </TableCell>
-                          <TableCell sx={{ fontWeight: 'bold' }}>
-                            <TableSortLabel
-                              active={orderBy === 'processedDate'}
-                              direction={orderBy === 'processedDate' ? order : 'asc'}
-                              onClick={() => handleSort('processedDate')}
-                            >
-                              {t('vacationManagement.processingDate')}
-                            </TableSortLabel>
-                          </TableCell>
-                          <TableCell sx={{ fontWeight: 'bold', textAlign: 'center' }}>{t('vacationManagement.actions')}</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {processedRequests.map((request) => (
-                        <TableRow 
-                          key={request.id} 
-                          hover 
-                          onClick={() => handleRowClick(request)}
-                          sx={{ cursor: 'pointer' }}
-                        >
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <Avatar sx={{ mr: 2, bgcolor: 'primary.main', width: 32, height: 32 }}>
-                                {request.employeeName.charAt(0)}
-                              </Avatar>
-                              <Box>
-                                <Typography variant="body1" sx={{ fontWeight: 'medium' }}>
-                                  {request.employeeName}
-                                </Typography>
-                                <Typography variant="caption" color="text.secondary">
-                                  {request.department} • {request.position}
-                                </Typography>
-                              </Box>
-                            </Box>
-                          </TableCell>
-                          <TableCell>
-                            {getTypeChip(request.vacationType)}
-                          </TableCell>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                              <CalendarIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary' }} />
-                              <Typography variant="body2">
-                                {request.startDate} ~ {request.endDate}
-                              </Typography>
-                            </Box>
-                          </TableCell>
-                          <TableCell>
-                            <Chip label={`${request.days}${t('vacationManagement.daysUnit')}`} color="info" size="small" />
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {request.reason}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            {getStatusChip(request.status)}
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" color="text.secondary">
-                              {request.appliedDate}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" color="text.secondary">
-                              {request.approvedDate || '-'}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="center">
-                            {/* 작업 컬럼은 비워둠 - 행 클릭으로 상세보기 */}
-                          </TableCell>
-                        </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                )}
-              </CardContent>
-            </Card>
+          <Box sx={mvsBodyListZoneSx}>
+            {renderVacationTable(filteredRequests, {
+              showDelete: true,
+              showApplyCta: true,
+              pageNum: page,
+              onPageChange: setPage,
+              emptyTitle:
+                vacationRequests.length === 0
+                  ? t('vacationManagement.empty.noItems')
+                  : t('vacationManagement.empty.noResults'),
+              emptyHint:
+                vacationRequests.length === 0
+                  ? t('vacationManagement.empty.noItemsHint')
+                  : t('vacationManagement.empty.noResultsHint'),
+            })}
           </Box>
         );
+      case 2: {
+        const pendingRequests = filteredRequests.filter((req) => req.status === 'pending');
+        const processedRequests = filteredRequests.filter(
+          (req) => req.status === 'approved' || req.status === 'rejected'
+        );
+
+        return (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+            <Box sx={mvsBodyListZoneSx}>
+              {renderVacationTable(pendingRequests, {
+                showApproveReject: canPerformVacationApproval,
+                sectionTitle: `${t('vacationManagement.pending')} (${pendingRequests.length}${t('vacationManagement.casesUnit')})`,
+                pageNum: pendingPage,
+                onPageChange: setPendingPage,
+                emptyTitle: t('vacationManagement.noPendingLeave'),
+              })}
+            </Box>
+            <Box sx={{ ...mvsBodyListZoneSx, mt: 0 }}>
+              {renderVacationTable(processedRequests, {
+                showProcessedDate: true,
+                sectionTitle: `${t('vacationManagement.completed')} (${processedRequests.length}${t('vacationManagement.casesUnit')})`,
+                pageNum: processedPage,
+                onPageChange: setProcessedPage,
+                emptyTitle: t('vacationManagement.noProcessedLeave'),
+              })}
+            </Box>
+          </Box>
+        );
+      }
       case 3:
-        // 휴가 형태 (admin이면 3번, 일반 사용자는 2번이지만 adjustedTab으로 3번)
         if (!canEditPolicy) {
           return (
-            <Card>
-              <CardContent>
-                <Alert severity="info">
+            <Box sx={mvsBodyListZoneSx}>
+              <Box sx={listStateBoxSx}>
+                <EventIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.3 }} />
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
                   {t('vacationManagement.adminOnlyLeaveType')}
-                </Alert>
-              </CardContent>
-            </Card>
+                </Typography>
+              </Box>
+            </Box>
           );
         }
         return (
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-                {t('vacationManagement.leavePolicy')}
-              </Typography>
-              <Alert severity="info" variant="outlined" sx={{ mb: 3, borderRadius: 2 }}>
+          <Box sx={mvsBodyListZoneSx}>
+            <Box sx={{ ...mvsBodyCardSx, overflow: 'hidden' }}>
+              <Alert severity="info" variant="outlined" sx={{ m: { xs: 2, sm: 2.5 }, mb: 0, borderRadius: 2 }}>
                 {t('vacationManagement.fiscalYearResetNote')}
               </Alert>
-              
+              <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: 2, pb: { xs: 2, sm: 2.5 } }}>
               <Grid container spacing={3}>
               {/* 연차 (Earned Leave) */}
                 <Grid size={{ xs: 12, md: 6 }}>
@@ -1547,6 +1487,7 @@ const VacationManagement: React.FC = () => {
                     <Typography variant="body2" color="text.secondary" paragraph>
                       • {t('vacationManagement.sickLeaveDesc1')}
                     </Typography>
+                    {renderLeaveDaysInput('sick')}
                     <Typography variant="body2" color="text.secondary" paragraph>
                       • {t('vacationManagement.sickLeaveDesc2')}
                     </Typography>
@@ -1587,6 +1528,7 @@ const VacationManagement: React.FC = () => {
                     <Typography variant="body2" color="text.secondary" paragraph>
                       • {t('vacationManagement.casualLeaveDesc1')}
                     </Typography>
+                    {renderLeaveDaysInput('personal')}
                     <Typography variant="body2" color="text.secondary" paragraph>
                       • {t('vacationManagement.casualLeaveDesc2')}
                     </Typography>
@@ -1627,6 +1569,7 @@ const VacationManagement: React.FC = () => {
                     <Typography variant="body2" color="text.secondary" paragraph>
                       • {t('vacationManagement.studyLeaveDesc1')}
                     </Typography>
+                    {renderLeaveDaysInput('study')}
                     <Typography variant="body2" color="text.secondary">
                       • {t('vacationManagement.studyLeaveDesc2')}
                     </Typography>
@@ -1664,6 +1607,7 @@ const VacationManagement: React.FC = () => {
                     <Typography variant="body2" color="text.secondary" paragraph>
                       • {t('vacationManagement.maternityLeaveDesc1')}
                     </Typography>
+                    {renderLeaveDaysInput('maternity')}
                     <Typography variant="body2" color="text.secondary" paragraph>
                       • {t('vacationManagement.maternityLeaveDesc2')}
                     </Typography>
@@ -1704,6 +1648,7 @@ const VacationManagement: React.FC = () => {
                     <Typography variant="body2" color="text.secondary" paragraph>
                       • {t('vacationManagement.paternityLeaveDesc1')}
                     </Typography>
+                    {renderLeaveDaysInput('paternity')}
                     <Typography variant="body2" color="text.secondary" paragraph>
                       • {t('vacationManagement.paternityLeaveDesc2')}
                     </Typography>
@@ -1715,8 +1660,9 @@ const VacationManagement: React.FC = () => {
                   </Card>
                 </Grid>
               </Grid>
-            </CardContent>
-          </Card>
+              </Box>
+            </Box>
+          </Box>
         );
       default:
         return null;
@@ -1725,58 +1671,10 @@ const VacationManagement: React.FC = () => {
 
   return (
     <Box sx={{ ...mvsPageRootSx }}>
-      <MvsPageHeader title={t('vacationManagement.title')} mb={2} />
-
-      {/* 탭 메뉴 */}
-      <Card sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 2, pt: 1 }}>
-          <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)}>
-            {(user?.role === 'admin' || user?.role === 'root') && (
-              <Tab 
-                icon={<FilterIcon />} 
-                label={t('vacationManagement.leaveStatus')} 
-                iconPosition="start"
-              />
-            )}
-            <Tab 
-              icon={<ScheduleIcon />} 
-              label={t('vacationManagement.myRequestedLeave')} 
-              iconPosition="start"
-            />
-            <Tab 
-              icon={<WorkIcon />} 
-              label={t('vacationManagement.leaveApproval')} 
-              iconPosition="start"
-            />
-            {(user?.role === 'admin' || user?.role === 'root') && (
-              <Tab 
-                icon={<EventIcon />} 
-                label={t('vacationManagement.leaveType')} 
-                iconPosition="start"
-              />
-            )}
-          </Tabs>
-          <Tooltip
-            title={
-              !hrElevated && !vacationMenuFlags.canCreate
-                ? t('vacationManagement.noPermissionCreate')
-                : ''
-            }
-          >
-            <span>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={handleAdd}
-                sx={{ ml: 2 }}
-                disabled={!menusLoading && !hrElevated && !vacationMenuFlags.canCreate}
-              >
-                {t('vacationManagement.applyLeave')}
-              </Button>
-            </span>
-          </Tooltip>
-        </Box>
-      </Card>
+      <MvsPageHeader
+        title={t('vacationManagement.title')}
+        description={t('vacationManagement.description')}
+      />
 
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
@@ -1790,81 +1688,236 @@ const VacationManagement: React.FC = () => {
         </Alert>
       )}
 
-      {/* 검색 및 필터 - 휴가 현황 및 휴가 형태 탭에서는 숨김 */}
-      {(() => {
-        const adjustedTab = (user?.role === 'admin' || user?.role === 'root') ? activeTab : activeTab + 1;
-        const vacationPolicyTab = (user?.role === 'admin' || user?.role === 'root') ? 3 : 2;
-        const vacationStatusTab = 0; // 휴가 현황 탭
-        if (adjustedTab === vacationPolicyTab || adjustedTab === vacationStatusTab) {
-          return null;
-        }
-        return (
-          <Card sx={{ mb: 3 }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                <TextField
-                  label={t('common.search')}
-                  placeholder={t('vacationManagement.searchPlaceholder')}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon />
-                      </InputAdornment>
-                    ),
-                  }}
-                  sx={{ minWidth: 300 }}
-                />
-                <TextField
-                  select
-                  label={t('vacationManagement.status')}
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  SelectProps={{ displayEmpty: true }}
-                  sx={{ minWidth: 120, height: '40px' }}
+      {showKpi && (
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+            gap: 2.5,
+            mb: 3,
+          }}
+        >
+          {kpiItems.map((item) => (
+            <Card key={item.key} elevation={0} sx={mvsKpiCardSx}>
+              <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                  {item.label}
+                </Typography>
+                <Typography
+                  variant="h5"
+                  sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: item.valueColor ?? 'text.primary' }}
                 >
-                  <MenuItem value="all">{t('vacationManagement.allStatus')}</MenuItem>
-                  <MenuItem value="pending">{t('vacationManagement.statusPending')}</MenuItem>
-                  <MenuItem value="approved">{t('vacationManagement.statusApproved')}</MenuItem>
-                  <MenuItem value="rejected">{t('vacationManagement.statusRejected')}</MenuItem>
-                  <MenuItem value="cancelled">{t('vacationManagement.statusCancelled')}</MenuItem>
-                </TextField>
-                <TextField
-                  select
-                  label={t('vacationManagement.leaveTypeFilter')}
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                  InputLabelProps={{ shrink: true }}
-                  SelectProps={{ displayEmpty: true }}
-                  sx={{ minWidth: 120, height: '40px' }}
-                >
-                  <MenuItem value="all">{t('vacationManagement.allTypes')}</MenuItem>
-                  {vacationTypes.map(type => (
-                    <MenuItem key={type.key} value={type.key}>
-                      {type.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-                <Box sx={{ flexGrow: 1 }} />
-                {canExportVacations && (
+                  {item.value}
+                </Typography>
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
+      )}
+
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', md: 'row' },
+            flexWrap: 'wrap',
+            alignItems: { xs: 'stretch', md: 'center' },
+            justifyContent: { md: 'space-between' },
+            gap: { xs: 1.25, md: 1 },
+            px: { xs: 2, sm: 2.5 },
+            py: 1.5,
+            bgcolor: '#FFFFFF',
+          }}
+        >
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
+            {showListFilters && canExportVacations ? (
+              isCompactToolbar ? (
+                <>
                   <Button
                     variant="outlined"
-                    startIcon={<DownloadIcon />}
-                    onClick={handleExportExcel}
+                    size="small"
+                    startIcon={<MoreHorizIcon fontSize="small" />}
+                    onClick={(e) => setToolbarMenuAnchor(e.currentTarget)}
+                    sx={mvsBodyOutlinedBtnSx}
                   >
-                    {t('vacationManagement.export')}
+                    {t('vacationManagement.moreTools')}
                   </Button>
-                )}
-              </Box>
-            </CardContent>
-          </Card>
-        );
-      })()}
+                  <Menu
+                    anchorEl={toolbarMenuAnchor}
+                    open={Boolean(toolbarMenuAnchor)}
+                    onClose={() => setToolbarMenuAnchor(null)}
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                    transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                    slotProps={{
+                      paper: {
+                        sx: {
+                          mt: 0.5,
+                          minWidth: 220,
+                          borderRadius: '12px',
+                          border: '1px solid #C5CED9',
+                          boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
+                        },
+                      },
+                    }}
+                  >
+                    <MenuItem
+                      onClick={() => {
+                        setToolbarMenuAnchor(null);
+                        handleExportExcel();
+                      }}
+                    >
+                      <ListItemIcon>
+                        <DownloadIcon fontSize="small" />
+                      </ListItemIcon>
+                      {t('vacationManagement.export')}
+                    </MenuItem>
+                  </Menu>
+                </>
+              ) : (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<DownloadIcon fontSize="small" />}
+                  onClick={handleExportExcel}
+                  sx={mvsBodyOutlinedBtnSx}
+                >
+                  {t('vacationManagement.export')}
+                </Button>
+              )
+            ) : null}
+          </Box>
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: 1,
+              flexShrink: 0,
+              width: { xs: '100%', md: 'auto' },
+              ml: { md: 'auto' },
+            }}
+          >
+            <Tooltip
+              title={!hrElevated && !vacationMenuFlags.canCreate ? t('vacationManagement.noPermissionCreate') : ''}
+            >
+              <span style={{ display: 'inline-flex', flexShrink: 0 }}>
+                <Button
+                  variant="contained"
+                  disableElevation
+                  size="small"
+                  startIcon={<AddIcon fontSize="small" />}
+                  onClick={handleAdd}
+                  disabled={!menusLoading && !hrElevated && !vacationMenuFlags.canCreate}
+                  sx={mvsBodyPrimaryBtnSx}
+                >
+                  {t('vacationManagement.applyLeave')}
+                </Button>
+              </span>
+            </Tooltip>
+          </Box>
+        </Box>
 
-      {/* 탭 콘텐츠 */}
+        <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: 0.5, pb: 0, bgcolor: '#FFFFFF' }}>
+          <Tabs
+            value={activeTab}
+            onChange={(_, newValue) => setActiveTab(newValue)}
+            variant="scrollable"
+            scrollButtons="auto"
+          >
+            {(user?.role === 'admin' || user?.role === 'root') && (
+              <Tab icon={<FilterIcon />} label={t('vacationManagement.leaveStatus')} iconPosition="start" />
+            )}
+            <Tab icon={<ScheduleIcon />} label={t('vacationManagement.myRequestedLeave')} iconPosition="start" />
+            <Tab icon={<WorkIcon />} label={t('vacationManagement.leaveApproval')} iconPosition="start" />
+            {(user?.role === 'admin' || user?.role === 'root') && (
+              <Tab icon={<EventIcon />} label={t('vacationManagement.leaveType')} iconPosition="start" />
+            )}
+          </Tabs>
+        </Box>
+
+        {showListFilters ? (
+          <Box
+            sx={{
+              px: { xs: 2, sm: 2.5 },
+              py: 2,
+              bgcolor: '#FFFFFF',
+              ...(mvsSearchFieldSx as Record<string, unknown>),
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'repeat(2, minmax(0, 1fr))',
+                lg: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto',
+              },
+              gap: 2,
+              alignItems: 'flex-end',
+            }}
+          >
+            <TextField
+              fullWidth
+              size="small"
+              label={t('common.search')}
+              {...VACATION_FILTER_OUTLINED}
+              placeholder={t('vacationManagement.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              sx={vacationFilterFieldSx}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('vacationManagement.status')}
+              {...VACATION_FILTER_OUTLINED}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              SelectProps={{ displayEmpty: true }}
+              sx={vacationFilterFieldSx}
+            >
+              <MenuItem value="all">{t('vacationManagement.allStatus')}</MenuItem>
+              <MenuItem value="pending">{t('vacationManagement.statusPending')}</MenuItem>
+              <MenuItem value="approved">{t('vacationManagement.statusApproved')}</MenuItem>
+              <MenuItem value="rejected">{t('vacationManagement.statusRejected')}</MenuItem>
+              <MenuItem value="cancelled">{t('vacationManagement.statusCancelled')}</MenuItem>
+            </TextField>
+            <TextField
+              fullWidth
+              size="small"
+              select
+              label={t('vacationManagement.leaveTypeFilter')}
+              {...VACATION_FILTER_OUTLINED}
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              SelectProps={{ displayEmpty: true }}
+              sx={vacationFilterFieldSx}
+            >
+              <MenuItem value="all">{t('vacationManagement.allTypes')}</MenuItem>
+              {vacationTypes.map((type) => (
+                <MenuItem key={type.key} value={type.key}>
+                  {type.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<ResetIcon fontSize="small" />}
+              onClick={handleResetFilters}
+              sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
+            >
+              {t('vacationManagement.reset')}
+            </Button>
+          </Box>
+        ) : null}
+      </Card>
+
       {getTabContent()}
 
       {/* 휴가 세부사항 Dialog */}
@@ -2002,7 +2055,7 @@ const VacationManagement: React.FC = () => {
           {selectedVacation && selectedVacation.status === 'pending' && (() => {
             // 탭 2(받은 휴가 승인)일 때만 승인/반려 버튼 표시
             const adjustedTab = (user?.role === 'admin' || user?.role === 'root') ? activeTab : activeTab + 1;
-            if (adjustedTab === 2) {
+            if (adjustedTab === 2 && canPerformVacationApproval) {
               return (
                 <>
                   <Button 

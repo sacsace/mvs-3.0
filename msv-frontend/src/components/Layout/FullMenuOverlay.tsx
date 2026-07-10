@@ -283,7 +283,7 @@ const FullMenuOverlay: React.FC<FullMenuOverlayProps> = ({
                 onClick={() => goTo('/ai')}
                 sx={{ textTransform: 'none', fontWeight: 500, color: '#4B5563' }}
               >
-                {language === 'en' ? 'AI Analysis' : 'AI 분석'}
+                {language === 'en' ? 'Analysis' : '분석'}
               </Button>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>

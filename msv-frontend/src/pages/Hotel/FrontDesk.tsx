@@ -14,7 +14,6 @@ import {
   TableRow,
   TableContainer,
   TableSortLabel,
-  Paper,
   Chip,
   Snackbar,
   Alert,
@@ -33,12 +32,24 @@ import {
   InputAdornment
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodySectionHeaderSx,
+  mvsBodyToolbarSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsTableScrollSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+  mvsSearchFieldSx,
+} from '../../theme/mvsLayout';
 import { Search as SearchIcon } from '@mui/icons-material';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { roomBookingService, roomTypeRoomService, roomTypeService } from '../../services/api';
-import { mvsInnerCardSx, mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
 import { generateWalkInBookingId } from '../../utils/bookingId';
 
 const formatDate = (value: string | undefined, locale: string) => {
@@ -115,6 +126,10 @@ const STATUS_SORT_ORDER: Record<string, number> = {
 /** 예약자 표시·검색 공통 (API snake/camel 혼용 대응, 표시 우선순위와 동일) */
 const getBookingGuestSearchable = (b: any) =>
   String(b?.guest_name ?? b?.guestName ?? b?.user?.username ?? b?.user?.name ?? '').trim();
+
+const frontDeskSearchFieldSx = {
+  ...(mvsSearchFieldSx as Record<string, unknown>),
+} as const;
 
 const FrontDesk: React.FC = () => {
   const theme = useTheme();
@@ -969,47 +984,40 @@ const FrontDesk: React.FC = () => {
     }
   };
 
-  const shellCardSx = {
-    width: '100%',
-    maxWidth: '100%',
-    borderRadius: '20px',
-    border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
-    boxShadow: `0 4px 24px ${alpha('#0f172a', 0.055)}`,
-    bgcolor: 'background.paper',
-    overflow: 'hidden',
-    boxSizing: 'border-box' as const
+  const quickActionBtnSx = {
+    ...mvsBodyOutlinedBtnSx,
+    flex: { sm: '1 1 140px' },
+    minWidth: { sm: 120 },
+    minHeight: 42,
+    py: 1,
+    lineHeight: 1.25,
   };
-
-  const summaryCardSx = {
-    ...mvsInnerCardSx,
-    width: '100%',
-    maxWidth: '100%',
-    p: 0,
-    border: '1px solid #B8C4D0',
-    boxShadow: '0 2px 10px rgba(15, 23, 42, 0.08)',
-    overflow: 'hidden',
-    boxSizing: 'border-box' as const,
-  };
-
-  const headBg = alpha(theme.palette.grey[500], 0.08);
-  const headBorder = alpha(theme.palette.divider, 0.9);
 
   const rowActionBtnSx = {
+    ...mvsBodyOutlinedBtnSx,
     flexShrink: 0,
+    minHeight: 32,
     px: 1.25,
-    py: 0.65,
+    py: 0.5,
     fontSize: '0.8125rem',
-    fontWeight: 600,
-    textTransform: 'none' as const,
-    borderRadius: '10px',
     whiteSpace: 'nowrap' as const,
     '&.Mui-disabled': {
       opacity: 1,
       color: alpha(theme.palette.text.primary, 0.42),
       borderColor: alpha(theme.palette.divider, 0.75),
-      WebkitTextFillColor: alpha(theme.palette.text.primary, 0.42)
-    }
+      WebkitTextFillColor: alpha(theme.palette.text.primary, 0.42),
+    },
   };
+
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    py: 6,
+    px: 2,
+  } as const;
 
   return (
     <Box sx={{ ...mvsPageRootSx }}>
@@ -1018,14 +1026,19 @@ const FrontDesk: React.FC = () => {
         description={t('frontDesk.description')}
       />
 
-      <Card elevation={0} sx={{ ...shellCardSx, mb: 2.5 }}>
-        <CardContent sx={{ py: 2.25, px: { xs: 2, sm: 2.5 }, '&:last-child': { pb: 2.25 } }}>
-          <Typography
-            variant="subtitle2"
-            sx={{ fontWeight: 600, letterSpacing: '0.02em', color: 'text.secondary', mb: 1.5 }}
-          >
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 2.5 }}>
+        <Box sx={{ ...mvsBodySectionHeaderSx, borderBottom: 'none', pb: 1 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
             {t('frontDesk.quickActionsTitle')}
           </Typography>
+        </Box>
+        <Box
+          sx={{
+            ...mvsBodyToolbarSx,
+            borderBottom: 'none',
+            pb: 2,
+          }}
+        >
           <Box
             sx={{
               display: 'flex',
@@ -1033,74 +1046,23 @@ const FrontDesk: React.FC = () => {
               flexWrap: { xs: 'wrap', sm: 'wrap' },
               gap: 1.25,
               alignItems: 'stretch',
-              width: '100%'
+              width: '100%',
             }}
           >
-            <Button
-              variant="outlined"
-              onClick={() => setWalkInOpen(true)}
-              sx={{
-                flex: { sm: '1 1 140px' },
-                minWidth: { sm: 120 },
-                minHeight: 42,
-                py: 1,
-                lineHeight: 1.25,
-                borderRadius: '12px',
-                textTransform: 'none',
-                fontWeight: 600,
-                borderColor: alpha(theme.palette.divider, 0.95)
-              }}
-            >
+            <Button variant="outlined" onClick={() => setWalkInOpen(true)} sx={quickActionBtnSx}>
               {t('frontDesk.actions.newCheckin')}
             </Button>
-            <Button
-              variant="outlined"
-              onClick={() => openQuickActionDialog('checkin')}
-              sx={{
-                flex: { sm: '1 1 140px' },
-                minWidth: { sm: 120 },
-                minHeight: 42,
-                py: 1,
-                lineHeight: 1.25,
-                borderRadius: '12px',
-                textTransform: 'none',
-                fontWeight: 600,
-                borderColor: alpha(theme.palette.divider, 0.95)
-              }}
-            >
+            <Button variant="outlined" onClick={() => openQuickActionDialog('checkin')} sx={quickActionBtnSx}>
               {t('frontDesk.walkIn.openExistingCheckin')}
             </Button>
-            <Button
-              variant="outlined"
-              onClick={() => openQuickActionDialog('checkout')}
-              sx={{
-                flex: { sm: '1 1 140px' },
-                minWidth: { sm: 120 },
-                minHeight: 42,
-                py: 1,
-                lineHeight: 1.25,
-                borderRadius: '12px',
-                textTransform: 'none',
-                fontWeight: 600,
-                borderColor: alpha(theme.palette.divider, 0.95)
-              }}
-            >
+            <Button variant="outlined" onClick={() => openQuickActionDialog('checkout')} sx={quickActionBtnSx}>
               {t('frontDesk.actions.processCheckout')}
             </Button>
             <Button
               variant="outlined"
               color="warning"
               onClick={() => openQuickActionDialog('no_show')}
-              sx={{
-                flex: { sm: '1 1 140px' },
-                minWidth: { sm: 120 },
-                minHeight: 42,
-                py: 1,
-                lineHeight: 1.25,
-                borderRadius: '12px',
-                textTransform: 'none',
-                fontWeight: 600
-              }}
+              sx={quickActionBtnSx}
             >
               {t('frontDesk.actions.processNoShow')}
             </Button>
@@ -1108,45 +1070,22 @@ const FrontDesk: React.FC = () => {
               variant="outlined"
               color="error"
               onClick={() => openQuickActionDialog('cancel')}
-              sx={{
-                flex: { sm: '1 1 140px' },
-                minWidth: { sm: 120 },
-                minHeight: 42,
-                py: 1,
-                lineHeight: 1.25,
-                borderRadius: '12px',
-                textTransform: 'none',
-                fontWeight: 600
-              }}
+              sx={quickActionBtnSx}
             >
               {t('frontDesk.actions.cancelBooking')}
             </Button>
-            <Button
-              variant="outlined"
-              onClick={openAssignRoomDialog}
-              sx={{
-                flex: { sm: '1 1 140px' },
-                minWidth: { sm: 120 },
-                minHeight: 42,
-                py: 1,
-                lineHeight: 1.25,
-                borderRadius: '12px',
-                textTransform: 'none',
-                fontWeight: 600,
-                borderColor: alpha(theme.palette.divider, 0.95)
-              }}
-            >
+            <Button variant="outlined" onClick={openAssignRoomDialog} sx={quickActionBtnSx}>
               {t('frontDesk.actions.assignRoom')}
             </Button>
           </Box>
-        </CardContent>
+        </Box>
       </Card>
 
-      <Grid container spacing={2} sx={{ mb: 2.5 }}>
+      <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
         {summaryCards.map((item) => (
           <Grid key={item.label} size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card elevation={0} sx={summaryCardSx}>
-              <CardContent sx={{ py: 2, px: 2.25 }}>
+            <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
+              <CardContent sx={{ py: 2.25, px: 2.5 }}>
                 <Typography
                   variant="caption"
                   sx={{ color: 'text.secondary', fontWeight: 600, letterSpacing: '0.02em', display: 'block', mb: 0.75 }}
@@ -1164,79 +1103,62 @@ const FrontDesk: React.FC = () => {
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12 }}>
-          <Card elevation={0} sx={shellCardSx}>
-            <CardContent sx={{ py: 2.25, px: { xs: 2, sm: 2.5 }, '&:last-child': { pb: 2.25 } }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600, letterSpacing: '-0.01em' }}>
+          <Card elevation={0} sx={mvsBodyCardSx}>
+            <Box sx={mvsBodySectionHeaderSx}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
                 {t('frontDesk.bookingListTitle')}
               </Typography>
+            </Box>
+            <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 1.5, bgcolor: '#FFFFFF' }}>
               <TextField
                 size="small"
                 placeholder={t('frontDesk.searchPlaceholder')}
                 value={bookingListSearch}
                 onChange={(e) => setBookingListSearch(e.target.value)}
                 fullWidth
-                sx={{
-                  mt: 1.75,
-                  mb: 1.5,
-                  maxWidth: '100%',
-                  '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: alpha(theme.palette.grey[500], 0.04) }
-                }}
+                sx={frontDeskSearchFieldSx}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
                       <SearchIcon fontSize="small" sx={{ color: 'text.secondary', opacity: 0.85 }} />
                     </InputAdornment>
-                  )
+                  ),
                 }}
               />
-              <TableContainer
-                component={Paper}
-                elevation={0}
-                sx={{
-                  width: '100%',
-                  maxWidth: '100%',
-                  overflowX: 'auto',
-                  borderRadius: '16px',
-                  border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
-                  boxShadow: `0 2px 14px ${alpha('#0f172a', 0.04)}`,
-                  bgcolor: 'background.paper',
-                  boxSizing: 'border-box'
-                }}
-              >
-                <Table
-                  size="small"
-                  sx={{
-                    minWidth: 720,
-                    width: '100%',
-                    '& .MuiTableCell-head': {
-                      color: 'text.secondary',
-                      fontWeight: 600,
-                      fontSize: '0.75rem',
-                      letterSpacing: '0.02em'
-                    },
-                    '& .MuiTableCell-body': {
-                      color: 'text.primary',
-                      borderBottom: `1px solid ${alpha(theme.palette.divider, 0.65)}`
-                    },
-                    '& .MuiTableSortLabel-root': {
-                      color: 'inherit'
-                    },
-                    '& .MuiTableSortLabel-root.Mui-active': {
-                      color: 'text.primary'
-                    }
-                  }}
-                >
-                  <TableHead>
-                    <TableRow
-                      sx={{
-                        '& .MuiTableCell-head': {
-                          bgcolor: headBg,
-                          borderBottom: `1px solid ${headBorder}`,
-                          fontWeight: 600,
-                          py: 1.25
-                        }
-                      }}
-                    >
+            </Box>
+            <Box sx={{ ...mvsBodyListZoneSx, px: { xs: 2, sm: 2.5 }, pb: 2.5, mt: 0 }}>
+              {bookings.length === 0 || filteredBookings.length === 0 ? (
+                <Box sx={listStateBoxSx}>
+                  <Typography variant="body2" color="text.secondary">
+                    {bookings.length === 0
+                      ? t('frontDesk.empty.noData')
+                      : t('frontDesk.searchNoResults')}
+                  </Typography>
+                </Box>
+              ) : (
+                <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+                  <Table
+                    size="small"
+                    sx={{
+                      minWidth: 720,
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      bgcolor: 'transparent',
+                      '& .MuiTableCell-root': {
+                        borderLeft: 'none',
+                        borderRight: 'none',
+                        borderTop: 'none',
+                      },
+                      '& .MuiTableSortLabel-root': {
+                        color: 'inherit',
+                      },
+                      '& .MuiTableSortLabel-root.Mui-active': {
+                        color: 'text.primary',
+                      },
+                    }}
+                  >
+                    <TableHead sx={mvsTableHeadHighlightSx}>
+                      <TableRow>
                       <TableCell sortDirection={bookingSortBy === 'bookingNo' ? bookingSortDir : false}>
                         <TableSortLabel
                           active={bookingSortBy === 'bookingNo'}
@@ -1287,25 +1209,8 @@ const FrontDesk: React.FC = () => {
                       </TableCell>
                     </TableRow>
                   </TableHead>
-                  <TableBody>
-                    {bookings.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6}>
-                          <Typography variant="body2" sx={{ color: 'text.primary', opacity: 0.84 }}>
-                            {t('frontDesk.empty.noData')}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ) : filteredBookings.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6}>
-                          <Typography variant="body2" sx={{ color: 'text.primary', opacity: 0.84 }}>
-                            {t('frontDesk.searchNoResults')}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      sortedBookings.map((booking) => (
+                  <TableBody sx={mvsTableBodyRowSx}>
+                    {sortedBookings.map((booking) => (
                         <TableRow key={booking.id} hover>
                           <TableCell>{booking.booking_id || booking.id}</TableCell>
                           <TableCell>{getBookingGuestSearchable(booking) || '-'}</TableCell>
@@ -1383,12 +1288,12 @@ const FrontDesk: React.FC = () => {
                             </Box>
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
+                      ))}
                   </TableBody>
                 </Table>
               </TableContainer>
-            </CardContent>
+              )}
+            </Box>
           </Card>
         </Grid>
       </Grid>

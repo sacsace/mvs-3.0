@@ -42,6 +42,19 @@ import Notice from './Notice';
 import ExpenseReport from './ExpenseReport';
 import Budget from './Budget';
 import Asset from './Asset';
+import AutoVoucher from './AutoVoucher';
+import AutoVoucherRule from './AutoVoucherRule';
+import AutoVoucherAuditLog from './AutoVoucherAuditLog';
+import GlAccount from './GlAccount';
+import GlVoucher from './GlVoucher';
+import GlVoucherLine from './GlVoucherLine';
+import AcVoucherType from './AcVoucherType';
+import AcTransactionItem from './AcTransactionItem';
+import AcGstCode from './AcGstCode';
+import AcTdsCode from './AcTdsCode';
+import AcBankAccount from './AcBankAccount';
+import AcFinancialYear from './AcFinancialYear';
+import AcVoucherAuditLog from './AcVoucherAuditLog';
 import WorkBoard from './WorkBoard';
 import WorkBoardList from './WorkBoardList';
 import WorkBoardCard from './WorkBoardCard';
@@ -365,6 +378,39 @@ Asset.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
 (Company as any).hasMany(Asset, { foreignKey: 'company_id', as: 'assets' });
 Asset.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 
+(Tenant as any).hasMany(AutoVoucher, { foreignKey: 'tenant_id', as: 'autoVouchers' });
+AutoVoucher.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(Company as any).hasMany(AutoVoucher, { foreignKey: 'company_id', as: 'autoVouchers' });
+AutoVoucher.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+(User as any).hasMany(AutoVoucher, { foreignKey: 'created_by', as: 'createdAutoVouchers' });
+AutoVoucher.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+
+(Tenant as any).hasMany(AutoVoucherRule, { foreignKey: 'tenant_id', as: 'autoVoucherRules' });
+AutoVoucherRule.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(Company as any).hasMany(AutoVoucherRule, { foreignKey: 'company_id', as: 'autoVoucherRules' });
+AutoVoucherRule.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+(AutoVoucher as any).hasMany(AutoVoucherAuditLog, { foreignKey: 'auto_voucher_id', as: 'auditLogs' });
+AutoVoucherAuditLog.belongsTo(AutoVoucher, { foreignKey: 'auto_voucher_id', as: 'voucher' });
+(User as any).hasMany(AutoVoucherAuditLog, { foreignKey: 'actor_id', as: 'autoVoucherAuditActions' });
+AutoVoucherAuditLog.belongsTo(User, { foreignKey: 'actor_id', as: 'actor' });
+
+(GlAccount as any).belongsTo(GlAccount, { foreignKey: 'parent_id', as: 'parent' });
+(GlAccount as any).hasMany(GlAccount, { foreignKey: 'parent_id', as: 'children' });
+(Tenant as any).hasMany(GlAccount, { foreignKey: 'tenant_id', as: 'glAccounts' });
+GlAccount.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(Company as any).hasMany(GlAccount, { foreignKey: 'company_id', as: 'glAccounts' });
+GlAccount.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+
+(Tenant as any).hasMany(GlVoucher, { foreignKey: 'tenant_id', as: 'glVouchers' });
+GlVoucher.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(Company as any).hasMany(GlVoucher, { foreignKey: 'company_id', as: 'glVouchers' });
+GlVoucher.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+(GlVoucher as any).hasMany(GlVoucherLine, { foreignKey: 'voucher_id', as: 'lines' });
+GlVoucherLine.belongsTo(GlVoucher, { foreignKey: 'voucher_id', as: 'voucher' });
+(GlAccount as any).hasMany(GlVoucherLine, { foreignKey: 'account_id', as: 'voucherLines' });
+GlVoucherLine.belongsTo(GlAccount, { foreignKey: 'account_id', as: 'account' });
+
 // 작업 보드 (트렐로형)
 (Tenant as any).hasMany(WorkBoard, { foreignKey: 'tenant_id', as: 'workBoards' });
 (WorkBoard as any).belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
@@ -509,6 +555,19 @@ export {
   ExpenseReport,
   Budget,
   Asset,
+  AutoVoucher,
+  AutoVoucherRule,
+  AutoVoucherAuditLog,
+  GlAccount,
+  GlVoucher,
+  GlVoucherLine,
+  AcVoucherType,
+  AcTransactionItem,
+  AcGstCode,
+  AcTdsCode,
+  AcBankAccount,
+  AcFinancialYear,
+  AcVoucherAuditLog,
   WorkBoard,
   WorkBoardList,
   WorkBoardCard,

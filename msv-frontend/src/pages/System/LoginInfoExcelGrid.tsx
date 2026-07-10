@@ -13,14 +13,14 @@ import {
   Typography
 } from '@mui/material';
 import {
-  Add as AddIcon,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   Delete as DeleteIcon,
   DeleteOutline as DeleteOutlineIcon,
-  ViewColumn as ViewColumnIcon
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { alpha, useTheme } from '@mui/material/styles';
+import { mvsBodyPaginationSx } from '../../theme/mvsLayout';
 import ExcelJS from 'exceljs';
 import { loginInfoService } from '../../services/api';
 
@@ -295,6 +295,7 @@ const LoginInfoExcelGrid = forwardRef<LoginInfoExcelGridHandle, Props>(function 
   ref
 ) {
   const { t } = useTranslation();
+  const theme = useTheme();
   const headerHint = t('loginInfoManagement.hints.doubleClickHeader');
 
   const defaultHeaderLabels = useMemo(
@@ -959,9 +960,19 @@ const LoginInfoExcelGrid = forwardRef<LoginInfoExcelGridHandle, Props>(function 
       renderCell: (params) => (
         <Tooltip title={t('loginInfoManagement.actions.delete')}>
           <IconButton
+            className="login-info-delete-btn"
             size="small"
             onClick={() => void handleDelete(params.row)}
             aria-label={t('loginInfoManagement.actions.delete')}
+            sx={{
+              color: alpha(theme.palette.text.secondary, theme.palette.mode === 'light' ? 0.72 : 1),
+              borderRadius: '10px',
+              transition: 'color 0.15s ease, background-color 0.15s ease',
+              '&:hover': {
+                color: 'error.main',
+                bgcolor: alpha(theme.palette.error.main, 0.12),
+              },
+            }}
           >
             <DeleteIcon fontSize="small" />
           </IconButton>
@@ -984,12 +995,14 @@ const LoginInfoExcelGrid = forwardRef<LoginInfoExcelGridHandle, Props>(function 
     resolvedSchema.columns,
     schemaColCount,
     rows,
-    t
+    t,
+    theme
   ]);
 
-  /** 파트너 업체 관리 등 목록 테이블 헤더와 동일 톤 */
-  const headerBgLight = '#F5F6F8';
-  const headerBorderBottomLight = '#E2E8F0';
+  const headerBgLight = '#F1F5F9';
+  const headerFgLight = '#475569';
+  const headerBorderBottomLight = '#A8B4C0';
+  const rowHoverLight = '#EFF6FF';
 
   return (
     <Box onPaste={handlePaste} sx={{ width: '100%' }}>
@@ -1003,7 +1016,9 @@ const LoginInfoExcelGrid = forwardRef<LoginInfoExcelGridHandle, Props>(function 
         processRowUpdate={processRowUpdate}
         disableColumnMenu
         disableRowSelectionOnClick
-        hideFooter
+        pagination
+        pageSizeOptions={[10]}
+        initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
         rowHeight={40}
         columnHeaderHeight={40}
         onCellClick={(params: GridCellParams<LoginInfoGridRow>) => {
@@ -1011,98 +1026,87 @@ const LoginInfoExcelGrid = forwardRef<LoginInfoExcelGridHandle, Props>(function 
             lastFocusRef.current = { rowId: params.id, field: params.field };
           }
         }}
-        getRowClassName={(params) =>
-          params.indexRelativeToCurrentPage % 2 === 1 ? 'login-info-grid-row--alt' : ''
-        }
         sx={{
           border: 'none',
           fontSize: '0.8125rem',
           ...(isDark
             ? {
                 '&.MuiDataGrid-root': {
-                  border: '1px solid rgba(255,255,255,0.12)'
-                }
+                  border: '1px solid rgba(255,255,255,0.12)',
+                },
               }
             : {}),
           '& .MuiDataGrid-columnHeaders': isDark
             ? {
                 backgroundColor: 'rgba(69, 90, 100, 0.55)',
                 borderBottom: '2px solid rgba(144, 164, 174, 0.45)',
-                boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.25)'
+                boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.25)',
               }
             : {
                 backgroundColor: headerBgLight,
                 borderBottom: `1px solid ${headerBorderBottomLight}`,
-                boxShadow: 'none'
+                borderTop: '2px solid',
+                borderTopColor: 'primary.main',
+                boxShadow: 'none',
               },
-          /* 헤더 배경만 칠하면 컬럼 사이 리사이즈 구분선 영역이 기본(밝은) 배경으로 남아 흰 세로줄처럼 보임 */
           '& .MuiDataGrid-columnHeadersInner': isDark
             ? { backgroundColor: 'rgba(69, 90, 100, 0.55)' }
             : { backgroundColor: headerBgLight },
           '& .MuiDataGrid-columnSeparator': isDark
             ? {
                 backgroundColor: 'rgba(69, 90, 100, 0.55)',
-                '&:hover': { backgroundColor: 'rgba(90, 115, 128, 0.75)' }
+                '&:hover': { backgroundColor: 'rgba(90, 115, 128, 0.75)' },
               }
             : {
                 backgroundColor: headerBgLight,
-                '&:hover': { backgroundColor: 'rgba(100, 116, 139, 0.14)' }
+                '&:hover': { backgroundColor: 'rgba(100, 116, 139, 0.14)' },
               },
           '& .MuiDataGrid-columnHeader': isDark
             ? {
                 backgroundColor: 'rgba(69, 90, 100, 0.55)',
                 borderRight: '1px solid rgba(255,255,255,0.1)',
                 '&:last-of-type': { borderRight: 'none' },
-                '&:focus, &:focus-within': { backgroundColor: 'rgba(69, 90, 100, 0.55)' }
+                '&:focus, &:focus-within': { backgroundColor: 'rgba(69, 90, 100, 0.55)' },
               }
             : {
                 backgroundColor: headerBgLight,
                 borderRight: 'none',
                 '&:last-of-type': { borderRight: 'none' },
-                '&:focus, &:focus-within': { backgroundColor: headerBgLight }
+                '&:focus, &:focus-within': { backgroundColor: headerBgLight },
               },
           '& .MuiDataGrid-cell': isDark
             ? { borderColor: 'rgba(255,255,255,0.08)', color: 'rgba(245,248,255,0.92)' }
             : undefined,
           '& .MuiDataGrid-columnHeaderTitle': isDark
             ? { color: 'rgba(236, 239, 241, 0.98)', fontWeight: 600 }
-            : { color: '#64748B', fontWeight: 700 },
-          '& .MuiDataGrid-row.login-info-grid-row--alt': {
-            backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.03)'
-          },
+            : { color: headerFgLight, fontWeight: 600 },
+          '& .MuiDataGrid-row': isDark
+            ? { backgroundColor: 'transparent' }
+            : { backgroundColor: '#FFFFFF' },
           '& .MuiDataGrid-row:hover': {
-            backgroundColor: isDark ? 'rgba(129, 180, 255, 0.12)' : 'rgba(25, 118, 210, 0.06)'
+            backgroundColor: isDark ? 'rgba(129, 180, 255, 0.12)' : rowHoverLight,
           },
-          '& .MuiDataGrid-row.login-info-grid-row--alt:hover': {
-            backgroundColor: isDark ? 'rgba(129, 180, 255, 0.14)' : 'rgba(25, 118, 210, 0.08)'
+          '& .MuiDataGrid-row:hover .login-info-delete-btn:not(.Mui-disabled)': {
+            color: 'error.main',
+            bgcolor: alpha(theme.palette.error.main, 0.08),
           },
           '& .MuiDataGrid-cell:focus': {
-            outline: isDark ? '1px solid rgba(138,181,255,0.7)' : undefined
-          }
+            outline: isDark ? '1px solid rgba(138,181,255,0.7)' : undefined,
+          },
+          '& .MuiDataGrid-footerContainer': {
+            ...mvsBodyPaginationSx,
+            borderTop: 'none',
+            minHeight: 48,
+          },
+          '& .MuiTablePagination-root': {
+            overflow: 'visible',
+          },
+          '& .MuiPaginationItem-root': {
+            borderRadius: '10px',
+            fontWeight: 500,
+          },
         }}
       />
-      <Box
-        sx={{
-          mt: 1,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 1
-        }}
-      >
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={<ViewColumnIcon />}
-          onClick={openAddColumnDialog}
-        >
-          {t('loginInfoManagement.actions.addColumn')}
-        </Button>
-        <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={addEmptyRow}>
-          {t('loginInfoManagement.actions.addRow')}
-        </Button>
-      </Box>
 
       <Dialog
         open={addColumnDialogOpen}

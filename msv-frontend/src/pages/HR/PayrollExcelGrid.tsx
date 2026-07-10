@@ -1,11 +1,12 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { DataGrid, GridRowModel, GridPaginationModel } from '@mui/x-data-grid';
-import { Box } from '@mui/material';
+import React, { useCallback, useMemo } from 'react';
+import { DataGrid, GridRowModel } from '@mui/x-data-grid';
 import { useTranslation } from 'react-i18next';
+import { useTheme } from '@mui/material/styles';
+import Box from '@mui/material/Box';
 import { payrollService } from '../../services/api';
 import type { PayrollGridRow } from './payroll/payrollGridTypes';
-import { gridRowToPayload, recalculatePayrollRow, ESI_GROSS_CEILING_INR } from './payroll/payrollGridUtils';
-import { buildPayrollGridColumns } from './payroll/payrollGridColumns';
+import { gridRowToPayload, recalculatePayrollRow, type PayrollRecalcContext } from './payroll/payrollGridUtils';
+import { buildPayrollGridColumns, PAYROLL_GRID_MIN_WIDTH } from './payroll/payrollGridColumns';
 import { payrollDataGridSx } from './payroll/payrollGridStyles';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
@@ -27,6 +28,10 @@ type Props = {
   allowCellEdit?: boolean;
   allowDelete?: boolean;
   allowOpenPayslip?: boolean;
+  /** 회사 등록 주 GST code — PT 자동 산출 */
+  companyStateCode?: string | null;
+  /** YYYY-MM — PT 월별 특례(예: Maharashtra 2월) */
+  payrollMonth?: string | null;
 };
 
 const PayrollExcelGrid: React.FC<Props> = ({
@@ -40,14 +45,18 @@ const PayrollExcelGrid: React.FC<Props> = ({
   isRoot = false,
   allowCellEdit = true,
   allowDelete = true,
-  allowOpenPayslip = true
+  allowOpenPayslip = true,
+  companyStateCode = null,
+  payrollMonth = null
 }) => {
   const { t, i18n } = useTranslation();
+  const theme = useTheme();
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
-  const [paginationModel, setPaginationModel] = useState<GridPaginationModel>({
-    page: 0,
-    pageSize: 50
-  });
+
+  const recalcCtx = useMemo<PayrollRecalcContext>(
+    () => ({ companyStateCode, payrollMonth }),
+    [companyStateCode, payrollMonth]
+  );
 
   const handleDeleteRow = useCallback(
     (id: number) => {
@@ -85,10 +94,10 @@ const PayrollExcelGrid: React.FC<Props> = ({
       if (!allowCellEdit) {
         return oldRow as PayrollGridRow;
       }
-      const row = recalculatePayrollRow(newRow as PayrollGridRow);
+      const row = recalculatePayrollRow(newRow as PayrollGridRow, recalcCtx);
       try {
         onError(null);
-        const payload = gridRowToPayload(row);
+        const payload = gridRowToPayload(row, recalcCtx);
         const res = await payrollService.updatePayroll(row.id, payload);
         if (!res.success) {
           throw new Error((res as any).message || t('payrollManagement.errors.saveFailed'));
@@ -102,7 +111,7 @@ const PayrollExcelGrid: React.FC<Props> = ({
         throw e;
       }
     },
-    [allowCellEdit, onError, onReload, onSuccess, t]
+    [allowCellEdit, onError, onReload, onSuccess, recalcCtx, t]
   );
 
   const columns = useMemo(
@@ -120,18 +129,14 @@ const PayrollExcelGrid: React.FC<Props> = ({
     [allowCellEdit, allowDelete, allowOpenPayslip, handleDeleteRow, isRoot, lockedPeriods, onOpenPayslip, t]
   );
 
+  const PAYROLL_ROW_HEIGHT = 36;
+  const PAYROLL_HEADER_HEIGHT = 56;
+  const PAYROLL_LIST_BOTTOM_GAP = PAYROLL_ROW_HEIGHT;
+  const gridBodyHeight =
+    PAYROLL_HEADER_HEIGHT + Math.max(rows.length, 1) * PAYROLL_ROW_HEIGHT + PAYROLL_LIST_BOTTOM_GAP;
+
   return (
-    <Box
-      sx={{
-        width: '100%',
-        height: '100%',
-        minHeight: 360,
-        flex: 1,
-        minWidth: 0,
-        display: 'flex',
-        flexDirection: 'column'
-      }}
-    >
+    <>
       <ConfirmDialog
         open={dialogState.open}
         title={dialogState.title}
@@ -142,7 +147,8 @@ const PayrollExcelGrid: React.FC<Props> = ({
         onConfirm={handleConfirm}
         onCancel={handleCancel}
       />
-      <DataGrid
+      <Box sx={{ width: '100%', minWidth: 0 }}>
+        <DataGrid
         key={i18n.language}
         rows={rows}
         columns={columns}
@@ -150,16 +156,24 @@ const PayrollExcelGrid: React.FC<Props> = ({
         getRowId={(r) => r.id}
         isCellEditable={(params) => {
           if (!allowCellEdit) return false;
-          if (params.field === 'pf_employer' || params.field === 'days_worked') return false;
-          const row = params.row as PayrollGridRow;
-          const sum = typeof row.sum_total === 'number' ? row.sum_total : parseFloat(String(row.sum_total ?? '').replace(/,/g, ''));
-          const sumOk = Number.isFinite(sum) ? sum : 0;
           if (
-            (params.field === 'esic_employee' || params.field === 'esic_employer') &&
-            sumOk <= ESI_GROSS_CEILING_INR
+            params.field === 'pf_employer' ||
+            params.field === 'days_worked' ||
+            params.field === 'sum_total' ||
+            params.field === 'net_salary_payable' ||
+            params.field === 'pt' ||
+            params.field === 'ot_rate' ||
+            params.field === 'esic_employee' ||
+            params.field === 'esic_employer' ||
+            params.field === 'pf_employee' ||
+            params.field === 'pf_employer' ||
+            params.field === 'emp_id' ||
+            params.field === 'employee_email' ||
+            params.field === 'working_month'
           ) {
             return false;
           }
+          const row = params.row as PayrollGridRow;
           if (isRoot) return true;
           const period = String(row.working_month || '').trim();
           if (!period) return true;
@@ -168,22 +182,23 @@ const PayrollExcelGrid: React.FC<Props> = ({
         processRowUpdate={processRowUpdate}
         editMode="cell"
         disableRowSelectionOnClick
-        rowHeight={36}
-        columnHeaderHeight={56}
-        paginationModel={paginationModel}
-        onPaginationModelChange={setPaginationModel}
-        pageSizeOptions={[25, 50, 100]}
+        rowHeight={PAYROLL_ROW_HEIGHT}
+        columnHeaderHeight={PAYROLL_HEADER_HEIGHT}
+        paginationModel={{ page: 0, pageSize: Math.max(rows.length, 1) }}
+        onPaginationModelChange={() => undefined}
+        hideFooter
         sx={{
-          ...payrollDataGridSx,
-          flex: 1,
-          minHeight: 0,
+          ...(typeof payrollDataGridSx === 'function' ? payrollDataGridSx(theme) : payrollDataGridSx),
           width: '100%',
-          height: '100%',
+          minWidth: PAYROLL_GRID_MIN_WIDTH,
+          height: gridBodyHeight,
+          minHeight: gridBodyHeight,
+          maxHeight: gridBodyHeight,
           border: 'none',
-          '& .MuiDataGrid-main': { flex: 1, minHeight: 0 }
         }}
-      />
-    </Box>
+        />
+      </Box>
+    </>
   );
 };
 

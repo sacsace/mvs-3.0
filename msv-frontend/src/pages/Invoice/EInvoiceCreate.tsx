@@ -52,7 +52,9 @@ import {
   AttachMoney as MoneyIcon,
   Edit as EditIcon
 } from '@mui/icons-material';
+import { alpha, useTheme } from '@mui/material/styles';
 import { useStore } from '../../store';
+import { useTranslation } from 'react-i18next';
 
 interface EInvoiceItem {
   id: number;
@@ -118,7 +120,10 @@ interface EInvoice {
 }
 
 const EInvoiceCreate: React.FC = () => {
+  const theme = useTheme();
+  const { i18n } = useTranslation();
   const { user } = useStore();
+  const txt = (ko: string, en: string) => (i18n.language?.startsWith('en') ? en : ko);
   const [activeStep, setActiveStep] = useState(0);
   const [invoice, setInvoice] = useState<Partial<EInvoice>>({
     invoiceNumber: '',
@@ -146,11 +151,18 @@ const EInvoiceCreate: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<EInvoiceItem | null>(null);
 
   const steps = [
-    '고객 정보',
-    '상품/서비스',
-    '세금 계산',
-    '검토 및 생성'
+    txt('고객 정보', 'Customer'),
+    txt('상품/서비스', 'Items'),
+    txt('세금 계산', 'Tax'),
+    txt('검토 및 생성', 'Review'),
   ];
+
+  const sectionCardSx = {
+    borderRadius: '16px',
+    border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+    bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.03) : '#FFFFFF',
+    boxShadow: '0 2px 12px rgba(15, 23, 42, 0.05)',
+  };
 
   useEffect(() => {
     calculateTotals();
@@ -237,9 +249,9 @@ const EInvoiceCreate: React.FC = () => {
   };
 
   const renderCustomerInfo = () => (
-    <Card>
+    <Card elevation={0} sx={sectionCardSx}>
       <CardContent>
-        <Typography variant="h6" gutterBottom>고객 정보</Typography>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>{txt('고객 정보', 'Customer Information')}</Typography>
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 6 }}>
             <TextField
@@ -290,30 +302,43 @@ const EInvoiceCreate: React.FC = () => {
   );
 
   const renderItems = () => (
-    <Card>
+    <Card elevation={0} sx={sectionCardSx}>
       <CardContent>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6">상품/서비스</Typography>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>{txt('상품/서비스', 'Items')}</Typography>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
             onClick={handleAddItem}
           >
-            항목 추가
+            {txt('항목 추가', 'Add Item')}
           </Button>
         </Box>
         
-        <TableContainer>
+        <TableContainer
+          component={Paper}
+          elevation={0}
+          sx={{
+            borderRadius: '12px',
+            border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
+            overflow: 'hidden',
+          }}
+        >
           <Table>
-            <TableHead>
+            <TableHead
+              sx={{
+                bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.03)' : alpha(theme.palette.common.white, 0.05),
+                '& .MuiTableCell-head': { fontWeight: 700, fontSize: '0.78rem' },
+              }}
+            >
               <TableRow>
-                <TableCell>상품명</TableCell>
-                <TableCell>수량</TableCell>
-                <TableCell>단가</TableCell>
-                <TableCell>금액</TableCell>
-                <TableCell>세율</TableCell>
-                <TableCell>세금</TableCell>
-                <TableCell>작업</TableCell>
+                <TableCell>{txt('상품명', 'Item')}</TableCell>
+                <TableCell>{txt('수량', 'Qty')}</TableCell>
+                <TableCell>{txt('단가', 'Unit Price')}</TableCell>
+                <TableCell>{txt('금액', 'Amount')}</TableCell>
+                <TableCell>{txt('세율', 'Tax Rate')}</TableCell>
+                <TableCell>{txt('세금', 'Tax')}</TableCell>
+                <TableCell>{txt('작업', 'Action')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -343,27 +368,27 @@ const EInvoiceCreate: React.FC = () => {
   );
 
   const renderTaxCalculation = () => (
-    <Card>
+    <Card elevation={0} sx={sectionCardSx}>
       <CardContent>
-        <Typography variant="h6" gutterBottom>세금 계산</Typography>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>{txt('세금 계산', 'Tax Calculation')}</Typography>
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 6 }}>
-            <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+            <Box sx={{ p: 2, bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.04) : 'grey.50', borderRadius: 2 }}>
               <Typography variant="body1" gutterBottom>
-                공급가액: Rs. {invoice.subtotal?.toLocaleString() || 0}
+                {txt('공급가액', 'Subtotal')}: Rs. {invoice.subtotal?.toLocaleString() || 0}
               </Typography>
               <Typography variant="body1" gutterBottom>
-                총 세금: Rs. {invoice.totalTax?.toLocaleString() || 0}
+                {txt('총 세금', 'Total Tax')}: Rs. {invoice.totalTax?.toLocaleString() || 0}
               </Typography>
               <Divider sx={{ my: 1 }} />
               <Typography variant="h6" color="primary.main">
-                총 금액: Rs. {invoice.totalAmount?.toLocaleString() || 0}
+                {txt('총 금액', 'Grand Total')}: Rs. {invoice.totalAmount?.toLocaleString() || 0}
               </Typography>
             </Box>
           </Grid>
           <Grid size={{ xs: 12, md: 6 }}>
             <Typography variant="body2" color="text.secondary">
-              GST 규정에 따라 자동으로 세금이 계산됩니다.
+              {txt('GST 규정에 따라 자동으로 세금이 계산됩니다.', 'Tax values are calculated automatically based on GST rules.')}
             </Typography>
           </Grid>
         </Grid>
@@ -372,27 +397,27 @@ const EInvoiceCreate: React.FC = () => {
   );
 
   const renderReview = () => (
-    <Card>
+    <Card elevation={0} sx={sectionCardSx}>
       <CardContent>
-        <Typography variant="h6" gutterBottom>E-Invoice 검토</Typography>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>{txt('E-Invoice 검토', 'E-Invoice Review')}</Typography>
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 6 }}>
-            <Typography variant="subtitle1" gutterBottom>회사 정보</Typography>
+            <Typography variant="subtitle1" gutterBottom>{txt('회사 정보', 'Company')}</Typography>
             <Typography variant="body2">{invoice.companyName}</Typography>
             <Typography variant="body2">GSTIN: {invoice.companyGstin}</Typography>
             <Typography variant="body2">{invoice.companyAddress}</Typography>
           </Grid>
           <Grid size={{ xs: 12, md: 6 }}>
-            <Typography variant="subtitle1" gutterBottom>고객 정보</Typography>
+            <Typography variant="subtitle1" gutterBottom>{txt('고객 정보', 'Customer')}</Typography>
             <Typography variant="body2">{invoice.customerName}</Typography>
             <Typography variant="body2">GSTIN: {invoice.customerGstin}</Typography>
             <Typography variant="body2">{invoice.customerAddress}</Typography>
           </Grid>
           <Grid size={{ xs: 12 }}>
-            <Typography variant="subtitle1" gutterBottom>인보이스 요약</Typography>
-            <Typography variant="body2">인보이스 번호: {invoice.invoiceNumber}</Typography>
-            <Typography variant="body2">인보이스 날짜: {invoice.invoiceDate}</Typography>
-            <Typography variant="body2">총 금액: Rs. {invoice.totalAmount?.toLocaleString() || 0}</Typography>
+            <Typography variant="subtitle1" gutterBottom>{txt('인보이스 요약', 'Invoice Summary')}</Typography>
+            <Typography variant="body2">{txt('인보이스 번호', 'Invoice Number')}: {invoice.invoiceNumber}</Typography>
+            <Typography variant="body2">{txt('인보이스 날짜', 'Invoice Date')}: {invoice.invoiceDate}</Typography>
+            <Typography variant="body2">{txt('총 금액', 'Grand Total')}: Rs. {invoice.totalAmount?.toLocaleString() || 0}</Typography>
           </Grid>
         </Grid>
       </CardContent>
@@ -400,9 +425,14 @@ const EInvoiceCreate: React.FC = () => {
   );
 
   return (
-    <Box sx={{ ...mvsPageRootSx }}>
+    <Box
+      sx={{
+        ...mvsPageRootSx,
+        px: { xs: 0, sm: 0.5, md: 1 },
+      }}
+    >
       <MvsPageHeader
-        title="E-Invoice 생성"
+        title={txt('E-Invoice 생성', 'Create E-Invoice')}
         icon={<ReceiptIcon />}
         actions={
           <>
@@ -410,27 +440,33 @@ const EInvoiceCreate: React.FC = () => {
             variant="outlined"
             startIcon={<PrintIcon />}
             disabled={activeStep < 3}
+            sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 600 }}
           >
-            미리보기
+            {txt('미리보기', 'Preview')}
           </Button>
           <Button
             variant="outlined"
             startIcon={<DownloadIcon />}
             disabled={activeStep < 3}
+            sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 600 }}
           >
-            PDF 다운로드
+            {txt('PDF 다운로드', 'Download PDF')}
           </Button>
           </>
         }
       />
 
-      <Stepper activeStep={activeStep} sx={{ mb: 3 }}>
-        {steps.map((label) => (
-          <Step key={label}>
-            <StepLabel>{label}</StepLabel>
-          </Step>
-        ))}
-      </Stepper>
+      <Card elevation={0} sx={{ ...sectionCardSx, mb: 3 }}>
+        <CardContent sx={{ py: 2 }}>
+          <Stepper activeStep={activeStep}>
+            {steps.map((label) => (
+              <Step key={label}>
+                <StepLabel>{label}</StepLabel>
+              </Step>
+            ))}
+          </Stepper>
+        </CardContent>
+      </Card>
 
       <Box sx={{ mb: 3 }}>
         {activeStep === 0 && renderCustomerInfo()}
@@ -443,8 +479,9 @@ const EInvoiceCreate: React.FC = () => {
         <Button
           disabled={activeStep === 0}
           onClick={handleBack}
+          sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 600 }}
         >
-          이전
+          {txt('이전', 'Back')}
         </Button>
         <Box>
           {activeStep === steps.length - 1 ? (
@@ -453,15 +490,17 @@ const EInvoiceCreate: React.FC = () => {
               onClick={handleGenerateInvoice}
               disabled={loading}
               startIcon={<SendIcon />}
+              sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 700, boxShadow: 'none' }}
             >
-              E-Invoice 생성
+              {txt('E-Invoice 생성', 'Generate E-Invoice')}
             </Button>
           ) : (
             <Button
               variant="contained"
               onClick={handleNext}
+              sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 700, boxShadow: 'none' }}
             >
-              다음
+              {txt('다음', 'Next')}
             </Button>
           )}
         </Box>

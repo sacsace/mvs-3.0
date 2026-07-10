@@ -37,7 +37,20 @@ import {
   useTheme
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsBodyPaginationSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsTableScrollSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+} from '../../theme/mvsLayout';
 import { alpha } from '@mui/material/styles';
 import {
   Add as AddIcon,
@@ -148,6 +161,21 @@ interface RoomBookingManagementProps {
   onCloseDialog?: () => void;
 }
 
+const roomBookingFilterFieldSx = {
+  ...(mvsSearchFieldSx as Record<string, unknown>),
+  ...mvsFilterFieldHeightSx,
+} as const;
+
+const listStateBoxSx = {
+  ...mvsBodyListTableSx,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  py: 6,
+  px: 2,
+} as const;
+
 const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   dialogOnly = false,
   initialFormState,
@@ -170,7 +198,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   const [paymentFilter, setPaymentFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [page, setPage] = useState(1);
-  const [itemsPerPage] = useState(25);
+  const [itemsPerPage] = useState(20);
   const [saving, setSaving] = useState(false);
   const [sortKey, setSortKey] = useState<string>('guestName');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -232,51 +260,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const apiBaseUrl = useMemo(() => API_BASE_URL.replace(/\/api$/, ''), []);
-
-  const shellCardSx = useMemo(
-    () => ({
-      mb: 3,
-      borderRadius: '18px',
-      border: `1px solid ${alpha(theme.palette.text.primary, 0.06)}`,
-      boxShadow: '0 2px 20px rgba(0,0,0,0.05)',
-      overflow: 'hidden',
-    }),
-    [theme]
-  );
-  const listTableCardSx = useMemo(
-    () => ({
-      borderRadius: '18px',
-      border: `1px solid ${alpha(theme.palette.text.primary, 0.06)}`,
-      boxShadow: '0 2px 20px rgba(0,0,0,0.05)',
-      overflow: 'hidden',
-    }),
-    [theme]
-  );
-  const softFieldSx = useMemo(
-    () => ({
-      '& .MuiOutlinedInput-root': {
-        borderRadius: '12px',
-        bgcolor: '#FFFFFF',
-        height: 40,
-        '& .MuiOutlinedInput-input': {
-          py: 0,
-        },
-        '& fieldset': { borderColor: '#C5CED9' },
-        '&:hover fieldset': { borderColor: '#B8C4D0' },
-      },
-    }),
-    []
-  );
-  const selectFieldSx = useMemo(
-    () => ({
-      borderRadius: '12px',
-      bgcolor: '#FFFFFF',
-      height: 40,
-      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
-      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
-    }),
-    []
-  );
 
   const billToInputSx = {
     '& .MuiInputBase-root': {
@@ -2295,7 +2278,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
             disableElevation
             startIcon={<AddIcon />}
             onClick={handleOpenCreate}
-            sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}
+            sx={mvsBodyPrimaryBtnSx}
           >
             {t('roomBookingManagement.actions.book')}
           </Button>
@@ -2303,14 +2286,19 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       />
 
       {/* 필터 및 검색 */}
-      <Card elevation={0} sx={shellCardSx}>
-        <CardContent sx={{ py: 2.5 }}>
-          <Box sx={{ 
-            display: 'grid', 
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            ...roomBookingFilterFieldSx,
+            display: 'grid',
             gridTemplateColumns: { xs: '1fr', sm: 'minmax(180px, 2fr) repeat(4, minmax(110px, 1fr)) auto' },
-            gap: 2, 
-            alignItems: 'flex-end' 
-          }}>
+            gap: 2,
+            alignItems: 'flex-end',
+          }}
+        >
             <TextField
               fullWidth
               size="small"
@@ -2319,11 +2307,11 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              sx={softFieldSx}
+              sx={roomBookingFilterFieldSx}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon color="action" fontSize="small" />
+                    <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
                   </InputAdornment>
                 ),
               }}
@@ -2340,7 +2328,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                 displayEmpty: true,
                 renderValue: (selected) => (selected ? selected : t('roomBookingManagement.filters.all')),
               }}
-              sx={selectFieldSx}
+              sx={roomBookingFilterFieldSx}
             >
               <MenuItem value="">{t('roomBookingManagement.filters.all')}</MenuItem>
               <MenuItem value="confirmed">{t('roomBookingManagement.status.confirmed')}</MenuItem>
@@ -2362,7 +2350,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                 displayEmpty: true,
                 renderValue: (selected) => (selected ? selected : t('roomBookingManagement.filters.all')),
               }}
-              sx={selectFieldSx}
+              sx={roomBookingFilterFieldSx}
             >
               <MenuItem value="">{t('roomBookingManagement.filters.all')}</MenuItem>
               <MenuItem value="standard">{t('roomBookingManagement.roomTypes.standard')}</MenuItem>
@@ -2382,7 +2370,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                 displayEmpty: true,
                 renderValue: (selected) => (selected ? selected : t('roomBookingManagement.filters.all')),
               }}
-              sx={selectFieldSx}
+              sx={roomBookingFilterFieldSx}
             >
               <MenuItem value="">{t('roomBookingManagement.filters.all')}</MenuItem>
               <MenuItem value="paid">{t('roomBookingManagement.filters.paidOption')}</MenuItem>
@@ -2396,7 +2384,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
               onChange={(e) => setDateFilter(e.target.value)}
               size="small"
               InputLabelProps={{ shrink: true }}
-              sx={softFieldSx}
+              sx={roomBookingFilterFieldSx}
             />
             <Button
               variant="outlined"
@@ -2409,197 +2397,174 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                 setDateFilter('');
               }}
               sx={{
-                textTransform: 'none',
-                borderRadius: '12px',
+                ...mvsBodyOutlinedBtnSx,
                 height: 40,
                 whiteSpace: 'nowrap',
-                minWidth: 'fit-content',
-                px: 2,
+                width: { xs: '100%', sm: 'auto' },
+                minWidth: { sm: 120 },
               }}
             >
               {t('roomBookingManagement.actions.reset')}
             </Button>
-          </Box>
-        </CardContent>
+        </Box>
       </Card>
 
       {/* 예약 목록 테이블 */}
-      <Card elevation={0} sx={listTableCardSx}>
-        <TableContainer
-          sx={{
-            width: '100%',
-            maxWidth: '100%',
-            overflowX: 'auto',
-            WebkitOverflowScrolling: 'touch',
-          }}
-        >
-          <Table
-            size="small"
-            stickyHeader
-            sx={{
-              width: '100%',
-              tableLayout: 'auto',
-              minWidth: { xs: 720, sm: 960 },
-              borderCollapse: 'separate',
-              borderSpacing: 0,
-            }}
-          >
-            <TableHead
+      <Box sx={mvsBodyListZoneSx}>
+        {sortedPaginatedBookings.length === 0 ? (
+          <Box sx={listStateBoxSx}>
+            <Typography variant="body2" color="text.secondary">
+              {filteredBookings.length === 0
+                ? t('roomBookingManagement.empty.noData', { defaultValue: '표시할 예약이 없습니다.' })
+                : t('roomBookingManagement.empty.noSearchResults', { defaultValue: '검색 결과가 없습니다.' })}
+            </Typography>
+          </Box>
+        ) : (
+          <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+            <Table
+              size="small"
               sx={{
-                bgcolor: alpha(theme.palette.text.primary, 0.03),
-                '& .MuiTableCell-head': {
-                  color: 'text.secondary',
-                  fontWeight: 600,
-                  fontSize: '0.75rem',
-                  letterSpacing: '0.04em',
-                  textTransform: 'none',
-                  borderBottom: '1px solid',
-                  borderColor: alpha(theme.palette.text.primary, 0.08),
-                  py: 1.25,
-                  '& .MuiTableSortLabel-root': { color: 'inherit' },
-                },
-                '& .MuiTableCell-head:last-of-type': {
-                  textAlign: 'center',
+                width: '100%',
+                tableLayout: 'auto',
+                minWidth: { xs: 720, sm: 960 },
+                borderCollapse: 'collapse',
+                bgcolor: 'transparent',
+                '& .MuiTableCell-root': {
+                  borderLeft: 'none',
+                  borderRight: 'none',
+                  borderTop: 'none',
                 },
               }}
             >
-              <TableRow>
-                {[
-                  { label: t('roomBookingManagement.columns.guestName'), key: 'guestName' },
-                  { label: t('roomBookingManagement.columns.companyName'), key: 'companyName' },
-                  { label: t('roomBookingManagement.columns.roomNo'), key: 'roomNumber' },
-                  { label: t('roomBookingManagement.columns.roomType'), key: 'roomType' },
-                  { label: t('roomBookingManagement.columns.checkIn'), key: 'checkInDate' },
-                  { label: t('roomBookingManagement.columns.checkOut'), key: 'checkOutDate' },
-                  { label: t('roomBookingManagement.columns.nights'), key: 'totalNights' },
-                  { label: t('roomBookingManagement.columns.nightlyRate'), key: 'nightlyRate' },
-                  { label: t('roomBookingManagement.columns.amount'), key: 'totalAmount' },
-                  { label: t('roomBookingManagement.columns.payment'), key: 'paymentStatus' },
-                  { label: t('roomBookingManagement.columns.status'), key: 'status' },
-                  { label: t('roomBookingManagement.columns.note'), key: 'specialRequests' },
-                  { label: t('roomBookingManagement.columns.actions') }
-                ].map((col) => (
-                  <TableCell
-                    key={col.label}
-                    sx={{
-                      fontSize: 12,
-                      whiteSpace: 'nowrap',
-                      lineHeight: 1.2,
-                      cursor: col.key ? 'pointer' : 'default',
-                      verticalAlign: 'middle',
-                    }}
-                    onClick={() => handleSort(col.key)}
+              <TableHead sx={mvsTableHeadHighlightSx}>
+                <TableRow>
+                  {[
+                    { label: t('roomBookingManagement.columns.guestName'), key: 'guestName' },
+                    { label: t('roomBookingManagement.columns.companyName'), key: 'companyName' },
+                    { label: t('roomBookingManagement.columns.roomNo'), key: 'roomNumber' },
+                    { label: t('roomBookingManagement.columns.roomType'), key: 'roomType' },
+                    { label: t('roomBookingManagement.columns.checkIn'), key: 'checkInDate' },
+                    { label: t('roomBookingManagement.columns.checkOut'), key: 'checkOutDate' },
+                    { label: t('roomBookingManagement.columns.nights'), key: 'totalNights' },
+                    { label: t('roomBookingManagement.columns.nightlyRate'), key: 'nightlyRate' },
+                    { label: t('roomBookingManagement.columns.amount'), key: 'totalAmount' },
+                    { label: t('roomBookingManagement.columns.payment'), key: 'paymentStatus' },
+                    { label: t('roomBookingManagement.columns.status'), key: 'status' },
+                    { label: t('roomBookingManagement.columns.note'), key: 'specialRequests' },
+                    { label: t('roomBookingManagement.columns.actions') },
+                  ].map((col) => (
+                    <TableCell
+                      key={col.label}
+                      align={col.key ? 'left' : 'center'}
+                      sx={{
+                        whiteSpace: 'nowrap',
+                        cursor: col.key ? 'pointer' : 'default',
+                        verticalAlign: 'middle',
+                      }}
+                      onClick={() => handleSort(col.key)}
+                    >
+                      {col.key ? (
+                        <TableSortLabel
+                          active={sortKey === col.key}
+                          direction={sortKey === col.key ? sortDirection : 'asc'}
+                          sx={{
+                            color: 'inherit',
+                            '& .MuiTableSortLabel-icon': { color: 'inherit' },
+                          }}
+                        >
+                          {col.label}
+                        </TableSortLabel>
+                      ) : (
+                        col.label
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody sx={mvsTableBodyRowSx}>
+                {sortedPaginatedBookings.map((booking) => (
+                  <TableRow
+                    key={booking.id}
+                    hover
+                    onClick={() => handleViewBooking(booking)}
+                    sx={{ cursor: 'pointer', '&:active': { bgcolor: 'action.selected' } }}
                   >
-                    {col.key ? (
-                      <TableSortLabel
-                        active={sortKey === col.key}
-                        direction={sortKey === col.key ? sortDirection : 'asc'}
+                    {[
+                      booking.guestName,
+                      booking.companyName || '-',
+                      getRoomDisplayLabel(booking),
+                      getRoomTypeLabel(booking.roomType),
+                      booking.checkInDate,
+                      booking.checkOutDate,
+                      `${booking.totalNights}${t('roomBookingManagement.units.night')}`,
+                      `Rs. ${booking.totalNights ? Math.round(booking.totalAmount / booking.totalNights).toLocaleString() : '-'}`,
+                      `Rs. ${booking.totalAmount.toLocaleString()}`,
+                    ].map((value, index) => (
+                      <TableCell
+                        key={`${booking.id}-${index}`}
                         sx={{
-                          color: 'inherit',
-                          '& .MuiTableSortLabel-icon': { color: 'inherit' }
+                          fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                          py: 0.75,
+                          px: { xs: 0.5, sm: 1 },
+                          whiteSpace: index === 0 || index === 1 ? 'normal' : 'nowrap',
+                          wordBreak: index === 0 || index === 1 ? 'break-word' : undefined,
+                          maxWidth: index === 0 ? { xs: 140, sm: 180 } : index === 1 ? { xs: 120, sm: 200 } : undefined,
+                          overflow: 'hidden',
+                          textOverflow: index === 0 || index === 1 ? 'ellipsis' : undefined,
+                          verticalAlign: 'middle',
                         }}
                       >
-                        {col.label}
-                      </TableSortLabel>
-                    ) : (
-                      col.label
-                    )}
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {sortedPaginatedBookings.map((booking) => (
-                <TableRow
-                  key={booking.id}
-                  hover
-                  onClick={() => handleViewBooking(booking)}
-                  sx={{ cursor: 'pointer' }}
-                >
-                  {[
-                    booking.guestName,
-                    booking.companyName || '-',
-                    getRoomDisplayLabel(booking),
-                    getRoomTypeLabel(booking.roomType),
-                    booking.checkInDate,
-                    booking.checkOutDate,
-                    `${booking.totalNights}${t('roomBookingManagement.units.night')}`,
-                    `Rs. ${booking.totalNights ? Math.round(booking.totalAmount / booking.totalNights).toLocaleString() : '-'}`,
-                    `Rs. ${booking.totalAmount.toLocaleString()}`
-                  ].map((value, index) => (
+                        {value}
+                      </TableCell>
+                    ))}
                     <TableCell
-                      key={`${booking.id}-${index}`}
+                      align="center"
                       sx={{
-                        fontSize: 12,
-                        whiteSpace: index === 0 || index === 1 ? 'normal' : 'nowrap',
-                        wordBreak: index === 0 || index === 1 ? 'break-word' : undefined,
-                        maxWidth: index === 0 ? { xs: 140, sm: 180 } : index === 1 ? { xs: 120, sm: 200 } : undefined,
-                        overflow: index === 0 || index === 1 ? 'hidden' : 'hidden',
-                        textOverflow: index === 0 || index === 1 ? 'ellipsis' : 'ellipsis',
-                        borderBottom: '1px solid',
-                        borderColor: alpha(theme.palette.text.primary, 0.08),
-                        lineHeight: 1.35,
-                        py: 1,
+                        fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                        py: 0.75,
+                        px: { xs: 0.5, sm: 1 },
                         verticalAlign: 'middle',
                       }}
                     >
-                      {value}
+                      <Box sx={{ display: 'inline-flex', justifyContent: 'center' }}>
+                        {getPaymentStatusChip(booking.paymentStatus)}
+                      </Box>
                     </TableCell>
-                  ))}
-                  <TableCell
-                    sx={{
-                      fontSize: 12,
-                      textAlign: 'center',
-                      borderBottom: '1px solid',
-                      borderColor: alpha(theme.palette.text.primary, 0.08),
-                      lineHeight: 1.2,
-                      py: 1,
-                      verticalAlign: 'middle',
-                    }}
-                  >
-                    <Box sx={{ display: 'inline-flex', justifyContent: 'center' }}>
-                      {getPaymentStatusChip(booking.paymentStatus)}
-                    </Box>
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      fontSize: 12,
-                      borderBottom: '1px solid',
-                      borderColor: alpha(theme.palette.text.primary, 0.08),
-                      lineHeight: 1.2,
-                      py: 1,
-                      verticalAlign: 'middle',
-                    }}
-                  >
-                    {getStatusChip(booking.status)}
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      fontSize: 12,
-                      whiteSpace: 'normal',
-                      wordBreak: 'break-word',
-                      maxWidth: { xs: 140, sm: 240 },
-                      borderBottom: '1px solid',
-                      borderColor: alpha(theme.palette.text.primary, 0.08),
-                      lineHeight: 1.35,
-                      py: 1,
-                      verticalAlign: 'middle',
-                    }}
-                  >
-                    {booking.specialRequests || '-'}
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      fontSize: 12,
-                      whiteSpace: 'nowrap',
-                      borderBottom: '1px solid',
-                      borderColor: alpha(theme.palette.text.primary, 0.08),
-                      py: 0.75,
-                      verticalAlign: 'middle',
-                    }}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center', flexWrap: 'wrap' }}>
+                    <TableCell
+                      sx={{
+                        fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                        py: 0.75,
+                        px: { xs: 0.5, sm: 1 },
+                        verticalAlign: 'middle',
+                      }}
+                    >
+                      {getStatusChip(booking.status)}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                        py: 0.75,
+                        px: { xs: 0.5, sm: 1 },
+                        whiteSpace: 'normal',
+                        wordBreak: 'break-word',
+                        maxWidth: { xs: 140, sm: 240 },
+                        verticalAlign: 'middle',
+                      }}
+                    >
+                      {booking.specialRequests || '-'}
+                    </TableCell>
+                    <TableCell
+                      align="center"
+                      sx={{
+                        fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                        py: 0.5,
+                        px: { xs: 0.5, sm: 1 },
+                        whiteSpace: 'nowrap',
+                        verticalAlign: 'middle',
+                      }}
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center', flexWrap: 'wrap' }}>
                       {booking.status === 'confirmed' && (
                         <Tooltip title={t('roomBookingManagement.actions.checkin')}>
                           <IconButton
@@ -2648,17 +2613,19 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
             </TableBody>
           </Table>
         </TableContainer>
+        )}
 
-        {/* 페이지네이션 */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-          <Pagination
-            count={Math.ceil(filteredBookings.length / itemsPerPage)}
-            page={page}
-            onChange={(_, value) => setPage(value)}
-            color="primary"
-          />
-        </Box>
-      </Card>
+        {filteredBookings.length > 0 && (
+          <Box sx={mvsBodyPaginationSx}>
+            <Pagination
+              count={Math.ceil(filteredBookings.length / itemsPerPage)}
+              page={page}
+              onChange={(_, value) => setPage(value)}
+              color="primary"
+            />
+          </Box>
+        )}
+      </Box>
 
       {bookingDialog}
       {feedbackSnackbars}

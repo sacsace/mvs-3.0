@@ -15,7 +15,13 @@ import {
   Tooltip
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsBodyCardSx,
+  mvsBodyPrimaryBtnSx,
+  mvsSearchFieldSx,
+  mvsInnerCardSx,
+} from '../../theme/mvsLayout';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { api, inventoryService } from '../../services/api';
@@ -302,13 +308,26 @@ const StockInSimple: React.FC = () => {
     lineHeight: 1.35,
   } as const;
 
-  /** 편집 가능 입력 — 여유 있는 높이, 도움말은 캡션 톤으로 분리 */
+  /** 편집 가능 입력 — MVS Body 검색 필드 + 폼 높이 */
   const appleInputSx = {
+    ...(mvsSearchFieldSx as Record<string, unknown>),
     '& .MuiOutlinedInput-root': {
       borderRadius: '12px',
-      minHeight: 48,
       bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.05),
+      minHeight: 48,
       transition: theme.transitions.create(['background-color', 'box-shadow', 'border-color'], { duration: 180 }),
+      '& .MuiOutlinedInput-notchedOutline': {
+        borderColor: '#C5CED9',
+      },
+      '&:hover .MuiOutlinedInput-notchedOutline': {
+        borderColor: '#B8C4D0',
+      },
+      '& fieldset': {
+        borderColor: '#C5CED9',
+      },
+      '&:hover fieldset': {
+        borderColor: '#B8C4D0',
+      },
       '&:hover': {
         bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.14 : 0.08),
       },
@@ -319,9 +338,6 @@ const StockInSimple: React.FC = () => {
           borderColor: alpha(theme.palette.divider, 0.95),
           borderWidth: 1,
         },
-      },
-      '& fieldset': {
-        borderColor: alpha(theme.palette.divider, 0.9),
       },
       '&.Mui-disabled': {
         bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
@@ -347,17 +363,21 @@ const StockInSimple: React.FC = () => {
     },
   };
 
-  /** 조회된 품목 읽기 전용 — 입력과 계열, 읽기 전용 톤 */
+  /** 조회된 품목 읽기 전용 — MVS Body 검색 필드 톤 + 읽기 전용 배경 */
   const appleReadOnlySx = {
+    ...(mvsSearchFieldSx as Record<string, unknown>),
     '& .MuiOutlinedInput-root': {
       borderRadius: '12px',
       minHeight: 48,
       bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
+      '& .MuiOutlinedInput-notchedOutline': {
+        borderColor: '#C5CED9',
+      },
       '& fieldset': {
-        borderColor: alpha(theme.palette.divider, 0.85),
+        borderColor: '#C5CED9',
       },
       '&:hover fieldset': {
-        borderColor: alpha(theme.palette.divider, 0.92),
+        borderColor: '#B8C4D0',
       },
     },
     '& .MuiOutlinedInput-input': {
@@ -377,7 +397,7 @@ const StockInSimple: React.FC = () => {
   };
 
   return (
-    <Box sx={{ ...mvsPageRootSx, p: 2, maxWidth: 920, mx: 'auto' }}>
+    <Box sx={{ ...mvsPageRootSx, maxWidth: 920, mx: 'auto' }}>
       <MvsPageHeader
         title={txt('입고 관리', 'Receiving')}
         description={
@@ -396,16 +416,8 @@ const StockInSimple: React.FC = () => {
         }
       />
 
-      <Card
-        elevation={0}
-        sx={{
-          border: '1px solid',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-          borderRadius: '20px',
-          boxShadow: theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
-        }}
-      >
-        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, p: { xs: 2.5, sm: 3 } }}>
+      <Card elevation={0} sx={mvsBodyCardSx}>
+        <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
             <Stack spacing={3}>
               <Typography
                 component="label"
@@ -535,10 +547,7 @@ const StockInSimple: React.FC = () => {
               <>
                 <Box
                   sx={{
-                    border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
-                    borderRadius: '14px',
-                    bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.04),
-                    boxShadow: `inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.04 : 0.45)}`,
+                    ...mvsInnerCardSx,
                     p: 2,
                     minHeight: 160,
                     display: 'flex',
@@ -657,12 +666,11 @@ const StockInSimple: React.FC = () => {
                       onClick={submit}
                       fullWidth
                       sx={{
+                        ...mvsBodyPrimaryBtnSx,
                         mt: 0.5,
                         py: 1.35,
-                        borderRadius: '12px',
-                        fontWeight: 600,
+                        minHeight: 48,
                         fontSize: '0.95rem',
-                        textTransform: 'none',
                       }}
                     >
                       {txt('입고 처리', 'Receive stock')}

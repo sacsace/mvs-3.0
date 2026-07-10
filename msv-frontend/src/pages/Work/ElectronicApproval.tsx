@@ -41,7 +41,22 @@ import {
   TableSortLabel
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx, mvsOutlinedLabelProps } from '../../theme/mvsLayout';
+import {
+  mvsOutlinedLabelProps,
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsBodyPaginationSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsTableScrollSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+} from '../../theme/mvsLayout';
 import {
   Edit as EditIcon,
   Delete as DeleteIcon,
@@ -89,7 +104,6 @@ import PromptDialog from '../../components/Common/PromptDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { usePromptDialog } from '../../hooks/usePromptDialog';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
-import { mvsPageTitleSx } from '../../theme/mvsLayout';
 
 const WORK_APPROVAL_MENU_ROUTES = ['/work/approval', '/work'] as const;
 
@@ -221,36 +235,9 @@ const APPROVAL_FORM_BORDER = {
   flowArrow: 'rgba(15, 23, 42, 0.5)',
 } as const;
 
-/** 목록 상단 통계·필터 — 대비·테두리 선명도 */
-const approvalListHeaderCardSx = (mode: 'light' | 'dark') => ({
-  borderRadius: '16px',
-  border: '1px solid',
-  borderColor: mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : 'divider',
-  boxShadow: mode === 'light' ? '0 4px 14px rgba(15, 23, 42, 0.08)' : '0 2px 12px rgba(0,0,0,0.28)',
-  bgcolor: 'background.paper',
-});
-
-const approvalListFilterFieldSx = {
-  bgcolor: 'background.paper',
-  borderRadius: '12px',
-  '& .MuiInputLabel-root': {
-    color: '#4B5563',
-    fontWeight: 600,
-    fontSize: '0.8125rem',
-  },
-  '& .MuiOutlinedInput-root': {
-    borderRadius: '12px',
-    '& fieldset': {
-      borderColor: APPROVAL_FORM_BORDER.field,
-    },
-    '&:hover fieldset': {
-      borderColor: APPROVAL_FORM_BORDER.fieldHover,
-    },
-    '&.Mui-focused fieldset': {
-      borderColor: 'primary.main',
-      borderWidth: '1.5px',
-    },
-  },
+const approvalFilterFieldSx = {
+  ...mvsSearchFieldSx,
+  ...mvsFilterFieldHeightSx,
 } as const;
 
 const approvalWriteFieldSx = {
@@ -1151,7 +1138,7 @@ const ElectronicApproval: React.FC = () => {
     } catch (error: any) {
       console.error('사용자 목록 조회 오류:', error);
     }
-  }, [user?.company_id, user?.id]);
+  }, [user]);
 
 
   const filterDocuments = useCallback(() => {
@@ -2104,29 +2091,26 @@ const ElectronicApproval: React.FC = () => {
     const isCurrentApprover = selectedDocument.currentApproverId === user?.id;
 
     return (
-      <Box sx={{ 
-        p: 0,
-        backgroundColor: 'workArea.main',
-        borderRadius: 2,
-        minHeight: '100%',
+      <Box sx={{
+        ...mvsPageRootSx,
         '& .MuiOutlinedInput-root': {
-          borderRadius: 2,
+          borderRadius: '12px',
           backgroundColor: 'background.paper',
           '& .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'divider'
+            borderColor: alpha(theme.palette.divider, 0.9),
           },
           '&:hover .MuiOutlinedInput-notchedOutline': {
-            borderColor: 'text.secondary'
+            borderColor: alpha(theme.palette.text.primary, 0.12),
           },
-      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-          borderColor: 'primary.main',
-          borderWidth: 1,
-        }
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+            borderColor: 'primary.main',
+            borderWidth: 1,
+          },
         },
         '& .MuiInputBase-input::placeholder': {
-          color: 'text.secondary',
-          opacity: 0.75
-        }
+          color: '#9CA3AF',
+          opacity: 1,
+        },
       }}>
         <MvsPageHeader
           title={t('approval.detailPageTitle')}
@@ -2134,21 +2118,14 @@ const ElectronicApproval: React.FC = () => {
             <Button
               variant="outlined"
               onClick={() => setViewMode('list')}
-              sx={{
-                borderRadius: '12px',
-                textTransform: 'none',
-                fontWeight: 600,
-                borderColor: 'divider',
-                color: 'text.secondary',
-                '&:hover': { bgcolor: 'action.hover', color: 'text.primary' },
-              }}
+              sx={mvsBodyOutlinedBtnSx}
             >
               {t('approval.backToList')}
             </Button>
           }
         />
 
-        <Card>
+        <Card elevation={0} sx={mvsBodyCardSx}>
           <CardContent>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
               <Box>
@@ -2610,12 +2587,11 @@ const ElectronicApproval: React.FC = () => {
     );
   }
 
+  const isListView = viewMode === 'list' && activeTab !== 2;
+
   return (
-    <Box sx={{ 
-      width: '100%',
-      minHeight: '100%',
-      maxWidth: '100%',
-      boxSizing: 'border-box',
+    <Box sx={{
+      ...mvsPageRootSx,
       '& .MuiOutlinedInput-root': {
         borderRadius: '12px',
         backgroundColor: 'background.paper',
@@ -2641,50 +2617,43 @@ const ElectronicApproval: React.FC = () => {
       <MvsPageHeader title={t('approval.pageTitle')} mb={2} />
 
       {/* 탭 네비게이션 */}
-      <Card
-        elevation={0}
-        sx={{
-          mb: 3,
-          borderRadius: '16px',
-          overflow: 'hidden',
-          border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'light' ? 0.1 : 0.35)}`,
-          boxShadow:
-            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 2px 12px rgba(0,0,0,0.25)',
-        }}
-      >
-        <Tabs 
-          value={activeTab} 
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: isListView ? 3 : 2 }}>
+        <Tabs
+          value={activeTab}
           onChange={(e, newValue) => {
             setActiveTab(newValue);
             if (newValue === 2) {
-              // 결제 문서 작성 탭
               if (viewMode !== 'create' && viewMode !== 'edit') {
                 handleAdd();
               }
             } else {
-              // 목록 탭들
               setViewMode('list');
               setSelectedDocument(null);
             }
           }}
           sx={{
-            px: 1,
-            minHeight: 48,
+            minHeight: 40,
+            px: { xs: 1, sm: 1.5 },
+            bgcolor: '#FFFFFF',
             '& .MuiTabs-indicator': {
-              height: 2,
-              borderRadius: '2px 2px 0 0',
-              bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.85)' : theme.palette.grey[300],
+              height: 3,
+              borderRadius: '3px 3px 0 0',
             },
             '& .MuiTab-root': {
               textTransform: 'none',
               fontWeight: 500,
-              fontSize: '0.875rem',
+              fontSize: '0.8125rem',
+              minHeight: 40,
+              py: 0.75,
+              letterSpacing: '-0.01em',
               color: 'text.secondary',
-              minHeight: 48,
             },
             '& .MuiTab-root.Mui-selected': {
-              color: 'text.primary',
-              fontWeight: 600,
+              color: 'primary.main',
+              fontWeight: 700,
+            },
+            '& .MuiTab-root.Mui-disabled': {
+              color: 'text.disabled',
             },
           }}
         >
@@ -2704,16 +2673,7 @@ const ElectronicApproval: React.FC = () => {
       </Card>
 
       {(viewMode === 'create' || viewMode === 'edit') && (
-        <Card sx={{ 
-          mb: 3,
-          elevation: 0,
-          boxShadow: '0 4px 24px rgba(15, 23, 42, 0.06)', 
-          bgcolor: 'background.paper',
-          borderRadius: '20px',
-          overflow: 'hidden',
-          border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'dark' ? 0.35 : 0.1)}`,
-          maxWidth: '100%',
-        }}>
+        <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3, maxWidth: '100%' }}>
           {/* 문서 헤더 */}
           <Box sx={{ 
             bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.045),
@@ -3738,20 +3698,7 @@ const ElectronicApproval: React.FC = () => {
                     setSelectedDocument(null);
                   }}
                   disabled={saving}
-                  sx={{
-                    borderRadius: '12px',
-                    px: 3,
-                    py: 1.25,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    minWidth: 100,
-                    borderColor: alpha(theme.palette.divider, 0.95),
-                    color: 'text.primary',
-                    '&:hover': {
-                      borderColor: alpha(theme.palette.text.primary, 0.2),
-                      bgcolor: alpha(theme.palette.grey[500], 0.06),
-                    },
-                  }}
+                  sx={mvsBodyOutlinedBtnSx}
                 >
                   {t('approval.cancel')}
                 </Button>
@@ -3761,14 +3708,7 @@ const ElectronicApproval: React.FC = () => {
                   onClick={handleSave}
                   disabled={saving}
                   startIcon={saving ? <CircularProgress size={20} color="inherit" /> : null}
-                  sx={{
-                    borderRadius: '12px',
-                    px: 3,
-                    py: 1.25,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    minWidth: 120,
-                  }}
+                  sx={mvsBodyPrimaryBtnSx}
                 >
                   {saving ? t('approval.saving') : (selectedDocument ? t('approval.update') : t('approval.create'))}
                 </Button>
@@ -3779,12 +3719,12 @@ const ElectronicApproval: React.FC = () => {
       )}
 
       {/* 통계 카드 - 목록 모드일 때만 표시 */}
-      {viewMode === 'list' && activeTab !== 2 && (
+      {isListView && (
         <Box
           sx={{
             display: 'grid',
             gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
-            gap: 2,
+            gap: 2.5,
             mb: 3,
           }}
         >
@@ -3796,26 +3736,16 @@ const ElectronicApproval: React.FC = () => {
               { label: t('approval.statistics.totalAmount'), value: totalAmount.toLocaleString(), color: 'text.primary' as const },
             ] as const
           ).map((stat) => (
-            <Card
-              key={stat.label}
-              elevation={0}
-              sx={approvalListHeaderCardSx(theme.palette.mode)}
-            >
-              <CardContent sx={{ py: 2.25, px: 2.5 }}>
+            <Card key={stat.label} elevation={0} sx={mvsKpiCardSx}>
+              <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
                 <Typography
                   variant="caption"
-                  sx={{
-                    fontWeight: 600,
-                    display: 'block',
-                    mb: 1,
-                    letterSpacing: '0.03em',
-                    fontSize: '0.8125rem',
-                    color: theme.palette.mode === 'light' ? '#4B5563' : 'text.secondary',
-                  }}
+                  color="text.secondary"
+                  sx={{ fontWeight: 600, display: 'block', mb: 0.75, letterSpacing: '0.02em' }}
                 >
                   {stat.label}
                 </Typography>
-                <Typography variant="kpiNumber" sx={{ fontWeight: 700, color: stat.color, lineHeight: 1.2 }}>
+                <Typography variant="h5" sx={{ fontWeight: 600, color: stat.color, lineHeight: 1.2, letterSpacing: '-0.02em' }}>
                   {stat.value}
                 </Typography>
               </CardContent>
@@ -3825,21 +3755,20 @@ const ElectronicApproval: React.FC = () => {
       )}
 
       {/* 필터 및 검색 - 목록 모드일 때만 표시 */}
-      {viewMode === 'list' && activeTab !== 2 && (
-        <Card
-          elevation={0}
-          sx={{
-            ...approvalListHeaderCardSx(theme.palette.mode),
-            mb: 3,
-          }}
-        >
-        <CardContent sx={{ py: 2.25, px: 2.5 }}>
-          <Box sx={{ 
-            display: 'grid', 
-            gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr 1fr' },
-            gap: 2, 
-            alignItems: 'center' 
-          }}>
+      {isListView && (
+        <Card elevation={0} sx={mvsBodyCardSx}>
+          <Box
+            sx={{
+              px: { xs: 2, sm: 2.5 },
+              py: 2,
+              bgcolor: '#FFFFFF',
+              ...approvalFilterFieldSx,
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr 1fr' },
+              gap: 2,
+              alignItems: 'flex-end',
+            }}
+          >
             <TextField
               fullWidth
               size="small"
@@ -3855,7 +3784,7 @@ const ElectronicApproval: React.FC = () => {
                   </InputAdornment>
                 ),
               }}
-              sx={approvalListFilterFieldSx}
+              sx={approvalFilterFieldSx}
             />
             <TextField
               fullWidth
@@ -3866,7 +3795,7 @@ const ElectronicApproval: React.FC = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
               InputLabelProps={{ shrink: true }}
               SelectProps={{ displayEmpty: true }}
-              sx={approvalListFilterFieldSx}
+              sx={approvalFilterFieldSx}
             >
               <MenuItem value="">{t('approval.all')}</MenuItem>
               <MenuItem value="draft">{t('approval.draft')}</MenuItem>
@@ -3885,7 +3814,7 @@ const ElectronicApproval: React.FC = () => {
               onChange={(e) => setTypeFilter(e.target.value)}
               InputLabelProps={{ shrink: true }}
               SelectProps={{ displayEmpty: true }}
-              sx={approvalListFilterFieldSx}
+              sx={approvalFilterFieldSx}
             >
               <MenuItem value="">{t('approval.all')}</MenuItem>
               <MenuItem value="expense">{t('approval.expense')}</MenuItem>
@@ -3902,7 +3831,7 @@ const ElectronicApproval: React.FC = () => {
               onChange={(e) => setPriorityFilter(e.target.value)}
               InputLabelProps={{ shrink: true }}
               SelectProps={{ displayEmpty: true }}
-              sx={approvalListFilterFieldSx}
+              sx={approvalFilterFieldSx}
             >
               <MenuItem value="">{t('approval.all')}</MenuItem>
               <MenuItem value="low">{t('approval.low')}</MenuItem>
@@ -3920,72 +3849,31 @@ const ElectronicApproval: React.FC = () => {
                 setTypeFilter('');
                 setPriorityFilter('');
               }}
-              sx={{
-                borderRadius: '12px',
-                textTransform: 'none',
-                fontWeight: 600,
-                borderColor: APPROVAL_FORM_BORDER.field,
-                color: theme.palette.mode === 'light' ? '#4B5563' : 'text.secondary',
-                '&:hover': {
-                  borderColor: APPROVAL_FORM_BORDER.fieldHover,
-                  bgcolor: 'action.hover',
-                  color: 'text.primary',
-                },
-              }}
+              sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
             >
               {t('approval.reset')}
             </Button>
           </Box>
-        </CardContent>
-      </Card>
+        </Card>
       )}
 
       {/* 결재 문서 목록 테이블 - 목록 모드일 때만 표시 */}
-      {viewMode === 'list' && activeTab !== 2 && (
-        <Card
-          elevation={0}
-          sx={{
-            borderRadius: '14px',
-            overflow: 'hidden',
-            border: '1px solid',
-            borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-            boxShadow:
-              theme.palette.mode === 'light' ? '0 1px 8px rgba(15, 23, 42, 0.04)' : '0 2px 10px rgba(0,0,0,0.24)',
-            bgcolor: 'background.paper',
-          }}
-        >
-        <TableContainer sx={{ bgcolor: 'transparent' }}>
-          <Table
-            sx={{
-              borderCollapse: 'collapse',
-              '& .MuiTableCell-root': {
-                borderLeft: 'none',
-                borderRight: 'none',
-                borderTop: 'none',
-              },
-            }}
-          >
-            <TableHead
+      {isListView && (
+        <Box sx={mvsBodyListZoneSx}>
+          <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+            <Table
+              size="small"
               sx={{
-                '& .MuiTableCell-head': {
-                  bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.015)' : alpha(theme.palette.common.white, 0.03),
-                  color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
-                  fontWeight: 500,
-                  fontSize: '0.72rem',
-                  textTransform: 'none',
-                  letterSpacing: '0.005em',
-                  borderBottom: `1px solid ${
-                    theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                  }`,
-                  py: 1.1,
-                  px: 1.5,
-                  '& .MuiTableSortLabel-root': { color: 'inherit' },
-                  '& .MuiTableSortLabel-root.Mui-active': {
-                    color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.92)' : theme.palette.grey[100],
-                  },
+                borderCollapse: 'collapse',
+                bgcolor: 'transparent',
+                '& .MuiTableCell-root': {
+                  borderLeft: 'none',
+                  borderRight: 'none',
+                  borderTop: 'none',
                 },
               }}
             >
+            <TableHead sx={mvsTableHeadHighlightSx}>
               <TableRow>
                 <TableCell
                   align="center"
@@ -4058,30 +3946,11 @@ const ElectronicApproval: React.FC = () => {
                 <TableCell>{t('approval.actions')}</TableCell>
               </TableRow>
             </TableHead>
-            <TableBody
-              sx={{
-                '& .MuiTableCell-body': {
-                  py: 1.1,
-                  px: 1.5,
-                  fontSize: '0.82rem',
-                  borderBottom: `1px solid ${
-                    theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                  }`,
-                },
-                '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
-                  borderBottom: 'none',
-                },
-              }}
-            >
+            <TableBody sx={mvsTableBodyRowSx}>
               {paginatedDocuments.map((document, index) => (
-                <TableRow 
-                  key={document.id} 
-                  hover 
-                  sx={{
-                    cursor: 'pointer',
-                    transition: 'background-color 0.15s ease',
-                    '&:hover': { bgcolor: 'action.hover' },
-                  }}
+                <TableRow
+                  key={document.id}
+                  sx={{ cursor: 'pointer' }}
                   onClick={() => handleViewDocument(document)}
                 >
                   <TableCell align="center" sx={{ color: 'text.secondary', fontWeight: 500 }}>
@@ -4205,8 +4074,7 @@ const ElectronicApproval: React.FC = () => {
           </Table>
         </TableContainer>
 
-        {/* 페이지네이션 */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', py: 1.8, px: 1.5 }}>
+        <Box sx={mvsBodyPaginationSx}>
           <Pagination
             count={Math.ceil(filteredDocuments.length / itemsPerPage)}
             page={page}
@@ -4214,24 +4082,9 @@ const ElectronicApproval: React.FC = () => {
             shape="rounded"
             siblingCount={1}
             boundaryCount={1}
-            sx={{
-              '& .MuiPaginationItem-root': {
-                borderRadius: '10px',
-                fontWeight: 500,
-                minWidth: 32,
-                height: 32,
-              },
-              '& .Mui-selected': {
-                bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.12),
-                color: 'text.primary',
-                '&:hover': {
-                  bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.12)' : alpha(theme.palette.common.white, 0.16),
-                },
-              },
-            }}
           />
         </Box>
-      </Card>
+        </Box>
       )}
 
       {/* 상세 보기 다이얼로그 */}

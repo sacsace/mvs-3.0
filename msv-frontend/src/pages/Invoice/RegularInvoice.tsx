@@ -38,8 +38,20 @@ import {
   CircularProgress
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
-import { alpha } from '@mui/material/styles';
+import {
+  mvsPageRootSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsBodyPaginationSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsTableScrollSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+} from '../../theme/mvsLayout';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import {
   Add as AddIcon,
@@ -123,6 +135,11 @@ function buildInvoiceLineSummaryForEmail(items: InvoiceItem[], maxLines = 2): st
   const more = items.length > maxLines ? ` (+${items.length - maxLines} more)` : '';
   return parts.join('; ') + more;
 }
+
+const regularInvoiceFilterFieldSx = {
+  ...(mvsSearchFieldSx as Record<string, unknown>),
+  ...mvsFilterFieldHeightSx,
+} as const;
 
 function buildRegularInvoiceEmailEnglish(params: {
   abbr: string;
@@ -1518,16 +1535,28 @@ const RegularInvoice: React.FC = () => {
     return <Typography variant="caption">{s}</Typography>;
   };
 
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    py: { xs: 6, sm: 8 },
+    px: 3,
+    gap: 1.5,
+  } as const;
+
   return (
-    <Box sx={{ p: 0 }}>
+    <Box sx={{ ...mvsPageRootSx }}>
       {isInvoicePageMode && (
         <Box sx={{ mb: 1.25 }}>
           <Button
-            variant="text"
+            variant="outlined"
             size="small"
             startIcon={<ArrowBackIcon fontSize="small" />}
             onClick={handleBackToList}
-            sx={{ textTransform: 'none', px: 0.5, ml: -0.75, color: 'primary.main', fontWeight: 600 }}
+            sx={mvsBodyOutlinedBtnSx}
           >
             {tr('목록으로', 'Back to list')}
           </Button>
@@ -1541,24 +1570,47 @@ const RegularInvoice: React.FC = () => {
       />
 
       {!isInvoicePageMode && (
-        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+        <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
           <Tabs
             value={listSubTab}
             onChange={(_, v) => {
               setListSubTab(v);
               setPage(1);
             }}
+            sx={{
+              minHeight: 40,
+              px: { xs: 1, sm: 1.5 },
+              bgcolor: '#FFFFFF',
+              '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' },
+              '& .MuiTab-root': {
+                textTransform: 'none',
+                fontWeight: 500,
+                fontSize: '0.8125rem',
+                minHeight: 40,
+                py: 0.75,
+                letterSpacing: '-0.01em',
+                color: 'text.secondary',
+              },
+              '& .MuiTab-root.Mui-selected': { color: 'primary.main', fontWeight: 700 },
+            }}
           >
             <Tab value="requested" label={tr('내가 요청한 인보이스', 'Invoices I requested')} />
             <Tab value="pending" label={tr('승인 대기 인보이스', 'Pending my approval')} />
           </Tabs>
-        </Box>
+        </Card>
       )}
 
-      {/* ?? ? ?? */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Grid container spacing={2} alignItems="center">
+      {!isInvoicePageMode && (
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            ...regularInvoiceFilterFieldSx,
+          }}
+        >
+          <Grid container spacing={2} alignItems="flex-end">
             <Grid size={{ xs: 12, md: 3 }}>
               <TextField
                 fullWidth
@@ -1571,14 +1623,15 @@ const RegularInvoice: React.FC = () => {
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <SearchIcon />
+                      <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
                     </InputAdornment>
                   ),
                 }}
+                sx={regularInvoiceFilterFieldSx}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 2 }}>
-              <FormControl fullWidth size="small">
+              <FormControl fullWidth size="small" sx={regularInvoiceFilterFieldSx}>
                 <InputLabel shrink>{tr('결제 상태', 'Payment Status')}</InputLabel>
                 <Select
                   value={filters.payment_status}
@@ -1596,33 +1649,37 @@ const RegularInvoice: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid size={{ xs: 12, md: 5 }}>
-              <Stack direction="row" spacing={1} justifyContent="flex-end">
+            <Grid size={{ xs: 12, md: 7 }}>
+              <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="wrap" useFlexGap>
                 <Button
                   variant="outlined"
-                  startIcon={<FilterIcon />}
+                  startIcon={<FilterIcon sx={{ fontSize: 18 }} />}
                   disabled={loading}
                   onClick={() => setFilters({ payment_status: '', search: '' })}
+                  sx={mvsBodyOutlinedBtnSx}
                 >
                   {tr('필터 초기화', 'Reset Filters')}
                 </Button>
                 <Button
                   variant="contained"
+                  disableElevation
                   startIcon={<AddIcon />}
                   disabled={loading}
                   onClick={handleCreateInvoice}
+                  sx={mvsBodyPrimaryBtnSx}
                 >
                   {tr('새 인보이스', 'New Invoice')}
                 </Button>
               </Stack>
             </Grid>
           </Grid>
-        </CardContent>
+        </Box>
       </Card>
+      )}
 
       {/* ???? ??/?? ? */}
       {isViewing && selectedInvoice ? (
-        <Card sx={{ mb: 3, bgcolor: 'white', border: '1px solid', borderColor: 'grey.300' }}>
+        <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
           <CardContent sx={{ p: { xs: 2.5, md: 4 } }}>
             <Box
               ref={invoicePrintRef}
@@ -2109,7 +2166,7 @@ const RegularInvoice: React.FC = () => {
           </CardContent>
         </Card>
       ) : ((isCreating || isEditing) ? (
-        <Card sx={{ mb: 3, bgcolor: '#fdfbf7', border: '1px solid', borderColor: 'grey.200', boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}>
+        <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
           <CardContent sx={{ p: { xs: 2.5, md: 4 } }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
               <Box>
@@ -2127,7 +2184,7 @@ const RegularInvoice: React.FC = () => {
                 <Typography variant="body2" fontWeight={600}>
                   {isEditing && selectedInvoice ? selectedInvoice.invoice_number : generatedInvoiceNumber}
                 </Typography>
-                <Button variant="outlined" onClick={handleCancelEdit}>
+                <Button variant="outlined" onClick={handleCancelEdit} sx={mvsBodyOutlinedBtnSx}>
                   {tr('취소', 'Cancel')}
                 </Button>
               </Stack>
@@ -2835,10 +2892,10 @@ const RegularInvoice: React.FC = () => {
 
               <Grid size={{ xs: 12 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2, mt: 3 }}>
-                  <Button variant="outlined" onClick={handleCancelEdit}>
+                  <Button variant="outlined" onClick={handleCancelEdit} sx={mvsBodyOutlinedBtnSx}>
                     {tr('취소', 'Cancel')}
                   </Button>
-                  <Button variant="contained" onClick={handleSaveInvoice}>
+                  <Button variant="contained" disableElevation onClick={handleSaveInvoice} sx={mvsBodyPrimaryBtnSx}>
                     {tr('저장', 'Save')}
                   </Button>
                 </Box>
@@ -2848,30 +2905,28 @@ const RegularInvoice: React.FC = () => {
         </Card>
       ) : (
         <>
-          {/* ???? ?? */}
-          <Card>
-            <CardContent>
-              <TableContainer>
-                <Table>
-                  <TableHead
-                    sx={{
-                      bgcolor: 'background.paper',
-                      '& .MuiTableCell-head': {
-                        bgcolor: 'background.paper',
-                        color: 'text.primary',
-                        fontWeight: 600,
-                        fontSize: '0.875rem',
-                        textTransform: 'none',
-                        letterSpacing: 'normal',
-                        borderBottom: '2px solid',
-                        borderColor: 'primary.main',
-                        py: 1.25
-                      },
-                      '& .MuiTableCell-head:last-of-type': {
-                        textAlign: 'center'
-                      }
-                    }}
-                  >
+          <Box sx={mvsBodyListZoneSx}>
+            {pagedInvoices.length === 0 ? (
+              <Box sx={listStateBoxSx}>
+                <Typography variant="body2" color="text.secondary">
+                  {tr('표시할 인보이스가 없습니다.', 'No invoices to display.')}
+                </Typography>
+              </Box>
+            ) : (
+              <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+                <Table
+                  size="small"
+                  sx={{
+                    borderCollapse: 'collapse',
+                    bgcolor: 'transparent',
+                    '& .MuiTableCell-root': {
+                      borderLeft: 'none',
+                      borderRight: 'none',
+                      borderTop: 'none',
+                    },
+                  }}
+                >
+                  <TableHead sx={mvsTableHeadHighlightSx}>
                     <TableRow>
                       <TableCell>{tr('인보이스 번호', 'Invoice No.')}</TableCell>
                       <TableCell>{tr('고객', 'Customer')}</TableCell>
@@ -2883,30 +2938,12 @@ const RegularInvoice: React.FC = () => {
                       <TableCell align="center">{tr('작업', 'Actions')}</TableCell>
                     </TableRow>
                   </TableHead>
-                  <TableBody>
-                    {pagedInvoices.map((invoice, rowIdx) => (
+                  <TableBody sx={mvsTableBodyRowSx}>
+                    {pagedInvoices.map((invoice) => (
                       <TableRow
                         key={invoice.id}
-                        hover={false}
                         onClick={() => handleViewInvoice(invoice)}
-                        sx={(theme) => ({
-                          cursor: 'pointer',
-                          bgcolor:
-                            rowIdx % 2 === 1
-                              ? theme.palette.mode === 'light'
-                                ? alpha(theme.palette.common.black, 0.028)
-                                : alpha(theme.palette.common.white, 0.045)
-                              : 'transparent',
-                          transition: theme.transitions.create('background-color', {
-                            duration: theme.transitions.duration.shorter,
-                          }),
-                          '&:hover': {
-                            bgcolor:
-                              theme.palette.mode === 'light'
-                                ? alpha(theme.palette.primary.main, 0.07)
-                                : alpha(theme.palette.common.white, 0.09),
-                          },
-                        })}
+                        sx={{ cursor: 'pointer', '&:active': { bgcolor: 'action.selected' } }}
                       >
                         <TableCell>
                           <Typography variant="body2" fontWeight={500}>
@@ -3032,18 +3069,17 @@ const RegularInvoice: React.FC = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
+            )}
 
-              {/* ?????? */}
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                <Pagination
-                  count={totalPages}
-                  page={page}
-                  onChange={(_, newPage) => setPage(newPage)}
-                  color="primary"
-                />
-              </Box>
-            </CardContent>
-          </Card>
+            <Box sx={mvsBodyPaginationSx}>
+              <Pagination
+                count={totalPages}
+                page={page}
+                onChange={(_, newPage) => setPage(newPage)}
+                color="primary"
+              />
+            </Box>
+          </Box>
         </>
       ))}
 
@@ -3148,15 +3184,18 @@ const RegularInvoice: React.FC = () => {
               })
             }
             disabled={loading}
+            sx={mvsBodyOutlinedBtnSx}
           >
             {tr('취소', 'Cancel')}
           </Button>
           <Button
             variant="contained"
             color="error"
+            disableElevation
             onClick={() => void handleConfirmDeleteInvoice()}
             disabled={loading || companyUsers.length === 0}
             startIcon={loading ? <CircularProgress size={18} color="inherit" /> : undefined}
+            sx={mvsBodyPrimaryBtnSx}
           >
             {tr('삭제 요청', 'Submit request')}
           </Button>

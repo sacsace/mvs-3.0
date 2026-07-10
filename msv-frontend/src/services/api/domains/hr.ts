@@ -71,7 +71,7 @@ export const hrService = {
 // ?�고 관�?API ?�비??
 export const vacationService = {
   // ?��? 목록 조회
-  getVacations: async (params?: { user_id?: number; status?: string; vacation_type?: string; start_date?: string; end_date?: string; approved_by?: number; same_department?: boolean }) => {
+  getVacations: async (params?: { user_id?: number; status?: string; vacation_type?: string; start_date?: string; end_date?: string; company_id?: number; approved_by?: number; same_department?: boolean }) => {
     try {
       const response = await api.get('/hr/vacations', { params });
       return response.data;
@@ -138,7 +138,12 @@ export const vacationService = {
   },
 
   // ?��? ?�책 ?�??
-  updateVacationPolicy: async (data: { annualLeaveStartDays: number; annualLeaveEarnDays?: number; availableTypes?: string[] }) => {
+  updateVacationPolicy: async (data: {
+    annualLeaveStartDays?: number;
+    annualLeaveEarnDays?: number;
+    availableTypes?: string[];
+    leaveTypeDays?: Record<string, number>;
+  }) => {
     try {
       const response = await api.put('/hr/vacations/policy', data);
       return response.data;
@@ -295,6 +300,15 @@ export const employmentContractService = {
       return response.data;
     } catch (error) {
       console.error('?�자근로계약 ?�명 ?�류:', error);
+      throw error;
+    }
+  },
+  sendContractToEmployee: async (id: number) => {
+    try {
+      const response = await api.post(`/hr/employment-contracts/${id}/send`);
+      return response.data;
+    } catch (error) {
+      console.error('전자근로계약 발송 오류:', error);
       throw error;
     }
   },

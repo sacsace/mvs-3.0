@@ -30,7 +30,20 @@ import {
   Snackbar
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsTableScrollSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+} from '../../theme/mvsLayout';
 import MuiLink from '@mui/material/Link';
 import {
   Add as AddIcon,
@@ -78,7 +91,7 @@ interface Customer {
 }
 
 /** DB `menus.route` — `App.tsx`의 `/customers/contracts` */
-const CONTRACT_MENU_ROUTES = ['/customers/contracts', '/customers'];
+const CONTRACT_MENU_ROUTES = ['/customers/contracts', '/sales', '/customers'];
 
 const ContractManagement: React.FC = () => {
   const theme = useTheme();
@@ -500,13 +513,9 @@ const ContractManagement: React.FC = () => {
     return softChipSx('default');
   };
 
-  const kpiCardSx = {
-    borderRadius: '16px',
-    border: '1px solid',
-    borderColor: alpha(theme.palette.divider, theme.palette.mode === 'light' ? 0.1 : 0.35),
-    boxShadow:
-      theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 2px 12px rgba(0,0,0,0.25)',
-    bgcolor: 'background.paper',
+  const contractFilterFieldSx = {
+    ...mvsSearchFieldSx,
+    ...mvsFilterFieldHeightSx,
   } as const;
 
   /** 계약 등록·수정 다이얼로그 — 입력 필 Apple 계열 톤 */
@@ -553,18 +562,7 @@ const ContractManagement: React.FC = () => {
             startIcon={<RefreshIcon sx={{ fontSize: 18 }} />}
             onClick={() => void loadContracts()}
             disabled={loading || menusLoading || !contractMenuFlags.canRead}
-            sx={{
-              borderRadius: '12px',
-              textTransform: 'none',
-              fontWeight: 600,
-              borderColor: 'divider',
-              color: 'text.secondary',
-              '&:hover': {
-                borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
-                bgcolor: 'action.hover',
-                color: 'text.primary',
-              },
-            }}
+            sx={mvsBodyOutlinedBtnSx}
           >
             {txt('새로고침', 'Refresh')}
           </Button>
@@ -583,7 +581,7 @@ const ContractManagement: React.FC = () => {
                 startIcon={<AddIcon sx={{ fontSize: 20 }} />}
                 onClick={handleCreateContract}
                 disabled={menusLoading || !contractMenuFlags.canCreate}
-                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+                sx={mvsBodyPrimaryBtnSx}
               >
                 {txt('계약 등록', 'Register contract')}
               </Button>
@@ -596,48 +594,48 @@ const ContractManagement: React.FC = () => {
       {/* 통계 카드 */}
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card elevation={0} sx={kpiCardSx}>
-            <CardContent sx={{ py: 2, px: 2.5 }}>
+          <Card elevation={0} sx={mvsKpiCardSx}>
+            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
               <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
                 {txt('총 계약 수', 'Total contracts')}
               </Typography>
-              <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: 'text.primary' }}>
+              <Typography variant="h5" sx={{ fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
                 {contracts.length}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card elevation={0} sx={kpiCardSx}>
-            <CardContent sx={{ py: 2, px: 2.5 }}>
+          <Card elevation={0} sx={mvsKpiCardSx}>
+            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
               <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
                 {txt('진행중 계약', 'In progress')}
               </Typography>
-              <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: 'success.dark' }}>
+              <Typography variant="h5" sx={{ fontWeight: 600, letterSpacing: '-0.02em', color: 'success.dark' }}>
                 {getActiveContracts()}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card elevation={0} sx={kpiCardSx}>
-            <CardContent sx={{ py: 2, px: 2.5 }}>
+          <Card elevation={0} sx={mvsKpiCardSx}>
+            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
               <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
                 {txt('만료 임박', 'Expiring soon')}
               </Typography>
-              <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: 'warning.dark' }}>
+              <Typography variant="h5" sx={{ fontWeight: 600, letterSpacing: '-0.02em', color: 'warning.dark' }}>
                 {getExpiringSoonContracts()}
               </Typography>
             </CardContent>
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card elevation={0} sx={kpiCardSx}>
-            <CardContent sx={{ py: 2, px: 2.5 }}>
+          <Card elevation={0} sx={mvsKpiCardSx}>
+            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
               <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
                 {txt('총 계약 가치', 'Total contract value')}
               </Typography>
-              <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: 'text.primary' }}>
+              <Typography variant="h5" sx={{ fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
                 Rs. {getTotalValue().toLocaleString()}
               </Typography>
             </CardContent>
@@ -646,18 +644,16 @@ const ContractManagement: React.FC = () => {
       </Grid>
 
       {/* 필터 및 검색 */}
-      <Card
-        elevation={0}
-        sx={{
-          mb: 3,
-          borderRadius: '16px',
-          border: 'none',
-          boxShadow: 'none',
-          bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.06) : alpha(theme.palette.common.black, 0.03),
-        }}
-      >
-        <CardContent sx={{ py: 2, px: 2.5 }}>
-          <Grid container spacing={2} alignItems="center">
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            ...contractFilterFieldSx,
+          }}
+        >
+          <Grid container spacing={2} alignItems="flex-end">
             <Grid size={{ xs: 12, md: 4 }}>
               <TextField
                 fullWidth
@@ -677,20 +673,11 @@ const ContractManagement: React.FC = () => {
                     </InputAdornment>
                   ),
                 }}
-                sx={{
-                  bgcolor: 'background.paper',
-                  borderRadius: '12px',
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: '12px',
-                    '& fieldset': {
-                      borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : undefined,
-                    },
-                  },
-                }}
+                sx={contractFilterFieldSx}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 3 }}>
-              <FormControl fullWidth size="small">
+              <FormControl fullWidth size="small" sx={contractFilterFieldSx}>
                 <InputLabel shrink>{txt('상태', 'Status')}</InputLabel>
                 <Select
                   value={statusFilter}
@@ -706,7 +693,7 @@ const ContractManagement: React.FC = () => {
               </FormControl>
             </Grid>
             <Grid size={{ xs: 12, md: 2 }}>
-              <FormControl fullWidth size="small">
+              <FormControl fullWidth size="small" sx={contractFilterFieldSx}>
                 <InputLabel shrink>{txt('계약 구분', 'Contract type')}</InputLabel>
                 <Select
                   value={contractTypeFilter}
@@ -720,7 +707,7 @@ const ContractManagement: React.FC = () => {
               </FormControl>
             </Grid>
             <Grid size={{ xs: 12, md: 2 }}>
-              <FormControl fullWidth size="small">
+              <FormControl fullWidth size="small" sx={contractFilterFieldSx}>
                 <InputLabel shrink>{txt('기간', 'Period')}</InputLabel>
                 <Select
                   value={dateFilter}
@@ -736,54 +723,25 @@ const ContractManagement: React.FC = () => {
               </FormControl>
             </Grid>
           </Grid>
-        </CardContent>
+        </Box>
       </Card>
 
       {/* 계약 목록 테이블 */}
-      <Card
-        elevation={0}
-        sx={{
-          borderRadius: '20px',
-          overflow: 'hidden',
-          border: '1px solid',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-          boxShadow:
-            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
-          bgcolor: 'background.paper',
-        }}
-      >
-        <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
-          <TableContainer sx={{ bgcolor: 'transparent' }}>
-            <Table
-              sx={{
-                borderCollapse: 'collapse',
-                '& .MuiTableCell-root': {
-                  borderLeft: 'none',
-                  borderRight: 'none',
-                  borderTop: 'none',
-                },
-              }}
-            >
-              <TableHead
-                sx={{
-                  '& .MuiTableCell-head': {
-                    bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
-                    color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
-                    fontWeight: 600,
-                    fontSize: '0.75rem',
-                    textTransform: 'none',
-                    letterSpacing: '0.01em',
-                    borderBottom: `1px solid ${
-                      theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                    }`,
-                    py: 1.5,
-                    px: 2,
-                  },
-                  '& .MuiTableCell-head:last-of-type': {
-                    textAlign: 'center',
-                  },
-                }}
-              >
+      <Box sx={mvsBodyListZoneSx}>
+        <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+          <Table
+            size="small"
+            sx={{
+              borderCollapse: 'collapse',
+              bgcolor: 'transparent',
+              '& .MuiTableCell-root': {
+                borderLeft: 'none',
+                borderRight: 'none',
+                borderTop: 'none',
+              },
+            }}
+          >
+            <TableHead sx={mvsTableHeadHighlightSx}>
                 <TableRow>
                   <TableCell>{txt('계약명', 'Title')}</TableCell>
                   <TableCell>{txt('계약번호', 'Contract no.')}</TableCell>
@@ -794,36 +752,17 @@ const ContractManagement: React.FC = () => {
                   <TableCell>{txt('계약 상태', 'Lifecycle')}</TableCell>
                   <TableCell>{txt('상태', 'Status')}</TableCell>
                   <TableCell>{txt('등록일', 'Created')}</TableCell>
-                  <TableCell>{txt('작업', 'Actions')}</TableCell>
+                  <TableCell sx={{ textAlign: 'center' }}>{txt('작업', 'Actions')}</TableCell>
                 </TableRow>
               </TableHead>
-              <TableBody
-                sx={{
-                  '& .MuiTableCell-body': {
-                    py: 1.5,
-                    px: 2,
-                    fontSize: '0.875rem',
-                    borderBottom: `1px solid ${
-                      theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                    }`,
-                  },
-                  '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
-                    borderBottom: 'none',
-                  },
-                }}
-              >
+              <TableBody sx={mvsTableBodyRowSx}>
                 {filteredContracts.map((contract) => {
                   const contractStatus = getContractStatus(contract);
                   return (
                     <TableRow
                       key={contract.id}
-                      hover
                       onClick={contractMenuFlags.canRead ? () => handleViewContract(contract) : undefined}
-                      sx={{
-                        cursor: contractMenuFlags.canRead ? 'pointer' : 'default',
-                        transition: 'background-color 0.15s ease',
-                        '&:hover': { bgcolor: 'action.hover' },
-                      }}
+                      sx={{ cursor: contractMenuFlags.canRead ? 'pointer' : 'default' }}
                     >
                       <TableCell>
                         <Box>
@@ -974,9 +913,8 @@ const ContractManagement: React.FC = () => {
                 })}
               </TableBody>
             </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
+        </TableContainer>
+      </Box>
 
       {/* 계약 등록/수정 다이얼로그 */}
       <Dialog
@@ -1227,7 +1165,7 @@ const ContractManagement: React.FC = () => {
           <Box sx={{ flex: 1 }} />
           <Button
             onClick={() => setDialogOpen(false)}
-            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '12px', px: 2 }}
+            sx={mvsBodyOutlinedBtnSx}
           >
             {dialogMode === 'view' ? txt('닫기', 'Close') : txt('취소', 'Cancel')}
           </Button>
@@ -1238,7 +1176,7 @@ const ContractManagement: React.FC = () => {
                 onClick={() => void handleSaveContract()}
                 variant="contained"
                 disableElevation
-                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+                sx={mvsBodyPrimaryBtnSx}
               >
                 {dialogMode === 'create' ? txt('등록', 'Register') : txt('수정', 'Update')}
               </Button>

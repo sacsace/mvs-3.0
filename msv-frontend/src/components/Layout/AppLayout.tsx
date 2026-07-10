@@ -204,9 +204,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     ? WORK_AREA_OUTSET
     : (autoCollapseEnabled && isSidebarCollapsed ? collapsedWidth : sidebarWidth) + WORK_AREA_OUTSET;
 
-  const isWorkBoardChromeless =
-    location.pathname === '/work/projects' ||
-    /^\/work\/projects\/\d+$/.test(location.pathname);
+  const useChromelessWorkArea = true;
 
   return (
     <Box 
@@ -214,8 +212,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         display: 'flex',
         flexDirection: 'column',
         minHeight: '100vh',
-        backgroundColor: isWorkBoardChromeless ? 'transparent' : 'bodyArea.main',
-        ...(isWorkBoardChromeless
+        backgroundColor: useChromelessWorkArea ? 'transparent' : 'bodyArea.main',
+        ...(useChromelessWorkArea
           ? { background: mvsWorkBoardPageBg, backgroundColor: 'transparent' }
           : {}),
         fontFamily: 'var(--font-sans)',
@@ -249,8 +247,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           minHeight: 0,
           display: 'flex',
           flexDirection: 'column',
-          backgroundColor: isWorkBoardChromeless ? 'transparent' : 'bodyArea.main',
-        ...(isWorkBoardChromeless
+          backgroundColor: useChromelessWorkArea ? 'transparent' : 'bodyArea.main',
+        ...(useChromelessWorkArea
           ? { background: mvsWorkBoardPageBg, backgroundColor: 'transparent' }
           : {}),
         }}
@@ -279,8 +277,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             flexDirection: 'column',
             justifyContent: 'flex-start',
             alignItems: 'stretch',
-            backgroundColor: isWorkBoardChromeless ? 'transparent' : 'bodyArea.main',
-            ...(isWorkBoardChromeless
+            backgroundColor: useChromelessWorkArea ? 'transparent' : 'bodyArea.main',
+            ...(useChromelessWorkArea
               ? { background: mvsWorkBoardPageBg, backgroundColor: 'transparent' }
               : {}),
             position: 'relative',
@@ -308,11 +306,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               width: '100%',
               maxWidth: '100%',
               mx: 0,
-              backgroundColor: isWorkBoardChromeless ? 'transparent' : 'workArea.main',
-              borderRadius: isWorkBoardChromeless ? 0 : { xs: '12px', sm: '18px', md: '24px' },
-              boxShadow: isWorkBoardChromeless ? 'none' : '0 4px 16px rgba(15, 23, 42, 0.08)',
-              border: isWorkBoardChromeless ? 'none' : '1px solid #C5CED9',
-              ...(isWorkBoardChromeless
+              backgroundColor: useChromelessWorkArea ? 'transparent' : 'workArea.main',
+              borderRadius: useChromelessWorkArea ? 0 : { xs: '12px', sm: '18px', md: '24px' },
+              boxShadow: useChromelessWorkArea ? 'none' : '0 4px 16px rgba(15, 23, 42, 0.08)',
+              border: useChromelessWorkArea ? 'none' : '1px solid #C5CED9',
+              ...(useChromelessWorkArea
                 ? { background: mvsWorkBoardPageBg, backgroundColor: 'transparent' }
                 : {}),
               outline: 'none',
@@ -350,7 +348,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 border: 'none',
                 outline: 'none',
                 boxShadow: 'none',
-                ...(isWorkBoardChromeless
+                ...(useChromelessWorkArea
                   ? {
                       flex: 1,
                       minHeight: '100%',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -21,9 +21,24 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Pagination,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodySectionHeaderSx,
+  mvsBodyListZoneSx,
+  mvsBodyPaginationSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsTableScrollSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+} from '../../theme/mvsLayout';
 import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
@@ -136,10 +151,32 @@ function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
   return (
     <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3, px: 2 }}>{children}</Box>}
+      {value === index && <Box sx={{ mb: 3 }}>{children}</Box>}
     </div>
   );
 }
+
+const accountingStatsFilterFieldSx = {
+  ...(mvsSearchFieldSx as Record<string, unknown>),
+  ...mvsFilterFieldHeightSx,
+} as const;
+
+const LIST_PAGE_SIZE = 10;
+
+const bodyCardTableContainerSx = {
+  ...mvsTableScrollSx,
+  width: '100%',
+  maxWidth: '100%',
+} as const;
+
+const listStateInlineSx = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  py: 6,
+  px: 2,
+} as const;
 
 const AccountingStatistics: React.FC = () => {
   const theme = useTheme();
@@ -181,6 +218,26 @@ const AccountingStatistics: React.FC = () => {
   const [purchaseList, setPurchaseList] = useState<PurchaseListRow[]>([]);
   const [purchaseTotal, setPurchaseTotal] = useState(0);
   const [purchasePaidTotal, setPurchasePaidTotal] = useState(0);
+  const [salesPage, setSalesPage] = useState(1);
+  const [purchasePage, setPurchasePage] = useState(1);
+
+  const paginatedSalesList = useMemo(() => {
+    const start = (salesPage - 1) * LIST_PAGE_SIZE;
+    return salesList.slice(start, start + LIST_PAGE_SIZE);
+  }, [salesList, salesPage]);
+
+  const paginatedPurchaseList = useMemo(() => {
+    const start = (purchasePage - 1) * LIST_PAGE_SIZE;
+    return purchaseList.slice(start, start + LIST_PAGE_SIZE);
+  }, [purchaseList, purchasePage]);
+
+  useEffect(() => {
+    setSalesPage(1);
+  }, [salesList]);
+
+  useEffect(() => {
+    setPurchasePage(1);
+  }, [purchaseList]);
 
   useEffect(() => {
     if (canSelectCompany) {
@@ -536,11 +593,7 @@ const AccountingStatistics: React.FC = () => {
             startIcon={<RefreshIcon fontSize="small" />}
             onClick={loadStatistics}
             disabled={loading}
-            sx={{
-              textTransform: 'none',
-              borderRadius: '12px',
-              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.14)' : 'divider',
-            }}
+            sx={mvsBodyOutlinedBtnSx}
           >
             새로고침
           </Button>
@@ -549,7 +602,7 @@ const AccountingStatistics: React.FC = () => {
             disableElevation
             startIcon={<DownloadIcon fontSize="small" />}
             onClick={handleDownloadReport}
-            sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}
+            sx={mvsBodyPrimaryBtnSx}
           >
             보고서 다운로드
           </Button>
@@ -564,23 +617,21 @@ const AccountingStatistics: React.FC = () => {
       )}
 
       {/* 필터 섹션 */}
-      <Card
-        elevation={0}
-        sx={{
-          mb: 3,
-          borderRadius: '16px',
-          border: '1px solid',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-          bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.03),
-          boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : 'none',
-        }}
-      >
-        <CardContent sx={{ py: 2.5, px: 2.5 }}>
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            ...accountingStatsFilterFieldSx,
+          }}
+        >
           <Grid container spacing={2} alignItems="flex-end">
             {canSelectCompany && (
               <Grid size={{ xs: 12, sm: 9, md: 3 }}>
                 <TextField
                   fullWidth
+                  size="small"
                   select
                   label="회사"
                   value={selectedCompanyId}
@@ -595,7 +646,7 @@ const AccountingStatistics: React.FC = () => {
                   }}
                   InputLabelProps={{ shrink: true }}
                   SelectProps={{ displayEmpty: true }}
-                  sx={{ height: '40px', minWidth: 0 }}
+                  sx={accountingStatsFilterFieldSx}
                 >
                   <MenuItem value="">전체 회사</MenuItem>
                   {companies.map((company) => (
@@ -609,13 +660,14 @@ const AccountingStatistics: React.FC = () => {
             <Grid size={{ xs: 12, sm: 6, md: 2 }}>
               <TextField
                 fullWidth
+                size="small"
                 select
                 label="기간"
                 value={selectedPeriod}
                 onChange={(e) => setSelectedPeriod(e.target.value)}
                 InputLabelProps={{ shrink: true }}
                 SelectProps={{ displayEmpty: true }}
-                sx={{ height: '40px' }}
+                sx={accountingStatsFilterFieldSx}
               >
                 <MenuItem value="day">일간</MenuItem>
                 <MenuItem value="week">주간</MenuItem>
@@ -628,12 +680,13 @@ const AccountingStatistics: React.FC = () => {
               <Grid size={{ xs: 12, sm: 6, md: 2 }}>
                 <TextField
                   fullWidth
+                  size="small"
                   select
                   label="연도"
                   value={selectedYear}
                   onChange={(e) => setSelectedYear(Number(e.target.value))}
                   InputLabelProps={{ shrink: true }}
-                  sx={{ height: '40px' }}
+                  sx={accountingStatsFilterFieldSx}
                 >
                   {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
                     <MenuItem key={year} value={year}>{year}년</MenuItem>
@@ -646,12 +699,13 @@ const AccountingStatistics: React.FC = () => {
                 <Grid size={{ xs: 12, sm: 6, md: 2 }}>
                   <TextField
                     fullWidth
+                    size="small"
                     select
                     label="연도"
                     value={selectedYear}
                     onChange={(e) => setSelectedYear(Number(e.target.value))}
                     InputLabelProps={{ shrink: true }}
-                    sx={{ height: '40px' }}
+                    sx={accountingStatsFilterFieldSx}
                   >
                     {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
                       <MenuItem key={year} value={year}>{year}년</MenuItem>
@@ -661,12 +715,13 @@ const AccountingStatistics: React.FC = () => {
                 <Grid size={{ xs: 12, sm: 6, md: 2 }}>
                   <TextField
                     fullWidth
+                    size="small"
                     select
                     label="월"
                     value={selectedMonth}
                     onChange={(e) => setSelectedMonth(Number(e.target.value))}
                     InputLabelProps={{ shrink: true }}
-                    sx={{ height: '40px' }}
+                    sx={accountingStatsFilterFieldSx}
                   >
                     {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
                       <MenuItem key={month} value={month}>{month}월</MenuItem>
@@ -676,23 +731,13 @@ const AccountingStatistics: React.FC = () => {
               </>
             )}
           </Grid>
-        </CardContent>
+        </Box>
       </Card>
 
       {/* 주요 지표 카드 */}
       <Grid container spacing={2.5} sx={{ mb: 3 }} alignItems="stretch">
         <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-          <Card
-            elevation={0}
-            sx={{
-              width: '100%',
-              height: '100%',
-              borderRadius: '16px',
-              border: '1px solid',
-              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-              boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
-            }}
-          >
+          <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
             <CardContent sx={{ py: 2.25, px: 2.5, height: '100%' }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
                 총 매출 (인보이스 기준)
@@ -710,17 +755,7 @@ const AccountingStatistics: React.FC = () => {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-          <Card
-            elevation={0}
-            sx={{
-              width: '100%',
-              height: '100%',
-              borderRadius: '16px',
-              border: '1px solid',
-              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-              boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
-            }}
-          >
+          <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
             <CardContent sx={{ py: 2.25, px: 2.5, height: '100%' }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
                 총 지출
@@ -736,17 +771,7 @@ const AccountingStatistics: React.FC = () => {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-          <Card
-            elevation={0}
-            sx={{
-              width: '100%',
-              height: '100%',
-              borderRadius: '16px',
-              border: '1px solid',
-              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-              boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
-            }}
-          >
+          <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
             <CardContent sx={{ py: 2.25, px: 2.5, height: '100%' }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
                 순이익
@@ -761,17 +786,7 @@ const AccountingStatistics: React.FC = () => {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-          <Card
-            elevation={0}
-            sx={{
-              width: '100%',
-              height: '100%',
-              borderRadius: '16px',
-              border: '1px solid',
-              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-              boxShadow: theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
-            }}
-          >
+          <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
             <CardContent sx={{ py: 2.25, px: 2.5, height: '100%' }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
                 총 인보이스
@@ -793,45 +808,81 @@ const AccountingStatistics: React.FC = () => {
         </Box>
       ) : (
         <>
-          {/* 탭 섹션 */}
-          <Card sx={{ mb: 3 }}>
-            <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-              <Tabs
-                value={activeTab}
-                onChange={(_, newValue) => setActiveTab(newValue)}
-                variant="scrollable"
-                scrollButtons="auto"
-              >
-                <Tab icon={<ReceiptLongIcon />} iconPosition="start" label="매출 통계" />
-                <Tab icon={<ShoppingCartIcon />} iconPosition="start" label="매입 통계" />
-                <Tab icon={<ShowChartIcon />} iconPosition="start" label="수익/비용 추이" />
-                <Tab icon={<PieChartIcon />} iconPosition="start" label="카테고리별 분석" />
-                <Tab icon={<BarChartIcon />} iconPosition="start" label="인보이스 현황" />
-                <Tab icon={<AccountBalanceIcon />} iconPosition="start" label="예산 대비 실적" />
-              </Tabs>
-            </Box>
+          {/* 탭 메뉴 */}
+          <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+            <Tabs
+              value={activeTab}
+              onChange={(_, newValue) => setActiveTab(newValue)}
+              variant="scrollable"
+              scrollButtons="auto"
+              sx={{
+                minHeight: 48,
+                px: { xs: 1, sm: 1.5 },
+                bgcolor: '#FFFFFF',
+                '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' },
+                '& .MuiTab-root': {
+                  textTransform: 'none',
+                  fontWeight: 500,
+                  fontSize: '0.8125rem',
+                  minHeight: 48,
+                  py: 1.5,
+                  letterSpacing: '-0.01em',
+                  color: 'text.secondary',
+                },
+                '& .MuiTab-root.Mui-selected': { color: 'primary.main', fontWeight: 700 },
+              }}
+            >
+              <Tab icon={<ReceiptLongIcon />} iconPosition="start" label="매출 통계" />
+              <Tab icon={<ShoppingCartIcon />} iconPosition="start" label="매입 통계" />
+              <Tab icon={<ShowChartIcon />} iconPosition="start" label="수익/비용 추이" />
+              <Tab icon={<PieChartIcon />} iconPosition="start" label="카테고리별 분석" />
+              <Tab icon={<BarChartIcon />} iconPosition="start" label="인보이스 현황" />
+              <Tab icon={<AccountBalanceIcon />} iconPosition="start" label="예산 대비 실적" />
+            </Tabs>
+          </Card>
 
-            {/* 매출 통계 */}
-            <TabPanel value={activeTab} index={0}>
-              <Card variant="outlined">
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, gap: 2, flexWrap: 'wrap' }}>
-                    <Box>
-                      <Typography variant="h6">매출 통계</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        인보이스 및 객실예약 매출 내역 ({salesList.length}건)
-                      </Typography>
-                    </Box>
-                    <Box sx={{ textAlign: 'right' }}>
-                      <Typography variant="caption" color="text.secondary">합산금</Typography>
-                      <Typography variant="h5" fontWeight={700} color="success.main">
-                        {formatCurrency(salesTotal)}
-                      </Typography>
-                    </Box>
+          {/* 매출 통계 */}
+          <TabPanel value={activeTab} index={0}>
+            <Card elevation={0} sx={mvsBodyCardSx}>
+              <Box sx={{ ...mvsBodySectionHeaderSx, alignItems: 'flex-start' }}>
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+                    매출 통계
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    인보이스 및 객실예약 매출 내역 ({salesList.length}건)
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'right' }}>
+                  <Typography variant="caption" color="text.secondary">합산금</Typography>
+                  <Typography variant="h6" fontWeight={700} color="success.main">
+                    {formatCurrency(salesTotal)}
+                  </Typography>
+                </Box>
+              </Box>
+              <Box sx={{ ...mvsBodyListZoneSx, mt: 0, pb: 0 }}>
+                {salesList.length === 0 ? (
+                  <Box sx={listStateInlineSx}>
+                    <Typography variant="body2" color="text.secondary">
+                      조회 기간에 해당하는 매출 내역이 없습니다.
+                    </Typography>
                   </Box>
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
+                ) : (
+                  <>
+                  <TableContainer sx={bodyCardTableContainerSx}>
+                    <Table
+                      size="small"
+                      sx={{
+                        borderCollapse: 'collapse',
+                        bgcolor: 'transparent',
+                        '& .MuiTableCell-root': {
+                          borderLeft: 'none',
+                          borderRight: 'none',
+                          borderTop: 'none',
+                        },
+                      }}
+                    >
+                      <TableHead sx={mvsTableHeadHighlightSx}>
                         <TableRow>
                           <TableCell>문서번호</TableCell>
                           <TableCell>일자</TableCell>
@@ -843,68 +894,91 @@ const AccountingStatistics: React.FC = () => {
                           <TableCell align="center">결제상태</TableCell>
                         </TableRow>
                       </TableHead>
-                      <TableBody>
-                        {salesList.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={8} align="center" sx={{ py: 4, color: 'text.secondary' }}>
-                              조회 기간에 해당하는 매출 내역이 없습니다.
+                      <TableBody sx={mvsTableBodyRowSx}>
+                        {paginatedSalesList.map((row) => (
+                          <TableRow key={`${row.source}-${row.id}`} hover>
+                            <TableCell>{row.document_number}</TableCell>
+                            <TableCell>{formatDate(row.date)}</TableCell>
+                            <TableCell>{row.counterparty}</TableCell>
+                            <TableCell>
+                              <Chip size="small" label={row.category} variant="outlined" />
                             </TableCell>
-                          </TableRow>
-                        ) : (
-                          salesList.map((row) => (
-                            <TableRow key={`${row.source}-${row.id}`} hover>
-                              <TableCell>{row.document_number}</TableCell>
-                              <TableCell>{formatDate(row.date)}</TableCell>
-                              <TableCell>{row.counterparty}</TableCell>
-                              <TableCell>
-                                <Chip size="small" label={row.category} variant="outlined" />
-                              </TableCell>
-                              <TableCell align="right">{formatCurrency(row.amount - row.tax_amount)}</TableCell>
-                              <TableCell align="right">{formatCurrency(row.tax_amount)}</TableCell>
-                              <TableCell align="right" sx={{ fontWeight: 600 }}>
-                                {formatCurrency(row.amount)}
-                              </TableCell>
-                              <TableCell align="center">{getPaymentStatusChip(row.payment_status)}</TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                        {salesList.length > 0 && (
-                          <TableRow sx={{ bgcolor: alpha(theme.palette.success.main, 0.08) }}>
-                            <TableCell colSpan={6} sx={{ fontWeight: 700 }}>합산금</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700, color: 'success.main' }}>
-                              {formatCurrency(salesTotal)}
+                            <TableCell align="right">{formatCurrency(row.amount - row.tax_amount)}</TableCell>
+                            <TableCell align="right">{formatCurrency(row.tax_amount)}</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600 }}>
+                              {formatCurrency(row.amount)}
                             </TableCell>
-                            <TableCell />
+                            <TableCell align="center">{getPaymentStatusChip(row.payment_status)}</TableCell>
                           </TableRow>
-                        )}
+                        ))}
+                        <TableRow sx={{ bgcolor: alpha(theme.palette.success.main, 0.08) }}>
+                          <TableCell colSpan={6} sx={{ fontWeight: 700 }}>합산금</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700, color: 'success.main' }}>
+                            {formatCurrency(salesTotal)}
+                          </TableCell>
+                          <TableCell />
+                        </TableRow>
                       </TableBody>
                     </Table>
                   </TableContainer>
-                </CardContent>
-              </Card>
-            </TabPanel>
+                  {salesList.length > LIST_PAGE_SIZE && (
+                    <Box sx={mvsBodyPaginationSx}>
+                      <Pagination
+                        count={Math.ceil(salesList.length / LIST_PAGE_SIZE)}
+                        page={salesPage}
+                        onChange={(_, value) => setSalesPage(value)}
+                        color="primary"
+                      />
+                    </Box>
+                  )}
+                  </>
+                )}
+              </Box>
+            </Card>
+          </TabPanel>
 
-            {/* 매입 통계 */}
-            <TabPanel value={activeTab} index={1}>
-              <Card variant="outlined">
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, gap: 2, flexWrap: 'wrap' }}>
-                    <Box>
-                      <Typography variant="h6">매입 통계</Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        지출결의서 매입 내역 ({purchaseList.length}건) · 지급완료 {formatCurrency(purchasePaidTotal)}
-                      </Typography>
-                    </Box>
-                    <Box sx={{ textAlign: 'right' }}>
-                      <Typography variant="caption" color="text.secondary">합산금</Typography>
-                      <Typography variant="h5" fontWeight={700} color="error.main">
-                        {formatCurrency(purchaseTotal)}
-                      </Typography>
-                    </Box>
+          {/* 매입 통계 */}
+          <TabPanel value={activeTab} index={1}>
+            <Card elevation={0} sx={mvsBodyCardSx}>
+              <Box sx={{ ...mvsBodySectionHeaderSx, alignItems: 'flex-start' }}>
+                <Box>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+                    매입 통계
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    지출결의서 매입 내역 ({purchaseList.length}건) · 지급완료 {formatCurrency(purchasePaidTotal)}
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'right' }}>
+                  <Typography variant="caption" color="text.secondary">합산금</Typography>
+                  <Typography variant="h6" fontWeight={700} color="error.main">
+                    {formatCurrency(purchaseTotal)}
+                  </Typography>
+                </Box>
+              </Box>
+              <Box sx={{ ...mvsBodyListZoneSx, mt: 0, pb: 0 }}>
+                {purchaseList.length === 0 ? (
+                  <Box sx={listStateInlineSx}>
+                    <Typography variant="body2" color="text.secondary">
+                      조회 기간에 해당하는 매입 내역이 없습니다.
+                    </Typography>
                   </Box>
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
+                ) : (
+                  <>
+                  <TableContainer sx={bodyCardTableContainerSx}>
+                    <Table
+                      size="small"
+                      sx={{
+                        borderCollapse: 'collapse',
+                        bgcolor: 'transparent',
+                        '& .MuiTableCell-root': {
+                          borderLeft: 'none',
+                          borderRight: 'none',
+                          borderTop: 'none',
+                        },
+                      }}
+                    >
+                      <TableHead sx={mvsTableHeadHighlightSx}>
                         <TableRow>
                           <TableCell>문서번호</TableCell>
                           <TableCell>일자</TableCell>
@@ -917,55 +991,57 @@ const AccountingStatistics: React.FC = () => {
                           <TableCell align="center">지급상태</TableCell>
                         </TableRow>
                       </TableHead>
-                      <TableBody>
-                        {purchaseList.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={9} align="center" sx={{ py: 4, color: 'text.secondary' }}>
-                              조회 기간에 해당하는 매입 내역이 없습니다.
+                      <TableBody sx={mvsTableBodyRowSx}>
+                        {paginatedPurchaseList.map((row) => (
+                          <TableRow key={row.id} hover>
+                            <TableCell>{row.document_number}</TableCell>
+                            <TableCell>{formatDate(row.date)}</TableCell>
+                            <TableCell>{row.title}</TableCell>
+                            <TableCell>{row.requester}</TableCell>
+                            <TableCell>{row.department}</TableCell>
+                            <TableCell sx={{ maxWidth: 220 }}>{row.purpose}</TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600 }}>
+                              {formatCurrency(row.amount)}
                             </TableCell>
+                            <TableCell align="center">{getExpenseStatusChip(row.status)}</TableCell>
+                            <TableCell align="center">{getPaymentStatusChip(row.payment_status)}</TableCell>
                           </TableRow>
-                        ) : (
-                          purchaseList.map((row) => (
-                            <TableRow key={row.id} hover>
-                              <TableCell>{row.document_number}</TableCell>
-                              <TableCell>{formatDate(row.date)}</TableCell>
-                              <TableCell>{row.title}</TableCell>
-                              <TableCell>{row.requester}</TableCell>
-                              <TableCell>{row.department}</TableCell>
-                              <TableCell sx={{ maxWidth: 220 }}>{row.purpose}</TableCell>
-                              <TableCell align="right" sx={{ fontWeight: 600 }}>
-                                {formatCurrency(row.amount)}
-                              </TableCell>
-                              <TableCell align="center">{getExpenseStatusChip(row.status)}</TableCell>
-                              <TableCell align="center">{getPaymentStatusChip(row.payment_status)}</TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                        {purchaseList.length > 0 && (
-                          <TableRow sx={{ bgcolor: alpha(theme.palette.error.main, 0.08) }}>
-                            <TableCell colSpan={6} sx={{ fontWeight: 700 }}>합산금</TableCell>
-                            <TableCell align="right" sx={{ fontWeight: 700, color: 'error.main' }}>
-                              {formatCurrency(purchaseTotal)}
-                            </TableCell>
-                            <TableCell colSpan={2} />
-                          </TableRow>
-                        )}
+                        ))}
+                        <TableRow sx={{ bgcolor: alpha(theme.palette.error.main, 0.08) }}>
+                          <TableCell colSpan={6} sx={{ fontWeight: 700 }}>합산금</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: 700, color: 'error.main' }}>
+                            {formatCurrency(purchaseTotal)}
+                          </TableCell>
+                          <TableCell colSpan={2} />
+                        </TableRow>
                       </TableBody>
                     </Table>
                   </TableContainer>
-                </CardContent>
-              </Card>
-            </TabPanel>
+                  {purchaseList.length > LIST_PAGE_SIZE && (
+                    <Box sx={mvsBodyPaginationSx}>
+                      <Pagination
+                        count={Math.ceil(purchaseList.length / LIST_PAGE_SIZE)}
+                        page={purchasePage}
+                        onChange={(_, value) => setPurchasePage(value)}
+                        color="primary"
+                      />
+                    </Box>
+                  )}
+                  </>
+                )}
+              </Box>
+            </Card>
+          </TabPanel>
 
-            {/* 수익/비용 추이 */}
-            <TabPanel value={activeTab} index={2}>
-              <Grid container spacing={3}>
-                <Grid size={{ xs: 12 }}>
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-                        수익/비용 추이
-                      </Typography>
+          {/* 수익/비용 추이 */}
+          <TabPanel value={activeTab} index={2}>
+            <Card elevation={0} sx={mvsBodyCardSx}>
+              <Box sx={mvsBodySectionHeaderSx}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+                  수익/비용 추이
+                </Typography>
+              </Box>
+              <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
                       <ResponsiveContainer width="100%" height={400}>
                         <ComposedChart data={getChartData()}>
                           <CartesianGrid strokeDasharray="3 3" />
@@ -1002,21 +1078,21 @@ const AccountingStatistics: React.FC = () => {
                           />
                         </ComposedChart>
                       </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              </Grid>
-            </TabPanel>
+              </Box>
+            </Card>
+          </TabPanel>
 
-            {/* 카테고리별 분석 */}
-            <TabPanel value={activeTab} index={3}>
-              <Grid container spacing={3}>
-                <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
-                  <Card variant="outlined" sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-                    <CardContent sx={{ flex: 1 }}>
-                      <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-                        카테고리별 비용 분포
-                      </Typography>
+          {/* 카테고리별 분석 */}
+          <TabPanel value={activeTab} index={3}>
+            <Grid container spacing={2.5}>
+              <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
+                <Card elevation={0} sx={{ ...mvsBodyCardSx, width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <Box sx={mvsBodySectionHeaderSx}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+                      카테고리별 비용 분포
+                    </Typography>
+                  </Box>
+                  <Box sx={{ flex: 1, px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
                       <ResponsiveContainer width="100%" height={350}>
                         <PieChart>
                           <Pie
@@ -1060,15 +1136,17 @@ const AccountingStatistics: React.FC = () => {
                           </Box>
                         ))}
                       </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
-                <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
-                  <Card variant="outlined" sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-                    <CardContent sx={{ flex: 1 }}>
-                      <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-                        카테고리별 수익 분포
-                      </Typography>
+                  </Box>
+                </Card>
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }} sx={{ display: 'flex' }}>
+                <Card elevation={0} sx={{ ...mvsBodyCardSx, width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <Box sx={mvsBodySectionHeaderSx}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+                      카테고리별 수익 분포
+                    </Typography>
+                  </Box>
+                  <Box sx={{ flex: 1, px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
                       <ResponsiveContainer width="100%" height={350}>
                         <PieChart>
                           <Pie
@@ -1112,21 +1190,23 @@ const AccountingStatistics: React.FC = () => {
                           </Box>
                         ))}
                       </Box>
-                    </CardContent>
-                  </Card>
-                </Grid>
+                  </Box>
+                </Card>
               </Grid>
-            </TabPanel>
+            </Grid>
+          </TabPanel>
 
-            {/* 인보이스 현황 */}
-            <TabPanel value={activeTab} index={4}>
-              <Grid container spacing={3}>
-                <Grid size={{ xs: 12, md: 8 }} sx={{ display: 'flex' }}>
-                  <Card variant="outlined" sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-                    <CardContent sx={{ flex: 1 }}>
-                      <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-                        인보이스 상태별 현황
-                      </Typography>
+          {/* 인보이스 현황 */}
+          <TabPanel value={activeTab} index={4}>
+            <Grid container spacing={2.5}>
+              <Grid size={{ xs: 12, md: 8 }} sx={{ display: 'flex' }}>
+                <Card elevation={0} sx={{ ...mvsBodyCardSx, width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <Box sx={mvsBodySectionHeaderSx}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+                      인보이스 상태별 현황
+                    </Typography>
+                  </Box>
+                  <Box sx={{ flex: 1, px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
                       <ResponsiveContainer width="100%" height={300}>
                         <BarChart data={invoiceStatusData}>
                           <CartesianGrid strokeDasharray="3 3" />
@@ -1143,15 +1223,17 @@ const AccountingStatistics: React.FC = () => {
                           <Bar dataKey="amount" fill="#82ca9d" name="금액" />
                         </BarChart>
                       </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
-                </Grid>
-                <Grid size={{ xs: 12, md: 4 }} sx={{ display: 'flex' }}>
-                  <Card variant="outlined" sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-                    <CardContent sx={{ flex: 1 }}>
-                      <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-                        인보이스 상태 요약
-                      </Typography>
+                  </Box>
+                </Card>
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }} sx={{ display: 'flex' }}>
+                <Card elevation={0} sx={{ ...mvsBodyCardSx, width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <Box sx={mvsBodySectionHeaderSx}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+                      인보이스 상태 요약
+                    </Typography>
+                  </Box>
+                  <Box sx={{ flex: 1, px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
                       <Stack spacing={2}>
                         {invoiceStatusData.map((item, index) => (
                           <Box key={index}>
@@ -1186,21 +1268,23 @@ const AccountingStatistics: React.FC = () => {
                           </Typography>
                         </Box>
                       </Stack>
-                    </CardContent>
-                  </Card>
-                </Grid>
+                  </Box>
+                </Card>
               </Grid>
-            </TabPanel>
+            </Grid>
+          </TabPanel>
 
-            {/* 예산 대비 실적 */}
-            <TabPanel value={activeTab} index={5}>
-              <Grid container spacing={3}>
-                <Grid size={{ xs: 12 }}>
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-                        예산 대비 실적 분석
-                      </Typography>
+          {/* 예산 대비 실적 */}
+          <TabPanel value={activeTab} index={5}>
+            <Grid container spacing={2.5}>
+              <Grid size={{ xs: 12 }}>
+                <Card elevation={0} sx={mvsBodyCardSx}>
+                  <Box sx={mvsBodySectionHeaderSx}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+                      예산 대비 실적 분석
+                    </Typography>
+                  </Box>
+                  <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
                       <ResponsiveContainer width="100%" height={400}>
                         <ComposedChart data={monthlyRevenueData}>
                           <CartesianGrid strokeDasharray="3 3" />
@@ -1220,18 +1304,31 @@ const AccountingStatistics: React.FC = () => {
                           />
                         </ComposedChart>
                       </ResponsiveContainer>
-                    </CardContent>
-                  </Card>
-                </Grid>
-                <Grid size={{ xs: 12 }}>
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                        월별 예산 대비 실적 상세
-                      </Typography>
-                      <TableContainer>
-                        <Table size="small">
-                          <TableHead>
+                  </Box>
+                </Card>
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                <Card elevation={0} sx={mvsBodyCardSx}>
+                  <Box sx={mvsBodySectionHeaderSx}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+                      월별 예산 대비 실적 상세
+                    </Typography>
+                  </Box>
+                  <Box sx={{ ...mvsBodyListZoneSx, mt: 0, pb: 0 }}>
+                    <TableContainer sx={bodyCardTableContainerSx}>
+                        <Table
+                          size="small"
+                          sx={{
+                            borderCollapse: 'collapse',
+                            bgcolor: 'transparent',
+                            '& .MuiTableCell-root': {
+                              borderLeft: 'none',
+                              borderRight: 'none',
+                              borderTop: 'none',
+                            },
+                          }}
+                        >
+                          <TableHead sx={mvsTableHeadHighlightSx}>
                             <TableRow>
                               <TableCell>월</TableCell>
                               <TableCell align="right">예산</TableCell>
@@ -1240,7 +1337,7 @@ const AccountingStatistics: React.FC = () => {
                               <TableCell align="right">달성률</TableCell>
                             </TableRow>
                           </TableHead>
-                          <TableBody>
+                          <TableBody sx={mvsTableBodyRowSx}>
                             {monthlyRevenueData.map((row, index) => {
                               const difference = row.revenue - row.budget;
                               const achievementRate = ((row.revenue / row.budget) * 100).toFixed(1);
@@ -1270,12 +1367,11 @@ const AccountingStatistics: React.FC = () => {
                           </TableBody>
                         </Table>
                       </TableContainer>
-                    </CardContent>
-                  </Card>
-                </Grid>
+                  </Box>
+                </Card>
               </Grid>
-            </TabPanel>
-          </Card>
+            </Grid>
+          </TabPanel>
         </>
       )}
     </Box>

@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import nodemailer from 'nodemailer';
 import { RequestWithUser } from '../types';
-import { Payroll, User, PayrollPeriodLock, Company } from '../models';
+import { Payroll, User, PayrollPeriodLock, Company, CompanyGstNumber } from '../models';
 import { Op, Sequelize } from 'sequelize';
 import sequelize from '../config/database';
 import { buildNodemailerTransportOptions, getResolvedMailTransportOptions } from '../utils/mailConfig';
@@ -22,6 +22,7 @@ import {
   computeDailyWorkerSumTotal,
   type PfMode
 } from '../services/indianStatutoryPayroll';
+import { resolveCompanyRegisteredStateCode } from '../utils/indianProfessionalTax';
 
 const PAYROLL_MUTABLE_FIELDS = [
   'employee_id',
@@ -138,7 +139,8 @@ export const getPayrolls = async (req: RequestWithUser, res: Response) => {
             'position',
             'employee_number',
             'birth_date',
-            'hire_date'
+            'hire_date',
+            'ot_eligible'
           ]
         }
       ],
@@ -305,11 +307,16 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
         'bank_name',
         'bank_account',
         'bank_ifsc',
-        'employment_type'
+        'employment_type',
+        'ot_eligible'
       ]
     });
 
     let created = 0;
+    const registeredStateCode = await resolveCompanyRegisteredStateCode(company_id, {
+      Company,
+      CompanyGstNumber
+    });
 
     for (const emp of employees) {
       const contract = await findEffectiveEmploymentContract(tenant_id, company_id, emp.id, bounds);
@@ -325,6 +332,16 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
       const monthlyEquivForDaily = basic_salary * bounds.daysInMonth;
 
       const att = await aggregateAttendanceForPeriod(tenant_id, company_id, emp.id, bounds);
+      const rawOtEligible = (emp as any).ot_eligible ?? (emp as any).get?.('ot_eligible');
+      const otEligible = !(
+        rawOtEligible === false ||
+        rawOtEligible === 0 ||
+        rawOtEligible === '0' ||
+        rawOtEligible === 'false'
+      );
+      const dayOtHours = otEligible ? att.dayOtHours : 0;
+      const nightOtHours = otEligible ? att.nightOtHours : 0;
+      const overtimeHoursForPay = otEligible ? att.overtimeHours : 0;
 
       const bonus =
         isDaily && att.recordCount === 0
@@ -337,7 +354,7 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
             );
       const overtime_pay = computeOvertimePay(
         isDaily ? monthlyEquivForDaily : basic_salary,
-        att.overtimeHours
+        overtimeHoursForPay
       );
 
       const pr = isDaily
@@ -363,15 +380,21 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
       const statutoryApplicable = bodyOpts.statutory_india !== false;
       const pfCapAt1800 = bodyOpts.pf_cap_1800 !== false;
       const estimateTds = bodyOpts.estimate_tds !== false;
-      const pfMode =
-        bodyOpts.pf_mode === 'epf_12pct_half' ? 'epf_12pct_half' : ('gross_6pct' as PfMode);
+      const pfMode: PfMode =
+        bodyOpts.pf_mode === 'gross_6pct'
+          ? 'gross_6pct'
+          : bodyOpts.pf_mode === 'epf_12pct_half'
+            ? 'epf_12pct_half'
+            : 'basic_12pct';
 
       const stat = computeIndianStatutoryPayroll(gross_salary, {
         statutoryApplicable,
         pfMode,
         pfCapAt1800,
         estimateTds,
-        basicSalary: isDaily ? monthlyEquivForDaily : basic_salary
+        basicSalary: isDaily ? monthlyEquivForDaily : basic_salary,
+        registeredStateCode,
+        payrollMonth: payroll_period
       });
       const statExtra = breakdownToExtraFields(stat);
 
@@ -409,7 +432,13 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
         employment_contract_id: contract ? contract.id : null,
         working_days_contract: contract?.working_days ?? '',
         attendance_records: String(att.recordCount),
-        attendance_overtime_hours: String(att.overtimeHours),
+        attendance_overtime_hours: String(overtimeHoursForPay),
+        attendance_day_ot_hours: String(dayOtHours),
+        attendance_night_ot_hours: String(nightOtHours),
+        attendance_holiday_work_hours: String(att.holidayWorkHours),
+        day_ot_hour: String(dayOtHours),
+        night_ot_hour: String(nightOtHours),
+        ot_eligible: String(otEligible),
         indian_pf_mode: statutoryApplicable ? pfMode : '',
         indian_statutory_version: 'sheet_ref_6pct_prorate_v2'
       };

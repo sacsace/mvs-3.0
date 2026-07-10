@@ -7,12 +7,9 @@ import {
   Card,
   CardContent,
   Chip,
-  FormControl,
   InputAdornment,
-  InputLabel,
   MenuItem,
   Pagination,
-  Select,
   Snackbar,
   Tab,
   Tabs,
@@ -28,7 +25,19 @@ import {
   Typography
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPaginationSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsBodyListTableSx,
+  mvsTableScrollSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+} from '../../theme/mvsLayout';
 import { useTranslation } from 'react-i18next';
 import { useTheme, alpha } from '@mui/material/styles';
 import {
@@ -814,13 +823,9 @@ const WorkStatistics: React.FC = () => {
     </div>
   );
 
-  const kpiCardSx = {
-    borderRadius: '16px',
-    border: '1px solid',
-    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-    boxShadow:
-      theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
-    bgcolor: 'background.paper',
+  const statsFilterFieldSx = {
+    ...mvsSearchFieldSx,
+    ...mvsFilterFieldHeightSx,
   } as const;
 
   return (
@@ -833,36 +838,14 @@ const WorkStatistics: React.FC = () => {
             variant="outlined"
             startIcon={<RefreshIcon sx={{ fontSize: 18 }} />}
             onClick={loadStatisticsData}
-            sx={{
-              borderRadius: '12px',
-              textTransform: 'none',
-              fontWeight: 600,
-              borderColor: 'divider',
-              color: 'text.secondary',
-              '&:hover': {
-                borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
-                bgcolor: 'action.hover',
-                color: 'text.primary',
-              },
-            }}
+            sx={mvsBodyOutlinedBtnSx}
           >
             {t('workStatistics.actions.refresh')}
           </Button>
           <Button
             variant="outlined"
             startIcon={<DownloadIcon sx={{ fontSize: 18 }} />}
-            sx={{
-              borderRadius: '12px',
-              textTransform: 'none',
-              fontWeight: 600,
-              borderColor: 'divider',
-              color: 'text.secondary',
-              '&:hover': {
-                borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
-                bgcolor: 'action.hover',
-                color: 'text.primary',
-              },
-            }}
+            sx={mvsBodyOutlinedBtnSx}
           >
             {t('workStatistics.actions.export')}
           </Button>
@@ -870,9 +853,9 @@ const WorkStatistics: React.FC = () => {
         }
       />
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', xl: 'repeat(7, 1fr)' }, gap: 2, mb: 3 }}>
-        <Card elevation={0} sx={kpiCardSx}>
-          <CardContent sx={{ py: 2, px: 2.5 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', xl: 'repeat(7, 1fr)' }, gap: 2.5, mb: 3 }}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {t('workStatistics.summary.avgPersonalEfficiency')}
             </Typography>
@@ -881,8 +864,8 @@ const WorkStatistics: React.FC = () => {
             </Typography>
           </CardContent>
         </Card>
-        <Card elevation={0} sx={kpiCardSx}>
-          <CardContent sx={{ py: 2, px: 2.5 }}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {t('workStatistics.summary.avgOnTimeRate')}
             </Typography>
@@ -891,8 +874,8 @@ const WorkStatistics: React.FC = () => {
             </Typography>
           </CardContent>
         </Card>
-        <Card elevation={0} sx={kpiCardSx}>
-          <CardContent sx={{ py: 2, px: 2.5 }}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {t('workStatistics.summary.avgCompletionRate')}
             </Typography>
@@ -901,32 +884,32 @@ const WorkStatistics: React.FC = () => {
             </Typography>
           </CardContent>
         </Card>
-        <Card elevation={0} sx={kpiCardSx}>
-          <CardContent sx={{ py: 2, px: 2.5 }}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {t('workStatistics.summary.totalAssignedCards')}
             </Typography>
             <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: 'text.primary' }}>{totalAssigned}</Typography>
           </CardContent>
         </Card>
-        <Card elevation={0} sx={kpiCardSx}>
-          <CardContent sx={{ py: 2, px: 2.5 }}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {t('workStatistics.summary.completedCards')}
             </Typography>
             <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: 'text.primary' }}>{totalTasksCompleted}</Typography>
           </CardContent>
         </Card>
-        <Card elevation={0} sx={kpiCardSx}>
-          <CardContent sx={{ py: 2, px: 2.5 }}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {t('workStatistics.summary.overallCompletionRate')}
             </Typography>
             <Typography variant="kpiNumber" sx={{ fontWeight: 600, color: softMetricColor('success') }}>{completionRate.toFixed(1)}%</Typography>
           </CardContent>
         </Card>
-        <Card elevation={0} sx={kpiCardSx}>
-          <CardContent sx={{ py: 2, px: 2.5 }}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, display: 'block', mb: 1, letterSpacing: '0.02em' }}>
               {t('workStatistics.summary.avgProcessingTime')}
             </Typography>
@@ -937,18 +920,19 @@ const WorkStatistics: React.FC = () => {
         </Card>
       </Box>
 
-      <Card
-        elevation={0}
-        sx={{
-          mb: 3,
-          borderRadius: '16px',
-          border: 'none',
-          boxShadow: 'none',
-          bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.06) : alpha(theme.palette.common.black, 0.03),
-        }}
-      >
-        <CardContent sx={{ py: 2, px: 2.5 }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr' }, gap: 2, alignItems: 'center' }}>
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            ...statsFilterFieldSx,
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr 1fr' },
+            gap: 2,
+            alignItems: 'flex-end',
+          }}
+        >
             <TextField
               fullWidth
               size="small"
@@ -964,20 +948,7 @@ const WorkStatistics: React.FC = () => {
                   </InputAdornment>
                 )
               }}
-              sx={{
-                bgcolor: 'background.paper',
-                borderRadius: '12px',
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '12px',
-                  '& fieldset': {
-                    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.1)' : undefined,
-                  },
-                },
-                '& .MuiInputBase-input::placeholder': {
-                  color: 'text.secondary',
-                  opacity: 0.85,
-                },
-              }}
+              sx={statsFilterFieldSx}
             />
             <TextField
               fullWidth
@@ -988,6 +959,7 @@ const WorkStatistics: React.FC = () => {
               onChange={(e) => setDepartmentFilter(e.target.value)}
               InputLabelProps={{ shrink: true }}
               SelectProps={{ displayEmpty: true }}
+              sx={statsFilterFieldSx}
             >
               <MenuItem value="">{t('workStatistics.filters.all')}</MenuItem>
               {departments.map((dept) => (
@@ -1003,6 +975,7 @@ const WorkStatistics: React.FC = () => {
               onChange={(e) => setPeriodFilter(e.target.value)}
               InputLabelProps={{ shrink: true }}
               SelectProps={{ displayEmpty: true }}
+              sx={statsFilterFieldSx}
             >
               <MenuItem value="">{t('workStatistics.filters.all')}</MenuItem>
               {periods.map((period) => (
@@ -1018,60 +991,38 @@ const WorkStatistics: React.FC = () => {
                 setDepartmentFilter('');
                 setPeriodFilter('');
               }}
-              sx={{
-                borderRadius: '12px',
-                textTransform: 'none',
-                fontWeight: 600,
-                borderColor: 'divider',
-                color: 'text.secondary',
-                '&:hover': {
-                  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
-                  bgcolor: 'action.hover',
-                  color: 'text.primary',
-                },
-              }}
+              sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
             >
               {t('workStatistics.actions.reset')}
             </Button>
-          </Box>
-        </CardContent>
+        </Box>
       </Card>
 
-      <Card
-        elevation={0}
-        sx={{
-          mb: 3,
-          borderRadius: '20px',
-          overflow: 'hidden',
-          border: '1px solid',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-          boxShadow:
-            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
-          bgcolor: 'background.paper',
-        }}
-      >
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Box sx={{ borderBottom: 1, borderColor: '#C5CED9' }}>
           <Tabs
             value={tabValue}
             onChange={(_e, newValue) => setTabValue(newValue)}
             sx={{
-              px: { xs: 2, sm: 2.5, md: 3 },
-              minHeight: 48,
+              minHeight: 40,
+              px: { xs: 1, sm: 1.5 },
+              bgcolor: '#FFFFFF',
               '& .MuiTabs-indicator': {
-                height: 2,
-                borderRadius: '2px 2px 0 0',
-                bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.85)' : theme.palette.grey[300],
+                height: 3,
+                borderRadius: '3px 3px 0 0',
               },
               '& .MuiTab-root': {
-                color: 'text.secondary',
-                fontWeight: 500,
-                fontSize: '0.875rem',
                 textTransform: 'none',
-                minHeight: 48,
+                fontWeight: 500,
+                fontSize: '0.8125rem',
+                minHeight: 40,
+                py: 0.75,
+                letterSpacing: '-0.01em',
+                color: 'text.secondary',
               },
               '& .MuiTab-root.Mui-selected': {
-                color: 'text.primary',
-                fontWeight: 600,
+                color: 'primary.main',
+                fontWeight: 700,
               },
             }}
           >
@@ -1084,10 +1035,12 @@ const WorkStatistics: React.FC = () => {
         </Box>
 
         <TabPanel value={tabValue} index={0}>
-          <TableContainer sx={{ bgcolor: 'transparent', overflowX: 'auto' }}>
+          <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
             <Table
+              size="small"
               sx={{
                 borderCollapse: 'collapse',
+                bgcolor: 'transparent',
                 '& .MuiTableCell-root': {
                   borderLeft: 'none',
                   borderRight: 'none',
@@ -1095,23 +1048,7 @@ const WorkStatistics: React.FC = () => {
                 },
               }}
             >
-              <TableHead
-                sx={{
-                  '& .MuiTableCell-head': {
-                    bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
-                    color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
-                    fontWeight: 500,
-                    fontSize: '0.72rem',
-                    textTransform: 'none',
-                    letterSpacing: '0.01em',
-                    borderBottom: `1px solid ${
-                      theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                    }`,
-                    py: 1.15,
-                    px: 1.5,
-                  },
-                }}
-              >
+              <TableHead sx={mvsTableHeadHighlightSx}>
                 <TableRow>
                   <TableCell>{t('workStatistics.columns.employeeInfo')}</TableCell>
                   <TableCell>{t('workStatistics.columns.period')}</TableCell>
@@ -1127,30 +1064,9 @@ const WorkStatistics: React.FC = () => {
                   <TableCell>{t('workStatistics.columns.monthlyCompleted')}</TableCell>
                 </TableRow>
               </TableHead>
-              <TableBody
-                sx={{
-                  '& .MuiTableCell-body': {
-                    py: 1.1,
-                    px: 1.5,
-                    fontSize: '0.82rem',
-                    borderBottom: `1px solid ${
-                      theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                    }`,
-                  },
-                  '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
-                    borderBottom: 'none',
-                  },
-                }}
-              >
+              <TableBody sx={mvsTableBodyRowSx}>
                 {paginatedStatistics.map((stat) => (
-                  <TableRow
-                    key={stat.id}
-                    hover
-                    sx={{
-                      transition: 'background-color 0.15s ease',
-                      '&:hover': { bgcolor: 'action.hover' },
-                    }}
-                  >
+                  <TableRow key={stat.id}>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
                         <Avatar
@@ -1280,28 +1196,13 @@ const WorkStatistics: React.FC = () => {
             </Table>
           </TableContainer>
 
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2.5, px: 2 }}>
+          <Box sx={mvsBodyPaginationSx}>
             <Pagination
               count={Math.max(1, Math.ceil(filteredStatistics.length / itemsPerPage))}
               page={page}
               onChange={(_, value) => setPage(value)}
               shape="rounded"
               siblingCount={1}
-              sx={{
-                '& .MuiPaginationItem-root': {
-                  borderRadius: '10px',
-                  fontWeight: 600,
-                  minWidth: 36,
-                  height: 36,
-                },
-                '& .Mui-selected': {
-                  bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.12),
-                  color: 'text.primary',
-                  '&:hover': {
-                    bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.12)' : alpha(theme.palette.common.white, 0.16),
-                  },
-                },
-              }}
             />
           </Box>
         </TabPanel>
@@ -1399,9 +1300,9 @@ const WorkStatistics: React.FC = () => {
           <Typography variant="subtitle1" sx={{ color: 'text.primary', fontWeight: 600, mb: 1.5 }}>
             {t('workStatistics.sections.personalEfficiencyDetail')}
           </Typography>
-          <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table size="small">
-              <TableHead>
+          <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx, mb: 2 }}>
+            <Table size="small" sx={{ borderCollapse: 'collapse', bgcolor: 'transparent' }}>
+              <TableHead sx={mvsTableHeadHighlightSx}>
                 <TableRow>
                   <TableCell>{t('workStatistics.columns.employeeInfo')}</TableCell>
                   <TableCell>{t('workStatistics.columns.personalEfficiency')}</TableCell>
@@ -1412,9 +1313,9 @@ const WorkStatistics: React.FC = () => {
                   <TableCell>{t('workStatistics.columns.avgProcessingTime')}</TableCell>
                 </TableRow>
               </TableHead>
-              <TableBody>
+              <TableBody sx={mvsTableBodyRowSx}>
                 {personalEfficiencyRows.slice(0, 15).map((stat) => (
-                  <TableRow key={`efficiency-${stat.id}`} hover>
+                  <TableRow key={`efficiency-${stat.id}`}>
                     <TableCell>{stat.employeeName}</TableCell>
                     <TableCell>{stat.personalEfficiencyScore.toFixed(1)}%</TableCell>
                     <TableCell>{stat.productivity.toFixed(1)}%</TableCell>
@@ -1471,8 +1372,8 @@ const WorkStatistics: React.FC = () => {
           </Box>
 
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2, mb: 3 }}>
-            <Card elevation={0} sx={kpiCardSx}>
-              <CardContent sx={{ py: 1.5, px: 2 }}>
+            <Card elevation={0} sx={mvsKpiCardSx}>
+              <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
                   {t('workStatistics.processingTime.teamMedian')}
                 </Typography>
@@ -1481,8 +1382,8 @@ const WorkStatistics: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
-            <Card elevation={0} sx={kpiCardSx}>
-              <CardContent sx={{ py: 1.5, px: 2 }}>
+            <Card elevation={0} sx={mvsKpiCardSx}>
+              <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
                   {t('workStatistics.processingTime.teamAverage')}
                 </Typography>
@@ -1491,8 +1392,8 @@ const WorkStatistics: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
-            <Card elevation={0} sx={kpiCardSx}>
-              <CardContent sx={{ py: 1.5, px: 2 }}>
+            <Card elevation={0} sx={mvsKpiCardSx}>
+              <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
                   {t('workStatistics.processingTime.fastest')}
                 </Typography>
@@ -1501,8 +1402,8 @@ const WorkStatistics: React.FC = () => {
                 </Typography>
               </CardContent>
             </Card>
-            <Card elevation={0} sx={kpiCardSx}>
-              <CardContent sx={{ py: 1.5, px: 2 }}>
+            <Card elevation={0} sx={mvsKpiCardSx}>
+              <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
                 <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
                   {t('workStatistics.processingTime.slowest')}
                 </Typography>
@@ -1631,9 +1532,9 @@ const WorkStatistics: React.FC = () => {
           <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
             {t('workStatistics.tooltips.processingTimeDetail')}
           </Typography>
-          <TableContainer sx={{ overflowX: 'auto' }}>
-            <Table size="small">
-              <TableHead>
+          <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx, mb: 2 }}>
+            <Table size="small" sx={{ borderCollapse: 'collapse', bgcolor: 'transparent' }}>
+              <TableHead sx={mvsTableHeadHighlightSx}>
                 <TableRow>
                   <TableCell>{t('workStatistics.columns.employeeInfo')}</TableCell>
                   <TableCell>{t('workStatistics.processingTime.sampleSize')}</TableCell>
@@ -1645,9 +1546,9 @@ const WorkStatistics: React.FC = () => {
                   <TableCell>{t('workStatistics.columns.avgElapsedTime')}</TableCell>
                 </TableRow>
               </TableHead>
-              <TableBody>
+              <TableBody sx={mvsTableBodyRowSx}>
                 {processingTimeDetailRows.map((stat) => (
-                  <TableRow key={`processing-${stat.id}`} hover>
+                  <TableRow key={`processing-${stat.id}`}>
                     <TableCell>{stat.employeeName}</TableCell>
                     <TableCell>
                       {t('workStatistics.processingTime.sampleCount', {

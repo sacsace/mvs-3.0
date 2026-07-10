@@ -39,10 +39,27 @@ import {
   TableSortLabel,
   InputAdornment,
   CircularProgress,
-  Tooltip
+  Tooltip,
+  Checkbox,
+  Pagination,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsFilterFieldHeightSx,
+  mvsSearchFieldSx,
+  mvsOutlinedLabelProps,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+  mvsTableScrollSx,
+  mvsBodyPaginationSx,
+} from '../../theme/mvsLayout';
 import {
   Business as BusinessIcon,
   Save as SaveIcon,
@@ -59,6 +76,7 @@ import {
   Warning as WarningIcon,
   Info as InfoIcon,
   Search as SearchIcon,
+  RestartAlt as ResetIcon,
   Visibility as ViewIcon,
   Phone as PhoneIcon,
   Email as EmailIcon,
@@ -73,12 +91,76 @@ import { useReferenceDataStore } from '../../store/referenceDataStore';
 import AuthMedia from '../../components/Common/AuthMedia';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import { useTranslation } from 'react-i18next';
-import { alpha, useTheme } from '@mui/material/styles';
+import { alpha, useTheme, type SxProps, type Theme } from '@mui/material/styles';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 
 const COMPANY_MENU_ROUTES = ['/basic-info/company', '/basic-info'] as const;
+const COMPANIES_PER_PAGE = 10;
+
+const COMP_COL_DEFAULTS: Record<string, number> = {
+  select: 48,
+  name: 280,
+  ceo_name: 140,
+  industry: 140,
+  employee_count: 120,
+  mvs_start: 180,
+  actions: 72,
+};
+
+const COMP_COL_TOTAL = Object.values(COMP_COL_DEFAULTS).reduce((s, n) => s + n, 0);
+
+const COMP_COL_ALIGN: Record<string, 'left' | 'right' | 'center'> = {
+  select: 'center',
+  name: 'left',
+  ceo_name: 'left',
+  industry: 'left',
+  employee_count: 'right',
+  mvs_start: 'left',
+  actions: 'center',
+};
+
+const COMP_COL_MIN_WIDTH: Record<string, number> = {
+  select: 48,
+  name: 120,
+  ceo_name: 88,
+  industry: 72,
+  employee_count: 96,
+  mvs_start: 120,
+  actions: 56,
+};
+
+function compColWidthPct(key: string): string {
+  const w = COMP_COL_DEFAULTS[key] ?? 80;
+  return `${(w / COMP_COL_TOTAL) * 100}%`;
+}
+
+function compColTableAlign(key: string): 'left' | 'right' | 'center' {
+  return COMP_COL_ALIGN[key] ?? 'left';
+}
+
+function compColSortLabelJustify(key: string): 'flex-start' | 'flex-end' | 'center' {
+  const align = compColTableAlign(key);
+  if (align === 'right') return 'flex-end';
+  if (align === 'center') return 'center';
+  return 'flex-start';
+}
+
+const COMPANY_FILTER_OUTLINED = mvsOutlinedLabelProps;
+const companyFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
+
+const companyTableBodyRowSx: SxProps<Theme> = (theme) => {
+  const base = typeof mvsTableBodyRowSx === 'function' ? mvsTableBodyRowSx(theme) : mvsTableBodyRowSx;
+  const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
+  const hoverBg = theme.palette.mode === 'light' ? '#EFF6FF' : theme.palette.action.hover;
+  return {
+    ...(base as object),
+    '& .MuiTableRow-root:nth-of-type(odd)': { bgcolor: rowBg },
+    '& .MuiTableRow-root:nth-of-type(even)': { bgcolor: rowBg },
+    '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
+  };
+};
 
 // TabPanel 컴포넌트 정의
 interface TabPanelProps {
@@ -269,6 +351,8 @@ const CompanyManagement: React.FC = () => {
     company_seal: '',
     ceo_signature: ''
   });
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>([]);
+  const [page, setPage] = useState(1);
 
   // 이미지 파일을 Base64로 변환하는 함수
   const convertToBase64 = (file: File): Promise<string> => {
@@ -713,9 +797,15 @@ const CompanyManagement: React.FC = () => {
   };
 
   // 회사 삭제
+  const removeCompaniesFromList = (ids: number[]) => {
+    const idSet = new Set(ids);
+    setCompanies((prev) => prev.filter((company) => !idSet.has(company.id)));
+    setSelectedCompanyIds((prev) => prev.filter((id) => !idSet.has(id)));
+  };
+
   const handleDelete = (id: number) => {
     showConfirm(
-      '정말로 이 회사를 삭제하시겠습니까?',
+      t('companyManagement.confirmDelete'),
       () => {
         void (async () => {
           setLoading(true);
@@ -724,7 +814,8 @@ const CompanyManagement: React.FC = () => {
 
           try {
             await api.delete(`/company/${id}`);
-            setSuccess('회사가 성공적으로 삭제되었습니다.');
+            removeCompaniesFromList([id]);
+            setSuccess(t('companyManagement.companyDeleted'));
 
             const companiesData = await useReferenceDataStore.getState().fetchCompanies(true);
             const transformedCompanies = companiesData.map((company: any) => ({
@@ -756,7 +847,60 @@ const CompanyManagement: React.FC = () => {
           }
         })();
       },
-      { title: '삭제 확인', confirmColor: 'error', confirmText: t('common.delete'), cancelText: t('common.cancel') }
+      { title: t('common.confirm'), confirmColor: 'error', confirmText: t('common.delete'), cancelText: t('common.cancel') }
+    );
+  };
+
+  const handleDeleteSelected = () => {
+    if (!menuFlags.canDelete) return;
+    if (selectedCompanyIds.length === 0) return;
+
+    const idsToDelete = [...selectedCompanyIds];
+
+    showConfirm(
+      t('companyManagement.deleteSelectedConfirm', { count: idsToDelete.length }),
+      () => {
+        void (async () => {
+          setLoading(true);
+          setError('');
+          setSuccess('');
+
+          try {
+            await Promise.all(idsToDelete.map((id) => api.delete(`/company/${id}`)));
+            removeCompaniesFromList(idsToDelete);
+            setSuccess(t('companyManagement.deleteSelectedSuccess', { count: idsToDelete.length }));
+
+            const companiesData = await useReferenceDataStore.getState().fetchCompanies(true);
+            const transformedCompanies = companiesData.map((company: any) => ({
+              ...company,
+              employee_count: company.employee_count || 0,
+              subscription_plan: company.subscription_plan || 'basic',
+              subscription_status: company.status || 'active',
+              company_logo: company.company_logo || '',
+              company_seal: company.company_seal || '',
+              ceo_signature: company.ceo_signature || '',
+              account_holder_name: company.account_holder_name || '',
+              bank_name: company.bank_name || '',
+              account_number: company.account_number || '',
+              ifsc_code: company.ifsc_code || '',
+              login_period_start: company.login_period_start || '',
+              login_period_end: company.login_period_end || '',
+              login_time_start: company.login_time_start || '09:00:00',
+              login_time_end: company.login_time_end || '18:00:00',
+              timezone: company.timezone || 'Asia/Seoul',
+              settings: company.settings || {},
+            }));
+
+            setCompanies(transformedCompanies);
+          } catch (error: any) {
+            console.error('회사 일괄 삭제 오류:', error);
+            setError(error.response?.data?.message || '회사 삭제 중 오류가 발생했습니다.');
+          } finally {
+            setLoading(false);
+          }
+        })();
+      },
+      { title: t('common.confirm'), confirmColor: 'error', confirmText: t('common.delete'), cancelText: t('common.cancel') }
     );
   };
 
@@ -782,6 +926,127 @@ const CompanyManagement: React.FC = () => {
     copy.sort(getCompanySortComparator(order, orderBy));
     return copy;
   }, [filteredCompanies, order, orderBy]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedCompanies.length / COMPANIES_PER_PAGE));
+
+  const paginatedCompanies = useMemo(
+    () => sortedCompanies.slice((page - 1) * COMPANIES_PER_PAGE, page * COMPANIES_PER_PAGE),
+    [sortedCompanies, page]
+  );
+
+  const visibleCompanyIds = useMemo(
+    () => paginatedCompanies.map((company) => company.id),
+    [paginatedCompanies]
+  );
+
+  const allVisibleSelected =
+    visibleCompanyIds.length > 0 && visibleCompanyIds.every((id) => selectedCompanyIds.includes(id));
+  const someVisibleSelected = visibleCompanyIds.some((id) => selectedCompanyIds.includes(id));
+
+  useEffect(() => {
+    setPage(1);
+    setSelectedCompanyIds([]);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const hasActiveFilters = Boolean(searchTerm.trim());
+
+  const handleResetFilters = () => setSearchTerm('');
+
+  const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!menuFlags.canDelete) return;
+    if (event.target.checked) {
+      setSelectedCompanyIds(visibleCompanyIds);
+    } else {
+      setSelectedCompanyIds([]);
+    }
+  };
+
+  const handleToggleSelectCompany = (id: number) => {
+    if (!menuFlags.canDelete) return;
+    setSelectedCompanyIds((prev) =>
+      prev.includes(id) ? prev.filter((companyId) => companyId !== id) : [...prev, id]
+    );
+  };
+
+  const thLabelEllipsisSx = {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    minWidth: 0,
+    flex: '1 1 auto',
+  } as const;
+
+  const thSx = (key: string) => {
+    const align = compColTableAlign(key);
+    return {
+      width: compColWidthPct(key),
+      minWidth: COMP_COL_MIN_WIDTH[key] ?? 0,
+      maxWidth: compColWidthPct(key),
+      overflow: 'hidden',
+      textAlign: align,
+      verticalAlign: 'middle' as const,
+      boxSizing: 'border-box' as const,
+      '& .MuiTableSortLabel-root': {
+        color: 'inherit',
+        display: 'inline-flex',
+        width: '100%',
+        maxWidth: '100%',
+        justifyContent: compColSortLabelJustify(key),
+        overflow: 'hidden',
+        ...(align === 'right' ? { flexDirection: 'row-reverse' as const } : {}),
+      },
+      '& .MuiTableSortLabel-icon': { flexShrink: 0 },
+    };
+  };
+
+  const tdSx = (key: string) => ({
+    width: compColWidthPct(key),
+    minWidth: COMP_COL_MIN_WIDTH[key] ?? 0,
+    maxWidth: compColWidthPct(key),
+    overflow:
+      key === 'name' || key === 'ceo_name' || key === 'industry' || key === 'mvs_start'
+        ? ('hidden' as const)
+        : ('visible' as const),
+    textOverflow:
+      key === 'name' || key === 'ceo_name' || key === 'industry' || key === 'mvs_start'
+        ? ('ellipsis' as const)
+        : undefined,
+    verticalAlign: 'middle' as const,
+    boxSizing: 'border-box' as const,
+  });
+
+  const renderHeadSortCell = (key: CompanySortKey, label: string) => (
+    <TableCell key={key} align={compColTableAlign(key)} sx={thSx(key)}>
+      <TableSortLabel
+        disabled={menuFlags.menusLoading || !menuFlags.canRead}
+        active={orderBy === key}
+        direction={orderBy === key ? order : 'asc'}
+        onClick={() => handleRequestSort(key)}
+      >
+        <Box component="span" sx={thLabelEllipsisSx} title={label}>
+          {label}
+        </Box>
+      </TableSortLabel>
+    </TableCell>
+  );
+
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    py: { xs: 6, sm: 8 },
+    px: 3,
+    gap: 1.5,
+  } as const;
 
   // 공통 TextField 스타일
   const textFieldStyles = {
@@ -1449,44 +1714,11 @@ const CompanyManagement: React.FC = () => {
     </Dialog>
   );
 
-  const sortLabelSx = {
-    fontWeight: 600,
-    fontSize: '0.75rem',
-    letterSpacing: '0.01em',
-    color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.55)' : theme.palette.grey[400],
-    '&.Mui-active': {
-      color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.92)' : theme.palette.grey[100],
-    },
-    '& .MuiTableSortLabel-icon': {
-      color: 'inherit',
-      opacity: 0.85,
-    },
-  } as const;
-
   return (
     <Box sx={{ ...mvsPageRootSx }}>
       <MvsPageHeader
         title={t('companyManagement.pageTitle')}
         description={t('companyManagement.description')}
-        actions={
-          user?.role === 'root' ? (
-            <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
-              <span style={{ display: 'inline-flex' }}>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  disableElevation
-                  startIcon={<AddIcon sx={{ fontSize: 20 }} />}
-                  onClick={handleAdd}
-                  disabled={menuFlags.menusLoading || !menuFlags.canCreate}
-                  sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
-                >
-                  {t('companyManagement.addCompany')}
-                </Button>
-              </span>
-            </Tooltip>
-          ) : undefined
-        }
       />
 
       {/* 알림 메시지 */}
@@ -1506,44 +1738,23 @@ const CompanyManagement: React.FC = () => {
         </Alert>
       )}
 
-      {/* 통계 카드 및 검색 필터 - root 사용자만 표시 */}
-      {user?.role === 'root' && (
+      {user?.role === 'root' ? (
         <>
           <Box
             sx={{
               display: 'grid',
               gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-              gap: 2,
+              gap: 2.5,
               mb: 3,
             }}
           >
             {[filteredCompanies.length, companies.length].map((value, idx) => (
-              <Card
-                key={idx === 0 ? 'mvs' : 'total'}
-                elevation={0}
-                sx={{
-                  borderRadius: '16px',
-                  border: '1px solid',
-                  borderColor: theme.palette.mode === 'light' ? '#B8C4D0' : 'divider',
-                  boxShadow:
-                    theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.08)' : '0 2px 12px rgba(0,0,0,0.25)',
-                  bgcolor: 'background.paper',
-                }}
-              >
-                <CardContent sx={{ py: 2, px: 2.5 }}>
-                  <Typography
-                    sx={{
-                      color: pageMutedFg,
-                      display: 'block',
-                      fontWeight: 600,
-                      letterSpacing: '0.02em',
-                      fontSize: '0.75rem',
-                      mb: 1,
-                    }}
-                  >
+              <Card key={idx === 0 ? 'mvs' : 'total'} elevation={0} sx={mvsKpiCardSx}>
+                <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
                     {idx === 0 ? t('companyManagement.mvsUsageCompanies') : t('companyManagement.totalCompanies')}
                   </Typography>
-                  <Typography variant="kpiNumber" sx={{ color: tablePrimaryFg, fontWeight: 600 }}>
+                  <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
                     {value}
                   </Typography>
                 </CardContent>
@@ -1551,116 +1762,170 @@ const CompanyManagement: React.FC = () => {
             ))}
           </Box>
 
-          {/* 검색 */}
-          <Box
-            sx={{
-              mb: 3,
-              p: 2,
-              borderRadius: '14px',
-              border: '1px solid',
-              borderColor: theme.palette.mode === 'light' ? '#C5CED9' : 'divider',
-              bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.06) : '#F0F4F8',
-            }}
-          >
-            <TextField
-              fullWidth
-              placeholder={t('companyManagement.searchPlaceholder')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              variant="outlined"
-              size="small"
-              disabled={menuFlags.menusLoading || !menuFlags.canRead}
-              hiddenLabel
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
-                  </InputAdornment>
-                ),
-              }}
+          <Card elevation={0} sx={mvsBodyCardSx}>
+            <Box
               sx={{
-                maxWidth: 560,
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '12px',
-                  bgcolor: 'background.paper',
-                  '& fieldset': {
-                    borderColor: theme.palette.mode === 'light' ? '#C5CED9' : undefined,
-                  },
-                  '&:hover fieldset': {
-                    borderColor: theme.palette.mode === 'light' ? '#B8C4D0' : undefined,
-                  },
-                },
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: 1,
+                px: { xs: 2, sm: 2.5 },
+                py: 1.5,
+                bgcolor: '#FFFFFF',
               }}
-            />
-          </Box>
-        </>
-      )}
-
-      {/* 회사 목록 - root 사용자는 리스트, 일반 사용자는 본인 회사만 view */}
-      {loading ? (
-        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', p: 8 }}>
-          <CircularProgress sx={{ mb: 2 }} />
-          <Typography sx={{ color: pageMutedFg }}>{t('companyManagement.loadingMessage')}</Typography>
-        </Box>
-      ) : user?.role === 'root' ? (
-        // root 사용자: 회사 리스트 표시
-        <Card
-          elevation={0}
-          sx={{
-            borderRadius: '20px',
-            border: '1px solid',
-            borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-            boxShadow:
-              theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
-            bgcolor: 'background.paper',
-            overflow: 'hidden',
-          }}
-        >
-          <CardContent sx={{ py: 3, px: 3 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 2.5 }}>
-              <Typography
-                variant="subtitle1"
-                sx={{
-                  color: tablePrimaryFg,
-                  fontWeight: 600,
-                  letterSpacing: '-0.02em',
-                  fontSize: '1rem',
-                }}
-              >
-                {t('companyManagement.companyListTitle', { count: filteredCompanies.length })}
-              </Typography>
+            >
+              {selectedCompanyIds.length > 0 ? (
+                <Tooltip title={t('common.menuNoDelete')} disableHoverListener={menuFlags.menusLoading || menuFlags.canDelete}>
+                  <span style={{ display: 'inline-flex' }}>
+                    <Button
+                      variant="contained"
+                      color="error"
+                      disableElevation
+                      size="small"
+                      startIcon={<DeleteIcon fontSize="small" />}
+                      disabled={menuFlags.menusLoading || !menuFlags.canDelete}
+                      onClick={handleDeleteSelected}
+                      sx={{
+                        textTransform: 'none',
+                        borderRadius: '10px',
+                        fontWeight: 600,
+                        fontSize: '0.8125rem',
+                        minHeight: 36,
+                        px: 2,
+                        boxShadow: 'none',
+                      }}
+                    >
+                      {t('companyManagement.deleteSelected')} ({selectedCompanyIds.length})
+                    </Button>
+                  </span>
+                </Tooltip>
+              ) : null}
               <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
-                <span style={{ display: 'inline-flex' }}>
+                <span style={{ display: 'inline-flex', flexShrink: 0 }}>
                   <Button
-                    variant="outlined"
+                    variant="contained"
+                    disableElevation
                     size="small"
-                    startIcon={<AddIcon sx={{ fontSize: 18 }} />}
+                    startIcon={<AddIcon fontSize="small" />}
                     onClick={handleAdd}
                     disabled={menuFlags.menusLoading || !menuFlags.canCreate}
-                    sx={{
-                      borderRadius: '12px',
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      borderColor: 'divider',
-                      color: 'text.secondary',
-                      '&:hover': {
-                        borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
-                        bgcolor: 'action.hover',
-                        color: 'text.primary',
-                      },
-                    }}
+                    sx={mvsBodyPrimaryBtnSx}
                   >
                     {t('companyManagement.addCompany')}
                   </Button>
                 </span>
               </Tooltip>
             </Box>
-            {filteredCompanies.length > 0 ? (
-              <TableContainer sx={{ bgcolor: 'transparent', boxShadow: 'none', border: 'none' }}>
+
+            <Box
+              sx={{
+                px: { xs: 2, sm: 2.5 },
+                py: 2,
+                bgcolor: '#FFFFFF',
+                ...(mvsSearchFieldSx as Record<string, unknown>),
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  md: 'minmax(0, 1fr) auto',
+                },
+                gap: 2,
+                alignItems: 'flex-end',
+              }}
+            >
+              <TextField
+                fullWidth
+                size="small"
+                label={t('common.search')}
+                {...COMPANY_FILTER_OUTLINED}
+                placeholder={t('companyManagement.searchPlaceholder')}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                sx={companyFilterFieldSx}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<ResetIcon fontSize="small" />}
+                onClick={handleResetFilters}
+                disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                sx={{
+                  ...mvsBodyOutlinedBtnSx,
+                  height: 40,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {t('companyManagement.reset')}
+              </Button>
+            </Box>
+          </Card>
+
+          <Box sx={mvsBodyListZoneSx}>
+            {loading ? (
+              <Box sx={listStateBoxSx}>
+                <CircularProgress size={36} />
+                <Typography variant="body2" color="text.secondary">
+                  {t('companyManagement.empty.loading')}
+                </Typography>
+              </Box>
+            ) : sortedCompanies.length === 0 ? (
+              <Box sx={listStateBoxSx}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+                  {hasActiveFilters
+                    ? t('companyManagement.empty.noResults')
+                    : t('companyManagement.empty.noItems')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
+                  {hasActiveFilters
+                    ? t('companyManagement.empty.noResultsHint')
+                    : t('companyManagement.empty.noItemsHint')}
+                </Typography>
+                {hasActiveFilters ? (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<ResetIcon fontSize="small" />}
+                    onClick={handleResetFilters}
+                    sx={mvsBodyOutlinedBtnSx}
+                  >
+                    {t('companyManagement.reset')}
+                  </Button>
+                ) : (
+                  <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
+                    <span style={{ display: 'inline-flex' }}>
+                      <Button
+                        variant="contained"
+                        disableElevation
+                        size="small"
+                        startIcon={<AddIcon fontSize="small" />}
+                        disabled={menuFlags.menusLoading || !menuFlags.canCreate}
+                        onClick={handleAdd}
+                        sx={mvsBodyPrimaryBtnSx}
+                      >
+                        {t('companyManagement.addCompany')}
+                      </Button>
+                    </span>
+                  </Tooltip>
+                )}
+              </Box>
+            ) : (
+              <>
+              <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
                 <Table
                   size="small"
                   sx={{
+                    tableLayout: 'fixed',
+                    width: '100%',
                     borderCollapse: 'collapse',
+                    bgcolor: 'transparent',
                     '& .MuiTableCell-root': {
                       borderLeft: 'none',
                       borderRight: 'none',
@@ -1668,118 +1933,79 @@ const CompanyManagement: React.FC = () => {
                     },
                   }}
                 >
-                  <TableHead
-                    sx={{
-                      '& .MuiTableCell-head': {
-                        bgcolor:
-                          theme.palette.mode === 'light'
-                            ? 'rgba(0, 0, 0, 0.02)'
-                            : alpha(theme.palette.common.white, 0.04),
-                        color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
-                        fontWeight: 600,
-                        fontSize: '0.75rem',
-                        letterSpacing: '0.01em',
-                        borderBottom: `1px solid ${
-                          theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                        }`,
-                        py: 1.5,
-                        px: 2,
-                      },
-                    }}
-                  >
+                  <TableHead sx={mvsTableHeadHighlightSx}>
                     <TableRow>
-                      <TableCell sortDirection={orderBy === 'name' ? order : false}>
-                        <TableSortLabel
-                          active={orderBy === 'name'}
-                          direction={orderBy === 'name' ? order : 'asc'}
-                          onClick={() => handleRequestSort('name')}
-                          sx={sortLabelSx}
-                        >
-                          {t('companyManagement.companyInfo')}
-                        </TableSortLabel>
+                      <TableCell padding="checkbox" align="center" sx={thSx('select')}>
+                        <Checkbox
+                          size="small"
+                          disabled={menuFlags.menusLoading || !menuFlags.canDelete || paginatedCompanies.length === 0}
+                          indeterminate={someVisibleSelected && !allVisibleSelected}
+                          checked={allVisibleSelected}
+                          onChange={handleSelectAll}
+                          inputProps={{ 'aria-label': t('companyManagement.selectAll') }}
+                        />
                       </TableCell>
-                      <TableCell sortDirection={orderBy === 'ceo_name' ? order : false}>
-                        <TableSortLabel
-                          active={orderBy === 'ceo_name'}
-                          direction={orderBy === 'ceo_name' ? order : 'asc'}
-                          onClick={() => handleRequestSort('ceo_name')}
-                          sx={sortLabelSx}
+                      {renderHeadSortCell('name', t('companyManagement.companyInfo'))}
+                      {renderHeadSortCell('ceo_name', t('companyManagement.representative'))}
+                      {renderHeadSortCell('industry', t('companyManagement.industry'))}
+                      {renderHeadSortCell('employee_count', t('companyManagement.employeeCount'))}
+                      {renderHeadSortCell('mvs_start', t('companyManagement.mvsUsagePeriod'))}
+                      <TableCell align={compColTableAlign('actions')} sx={thSx('actions')}>
+                        <Box
+                          component="span"
+                          sx={{
+                            display: 'inline-block',
+                            maxWidth: '100%',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={t('companyManagement.actions')}
                         >
-                          {t('companyManagement.representative')}
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell sortDirection={orderBy === 'industry' ? order : false}>
-                        <TableSortLabel
-                          active={orderBy === 'industry'}
-                          direction={orderBy === 'industry' ? order : 'asc'}
-                          onClick={() => handleRequestSort('industry')}
-                          sx={sortLabelSx}
-                        >
-                          {t('companyManagement.industry')}
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell sortDirection={orderBy === 'employee_count' ? order : false}>
-                        <TableSortLabel
-                          active={orderBy === 'employee_count'}
-                          direction={orderBy === 'employee_count' ? order : 'asc'}
-                          onClick={() => handleRequestSort('employee_count')}
-                          sx={sortLabelSx}
-                        >
-                          {t('companyManagement.employeeCount')}
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell sortDirection={orderBy === 'mvs_start' ? order : false}>
-                        <TableSortLabel
-                          active={orderBy === 'mvs_start'}
-                          direction={orderBy === 'mvs_start' ? order : 'asc'}
-                          onClick={() => handleRequestSort('mvs_start')}
-                          sx={sortLabelSx}
-                        >
-                          {t('companyManagement.mvsUsagePeriod')}
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 600, textAlign: 'center', color: 'text.secondary', fontSize: '0.75rem' }}>
-                        {t('companyManagement.actions')}
+                          {t('companyManagement.actions')}
+                        </Box>
                       </TableCell>
                     </TableRow>
                   </TableHead>
-                  <TableBody
-                    sx={{
-                      '& .MuiTableCell-body': {
-                        py: 1.5,
-                        px: 2,
-                        fontSize: '0.875rem',
-                        borderBottom: `1px solid ${
-                          theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                        }`,
-                      },
-                      '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
-                        borderBottom: 'none',
-                      },
-                    }}
-                  >
-                    {sortedCompanies.map((company) => (
+                  <TableBody sx={companyTableBodyRowSx}>
+                    {paginatedCompanies.map((company) => (
                       <TableRow
                         key={company.id}
-                        hover
                         onClick={() => {
                           if (!menuFlags.menusLoading && menuFlags.canRead) handleView(company);
                         }}
                         sx={{
                           cursor: menuFlags.menusLoading || !menuFlags.canRead ? 'default' : 'pointer',
-                          transition: 'background-color 0.15s ease',
-                          '&:hover': { bgcolor: 'action.hover' },
+                          '&:hover .company-delete-btn:not(.Mui-disabled)': {
+                            color: 'error.main',
+                            bgcolor: alpha(theme.palette.error.main, 0.08),
+                          },
                         }}
                       >
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <TableCell
+                          padding="checkbox"
+                          align="center"
+                          sx={tdSx('select')}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Checkbox
+                            size="small"
+                            disabled={menuFlags.menusLoading || !menuFlags.canDelete}
+                            checked={selectedCompanyIds.includes(company.id)}
+                            onChange={() => handleToggleSelectCompany(company.id)}
+                            inputProps={{ 'aria-label': t('companyManagement.selectItem', { name: company.name }) }}
+                          />
+                        </TableCell>
+                        <TableCell align={compColTableAlign('name')} sx={tdSx('name')}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'hidden' }}>
                             <Avatar
                               sx={{
-                                mr: 2,
-                                width: 40,
-                                height: 40,
-                                fontSize: '1rem',
+                                mr: 1.5,
+                                width: 36,
+                                height: 36,
+                                fontSize: '0.875rem',
                                 fontWeight: 600,
+                                flexShrink: 0,
                                 bgcolor:
                                   theme.palette.mode === 'light'
                                     ? 'rgba(15, 23, 42, 0.08)'
@@ -1789,53 +2015,74 @@ const CompanyManagement: React.FC = () => {
                             >
                               {company.name.charAt(0)}
                             </Avatar>
-                            <Typography variant="body1" sx={{ fontWeight: 600, color: tablePrimaryFg }}>
+                            <Typography
+                              variant="subtitle2"
+                              fontWeight={600}
+                              noWrap
+                              title={company.name}
+                              sx={{ minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                            >
                               {company.name}
                             </Typography>
                           </Box>
                         </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" sx={{ fontWeight: 600, color: tablePrimaryFg }}>
+                        <TableCell align={compColTableAlign('ceo_name')} sx={tdSx('ceo_name')}>
+                          <Typography variant="body2" noWrap title={company.ceo_name} sx={{ fontWeight: 600 }}>
                             {company.ceo_name}
                           </Typography>
                         </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" sx={{ color: tablePrimaryFg, fontWeight: 500 }}>
+                        <TableCell align={compColTableAlign('industry')} sx={tdSx('industry')}>
+                          <Typography variant="body2" noWrap title={company.industry || '-'}>
                             {company.industry || '-'}
                           </Typography>
                         </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                            <PeopleIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary', opacity: 0.7 }} />
-                            <Typography variant="body2" sx={{ color: tablePrimaryFg, fontWeight: 500 }}>
+                        <TableCell align={compColTableAlign('employee_count')} sx={tdSx('employee_count')}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                            <PeopleIcon sx={{ mr: 0.75, fontSize: '1rem', color: 'text.secondary', opacity: 0.7 }} />
+                            <Typography variant="body2" noWrap sx={{ fontVariantNumeric: 'tabular-nums' }}>
                               {t('companyManagement.employeesCount', { count: company.employee_count })}
                             </Typography>
                           </Box>
                         </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" sx={{ color: tablePrimaryFg, fontWeight: 500 }}>
+                        <TableCell align={compColTableAlign('mvs_start')} sx={tdSx('mvs_start')}>
+                          <Typography
+                            variant="body2"
+                            noWrap
+                            title={
+                              company.mvs_start_date && company.mvs_end_date
+                                ? `${company.mvs_start_date} ~ ${company.mvs_end_date}`
+                                : '-'
+                            }
+                            sx={{ fontVariantNumeric: 'tabular-nums' }}
+                          >
                             {company.mvs_start_date && company.mvs_end_date
                               ? `${company.mvs_start_date} ~ ${company.mvs_end_date}`
                               : '-'}
                           </Typography>
                         </TableCell>
-                        <TableCell align="center">
-                          <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                            <Tooltip title={menuFlags.menusLoading || !menuFlags.canDelete ? t('common.menuNoDelete') : t('companyManagement.delete')}>
+                        <TableCell align={compColTableAlign('actions')} sx={tdSx('actions')} onClick={(e) => e.stopPropagation()}>
+                          <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                            <Tooltip
+                              title={
+                                menuFlags.menusLoading || !menuFlags.canDelete
+                                  ? t('common.menuNoDelete')
+                                  : t('companyManagement.delete')
+                              }
+                            >
                               <span style={{ display: 'inline-flex' }}>
                                 <IconButton
+                                  className="company-delete-btn"
                                   size="small"
                                   disabled={menuFlags.menusLoading || !menuFlags.canDelete}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDelete(company.id);
-                                  }}
+                                  onClick={() => handleDelete(company.id)}
+                                  aria-label={t('companyManagement.delete')}
                                   sx={{
-                                    color: 'text.secondary',
+                                    color: alpha(theme.palette.text.secondary, theme.palette.mode === 'light' ? 0.72 : 1),
                                     borderRadius: '10px',
+                                    transition: 'color 0.15s ease, background-color 0.15s ease',
                                     '&:hover': {
                                       color: 'error.main',
-                                      bgcolor: alpha(theme.palette.error.main, 0.08),
+                                      bgcolor: alpha(theme.palette.error.main, 0.12),
                                     },
                                   }}
                                 >
@@ -1850,35 +2097,36 @@ const CompanyManagement: React.FC = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
-            ) : (
-              <Box sx={{ textAlign: 'center', py: 8 }}>
-                <BusinessIcon sx={{ fontSize: 64, color: pageMutedFg, mb: 2, opacity: 0.45 }} />
-                <Typography variant="h6" sx={{ mb: 1, color: pageMutedFg }}>
-                  {t('companyManagement.noCompaniesTitle')}
-                </Typography>
-                <Typography variant="body2" sx={{ color: pageMutedFg }}>
-                  {searchTerm.trim()
-                    ? t('companyManagement.noCompaniesMatch')
-                    : t('companyManagement.noActiveCompanies')}
-                </Typography>
+
+              <Box sx={mvsBodyPaginationSx}>
+                <Pagination
+                  count={totalPages}
+                  page={page}
+                  onChange={(_, value) => setPage(value)}
+                  color="primary"
+                  shape="rounded"
+                  sx={{
+                    '& .MuiPaginationItem-root': {
+                      borderRadius: '10px',
+                      fontWeight: 500,
+                    },
+                  }}
+                />
               </Box>
+              </>
             )}
-          </CardContent>
-        </Card>
+          </Box>
+        </>
+      ) : loading ? (
+        <Box sx={listStateBoxSx}>
+          <CircularProgress size={36} />
+          <Typography variant="body2" color="text.secondary">
+            {t('companyManagement.empty.loading')}
+          </Typography>
+        </Box>
       ) : (
-        // 일반 사용자: 본인 회사 정보만 view 모드로 표시
         companies.length > 0 ? (
-          <Card
-            elevation={0}
-            sx={{
-              borderRadius: '20px',
-              border: '1px solid',
-              borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-              boxShadow:
-                theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
-              bgcolor: 'background.paper',
-            }}
-          >
+          <Card elevation={0} sx={mvsBodyCardSx}>
             <CardContent sx={{ p: { xs: 3, sm: 4 } }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2, mb: 4 }}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, letterSpacing: '-0.02em', color: tablePrimaryFg }}>
@@ -1892,20 +2140,9 @@ const CompanyManagement: React.FC = () => {
                         startIcon={<EditIcon sx={{ fontSize: 18 }} />}
                         onClick={() => handleEdit(companies[0])}
                         disabled={menuFlags.menusLoading || !menuFlags.canEdit}
-                        sx={{
-                          borderRadius: '12px',
-                          textTransform: 'none',
-                          fontWeight: 600,
-                          borderColor: 'divider',
-                          color: 'text.secondary',
-                          '&:hover': {
-                            borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.16)' : undefined,
-                            bgcolor: 'action.hover',
-                            color: 'text.primary',
-                          },
-                        }}
+                        sx={mvsBodyOutlinedBtnSx}
                       >
-                        수정
+                        {t('companyManagement.edit')}
                       </Button>
                     </span>
                   </Tooltip>
@@ -2129,19 +2366,14 @@ const CompanyManagement: React.FC = () => {
             </CardContent>
           </Card>
         ) : (
-          <Card>
-            <CardContent>
-              <Box sx={{ textAlign: 'center', py: 8 }}>
-                <BusinessIcon sx={{ fontSize: 64, color: pageMutedFg, mb: 2, opacity: 0.45 }} />
-                <Typography variant="h6" sx={{ mb: 1, color: pageMutedFg }}>
-                  회사 정보가 없습니다
-                </Typography>
-                <Typography variant="body2" sx={{ color: pageMutedFg }}>
-                  회사 정보를 불러올 수 없습니다.
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
+          <Box sx={listStateBoxSx}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'text.primary' }}>
+              {t('companyManagement.empty.noItems')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {t('companyManagement.empty.noItemsHint')}
+            </Typography>
+          </Box>
         )
       )}
 

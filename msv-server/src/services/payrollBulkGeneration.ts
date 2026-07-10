@@ -1,6 +1,7 @@
 import { Op } from 'sequelize';
 import EmploymentContract from '../models/EmploymentContract';
 import Attendance from '../models/Attendance';
+import { summarizeAttendanceOt, type AttendanceOtRow } from '../utils/attendanceOtCalculation';
 
 /** 한국 통상적으로 월 소정근로시간 209시간(주 40시간 기준) — 시간당 급여 환산용 */
 export const MONTHLY_STANDARD_HOURS = 209;
@@ -116,34 +117,31 @@ export async function aggregateAttendanceForPeriod(
       tenant_id: tenantId,
       company_id: companyId,
       user_id: userId,
-      date: { [Op.between]: [bounds.start, bounds.end] }
+      date: { [Op.between]: [bounds.start, bounds.end] },
+      is_active: true
     },
-    attributes: ['work_hours', 'status']
+    attributes: [
+      'date',
+      'work_hours',
+      'status',
+      'check_in',
+      'check_out',
+      'check_in_client_time',
+      'check_out_client_time'
+    ]
   });
 
-  let daysWorked = 0;
-  let absentDays = 0;
-  let overtimeHours = 0;
+  const mapped: AttendanceOtRow[] = rows.map((r: any) => ({
+    date: r.get('date'),
+    work_hours: r.get('work_hours'),
+    status: r.get('status'),
+    check_in: r.get('check_in'),
+    check_out: r.get('check_out'),
+    check_in_client_time: r.get('check_in_client_time'),
+    check_out_client_time: r.get('check_out_client_time')
+  }));
 
-  for (const r of rows) {
-    const st = String(r.get('status'));
-    if (st === 'absent') {
-      absentDays += 1;
-      continue;
-    }
-    daysWorked += 1;
-    const wh = parseFloat(String(r.get('work_hours') ?? ''));
-    if (!Number.isNaN(wh) && wh > 8) {
-      overtimeHours += wh - 8;
-    }
-  }
-
-  return {
-    daysWorked,
-    absentDays,
-    recordCount: rows.length,
-    overtimeHours: Math.round(overtimeHours * 100) / 100
-  };
+  return summarizeAttendanceOt(mapped);
 }
 
 /** 연장근로 가산임금: 시간당 통상임금 × 연장시간 × 1.5 (통상임금 = 월 기본급 / 209) */

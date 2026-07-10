@@ -31,25 +31,42 @@ import {
   Stack,
   Divider,
   CircularProgress,
-  Autocomplete
+  Autocomplete,
+  Checkbox,
+  Menu,
+  ListItemIcon,
+  useMediaQuery
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx, mvsFilterToolbarSx, mvsSearchFieldSx, mvsOutlinedLabelProps } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsSearchFieldSx,
+  mvsOutlinedLabelProps,
+  mvsTableHeadHighlightSx,
+  mvsTableScrollSx,
+  mvsKpiCardSx,
+  mvsFilterFieldHeightSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsTableBodyRowSx,
+  mvsBodyPaginationSx,
+} from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Search as SearchIcon,
-  FilterList as FilterIcon,
-  Inventory as InventoryIcon,
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  Warning as WarningIcon,
+  RestartAlt as ResetIcon,
   UploadFile as UploadFileIcon,
+  Download as DownloadIcon,
   Warehouse as WarehouseIcon,
   Category as CategoryIcon,
   Print as PrintIcon,
-  Scale as ScaleIcon
+  Scale as ScaleIcon,
+  MoreHoriz as MoreHorizIcon
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { alpha, useTheme } from '@mui/material/styles';
@@ -73,17 +90,17 @@ const resolveProductImageUrl = resolveMediaUrl;
 
 /** 재고 목록 테이블 열 비율(상대 가중치) — 합계 대비 %로 너비 분배, 뷰포트에 맞춤 */
 const INV_COL_DEFAULTS: Record<string, number> = {
-  status: 132,
-  name: 240,
-  sku: 128,
-  category: 144,
-  currentStock: 120,
+  select: 48,
+  status: 120,
+  name: 248,
+  category: 152,
+  currentStock: 136,
   unitPrice: 112,
-  totalValue: 120,
-  supplier: 200,
-  location: 128,
-  lastUpdated: 120,
-  actions: 84
+  totalValue: 124,
+  supplier: 180,
+  location: 116,
+  lastUpdated: 152,
+  actions: 72,
 };
 
 const INV_COL_TOTAL = Object.values(INV_COL_DEFAULTS).reduce((s, n) => s + n, 0);
@@ -94,38 +111,51 @@ const INVENTORY_BASIC_MENU_ROUTES = ['/inventory/basic', '/inventory'];
 const FILTER_OUTLINED = mvsOutlinedLabelProps;
 const FORM_OUTLINED = mvsOutlinedLabelProps;
 
-const inventoryFilterFieldSx = {
-  '& .MuiOutlinedInput-root': {
-    height: 40,
-    '& .MuiOutlinedInput-input': { py: 0 },
-  },
-} as const;
+const inventoryFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
 
 function invColWidthPct(key: string): string {
   const w = INV_COL_DEFAULTS[key] ?? 80;
   return `${(w / INV_COL_TOTAL) * 100}%`;
 }
 
-/** 헤더·본문 동일 정렬 — 재고·단가·총액은 좌측, 날짜는 우측, 상태·작업은 중앙 */
+/** 헤더·본문 동일 정렬 — 텍스트 좌측, 숫자·날짜 우측, 상태·작업 중앙 */
 const INV_COL_ALIGN: Record<string, 'left' | 'right' | 'center'> = {
+  select: 'center',
   status: 'center',
   name: 'left',
-  sku: 'left',
   category: 'left',
-  currentStock: 'left',
-  unitPrice: 'left',
-  totalValue: 'left',
+  currentStock: 'right',
+  unitPrice: 'right',
+  totalValue: 'right',
   supplier: 'left',
   location: 'left',
   lastUpdated: 'right',
   actions: 'center',
 };
 
+/** 헤더 라벨이 잘리지 않도록 최소 너비(px) */
+const INV_COL_MIN_WIDTH: Record<string, number> = {
+  select: 48,
+  status: 80,
+  currentStock: 104,
+  unitPrice: 88,
+  totalValue: 96,
+  lastUpdated: 132,
+  actions: 64,
+};
+
 function invColTableAlign(key: string): 'left' | 'right' | 'center' {
   return INV_COL_ALIGN[key] ?? 'left';
 }
 
-const INV_TD_ELLIPSIS_KEYS = new Set(['name', 'sku', 'category', 'supplier', 'location']);
+function invColSortLabelJustify(key: string): 'flex-start' | 'flex-end' | 'center' {
+  const align = invColTableAlign(key);
+  if (align === 'right') return 'flex-end';
+  if (align === 'center') return 'center';
+  return 'flex-start';
+}
+
+const INV_TD_ELLIPSIS_KEYS = new Set(['name', 'category', 'supplier', 'location']);
 
 interface InventoryItem {
   id: number;
@@ -205,6 +235,9 @@ const InventoryManagement: React.FC = () => {
   const [unitManageLoading, setUnitManageLoading] = useState(false);
   const [newUnitInput, setNewUnitInput] = useState('');
   const [editingUnit, setEditingUnit] = useState<{ id: number; name: string } | null>(null);
+  const [selectedItemIds, setSelectedItemIds] = useState<number[]>([]);
+  const [toolbarMenuAnchor, setToolbarMenuAnchor] = useState<null | HTMLElement>(null);
+  const isCompactToolbar = useMediaQuery(theme.breakpoints.down('md'));
 
   const elevated = user?.role === 'root' || user?.role === 'admin';
   const basicMenuFlags = useMemo(() => {
@@ -347,20 +380,6 @@ const InventoryManagement: React.FC = () => {
     }
 
     setFilteredItems(filtered);
-  };
-
-  const getStatusIcon = (status: string) => {
-    const sx = { fontSize: '1.125rem' as const };
-    switch (status) {
-      case 'in_stock':
-        return <TrendingUpIcon sx={{ ...sx, color: alpha(theme.palette.success.main, 0.85) }} />;
-      case 'low_stock':
-        return <WarningIcon sx={{ ...sx, color: alpha(theme.palette.warning.main, 0.9) }} />;
-      case 'out_of_stock':
-        return <TrendingDownIcon sx={{ ...sx, color: alpha(theme.palette.error.main, 0.85) }} />;
-      default:
-        return <InventoryIcon sx={{ ...sx, color: 'text.disabled' }} />;
-    }
   };
 
   const handleCloseInventoryDialog = () => {
@@ -730,6 +749,7 @@ const InventoryManagement: React.FC = () => {
           try {
             await inventoryService.deleteProduct(id);
             setSuccess(t('inventoryManagement.messages.deleteSuccess'));
+            setSelectedItemIds((prev) => prev.filter((itemId) => itemId !== id));
             loadInventoryData();
           } catch (error: any) {
             console.error('삭제 오류:', error);
@@ -827,34 +847,129 @@ const InventoryManagement: React.FC = () => {
   // 상태 필터가 적용된 항목 사용 (API에서 이미 페이지네이션 처리됨)
   const paginatedItems = sortedItems;
 
+  const visibleItemIds = useMemo(() => paginatedItems.map((item) => item.id), [paginatedItems]);
+
+  const hasActiveFilters = Boolean(
+    searchTerm.trim() || categoryFilter || warehouseFilter || statusFilter
+  );
+
+  const allVisibleSelected =
+    visibleItemIds.length > 0 && visibleItemIds.every((id) => selectedItemIds.includes(id));
+  const someVisibleSelected = visibleItemIds.some((id) => selectedItemIds.includes(id));
+
+  useEffect(() => {
+    setSelectedItemIds([]);
+  }, [page, searchTerm, categoryFilter, warehouseFilter, statusFilter]);
+
+  const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!basicMenuFlags.canDelete) return;
+    if (event.target.checked) {
+      setSelectedItemIds(visibleItemIds);
+    } else {
+      setSelectedItemIds([]);
+    }
+  };
+
+  const handleToggleSelectItem = (id: number) => {
+    if (!basicMenuFlags.canDelete) return;
+    setSelectedItemIds((prev) =>
+      prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteSelected = () => {
+    if (!basicMenuFlags.canDelete) {
+      setError(t('inventoryManagement.messages.noPermissionDelete'));
+      return;
+    }
+    if (selectedItemIds.length === 0) return;
+
+    showConfirm(
+      t('inventoryManagement.messages.deleteSelectedConfirm', { count: selectedItemIds.length }),
+      () => {
+        void (async () => {
+          try {
+            await Promise.all(selectedItemIds.map((id) => inventoryService.deleteProduct(id)));
+            setSuccess(
+              t('inventoryManagement.messages.deleteSelectedSuccess', { count: selectedItemIds.length })
+            );
+            setSelectedItemIds([]);
+            loadInventoryData();
+          } catch (error: any) {
+            console.error('일괄 삭제 오류:', error);
+            setError(error.response?.data?.message || t('inventoryManagement.messages.deleteError'));
+          }
+        })();
+      },
+      {
+        title: t('common.confirm'),
+        confirmColor: 'error',
+        confirmText: t('common.delete'),
+        cancelText: t('common.cancel'),
+      }
+    );
+  };
+
   const handleSort = (property: keyof InventoryItem | '') => {
     const isAsc = orderBy === property && order === 'asc';
     setOrder(isAsc ? 'desc' : 'asc');
     setOrderBy(property);
   };
 
+  const thLabelEllipsisSx = {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    minWidth: 0,
+    flex: '1 1 auto',
+  } as const;
+
   const thSx = (key: string) => {
     const align = invColTableAlign(key);
-    const sortLabelLayout =
-      align === 'right'
-        ? { width: '100%', justifyContent: 'flex-end' as const }
-        : align === 'center'
-          ? { width: '100%', justifyContent: 'center' as const }
-          : {};
     return {
       width: invColWidthPct(key),
-      minWidth: 0,
-      position: 'relative' as const,
-      overflow: 'visible',
+      minWidth: INV_COL_MIN_WIDTH[key] ?? 0,
+      maxWidth: invColWidthPct(key),
+      overflow: 'hidden',
+      textAlign: align,
       verticalAlign: 'middle' as const,
       boxSizing: 'border-box' as const,
-      '& .MuiTableSortLabel-root': { color: 'inherit', ...sortLabelLayout },
+      '& .MuiTableSortLabel-root': {
+        color: 'inherit',
+        display: 'inline-flex',
+        width: '100%',
+        maxWidth: '100%',
+        justifyContent: invColSortLabelJustify(key),
+        overflow: 'hidden',
+        ...(align === 'right' ? { flexDirection: 'row-reverse' as const } : {}),
+      },
+      '& .MuiTableSortLabel-icon': {
+        flexShrink: 0,
+      },
     };
   };
 
+  const renderHeadSortCell = (
+    key: string,
+    property: keyof InventoryItem | '',
+    label: string,
+  ) => (
+    <TableCell key={key} align={invColTableAlign(key)} sx={thSx(key)}>
+      <TableSortLabel
+        active={orderBy === property}
+        direction={orderBy === property ? order : 'asc'}
+        onClick={() => handleSort(property)}
+      >
+        <Box component="span" sx={thLabelEllipsisSx} title={label}>
+          {label}
+        </Box>
+      </TableSortLabel>
+    </TableCell>
+  );
+
   const tdSx = (key: string) => ({
     width: invColWidthPct(key),
-    minWidth: 0,
+    minWidth: INV_COL_MIN_WIDTH[key] ?? 0,
     overflow: INV_TD_ELLIPSIS_KEYS.has(key) ? ('hidden' as const) : ('visible' as const),
     textOverflow: INV_TD_ELLIPSIS_KEYS.has(key) ? ('ellipsis' as const) : undefined,
     verticalAlign: 'middle' as const,
@@ -910,60 +1025,239 @@ const InventoryManagement: React.FC = () => {
     }
   };
 
-  const kpiCardSx = {
-    borderRadius: '16px',
-    border: '1px solid',
-    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-    boxShadow:
-      theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
-    bgcolor: 'background.paper',
+  const kpiCardSx = mvsKpiCardSx;
+
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    py: { xs: 6, sm: 8 },
+    px: 3,
+    gap: 1.5,
   } as const;
 
-  const outlineToolbarBtnSx = {
-    textTransform: 'none' as const,
-    borderRadius: '12px',
-    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.14)' : 'divider',
-    color: 'text.primary',
-    '&:hover': {
-      borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.22)' : theme.palette.grey[500],
-      bgcolor: 'action.hover',
-    },
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setCategoryFilter('');
+    setWarehouseFilter('');
+    setStatusFilter('');
+  };
+
+  const closeToolbarMenu = () => setToolbarMenuAnchor(null);
+
+  const openWarehouseManage = () => {
+    setNewWarehouseInput('');
+    setWarehouseManageOpen(true);
+    loadWarehouseManageList();
+  };
+
+  const openCategoryManage = () => {
+    setNewCategoryInput('');
+    setCategoryManageOpen(true);
+    loadCategoryManageList();
+  };
+
+  const openUnitManage = () => {
+    setNewUnitInput('');
+    setUnitManageOpen(true);
+    loadUnitManageList();
   };
 
   return (
-    <Box sx={{
-      p: 0,
-      backgroundColor: 'workArea.main',
-      borderRadius: 2,
-      minHeight: '100%',
-      width: '100%',
-      maxWidth: '100%',
-      minWidth: 0,
-      boxSizing: 'border-box'
-    }}>
-      <MvsPageHeader
-        title={t('inventoryManagement.pageTitle')}
-        actions={
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center', justifyContent: 'flex-end' }}>
-          <input
-            ref={excelFileInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-            hidden
-            onChange={handleInventoryExcelSelected}
-          />
+    <Box sx={mvsPageRootSx}>
+      <input
+        ref={excelFileInputRef}
+        type="file"
+        accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+        hidden
+        onChange={handleInventoryExcelSelected}
+      />
+
+      <MvsPageHeader title={t('inventoryManagement.pageTitle')} />
+
+      {menusLoading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+          <CircularProgress size={36} />
+        </Box>
+      ) : (
+        <>
+      {!basicMenuFlags.canRead ? (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          {t('inventoryManagement.messages.noPermissionReadPage')}
+        </Alert>
+      ) : null}
+
+      {/* 통계 카드 */}
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2.5, mb: 3 }}>
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+              {t('inventoryManagement.stats.totalItems')}
+            </Typography>
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
+              {inventoryStats.totalProducts}
+            </Typography>
+          </CardContent>
+        </Card>
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+              {t('inventoryManagement.stats.totalValue')}
+            </Typography>
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
+              {t('inventoryManagement.currency')}{' '}
+              {inventoryStats.totalValue.toLocaleString()}
+            </Typography>
+          </CardContent>
+        </Card>
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+              {t('inventoryManagement.stats.lowStock')}
+            </Typography>
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'warning.main' }}>
+              {inventoryStats.lowStockItems}
+            </Typography>
+          </CardContent>
+        </Card>
+        <Card elevation={0} sx={kpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+              {t('inventoryManagement.stats.outOfStock')}
+            </Typography>
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'error.main' }}>
+              {inventoryStats.outOfStockItems}
+            </Typography>
+          </CardContent>
+        </Card>
+      </Box>
+
+      {/* 재고 목록 — Body 표준 */}
+      <Card elevation={0} sx={mvsBodyCardSx}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', md: 'row' },
+            flexWrap: 'wrap',
+            alignItems: { xs: 'stretch', md: 'center' },
+            justifyContent: { md: 'space-between' },
+            gap: { xs: 1.25, md: 1 },
+            px: { xs: 2, sm: 2.5 },
+            py: 1.5,
+            bgcolor: '#FFFFFF',
+          }}
+        >
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
+          {isCompactToolbar ? (
+            <>
+              <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menusLoading || basicMenuFlags.canMutate}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<MoreHorizIcon fontSize="small" />}
+                    disabled={menusLoading}
+                    onClick={(e) => setToolbarMenuAnchor(e.currentTarget)}
+                    sx={mvsBodyOutlinedBtnSx}
+                  >
+                    {t('inventoryManagement.moreTools')}
+                  </Button>
+                </span>
+              </Tooltip>
+              <Menu
+                anchorEl={toolbarMenuAnchor}
+                open={Boolean(toolbarMenuAnchor)}
+                onClose={closeToolbarMenu}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                slotProps={{
+                  paper: {
+                    sx: {
+                      mt: 0.5,
+                      minWidth: 220,
+                      borderRadius: '12px',
+                      border: '1px solid #C5CED9',
+                      boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
+                    },
+                  },
+                }}
+              >
+                <MenuItem
+                  disabled={menusLoading || !basicMenuFlags.canMutate}
+                  onClick={() => {
+                    closeToolbarMenu();
+                    openWarehouseManage();
+                  }}
+                >
+                  <ListItemIcon>
+                    <WarehouseIcon fontSize="small" />
+                  </ListItemIcon>
+                  {t('inventoryManagement.manageWarehouseButton')}
+                </MenuItem>
+                <MenuItem
+                  disabled={menusLoading || !basicMenuFlags.canMutate}
+                  onClick={() => {
+                    closeToolbarMenu();
+                    openCategoryManage();
+                  }}
+                >
+                  <ListItemIcon>
+                    <CategoryIcon fontSize="small" />
+                  </ListItemIcon>
+                  {t('inventoryManagement.manageCategoryButton')}
+                </MenuItem>
+                <MenuItem
+                  disabled={menusLoading || !basicMenuFlags.canMutate}
+                  onClick={() => {
+                    closeToolbarMenu();
+                    openUnitManage();
+                  }}
+                >
+                  <ListItemIcon>
+                    <ScaleIcon fontSize="small" />
+                  </ListItemIcon>
+                  {t('inventoryManagement.manageUnitButton')}
+                </MenuItem>
+                <MenuItem
+                  disabled={excelUploading || menusLoading || !basicMenuFlags.canMutate}
+                  onClick={() => {
+                    closeToolbarMenu();
+                    excelFileInputRef.current?.click();
+                  }}
+                >
+                  <ListItemIcon>
+                    <UploadFileIcon fontSize="small" />
+                  </ListItemIcon>
+                  {t('inventoryManagement.excelBulkApply')}
+                </MenuItem>
+                <MenuItem
+                  disabled={menusLoading || !basicMenuFlags.canRead}
+                  onClick={() => {
+                    closeToolbarMenu();
+                    handleDownloadInventoryExcelSample();
+                  }}
+                >
+                  <ListItemIcon>
+                    <DownloadIcon fontSize="small" />
+                  </ListItemIcon>
+                  {t('inventoryManagement.downloadTemplate')}
+                </MenuItem>
+              </Menu>
+            </>
+          ) : (
+            <>
           <Tooltip title={t('common.menuNoMutate')} disableHoverListener={menusLoading || basicMenuFlags.canMutate}>
             <span style={{ display: 'inline-flex' }}>
               <Button
                 variant="outlined"
+                size="small"
                 startIcon={<WarehouseIcon fontSize="small" />}
                 disabled={menusLoading || !basicMenuFlags.canMutate}
-                onClick={() => {
-                  setNewWarehouseInput('');
-                  setWarehouseManageOpen(true);
-                  loadWarehouseManageList();
-                }}
-                sx={outlineToolbarBtnSx}
+                onClick={openWarehouseManage}
+                sx={mvsBodyOutlinedBtnSx}
               >
                 {t('inventoryManagement.manageWarehouseButton')}
               </Button>
@@ -973,14 +1267,11 @@ const InventoryManagement: React.FC = () => {
             <span style={{ display: 'inline-flex' }}>
               <Button
                 variant="outlined"
+                size="small"
                 startIcon={<CategoryIcon fontSize="small" />}
                 disabled={menusLoading || !basicMenuFlags.canMutate}
-                onClick={() => {
-                  setNewCategoryInput('');
-                  setCategoryManageOpen(true);
-                  loadCategoryManageList();
-                }}
-                sx={outlineToolbarBtnSx}
+                onClick={openCategoryManage}
+                sx={mvsBodyOutlinedBtnSx}
               >
                 {t('inventoryManagement.manageCategoryButton')}
               </Button>
@@ -990,14 +1281,11 @@ const InventoryManagement: React.FC = () => {
             <span style={{ display: 'inline-flex' }}>
               <Button
                 variant="outlined"
+                size="small"
                 startIcon={<ScaleIcon fontSize="small" />}
                 disabled={menusLoading || !basicMenuFlags.canMutate}
-                onClick={() => {
-                  setNewUnitInput('');
-                  setUnitManageOpen(true);
-                  loadUnitManageList();
-                }}
-                sx={outlineToolbarBtnSx}
+                onClick={openUnitManage}
+                sx={mvsBodyOutlinedBtnSx}
               >
                 {t('inventoryManagement.manageUnitButton')}
               </Button>
@@ -1007,10 +1295,11 @@ const InventoryManagement: React.FC = () => {
             <span style={{ display: 'inline-flex' }}>
               <Button
                 variant="outlined"
+                size="small"
                 startIcon={<UploadFileIcon fontSize="small" />}
                 disabled={excelUploading || menusLoading || !basicMenuFlags.canMutate}
                 onClick={() => excelFileInputRef.current?.click()}
-                sx={outlineToolbarBtnSx}
+                sx={mvsBodyOutlinedBtnSx}
               >
                 {t('inventoryManagement.excelBulkApply')}
               </Button>
@@ -1020,111 +1309,91 @@ const InventoryManagement: React.FC = () => {
             <span style={{ display: 'inline-flex' }}>
               <Button
                 variant="outlined"
+                size="small"
+                startIcon={<DownloadIcon fontSize="small" />}
                 disabled={menusLoading || !basicMenuFlags.canRead}
                 onClick={handleDownloadInventoryExcelSample}
-                sx={outlineToolbarBtnSx}
+                sx={mvsBodyOutlinedBtnSx}
               >
                 {t('inventoryManagement.downloadTemplate')}
               </Button>
             </span>
           </Tooltip>
+            </>
+          )}
+          </Box>
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: 1,
+              flexShrink: 0,
+              width: { xs: '100%', md: 'auto' },
+              ml: { md: 'auto' },
+            }}
+          >
+          {selectedItemIds.length > 0 ? (
+            <Tooltip title={t('common.menuNoDelete')} disableHoverListener={menusLoading || basicMenuFlags.canDelete}>
+              <span style={{ display: 'inline-flex' }}>
+                <Button
+                  variant="contained"
+                  color="error"
+                  disableElevation
+                  size="small"
+                  startIcon={<DeleteIcon fontSize="small" />}
+                  disabled={menusLoading || !basicMenuFlags.canDelete}
+                  onClick={handleDeleteSelected}
+                  sx={{
+                    textTransform: 'none',
+                    borderRadius: '10px',
+                    fontWeight: 600,
+                    fontSize: '0.8125rem',
+                    minHeight: 36,
+                    px: 2,
+                    boxShadow: 'none',
+                  }}
+                >
+                  {t('inventoryManagement.deleteSelected')} ({selectedItemIds.length})
+                </Button>
+              </span>
+            </Tooltip>
+          ) : null}
           <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menusLoading || basicMenuFlags.canCreate}>
-            <span style={{ display: 'inline-flex' }}>
+            <span style={{ display: 'inline-flex', flexShrink: 0 }}>
               <Button
                 variant="contained"
                 disableElevation
+                size="small"
                 startIcon={<AddIcon fontSize="small" />}
                 disabled={menusLoading || !basicMenuFlags.canCreate}
                 onClick={handleAddItem}
-                sx={{
-                  textTransform: 'none',
-                  borderRadius: '12px',
-                  px: 2,
-                }}
+                sx={mvsBodyPrimaryBtnSx}
               >
                 {t('inventoryManagement.addItem')}
               </Button>
             </span>
           </Tooltip>
           </Box>
-        }
-      />
+        </Box>
 
-      {!menusLoading && !basicMenuFlags.canRead ? (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          {t('inventoryManagement.messages.noPermissionReadPage')}
-        </Alert>
-      ) : null}
-
-      {/* 통계 카드 */}
-      <Grid container spacing={2.5} sx={{ mb: 3 }}>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card elevation={0} sx={kpiCardSx}>
-            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-                {t('inventoryManagement.stats.totalItems')}
-              </Typography>
-              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
-                {inventoryStats.totalProducts}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card elevation={0} sx={kpiCardSx}>
-            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-                {t('inventoryManagement.stats.totalValue')}
-              </Typography>
-              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
-                {t('inventoryManagement.currency')}{' '}
-                {inventoryStats.totalValue.toLocaleString()}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card elevation={0} sx={kpiCardSx}>
-            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-                {t('inventoryManagement.stats.lowStock')}
-              </Typography>
-              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'warning.main' }}>
-                {inventoryStats.lowStockItems}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card elevation={0} sx={kpiCardSx}>
-            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-                {t('inventoryManagement.stats.outOfStock')}
-              </Typography>
-              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'error.main' }}>
-                {inventoryStats.outOfStockItems}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      {/* 필터 및 검색 */}
-      <Card elevation={0} sx={{ mb: 3, ...mvsFilterToolbarSx, ...mvsSearchFieldSx }}>
-        <CardContent sx={{ py: 2, px: 2, '&:last-child': { pb: 2 } }}>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: 'repeat(2, minmax(0, 1fr))',
-                lg: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto',
-              },
-              gap: 2,
-              alignItems: 'flex-end',
-              ...mvsSearchFieldSx,
-            }}
-          >
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            ...(mvsSearchFieldSx as Record<string, unknown>),
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, minmax(0, 1fr))',
+              lg: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto',
+            },
+            gap: 2,
+            alignItems: 'flex-end',
+          }}
+        >
             <TextField
               fullWidth
               size="small"
@@ -1213,15 +1482,11 @@ const InventoryManagement: React.FC = () => {
             </TextField>
             <Button
               variant="outlined"
-              startIcon={<FilterIcon fontSize="small" />}
-              onClick={() => {
-                setSearchTerm('');
-                setCategoryFilter('');
-                setWarehouseFilter('');
-                setStatusFilter('');
-              }}
+              size="small"
+              startIcon={<ResetIcon fontSize="small" />}
+              onClick={handleResetFilters}
               sx={{
-                ...outlineToolbarBtnSx,
+                ...mvsBodyOutlinedBtnSx,
                 height: 40,
                 whiteSpace: 'nowrap',
                 gridColumn: { xs: '1 / -1', sm: '1 / -1', lg: 'auto' },
@@ -1230,33 +1495,69 @@ const InventoryManagement: React.FC = () => {
             >
               {t('inventoryManagement.reset')}
             </Button>
-          </Box>
-        </CardContent>
+        </Box>
       </Card>
 
-      {/* 재고 목록 테이블 — 열 너비는 뷰포트에 맞게 비율(%)로 자동 분배 */}
-      <Card
-        elevation={0}
-        sx={{
-          width: '100%',
-          minWidth: 0,
-          overflow: 'hidden',
-          borderRadius: '20px',
-          border: '1px solid',
-          borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-          boxShadow:
-            theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.05)' : '0 4px 18px rgba(0,0,0,0.3)',
-          bgcolor: 'background.paper',
-        }}
-      >
-        <TableContainer sx={{ width: '100%', maxWidth: '100%', overflowX: 'auto', bgcolor: 'transparent' }}>
+      {/* 리스트 — 외곽 박스·배경 없음 */}
+      <Box sx={mvsBodyListZoneSx}>
+        {loading ? (
+          <Box sx={listStateBoxSx}>
+            <CircularProgress size={36} />
+            <Typography variant="body2" color="text.secondary">
+              {t('inventoryManagement.empty.loading')}
+            </Typography>
+          </Box>
+        ) : paginatedItems.length === 0 ? (
+          <Box sx={listStateBoxSx}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+              {hasActiveFilters
+                ? t('inventoryManagement.empty.noResults')
+                : t('inventoryManagement.empty.noItems')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
+              {hasActiveFilters
+                ? t('inventoryManagement.empty.noResultsHint')
+                : t('inventoryManagement.empty.noItemsHint')}
+            </Typography>
+            {hasActiveFilters ? (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<ResetIcon fontSize="small" />}
+                onClick={handleResetFilters}
+                sx={mvsBodyOutlinedBtnSx}
+              >
+                {t('inventoryManagement.reset')}
+              </Button>
+            ) : (
+              <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menusLoading || basicMenuFlags.canCreate}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="contained"
+                    disableElevation
+                    size="small"
+                    startIcon={<AddIcon fontSize="small" />}
+                    disabled={menusLoading || !basicMenuFlags.canCreate}
+                    onClick={handleAddItem}
+                    sx={mvsBodyPrimaryBtnSx}
+                  >
+                    {t('inventoryManagement.addItem')}
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
+          </Box>
+        ) : (
+          <>
+        <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
           <Table
             size="small"
             sx={{
               tableLayout: 'fixed',
               width: '100%',
-              minWidth: 0,
+              minWidth: 768,
               borderCollapse: 'collapse',
+              bgcolor: 'transparent',
               '& .MuiTableCell-root': {
                 borderLeft: 'none',
                 borderRight: 'none',
@@ -1264,162 +1565,80 @@ const InventoryManagement: React.FC = () => {
               },
             }}
           >
-            <TableHead
-              sx={{
-                '& .MuiTableCell-head': {
-                  bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
-                  color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
-                  fontWeight: 600,
-                  fontSize: '0.75rem',
-                  textTransform: 'none',
-                  letterSpacing: '0.01em',
-                  borderBottom: `1px solid ${
-                    theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                  }`,
-                  py: 1.5,
-                  px: 2,
-                },
-              }}
-            >
+            <TableHead sx={mvsTableHeadHighlightSx}>
               <TableRow>
-                <TableCell align={invColTableAlign('status')} sx={thSx('status')}>
-                  <TableSortLabel
-                    active={orderBy === 'status'}
-                    direction={orderBy === 'status' ? order : 'asc'}
-                    onClick={() => handleSort('status')}
-                  >
-                    {t('inventoryManagement.columns.status')}
-                  </TableSortLabel>
+                <TableCell padding="checkbox" align="center" sx={thSx('select')}>
+                  <Checkbox
+                    size="small"
+                    disabled={menusLoading || !basicMenuFlags.canDelete || paginatedItems.length === 0}
+                    indeterminate={someVisibleSelected && !allVisibleSelected}
+                    checked={allVisibleSelected}
+                    onChange={handleSelectAll}
+                    inputProps={{ 'aria-label': t('inventoryManagement.selectAll') }}
+                  />
                 </TableCell>
-                <TableCell align={invColTableAlign('name')} sx={thSx('name')}>
-                  <TableSortLabel
-                    active={orderBy === 'name'}
-                    direction={orderBy === 'name' ? order : 'asc'}
-                    onClick={() => handleSort('name')}
-                  >
-                    {t('inventoryManagement.columns.productName')}
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align={invColTableAlign('sku')} sx={thSx('sku')}>
-                  <TableSortLabel
-                    active={orderBy === 'sku'}
-                    direction={orderBy === 'sku' ? order : 'asc'}
-                    onClick={() => handleSort('sku')}
-                  >
-                    {t('inventoryManagement.columns.sku')}
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align={invColTableAlign('category')} sx={thSx('category')}>
-                  <TableSortLabel
-                    active={orderBy === 'category'}
-                    direction={orderBy === 'category' ? order : 'asc'}
-                    onClick={() => handleSort('category')}
-                  >
-                    {t('inventoryManagement.columns.category')}
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align={invColTableAlign('currentStock')} sx={thSx('currentStock')}>
-                  <TableSortLabel
-                    active={orderBy === 'currentStock'}
-                    direction={orderBy === 'currentStock' ? order : 'asc'}
-                    onClick={() => handleSort('currentStock')}
-                  >
-                    {t('inventoryManagement.columns.currentStock')}
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align={invColTableAlign('unitPrice')} sx={thSx('unitPrice')}>
-                  <TableSortLabel
-                    active={orderBy === 'unitPrice'}
-                    direction={orderBy === 'unitPrice' ? order : 'asc'}
-                    onClick={() => handleSort('unitPrice')}
-                  >
-                    {t('inventoryManagement.columns.unitPrice')}
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align={invColTableAlign('totalValue')} sx={thSx('totalValue')}>
-                  <TableSortLabel
-                    active={orderBy === 'totalValue'}
-                    direction={orderBy === 'totalValue' ? order : 'asc'}
-                    onClick={() => handleSort('totalValue')}
-                  >
-                    {t('inventoryManagement.columns.totalValue')}
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align={invColTableAlign('supplier')} sx={thSx('supplier')}>
-                  <TableSortLabel
-                    active={orderBy === 'supplier'}
-                    direction={orderBy === 'supplier' ? order : 'asc'}
-                    onClick={() => handleSort('supplier')}
-                  >
-                    {t('inventoryManagement.columns.supplier')}
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align={invColTableAlign('location')} sx={thSx('location')}>
-                  <TableSortLabel
-                    active={orderBy === 'location'}
-                    direction={orderBy === 'location' ? order : 'asc'}
-                    onClick={() => handleSort('location')}
-                  >
-                    {t('inventoryManagement.columns.location')}
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell align={invColTableAlign('lastUpdated')} sx={thSx('lastUpdated')}>
-                  <TableSortLabel
-                    active={orderBy === 'lastUpdated'}
-                    direction={orderBy === 'lastUpdated' ? order : 'asc'}
-                    onClick={() => handleSort('lastUpdated')}
-                  >
-                    {t('inventoryManagement.columns.lastUpdated')}
-                  </TableSortLabel>
-                </TableCell>
+                {renderHeadSortCell('status', 'status', t('inventoryManagement.columns.status'))}
+                {renderHeadSortCell('name', 'name', t('inventoryManagement.columns.productName'))}
+                {renderHeadSortCell('category', 'category', t('inventoryManagement.columns.category'))}
+                {renderHeadSortCell('currentStock', 'currentStock', t('inventoryManagement.columns.currentStock'))}
+                {renderHeadSortCell('unitPrice', 'unitPrice', t('inventoryManagement.columns.unitPrice'))}
+                {renderHeadSortCell('totalValue', 'totalValue', t('inventoryManagement.columns.totalValue'))}
+                {renderHeadSortCell('supplier', 'supplier', t('inventoryManagement.columns.supplier'))}
+                {renderHeadSortCell('location', 'location', t('inventoryManagement.columns.location'))}
+                {renderHeadSortCell('lastUpdated', 'lastUpdated', t('inventoryManagement.columns.lastUpdated'))}
                 <TableCell align={invColTableAlign('actions')} sx={thSx('actions')}>
-                  {t('inventoryManagement.columns.actions')}
+                  <Box
+                    component="span"
+                    sx={{
+                      display: 'inline-block',
+                      maxWidth: '100%',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={t('inventoryManagement.columns.actions')}
+                  >
+                    {t('inventoryManagement.columns.actions')}
+                  </Box>
                 </TableCell>
               </TableRow>
             </TableHead>
-            <TableBody
-              sx={{
-                '& .MuiTableCell-body': {
-                  py: 1.5,
-                  px: 2,
-                  fontSize: '0.875rem',
-                  borderBottom: `1px solid ${
-                    theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                  }`,
-                },
-                '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
-                  borderBottom: 'none',
-                },
-              }}
-            >
+            <TableBody sx={mvsTableBodyRowSx}>
               {paginatedItems.map((item) => (
                 <TableRow
                   key={item.id}
-                  hover
                   onClick={basicMenuFlags.canRead || basicMenuFlags.canEdit ? () => handleOpenView(item) : undefined}
                   sx={{
                     cursor: basicMenuFlags.canRead || basicMenuFlags.canEdit ? 'pointer' : 'default',
-                    transition: 'background-color 0.15s ease',
-                    '&:hover': { bgcolor: 'action.hover' },
+                    '&:hover .inv-delete-btn:not(.Mui-disabled)': {
+                      color: 'error.main',
+                      bgcolor: alpha(theme.palette.error.main, 0.08),
+                    },
                   }}
                 >
+                  <TableCell
+                    padding="checkbox"
+                    align="center"
+                    sx={tdSx('select')}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Checkbox
+                      size="small"
+                      disabled={menusLoading || !basicMenuFlags.canDelete}
+                      checked={selectedItemIds.includes(item.id)}
+                      onChange={() => handleToggleSelectItem(item.id)}
+                      inputProps={{ 'aria-label': t('inventoryManagement.selectItem', { name: item.name }) }}
+                    />
+                  </TableCell>
                   <TableCell align={invColTableAlign('status')} sx={tdSx('status')}>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 1,
-                        minWidth: 0,
-                        width: '100%',
-                      }}
-                    >
-                      {getStatusIcon(item.status)}
-                      {getStatusChip(item.status)}
+                    <Box sx={{ display: 'flex', justifyContent: 'center', minWidth: 0, overflow: 'visible' }}>
+                      <Box sx={{ maxWidth: '100%', '& .MuiChip-root': { maxWidth: '100%' } }}>
+                        {getStatusChip(item.status)}
+                      </Box>
                     </Box>
                   </TableCell>
-                  <TableCell align={invColTableAlign('name')} sx={{ ...tdSx('name'), whiteSpace: 'normal' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                  <TableCell align={invColTableAlign('name')} sx={tdSx('name')}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, overflow: 'hidden' }}>
                       {item.imageUrl ? (
                         <Box
                           component="img"
@@ -1436,15 +1655,16 @@ const InventoryManagement: React.FC = () => {
                           }}
                         />
                       ) : null}
-                      <Typography variant="subtitle2" fontWeight={600} sx={{ wordBreak: 'break-word' }}>
+                      <Typography
+                        variant="subtitle2"
+                        fontWeight={600}
+                        noWrap
+                        title={item.name}
+                        sx={{ minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      >
                         {item.name}
                       </Typography>
                     </Box>
-                  </TableCell>
-                  <TableCell align={invColTableAlign('sku')} sx={tdSx('sku')}>
-                    <Typography variant="body2" color="text.secondary" noWrap>
-                      {item.sku}
-                    </Typography>
                   </TableCell>
                   <TableCell align={invColTableAlign('category')} sx={tdSx('category')}>
                     <Typography variant="body2" noWrap title={item.category}>
@@ -1499,14 +1719,19 @@ const InventoryManagement: React.FC = () => {
                       >
                         <span>
                           <IconButton
+                            className="inv-delete-btn"
                             size="small"
                             disabled={menusLoading || !basicMenuFlags.canDelete}
                             onClick={() => handleDeleteItem(item.id)}
                             aria-label={t('inventoryManagement.tooltips.delete')}
                             sx={{
-                              color: 'text.secondary',
+                              color: alpha(theme.palette.text.secondary, theme.palette.mode === 'light' ? 0.72 : 1),
                               borderRadius: '10px',
-                              '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.08) },
+                              transition: 'color 0.15s ease, background-color 0.15s ease',
+                              '&:hover': {
+                                color: 'error.main',
+                                bgcolor: alpha(theme.palette.error.main, 0.12),
+                              },
                             }}
                           >
                             <DeleteIcon fontSize="small" />
@@ -1521,10 +1746,9 @@ const InventoryManagement: React.FC = () => {
           </Table>
         </TableContainer>
 
-        {/* 페이지네이션 */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+        <Box sx={mvsBodyPaginationSx}>
           <Pagination
-            count={totalPages}
+            count={Math.max(1, totalPages)}
             page={page}
             onChange={(_, value) => setPage(value)}
             color="primary"
@@ -1537,7 +1761,11 @@ const InventoryManagement: React.FC = () => {
             }}
           />
         </Box>
-      </Card>
+          </>
+        )}
+      </Box>
+        </>
+      )}
 
       {/* 재고 보기 / 추가·수정 다이얼로그 */}
       <Dialog
@@ -2143,80 +2371,95 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
     else w.onload = doPrint;
   };
 
+  const detailFieldSx = {
+    p: 1.5,
+    borderRadius: '12px',
+    border: '1px solid',
+    borderColor: 'divider',
+    bgcolor: 'background.paper',
+    minHeight: 74,
+  } as const;
+
   return (
-    <Box sx={{ mt: 1 }}>
-      <Grid container spacing={2}>
+    <Box sx={{ mt: 0.5 }}>
+      <Grid container spacing={{ xs: 2, sm: 2.25 }}>
         <Grid size={{ xs: 12 }}>
-          <Stack direction="row" spacing={2} alignItems="flex-start">
-            <Box
-              sx={{
-                width: 120,
-                height: 120,
-                border: '1px solid',
-                borderColor: 'divider',
-                borderRadius: 1,
-                overflow: 'hidden',
-                flexShrink: 0,
-                bgcolor: 'action.hover',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              {item.imageUrl ? (
-                <Box
-                  component="img"
-                  src={resolveProductImageUrl(item.imageUrl)}
-                  alt=""
-                  sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
-              ) : (
-                <Typography variant="caption" color="text.secondary">
-                  {t('inventoryManagement.form.noImage')}
-                </Typography>
-              )}
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary" display="block">
-                {t('inventoryManagement.columns.status')}
-              </Typography>
-              <Box sx={{ mt: 0.5 }}>{getStatusChip(item.status)}</Box>
-            </Box>
-          </Stack>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6 }}>
           <Box
             sx={(theme) => ({
-              p: 1.5,
-              borderRadius: 2,
-              bgcolor: alpha(theme.palette.primary.main, 0.08),
-              border: `1px solid ${alpha(theme.palette.primary.main, 0.22)}`
+              p: { xs: 1.5, sm: 2 },
+              borderRadius: '14px',
+              border: `1px solid ${alpha(theme.palette.divider, 0.95)}`,
+              bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.03),
             })}
           >
+            <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+              <Box
+                sx={{
+                  width: 104,
+                  height: 104,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  flexShrink: 0,
+                  bgcolor: 'action.hover',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                {item.imageUrl ? (
+                  <Box
+                    component="img"
+                    src={resolveProductImageUrl(item.imageUrl)}
+                    alt=""
+                    sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                ) : (
+                  <Typography variant="caption" color="text.secondary">
+                    {t('inventoryManagement.form.noImage')}
+                  </Typography>
+                )}
+              </Box>
+              <Box sx={{ minWidth: 180, flex: 1 }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  {t('inventoryManagement.columns.status')}
+                </Typography>
+                <Box sx={{ mt: 0.75, mb: 1 }}>{getStatusChip(item.status)}</Box>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, lineHeight: 1.35 }}>
+                  {item.name}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ fontFamily: 'ui-monospace, monospace', mt: 0.4, letterSpacing: 0.02 }}
+                >
+                  {item.sku}
+                </Typography>
+              </Box>
+            </Stack>
+          </Box>
+        </Grid>
+
+        <Grid size={{ xs: 12, sm: 6 }}>
+          <Box sx={{ ...detailFieldSx, bgcolor: alpha('#0091A5', 0.06), borderColor: alpha('#0091A5', 0.22) }}>
             <Typography variant="caption" color="text.secondary" display="block">
               {t('inventoryManagement.form.productName')}
             </Typography>
-            <Typography variant="body1" fontWeight={700} color="primary.main" sx={{ mt: 0.25 }}>
+            <Typography variant="body1" fontWeight={700} color="primary.main" sx={{ mt: 0.4 }}>
               {item.name}
             </Typography>
           </Box>
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
-          <Box
-            sx={(theme) => ({
-              p: 1.5,
-              borderRadius: 2,
-              bgcolor: alpha(theme.palette.primary.main, 0.08),
-              border: `1px solid ${alpha(theme.palette.primary.main, 0.22)}`
-            })}
-          >
+          <Box sx={{ ...detailFieldSx, bgcolor: alpha('#0091A5', 0.06), borderColor: alpha('#0091A5', 0.22) }}>
             <Typography variant="caption" color="text.secondary" display="block">
               {t('inventoryManagement.form.sku')}
             </Typography>
             <Typography
               variant="body1"
               fontWeight={600}
-              sx={{ mt: 0.25, fontFamily: 'ui-monospace, monospace', letterSpacing: 0.02 }}
+              sx={{ mt: 0.4, fontFamily: 'ui-monospace, monospace', letterSpacing: 0.02 }}
             >
               {item.sku}
             </Typography>
@@ -2224,8 +2467,8 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
         </Grid>
 
         <Grid size={{ xs: 12 }}>
-          <Divider sx={{ my: 1 }} />
-          <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1.5, fontWeight: 600 }}>
+          <Divider sx={{ my: 0.25 }} />
+          <Typography variant="subtitle2" color="text.secondary" sx={{ mt: 0.5, mb: 1.25, fontWeight: 600 }}>
             {t('inventoryManagement.form.barcodeQrSection')}
           </Typography>
           {!skuTrim ? (
@@ -2237,23 +2480,23 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
               elevation={0}
               sx={(theme) => ({
                 p: 2,
-                borderRadius: 2,
-                border: `1px solid ${alpha(theme.palette.primary.main, 0.35)}`,
-                bgcolor: alpha(theme.palette.primary.main, 0.06)
+                borderRadius: '14px',
+                border: `1px solid ${alpha(theme.palette.primary.main, 0.28)}`,
+                bgcolor: alpha(theme.palette.primary.main, 0.05),
               })}
             >
-              <Stack spacing={2} alignItems="stretch">
+              <Stack spacing={1.75} alignItems="stretch">
                 <Box
                   sx={{
                     bgcolor: 'background.paper',
                     p: 2,
-                    borderRadius: 1,
+                    borderRadius: '12px',
                     border: '1px solid',
                     borderColor: 'divider',
                     display: 'flex',
                     justifyContent: 'center',
                     alignItems: 'center',
-                    overflow: 'auto'
+                    overflow: 'auto',
                   }}
                 >
                   <svg ref={detailBarcodeRef} style={{ maxWidth: '100%', width: 320, display: 'block' }} />
@@ -2266,7 +2509,7 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
                     startIcon={<PrintIcon />}
                     onClick={handlePrintBarcode}
                     disabled={!skuTrim}
-                    sx={{ minWidth: 200 }}
+                    sx={{ minWidth: 190, borderRadius: '10px', textTransform: 'none', fontWeight: 600 }}
                   >
                     {t('inventoryManagement.detail.printBarcode')}
                   </Button>
@@ -2277,39 +2520,47 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
         </Grid>
 
         <Grid size={{ xs: 12, sm: 6 }}>
-          <Typography variant="caption" color="text.secondary">
-            {t('inventoryManagement.form.category')}
-          </Typography>
-          <Typography variant="body1">{item.category || '—'}</Typography>
+          <Box sx={detailFieldSx}>
+            <Typography variant="caption" color="text.secondary">
+              {t('inventoryManagement.form.category')}
+            </Typography>
+            <Typography variant="body1" sx={{ mt: 0.4 }}>{item.category || '—'}</Typography>
+          </Box>
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
-          <Typography variant="caption" color="text.secondary">
-            {t('inventoryManagement.form.supplier')}
-          </Typography>
-          <Typography variant="body1">{item.supplier || '—'}</Typography>
+          <Box sx={detailFieldSx}>
+            <Typography variant="caption" color="text.secondary">
+              {t('inventoryManagement.form.supplier')}
+            </Typography>
+            <Typography variant="body1" sx={{ mt: 0.4 }}>{item.supplier || '—'}</Typography>
+          </Box>
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
-          <Typography variant="caption" color="text.secondary">
-            {t('inventoryManagement.form.unit')}
-          </Typography>
-          <Typography variant="body1">{item.unit || '—'}</Typography>
+          <Box sx={detailFieldSx}>
+            <Typography variant="caption" color="text.secondary">
+              {t('inventoryManagement.form.unit')}
+            </Typography>
+            <Typography variant="body1" sx={{ mt: 0.4 }}>{item.unit || '—'}</Typography>
+          </Box>
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
-          <Typography variant="caption" color="text.secondary">
-            {t('inventoryManagement.form.location')}
-          </Typography>
-          <Typography variant="body1">{item.location || '—'}</Typography>
+          <Box sx={detailFieldSx}>
+            <Typography variant="caption" color="text.secondary">
+              {t('inventoryManagement.form.location')}
+            </Typography>
+            <Typography variant="body1" sx={{ mt: 0.4 }}>{item.location || '—'}</Typography>
+          </Box>
         </Grid>
+
         <Grid size={{ xs: 12, sm: 4 }}>
           <Box
             sx={(theme) => {
               const low = item.minStock > 0 && item.currentStock <= item.minStock;
               const c = low ? theme.palette.warning : theme.palette.primary;
               return {
-                p: 1.5,
-                borderRadius: 2,
+                ...detailFieldSx,
                 bgcolor: alpha(c.main, 0.1),
-                border: `1px solid ${alpha(c.main, 0.35)}`
+                borderColor: alpha(c.main, 0.35),
               };
             }}
           >
@@ -2323,7 +2574,7 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
                 mt: 0.25,
                 mb: 0,
                 fontWeight: 800,
-                color: item.minStock > 0 && item.currentStock <= item.minStock ? 'warning.dark' : 'primary.main'
+                color: item.minStock > 0 && item.currentStock <= item.minStock ? 'warning.dark' : 'primary.main',
               }}
             >
               {item.currentStock}
@@ -2331,47 +2582,54 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
           </Box>
         </Grid>
         <Grid size={{ xs: 12, sm: 4 }}>
-          <Typography variant="caption" color="text.secondary">
-            {t('inventoryManagement.form.minStock')}
-          </Typography>
-          <Typography variant="body1">{item.minStock}</Typography>
+          <Box sx={detailFieldSx}>
+            <Typography variant="caption" color="text.secondary">
+              {t('inventoryManagement.form.minStock')}
+            </Typography>
+            <Typography variant="body1" sx={{ mt: 0.4 }}>{item.minStock}</Typography>
+          </Box>
         </Grid>
         <Grid size={{ xs: 12, sm: 4 }}>
-          <Typography variant="caption" color="text.secondary">
-            {t('inventoryManagement.form.maxStock')}
-          </Typography>
-          <Typography variant="body1">{item.maxStock}</Typography>
+          <Box sx={detailFieldSx}>
+            <Typography variant="caption" color="text.secondary">
+              {t('inventoryManagement.form.maxStock')}
+            </Typography>
+            <Typography variant="body1" sx={{ mt: 0.4 }}>{item.maxStock}</Typography>
+          </Box>
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
-          <Typography variant="caption" color="text.secondary">
-            {t('inventoryManagement.form.unitPrice')}
-          </Typography>
-          <Typography variant="body1">
-            {t('inventoryManagement.currency')} {item.unitPrice.toLocaleString()}
-          </Typography>
+          <Box sx={detailFieldSx}>
+            <Typography variant="caption" color="text.secondary">
+              {t('inventoryManagement.form.unitPrice')}
+            </Typography>
+            <Typography variant="body1" sx={{ mt: 0.4 }}>
+              {t('inventoryManagement.currency')} {item.unitPrice.toLocaleString()}
+            </Typography>
+          </Box>
         </Grid>
         <Grid size={{ xs: 12, sm: 6 }}>
           <Box
             sx={(theme) => ({
-              p: 1.5,
-              borderRadius: 2,
+              ...detailFieldSx,
               bgcolor: alpha(theme.palette.success.main, 0.08),
-              border: `1px solid ${alpha(theme.palette.success.main, 0.25)}`
+              borderColor: alpha(theme.palette.success.main, 0.25),
             })}
           >
             <Typography variant="caption" color="text.secondary" display="block">
               {t('inventoryManagement.columns.totalValue')}
             </Typography>
-            <Typography variant="body1" fontWeight={700} sx={{ mt: 0.25 }} color="success.dark">
+            <Typography variant="body1" fontWeight={700} sx={{ mt: 0.4 }} color="success.dark">
               {t('inventoryManagement.currency')} {item.totalValue.toLocaleString()}
             </Typography>
           </Box>
         </Grid>
         <Grid size={{ xs: 12 }}>
-          <Typography variant="caption" color="text.secondary">
-            {t('inventoryManagement.columns.lastUpdated')}
-          </Typography>
-          <Typography variant="body1">{item.lastUpdated || '—'}</Typography>
+          <Box sx={{ ...detailFieldSx, minHeight: 64 }}>
+            <Typography variant="caption" color="text.secondary">
+              {t('inventoryManagement.columns.lastUpdated')}
+            </Typography>
+            <Typography variant="body1" sx={{ mt: 0.4 }}>{item.lastUpdated || '—'}</Typography>
+          </Box>
         </Grid>
       </Grid>
     </Box>

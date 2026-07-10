@@ -28,24 +28,27 @@ import {
   CircularProgress,
   Tooltip,
   IconButton,
-  Divider,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsBodyCardSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyPaginationSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsTableScrollSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+} from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
-import {
-  mvsFilterToolbarSx,
-  mvsSearchFieldSx,
-  mvsInnerCardSx,
-  mvsMainSurfaceSx,
-  mvsTableHeadHighlightSx,
-  mvsTableZoneSx,
-} from '../../theme/mvsLayout';
 import { accountingService } from '../../services/api';
 import { UTILS } from '../../constants';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
@@ -137,6 +140,26 @@ const calculateDepreciationValues = (
     accumulatedDepreciation: Number(accumulated.toFixed(2))
   };
 };
+
+const assetFilterFieldSx = {
+  ...(mvsSearchFieldSx as Record<string, unknown>),
+  ...mvsFilterFieldHeightSx,
+} as const;
+
+const bodyCardTableContainerSx = {
+  ...mvsTableScrollSx,
+  width: '100%',
+  maxWidth: '100%',
+} as const;
+
+const listStateInlineSx = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  py: 6,
+  px: 2,
+} as const;
 
 const AssetManagement: React.FC = () => {
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
@@ -380,7 +403,13 @@ const AssetManagement: React.FC = () => {
         title="자산 관리"
         description="자산 등록, 감가상각, 상태 관리를 한 번에 처리합니다."
         actions={
-          <Button variant="contained" disableElevation startIcon={<AddIcon fontSize="small" />} onClick={handleCreate} sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}>
+          <Button
+            variant="contained"
+            disableElevation
+            startIcon={<AddIcon fontSize="small" />}
+            onClick={handleCreate}
+            sx={mvsBodyPrimaryBtnSx}
+          >
             자산 등록
           </Button>
         }
@@ -397,188 +426,207 @@ const AssetManagement: React.FC = () => {
         </Alert>
       )}
 
-      <Card elevation={0} sx={{ mb: 3, ...mvsMainSurfaceSx, p: 0 }}>
-        <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
-          <Grid container spacing={2} sx={{ mb: 0 }}>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card elevation={0} sx={{ ...mvsInnerCardSx, p: 0 }}>
-                <CardContent sx={{ py: 2, px: 2 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>자산 수</Typography>
-                  <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600 }}>{summary.totalCount}건</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card elevation={0} sx={{ ...mvsInnerCardSx, p: 0 }}>
-                <CardContent sx={{ py: 2, px: 2 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>사용중 자산</Typography>
-                  <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600 }} color="success.main">{summary.activeCount}건</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card elevation={0} sx={{ ...mvsInnerCardSx, p: 0 }}>
-                <CardContent sx={{ py: 2, px: 2 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>총 취득가</Typography>
-                  <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600 }}>{formatCurrency(summary.totalPurchase)}</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card elevation={0} sx={{ ...mvsInnerCardSx, p: 0 }}>
-                <CardContent sx={{ py: 2, px: 2 }}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>총 현재가</Typography>
-                  <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600 }} color="text.primary">{formatCurrency(summary.totalCurrent)}</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
+      <Grid container spacing={2.5} sx={{ mb: 3 }} alignItems="stretch">
+        <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
+          <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
+            <CardContent sx={{ py: 2.25, px: 2.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                자산 수
+              </Typography>
+              <Typography variant="h6" sx={{ mt: 0.75, fontWeight: 700, letterSpacing: '-0.02em' }}>
+                {summary.totalCount}건
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
+          <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
+            <CardContent sx={{ py: 2.25, px: 2.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                사용중 자산
+              </Typography>
+              <Typography variant="h6" sx={{ mt: 0.75, fontWeight: 700, letterSpacing: '-0.02em' }} color="success.main">
+                {summary.activeCount}건
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
+          <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
+            <CardContent sx={{ py: 2.25, px: 2.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                총 취득가
+              </Typography>
+              <Typography variant="h6" sx={{ mt: 0.75, fontWeight: 700, letterSpacing: '-0.02em' }}>
+                {formatCurrency(summary.totalPurchase)}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
+          <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
+            <CardContent sx={{ py: 2.25, px: 2.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                총 현재가
+              </Typography>
+              <Typography variant="h6" sx={{ mt: 0.75, fontWeight: 700, letterSpacing: '-0.02em' }}>
+                {formatCurrency(summary.totalCurrent)}
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
 
-          <Divider sx={{ my: 2.5, borderColor: '#C5CED9' }} />
-
-          <Box sx={{ ...mvsFilterToolbarSx, ...mvsSearchFieldSx, mb: 0 }}>
-          <Grid container spacing={2} alignItems="flex-end">
-            <Grid size={{ xs: 12, md: 6 }}>
-              <TextField
-                fullWidth
-                label="검색"
-                placeholder="코드/자산명/시리얼/위치 검색"
-                value={filters.search}
-                onChange={e => setFilters({ ...filters, search: e.target.value })}
-                InputLabelProps={{ shrink: true }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField
-                fullWidth
-                select
-                label="분류"
-                value={filters.category}
-                onChange={e => setFilters({ ...filters, category: e.target.value })}
-                InputLabelProps={{ shrink: true }}
-                SelectProps={{ displayEmpty: true }}
-              >
-                <MenuItem value="all">전체 분류</MenuItem>
-                {assetCategories.map(cat => (
-                  <MenuItem key={cat.value} value={cat.value}>{cat.value}</MenuItem>
-                ))}
-              </TextField>
-            </Grid>
-            <Grid size={{ xs: 12, md: 3 }}>
-              <TextField
-                fullWidth
-                select
-                label="상태"
-                value={filters.status}
-                onChange={e => setFilters({ ...filters, status: e.target.value as AssetStatus | 'all' })}
-                InputLabelProps={{ shrink: true }}
-                SelectProps={{ displayEmpty: true }}
-              >
-                <MenuItem value="all">전체 상태</MenuItem>
-                <MenuItem value="active">사용중</MenuItem>
-                <MenuItem value="maintenance">점검중</MenuItem>
-                <MenuItem value="disposed">폐기</MenuItem>
-                <MenuItem value="lost">분실</MenuItem>
-                <MenuItem value="transferred">이관</MenuItem>
-              </TextField>
-            </Grid>
-          </Grid>
-          </Box>
-        </CardContent>
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            ...assetFilterFieldSx,
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: '2fr 1fr 1fr' },
+            gap: 2,
+            alignItems: 'flex-end',
+          }}
+        >
+          <TextField
+            fullWidth
+            size="small"
+            label="검색"
+            placeholder="코드/자산명/시리얼/위치 검색"
+            value={filters.search}
+            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            InputLabelProps={{ shrink: true }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
+                </InputAdornment>
+              ),
+            }}
+            sx={assetFilterFieldSx}
+          />
+          <TextField
+            fullWidth
+            size="small"
+            select
+            label="분류"
+            value={filters.category}
+            onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+            InputLabelProps={{ shrink: true }}
+            SelectProps={{ displayEmpty: true }}
+            sx={assetFilterFieldSx}
+          >
+            <MenuItem value="all">전체 분류</MenuItem>
+            {assetCategories.map((cat) => (
+              <MenuItem key={cat.value} value={cat.value}>{cat.value}</MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            fullWidth
+            size="small"
+            select
+            label="상태"
+            value={filters.status}
+            onChange={(e) => setFilters({ ...filters, status: e.target.value as AssetStatus | 'all' })}
+            InputLabelProps={{ shrink: true }}
+            SelectProps={{ displayEmpty: true }}
+            sx={assetFilterFieldSx}
+          >
+            <MenuItem value="all">전체 상태</MenuItem>
+            <MenuItem value="active">사용중</MenuItem>
+            <MenuItem value="maintenance">점검중</MenuItem>
+            <MenuItem value="disposed">폐기</MenuItem>
+            <MenuItem value="lost">분실</MenuItem>
+            <MenuItem value="transferred">이관</MenuItem>
+          </TextField>
+        </Box>
       </Card>
 
-      <Card elevation={0} sx={mvsTableZoneSx}>
-        <CardContent sx={{ p: { xs: 2, sm: 2.5 } }}>
+      <Card elevation={0} sx={mvsBodyCardSx}>
+        <Box sx={{ ...mvsBodyListZoneSx, mt: 0, pb: 0 }}>
           {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-              <CircularProgress />
+            <Box sx={listStateInlineSx}>
+              <CircularProgress size={28} />
             </Box>
           ) : filteredAssets.length === 0 ? (
-            <Box
-              sx={{
-                py: 5,
-                px: 2,
-                textAlign: 'center',
-                borderRadius: '14px',
-                border: '1px dashed #C5CED9',
-                bgcolor: '#F8FAFC',
-              }}
-            >
+            <Box sx={listStateInlineSx}>
               <Typography variant="body2" color="text.secondary">
                 자산 데이터가 없습니다.
               </Typography>
             </Box>
           ) : (
-            <TableContainer
-              sx={{
-                borderRadius: '14px',
-                border: '1px solid #C5CED9',
-                overflow: 'hidden',
-              }}
-            >
-              <Table>
-                <TableHead sx={mvsTableHeadHighlightSx}>
-                  <TableRow>
-                    <TableCell>코드</TableCell>
-                    <TableCell>자산명</TableCell>
-                    <TableCell>분류</TableCell>
-                    <TableCell>취득일</TableCell>
-                    <TableCell>취득가</TableCell>
-                    <TableCell>현재가</TableCell>
-                    <TableCell>상태</TableCell>
-                    <TableCell align="center">관리</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {paginatedAssets.map(asset => (
-                    <TableRow key={asset.id} hover sx={{ '& .MuiTableCell-root': { borderColor: '#D8E0EA' } }}>
-                      <TableCell>{asset.asset_code}</TableCell>
-                      <TableCell>{asset.name}</TableCell>
-                      <TableCell>{asset.category}</TableCell>
-                      <TableCell>{asset.purchase_date}</TableCell>
-                      <TableCell>{formatCurrency(asset.purchase_price)}</TableCell>
-                      <TableCell>{formatCurrency(asset.current_value)}</TableCell>
-                      <TableCell>
-                        <Chip size="small" label={getStatusLabel(asset.status)} color={getStatusColor(asset.status) as any} />
-                      </TableCell>
-                      <TableCell align="center">
-                        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
-                          <Tooltip title="수정">
-                            <IconButton size="small" onClick={() => handleEdit(asset)}>
-                              <EditIcon />
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title="삭제">
-                            <IconButton size="small" onClick={() => handleDelete(asset.id)} color="error">
-                              <DeleteIcon />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
-                      </TableCell>
+            <>
+              <TableContainer sx={bodyCardTableContainerSx}>
+                <Table
+                  size="small"
+                  sx={{
+                    borderCollapse: 'collapse',
+                    bgcolor: 'transparent',
+                    '& .MuiTableCell-root': {
+                      borderLeft: 'none',
+                      borderRight: 'none',
+                      borderTop: 'none',
+                    },
+                  }}
+                >
+                  <TableHead sx={mvsTableHeadHighlightSx}>
+                    <TableRow>
+                      <TableCell>코드</TableCell>
+                      <TableCell>자산명</TableCell>
+                      <TableCell>분류</TableCell>
+                      <TableCell>취득일</TableCell>
+                      <TableCell>취득가</TableCell>
+                      <TableCell>현재가</TableCell>
+                      <TableCell>상태</TableCell>
+                      <TableCell align="center">관리</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                  </TableHead>
+                  <TableBody sx={mvsTableBodyRowSx}>
+                    {paginatedAssets.map((asset) => (
+                      <TableRow key={asset.id} hover>
+                        <TableCell>{asset.asset_code}</TableCell>
+                        <TableCell>{asset.name}</TableCell>
+                        <TableCell>{asset.category}</TableCell>
+                        <TableCell>{asset.purchase_date}</TableCell>
+                        <TableCell>{formatCurrency(asset.purchase_price)}</TableCell>
+                        <TableCell>{formatCurrency(asset.current_value)}</TableCell>
+                        <TableCell>
+                          <Chip size="small" label={getStatusLabel(asset.status)} color={getStatusColor(asset.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'} />
+                        </TableCell>
+                        <TableCell align="center">
+                          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
+                            <Tooltip title="수정">
+                              <IconButton size="small" onClick={() => handleEdit(asset)}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="삭제">
+                              <IconButton size="small" onClick={() => handleDelete(asset.id)} color="error">
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Box>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+              {filteredAssets.length > itemsPerPage && (
+                <Box sx={mvsBodyPaginationSx}>
+                  <Pagination
+                    count={Math.ceil(filteredAssets.length / itemsPerPage)}
+                    page={page}
+                    onChange={(_, value) => setPage(value)}
+                    color="primary"
+                  />
+                </Box>
+              )}
+            </>
           )}
-
-          {filteredAssets.length > itemsPerPage && (
-            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-              <Pagination
-                count={Math.ceil(filteredAssets.length / itemsPerPage)}
-                page={page}
-                onChange={(_, value) => setPage(value)}
-              />
-            </Box>
-          )}
-        </CardContent>
+        </Box>
       </Card>
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="md" fullWidth>

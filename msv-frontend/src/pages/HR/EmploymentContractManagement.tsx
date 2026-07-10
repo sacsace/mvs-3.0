@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Autocomplete,
@@ -7,12 +7,14 @@ import {
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControlLabel,
   FormControl,
+  IconButton,
   InputLabel,
   MenuItem,
   Select,
@@ -30,26 +32,79 @@ import {
   TableRow,
   TextField,
   Typography,
-  Paper
+  Pagination,
+  Tooltip,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
-import { useTheme, alpha } from '@mui/material/styles';
-import { Add as AddIcon, Edit as EditIcon, Draw as DrawIcon, PictureAsPdf as PictureAsPdfIcon } from '@mui/icons-material';
-import { API_BASE_URL, companyService, employmentContractService, userService } from '../../services/api';
+import {
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsOutlinedLabelProps,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+  mvsTableScrollSx,
+  mvsBodyPaginationSx,
+} from '../../theme/mvsLayout';
+import { useTheme, alpha, type SxProps, type Theme } from '@mui/material/styles';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Draw as DrawIcon,
+  PictureAsPdf as PictureAsPdfIcon,
+  Description as DescriptionIcon,
+  Delete as DeleteIcon,
+  Send as SendIcon,
+  CheckCircleOutline as CheckCircleOutlineIcon,
+  EventBusy as EventBusyIcon,
+  VerifiedUser as VerifiedUserIcon,
+} from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
+import { employmentContractService } from '../../services/api';
+import { downloadEmploymentContractPdf } from '../../utils/employmentContractPdf';
+import { getUploadUrl } from '../../utils/uploadUrl';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useStore, useMenuStore } from '../../store';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 
+const ITEMS_PER_PAGE = 10;
+const CONTRACT_FILTER_OUTLINED = mvsOutlinedLabelProps;
+const contractFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
+
+const contractTableBodyRowSx: SxProps<Theme> = (theme) => {
+  const base = typeof mvsTableBodyRowSx === 'function' ? mvsTableBodyRowSx(theme) : mvsTableBodyRowSx;
+  const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
+  const hoverBg = theme.palette.mode === 'light' ? '#EFF6FF' : theme.palette.action.hover;
+  return {
+    ...(base as object),
+    '& .MuiTableRow-root:nth-of-type(odd)': { bgcolor: rowBg },
+    '& .MuiTableRow-root:nth-of-type(even)': { bgcolor: rowBg },
+    '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
+    '& .MuiTableCell-body.action-cell': {
+      overflow: 'visible',
+    },
+    '& .MuiTableCell-body.MuiTableCell-paddingCheckbox': {
+      overflow: 'visible',
+    },
+  };
+};
+
+const thLabelEllipsisSx = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  minWidth: 0,
+} as const;
+
 type TabMode = 'templates' | 'contracts' | 'my';
 type MyContractFilterMode = 'all' | 'in_progress' | 'completed';
-type ContractAuditFilter = {
-  action: string;
-  actor: string;
-  startDate: string;
-  endDate: string;
-};
 
 interface CompanyOption {
   id: number;
@@ -64,6 +119,7 @@ interface UserOption {
 
 const EmploymentContractManagement: React.FC = () => {
   const theme = useTheme();
+  const { t } = useTranslation();
   const { user } = useStore();
   const { language } = useMenuStore();
   const txt = useCallback((ko: string, en: string) => (language === 'en' ? en : ko), [language]);
@@ -97,6 +153,7 @@ const EmploymentContractManagement: React.FC = () => {
     [language]
   );
   const isRoot = user?.role === 'root';
+  const canDelete = isRoot;
   const [tab, setTab] = useState<TabMode>('contracts');
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>('');
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
@@ -110,14 +167,13 @@ const EmploymentContractManagement: React.FC = () => {
   const [contractDetailOpen, setContractDetailOpen] = useState(false);
   const [contractDetailLoading, setContractDetailLoading] = useState(false);
   const [selectedContractDetail, setSelectedContractDetail] = useState<any | null>(null);
-  const [contractAuditLogs, setContractAuditLogs] = useState<any[]>([]);
-  const [contractAuditLoading, setContractAuditLoading] = useState(false);
-  const [contractAuditFilter, setContractAuditFilter] = useState<ContractAuditFilter>({
-    action: '',
-    actor: '',
-    startDate: '',
-    endDate: ''
+  const [contractDetailPdfSaving, setContractDetailPdfSaving] = useState(false);
+  const [detailSignForm, setDetailSignForm] = useState({
+    aadhaar_consent: false,
+    aadhaar_last4: '',
+    aadhaar_auth_ref: '',
   });
+  const contractDetailPdfRef = useRef<HTMLDivElement | null>(null);
   const [signDialogOpen, setSignDialogOpen] = useState(false);
   const [signTarget, setSignTarget] = useState<{ contractId: number; signerType: 'company' | 'employee' } | null>(null);
   const [signForm, setSignForm] = useState({
@@ -132,6 +188,10 @@ const EmploymentContractManagement: React.FC = () => {
   const [contractDialogOpen, setContractDialogOpen] = useState(false);
   const [editTemplate, setEditTemplate] = useState<any | null>(null);
   const [editContract, setEditContract] = useState<any | null>(null);
+  const [contractsPage, setContractsPage] = useState(1);
+  const [templatesPage, setTemplatesPage] = useState(1);
+  const [myContractsPage, setMyContractsPage] = useState(1);
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>([]);
 
   const [templateForm, setTemplateForm] = useState({
     name: '',
@@ -155,12 +215,21 @@ const EmploymentContractManagement: React.FC = () => {
     probation_months: '',
     status: 'draft'
   });
-
   const canManage = useMemo(() => ['root', 'admin'].includes(String(user?.role || '')), [user?.role]);
+
+  useEffect(() => {
+    if (!canManage) setTab('my');
+  }, [canManage]);
   const completedContractStatuses = useMemo(
     () => new Set(['signed', 'active', 'expired', 'completed', 'terminated', 'cancelled']),
     []
   );
+  const signedContractStatuses = useMemo(() => new Set(['signed', 'active', 'expired']), []);
+  const canDownloadContractPdf = useMemo(() => {
+    if (!selectedContractDetail) return false;
+    const status = String(selectedContractDetail.status || '').toLowerCase();
+    return signedContractStatuses.has(status) || Boolean(selectedContractDetail.pdf_url);
+  }, [selectedContractDetail, signedContractStatuses]);
   const workingHourOptions = useMemo(
     () => [
       '09:00 ~ 18:00',
@@ -197,12 +266,22 @@ const EmploymentContractManagement: React.FC = () => {
     () => myContracts.filter((row) => Boolean(row?.pdf_url)),
     [myContracts]
   );
-  const toPdfFileUrl = (pdfUrl: string) => {
-    if (!pdfUrl) return '#';
-    if (pdfUrl.startsWith('http://') || pdfUrl.startsWith('https://')) return pdfUrl;
-    const apiRoot = API_BASE_URL.replace(/\/api\/?$/, '');
-    return `${apiRoot}${pdfUrl.startsWith('/') ? '' : '/'}${pdfUrl}`;
-  };
+  const toPdfFileUrl = (pdfUrl: string) => getUploadUrl(pdfUrl);
+  const detailSignContext = useMemo(() => {
+    if (!selectedContractDetail || !user) return null;
+    const status = String(selectedContractDetail.status || '').toLowerCase();
+    const contractId = Number(selectedContractDetail.id);
+    const isEmployee = Number(selectedContractDetail.employee_id) === Number(user.id);
+
+    if (isEmployee && status === 'awaiting_employee_sign') {
+      return { contractId, signerType: 'employee' as const };
+    }
+    return null;
+  }, [selectedContractDetail, user]);
+  const detailAadhaarSignReady =
+    detailSignForm.aadhaar_consent &&
+    detailSignForm.aadhaar_last4.length === 4 &&
+    detailSignForm.aadhaar_auth_ref.trim().length > 0;
   const selectedTemplate = useMemo(
     () => templates.find((tpl: any) => String(tpl.id) === String(contractForm.template_id)),
     [templates, contractForm.template_id]
@@ -216,41 +295,264 @@ const EmploymentContractManagement: React.FC = () => {
       templateName.includes('연봉')
     );
   }, [selectedTemplate]);
-  const contractAuditActionOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          contractAuditLogs
-            .map((row) => String(row?.action || '').trim())
-            .filter(Boolean)
-        )
-      ).sort((a, b) => a.localeCompare(b)),
-    [contractAuditLogs]
+  const pendingContractStatuses = useMemo(
+    () => new Set(['draft', 'in_review', 'awaiting_company_sign', 'awaiting_employee_sign']),
+    []
   );
-  const contractAuditActorOptions = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          contractAuditLogs
-            .map((row) => String(row?.actor?.username || row?.actor_role || '').trim())
-            .filter(Boolean)
-        )
-      ).sort((a, b) => a.localeCompare(b)),
-    [contractAuditLogs]
+  const activeContractStatuses = useMemo(() => new Set(['signed', 'active']), []);
+
+  const kpiItems = useMemo(() => {
+    if (tab === 'contracts') {
+      return [
+        { key: 'total', label: t('employmentContractManagement.stats.totalContracts'), value: contracts.length },
+        {
+          key: 'active',
+          label: t('employmentContractManagement.stats.activeContracts'),
+          value: contracts.filter((row) => activeContractStatuses.has(String(row?.status || '').toLowerCase())).length,
+        },
+        {
+          key: 'pending',
+          label: t('employmentContractManagement.stats.pendingContracts'),
+          value: contracts.filter((row) => pendingContractStatuses.has(String(row?.status || '').toLowerCase())).length,
+        },
+      ];
+    }
+    if (tab === 'templates') {
+      return [{ key: 'total', label: t('employmentContractManagement.stats.totalTemplates'), value: templates.length }];
+    }
+    const inProgressCount = myContracts.filter(
+      (row) => !completedContractStatuses.has(String(row?.status || '').toLowerCase())
+    ).length;
+    const completedCount = myContracts.filter((row) =>
+      completedContractStatuses.has(String(row?.status || '').toLowerCase())
+    ).length;
+    return [
+      { key: 'total', label: t('employmentContractManagement.stats.myTotal'), value: myContracts.length },
+      { key: 'inProgress', label: t('employmentContractManagement.stats.myInProgress'), value: inProgressCount },
+      { key: 'completed', label: t('employmentContractManagement.stats.myCompleted'), value: completedCount },
+    ];
+  }, [tab, contracts, templates, myContracts, t, activeContractStatuses, pendingContractStatuses, completedContractStatuses]);
+
+  const paginatedContracts = useMemo(
+    () => contracts.slice((contractsPage - 1) * ITEMS_PER_PAGE, contractsPage * ITEMS_PER_PAGE),
+    [contracts, contractsPage]
   );
-  const filteredContractAuditLogs = useMemo(() => {
-    return contractAuditLogs.filter((row) => {
-      const action = String(row?.action || '');
-      const actor = String(row?.actor?.username || row?.actor_role || '');
-      const createdAt = String(row?.created_at || '');
-      const dateOnly = createdAt.slice(0, 10);
-      if (contractAuditFilter.action && action !== contractAuditFilter.action) return false;
-      if (contractAuditFilter.actor && actor !== contractAuditFilter.actor) return false;
-      if (contractAuditFilter.startDate && dateOnly < contractAuditFilter.startDate) return false;
-      if (contractAuditFilter.endDate && dateOnly > contractAuditFilter.endDate) return false;
-      return true;
-    });
-  }, [contractAuditLogs, contractAuditFilter]);
+  const paginatedTemplates = useMemo(
+    () => templates.slice((templatesPage - 1) * ITEMS_PER_PAGE, templatesPage * ITEMS_PER_PAGE),
+    [templates, templatesPage]
+  );
+  const visibleTemplateIds = useMemo(
+    () => paginatedTemplates.map((row) => Number(row.id)).filter((id) => Number.isFinite(id)),
+    [paginatedTemplates]
+  );
+  const allVisibleTemplatesSelected =
+    visibleTemplateIds.length > 0 && visibleTemplateIds.every((id) => selectedTemplateIds.includes(id));
+  const someVisibleTemplatesSelected = visibleTemplateIds.some((id) => selectedTemplateIds.includes(id));
+  const paginatedMyContracts = useMemo(
+    () => visibleMyContracts.slice((myContractsPage - 1) * ITEMS_PER_PAGE, myContractsPage * ITEMS_PER_PAGE),
+    [visibleMyContracts, myContractsPage]
+  );
+
+  const contractsTotalPages = Math.max(1, Math.ceil(contracts.length / ITEMS_PER_PAGE));
+  const templatesTotalPages = Math.max(1, Math.ceil(templates.length / ITEMS_PER_PAGE));
+  const myContractsTotalPages = Math.max(1, Math.ceil(visibleMyContracts.length / ITEMS_PER_PAGE));
+
+  useEffect(() => {
+    setContractsPage(1);
+    setTemplatesPage(1);
+    setMyContractsPage(1);
+    setSelectedTemplateIds([]);
+  }, [tab, selectedCompanyId, myContractFilter]);
+
+  useEffect(() => {
+    setSelectedTemplateIds((prev) => prev.filter((id) => templates.some((row) => Number(row.id) === id)));
+  }, [templates]);
+
+  useEffect(() => {
+    if (contractsPage > contractsTotalPages) setContractsPage(contractsTotalPages);
+  }, [contractsPage, contractsTotalPages]);
+
+  useEffect(() => {
+    if (templatesPage > templatesTotalPages) setTemplatesPage(templatesTotalPages);
+  }, [templatesPage, templatesTotalPages]);
+
+  useEffect(() => {
+    if (myContractsPage > myContractsTotalPages) setMyContractsPage(myContractsTotalPages);
+  }, [myContractsPage, myContractsTotalPages]);
+
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    py: { xs: 6, sm: 8 },
+    px: 3,
+    gap: 1.5,
+  } as const;
+
+  const renderHeadCell = (label: string, width?: number | string, opts?: { action?: boolean }) => (
+    <TableCell
+      className={opts?.action ? 'action-cell' : undefined}
+      align={opts?.action ? 'center' : 'left'}
+      sx={{
+        overflow: opts?.action ? 'visible' : 'hidden',
+        verticalAlign: 'middle',
+        textAlign: opts?.action ? 'center' : 'left',
+        ...(opts?.action ? { px: 1 } : {}),
+        ...(width != null
+          ? { width, minWidth: width, maxWidth: width, boxSizing: 'border-box' }
+          : {}),
+      }}
+    >
+      {opts?.action ? (
+        label
+      ) : (
+        <Box component="span" sx={thLabelEllipsisSx} title={label}>
+          {label}
+        </Box>
+      )}
+    </TableCell>
+  );
+
+  const iconBtnBaseSx = {
+    borderRadius: '10px',
+    color: theme.palette.text.secondary,
+    transition: 'color 0.15s ease, background-color 0.15s ease',
+  } as const;
+
+  const renderActionIcon = (
+    actionKey: string,
+    label: string,
+    icon: React.ReactNode,
+    onClick: () => void,
+    hoverColor: 'primary' | 'error' = 'primary'
+  ) => (
+    <Tooltip key={actionKey} title={label}>
+      <span style={{ display: 'inline-flex' }}>
+        <IconButton
+          size="small"
+          aria-label={label}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}
+          sx={{
+            ...iconBtnBaseSx,
+            '&:hover':
+              hoverColor === 'error'
+                ? { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.12) }
+                : { color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.1) },
+          }}
+        >
+          {icon}
+        </IconButton>
+      </span>
+    </Tooltip>
+  );
+
+  const renderContractWorkflowActionIcons = (row: any) => {
+    const status = String(row?.status || '').toLowerCase();
+    const contractId = Number(row.id);
+    const icons: React.ReactNode[] = [];
+
+    if (['draft', 'in_review'].includes(status)) {
+      icons.push(
+        renderActionIcon(
+          'send',
+          txt('직원에게 보내기', 'Send to employee'),
+          <SendIcon fontSize="small" />,
+          () => sendContractToEmployee(contractId, String(row.title || ''))
+        )
+      );
+    }
+    if (status === 'signed') {
+      icons.push(
+        renderActionIcon(
+          'activate',
+          txt('활성화', 'Activate'),
+          <CheckCircleOutlineIcon fontSize="small" />,
+          () => void transitionContractStatus(contractId, 'active', txt('계약이 활성화되었습니다.', 'Contract activated.'))
+        )
+      );
+    }
+    if (status === 'active') {
+      icons.push(
+        renderActionIcon(
+          'expire',
+          txt('만료처리', 'Mark expired'),
+          <EventBusyIcon fontSize="small" />,
+          () => void transitionContractStatus(contractId, 'expired', txt('계약이 만료 처리되었습니다.', 'Contract marked as expired.'))
+        )
+      );
+    }
+
+    return icons;
+  };
+
+  const renderContractActions = (row: any) => {
+    if (!canManage) return null;
+
+    return (
+      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center', alignItems: 'center', flexWrap: 'nowrap', width: '100%' }}>
+        {renderActionIcon(
+          'edit',
+          txt('수정', 'Edit'),
+          <EditIcon fontSize="small" />,
+          () => openEditContract(row)
+        )}
+        {renderContractWorkflowActionIcons(row)}
+        {canDelete
+          ? renderActionIcon(
+              'delete',
+              txt('삭제', 'Delete'),
+              <DeleteIcon fontSize="small" />,
+              () => deleteContract(Number(row.id), String(row.title || '')),
+              'error'
+            )
+          : null}
+      </Box>
+    );
+  };
+
+  const renderEmptyState = (opts: {
+    icon?: React.ReactNode;
+    title: string;
+    hint?: string;
+    action?: React.ReactNode;
+  }) => (
+    <Box sx={listStateBoxSx}>
+      {opts.icon}
+      <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+        {opts.title}
+      </Typography>
+      {opts.hint ? (
+        <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
+          {opts.hint}
+        </Typography>
+      ) : null}
+      {opts.action}
+    </Box>
+  );
+
+  const renderPagination = (count: number, page: number, onChange: (value: number) => void) => (
+    <Box sx={mvsBodyPaginationSx}>
+      <Pagination
+        count={count}
+        page={page}
+        onChange={(_, value) => onChange(value)}
+        color="primary"
+        shape="rounded"
+        sx={{
+          '& .MuiPaginationItem-root': {
+            borderRadius: '10px',
+            fontWeight: 500,
+          },
+        }}
+      />
+    </Box>
+  );
 
   const loadCompanies = async () => {
     if (!isRoot) return;
@@ -291,14 +593,20 @@ const EmploymentContractManagement: React.FC = () => {
     setLoading(true);
     try {
       const queryCompanyId = isRoot && selectedCompanyId ? Number(selectedCompanyId) : undefined;
-      const [templateRes, contractRes, myRes] = await Promise.all([
-        employmentContractService.getTemplates(queryCompanyId),
-        employmentContractService.getContracts({ company_id: queryCompanyId }),
-        employmentContractService.getMyContracts()
-      ]);
-      setTemplates(Array.isArray(templateRes?.data) ? templateRes.data : []);
-      setContracts(Array.isArray(contractRes?.data) ? contractRes.data : []);
+      const myRes = await employmentContractService.getMyContracts();
       setMyContracts(Array.isArray(myRes?.data) ? myRes.data : []);
+
+      if (canManage) {
+        const [templateRes, contractRes] = await Promise.all([
+          employmentContractService.getTemplates(queryCompanyId),
+          employmentContractService.getContracts({ company_id: queryCompanyId }),
+        ]);
+        setTemplates(Array.isArray(templateRes?.data) ? templateRes.data : []);
+        setContracts(Array.isArray(contractRes?.data) ? contractRes.data : []);
+      } else {
+        setTemplates([]);
+        setContracts([]);
+      }
     } catch (error) {
       console.error('전자근로계약 데이터 조회 오류:', error);
       setMessage({
@@ -317,7 +625,7 @@ const EmploymentContractManagement: React.FC = () => {
   useEffect(() => {
     void loadUsers();
     void loadData();
-  }, [selectedCompanyId, isRoot]);
+  }, [selectedCompanyId, isRoot, canManage]);
 
   const openCreateTemplate = () => {
     setEditTemplate(null);
@@ -372,6 +680,7 @@ const EmploymentContractManagement: React.FC = () => {
     try {
       const res = await employmentContractService.deleteTemplate(templateId);
       if (!res?.success) throw new Error(res?.message || '템플릿 삭제 실패');
+      setSelectedTemplateIds((prev) => prev.filter((id) => id !== templateId));
       setMessage({ type: 'success', text: txt('템플릿이 삭제되었습니다.', 'Template deleted.') });
       void loadData();
     } catch (error: any) {
@@ -382,7 +691,55 @@ const EmploymentContractManagement: React.FC = () => {
     }
   };
 
+  const performDeleteTemplates = async (templateIds: number[]) => {
+    try {
+      const results = await Promise.all(templateIds.map((id) => employmentContractService.deleteTemplate(id)));
+      const failed = results.find((res) => !res?.success);
+      if (failed) throw new Error(failed?.message || '템플릿 삭제 실패');
+      setSelectedTemplateIds([]);
+      setMessage({
+        type: 'success',
+        text: t('employmentContractManagement.deleteSelectedSuccess', { count: templateIds.length }),
+      });
+      void loadData();
+    } catch (error: any) {
+      setMessage({
+        type: 'error',
+        text: error?.message || txt('템플릿 삭제 중 오류가 발생했습니다.', 'An error occurred while deleting the template.'),
+      });
+    }
+  };
+
+  const handleSelectAllTemplates = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.checked) {
+      setSelectedTemplateIds(visibleTemplateIds);
+      return;
+    }
+    setSelectedTemplateIds([]);
+  };
+
+  const handleSelectTemplate = (templateId: number) => {
+    setSelectedTemplateIds((prev) =>
+      prev.includes(templateId) ? prev.filter((id) => id !== templateId) : [...prev, templateId]
+    );
+  };
+
+  const deleteSelectedTemplates = () => {
+    if (!canDelete || selectedTemplateIds.length === 0) return;
+    showConfirm(
+      t('employmentContractManagement.confirmDeleteSelectedBulk', { count: selectedTemplateIds.length }),
+      () => {
+        void performDeleteTemplates(selectedTemplateIds);
+      },
+      {
+        title: txt('템플릿 삭제', 'Delete template'),
+        confirmColor: 'error',
+      }
+    );
+  };
+
   const deleteTemplate = (templateId: number, templateName: string) => {
+    if (!canDelete) return;
     showConfirm(txt(`'${templateName}' 템플릿을 삭제하시겠습니까?`, `Delete template '${templateName}'?`), () => {
       void performDeleteTemplate(templateId);
     }, {
@@ -435,6 +792,16 @@ const EmploymentContractManagement: React.FC = () => {
 
   const saveContract = async () => {
     try {
+      if (!contractForm.employee_id) {
+        throw new Error(txt('직원을 선택해 주세요.', 'Please select an employee.'));
+      }
+      if (!contractForm.template_id) {
+        throw new Error(txt('템플릿을 선택해 주세요.', 'Please select a template.'));
+      }
+      if (!contractForm.title.trim() || !contractForm.start_date || !contractForm.end_date) {
+        throw new Error(txt('제목과 계약 기간을 입력해 주세요.', 'Please enter title and contract period.'));
+      }
+
       const payload: any = {
         employee_id: Number(contractForm.employee_id),
         title: contractForm.title,
@@ -492,6 +859,36 @@ const EmploymentContractManagement: React.FC = () => {
     }
   };
 
+  const performSendContractToEmployee = async (contractId: number) => {
+    try {
+      const res = await employmentContractService.sendContractToEmployee(contractId);
+      if (!res?.success) throw new Error(res?.message || '계약 발송 실패');
+      setMessage({
+        type: 'success',
+        text: txt('직원에게 계약서가 발송되었습니다.', 'Contract sent to employee.'),
+      });
+      void loadData();
+    } catch (error: any) {
+      setMessage({
+        type: 'error',
+        text: error?.message || txt('계약 발송 중 오류가 발생했습니다.', 'An error occurred while sending the contract.'),
+      });
+    }
+  };
+
+  const sendContractToEmployee = (contractId: number, contractTitle: string) => {
+    showConfirm(
+      txt(`'${contractTitle}' 계약서를 직원에게 보내시겠습니까?`, `Send contract '${contractTitle}' to the employee?`),
+      () => {
+        void performSendContractToEmployee(contractId);
+      },
+      {
+        title: txt('계약 발송', 'Send contract'),
+        confirmColor: 'primary',
+      }
+    );
+  };
+
   const performDeleteContract = async (contractId: number) => {
     try {
       const res = await employmentContractService.deleteContract(contractId);
@@ -507,6 +904,7 @@ const EmploymentContractManagement: React.FC = () => {
   };
 
   const deleteContract = (contractId: number, contractTitle: string) => {
+    if (!canDelete) return;
     showConfirm(txt(`'${contractTitle}' 계약을 삭제하시겠습니까?`, `Delete contract '${contractTitle}'?`), () => {
       void performDeleteContract(contractId);
     }, {
@@ -556,55 +954,140 @@ const EmploymentContractManagement: React.FC = () => {
     }
   };
 
+  const resetDetailSignForm = () => {
+    setDetailSignForm({
+      aadhaar_consent: false,
+      aadhaar_last4: '',
+      aadhaar_auth_ref: '',
+    });
+  };
+
   const openMyContractDetail = async (contractId: number) => {
     setContractDetailOpen(true);
     setContractDetailLoading(true);
-    setContractAuditLoading(true);
-    setContractAuditFilter({
-      action: '',
-      actor: '',
-      startDate: '',
-      endDate: ''
-    });
+    resetDetailSignForm();
     try {
-      const [res, auditRes] = await Promise.all([
-        employmentContractService.getContract(contractId),
-        employmentContractService.getContractAuditLogs(contractId, { limit: 200 })
-      ]);
+      const res = await employmentContractService.getContract(contractId);
       if (!res?.success) throw new Error(res?.message || '계약 상세 조회 실패');
       setSelectedContractDetail(res.data || null);
-      setContractAuditLogs(Array.isArray(auditRes?.data) ? auditRes.data : []);
     } catch (error: any) {
       setSelectedContractDetail(null);
-      setContractAuditLogs([]);
       setMessage({
         type: 'error',
         text: error?.message || txt('계약 상세를 불러오지 못했습니다.', 'Failed to load contract details.'),
       });
     } finally {
       setContractDetailLoading(false);
-      setContractAuditLoading(false);
     }
   };
 
-  const employmentContractTableHeadRowSx = useMemo(
-    () => ({
-      '& > .MuiTableCell-root': {
-        bgcolor: theme.palette.mode === 'light' ? '#F2F4F7' : alpha(theme.palette.common.white, 0.06),
-        fontWeight: 600,
-        fontSize: '0.75rem',
-        letterSpacing: '0.02em',
-        color: theme.palette.mode === 'light' ? '#64748B' : theme.palette.grey[300],
-        borderBottom: `1px solid ${
-          theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.07)' : theme.palette.divider
-        }`,
-        borderTop: 'none',
-        py: 1.75,
-        px: 2,
-      },
-    }),
-    [theme]
-  );
+  const refreshContractDetail = async (contractId: number) => {
+    const res = await employmentContractService.getContract(contractId);
+    if (res?.success) {
+      setSelectedContractDetail(res.data || null);
+    }
+  };
+
+  const handleDownloadContractPdf = async () => {
+    if (!selectedContractDetail) return;
+
+    const status = String(selectedContractDetail.status || '').toLowerCase();
+    const isSigned = signedContractStatuses.has(status) || Boolean(selectedContractDetail.pdf_url);
+    if (!isSigned) {
+      setMessage({
+        type: 'error',
+        text: txt('서명이 완료된 후에 PDF를 저장할 수 있습니다.', 'PDF can be saved only after signing is completed.'),
+      });
+      return;
+    }
+
+    const serverPdfUrl = String(selectedContractDetail.pdf_url || '').trim();
+    if (serverPdfUrl) {
+      window.open(toPdfFileUrl(serverPdfUrl), '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    const root = contractDetailPdfRef.current;
+    if (!root) {
+      setMessage({
+        type: 'error',
+        text: txt('PDF 생성 대상을 찾지 못했습니다.', 'Could not find content to export as PDF.'),
+      });
+      return;
+    }
+
+    setContractDetailPdfSaving(true);
+    try {
+      const safeTitle = String(selectedContractDetail.title || `contract-${selectedContractDetail.id}`)
+        .replace(/[^\w.\-()가-힣\s]+/g, '_')
+        .trim();
+      await downloadEmploymentContractPdf(root, `${safeTitle || 'employment-contract'}.pdf`);
+      setMessage({
+        type: 'success',
+        text: txt('PDF 파일로 저장했습니다.', 'Contract saved as PDF.'),
+      });
+    } catch (error: any) {
+      setMessage({
+        type: 'error',
+        text: error?.message || txt('PDF 저장에 실패했습니다.', 'Failed to save PDF.'),
+      });
+    } finally {
+      setContractDetailPdfSaving(false);
+    }
+  };
+
+  const handleDetailAadhaarSign = async () => {
+    if (!detailSignContext || !detailAadhaarSignReady) return;
+    try {
+      const res = await employmentContractService.signContract(
+        detailSignContext.contractId,
+        detailSignContext.signerType,
+        'aadhaar_esign',
+        {
+          aadhaar_consent: detailSignForm.aadhaar_consent,
+          aadhaar_last4: detailSignForm.aadhaar_last4.trim(),
+          aadhaar_auth_ref: detailSignForm.aadhaar_auth_ref.trim(),
+        }
+      );
+      if (!res?.success) throw new Error(res?.message || '서명 실패');
+      setMessage({
+        type: 'success',
+        text: txt('Aadhaar e-Verify 서명이 완료되었습니다.', 'Aadhaar e-Verify signature completed.'),
+      });
+      resetDetailSignForm();
+      await refreshContractDetail(detailSignContext.contractId);
+      void loadData();
+    } catch (error: any) {
+      setMessage({
+        type: 'error',
+        text: error?.message || txt('Aadhaar e-Verify 처리 중 오류가 발생했습니다.', 'An error occurred during Aadhaar e-Verify.'),
+      });
+    }
+  };
+
+  const handleDetailInternalSign = async () => {
+    if (!detailSignContext) return;
+    try {
+      const res = await employmentContractService.signContract(
+        detailSignContext.contractId,
+        detailSignContext.signerType,
+        'internal_ack'
+      );
+      if (!res?.success) throw new Error(res?.message || '서명 실패');
+      setMessage({
+        type: 'success',
+        text: txt('서명이 완료되었습니다. PDF로 저장할 수 있습니다.', 'Signature completed. You can save it as PDF.'),
+      });
+      resetDetailSignForm();
+      await refreshContractDetail(detailSignContext.contractId);
+      void loadData();
+    } catch (error: any) {
+      setMessage({
+        type: 'error',
+        text: error?.message || txt('서명 처리 중 오류가 발생했습니다.', 'An error occurred while signing.'),
+      });
+    }
+  };
 
   const statusChip = useCallback(
     (status: string) => {
@@ -652,531 +1135,484 @@ const EmploymentContractManagement: React.FC = () => {
     [theme, contractStatusLabel]
   );
 
-  const tableWrapSx = useMemo(
-    () => ({
-      borderRadius: '16px',
-      overflow: 'hidden',
-      border:
-        theme.palette.mode === 'light'
-          ? '1px solid rgba(15, 23, 42, 0.06)'
-          : `1px solid ${theme.palette.divider}`,
-      boxShadow:
-        theme.palette.mode === 'light' ? '0 2px 14px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.35)',
-      bgcolor: 'background.paper',
-    }),
-    [theme]
-  );
+  const tableBaseSx = {
+    tableLayout: 'fixed' as const,
+    width: '100%',
+    minWidth: 720,
+    borderCollapse: 'collapse' as const,
+    bgcolor: 'transparent',
+    '& .MuiTableCell-root': {
+      borderLeft: 'none',
+      borderRight: 'none',
+      borderTop: 'none',
+    },
+    '& .MuiTableCell-head.action-cell, & .MuiTableCell-body.action-cell': {
+      overflow: 'visible',
+      textAlign: 'center',
+      px: 1,
+    },
+  };
+
+  const actionTableContainerSx = {
+    ...mvsBodyListTableSx,
+    ...mvsTableScrollSx,
+    '& .MuiTableCell-head.action-cell, & .MuiTableCell-body.action-cell': {
+      overflow: 'visible',
+      textAlign: 'center',
+      px: 1,
+    },
+  } as const;
+
+  const CONTRACT_ACTION_COL_WIDTH = 180;
+  const TEMPLATE_ACTION_COL_WIDTH = 72;
+
+  const cellEllipsisSx = {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+    verticalAlign: 'middle' as const,
+  };
+
+  const actionCellSx = {
+    width: CONTRACT_ACTION_COL_WIDTH,
+    minWidth: CONTRACT_ACTION_COL_WIDTH,
+    maxWidth: CONTRACT_ACTION_COL_WIDTH,
+    overflow: 'visible',
+    verticalAlign: 'middle' as const,
+    textAlign: 'center' as const,
+    px: 1,
+    whiteSpace: 'nowrap' as const,
+    boxSizing: 'border-box' as const,
+  };
 
   return (
     <Box sx={{ ...mvsPageRootSx }}>
       <MvsPageHeader
-        title={txt('전자근로계약 관리', 'Employment contract management')}
-        mb={2.5}
-        actions={
-          isRoot ? (
-            <Box sx={{ minWidth: { xs: '100%', sm: 280 }, maxWidth: 360 }}>
-              <TextField
-                select
-                size="small"
-                fullWidth
-                label={txt('회사', 'Company')}
-                value={selectedCompanyId}
-                onChange={(e) => setSelectedCompanyId(Number(e.target.value))}
-                InputLabelProps={{ shrink: true }}
-                SelectProps={{ displayEmpty: true }}
-                sx={{ borderRadius: '14px', minHeight: 44, bgcolor: 'background.paper' }}
-              >
-                {companies.map((company) => (
-                  <MenuItem key={company.id} value={company.id}>{company.name}</MenuItem>
-                ))}
-              </TextField>
-            </Box>
-          ) : undefined
-        }
+        title={t('employmentContractManagement.pageTitle')}
+        description={t('employmentContractManagement.description')}
       />
 
-      <Card
-        elevation={0}
+      <Box
         sx={{
-          borderRadius: '20px',
-          border: 'none',
-          boxShadow: '0 4px 18px rgba(15, 23, 42, 0.045)',
-          overflow: 'hidden',
+          display: 'grid',
+          gridTemplateColumns: {
+            xs: '1fr',
+            sm: kpiItems.length >= 3 ? 'repeat(3, 1fr)' : kpiItems.length === 2 ? 'repeat(2, 1fr)' : '1fr',
+          },
+          gap: 2.5,
+          mb: 3,
         }}
       >
-        <CardContent sx={{ py: 3, px: { xs: 2, sm: 3 } }}>
+        {kpiItems.map((item) => (
+          <Card key={item.key} elevation={0} sx={mvsKpiCardSx}>
+            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                {item.label}
+              </Typography>
+              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                {item.value}
+              </Typography>
+            </CardContent>
+          </Card>
+        ))}
+      </Box>
+
+      <Card elevation={0} sx={mvsBodyCardSx}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1,
+            px: { xs: 2, sm: 2.5 },
+            py: 1,
+            bgcolor: '#FFFFFF',
+          }}
+        >
           <Tabs
             value={tab}
             onChange={(_, next) => setTab(next)}
             sx={{
-              mb: 2.5,
-              minHeight: 44,
+              minHeight: 40,
               '& .MuiTab-root': {
                 textTransform: 'none',
                 fontWeight: 600,
-                fontSize: '0.9375rem',
-                minHeight: 44,
-                py: 1,
+                fontSize: '0.8125rem',
+                minHeight: 40,
+                py: 0.75,
                 color: 'text.secondary',
               },
               '& .Mui-selected': { color: 'primary.main', fontWeight: 700 },
               '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' },
             }}
           >
-            <Tab value="contracts" label={txt('계약 목록', 'Contracts')} />
-            <Tab value="templates" label={txt('템플릿', 'Templates')} />
-            <Tab value="my" label={txt('내 계약서', 'My contracts')} />
+            <Tab value="my" label={t('employmentContractManagement.tabs.my')} />
+            {canManage ? <Tab value="contracts" label={t('employmentContractManagement.tabs.contracts')} /> : null}
+            {canManage ? <Tab value="templates" label={t('employmentContractManagement.tabs.templates')} /> : null}
           </Tabs>
-
-          {tab === 'contracts' && (
-            <Stack spacing={2.5}>
-              {canManage && (
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon sx={{ fontSize: 18 }} />}
-                    onClick={openCreateContract}
-                    sx={{
-                      borderRadius: '14px',
-                      px: 2.5,
-                      py: 1,
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      boxShadow: 'none',
-                      background: `linear-gradient(180deg, ${alpha(theme.palette.primary.main, 0.92)} 0%, ${theme.palette.primary.main} 100%)`,
-                      '&:hover': { boxShadow: 'none' },
-                    }}
-                  >
-                    {txt('계약 생성', 'Create contract')}
-                  </Button>
-                </Box>
-              )}
-              <TableContainer component={Paper} elevation={0} sx={tableWrapSx}>
-                <Table
-                  size="medium"
+          {tab === 'contracts' && canManage ? (
+            <Button
+              variant="contained"
+              disableElevation
+              size="small"
+              startIcon={<AddIcon fontSize="small" />}
+              onClick={openCreateContract}
+              sx={mvsBodyPrimaryBtnSx}
+            >
+              {t('employmentContractManagement.createContract')}
+            </Button>
+          ) : null}
+          {tab === 'templates' && canManage ? (
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+              {canDelete && selectedTemplateIds.length > 0 ? (
+                <Button
+                  variant="contained"
+                  color="error"
+                  disableElevation
+                  size="small"
+                  startIcon={<DeleteIcon fontSize="small" />}
+                  onClick={deleteSelectedTemplates}
                   sx={{
-                    '& .MuiTableCell-body': {
-                      py: 1.75,
-                      px: 2,
-                      fontSize: '0.875rem',
-                      borderColor:
-                        theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : undefined,
-                    },
+                    textTransform: 'none',
+                    borderRadius: '10px',
+                    fontWeight: 600,
+                    fontSize: '0.8125rem',
+                    minHeight: 36,
+                    px: 2,
+                    boxShadow: 'none',
                   }}
                 >
-                  <TableHead>
-                    <TableRow sx={employmentContractTableHeadRowSx}>
-                      <TableCell>ID</TableCell>
-                      <TableCell>{txt('제목', 'Title')}</TableCell>
-                      <TableCell>{txt('직원', 'Employee')}</TableCell>
-                      <TableCell>{txt('기간', 'Period')}</TableCell>
-                      <TableCell>{txt('상태', 'Status')}</TableCell>
-                      <TableCell>{txt('작업', 'Actions')}</TableCell>
+                  {t('employmentContractManagement.deleteSelected')} ({selectedTemplateIds.length})
+                </Button>
+              ) : null}
+              <Button
+                variant="contained"
+                disableElevation
+                size="small"
+                startIcon={<AddIcon fontSize="small" />}
+                onClick={openCreateTemplate}
+                sx={mvsBodyPrimaryBtnSx}
+              >
+                {t('employmentContractManagement.createTemplate')}
+              </Button>
+            </Box>
+          ) : null}
+        </Box>
+
+        {(isRoot && tab !== 'my') || tab === 'my' ? (
+          <Box
+            sx={{
+              px: { xs: 2, sm: 2.5 },
+              py: 2,
+              bgcolor: '#FFFFFF',
+              ...(mvsSearchFieldSx as Record<string, unknown>),
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: tab === 'my' ? '1fr' : 'minmax(280px, 360px)' },
+              gap: 2,
+              alignItems: 'flex-end',
+            }}
+          >
+            {isRoot && tab !== 'my' ? (
+              <TextField
+                select
+                size="small"
+                fullWidth
+                label={t('employmentContractManagement.company')}
+                {...CONTRACT_FILTER_OUTLINED}
+                value={selectedCompanyId}
+                onChange={(e) => setSelectedCompanyId(Number(e.target.value))}
+                SelectProps={{ displayEmpty: true }}
+                sx={contractFilterFieldSx}
+              >
+                {companies.map((company) => (
+                  <MenuItem key={company.id} value={company.id}>
+                    {company.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            ) : null}
+            {tab === 'my' ? (
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {(['all', 'in_progress', 'completed'] as MyContractFilterMode[]).map((mode) => (
+                  <Button
+                    key={mode}
+                    size="small"
+                    variant={myContractFilter === mode ? 'contained' : 'outlined'}
+                    onClick={() => setMyContractFilter(mode)}
+                    sx={myContractFilter === mode ? mvsBodyPrimaryBtnSx : mvsBodyOutlinedBtnSx}
+                  >
+                    {mode === 'all'
+                      ? t('employmentContractManagement.filterAll')
+                      : mode === 'in_progress'
+                        ? t('employmentContractManagement.filterInProgress')
+                        : t('employmentContractManagement.filterCompleted')}
+                  </Button>
+                ))}
+              </Box>
+            ) : null}
+          </Box>
+        ) : null}
+      </Card>
+
+      <Box sx={mvsBodyListZoneSx}>
+        {loading ? (
+          renderEmptyState({
+            icon: <CircularProgress size={36} />,
+            title: t('employmentContractManagement.empty.loading'),
+          })
+        ) : tab === 'contracts' ? (
+          contracts.length === 0 ? (
+            renderEmptyState({
+              icon: <DescriptionIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.3 }} />,
+              title: t('employmentContractManagement.empty.noContracts'),
+              hint: t('employmentContractManagement.empty.noContractsHint'),
+              action: canManage ? (
+                <Button variant="contained" disableElevation size="small" startIcon={<AddIcon fontSize="small" />} onClick={openCreateContract} sx={mvsBodyPrimaryBtnSx}>
+                  {t('employmentContractManagement.createContract')}
+                </Button>
+              ) : undefined,
+            })
+          ) : (
+            <>
+              <TableContainer sx={actionTableContainerSx}>
+                <Table size="small" sx={tableBaseSx}>
+                  <TableHead sx={mvsTableHeadHighlightSx}>
+                    <TableRow>
+                      {renderHeadCell('ID', 56)}
+                      {renderHeadCell(txt('제목', 'Title'))}
+                      {renderHeadCell(txt('직원', 'Employee'), '18%')}
+                      {renderHeadCell(txt('기간', 'Period'), '22%')}
+                      {renderHeadCell(txt('상태', 'Status'), 140)}
+                      {renderHeadCell(txt('작업', 'Actions'), CONTRACT_ACTION_COL_WIDTH, { action: true })}
                     </TableRow>
                   </TableHead>
-                  <TableBody>
-                  {contracts.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      hover
-                      sx={{
-                        transition: 'background-color 0.15s ease',
-                        '&:hover': {
-                          bgcolor:
-                            theme.palette.mode === 'light'
-                              ? alpha(theme.palette.primary.main, 0.04)
-                              : alpha(theme.palette.common.white, 0.04),
-                        },
-                      }}
-                    >
-                      <TableCell>{row.id}</TableCell>
-                      <TableCell sx={{ fontWeight: 500 }}>{row.title}</TableCell>
-                      <TableCell>{row.employee?.username || row.employee_id}</TableCell>
-                      <TableCell>{row.start_date} ~ {row.end_date}</TableCell>
-                      <TableCell>{statusChip(String(row.status || 'draft'))}</TableCell>
-                      <TableCell>
-                        <Stack
-                          direction="row"
-                          spacing={0.75}
-                          flexWrap="wrap"
-                          useFlexGap
-                          sx={{ '& .MuiButton-root': { textTransform: 'none', borderRadius: '10px', fontWeight: 600 } }}
-                        >
-                          <Button size="small" onClick={() => openMyContractDetail(Number(row.id))}>
-                            {txt('상세', 'Details')}
-                          </Button>
-                          {canManage && (
-                            <Button size="small" startIcon={<EditIcon />} onClick={() => openEditContract(row)}>
-                              {txt('수정', 'Edit')}
-                            </Button>
-                          )}
-                          {canManage && String(row.status || '').toLowerCase() === 'draft' && (
-                            <Button
-                              size="small"
-                              onClick={() =>
-                                transitionContractStatus(
-                                  Number(row.id),
-                                  'in_review',
-                                  txt('검토 상태로 전환되었습니다.', 'Moved to in review.')
-                                )
-                              }
-                            >
-                              {txt('검토요청', 'Request review')}
-                            </Button>
-                          )}
-                          {canManage && String(row.status || '').toLowerCase() === 'in_review' && (
-                            <Button
-                              size="small"
-                              onClick={() =>
-                                transitionContractStatus(
-                                  Number(row.id),
-                                  'awaiting_company_sign',
-                                  txt('회사 서명 대기 상태로 전환되었습니다.', 'Moved to awaiting company signature.')
-                                )
-                              }
-                            >
-                              {txt('서명요청단계', 'Signing step')}
-                            </Button>
-                          )}
-                          {canManage && String(row.status || '').toLowerCase() === 'signed' && (
-                            <Button
-                              size="small"
-                              color="success"
-                              onClick={() =>
-                                transitionContractStatus(
-                                  Number(row.id),
-                                  'active',
-                                  txt('계약이 활성화되었습니다.', 'Contract activated.')
-                                )
-                              }
-                            >
-                              {txt('활성화', 'Activate')}
-                            </Button>
-                          )}
-                          {canManage && String(row.status || '').toLowerCase() === 'active' && (
-                            <Button
-                              size="small"
-                              color="warning"
-                              onClick={() =>
-                                transitionContractStatus(
-                                  Number(row.id),
-                                  'expired',
-                                  txt('계약이 만료 처리되었습니다.', 'Contract marked as expired.')
-                                )
-                              }
-                            >
-                              {txt('만료처리', 'Mark expired')}
-                            </Button>
-                          )}
-                          {canManage && (
-                            <Button
-                              size="small"
-                              color="error"
-                              onClick={() => deleteContract(Number(row.id), String(row.title || ''))}
-                            >
-                              {txt('삭제', 'Delete')}
-                            </Button>
-                          )}
-                          {canManage && ['in_review', 'awaiting_company_sign'].includes(String(row.status || '').toLowerCase()) && (
-                            <Button
-                              size="small"
-                              startIcon={<DrawIcon />}
-                              onClick={() => openSignDialog(Number(row.id), 'company')}
-                            >
-                              {txt('회사 서명', 'Company sign')}
-                            </Button>
-                          )}
-                        </Stack>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  <TableBody sx={contractTableBodyRowSx}>
+                    {paginatedContracts.map((row) => (
+                      <TableRow
+                        key={row.id}
+                        onClick={() => openMyContractDetail(Number(row.id))}
+                        sx={{ cursor: 'pointer' }}
+                      >
+                        <TableCell sx={cellEllipsisSx}>{row.id}</TableCell>
+                        <TableCell sx={cellEllipsisSx}>
+                          <Typography variant="body2" fontWeight={500} noWrap title={String(row.title || '')}>
+                            {row.title}
+                          </Typography>
+                        </TableCell>
+                        <TableCell sx={cellEllipsisSx}>
+                          <Typography variant="body2" noWrap title={String(row.employee?.username || row.employee_id || '')}>
+                            {row.employee?.username || row.employee_id}
+                          </Typography>
+                        </TableCell>
+                        <TableCell sx={cellEllipsisSx}>
+                          <Typography variant="body2" noWrap title={`${row.start_date} ~ ${row.end_date}`}>
+                            {row.start_date} ~ {row.end_date}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>{statusChip(String(row.status || 'draft'))}</TableCell>
+                        <TableCell align="center" className="action-cell" sx={actionCellSx} onClick={(e) => e.stopPropagation()}>
+                          {renderContractActions(row)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </TableContainer>
-              {!loading && contracts.length === 0 && (
-                <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
-                  {txt('등록된 계약이 없습니다.', 'No contracts yet.')}
-                </Typography>
-              )}
-              <Box
-                sx={{
-                  mt: 1,
-                  pt: 2.5,
-                  borderTop: '1px solid',
-                  borderColor: 'divider',
-                  borderRadius: '16px',
-                  bgcolor: theme.palette.mode === 'light' ? alpha(theme.palette.common.black, 0.02) : alpha(theme.palette.common.white, 0.03),
-                  px: 2,
-                  py: 2,
-                }}
-              >
-                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700, letterSpacing: '-0.01em', fontSize: '0.9375rem' }}>
-                  {txt('PDF 파일 목록', 'PDF files')}
-                </Typography>
+              {renderPagination(contractsTotalPages, contractsPage, setContractsPage)}
+              <Box sx={{ ...mvsBodyListTableSx, mt: 2.5, p: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700, letterSpacing: '-0.01em' }}>{t('employmentContractManagement.pdfFiles')}</Typography>
                 <Stack spacing={1}>
                   {contractPdfFiles.map((row) => (
                     <Box key={`pdf-contract-${row.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <PictureAsPdfIcon fontSize="small" sx={{ color: 'error.main', opacity: 0.85 }} />
-                      <Link href={toPdfFileUrl(String(row.pdf_url || ''))} target="_blank" rel="noopener noreferrer" underline="hover">
-                        {String(row.title || `Contract ${row.id}`)}.pdf
-                      </Link>
+                      <Link href={toPdfFileUrl(String(row.pdf_url || ''))} target="_blank" rel="noopener noreferrer" underline="hover">{String(row.title || `Contract ${row.id}`)}.pdf</Link>
                     </Box>
                   ))}
-                  {!loading && contractPdfFiles.length === 0 && (
-                    <Typography variant="body2" color="text.secondary">
-                      {txt('생성된 PDF 파일이 없습니다.', 'No PDF files have been generated.')}
-                    </Typography>
-                  )}
+                  {contractPdfFiles.length === 0 && <Typography variant="body2" color="text.secondary">{t('employmentContractManagement.noPdfFiles')}</Typography>}
                 </Stack>
               </Box>
-            </Stack>
-          )}
-
-          {tab === 'templates' && (
-            <Stack spacing={2.5}>
-              {canManage && (
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <Button
-                    variant="contained"
-                    startIcon={<AddIcon sx={{ fontSize: 18 }} />}
-                    onClick={openCreateTemplate}
-                    sx={{
-                      borderRadius: '14px',
-                      px: 2.5,
-                      py: 1,
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      boxShadow: 'none',
-                      background: `linear-gradient(180deg, ${alpha(theme.palette.primary.main, 0.92)} 0%, ${theme.palette.primary.main} 100%)`,
-                      '&:hover': { boxShadow: 'none' },
-                    }}
-                  >
-                    {txt('템플릿 생성', 'Create template')}
-                  </Button>
-                </Box>
-              )}
-              <TableContainer component={Paper} elevation={0} sx={tableWrapSx}>
-                <Table
-                  size="medium"
-                  sx={{
-                    '& .MuiTableCell-body': {
-                      py: 1.75,
-                      px: 2,
-                      fontSize: '0.875rem',
-                      borderColor:
-                        theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : undefined,
-                    },
-                  }}
-                >
-                  <TableHead>
-                    <TableRow sx={employmentContractTableHeadRowSx}>
-                      <TableCell>ID</TableCell>
-                      <TableCell>{txt('템플릿명', 'Template name')}</TableCell>
-                      <TableCell>{txt('유형', 'Type')}</TableCell>
-                      <TableCell>{txt('언어', 'Language')}</TableCell>
-                      <TableCell>{txt('버전', 'Version')}</TableCell>
-                      <TableCell>{txt('작업', 'Actions')}</TableCell>
+            </>
+          )
+        ) : tab === 'templates' ? (
+          templates.length === 0 ? (
+            renderEmptyState({
+              icon: <DescriptionIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.3 }} />,
+              title: t('employmentContractManagement.empty.noTemplates'),
+              hint: t('employmentContractManagement.empty.noTemplatesHint'),
+              action: canManage ? (
+                <Button variant="contained" disableElevation size="small" startIcon={<AddIcon fontSize="small" />} onClick={openCreateTemplate} sx={mvsBodyPrimaryBtnSx}>
+                  {t('employmentContractManagement.createTemplate')}
+                </Button>
+              ) : undefined,
+            })
+          ) : (
+            <>
+              <TableContainer sx={actionTableContainerSx}>
+                <Table size="small" sx={tableBaseSx}>
+                  <TableHead sx={mvsTableHeadHighlightSx}>
+                    <TableRow>
+                      {canDelete ? (
+                        <TableCell padding="checkbox" align="center">
+                          <Checkbox
+                            size="small"
+                            disabled={paginatedTemplates.length === 0}
+                            indeterminate={someVisibleTemplatesSelected && !allVisibleTemplatesSelected}
+                            checked={allVisibleTemplatesSelected}
+                            onChange={handleSelectAllTemplates}
+                          />
+                        </TableCell>
+                      ) : null}
+                      {renderHeadCell('ID', 56)}
+                      {renderHeadCell(txt('템플릿명', 'Template name'))}
+                      {renderHeadCell(txt('유형', 'Type'), '18%')}
+                      {renderHeadCell(txt('언어', 'Language'), 96)}
+                      {renderHeadCell(txt('버전', 'Version'), 80)}
+                      {canDelete ? renderHeadCell(txt('작업', 'Actions'), TEMPLATE_ACTION_COL_WIDTH, { action: true }) : null}
                     </TableRow>
                   </TableHead>
-                  <TableBody>
-                  {templates.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      hover
-                      sx={{
-                        transition: 'background-color 0.15s ease',
-                        '&:hover': {
-                          bgcolor:
-                            theme.palette.mode === 'light'
-                              ? alpha(theme.palette.primary.main, 0.04)
-                              : alpha(theme.palette.common.white, 0.04),
-                        },
-                      }}
-                    >
-                      <TableCell>{row.id}</TableCell>
-                      <TableCell sx={{ fontWeight: 500 }}>{row.name}</TableCell>
-                      <TableCell>{row.contract_type}</TableCell>
-                      <TableCell>{row.language}</TableCell>
-                      <TableCell>{row.version}</TableCell>
-                      <TableCell>
-                        {canManage && (
-                          <Stack
-                            direction="row"
-                            spacing={0.75}
-                            flexWrap="wrap"
-                            useFlexGap
-                            sx={{ '& .MuiButton-root': { textTransform: 'none', borderRadius: '10px', fontWeight: 600 } }}
-                          >
-                            <Button size="small" startIcon={<EditIcon />} onClick={() => openEditTemplate(row)}>
-                              {txt('수정', 'Edit')}
-                            </Button>
-                            <Button
+                  <TableBody sx={contractTableBodyRowSx}>
+                    {paginatedTemplates.map((row) => (
+                      <TableRow
+                        key={row.id}
+                        onClick={() => {
+                          if (canManage) openEditTemplate(row);
+                        }}
+                        sx={{ cursor: canManage ? 'pointer' : 'default' }}
+                      >
+                        {canDelete ? (
+                          <TableCell padding="checkbox" align="center" onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
                               size="small"
-                              color="error"
-                              onClick={() => deleteTemplate(Number(row.id), String(row.name || ''))}
-                            >
-                              {txt('삭제', 'Delete')}
-                            </Button>
-                          </Stack>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                              checked={selectedTemplateIds.includes(Number(row.id))}
+                              onChange={() => handleSelectTemplate(Number(row.id))}
+                            />
+                          </TableCell>
+                        ) : null}
+                        <TableCell sx={cellEllipsisSx}>{row.id}</TableCell>
+                        <TableCell sx={cellEllipsisSx}>
+                          <Typography variant="body2" fontWeight={500} noWrap title={String(row.name || '')}>
+                            {row.name}
+                          </Typography>
+                        </TableCell>
+                        <TableCell sx={cellEllipsisSx}>{row.contract_type}</TableCell>
+                        <TableCell sx={cellEllipsisSx}>{row.language}</TableCell>
+                        <TableCell sx={cellEllipsisSx}>{row.version}</TableCell>
+                        {canDelete ? (
+                          <TableCell
+                            align="center"
+                            className="action-cell"
+                            sx={{ ...actionCellSx, width: TEMPLATE_ACTION_COL_WIDTH, minWidth: TEMPLATE_ACTION_COL_WIDTH, maxWidth: TEMPLATE_ACTION_COL_WIDTH }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                              <Tooltip title={txt('삭제', 'Delete')}>
+                                <span style={{ display: 'inline-flex' }}>
+                                  <IconButton
+                                    size="small"
+                                    aria-label={txt('삭제', 'Delete')}
+                                    onClick={() => deleteTemplate(Number(row.id), String(row.name || ''))}
+                                    sx={{
+                                      ...iconBtnBaseSx,
+                                      '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.12) },
+                                    }}
+                                  >
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            </Box>
+                          </TableCell>
+                        ) : null}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </TableContainer>
-              {!loading && templates.length === 0 && (
-                <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
-                  {txt('등록된 템플릿이 없습니다.', 'No templates yet.')}
-                </Typography>
-              )}
-            </Stack>
-          )}
-
-          {tab === 'my' && (
-            <Stack spacing={2.5}>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Button
-                  size="small"
-                  variant={myContractFilter === 'all' ? 'contained' : 'outlined'}
-                  onClick={() => setMyContractFilter('all')}
-                  sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 600, px: 2 }}
-                >
-                  {txt('전체', 'All')}
-                </Button>
-                <Button
-                  size="small"
-                  variant={myContractFilter === 'in_progress' ? 'contained' : 'outlined'}
-                  onClick={() => setMyContractFilter('in_progress')}
-                  sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 600, px: 2 }}
-                >
-                  {txt('진행중', 'In progress')}
-                </Button>
-                <Button
-                  size="small"
-                  variant={myContractFilter === 'completed' ? 'contained' : 'outlined'}
-                  onClick={() => setMyContractFilter('completed')}
-                  sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 600, px: 2 }}
-                >
-                  {txt('완료', 'Completed')}
-                </Button>
-              </Box>
-              <TableContainer component={Paper} elevation={0} sx={tableWrapSx}>
-                <Table
-                  size="medium"
-                  sx={{
-                    '& .MuiTableCell-body': {
-                      py: 1.75,
-                      px: 2,
-                      fontSize: '0.875rem',
-                      borderColor:
-                        theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : undefined,
-                    },
-                  }}
-                >
-                  <TableHead>
-                    <TableRow sx={employmentContractTableHeadRowSx}>
-                      <TableCell>ID</TableCell>
-                      <TableCell>{txt('제목', 'Title')}</TableCell>
-                      <TableCell>{txt('기간', 'Period')}</TableCell>
-                      <TableCell>{txt('상태', 'Status')}</TableCell>
-                      <TableCell>{txt('작업', 'Actions')}</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                  {visibleMyContracts.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      hover
-                      onClick={() => openMyContractDetail(Number(row.id))}
-                      sx={{
-                        cursor: 'pointer',
-                        transition: 'background-color 0.15s ease',
-                        '&:hover': {
-                          bgcolor:
-                            theme.palette.mode === 'light'
-                              ? alpha(theme.palette.primary.main, 0.04)
-                              : alpha(theme.palette.common.white, 0.04),
-                        },
-                      }}
-                    >
-                      <TableCell>{row.id}</TableCell>
-                      <TableCell sx={{ fontWeight: 500 }}>{row.title}</TableCell>
-                      <TableCell>{row.start_date} ~ {row.end_date}</TableCell>
+              {renderPagination(templatesTotalPages, templatesPage, setTemplatesPage)}
+            </>
+          )
+        ) : visibleMyContracts.length === 0 ? (
+          renderEmptyState({
+            icon: <DescriptionIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.3 }} />,
+            title: myContractFilter === 'completed' ? t('employmentContractManagement.empty.noCompletedContracts') : t('employmentContractManagement.empty.noMyContracts'),
+            hint: t('employmentContractManagement.empty.noMyContractsHint'),
+          })
+        ) : (
+          <>
+            <TableContainer sx={actionTableContainerSx}>
+              <Table size="small" sx={tableBaseSx}>
+                <TableHead sx={mvsTableHeadHighlightSx}>
+                  <TableRow>
+                    {renderHeadCell('ID')}
+                    {renderHeadCell(txt('제목', 'Title'))}
+                    {renderHeadCell(txt('기간', 'Period'))}
+                    {renderHeadCell(txt('상태', 'Status'))}
+                    {renderHeadCell(txt('작업', 'Actions'))}
+                  </TableRow>
+                </TableHead>
+                <TableBody sx={contractTableBodyRowSx}>
+                  {paginatedMyContracts.map((row) => (
+                    <TableRow key={row.id} onClick={() => openMyContractDetail(Number(row.id))} sx={{ cursor: 'pointer' }}>
+                      <TableCell sx={cellEllipsisSx}>{row.id}</TableCell>
+                      <TableCell sx={cellEllipsisSx}><Typography variant="body2" fontWeight={500} noWrap title={String(row.title || '')}>{row.title}</Typography></TableCell>
+                      <TableCell sx={cellEllipsisSx}>{row.start_date} ~ {row.end_date}</TableCell>
                       <TableCell>{statusChip(String(row.status || 'draft'))}</TableCell>
-                      <TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
                         {String(row.status || '').toLowerCase() === 'awaiting_employee_sign' ? (
                           <Button
                             size="small"
-                            startIcon={<DrawIcon />}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openSignDialog(Number(row.id), 'employee');
-                            }}
-                            sx={{ textTransform: 'none', borderRadius: '10px', fontWeight: 600 }}
+                            variant="outlined"
+                            startIcon={<DrawIcon fontSize="small" />}
+                            onClick={() => openSignDialog(Number(row.id), 'employee')}
+                            sx={mvsBodyOutlinedBtnSx}
                           >
                             {txt('직원 서명', 'Sign as employee')}
                           </Button>
                         ) : completedContractStatuses.has(String(row.status || '').toLowerCase()) ? (
-                          <Typography variant="body2" color="text.secondary">
-                            {txt('완료', 'Done')}
-                          </Typography>
+                          signedContractStatuses.has(String(row.status || '').toLowerCase()) && row.pdf_url ? (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<PictureAsPdfIcon fontSize="small" />}
+                              onClick={() => window.open(toPdfFileUrl(String(row.pdf_url || '')), '_blank', 'noopener,noreferrer')}
+                              sx={mvsBodyOutlinedBtnSx}
+                            >
+                              {txt('PDF', 'PDF')}
+                            </Button>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary">{txt('완료', 'Done')}</Typography>
+                          )
                         ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            {txt('대기', 'Pending')}
-                          </Typography>
+                          <Typography variant="body2" color="text.secondary">{txt('대기', 'Pending')}</Typography>
                         )}
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-              </TableContainer>
-              {!loading && visibleMyContracts.length === 0 && (
-                <Typography variant="body2" color="text.secondary" sx={{ px: 0.5 }}>
-                  {myContractFilter === 'completed'
-                    ? txt('완료된 계약서가 없습니다.', 'No completed contracts.')
-                    : txt('내 계약서가 없습니다.', 'You have no contracts yet.')}
-                </Typography>
-              )}
-              <Box
-                sx={{
-                  mt: 1,
-                  pt: 2.5,
-                  borderTop: '1px solid',
-                  borderColor: 'divider',
-                  borderRadius: '16px',
-                  bgcolor: theme.palette.mode === 'light' ? alpha(theme.palette.common.black, 0.02) : alpha(theme.palette.common.white, 0.03),
-                  px: 2,
-                  py: 2,
-                }}
-              >
-                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700, letterSpacing: '-0.01em', fontSize: '0.9375rem' }}>
-                  {txt('내 PDF 파일 목록', 'My PDF files')}
-                </Typography>
-                <Stack spacing={1}>
-                  {myContractPdfFiles.map((row) => (
-                    <Box key={`pdf-my-contract-${row.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <PictureAsPdfIcon fontSize="small" sx={{ color: 'error.main', opacity: 0.85 }} />
-                      <Link href={toPdfFileUrl(String(row.pdf_url || ''))} target="_blank" rel="noopener noreferrer" underline="hover">
-                        {String(row.title || `Contract ${row.id}`)}.pdf
-                      </Link>
-                    </Box>
-                  ))}
-                  {!loading && myContractPdfFiles.length === 0 && (
-                    <Typography variant="body2" color="text.secondary">
-                      {txt('생성된 PDF 파일이 없습니다.', 'No PDF files have been generated.')}
-                    </Typography>
-                  )}
-                </Stack>
-              </Box>
-            </Stack>
-          )}
-        </CardContent>
-      </Card>
+            </TableContainer>
+            {renderPagination(myContractsTotalPages, myContractsPage, setMyContractsPage)}
+            <Box sx={{ ...mvsBodyListTableSx, mt: 2.5, p: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700, letterSpacing: '-0.01em' }}>{t('employmentContractManagement.myPdfFiles')}</Typography>
+              <Stack spacing={1}>
+                {myContractPdfFiles.map((row) => (
+                  <Box key={`pdf-my-contract-${row.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <PictureAsPdfIcon fontSize="small" sx={{ color: 'error.main', opacity: 0.85 }} />
+                    <Link href={toPdfFileUrl(String(row.pdf_url || ''))} target="_blank" rel="noopener noreferrer" underline="hover">{String(row.title || `Contract ${row.id}`)}.pdf</Link>
+                  </Box>
+                ))}
+                {myContractPdfFiles.length === 0 && <Typography variant="body2" color="text.secondary">{t('employmentContractManagement.noPdfFiles')}</Typography>}
+              </Stack>
+            </Box>
+          </>
+        )}
+      </Box>
 
       <Dialog open={templateDialogOpen} onClose={() => setTemplateDialogOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>{editTemplate ? txt('템플릿 수정', 'Edit template') : txt('템플릿 생성', 'Create template')}</DialogTitle>
+        <DialogTitle>
+          {editTemplate ? txt('템플릿 상세', 'Template details') : txt('템플릿 생성', 'Create template')}
+        </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
@@ -1494,7 +1930,10 @@ const EmploymentContractManagement: React.FC = () => {
 
       <Dialog
         open={contractDetailOpen}
-        onClose={() => setContractDetailOpen(false)}
+        onClose={() => {
+          setContractDetailOpen(false);
+          resetDetailSignForm();
+        }}
         fullWidth
         maxWidth="md"
       >
@@ -1505,144 +1944,134 @@ const EmploymentContractManagement: React.FC = () => {
               {txt('계약 내용을 불러오는 중입니다...', 'Loading contract...')}
             </Typography>
           ) : selectedContractDetail ? (
-            <Stack spacing={1.25} sx={{ mt: 1 }}>
-              <Typography variant="body2">
-                <strong>{txt('제목:', 'Title:')}</strong> {String(selectedContractDetail.title || '-')}
-              </Typography>
-              <Typography variant="body2">
-                <strong>{txt('기간:', 'Period:')}</strong> {String(selectedContractDetail.start_date || '-')} ~{' '}
-                {String(selectedContractDetail.end_date || '-')}
-              </Typography>
-              <Typography variant="body2">
-                <strong>{txt('상태:', 'Status:')}</strong> {contractStatusLabel(String(selectedContractDetail.status || 'draft'))}
-              </Typography>
-              <Typography variant="body2">
-                <strong>{txt('연봉/급여:', 'Salary:')}</strong> {String(selectedContractDetail.salary ?? '-')}
-              </Typography>
-              <Typography variant="body2">
-                <strong>{txt('보너스:', 'Bonus:')}</strong>{' '}
-                {selectedContractDetail.bonus_type
-                  ? `${String(selectedContractDetail.bonus_type)} ${String(selectedContractDetail.bonus_value ?? '-')}`
-                  : '-'}
-              </Typography>
-              <Typography variant="body2">
-                <strong>{txt('근무일:', 'Working days:')}</strong> {String(selectedContractDetail.working_days || '-')}
-              </Typography>
-              <Typography variant="body2">
-                <strong>{txt('근무시간:', 'Working hours:')}</strong> {String(selectedContractDetail.working_hours || '-')}
-              </Typography>
-              <Typography variant="body2">
-                <strong>{txt('근무지:', 'Work location:')}</strong> {String(selectedContractDetail.work_location || '-')}
-              </Typography>
-              <Box sx={{ mt: 1.5 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  {txt('계약 본문', 'Contract body')}
-                </Typography>
-                <Box
-                  sx={{
-                    p: 1.5,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                    maxHeight: 300,
-                    overflowY: 'auto',
-                    bgcolor: 'background.paper'
-                  }}
-                  dangerouslySetInnerHTML={{
-                    __html: String(
-                      selectedContractDetail.rendered_content_html ||
-                        selectedContractDetail.template?.content_html ||
-                        `<p>${txt('등록된 계약 본문이 없습니다.', 'No contract body is registered.')}</p>`
-                    ),
-                  }}
-                />
-              </Box>
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  {txt('감사로그', 'Audit log')}
-                </Typography>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ mb: 1.5 }}>
-                  <FormControl size="small" sx={{ minWidth: 180 }}>
-                    <InputLabel>{txt('액션', 'Action')}</InputLabel>
-                    <Select
-                      value={contractAuditFilter.action}
-                      label={txt('액션', 'Action')}
-                      onChange={(e) => setContractAuditFilter((prev) => ({ ...prev, action: String(e.target.value) }))}
-                    >
-                      <MenuItem value="">{txt('전체', 'All')}</MenuItem>
-                      {contractAuditActionOptions.map((action) => (
-                        <MenuItem key={action} value={action}>{action}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <FormControl size="small" sx={{ minWidth: 180 }}>
-                    <InputLabel>{txt('행위자', 'Actor')}</InputLabel>
-                    <Select
-                      value={contractAuditFilter.actor}
-                      label={txt('행위자', 'Actor')}
-                      onChange={(e) => setContractAuditFilter((prev) => ({ ...prev, actor: String(e.target.value) }))}
-                    >
-                      <MenuItem value="">{txt('전체', 'All')}</MenuItem>
-                      {contractAuditActorOptions.map((actor) => (
-                        <MenuItem key={actor} value={actor}>{actor}</MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                  <TextField
-                    size="small"
-                    type="date"
-                    label={txt('시작일', 'Start date')}
-                    value={contractAuditFilter.startDate}
-                    onChange={(e) => setContractAuditFilter((prev) => ({ ...prev, startDate: e.target.value }))}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                  <TextField
-                    size="small"
-                    type="date"
-                    label={txt('종료일', 'End date')}
-                    value={contractAuditFilter.endDate}
-                    onChange={(e) => setContractAuditFilter((prev) => ({ ...prev, endDate: e.target.value }))}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Stack>
-                {contractAuditLoading ? (
-                  <Typography variant="body2" color="text.secondary">
-                    {txt('감사로그를 불러오는 중입니다...', 'Loading audit log...')}
+            <Stack spacing={2} sx={{ mt: 1 }}>
+              <Box
+                ref={contractDetailPdfRef}
+                sx={{
+                  p: 1.5,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1.5,
+                  bgcolor: 'background.paper',
+                }}
+              >
+                <Stack spacing={1.25}>
+                  <Typography variant="body2">
+                    <strong>{txt('제목:', 'Title:')}</strong> {String(selectedContractDetail.title || '-')}
                   </Typography>
-                ) : (
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow sx={employmentContractTableHeadRowSx}>
-                        <TableCell>{txt('일시', 'Time')}</TableCell>
-                        <TableCell>{txt('액션', 'Action')}</TableCell>
-                        <TableCell>{txt('행위자', 'Actor')}</TableCell>
-                        <TableCell>{txt('상세', 'Details')}</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {filteredContractAuditLogs.map((log) => (
-                        <TableRow key={log.id}>
-                          <TableCell>{String(log.created_at || '').replace('T', ' ').slice(0, 19)}</TableCell>
-                          <TableCell>{String(log.action || '-')}</TableCell>
-                          <TableCell>{String(log.actor?.username || log.actor_role || '-')}</TableCell>
-                          <TableCell>
-                            <Typography variant="caption" color="text.secondary">
-                              {JSON.stringify(log.details || {})}
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {filteredContractAuditLogs.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={4}>
-                            <Typography variant="body2" color="text.secondary">
-                              {txt('조건에 맞는 감사로그가 없습니다.', 'No audit entries match the filters.')}
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
+                  <Typography variant="body2">
+                    <strong>{txt('기간:', 'Period:')}</strong> {String(selectedContractDetail.start_date || '-')} ~{' '}
+                    {String(selectedContractDetail.end_date || '-')}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>{txt('상태:', 'Status:')}</strong>{' '}
+                    {contractStatusLabel(String(selectedContractDetail.status || 'draft'))}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>{txt('연봉/급여:', 'Salary:')}</strong> {String(selectedContractDetail.salary ?? '-')}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>{txt('보너스:', 'Bonus:')}</strong>{' '}
+                    {selectedContractDetail.bonus_type
+                      ? `${String(selectedContractDetail.bonus_type)} ${String(selectedContractDetail.bonus_value ?? '-')}`
+                      : '-'}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>{txt('근무일:', 'Working days:')}</strong> {String(selectedContractDetail.working_days || '-')}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>{txt('근무시간:', 'Working hours:')}</strong> {String(selectedContractDetail.working_hours || '-')}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>{txt('근무지:', 'Work location:')}</strong> {String(selectedContractDetail.work_location || '-')}
+                  </Typography>
+                  <Box sx={{ mt: 0.5 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                      {txt('계약 본문', 'Contract body')}
+                    </Typography>
+                    <Box
+                      sx={{
+                        p: 1.5,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        maxHeight: 300,
+                        overflowY: 'auto',
+                        bgcolor: '#FFFFFF',
+                      }}
+                      dangerouslySetInnerHTML={{
+                        __html: String(
+                          selectedContractDetail.rendered_content_html ||
+                            selectedContractDetail.template?.content_html ||
+                            `<p>${txt('등록된 계약 본문이 없습니다.', 'No contract body is registered.')}</p>`
+                        ),
+                      }}
+                    />
+                  </Box>
+                </Stack>
+              </Box>
+
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 1.5,
+                  border: '1px solid #C5CED9',
+                  bgcolor: '#F8FAFC',
+                }}
+              >
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
+                  <VerifiedUserIcon color="primary" fontSize="small" />
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    {txt('Aadhaar e-Verify', 'Aadhaar e-Verify')}
+                  </Typography>
+                </Stack>
+
+                {detailSignContext ? (
+                  <Stack spacing={1.5}>
+                    <Typography variant="body2" color="text.secondary">
+                      {txt(
+                        'Aadhaar 인증 또는 간편 서명으로 계약서에 전자서명할 수 있습니다.',
+                        'You can sign the contract with Aadhaar verification or quick sign.'
                       )}
-                    </TableBody>
-                  </Table>
+                    </Typography>
+                    <TextField
+                      size="small"
+                      label={txt('Aadhaar 마지막 4자리', 'Aadhaar last 4 digits')}
+                      value={detailSignForm.aadhaar_last4}
+                      onChange={(e) =>
+                        setDetailSignForm((prev) => ({
+                          ...prev,
+                          aadhaar_last4: e.target.value.replace(/\D/g, '').slice(0, 4),
+                        }))
+                      }
+                      inputProps={{ maxLength: 4 }}
+                    />
+                    <TextField
+                      size="small"
+                      label={txt('Aadhaar 인증 참조값', 'Aadhaar auth reference')}
+                      value={detailSignForm.aadhaar_auth_ref}
+                      onChange={(e) => setDetailSignForm((prev) => ({ ...prev, aadhaar_auth_ref: e.target.value }))}
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={detailSignForm.aadhaar_consent}
+                          onChange={(e) => setDetailSignForm((prev) => ({ ...prev, aadhaar_consent: e.target.checked }))}
+                        />
+                      }
+                      label={txt(
+                        'Aadhaar eSign 본인 인증 및 전자서명 처리에 동의합니다.',
+                        'I consent to Aadhaar eSign identity verification and electronic signature processing.'
+                      )}
+                    />
+                  </Stack>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    {txt(
+                      '관리자가 계약서를내면 여기에서 서명할 수 있습니다.',
+                      'You can sign here once HR sends the contract.'
+                    )}
+                  </Typography>
                 )}
               </Box>
             </Stack>
@@ -1652,8 +2081,46 @@ const EmploymentContractManagement: React.FC = () => {
             </Typography>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setContractDetailOpen(false)}>{txt('닫기', 'Close')}</Button>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+          <Button onClick={() => {
+            setContractDetailOpen(false);
+            resetDetailSignForm();
+          }}>
+            {txt('닫기', 'Close')}
+          </Button>
+          {selectedContractDetail && canDownloadContractPdf ? (
+            <Button
+              variant="outlined"
+              startIcon={contractDetailPdfSaving ? <CircularProgress size={16} /> : <PictureAsPdfIcon fontSize="small" />}
+              onClick={() => void handleDownloadContractPdf()}
+              disabled={contractDetailPdfSaving}
+              sx={mvsBodyOutlinedBtnSx}
+            >
+              {txt('PDF 저장', 'Save PDF')}
+            </Button>
+          ) : null}
+          {detailSignContext ? (
+            <>
+              <Button
+                variant="outlined"
+                startIcon={<DrawIcon fontSize="small" />}
+                onClick={() => void handleDetailInternalSign()}
+                sx={mvsBodyOutlinedBtnSx}
+              >
+                {txt('서명 완료', 'Complete sign')}
+              </Button>
+              <Button
+                variant="contained"
+                disableElevation
+                startIcon={<VerifiedUserIcon fontSize="small" />}
+                onClick={() => void handleDetailAadhaarSign()}
+                disabled={!detailAadhaarSignReady}
+                sx={mvsBodyPrimaryBtnSx}
+              >
+                {txt('Aadhaar e-Verify', 'Aadhaar e-Verify')}
+              </Button>
+            </>
+          ) : null}
         </DialogActions>
       </Dialog>
 

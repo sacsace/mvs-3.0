@@ -62,6 +62,7 @@ import {
   updateEmploymentContract,
   deleteEmploymentContract,
   signEmploymentContract,
+  sendEmploymentContractToEmployee,
   getMyEmploymentContracts,
   getEmploymentContractAuditLogs
 } from '../controllers/employmentContractController';
@@ -404,6 +405,11 @@ router.delete(
   '/employment-contracts/:id',
   restrictAuditToReadOnly,
   deleteEmploymentContract
+);
+router.post(
+  '/employment-contracts/:id/send',
+  restrictAuditToReadOnly,
+  sendEmploymentContractToEmployee
 );
 router.post(
   '/employment-contracts/:id/sign',

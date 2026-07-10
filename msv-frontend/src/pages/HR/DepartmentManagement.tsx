@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Button,
@@ -20,16 +20,54 @@ import {
   TextField,
   Typography,
   Alert,
-  Snackbar
+  Snackbar,
+  CircularProgress,
+  Pagination,
+  Tooltip,
 } from '@mui/material';
-import { alpha, useTheme } from '@mui/material/styles';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { alpha, useTheme, type SxProps, type Theme } from '@mui/material/styles';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  AccountTree as AccountTreeIcon,
+} from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { departmentService } from '../../services/api';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
-import { mvsTableHeadHighlightSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+  mvsTableScrollSx,
+  mvsBodyPaginationSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsOutlinedLabelProps,
+} from '../../theme/mvsLayout';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
+
+const DEPTS_PER_PAGE = 10;
+const DEPT_FORM_FIELD_SX = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
+
+const deptTableBodyRowSx: SxProps<Theme> = (theme) => {
+  const base = typeof mvsTableBodyRowSx === 'function' ? mvsTableBodyRowSx(theme) : mvsTableBodyRowSx;
+  const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
+  const hoverBg = theme.palette.mode === 'light' ? '#EFF6FF' : theme.palette.action.hover;
+  return {
+    ...(base as object),
+    '& .MuiTableRow-root:nth-of-type(odd)': { bgcolor: rowBg },
+    '& .MuiTableRow-root:nth-of-type(even)': { bgcolor: rowBg },
+    '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
+  };
+};
 
 type DeptRow = {
   id: number;
@@ -56,7 +94,7 @@ export const DepartmentManagementPanel: React.FC<{
   embedded = false,
   canCreate = true,
   canEdit = true,
-  canDelete = true
+  canDelete = true,
 }) => {
   const theme = useTheme();
   const { t } = useTranslation();
@@ -67,11 +105,24 @@ export const DepartmentManagementPanel: React.FC<{
   const [success, setSuccess] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
   const [form, setForm] = useState<DeptFormState>({
     name: '',
     sort_order: 0,
-    is_active: true
+    is_active: true,
   });
+
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    py: { xs: 6, sm: 8 },
+    px: 3,
+    gap: 1.5,
+  } as const;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -96,6 +147,31 @@ export const DepartmentManagementPanel: React.FC<{
     void load();
   }, [load]);
 
+  const deptStats = useMemo(
+    () => ({
+      total: rows.length,
+      active: rows.filter((row) => row.is_active !== false).length,
+      inactive: rows.filter((row) => row.is_active === false).length,
+    }),
+    [rows]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / DEPTS_PER_PAGE));
+  const paginatedRows = useMemo(
+    () => rows.slice((page - 1) * DEPTS_PER_PAGE, page * DEPTS_PER_PAGE),
+    [rows, page]
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [rows.length]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
   const openCreate = () => {
     if (!canCreate) return;
     setEditingId(null);
@@ -109,7 +185,7 @@ export const DepartmentManagementPanel: React.FC<{
     setForm({
       name: row.name,
       sort_order: row.sort_order ?? 0,
-      is_active: row.is_active !== false
+      is_active: row.is_active !== false,
     });
     setDialogOpen(true);
   };
@@ -128,14 +204,14 @@ export const DepartmentManagementPanel: React.FC<{
         const res = await departmentService.update(editingId, {
           name,
           sort_order: form.sort_order,
-          is_active: form.is_active
+          is_active: form.is_active,
         });
         if (!res.success) throw new Error();
       } else {
         const res = await departmentService.create({
           name,
           sort_order: form.sort_order,
-          is_active: form.is_active
+          is_active: form.is_active,
         });
         if (!res.success) throw new Error();
       }
@@ -168,168 +244,219 @@ export const DepartmentManagementPanel: React.FC<{
         title: t('common.confirm'),
         confirmColor: 'error',
         confirmText: t('common.delete'),
-        cancelText: t('common.cancel')
+        cancelText: t('common.cancel'),
       }
     );
   };
 
-  const outlinedFieldSx = {
-    '& .MuiOutlinedInput-root': {
-      borderRadius: '12px',
-      bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.12 : 0.07),
-      transition: theme.transitions.create(['background-color', 'box-shadow'], { duration: 150 }),
-      '&:hover': { bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.16 : 0.1) },
-      '&.Mui-focused': {
-        bgcolor: theme.palette.background.paper,
-        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}`,
-      },
-      '& fieldset': { borderColor: alpha(theme.palette.divider, 0.9) },
-    },
-  };
+  const content = (
+    <>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
+          gap: 2.5,
+          mb: 3,
+        }}
+      >
+        {[
+          { key: 'total', label: t('departmentManagement.stats.total'), value: deptStats.total },
+          { key: 'active', label: t('departmentManagement.stats.active'), value: deptStats.active },
+          { key: 'inactive', label: t('departmentManagement.stats.inactive'), value: deptStats.inactive },
+        ].map((item) => (
+          <Card key={item.key} elevation={0} sx={mvsKpiCardSx}>
+            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                {item.label}
+              </Typography>
+              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                {item.value}
+              </Typography>
+            </CardContent>
+          </Card>
+        ))}
+      </Box>
 
-  return (
-    <Box
-      sx={
-        embedded
-          ? { width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }
-          : {
-              p: 0,
-              backgroundColor: 'transparent',
-              borderRadius: 0,
-              minHeight: '100%',
-              width: '100%',
-              maxWidth: '100%',
-              boxSizing: 'border-box',
-            }
-      }
-    >
-      <MvsPageHeader
-        title={t('departmentManagement.title')}
-        mb={2.5}
-        actions={
+      <Card elevation={0} sx={mvsBodyCardSx}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1.5,
+            px: { xs: 2, sm: 2.5 },
+            py: 1.5,
+            bgcolor: '#FFFFFF',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+            <AccountTreeIcon sx={{ fontSize: 20, color: 'primary.main', flexShrink: 0 }} />
+            <Typography
+              component="h2"
+              sx={{
+                fontSize: '0.9375rem',
+                fontWeight: 700,
+                letterSpacing: '-0.01em',
+                color: 'text.primary',
+              }}
+            >
+              {t('departmentManagement.title')}
+            </Typography>
+          </Box>
           <Button
             variant="contained"
             disableElevation
-            startIcon={<AddIcon />}
+            size="small"
+            startIcon={<AddIcon fontSize="small" />}
             onClick={openCreate}
             disabled={!canCreate}
-            sx={{
-              borderRadius: '12px',
-              textTransform: 'none',
-              fontWeight: 600,
-              px: 2.25,
-              flexShrink: 0,
-            }}
+            sx={mvsBodyPrimaryBtnSx}
           >
             {t('departmentManagement.add')}
           </Button>
-        }
-      />
+        </Box>
+      </Card>
 
-      <Card
-        elevation={0}
-        sx={{
-          borderRadius: 0,
-          border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'dark' ? 0.35 : 0.1)}`,
-          boxShadow: '0 4px 22px rgba(15, 23, 42, 0.06)',
-          overflow: 'hidden',
-          maxWidth: '100%',
-        }}
-      >
-        <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
-          <TableContainer sx={{ overflow: 'auto', pr: { xs: 1, sm: 1.5 } }}>
-            <Table
-              size="medium"
-              sx={{
-                '& .MuiTableBody-root .MuiTableRow:last-of-type .MuiTableCell-root': {
-                  borderBottom: 'none',
-                },
-                '& .MuiTableCell-root': {
-                  py: 1.75,
-                  px: 2,
-                  fontSize: '0.875rem',
-                  borderColor: alpha(theme.palette.divider, 0.75),
-                },
-              }}
+      <Box sx={mvsBodyListZoneSx}>
+        {loading ? (
+          <Box sx={listStateBoxSx}>
+            <CircularProgress size={36} />
+            <Typography variant="body2" color="text.secondary">
+              {t('departmentManagement.empty.loading')}
+            </Typography>
+          </Box>
+        ) : rows.length === 0 ? (
+          <Box sx={listStateBoxSx}>
+            <AccountTreeIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.3 }} />
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+              {t('departmentManagement.empty.noItems')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
+              {t('departmentManagement.empty.noItemsHint')}
+            </Typography>
+            <Button
+              variant="contained"
+              disableElevation
+              size="small"
+              startIcon={<AddIcon fontSize="small" />}
+              onClick={openCreate}
+              disabled={!canCreate}
+              sx={mvsBodyPrimaryBtnSx}
             >
-              <TableHead sx={mvsTableHeadHighlightSx}>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 600, letterSpacing: '-0.01em' }}>
-                    {t('departmentManagement.name')}
-                  </TableCell>
-                  <TableCell width={108} align="right" sx={{ fontWeight: 600, letterSpacing: '-0.01em' }}>
-                    {t('departmentManagement.sortOrder')}
-                  </TableCell>
-                  <TableCell width={112} sx={{ fontWeight: 600, letterSpacing: '-0.01em' }}>
-                    {t('departmentManagement.active')}
-                  </TableCell>
-                  <TableCell width={128} align="right" sx={{ pr: { xs: 1, sm: 2 } }} />
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading ? (
+              {t('departmentManagement.add')}
+            </Button>
+          </Box>
+        ) : (
+          <>
+            <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+              <Table
+                size="small"
+                sx={{
+                  tableLayout: 'fixed',
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  bgcolor: 'transparent',
+                  '& .MuiTableCell-root': {
+                    borderLeft: 'none',
+                    borderRight: 'none',
+                    borderTop: 'none',
+                  },
+                }}
+              >
+                <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
-                    <TableCell colSpan={4}>
-                      <Typography variant="body2" color="text.secondary" sx={{ py: 3, px: 1 }}>
-                        …
-                      </Typography>
+                    <TableCell sx={{ overflow: 'hidden' }}>{t('departmentManagement.name')}</TableCell>
+                    <TableCell align="right" sx={{ width: 96, overflow: 'hidden' }}>
+                      {t('departmentManagement.sortOrder')}
                     </TableCell>
+                    <TableCell sx={{ width: 112, overflow: 'hidden' }}>{t('departmentManagement.active')}</TableCell>
+                    <TableCell align="center" sx={{ width: 96 }} />
                   </TableRow>
-                ) : rows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4}>
-                      <Typography variant="body2" color="text.secondary" sx={{ py: 3, px: 1 }}>
-                        {t('departmentManagement.empty')}
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  rows.map((r) => (
-                    <TableRow key={r.id} hover sx={{ '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.04) } }}>
-                      <TableCell sx={{ fontWeight: 600, letterSpacing: '-0.01em', color: 'text.primary' }}>{r.name}</TableCell>
+                </TableHead>
+                <TableBody sx={deptTableBodyRowSx}>
+                  {paginatedRows.map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell sx={{ overflow: 'hidden' }}>
+                        <Typography variant="body2" fontWeight={600} noWrap title={row.name}>
+                          {row.name}
+                        </Typography>
+                      </TableCell>
                       <TableCell align="right" sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
-                        {r.sort_order}
+                        {row.sort_order}
                       </TableCell>
                       <TableCell sx={{ color: 'text.secondary' }}>
-                        {r.is_active ? t('departmentManagement.active') : t('departmentManagement.inactive')}
+                        {row.is_active ? t('departmentManagement.active') : t('departmentManagement.inactive')}
                       </TableCell>
-                      <TableCell align="right" sx={{ pr: { xs: 0.5, sm: 1 } }}>
-                        <IconButton
-                          size="small"
-                          onClick={() => openEdit(r)}
-                          aria-label="edit"
-                          disabled={!canEdit}
-                          sx={{
-                            borderRadius: '10px',
-                            mr: 0.5,
-                            color: 'text.secondary',
-                            '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.08), color: 'primary.main' },
-                          }}
-                        >
-                          <EditIcon sx={{ fontSize: '1.125rem' }} />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          onClick={() => void handleDelete(r)}
-                          aria-label="delete"
-                          disabled={!canDelete}
-                          sx={{
-                            borderRadius: '10px',
-                            color: 'text.secondary',
-                            '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.08), color: 'error.main' },
-                          }}
-                        >
-                          <DeleteIcon sx={{ fontSize: '1.125rem' }} />
-                        </IconButton>
+                      <TableCell align="center">
+                        <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                          <Tooltip title={canEdit ? t('departmentManagement.edit') : ''}>
+                            <span style={{ display: 'inline-flex' }}>
+                              <IconButton
+                                size="small"
+                                onClick={() => openEdit(row)}
+                                aria-label={t('departmentManagement.edit')}
+                                disabled={!canEdit}
+                                sx={{
+                                  color: 'text.secondary',
+                                  borderRadius: '10px',
+                                  '&:hover': {
+                                    color: 'primary.main',
+                                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                                  },
+                                }}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                          <Tooltip title={canDelete ? t('departmentManagement.delete') : ''}>
+                            <span style={{ display: 'inline-flex' }}>
+                              <IconButton
+                                size="small"
+                                onClick={() => void handleDelete(row)}
+                                aria-label={t('departmentManagement.delete')}
+                                disabled={!canDelete}
+                                sx={{
+                                  color: alpha(theme.palette.text.secondary, theme.palette.mode === 'light' ? 0.72 : 1),
+                                  borderRadius: '10px',
+                                  transition: 'color 0.15s ease, background-color 0.15s ease',
+                                  '&:hover': {
+                                    color: 'error.main',
+                                    bgcolor: alpha(theme.palette.error.main, 0.12),
+                                  },
+                                }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </Box>
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            <Box sx={mvsBodyPaginationSx}>
+              <Pagination
+                count={totalPages}
+                page={page}
+                onChange={(_, value) => setPage(value)}
+                color="primary"
+                shape="rounded"
+                sx={{
+                  '& .MuiPaginationItem-root': {
+                    borderRadius: '10px',
+                    fontWeight: 500,
+                  },
+                }}
+              />
+            </Box>
+          </>
+        )}
+      </Box>
 
       <Dialog
         open={dialogOpen}
@@ -341,28 +468,33 @@ export const DepartmentManagementPanel: React.FC<{
         <DialogTitle sx={{ pt: 2.5, px: 3, pb: 1, fontSize: '1.125rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
           {editingId != null ? t('departmentManagement.edit') : t('departmentManagement.add')}
         </DialogTitle>
-        <DialogContent sx={{ px: 3, pb: 1 }}>
+        <DialogContent sx={{ px: 3, pb: 1, ...DEPT_FORM_FIELD_SX }}>
           <TextField
             autoFocus
             margin="dense"
             label={t('departmentManagement.name')}
             fullWidth
+            size="small"
+            {...mvsOutlinedLabelProps}
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            sx={{ mb: 2.5, mt: 0.5, ...outlinedFieldSx }}
+            sx={{ mb: 2.5, mt: 0.5 }}
           />
           <TextField
             margin="dense"
             type="number"
             label={t('departmentManagement.sortOrder')}
             fullWidth
+            size="small"
+            {...mvsOutlinedLabelProps}
             value={form.sort_order}
             onChange={(e) => setForm((f) => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))}
-            sx={{ mb: 2, ...outlinedFieldSx }}
+            sx={{ mb: 2 }}
           />
           <FormControlLabel
             control={
               <Switch
+                size="small"
                 checked={form.is_active}
                 onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))}
               />
@@ -372,17 +504,16 @@ export const DepartmentManagementPanel: React.FC<{
           />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
-          <Button onClick={() => setDialogOpen(false)} sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}>
+          <Button onClick={() => setDialogOpen(false)} sx={mvsBodyOutlinedBtnSx}>
             {t('departmentManagement.cancel')}
           </Button>
           <Button
             variant="contained"
             disableElevation
+            size="small"
             onClick={() => void handleSave()}
-            disabled={
-              (editingId != null && !canEdit) || (editingId == null && !canCreate)
-            }
-            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+            disabled={(editingId != null && !canEdit) || (editingId == null && !canCreate)}
+            sx={mvsBodyPrimaryBtnSx}
           >
             {t('departmentManagement.save')}
           </Button>
@@ -410,6 +541,21 @@ export const DepartmentManagementPanel: React.FC<{
         onConfirm={handleConfirm}
         onCancel={handleCancel}
       />
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <Box sx={{ width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+        {content}
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={mvsPageRootSx}>
+      <MvsPageHeader title={t('departmentManagement.title')} description={t('departmentManagement.description')} />
+      {content}
     </Box>
   );
 };

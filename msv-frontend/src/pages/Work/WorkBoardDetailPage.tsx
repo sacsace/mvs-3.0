@@ -54,7 +54,7 @@ import {
   useSensors
 } from '@dnd-kit/core';
 import { restrictToWindowEdges, snapCenterToCursor } from '@dnd-kit/modifiers';
-import { api, workBoardService } from '../../services/api';
+import { workBoardService } from '../../services/api';
 import { useMenuStore, useStore } from '../../store';
 import { filterActiveCompanyUsers, useReferenceDataStore } from '../../store/referenceDataStore';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
@@ -350,40 +350,6 @@ const cardDetailFieldOutlinelessRootSx = {
   },
 } as const;
 
-/** 흰 패널 위 — 연한 회색 필드 */
-const cardDetailFieldTintSx = {
-  '& .MuiOutlinedInput-root': {
-    ...cardDetailFieldOutlinelessRootSx,
-    bgcolor: '#F0F4F8',
-    '&:hover': { bgcolor: '#E8EDF3' },
-    '&.Mui-focused': {
-      bgcolor: '#FFFFFF',
-      boxShadow: '0 0 0 2px',
-      boxShadowColor: 'primary.main',
-    },
-    '&.Mui-disabled': { bgcolor: '#EEF2F6' },
-  },
-  '& .MuiInputBase-input': { fontSize: '0.875rem' },
-} as const;
-
-/** 회색 패널 위 — 흰 필드 */
-const cardDetailFieldWhiteSx = {
-  '& .MuiOutlinedInput-root': {
-    ...cardDetailFieldOutlinelessRootSx,
-    bgcolor: '#FFFFFF',
-    height: 40,
-    '&:hover': { bgcolor: '#F8FAFC' },
-    '&.Mui-focused': {
-      bgcolor: '#FFFFFF',
-      boxShadow: '0 0 0 2px',
-      boxShadowColor: 'primary.main',
-    },
-    '&.Mui-disabled': { bgcolor: '#F1F5F9' },
-  },
-  '& .MuiInputBase-input': { fontSize: '0.875rem' },
-  '& .MuiSelect-select': { py: '10px' },
-} as const;
-
 const cardDetailInputSx = {
   '& .MuiOutlinedInput-root': {
     borderRadius: KANBAN_CONTROL_RADIUS,
@@ -395,17 +361,6 @@ const cardDetailInputSx = {
   '& .MuiInputBase-input': { fontSize: '0.875rem' },
 } as const;
 
-const cardDetailOutlinedTintSx = {
-  ...cardDetailInputSx,
-  '& .MuiOutlinedInput-root': {
-    ...(cardDetailInputSx['& .MuiOutlinedInput-root'] as Record<string, unknown>),
-    bgcolor: '#F0F4F8',
-    '&:hover': { bgcolor: '#E8EDF3' },
-    '&.Mui-focused': { bgcolor: '#FFFFFF' },
-    '&.Mui-disabled': { bgcolor: '#EEF2F6' },
-  },
-} as const;
-
 const cardDetailOutlinedWhiteSx = {
   ...cardDetailInputSx,
   '& .MuiOutlinedInput-root': {
@@ -415,15 +370,6 @@ const cardDetailOutlinedWhiteSx = {
     '&:hover': { bgcolor: '#F8FAFC' },
     '&.Mui-focused': { bgcolor: '#FFFFFF' },
     '&.Mui-disabled': { bgcolor: '#F1F5F9' },
-  },
-  '& .MuiSelect-select': { py: '10px' },
-} as const;
-
-const cardDetailSelectSx = {
-  ...cardDetailInputSx,
-  '& .MuiOutlinedInput-root': {
-    ...(cardDetailInputSx['& .MuiOutlinedInput-root'] as Record<string, unknown>),
-    height: 40,
   },
   '& .MuiSelect-select': { py: '10px' },
 } as const;

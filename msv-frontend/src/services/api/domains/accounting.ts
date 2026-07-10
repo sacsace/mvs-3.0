@@ -1,4 +1,4 @@
-import { api, API_BASE_URL, getAuthTokenFromStorage } from '../client';
+import { api } from '../client';
 
 export const accountingService = {
   // ?�보?�스 목록 조회
@@ -382,7 +382,342 @@ export const accountingService = {
       console.error('?�산 ??�� ?�류:', error);
       throw error;
     }
-  }
+  },
+
+  // AI 자동 전표 목록
+  getAutoVouchers: async (params?: { status?: string; sourceDocType?: string; q?: string; company_id?: number }) => {
+    try {
+      const response = await api.get('/accounting/auto-vouchers', { params });
+      return response.data;
+    } catch (error) {
+      console.error('AI 자동 전표 목록 조회 오류:', error);
+      throw error;
+    }
+  },
+
+  // AI 자동 전표 상세
+  getAutoVoucher: async (id: number, companyId?: number) => {
+    try {
+      const response = await api.get(`/accounting/auto-vouchers/${id}`, {
+        params: companyId ? { company_id: companyId } : undefined,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('AI 자동 전표 상세 조회 오류:', error);
+      throw error;
+    }
+  },
+
+  // AI 자동 전표 업로드 + 초안 생성
+  uploadAutoVoucher: async (file: File, sourceDocType: string, companyId?: number) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('sourceDocType', sourceDocType);
+      const response = await api.post('/accounting/auto-vouchers/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        params: companyId ? { company_id: companyId } : undefined,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('AI 자동 전표 업로드 오류:', error);
+      throw error;
+    }
+  },
+
+  // AI 자동 전표 수정
+  updateAutoVoucher: async (id: number, data: any, companyId?: number) => {
+    try {
+      const response = await api.put(`/accounting/auto-vouchers/${id}`, data, {
+        params: companyId ? { company_id: companyId } : undefined,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('AI 자동 전표 수정 오류:', error);
+      throw error;
+    }
+  },
+
+  // AI 자동 전표 승인
+  approveAutoVoucher: async (id: number, companyId?: number) => {
+    try {
+      const response = await api.post(`/accounting/auto-vouchers/${id}/approve`, {}, {
+        params: companyId ? { company_id: companyId } : undefined,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('AI 자동 전표 승인 오류:', error);
+      throw error;
+    }
+  },
+
+  // AI 자동 전표 Post
+  postAutoVoucher: async (id: number, companyId?: number) => {
+    try {
+      const response = await api.post(`/accounting/auto-vouchers/${id}/post`, {}, {
+        params: companyId ? { company_id: companyId } : undefined,
+      });
+      return response.data;
+    } catch (error) {
+      console.error('AI 자동 전표 Post 오류:', error);
+      throw error;
+    }
+  },
+
+  // AI 자동 전표 반려
+  rejectAutoVoucher: async (id: number, reason: string, companyId?: number) => {
+    try {
+      const response = await api.post(
+        `/accounting/auto-vouchers/${id}/reject`,
+        { reason },
+        { params: companyId ? { company_id: companyId } : undefined }
+      );
+      return response.data;
+    } catch (error) {
+      console.error('AI 자동 전표 반려 오류:', error);
+      throw error;
+    }
+  },
+
+  // AI 자동 전표 규칙 목록
+  getAutoVoucherRules: async () => {
+    try {
+      const response = await api.get('/accounting/auto-voucher-rules');
+      return response.data;
+    } catch (error) {
+      console.error('AI 자동 전표 규칙 조회 오류:', error);
+      throw error;
+    }
+  },
+
+  // AI 자동 전표 규칙 저장
+  upsertAutoVoucherRule: async (data: any) => {
+    try {
+      const response = await api.post('/accounting/auto-voucher-rules', data);
+      return response.data;
+    } catch (error) {
+      console.error('AI 자동 전표 규칙 저장 오류:', error);
+      throw error;
+    }
+  },
+
+  getGlAccounts: async (params?: { tree?: boolean; ledgerOnly?: boolean; company_id?: number }) => {
+    const response = await api.get('/accounting/gl/accounts', {
+      params: {
+        tree: params?.tree ? 'true' : undefined,
+        ledgerOnly: params?.ledgerOnly ? 'true' : undefined,
+        company_id: params?.company_id,
+      },
+    });
+    return response.data;
+  },
+
+  seedGlAccounts: async (companyId?: number) => {
+    const response = await api.post('/accounting/gl/accounts/seed-defaults', {}, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  createGlAccount: async (data: any, companyId?: number) => {
+    const response = await api.post('/accounting/gl/accounts', data, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  updateGlAccount: async (id: number, data: any, companyId?: number) => {
+    const response = await api.put(`/accounting/gl/accounts/${id}`, data, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  deleteGlAccount: async (id: number, companyId?: number) => {
+    const response = await api.delete(`/accounting/gl/accounts/${id}`, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  getGlVouchers: async (params?: { status?: string; from?: string; to?: string; company_id?: number }) => {
+    const response = await api.get('/accounting/gl/vouchers', { params });
+    return response.data;
+  },
+
+  getGlVoucher: async (id: number, companyId?: number) => {
+    const response = await api.get(`/accounting/gl/vouchers/${id}`, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  createGlVoucher: async (data: any, companyId?: number) => {
+    const response = await api.post('/accounting/gl/vouchers', data, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  postGlVoucher: async (id: number, companyId?: number) => {
+    const response = await api.post(`/accounting/gl/vouchers/${id}/post`, {}, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  getAccountLedger: async (params: { accountId: number; from?: string; to?: string; company_id?: number }) => {
+    const response = await api.get('/accounting/gl/ledger', { params });
+    return response.data;
+  },
+
+  getTrialBalance: async (params?: { from?: string; to?: string; company_id?: number }) => {
+    const response = await api.get('/accounting/gl/trial-balance', { params });
+    return response.data;
+  },
+
+  getProfitAndLoss: async (params?: { from?: string; to?: string; company_id?: number }) => {
+    const response = await api.get('/accounting/gl/profit-and-loss', { params });
+    return response.data;
+  },
+
+  // ── 직관적 전표 입력 마스터 API ──
+  seedAccountingMasters: async (companyId?: number) => {
+    const response = await api.post('/accounting/masters/seed', {}, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  getVoucherTypes: async (companyId?: number) => {
+    const response = await api.get('/accounting/voucher-types', {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  getTransactionItems: async (params?: { search?: string; company_id?: number }) => {
+    const response = await api.get('/accounting/transaction-items', { params });
+    return response.data;
+  },
+
+  getGstCodes: async (params?: { voucherDate?: string; company_id?: number }) => {
+    const response = await api.get('/accounting/gst-codes', { params });
+    return response.data;
+  },
+
+  getTdsCodes: async (companyId?: number) => {
+    const response = await api.get('/accounting/tds-codes', {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  getBankAccounts: async (companyId?: number) => {
+    const response = await api.get('/accounting/bank-accounts', {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  getFinancialYears: async (companyId?: number) => {
+    const response = await api.get('/accounting/financial-years', {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  searchAccountingParties: async (params?: { search?: string; company_id?: number }) => {
+    const response = await api.get('/accounting/parties', { params });
+    return response.data;
+  },
+
+  searchGlAccounts: async (params?: { search?: string; company_id?: number }) => {
+    const response = await api.get('/accounting/accounts/search', { params });
+    return response.data;
+  },
+
+  previewVoucher: async (data: any, companyId?: number) => {
+    const response = await api.post('/accounting/vouchers/preview', data, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  validateVoucherEntry: async (data: any, companyId?: number) => {
+    const response = await api.post('/accounting/vouchers/validate', data, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  createEnhancedVoucher: async (data: any, companyId?: number) => {
+    const response = await api.post('/accounting/vouchers/enhanced', data, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  getNextVoucherNumber: async (params: { voucherTypeId: number; voucherDate: string; company_id?: number }) => {
+    const response = await api.get('/accounting/vouchers/next-number', { params });
+    return response.data;
+  },
+
+  submitVoucherEntry: async (id: number, companyId?: number) => {
+    const response = await api.post(`/accounting/vouchers/${id}/submit`, {}, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  approveVoucherEntry: async (id: number, companyId?: number) => {
+    const response = await api.post(`/accounting/vouchers/${id}/approve`, {}, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  rejectVoucherEntry: async (id: number, reason: string, companyId?: number) => {
+    const response = await api.post(`/accounting/vouchers/${id}/reject`, { reason }, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  upsertVoucherType: async (data: any, companyId?: number) => {
+    const response = await api.post('/accounting/voucher-types', data, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  upsertTransactionItem: async (data: any, companyId?: number) => {
+    const response = await api.post('/accounting/transaction-items', data, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  upsertGstCode: async (data: any, companyId?: number) => {
+    const response = await api.post('/accounting/gst-codes', data, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  upsertTdsCode: async (data: any, companyId?: number) => {
+    const response = await api.post('/accounting/tds-codes', data, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  upsertBankAccount: async (data: any, companyId?: number) => {
+    const response = await api.post('/accounting/bank-accounts', data, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
 };
 
 // ?�사 관�?API ?�비??

@@ -189,7 +189,7 @@ const CostAnalysis: React.FC = () => {
     } catch (error) {
       console.error('AI 인사이트 생성 오류:', error);
       setError(
-        language === 'en' ? 'Failed to generate AI insights.' : 'AI 인사이트 생성에 실패했습니다.'
+        language === 'en' ? 'Failed to generate insights.' : '인사이트 생성에 실패했습니다.'
       );
     } finally {
       setAiProcessing(false);
@@ -221,7 +221,7 @@ const CostAnalysis: React.FC = () => {
     return (
       <Box sx={{ py: 8, px: 0, textAlign: 'center' }}>
         <CircularProgress />
-        <Typography sx={{ mt: 2, fontSize: '0.9375rem' }}>{txt('AI 분석 중...', 'Analyzing...')}</Typography>
+        <Typography sx={{ mt: 2, fontSize: '0.9375rem' }}>{txt('분석 중...', 'Analyzing...')}</Typography>
       </Box>
     );
   }
@@ -253,10 +253,10 @@ const CostAnalysis: React.FC = () => {
   return (
     <Box sx={{ ...mvsPageRootSx }}>
       <MvsPageHeader
-        title={txt('AI 비용 분석', 'AI Cost Analysis')}
+        title={txt('비용 분석', 'Cost Analysis')}
         description={txt(
-          '최근 비용 추이와 카테고리별 지출을 분석하고, AI가 절감 포인트와 향후 비용을 예측합니다.',
-          'Analyzes recent spending by category and uses AI to suggest savings and forecast costs.'
+          '최근 비용 추이와 카테고리별 지출을 분석하고, 절감 포인트와 향후 비용을 예측합니다.',
+          'Analyzes recent spending by category and suggests savings and cost forecasts.'
         )}
       />
 
@@ -327,7 +327,7 @@ const CostAnalysis: React.FC = () => {
                 textTransform: 'none',
               }}
             >
-              {aiProcessing ? txt('AI 분석 중...', 'Analyzing...') : txt('AI 인사이트 생성', 'Generate AI insights')}
+              {aiProcessing ? txt('분석 중...', 'Analyzing...') : txt('인사이트 생성', 'Generate insights')}
             </Button>
             <Button
               variant="outlined"
@@ -385,7 +385,7 @@ const CostAnalysis: React.FC = () => {
           }}
         >
           <Tab label={txt('개요', 'Overview')} />
-          <Tab label={txt('AI 인사이트', 'AI insights')} />
+          <Tab label={txt('인사이트', 'Insights')} />
           <Tab label={txt('예측 분석', 'Forecast')} />
           <Tab label={txt('벤치마킹', 'Benchmarks')} />
         </Tabs>

@@ -1,4 +1,4 @@
-import { api, API_BASE_URL, getAuthTokenFromStorage } from '../client';
+import { api, getAuthTokenFromStorage } from '../client';
 
 export const systemSettingsService = {
   // ?�스???�정 조회

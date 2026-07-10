@@ -9,7 +9,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Chip,
   Dialog,
   DialogTitle,
@@ -17,6 +16,8 @@ import {
   DialogActions,
   TextField,
   MenuItem,
+  Menu,
+  ListItemIcon,
   Alert,
   CircularProgress,
   Accordion,
@@ -28,10 +29,30 @@ import {
   Tab,
   Card,
   CardContent,
-  TableSortLabel
+  TableSortLabel,
+  Pagination,
+  useMediaQuery,
+  InputAdornment,
+  Tooltip,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx, mvsPageDescriptionSx, mvsPageTitleSx, mvsOutlinedLabelProps } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsOutlinedLabelProps,
+  mvsKpiCardSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+  mvsTableScrollSx,
+  mvsBodyPaginationSx,
+  mvsBodySectionHeaderSx,
+} from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -40,7 +61,11 @@ import {
   ExpandMore as ExpandMoreIcon,
   Download as DownloadIcon,
   FileDownload as FileDownloadIcon,
-  Upload as UploadIcon
+  Upload as UploadIcon,
+  Search as SearchIcon,
+  RestartAlt as ResetIcon,
+  MoreHoriz as MoreHorizIcon,
+  ArrowBack as ArrowBackIcon,
 } from '@mui/icons-material';
 import { useSearchParams } from 'react-router-dom';
 import { useStore, useMenuStore } from '../../store';
@@ -50,11 +75,35 @@ import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useTranslation } from 'react-i18next';
-import { alpha, useTheme } from '@mui/material/styles';
-import type { Theme } from '@mui/material/styles';
+import { alpha, useTheme, type SxProps, type Theme } from '@mui/material/styles';
 import { DepartmentManagementPanel } from '../HR/DepartmentManagement';
 
 const USER_MGMT_MENU_ROUTES = ['/hr/users', '/users'];
+const USERS_PER_PAGE = 10;
+
+const USER_FILTER_OUTLINED = mvsOutlinedLabelProps;
+const userFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
+const userFormFieldSx = userFilterFieldSx;
+
+const userTableBodyRowSx: SxProps<Theme> = (theme) => {
+  const base = typeof mvsTableBodyRowSx === 'function' ? mvsTableBodyRowSx(theme) : mvsTableBodyRowSx;
+  const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
+  const hoverBg = theme.palette.mode === 'light' ? '#EFF6FF' : theme.palette.action.hover;
+  return {
+    ...(base as object),
+    '& .MuiTableRow-root:nth-of-type(odd)': { bgcolor: rowBg },
+    '& .MuiTableRow-root:nth-of-type(even)': { bgcolor: rowBg },
+    '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
+    '& .MuiTableCell-body.MuiTableCell-paddingCheckbox': {
+      width: 56,
+      minWidth: 56,
+      maxWidth: 56,
+      pl: { xs: 1.5, sm: 2 },
+      pr: 1,
+      boxSizing: 'border-box',
+    },
+  };
+};
 
 interface User {
   id: number;
@@ -80,6 +129,7 @@ interface User {
   hire_date?: string;
   employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern' | 'daily';
   salary?: number;
+  ot_eligible?: boolean;
   bank_name?: string;
   bank_account?: string;
   bank_ifsc?: string;
@@ -151,32 +201,40 @@ function formatPhoneDisplay(digitsOnly: string): string {
   return `${d.slice(0, 5)} ${d.slice(5)}`;
 }
 
-/** 생성/수정 폼 아코디언 — 구분선 최소화 */
+/** 생성/수정 폼 아코디언 — MVS Body 리스트 영역 내 섹션 카드 */
 function getAccordionFormSx(_theme: Theme) {
   return {
     '&:before': { display: 'none' },
     boxShadow: 'none',
-    border: 'none',
-    borderRadius: 0,
-    mb: 0,
-    bgcolor: 'transparent',
+    border: '1px solid #E8EDF3',
+    borderRadius: '12px',
+    mb: 2,
+    bgcolor: '#FFFFFF',
     overflow: 'visible' as const,
+    '&:last-of-type': { mb: 0 },
     '& .MuiAccordionSummary-root': {
-      minHeight: 40,
+      minHeight: 44,
       py: 0,
-      px: 0,
-      bgcolor: 'transparent',
-      borderBottom: 'none',
-      '&.Mui-expanded': { minHeight: 40 },
+      px: 2,
+      bgcolor: '#F8FAFC',
+      borderBottom: '1px solid #E8EDF3',
+      borderRadius: '12px 12px 0 0',
+      '&.Mui-expanded': {
+        minHeight: 44,
+        borderBottom: '1px solid #E8EDF3',
+      },
     },
-    '& .MuiAccordionSummary-content': { my: 0.5 },
+    '& .MuiAccordionSummary-content': { my: 1 },
     '& .MuiAccordionDetails-root': {
       pt: 2,
-      pb: 3,
-      px: 0,
+      pb: 2.5,
+      px: 2,
+    },
+    '&.MuiAccordion-root.Mui-expanded': {
+      borderRadius: '12px',
     },
     '&.MuiAccordion-root:not(:first-of-type)': {
-      mt: 3,
+      mt: 0,
     },
   };
 }
@@ -220,39 +278,17 @@ const highlightBankFieldsSx = {
   boxSizing: 'border-box' as const,
 };
 
-/** 폼 내 TextField·Select 공통 — 흰 배경·40px·#C5CED9 테두리 */
-function getFormControlSurfaceSx(theme: Theme) {
-  return {
-    '& .MuiOutlinedInput-root': {
-      borderRadius: '12px',
-      bgcolor: 'background.paper',
-      transition: theme.transitions.create(['border-color', 'box-shadow'], { duration: 150 }),
-      '&:not(.MuiInputBase-multiline)': { height: 40 },
-      '& .MuiOutlinedInput-notchedOutline': {
-        borderColor: '#C5CED9',
-      },
-      '&:hover .MuiOutlinedInput-notchedOutline': {
-        borderColor: '#B8C4D0',
-      },
-      '& fieldset': {
-        borderColor: '#C5CED9',
-      },
-      '&:hover fieldset': {
-        borderColor: '#B8C4D0',
-      },
-      '&.Mui-focused': {
-        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}`,
-      },
-    },
-    '& .MuiInputBase-input:not(.MuiInputBase-inputMultiline)': { py: 0 },
-    '& .MuiSelect-select': { display: 'flex', alignItems: 'center', py: '10px' },
-    '& .MuiFormControl-root': { width: '100%' },
-    '& .MuiFormHelperText-root': { mx: 0, mt: 0.5 },
-  };
-}
+/** 폼 내 TextField·Select 공통 */
+const userFormContainerSx = {
+  ...userFormFieldSx,
+  '& .MuiFormControl-root': { width: '100%' },
+  '& .MuiFormHelperText-root': { mx: 0, mt: 0.5 },
+  '& .MuiSelect-select': { display: 'flex', alignItems: 'center' },
+} as const;
 
 const UserManagement: React.FC = () => {
   const theme = useTheme();
+  const isCompactToolbar = useMediaQuery(theme.breakpoints.down('md'));
   /** 사용자 상세 다이얼로그 — 필드 라벨·값 가독성 */
   const userDetailLabelSx = useMemo(
     () => ({
@@ -297,7 +333,7 @@ const UserManagement: React.FC = () => {
       canEdit: check('edit'),
       canDelete: check('delete')
     };
-  }, [menus, hasMenuPermission, user?.role]);
+  }, [menus, hasMenuPermission, hrElevated]);
   const { t, i18n } = useTranslation();
   const dateLocale = i18n.language?.startsWith('en') ? 'en-US' : 'ko-KR';
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
@@ -339,6 +375,7 @@ const UserManagement: React.FC = () => {
     position: '',
     employment_type: 'fulltime',
     salary: '',
+    ot_eligible: true,
     bank_name: '',
     bank_account: '',
     bank_ifsc: '',
@@ -365,6 +402,7 @@ const UserManagement: React.FC = () => {
     position: string;
     employment_type: string;
     salary: string;
+    ot_eligible: boolean;
     bank_name: string;
     bank_account: string;
     bank_ifsc: string;
@@ -378,6 +416,8 @@ const UserManagement: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [previewEmployeeNumberLoading, setPreviewEmployeeNumberLoading] = useState(false);
+  const [toolbarMenuAnchor, setToolbarMenuAnchor] = useState<null | HTMLElement>(null);
+  const [page, setPage] = useState(1);
 
   const fetchNextEmployeeNumber = useCallback(async (companyId?: number) => {
     if (user?.role === 'root' && !companyId) {
@@ -440,7 +480,7 @@ const UserManagement: React.FC = () => {
     } finally {
       setLoading(false);
           }
-  }, [searchTerm, selectedCompanyId, user?.role]);
+  }, [searchTerm, selectedCompanyId, user?.role, t]);
 
   const loadDepartments = useCallback(async () => {
     try {
@@ -521,6 +561,7 @@ const UserManagement: React.FC = () => {
       position: '',
       employment_type: 'fulltime',
       salary: '',
+      ot_eligible: true,
       bank_name: '',
       bank_account: '',
       bank_ifsc: '',
@@ -559,10 +600,12 @@ const UserManagement: React.FC = () => {
     }
   }, [menusLoading, pageTab, viewMode, hrElevated, userMgmtMenuFlags.canCreate, userMgmtMenuFlags.canView]);
 
+  const formCompanyId = (formData as { company_id?: number }).company_id;
+
   useEffect(() => {
     if (pageTab !== 1 || viewMode !== 'create' || editingUser) return;
-    void fetchNextEmployeeNumber((formData as { company_id?: number }).company_id);
-  }, [pageTab, viewMode, editingUser, (formData as { company_id?: number }).company_id, fetchNextEmployeeNumber]);
+    void fetchNextEmployeeNumber(formCompanyId);
+  }, [pageTab, viewMode, editingUser, formCompanyId, fetchNextEmployeeNumber]);
 
   useEffect(() => {
     // 검색어나 회사 필터가 변경되면 사용자 목록 다시 조회
@@ -595,6 +638,7 @@ const UserManagement: React.FC = () => {
       position: '',
       employment_type: 'fulltime',
       salary: '',
+      ot_eligible: true,
       bank_name: '',
       bank_account: '',
       bank_ifsc: '',
@@ -630,6 +674,7 @@ const UserManagement: React.FC = () => {
       position: user.position || '',
       employment_type: (user as any).employment_type || 'fulltime',
       salary: (user as any).salary || '',
+      ot_eligible: (user as any).ot_eligible !== false,
       bank_name: (user as any).bank_name || '',
       bank_account: normalizeBankAccountDigits((user as any).bank_account || ''),
       bank_ifsc: normalizeIfsc((user as any).bank_ifsc || ''),
@@ -644,22 +689,6 @@ const UserManagement: React.FC = () => {
     setViewMode('edit');
   };
 
-  const handleDeleteUser = async (userId: number) => {
-      showConfirm(
-      t('userManagement.confirmDelete'),
-      async () => {
-        try {
-          await api.delete(`/users/${userId}`);
-          setSuccess(t('userManagement.userDeleted'));
-          fetchUsers();
-        } catch (error) {
-          setError(t('userManagement.deleteFailed'));
-        }
-      },
-      { confirmColor: 'error' }
-    );
-  };
-
   const handleViewUser = (user: User) => {
     setSelectedUser(user);
     setOpenViewDialog(true);
@@ -667,7 +696,7 @@ const UserManagement: React.FC = () => {
 
   const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.checked) {
-      setSelectedUsers(filteredUsers.map(user => user.id));
+      setSelectedUsers(visibleUserIds);
     } else {
       setSelectedUsers([]);
     }
@@ -951,124 +980,115 @@ const UserManagement: React.FC = () => {
     return filtered;
   }, [users, searchTerm, showInactive, orderBy, order]);
 
+  const userStats = useMemo(
+    () => ({
+      total: users.length,
+      active: users.filter((u) => u.status === 'active').length,
+      inactive: users.filter((u) => u.status === 'inactive').length,
+    }),
+    [users]
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / USERS_PER_PAGE));
+
+  const paginatedUsers = useMemo(
+    () => filteredUsers.slice((page - 1) * USERS_PER_PAGE, page * USERS_PER_PAGE),
+    [filteredUsers, page]
+  );
+
+  const visibleUserIds = useMemo(
+    () => paginatedUsers.map((u) => u.id),
+    [paginatedUsers]
+  );
+
+  const allVisibleSelected =
+    visibleUserIds.length > 0 && visibleUserIds.every((id) => selectedUsers.includes(id));
+  const someVisibleSelected = visibleUserIds.some((id) => selectedUsers.includes(id));
+
+  useEffect(() => {
+    setPage(1);
+    setSelectedUsers([]);
+  }, [searchTerm, selectedCompanyId, showInactive]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const hasActiveFilters = Boolean(
+    searchTerm.trim() || selectedCompanyId || showInactive
+  );
+
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setSelectedCompanyId('');
+    setShowInactive(false);
+  };
+
+  const closeToolbarMenu = () => setToolbarMenuAnchor(null);
+
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    py: { xs: 6, sm: 8 },
+    px: 3,
+    gap: 1.5,
+  } as const;
+
   const handleSort = (property: string) => {
     const isAsc = orderBy === property && order === 'asc';
     setOrder(isAsc ? 'desc' : 'asc');
     setOrderBy(property);
   };
 
-  if (loading) {
-    return (
-      <Box sx={{ width: '100%', textAlign: 'center', py: 4 }}>
-        <CircularProgress />
-        <Typography variant="h6" sx={{ mt: 2 }}>{t('userManagement.loading')}</Typography>
-      </Box>
-    );
-  }
+  const isListView = pageTab === 0 && viewMode === 'list';
+  const isFormView = pageTab === 1 && (viewMode === 'create' || viewMode === 'edit');
+
+  const handleBackToList = () => {
+    setPageTab(0);
+    setViewMode('list');
+    setEditingUser(null);
+  };
 
   return (
     <Box sx={{ ...mvsPageRootSx, borderRadius: 0 }}>
-      <Box sx={{ mb: pageTab === 0 && viewMode === 'list' ? 3 : 1.5 }}>
-        <MvsPageHeader
-          title={t('userManagement.title')}
-          description={t('userManagement.description')}
-          mb={2}
-          actions={
-            <Box
-              sx={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 1,
-                justifyContent: 'flex-end',
-                flexShrink: 0,
-                maxWidth: { xs: '100%', sm: '55%' },
-                visibility: pageTab === 0 && viewMode === 'list' ? 'visible' : 'hidden',
-                pointerEvents: pageTab === 0 && viewMode === 'list' ? 'auto' : 'none',
-              }}
-            >
-            <Button
-              variant="outlined"
-              startIcon={<DownloadIcon />}
-              onClick={handleDownloadSample}
-              sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, borderColor: alpha(theme.palette.divider, 0.95) }}
-            >
-              {t('userManagement.excelSample')}
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<FileDownloadIcon />}
-              onClick={handleExportExcel}
-              sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, borderColor: alpha(theme.palette.divider, 0.95) }}
-            >
-              {t('userManagement.excelExport')}
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<UploadIcon />}
-              onClick={() => setImportDialogOpen(true)}
-              sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, borderColor: alpha(theme.palette.divider, 0.95) }}
-            >
-              {t('userManagement.excelImport')}
-            </Button>
-            {selectedUsers.length > 0 && (
-              <Button
-                variant="contained"
-                color="error"
-                disableElevation
-                startIcon={<DeleteIcon />}
-                onClick={handleDeleteSelected}
-                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
-              >
-                {t('userManagement.deleteSelected')} ({selectedUsers.length})
-              </Button>
-            )}
-            </Box>
-          }
-        />
+      <MvsPageHeader
+        title={t('userManagement.title')}
+        description={t('userManagement.description')}
+      />
 
-        {/* 탭 네비게이션 */}
-        <Card
-          elevation={0}
-          sx={{
-            mb: 3,
-            borderRadius: '14px',
-            border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'dark' ? 0.35 : 0.1)}`,
-            boxShadow: '0 2px 14px rgba(15, 23, 42, 0.05)',
-            overflow: 'hidden',
-          }}
-        >
+      {/* 탭 네비게이션 */}
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: isListView ? 3 : 2 }}>
           <Tabs
             value={pageTab}
             sx={{
-              minHeight: 48,
-              px: 0.5,
-              bgcolor: '#F0F4F8',
+              minHeight: 40,
+              px: { xs: 1, sm: 1.5 },
+              bgcolor: '#FFFFFF',
               '& .MuiTabs-indicator': {
                 height: 3,
                 borderRadius: '3px 3px 0 0',
-                bgcolor: 'primary.main',
               },
               '& .MuiTab-root': {
                 textTransform: 'none',
                 fontWeight: 500,
-                fontSize: '0.875rem',
-                minHeight: 48,
+                fontSize: '0.8125rem',
+                minHeight: 40,
+                py: 0.75,
                 letterSpacing: '-0.01em',
                 color: 'text.secondary',
-                transition: theme.transitions.create(['color', 'background-color'], { duration: 180 }),
-                '&:hover': {
-                  color: 'text.primary',
-                  bgcolor: alpha(theme.palette.common.white, 0.55),
-                },
               },
               '& .MuiTab-root.Mui-selected': {
                 color: 'primary.main',
                 fontWeight: 700,
-                bgcolor: '#FFFFFF',
               },
               '& .MuiTab-root.Mui-disabled': {
                 color: 'text.disabled',
-                fontWeight: 500,
               },
             }}
             onChange={(e, newValue) => {
@@ -1124,88 +1144,7 @@ const UserManagement: React.FC = () => {
               }
             />
           </Tabs>
-        </Card>
-      </Box>
-
-      {/* 검색 및 필터 */}
-      {pageTab === 0 && viewMode === 'list' && (
-      <Box sx={{ mb: 2, minHeight: 48 }}>
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: '1fr',
-              md:
-                user?.role === 'root'
-                  ? 'minmax(0, 1fr) minmax(0, 1fr) auto'
-                  : 'minmax(0, 1fr) auto',
-            },
-            gap: 2,
-            alignItems: 'center',
-          }}
-        >
-          <TextField
-            label={t('common.search')}
-            placeholder={t('userManagement.search')}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            size="small"
-            fullWidth
-            InputLabelProps={{ shrink: true }}
-            sx={{
-              minWidth: 0,
-              '& .MuiOutlinedInput-root': { height: 40 },
-            }}
-            InputProps={{
-              startAdornment: (
-                <Box sx={{ mr: 1, display: 'flex', alignItems: 'center' }}>
-                  <PersonIcon fontSize="small" color="action" />
-                </Box>
-              ),
-            }}
-          />
-          {user?.role === 'root' && (
-            <TextField
-              fullWidth
-              select
-              size="small"
-              label={t('userManagement.company')}
-              value={selectedCompanyId}
-              onChange={(e) => setSelectedCompanyId(e.target.value as number | '')}
-              InputLabelProps={{ shrink: true }}
-              SelectProps={{
-                displayEmpty: true,
-              }}
-              sx={{
-                minWidth: 0,
-                height: 40,
-                bgcolor: '#FFFFFF',
-                borderRadius: '12px',
-                '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
-                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
-              }}
-            >
-              <MenuItem value="">{t('userManagement.allCompanies')}</MenuItem>
-              {companies.map((company) => (
-                <MenuItem key={company.id} value={company.id}>
-                  {company.name}
-                </MenuItem>
-              ))}
-            </TextField>
-          )}
-          <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0, justifySelf: { xs: 'start', md: 'auto' } }}>
-            <Checkbox
-              checked={showInactive}
-              onChange={(e) => setShowInactive(e.target.checked)}
-              size="small"
-            />
-            <Typography variant="body2" sx={{ ml: -1, mr: 1 }}>
-              {t('userManagement.includeInactive')}
-            </Typography>
-          </Box>
-        </Box>
-      </Box>
-      )}
+      </Card>
 
       {/* 알림 */}
       {error && (
@@ -1219,246 +1158,526 @@ const UserManagement: React.FC = () => {
         </Alert>
       )}
 
-      {/* 사용자 테이블 */}
-      {pageTab === 0 && viewMode === 'list' && (
-      <TableContainer
-        component={Paper}
-        sx={{
-          boxShadow: 1,
-          borderRadius: 1,
-          border: '1px solid',
-          borderColor: 'divider'
-        }}
-      >
-        <Table
-          size="small"
-          sx={{
-            fontSize: '0.8125rem',
-            '& .MuiTableHead-root .MuiTableCell-root': {
-              py: 1,
-              px: 1,
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              color: 'text.secondary',
-              letterSpacing: '0.02em',
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-              bgcolor: 'grey.100'
-            },
-            '& .MuiTableBody-root .MuiTableCell-root': {
-              py: 1.45,
-              px: 1,
-              fontSize: '0.8125rem',
-              lineHeight: 1.45,
-              verticalAlign: 'middle',
-              borderBottom: '1px solid',
-              borderColor: 'divider'
-            },
-            '& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-root': {
-              borderBottom: 'none'
-            },
-            '& .MuiTableSortLabel-root': { fontSize: 'inherit', fontWeight: 600 }
-          }}
-        >
-          <TableHead>
-            <TableRow sx={{ bgcolor: 'grey.100' }}>
-              <TableCell padding="checkbox">
-                <Checkbox
-                  indeterminate={selectedUsers.length > 0 && selectedUsers.length < filteredUsers.length}
-                  checked={filteredUsers.length > 0 && selectedUsers.length === filteredUsers.length}
-                  onChange={handleSelectAll}
-                />
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={orderBy === 'username'}
-                  direction={orderBy === 'username' ? order : 'asc'}
-                  onClick={() => handleSort('username')}
-                >
-                  {t('userManagement.name')}
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={orderBy === 'email'}
-                  direction={orderBy === 'email' ? order : 'asc'}
-                  onClick={() => handleSort('email')}
-                >
-                  {t('userManagement.email')}
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={orderBy === 'role'}
-                  direction={orderBy === 'role' ? order : 'asc'}
-                  onClick={() => handleSort('role')}
-                >
-                  {t('userManagement.role')}
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={orderBy === 'department'}
-                  direction={orderBy === 'department' ? order : 'asc'}
-                  onClick={() => handleSort('department')}
-                >
-                  {t('userManagement.department')}
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={orderBy === 'position'}
-                  direction={orderBy === 'position' ? order : 'asc'}
-                  onClick={() => handleSort('position')}
-                >
-                  {t('userManagement.position')}
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={orderBy === 'status'}
-                  direction={orderBy === 'status' ? order : 'asc'}
-                  onClick={() => handleSort('status')}
-                >
-                  {t('userManagement.status')}
-                </TableSortLabel>
-              </TableCell>
-              <TableCell>
-                <TableSortLabel
-                  active={orderBy === 'created_at'}
-                  direction={orderBy === 'created_at' ? order : 'asc'}
-                  onClick={() => handleSort('created_at')}
-                >
-                  {t('userManagement.createdAt')}
-                </TableSortLabel>
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredUsers.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-                    <PersonIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.3 }} />
-                    <Typography variant="body1" color="text.secondary">
-                      {searchTerm || !showInactive 
-                        ? (searchTerm ? t('userManagement.noSearchResults') : t('userManagement.noUsersToDisplay'))
-                        : t('userManagement.noUsers')}
-                    </Typography>
-                    {!searchTerm && !showInactive && (
-                      <Typography variant="body2" color="text.secondary">
-                        {t('userManagement.noUsersIncludeInactive')}
-                      </Typography>
-                    )}
+      {isListView && (
+        <>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
+              gap: 2.5,
+              mb: 3,
+            }}
+          >
+            {[
+              { key: 'total', label: t('userManagement.stats.totalUsers'), value: userStats.total },
+              { key: 'active', label: t('userManagement.stats.activeUsers'), value: userStats.active },
+              { key: 'inactive', label: t('userManagement.stats.inactiveUsers'), value: userStats.inactive },
+            ].map((item) => (
+              <Card key={item.key} elevation={0} sx={mvsKpiCardSx}>
+                <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                    {item.label}
+                  </Typography>
+                  <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                    {item.value}
+                  </Typography>
+                </CardContent>
+              </Card>
+            ))}
+          </Box>
+
+          <Card elevation={0} sx={mvsBodyCardSx}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: { xs: 'column', md: 'row' },
+                flexWrap: 'wrap',
+                alignItems: { xs: 'stretch', md: 'center' },
+                justifyContent: { md: 'space-between' },
+                gap: { xs: 1.25, md: 1 },
+                px: { xs: 2, sm: 2.5 },
+                py: 1.5,
+                bgcolor: '#FFFFFF',
+              }}
+            >
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                {isCompactToolbar ? (
+                  <>
                     <Button
                       variant="outlined"
-                      startIcon={<AddIcon />}
-                      onClick={handleCreateUser}
-                      sx={{ mt: 1 }}
+                      size="small"
+                      startIcon={<MoreHorizIcon fontSize="small" />}
+                      disabled={menusLoading}
+                      onClick={(e) => setToolbarMenuAnchor(e.currentTarget)}
+                      sx={mvsBodyOutlinedBtnSx}
                     >
-                      {t('userManagement.addUser')}
+                      {t('userManagement.moreTools')}
                     </Button>
-                  </Box>
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredUsers.map((user) => (
-                <TableRow
-                  key={user.id}
-                  hover
-                  onClick={() => handleViewUser(user)}
-                  sx={{
-                    cursor: 'pointer',
-                    '&:hover': { bgcolor: 'action.hover' }
-                  }}
-                >
-                  <TableCell padding="checkbox" onClick={(e) => e.stopPropagation()}>
-                    <Checkbox
-                      checked={selectedUsers.includes(user.id)}
-                      onChange={() => handleSelectUser(user.id)}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell sx={{ minWidth: 140 }}>
-                    <Typography
-                      component="div"
-                      sx={{
-                        fontSize: '0.8125rem',
-                        fontWeight: 600,
-                        lineHeight: 1.4,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        minWidth: 0
+                    <Menu
+                      anchorEl={toolbarMenuAnchor}
+                      open={Boolean(toolbarMenuAnchor)}
+                      onClose={closeToolbarMenu}
+                      anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                      transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                      slotProps={{
+                        paper: {
+                          sx: {
+                            mt: 0.5,
+                            minWidth: 220,
+                            borderRadius: '12px',
+                            border: '1px solid #C5CED9',
+                            boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
+                          },
+                        },
                       }}
                     >
-                      {user.username}
-                    </Typography>
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      maxWidth: 220,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {user.email}
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={getRoleLabel(user.role)}
-                      color={getRoleColor(user.role) as any}
+                      <MenuItem
+                        disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
+                        onClick={() => {
+                          closeToolbarMenu();
+                          handleDownloadSample();
+                        }}
+                      >
+                        <ListItemIcon>
+                          <DownloadIcon fontSize="small" />
+                        </ListItemIcon>
+                        {t('userManagement.excelSample')}
+                      </MenuItem>
+                      <MenuItem
+                        disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
+                        onClick={() => {
+                          closeToolbarMenu();
+                          handleExportExcel();
+                        }}
+                      >
+                        <ListItemIcon>
+                          <FileDownloadIcon fontSize="small" />
+                        </ListItemIcon>
+                        {t('userManagement.excelExport')}
+                      </MenuItem>
+                      <MenuItem
+                        disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canCreate)}
+                        onClick={() => {
+                          closeToolbarMenu();
+                          setImportDialogOpen(true);
+                        }}
+                      >
+                        <ListItemIcon>
+                          <UploadIcon fontSize="small" />
+                        </ListItemIcon>
+                        {t('userManagement.excelImport')}
+                      </MenuItem>
+                    </Menu>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="outlined"
                       size="small"
-                      sx={{
-                        height: 22,
-                        maxWidth: '100%',
-                        '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' }
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      maxWidth: 120,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      color: 'text.secondary'
-                    }}
-                  >
-                    {user.department || '—'}
-                  </TableCell>
-                  <TableCell
-                    sx={{
-                      maxWidth: 120,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      color: 'text.secondary'
-                    }}
-                  >
-                    {user.position || '—'}
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={getStatusLabel(user.status)}
-                      color={getStatusColor(user.status) as any}
+                      startIcon={<DownloadIcon fontSize="small" />}
+                      disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
+                      onClick={handleDownloadSample}
+                      sx={mvsBodyOutlinedBtnSx}
+                    >
+                      {t('userManagement.excelSample')}
+                    </Button>
+                    <Button
+                      variant="outlined"
                       size="small"
-                      sx={{
-                        height: 22,
-                        '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' }
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap', fontSize: '0.75rem' }}>
-                    {new Date(user.created_at).toLocaleDateString(dateLocale)}
-                  </TableCell>
-                </TableRow>
-              ))
+                      startIcon={<FileDownloadIcon fontSize="small" />}
+                      disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
+                      onClick={handleExportExcel}
+                      sx={mvsBodyOutlinedBtnSx}
+                    >
+                      {t('userManagement.excelExport')}
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      startIcon={<UploadIcon fontSize="small" />}
+                      disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canCreate)}
+                      onClick={() => setImportDialogOpen(true)}
+                      sx={mvsBodyOutlinedBtnSx}
+                    >
+                      {t('userManagement.excelImport')}
+                    </Button>
+                  </>
+                )}
+              </Box>
+              <Box
+                sx={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  gap: 1,
+                  flexShrink: 0,
+                  width: { xs: '100%', md: 'auto' },
+                  ml: { md: 'auto' },
+                }}
+              >
+                {selectedUsers.length > 0 ? (
+                  <Button
+                    variant="contained"
+                    color="error"
+                    disableElevation
+                    size="small"
+                    startIcon={<DeleteIcon fontSize="small" />}
+                    disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canDelete)}
+                    onClick={handleDeleteSelected}
+                    sx={{
+                      textTransform: 'none',
+                      borderRadius: '10px',
+                      fontWeight: 600,
+                      fontSize: '0.8125rem',
+                      minHeight: 36,
+                      px: 2,
+                      boxShadow: 'none',
+                    }}
+                  >
+                    {t('userManagement.deleteSelected')} ({selectedUsers.length})
+                  </Button>
+                ) : null}
+                <Button
+                  variant="contained"
+                  disableElevation
+                  size="small"
+                  startIcon={<AddIcon fontSize="small" />}
+                  disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canCreate)}
+                  onClick={handleCreateUser}
+                  sx={mvsBodyPrimaryBtnSx}
+                >
+                  {t('userManagement.addUser')}
+                </Button>
+              </Box>
+            </Box>
+
+            <Box
+              sx={{
+                px: { xs: 2, sm: 2.5 },
+                py: 2,
+                bgcolor: '#FFFFFF',
+                ...(mvsSearchFieldSx as Record<string, unknown>),
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: user?.role === 'root' ? 'repeat(2, minmax(0, 1fr))' : '1fr',
+                  lg:
+                    user?.role === 'root'
+                      ? 'minmax(0, 2fr) minmax(0, 1fr) auto auto'
+                      : 'minmax(0, 2fr) auto auto',
+                },
+                gap: 2,
+                alignItems: 'flex-end',
+              }}
+            >
+              <TextField
+                fullWidth
+                size="small"
+                label={t('common.search')}
+                {...USER_FILTER_OUTLINED}
+                placeholder={t('userManagement.search')}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
+                sx={userFilterFieldSx}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              {user?.role === 'root' && (
+                <TextField
+                  fullWidth
+                  size="small"
+                  select
+                  label={t('userManagement.company')}
+                  {...USER_FILTER_OUTLINED}
+                  value={selectedCompanyId}
+                  onChange={(e) => setSelectedCompanyId(e.target.value as number | '')}
+                  disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
+                  SelectProps={{ displayEmpty: true }}
+                  sx={userFilterFieldSx}
+                >
+                  <MenuItem value="">{t('userManagement.allCompanies')}</MenuItem>
+                  {companies.map((company) => (
+                    <MenuItem key={company.id} value={company.id}>
+                      {company.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={showInactive}
+                    onChange={(e) => setShowInactive(e.target.checked)}
+                    size="small"
+                    disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
+                  />
+                }
+                label={t('userManagement.includeInactive')}
+                sx={{ m: 0, alignSelf: 'center', whiteSpace: 'nowrap' }}
+              />
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<ResetIcon fontSize="small" />}
+                onClick={handleResetFilters}
+                disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
+                sx={{
+                  ...mvsBodyOutlinedBtnSx,
+                  height: 40,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {t('userManagement.reset')}
+              </Button>
+            </Box>
+          </Card>
+
+          <Box sx={mvsBodyListZoneSx}>
+            {loading ? (
+              <Box sx={listStateBoxSx}>
+                <CircularProgress size={36} />
+                <Typography variant="body2" color="text.secondary">
+                  {t('userManagement.empty.loading')}
+                </Typography>
+              </Box>
+            ) : filteredUsers.length === 0 ? (
+              <Box sx={listStateBoxSx}>
+                <PersonIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.3 }} />
+                <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+                  {hasActiveFilters
+                    ? t('userManagement.empty.noResults')
+                    : t('userManagement.empty.noItems')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
+                  {hasActiveFilters
+                    ? t('userManagement.empty.noResultsHint')
+                    : t('userManagement.empty.noItemsHint')}
+                </Typography>
+                {hasActiveFilters ? (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<ResetIcon fontSize="small" />}
+                    onClick={handleResetFilters}
+                    sx={mvsBodyOutlinedBtnSx}
+                  >
+                    {t('userManagement.reset')}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="contained"
+                    disableElevation
+                    size="small"
+                    startIcon={<AddIcon fontSize="small" />}
+                    disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canCreate)}
+                    onClick={handleCreateUser}
+                    sx={mvsBodyPrimaryBtnSx}
+                  >
+                    {t('userManagement.addUser')}
+                  </Button>
+                )}
+              </Box>
+            ) : (
+              <>
+                <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+                  <Table
+                    size="small"
+                    sx={{
+                      tableLayout: 'fixed',
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      bgcolor: 'transparent',
+                      '& .MuiTableCell-root': {
+                        borderLeft: 'none',
+                        borderRight: 'none',
+                        borderTop: 'none',
+                      },
+                    }}
+                  >
+                    <TableHead sx={mvsTableHeadHighlightSx}>
+                      <TableRow>
+                        <TableCell padding="checkbox" align="center">
+                          <Checkbox
+                            size="small"
+                            disabled={
+                              menusLoading ||
+                              !(hrElevated || userMgmtMenuFlags.canDelete) ||
+                              paginatedUsers.length === 0
+                            }
+                            indeterminate={someVisibleSelected && !allVisibleSelected}
+                            checked={allVisibleSelected}
+                            onChange={handleSelectAll}
+                          />
+                        </TableCell>
+                        <TableCell sx={{ overflow: 'hidden' }}>
+                          <TableSortLabel
+                            active={orderBy === 'username'}
+                            direction={orderBy === 'username' ? order : 'asc'}
+                            onClick={() => handleSort('username')}
+                          >
+                            <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {t('userManagement.name')}
+                            </Box>
+                          </TableSortLabel>
+                        </TableCell>
+                        <TableCell sx={{ overflow: 'hidden' }}>
+                          <TableSortLabel
+                            active={orderBy === 'email'}
+                            direction={orderBy === 'email' ? order : 'asc'}
+                            onClick={() => handleSort('email')}
+                          >
+                            <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {t('userManagement.email')}
+                            </Box>
+                          </TableSortLabel>
+                        </TableCell>
+                        <TableCell sx={{ overflow: 'hidden' }}>
+                          <TableSortLabel
+                            active={orderBy === 'role'}
+                            direction={orderBy === 'role' ? order : 'asc'}
+                            onClick={() => handleSort('role')}
+                          >
+                            <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {t('userManagement.role')}
+                            </Box>
+                          </TableSortLabel>
+                        </TableCell>
+                        <TableCell sx={{ overflow: 'hidden' }}>
+                          <TableSortLabel
+                            active={orderBy === 'department'}
+                            direction={orderBy === 'department' ? order : 'asc'}
+                            onClick={() => handleSort('department')}
+                          >
+                            <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {t('userManagement.department')}
+                            </Box>
+                          </TableSortLabel>
+                        </TableCell>
+                        <TableCell sx={{ overflow: 'hidden' }}>
+                          <TableSortLabel
+                            active={orderBy === 'position'}
+                            direction={orderBy === 'position' ? order : 'asc'}
+                            onClick={() => handleSort('position')}
+                          >
+                            <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {t('userManagement.position')}
+                            </Box>
+                          </TableSortLabel>
+                        </TableCell>
+                        <TableCell sx={{ overflow: 'hidden' }}>
+                          <TableSortLabel
+                            active={orderBy === 'status'}
+                            direction={orderBy === 'status' ? order : 'asc'}
+                            onClick={() => handleSort('status')}
+                          >
+                            <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {t('userManagement.status')}
+                            </Box>
+                          </TableSortLabel>
+                        </TableCell>
+                        <TableCell sx={{ overflow: 'hidden' }}>
+                          <TableSortLabel
+                            active={orderBy === 'created_at'}
+                            direction={orderBy === 'created_at' ? order : 'asc'}
+                            onClick={() => handleSort('created_at')}
+                          >
+                            <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {t('userManagement.createdAt')}
+                            </Box>
+                          </TableSortLabel>
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody sx={userTableBodyRowSx}>
+                      {paginatedUsers.map((rowUser) => (
+                        <TableRow
+                          key={rowUser.id}
+                          onClick={() => {
+                            if (!menusLoading && (hrElevated || userMgmtMenuFlags.canView)) {
+                              handleViewUser(rowUser);
+                            }
+                          }}
+                          sx={{
+                            cursor: menusLoading || !(hrElevated || userMgmtMenuFlags.canView) ? 'default' : 'pointer',
+                          }}
+                        >
+                          <TableCell padding="checkbox" align="center" onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              size="small"
+                              disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canDelete)}
+                              checked={selectedUsers.includes(rowUser.id)}
+                              onChange={() => handleSelectUser(rowUser.id)}
+                            />
+                          </TableCell>
+                          <TableCell sx={{ overflow: 'hidden' }}>
+                            <Typography variant="subtitle2" fontWeight={600} noWrap title={rowUser.username}>
+                              {rowUser.username}
+                            </Typography>
+                          </TableCell>
+                          <TableCell sx={{ overflow: 'hidden' }}>
+                            <Typography variant="body2" noWrap title={rowUser.email}>
+                              {rowUser.email}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={getRoleLabel(rowUser.role)}
+                              color={getRoleColor(rowUser.role) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'}
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell sx={{ overflow: 'hidden' }}>
+                            <Typography variant="body2" color="text.secondary" noWrap title={rowUser.department || '—'}>
+                              {rowUser.department || '—'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell sx={{ overflow: 'hidden' }}>
+                            <Typography variant="body2" color="text.secondary" noWrap title={rowUser.position || '—'}>
+                              {rowUser.position || '—'}
+                            </Typography>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={getStatusLabel(rowUser.status)}
+                              color={getStatusColor(rowUser.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'}
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                            {new Date(rowUser.created_at).toLocaleDateString(dateLocale)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+
+                <Box sx={mvsBodyPaginationSx}>
+                  <Pagination
+                    count={totalPages}
+                    page={page}
+                    onChange={(_, value) => setPage(value)}
+                    color="primary"
+                    shape="rounded"
+                    sx={{
+                      '& .MuiPaginationItem-root': {
+                        borderRadius: '10px',
+                        fontWeight: 500,
+                      },
+                    }}
+                  />
+                </Box>
+              </>
             )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+          </Box>
+        </>
       )}
 
       {/* 부서 관리 (탭) */}
@@ -1471,45 +1690,45 @@ const UserManagement: React.FC = () => {
         />
       )}
 
-      {/* 사용자 생성/편집 폼 (본문에 표시) */}
-      {pageTab === 1 && (viewMode === 'create' || viewMode === 'edit') && (
-        <Box sx={{ width: '100%', maxWidth: '100%', minWidth: 0, boxSizing: 'border-box' }}>
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              gap: 2,
-              mb: 2.5,
-              flexWrap: 'wrap',
-            }}
-          >
-            <Typography
-              component="h2"
+      {/* 사용자 생성/편집 폼 */}
+      {isFormView && (
+        <>
+          <Card elevation={0} sx={mvsBodyCardSx}>
+            <Box sx={mvsBodySectionHeaderSx}>
+              <Typography
+                component="h2"
+                sx={{
+                  fontSize: '1rem',
+                  fontWeight: 700,
+                  letterSpacing: '-0.02em',
+                  color: 'text.primary',
+                  lineHeight: 1.3,
+                }}
+              >
+                {editingUser ? t('userManagement.editUserTitle') : t('userManagement.createUserTitle')}
+              </Typography>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<ArrowBackIcon fontSize="small" />}
+                onClick={handleBackToList}
+                sx={mvsBodyOutlinedBtnSx}
+              >
+                {t('userManagement.backToList')}
+              </Button>
+            </Box>
+          </Card>
+
+          <Box sx={mvsBodyListZoneSx}>
+            <Box
               sx={{
-                fontSize: '1.125rem',
-                fontWeight: 700,
-                letterSpacing: '-0.02em',
-                color: 'text.primary',
-                lineHeight: 1.3,
+                ...mvsBodyListTableSx,
+                p: { xs: 2, sm: 2.5 },
+                overflow: 'visible',
               }}
             >
-              {editingUser ? t('userManagement.editUserTitle') : t('userManagement.createUserTitle')}
-            </Typography>
-            <Button
-              variant="text"
-              onClick={() => {
-                setPageTab(0);
-                setViewMode('list');
-                setEditingUser(null);
-              }}
-              sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, color: 'primary.main', flexShrink: 0 }}
-            >
-              {t('userManagement.backToList')}
-            </Button>
-          </Box>
-          <form onSubmit={handleSubmit}>
-            <Box sx={getFormControlSurfaceSx(theme)}>
+              <form onSubmit={handleSubmit}>
+                <Box sx={userFormContainerSx}>
               {/* 기본 정보 섹션 */}
               <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -1795,6 +2014,15 @@ const UserManagement: React.FC = () => {
                           />
                         </Box>
                       </Box>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={Boolean(formData.ot_eligible)}
+                            onChange={(e) => setFormData({ ...formData, ot_eligible: e.target.checked })}
+                          />
+                        }
+                        label={t('userManagement.otEligible')}
+                      />
                     </Box>
                   </Box>
                 </AccordionDetails>
@@ -1960,24 +2188,39 @@ const UserManagement: React.FC = () => {
                   </Box>
                 </AccordionDetails>
               </Accordion>
-            </Box>
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, mt: 3, pt: 1 }}>
-                <Button
-                  onClick={() => {
-                    setPageTab(0);
-                    setViewMode('list');
-                    setEditingUser(null);
+                </Box>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    gap: 1.5,
+                    mt: 2.5,
+                    pt: 2,
+                    borderTop: '1px solid #E8EDF3',
                   }}
-                  sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.25 }}
                 >
-                  {t('common.cancel')}
-                </Button>
-                <Button type="submit" variant="contained" disableElevation size="large" sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 3 }}>
-                  {editingUser ? t('userManagement.submitEdit') : t('userManagement.submitRegister')}
-                </Button>
-              </Box>
-            </form>
-        </Box>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={handleBackToList}
+                    sx={mvsBodyOutlinedBtnSx}
+                  >
+                    {t('common.cancel')}
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    disableElevation
+                    size="small"
+                    sx={mvsBodyPrimaryBtnSx}
+                  >
+                    {editingUser ? t('userManagement.submitEdit') : t('userManagement.submitRegister')}
+                  </Button>
+                </Box>
+              </form>
+            </Box>
+          </Box>
+        </>
       )}
 
       {/* 사용자 상세 보기 다이얼로그 */}
@@ -2169,6 +2412,16 @@ const UserManagement: React.FC = () => {
                         {(selectedUser as any).salary != null && (selectedUser as any).salary !== ''
                           ? formatSalaryInr((selectedUser as any).salary)
                           : '-'}
+                      </Typography>
+                    </Box>
+                    <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' } }}>
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.otEligible')}
+                      </Typography>
+                      <Typography variant="body1" sx={userDetailValueSx}>
+                        {(selectedUser as any).ot_eligible !== false
+                          ? t('userManagement.otEligibleYes')
+                          : t('userManagement.otEligibleNo')}
                       </Typography>
                     </Box>
                   </Box>

@@ -1,4 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Box, Typography } from '@mui/material';
 import i18n from '../../locales/i18n';
 import { useErrorStore } from '../../store/errorStore';
 
@@ -29,14 +30,12 @@ class ErrorBoundaryClass extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // 에러 로깅 (개발 환경)
     console.error('❌ [Error Boundary] 컴포넌트 오류:', error, errorInfo);
 
-    // 에러를 팝업으로 표시
     const errorStore = useErrorStore.getState();
     const errorMessage = this.getUserFriendlyMessage(error);
-    const errorDetails = process.env.NODE_ENV === 'development' 
-      ? `컴포넌트: ${errorInfo.componentStack}\n\n에러: ${error.stack}` 
+    const errorDetails = process.env.NODE_ENV === 'development'
+      ? `컴포넌트: ${errorInfo.componentStack}\n\n에러: ${error.stack}`
       : undefined;
 
     errorStore.showError(
@@ -45,14 +44,6 @@ class ErrorBoundaryClass extends Component<Props, State> {
       errorDetails,
       'error'
     );
-
-    // 에러 상태를 리셋하여 사용자가 계속 작업할 수 있도록 함
-    setTimeout(() => {
-      this.setState({
-        hasError: false,
-        error: null
-      });
-    }, 100);
   }
 
   getUserFriendlyMessage(error: Error): string {
@@ -74,9 +65,13 @@ class ErrorBoundaryClass extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
-      // 에러가 발생했지만, 팝업으로 표시했으므로 페이지는 계속 렌더링
-      // fallback이 제공되면 그것을 표시하고, 아니면 children을 계속 렌더링
-      return this.props.fallback || this.props.children;
+      return (
+        this.props.fallback ?? (
+          <Box sx={{ py: 6, px: 2, textAlign: 'center' }}>
+            <Typography color="text.secondary">{this.getUserFriendlyMessage(this.state.error ?? new Error())}</Typography>
+          </Box>
+        )
+      );
     }
 
     return this.props.children;

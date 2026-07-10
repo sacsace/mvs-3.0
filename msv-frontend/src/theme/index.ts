@@ -488,11 +488,12 @@ const theme = createTheme({
             transform: 'translateY(-1px)',
           },
           '&.Mui-selected': {
-            backgroundColor: '#EAF2FF',
+            backgroundColor: 'rgba(0, 122, 131, 0.12)',
             color: '#007A83',
-            fontWeight: 500,
+            fontWeight: 600,
+            borderLeft: 'none',
             '&:hover': {
-              backgroundColor: '#E0EBFA',
+              backgroundColor: 'rgba(0, 122, 131, 0.18)',
             },
           },
         },

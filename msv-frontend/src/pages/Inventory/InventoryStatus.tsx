@@ -24,14 +24,27 @@ import {
   Button
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsTableHeadHighlightSx,
+  mvsSearchFieldSx,
+  mvsKpiCardSx,
+  mvsFilterFieldHeightSx,
+  mvsBodyCardSx,
+  mvsBodySectionHeaderSx,
+  mvsBodyFilterWrapSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsBodyPrimaryBtnSx,
+  mvsTableBodyRowSx,
+  mvsTableScrollSx,
+} from '../../theme/mvsLayout';
 import { Search as SearchIcon, Warning as WarningIcon, CheckCircle as CheckCircleIcon, Error as ErrorIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { alpha, useTheme } from '@mui/material/styles';
 import { inventoryService } from '../../services/api';
 import { UTILS } from '../../constants';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
-import { mvsTableHeadHighlightSx } from '../../theme/mvsLayout';
 
 const INVENTORY_STATUS_MENU_ROUTES = ['/inventory/status', '/inventory'] as const;
 
@@ -380,13 +393,16 @@ const InventoryStatus: React.FC = () => {
     return softChipSx('default');
   };
 
-  const kpiCardSx = {
-    borderRadius: '16px',
-    border: '1px solid',
-    borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
-    boxShadow:
-      theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
-    bgcolor: 'background.paper',
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    py: { xs: 6, sm: 8 },
+    px: 3,
+    gap: 1.5,
   } as const;
 
   return (
@@ -410,7 +426,7 @@ const InventoryStatus: React.FC = () => {
 
       {/* 요약 카드 — 재고 보고서 API 통계 */}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' }, gap: 2.5, mb: 3 }}>
-        <Card elevation={0} sx={kpiCardSx}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
           <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
               {t('inventoryStatus.stats.totalValue')}
@@ -420,7 +436,7 @@ const InventoryStatus: React.FC = () => {
             </Typography>
           </CardContent>
         </Card>
-        <Card elevation={0} sx={kpiCardSx}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
           <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
               {t('inventoryStatus.stats.lowStock')}
@@ -430,7 +446,7 @@ const InventoryStatus: React.FC = () => {
             </Typography>
           </CardContent>
         </Card>
-        <Card elevation={0} sx={kpiCardSx}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
           <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
               {t('inventoryStatus.stats.outOfStock')}
@@ -440,7 +456,7 @@ const InventoryStatus: React.FC = () => {
             </Typography>
           </CardContent>
         </Card>
-        <Card elevation={0} sx={kpiCardSx}>
+        <Card elevation={0} sx={mvsKpiCardSx}>
           <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
               {t('inventoryStatus.stats.totalProducts')}
@@ -458,18 +474,14 @@ const InventoryStatus: React.FC = () => {
         </Alert>
       ) : null}
 
-      {/* 검색 */}
-      <Card
-        elevation={0}
-        sx={{
-          mb: 3,
-          borderRadius: '18px',
-          border: '1px solid #C5CED9',
-          bgcolor: '#F0F4F8',
-          boxShadow: 'none',
-        }}
-      >
-        <CardContent sx={{ py: 2, px: 2, '&:last-child': { pb: 2 } }}>
+      {/* 재고 현황 테이블 — 컨트롤(검색)과 리스트 영역 분리 */}
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 0 }}>
+        <Box sx={mvsBodySectionHeaderSx}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+            {t('inventoryStatus.tableTitle')}
+          </Typography>
+        </Box>
+        <Box sx={mvsBodyFilterWrapSx}>
           <Box
             sx={{
               display: 'grid',
@@ -477,6 +489,7 @@ const InventoryStatus: React.FC = () => {
               gap: 2,
               alignItems: 'flex-end',
               maxWidth: { sm: 640 },
+              ...(mvsSearchFieldSx as Record<string, unknown>),
             }}
           >
             <TextField
@@ -488,16 +501,7 @@ const InventoryStatus: React.FC = () => {
               onChange={(e) => setSearchTerm(e.target.value)}
               disabled={menuFlags.menusLoading || !menuFlags.canRead}
               InputLabelProps={{ shrink: true }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  height: 40,
-                  borderRadius: '12px',
-                  bgcolor: '#FFFFFF',
-                  '& .MuiOutlinedInput-input': { py: 0 },
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
-                },
-              }}
+              sx={{ ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -507,41 +511,32 @@ const InventoryStatus: React.FC = () => {
               }}
             />
           </Box>
-        </CardContent>
+        </Box>
       </Card>
 
-      {/* 재고 현황 테이블 */}
-      <Card
-        elevation={0}
-        sx={{
-          borderRadius: 0,
-          border: 'none',
-          boxShadow: 'none',
-          bgcolor: 'transparent',
-          overflow: 'hidden',
-        }}
-      >
-        <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
-          <Box sx={{ px: 2.5, pt: 2, pb: 1.5 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, letterSpacing: '-0.01em', color: 'text.primary' }}>
-              {t('inventoryStatus.tableTitle')}
+      <Box sx={mvsBodyListZoneSx}>
+        {loading ? (
+          <Box sx={listStateBoxSx}>
+            <CircularProgress size={36} />
+            <Typography variant="body2" color="text.secondary">
+              {t('inventoryManagement.empty.loading')}
             </Typography>
           </Box>
-
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
-              <CircularProgress />
-            </Box>
-          ) : filteredItems.length === 0 ? (
-            <Typography color="text.secondary" sx={{ py: 4, px: 2.5, textAlign: 'center' }}>
+        ) : filteredItems.length === 0 ? (
+          <Box sx={listStateBoxSx}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
               {t('inventoryStatus.emptyTable')}
             </Typography>
-          ) : (
-            <TableContainer sx={{ bgcolor: 'transparent' }}>
+          </Box>
+        ) : (
+          <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
               <Table
                 size="small"
                 sx={{
+                  width: '100%',
+                  minWidth: 960,
                   borderCollapse: 'collapse',
+                  bgcolor: 'transparent',
                   '& .MuiTableCell-root': {
                     borderLeft: 'none',
                     borderRight: 'none',
@@ -653,21 +648,7 @@ const InventoryStatus: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 </TableHead>
-                <TableBody
-                  sx={{
-                    '& .MuiTableCell-body': {
-                      py: 1.5,
-                      px: 2,
-                      fontSize: '0.875rem',
-                      borderBottom: `1px solid ${
-                        theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                      }`,
-                    },
-                    '& .MuiTableRow-root:last-of-type .MuiTableCell-body': {
-                      borderBottom: 'none',
-                    },
-                  }}
-                >
+                <TableBody sx={mvsTableBodyRowSx}>
                   {sortedItems.map((item) => {
                     const statusInfo = getStatusInfo(item);
                     const ratePct = stockRatePercentVsMax(item.currentStock, item.maxStock);
@@ -678,12 +659,9 @@ const InventoryStatus: React.FC = () => {
                     return (
                       <TableRow
                         key={item.id}
-                        hover
                         onClick={menuFlags.canRead ? () => void openTxDialog(item) : undefined}
                         sx={{
                           cursor: menuFlags.canRead ? 'pointer' : 'default',
-                          transition: 'background-color 0.15s ease',
-                          '&:hover': { bgcolor: 'action.hover' },
                           '&:active': { bgcolor: menuFlags.canRead ? 'action.selected' : undefined },
                         }}
                       >
@@ -753,9 +731,8 @@ const InventoryStatus: React.FC = () => {
                 </TableBody>
               </Table>
             </TableContainer>
-          )}
-        </CardContent>
-      </Card>
+        )}
+      </Box>
 
       <Dialog open={txDialogOpen} onClose={closeTxDialog} maxWidth="md" fullWidth scroll="paper">
         <DialogTitle sx={{ pr: 6 }}>
@@ -782,25 +759,9 @@ const InventoryStatus: React.FC = () => {
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
                 {t('inventoryStatus.txDialog.totalShown', { total: txTotal })}
               </Typography>
-              <TableContainer sx={{ border: '1px solid', borderColor: 'divider', borderRadius: '12px', overflow: 'hidden' }}>
-                <Table size="small">
-                  <TableHead
-                    sx={{
-                      '& .MuiTableCell-head': {
-                        bgcolor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.04),
-                        color: theme.palette.mode === 'light' ? 'rgba(60, 60, 67, 0.6)' : theme.palette.grey[300],
-                        fontWeight: 600,
-                        fontSize: '0.75rem',
-                        textTransform: 'none',
-                        letterSpacing: '0.01em',
-                        borderBottom: `1px solid ${
-                          theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : theme.palette.divider
-                        }`,
-                        py: 1.25,
-                        px: 1.5,
-                      },
-                    }}
-                  >
+              <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx, borderRadius: '14px', overflow: 'hidden' }}>
+                <Table size="small" sx={{ borderCollapse: 'collapse', bgcolor: 'transparent' }}>
+                  <TableHead sx={mvsTableHeadHighlightSx}>
                     <TableRow>
                       <TableCell width={160}>{t('inventoryStatus.txColumns.datetime')}</TableCell>
                       <TableCell width={100}>{t('inventoryStatus.txColumns.type')}</TableCell>
@@ -811,7 +772,7 @@ const InventoryStatus: React.FC = () => {
                       <TableCell>{t('inventoryStatus.txColumns.notes')}</TableCell>
                     </TableRow>
                   </TableHead>
-                  <TableBody>
+                  <TableBody sx={mvsTableBodyRowSx}>
                     {txRows.map((tx) => {
                       const tinfo = formatTxTypeChip(tx.transaction_type);
                       const qty = Number(tx.quantity ?? 0);
@@ -841,12 +802,7 @@ const InventoryStatus: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2 }}>
-          <Button
-            onClick={closeTxDialog}
-            variant="contained"
-            disableElevation
-            sx={{ textTransform: 'none', borderRadius: '12px', px: 2.5 }}
-          >
+          <Button onClick={closeTxDialog} variant="contained" disableElevation sx={mvsBodyPrimaryBtnSx}>
             {t('inventoryStatus.txDialog.close')}
           </Button>
         </DialogActions>

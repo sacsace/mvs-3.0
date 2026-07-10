@@ -2,7 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../types';
 import { Vacation, User, Company } from '../models';
 import { Op } from 'sequelize';
-import { calculateAnnualLeave, validateVacationLeaveRequest } from '../utils/vacationCalculator';
+import { calculateAnnualLeave, validateVacationLeaveRequest, DEFAULT_LEAVE_TYPE_DAYS } from '../utils/vacationCalculator';
 import * as XLSX from 'xlsx';
 import { pushNotification } from './notificationController';
 import SocketService from '../services/socketService';
@@ -34,11 +34,13 @@ export const getVacations = async (req: AuthRequest, res: Response) => {
         whereClause.user_id = userId;
       }
     } else {
-      // root는 company_id 쿼리 파라미터로 회사별 필터링 가능
-      if (userRole === 'root' && company_id) {
-        whereClause.company_id = parseInt(company_id as string);
-      } else if (userRole === 'root') {
-        // root가 company_id를 지정하지 않으면 모든 회사 조회
+      // root는 company_id 쿼리로 회사 전환 가능, 미지정 시 등록된 회사 기준
+      if (userRole === 'root') {
+        if (company_id) {
+          whereClause.company_id = parseInt(company_id as string);
+        } else if (companyId) {
+          whereClause.company_id = companyId;
+        }
       } else {
         // audit는 모든 회사 조회 가능
         if (tenantId) whereClause.tenant_id = tenantId;
@@ -509,7 +511,7 @@ export const approveVacation = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const isAdmin = userRole === 'admin' || userRole === 'root';
+    const isAdmin = userRole === 'admin';
     const approverId = vacation.approved_by != null ? Number(vacation.approved_by) : NaN;
     const isDesignatedApprover = Number.isFinite(approverId) && approverId === Number(userId);
     if (!isAdmin && !isDesignatedApprover) {
@@ -582,7 +584,7 @@ export const rejectVacation = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const isAdmin = userRole === 'admin' || userRole === 'root';
+    const isAdmin = userRole === 'admin';
     const approverId = vacation.approved_by != null ? Number(vacation.approved_by) : NaN;
     const isDesignatedApprover = Number.isFinite(approverId) && approverId === Number(userId);
     if (!isAdmin && !isDesignatedApprover) {
@@ -658,18 +660,26 @@ export const getVacationPolicy = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // 기본 정책 (인도 법률 기준)
+    // 기본 정책
     const defaultPolicy = {
-      annualLeaveStartDays: 240, // 입사일로부터 240일 이후
-      annualLeaveEarnDays: 20, // 20일 근무당 1일
-      availableTypes: ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'] // 기본적으로 모든 휴가 유형 제공
+      annualLeaveStartDays: 240,
+      annualLeaveEarnDays: 20,
+      availableTypes: ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'],
+      leaveTypeDays: { ...DEFAULT_LEAVE_TYPE_DAYS },
     };
 
     const vacationPolicy = company.settings?.vacationPolicy || defaultPolicy;
     
-    // availableTypes가 없으면 기본값으로 설정
     if (!vacationPolicy.availableTypes) {
       vacationPolicy.availableTypes = defaultPolicy.availableTypes;
+    }
+    if (!vacationPolicy.leaveTypeDays) {
+      vacationPolicy.leaveTypeDays = { ...DEFAULT_LEAVE_TYPE_DAYS };
+    } else {
+      vacationPolicy.leaveTypeDays = {
+        ...DEFAULT_LEAVE_TYPE_DAYS,
+        ...vacationPolicy.leaveTypeDays,
+      };
     }
 
     res.json({
@@ -708,12 +718,12 @@ export const updateVacationPolicy = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const { annualLeaveStartDays, annualLeaveEarnDays, availableTypes } = req.body;
+    const { annualLeaveStartDays, annualLeaveEarnDays, availableTypes, leaveTypeDays } = req.body;
 
-    if (annualLeaveStartDays === undefined) {
+    if (annualLeaveStartDays === undefined && leaveTypeDays === undefined) {
       return res.status(400).json({
         success: false,
-        message: '연차 시작일 설정이 필요합니다.'
+        message: '연차 시작일 설정 또는 휴가 일수 설정이 필요합니다.'
       });
     }
 
@@ -741,9 +751,17 @@ export const updateVacationPolicy = async (req: AuthRequest, res: Response) => {
       ...currentSettings,
       vacationPolicy: {
         ...currentPolicy,
-        annualLeaveStartDays: parseInt(annualLeaveStartDays),
-        annualLeaveEarnDays: annualLeaveEarnDays || currentPolicy.annualLeaveEarnDays || 20, // 기본값 20일
-        availableTypes: availableTypes || currentPolicy.availableTypes || ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity']
+        annualLeaveStartDays:
+          annualLeaveStartDays !== undefined
+            ? parseInt(String(annualLeaveStartDays), 10)
+            : currentPolicy.annualLeaveStartDays ?? 240,
+        annualLeaveEarnDays: annualLeaveEarnDays || currentPolicy.annualLeaveEarnDays || 20,
+        availableTypes: availableTypes || currentPolicy.availableTypes || ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'],
+        leaveTypeDays: {
+          ...DEFAULT_LEAVE_TYPE_DAYS,
+          ...(currentPolicy.leaveTypeDays || {}),
+          ...(leaveTypeDays || {}),
+        },
       }
     };
 
@@ -819,11 +837,13 @@ export const exportVacationsToExcel = async (req: AuthRequest, res: Response) =>
         whereClause.user_id = userId;
       }
     } else {
-      // root는 company_id 쿼리 파라미터로 회사별 필터링 가능
-      if (userRole === 'root' && company_id) {
-        whereClause.company_id = parseInt(company_id as string);
-      } else if (userRole === 'root') {
-        // root가 company_id를 지정하지 않으면 모든 회사 조회
+      // root는 company_id 쿼리로 회사 전환 가능, 미지정 시 등록된 회사 기준
+      if (userRole === 'root') {
+        if (company_id) {
+          whereClause.company_id = parseInt(company_id as string);
+        } else if (companyId) {
+          whereClause.company_id = companyId;
+        }
       } else {
         // audit는 모든 회사 조회 가능
         if (tenantId) whereClause.tenant_id = tenantId;

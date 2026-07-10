@@ -49,6 +49,55 @@ import {
   rejectInvoice,
 } from '../controllers/accountingController';
 import {
+  approveAutoVoucher,
+  getAutoVoucherById,
+  getAutoVoucherRules,
+  getAutoVouchers,
+  postAutoVoucher,
+  rejectAutoVoucher,
+  updateAutoVoucher,
+  uploadAndGenerateAutoVoucher,
+  upsertAutoVoucherRule,
+} from '../controllers/autoVoucherController';
+import {
+  createGlAccount,
+  createGlVoucher,
+  deleteGlAccount,
+  getAccountLedger,
+  getGlAccounts,
+  getGlVoucherById,
+  getGlVouchers,
+  getTrialBalance,
+  getProfitAndLoss,
+  postGlVoucher,
+  seedGlAccounts,
+  updateGlAccount,
+  validateGlVoucherLines,
+} from '../controllers/glController';
+import {
+  seedAccountingMasters,
+  getVoucherTypes,
+  upsertVoucherType,
+  getTransactionItems,
+  upsertTransactionItem,
+  getGstCodes,
+  upsertGstCode,
+  getTdsCodes,
+  upsertTdsCode,
+  getBankAccounts,
+  upsertBankAccount,
+  getFinancialYears,
+  searchParties,
+  searchAccounts,
+  previewVoucher,
+  validateVoucher,
+  createEnhancedVoucher,
+  submitVoucher,
+  approveVoucherEntry,
+  rejectVoucherEntry,
+  getNextVoucherNumber,
+} from '../controllers/voucherEntryController';
+import {
   getEWayBills,
   getEWayBill,
   createEWayBill,
@@ -87,11 +136,91 @@ const receiptUpload = multer({
   }
 });
 
+const autoVoucherPath = path.join(uploadPath, 'auto-vouchers');
+if (!fs.existsSync(autoVoucherPath)) {
+  fs.mkdirSync(autoVoucherPath, { recursive: true });
+}
+const autoVoucherStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, autoVoucherPath),
+  filename: (_req, file, cb) => {
+    const safeName = (file.originalname || 'document').replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    cb(null, `${Date.now()}_${safeName}`);
+  },
+});
+const autoVoucherUpload = multer({
+  storage: autoVoucherStorage,
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'application/pdf',
+      'text/csv',
+      'text/plain',
+      'application/json',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ];
+    if (allowed.includes(file.mimetype)) return cb(null, true);
+    cb(new Error('지원하지 않는 파일 형식입니다.'));
+  },
+});
+
 // 토큰으로 영수증 업로드 (인증 미들웨어 없음 - 휴대폰에서 QR 스캔 후 호출)
 router.post('/expenses/upload-receipt', receiptUpload.single('file'), uploadExpenseReceiptByToken);
 
 // 모든 라우트에 인증 미들웨어 적용
 router.use(authenticateToken);
+
+// AI 자동 전표
+router.get('/auto-vouchers', getAutoVouchers);
+router.get('/auto-vouchers/:id', getAutoVoucherById);
+router.post('/auto-vouchers/upload', restrictAuditToReadOnly, autoVoucherUpload.single('file'), uploadAndGenerateAutoVoucher);
+router.put('/auto-vouchers/:id', restrictAuditToReadOnly, updateAutoVoucher);
+router.post('/auto-vouchers/:id/approve', restrictAuditToReadOnly, approveAutoVoucher);
+router.post('/auto-vouchers/:id/post', restrictAuditToReadOnly, postAutoVoucher);
+router.post('/auto-vouchers/:id/reject', restrictAuditToReadOnly, rejectAutoVoucher);
+router.get('/auto-voucher-rules', getAutoVoucherRules);
+router.post('/auto-voucher-rules', restrictAuditToReadOnly, upsertAutoVoucherRule);
+
+// 장부 / 계정과목 / 전표 (Tally형)
+router.get('/gl/accounts', getGlAccounts);
+router.post('/gl/accounts', restrictAuditToReadOnly, createGlAccount);
+router.put('/gl/accounts/:id', restrictAuditToReadOnly, updateGlAccount);
+router.delete('/gl/accounts/:id', restrictAuditToReadOnly, deleteGlAccount);
+router.post('/gl/accounts/seed-defaults', restrictAuditToReadOnly, seedGlAccounts);
+router.get('/gl/vouchers', getGlVouchers);
+router.get('/gl/vouchers/:id', getGlVoucherById);
+router.post('/gl/vouchers', restrictAuditToReadOnly, createGlVoucher);
+router.post('/gl/vouchers/:id/post', restrictAuditToReadOnly, postGlVoucher);
+router.post('/gl/vouchers/validate-lines', validateGlVoucherLines);
+router.get('/gl/ledger', getAccountLedger);
+router.get('/gl/trial-balance', getTrialBalance);
+router.get('/gl/profit-and-loss', getProfitAndLoss);
+
+// 전표 입력 마스터 & 직관적 전표 API
+router.post('/masters/seed', restrictAuditToReadOnly, seedAccountingMasters);
+router.get('/voucher-types', getVoucherTypes);
+router.post('/voucher-types', restrictAuditToReadOnly, upsertVoucherType);
+router.get('/transaction-items', getTransactionItems);
+router.post('/transaction-items', restrictAuditToReadOnly, upsertTransactionItem);
+router.get('/gst-codes', getGstCodes);
+router.post('/gst-codes', restrictAuditToReadOnly, upsertGstCode);
+router.get('/tds-codes', getTdsCodes);
+router.post('/tds-codes', restrictAuditToReadOnly, upsertTdsCode);
+router.get('/bank-accounts', getBankAccounts);
+router.post('/bank-accounts', restrictAuditToReadOnly, upsertBankAccount);
+router.get('/financial-years', getFinancialYears);
+router.get('/parties', searchParties);
+router.get('/accounts/search', searchAccounts);
+router.post('/vouchers/preview', previewVoucher);
+router.post('/vouchers/validate', validateVoucher);
+router.post('/vouchers/enhanced', restrictAuditToReadOnly, createEnhancedVoucher);
+router.get('/vouchers/next-number', getNextVoucherNumber);
+router.post('/vouchers/:id/submit', restrictAuditToReadOnly, submitVoucher);
+router.post('/vouchers/:id/approve', restrictAuditToReadOnly, approveVoucherEntry);
+router.post('/vouchers/:id/reject', restrictAuditToReadOnly, rejectVoucherEntry);
 
 // 인보이스 관련 라우트
 router.get('/invoices/next-number', getNextInvoiceNumber);

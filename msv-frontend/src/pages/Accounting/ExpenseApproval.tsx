@@ -48,7 +48,21 @@ import {
   useTheme
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsKpiCardSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsBodyPaginationSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsTableScrollSx,
+  mvsTableHeadHighlightSx,
+  mvsTableBodyRowSx,
+} from '../../theme/mvsLayout';
 import { alpha } from '@mui/material/styles';
 import {
   Add as AddIcon,
@@ -74,16 +88,11 @@ import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import QRCode from 'qrcode';
 import { useTranslation } from 'react-i18next';
-import { mvsSearchFieldSx } from '../../theme/mvsLayout';
 
-
-const expenseFilterSelectSx = {
-  borderRadius: '12px',
-  bgcolor: '#FFFFFF',
-  height: 40,
-  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
-  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
-};
+const expenseApprovalFilterFieldSx = {
+  ...(mvsSearchFieldSx as Record<string, unknown>),
+  ...mvsFilterFieldHeightSx,
+} as const;
 
 interface ExpenseItem {
   id: string;
@@ -1015,6 +1024,18 @@ const ExpenseApproval: React.FC = () => {
     page * itemsPerPage
   );
 
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    py: { xs: 6, sm: 8 },
+    px: 3,
+    gap: 1.5,
+  } as const;
+
   if (viewMode === 'create' || viewMode === 'edit') {
     const isEdit = viewMode === 'edit';
     return (
@@ -1039,7 +1060,7 @@ const ExpenseApproval: React.FC = () => {
                   {t('expenseApproval.voucher.autoSaveFailed')}
                 </Typography>
               )}
-              <Button variant="outlined" onClick={() => setViewMode('list')}>
+              <Button variant="outlined" onClick={() => setViewMode('list')} sx={mvsBodyOutlinedBtnSx}>
                 {t('expenseApproval.actions.backToList')}
               </Button>
             </Box>
@@ -1685,10 +1706,10 @@ const ExpenseApproval: React.FC = () => {
             </Box>
 
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 3 }}>
-              <Button variant="outlined" onClick={() => setViewMode('list')}>
+              <Button variant="outlined" onClick={() => setViewMode('list')} sx={mvsBodyOutlinedBtnSx}>
                 {t('common.cancel')}
               </Button>
-              <Button variant="contained" onClick={handleSaveExpense} disabled={saving || isInitializingDraft}>
+              <Button variant="contained" disableElevation onClick={handleSaveExpense} disabled={saving || isInitializingDraft} sx={mvsBodyPrimaryBtnSx}>
                 {saving ? t('expenseApproval.voucher.submitSaving') : (isEdit ? t('expenseApproval.voucher.submit') : t('expenseApproval.voucher.create'))}
               </Button>
             </Box>
@@ -1725,7 +1746,7 @@ const ExpenseApproval: React.FC = () => {
             )}
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setQrOpen(false)}>{t('common.close')}</Button>
+            <Button onClick={() => setQrOpen(false)} sx={mvsBodyOutlinedBtnSx}>{t('common.close')}</Button>
           </DialogActions>
         </Dialog>
       </Box>
@@ -1755,7 +1776,7 @@ const ExpenseApproval: React.FC = () => {
             <Button
               variant="outlined"
               onClick={() => setViewMode('list')}
-              sx={{ textTransform: 'none', borderRadius: '12px' }}
+              sx={mvsBodyOutlinedBtnSx}
             >
               {t('expenseApproval.actions.backToList')}
             </Button>
@@ -1764,7 +1785,7 @@ const ExpenseApproval: React.FC = () => {
               disableElevation
               startIcon={<EditIcon fontSize="small" />}
               onClick={() => handleEditExpense(selectedExpense)}
-              sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}
+              sx={mvsBodyPrimaryBtnSx}
             >
               {t('expenseApproval.actions.editDetail')}
             </Button>
@@ -1772,8 +1793,8 @@ const ExpenseApproval: React.FC = () => {
           }
         />
 
-        <Card>
-          <CardContent>
+        <Card elevation={0} sx={mvsBodyCardSx}>
+          <CardContent sx={{ px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
               <Box>
                 <Typography variant="h5" fontWeight="bold" gutterBottom>
@@ -2091,13 +2112,15 @@ const ExpenseApproval: React.FC = () => {
                 />
               </DialogContent>
               <DialogActions>
-                <Button variant="outlined" onClick={closeReasonDialog}>
+                <Button variant="outlined" onClick={closeReasonDialog} sx={mvsBodyOutlinedBtnSx}>
                   {t('common.cancel')}
                 </Button>
                 <Button
                   variant="contained"
+                  disableElevation
                   color={reasonDialogType === 'payment-approve' ? 'success' : 'error'}
                   onClick={handleReasonSubmit}
+                  sx={mvsBodyPrimaryBtnSx}
                 >
                   {reasonDialogType === 'payment-approve' ? t('expenseApproval.actions.approve') : t('expenseApproval.actions.reject')}
                 </Button>
@@ -2120,66 +2143,83 @@ const ExpenseApproval: React.FC = () => {
             disableElevation
             startIcon={<AddIcon fontSize="small" />}
             onClick={handleCreateExpense}
-            sx={{ borderRadius: '12px', textTransform: 'none' }}
+            sx={mvsBodyPrimaryBtnSx}
           >
             {t('expenseApproval.actions.requestExpense')}
           </Button>
         }
       />
 
-      <Tabs
-        value={listTab}
-        onChange={(_, value) => setListTab(value)}
-        sx={{ mb: 2 }}
-      >
-        <Tab label={t('expenseApproval.tabs.written')} value="written" />
-        <Tab label={t('expenseApproval.tabs.received')} value="received" />
-        {hasTransferAccess && <Tab label={t('expenseApproval.tabs.transfer')} value="transfer" />}
-      </Tabs>
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Tabs
+          value={listTab}
+          onChange={(_, value) => setListTab(value)}
+          sx={{
+            minHeight: 48,
+            px: { xs: 1, sm: 1.5 },
+            bgcolor: '#FFFFFF',
+            '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' },
+            '& .MuiTab-root': {
+              textTransform: 'none',
+              fontWeight: 500,
+              fontSize: '0.8125rem',
+              minHeight: 48,
+              py: 1.5,
+              letterSpacing: '-0.01em',
+              color: 'text.secondary',
+            },
+            '& .MuiTab-root.Mui-selected': { color: 'primary.main', fontWeight: 700 },
+          }}
+        >
+          <Tab label={t('expenseApproval.tabs.written')} value="written" />
+          <Tab label={t('expenseApproval.tabs.received')} value="received" />
+          {hasTransferAccess && <Tab label={t('expenseApproval.tabs.transfer')} value="transfer" />}
+        </Tabs>
+      </Card>
 
       {/* 통계 카드 */}
-      <Box sx={{ 
-        display: 'grid', 
+      <Box sx={{
+        display: 'grid',
         gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
-        gap: 2, 
-        mb: 3 
+        gap: 2.5,
+        mb: 3
       }}>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
               {t('expenseApproval.summary.totalExpense')}
             </Typography>
-            <Typography variant="h4">
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
               {totalExpenseAmount.toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
               {t('expenseApproval.summary.approvedAmount')}
             </Typography>
-            <Typography variant="h4" color="success.main">
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'success.main' }}>
               {approvedAmount.toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
               {t('expenseApproval.summary.pendingAmount')}
             </Typography>
-            <Typography variant="h4" color="warning.main">
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'warning.main' }}>
               {pendingAmount.toLocaleString()}
             </Typography>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent>
-            <Typography color="textSecondary" gutterBottom>
+        <Card elevation={0} sx={mvsKpiCardSx}>
+          <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
               {t('expenseApproval.summary.urgentRequests')}
             </Typography>
-            <Typography variant="h4" color="error.main">
+            <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'error.main' }}>
               {urgentCount}
             </Typography>
           </CardContent>
@@ -2187,20 +2227,22 @@ const ExpenseApproval: React.FC = () => {
       </Box>
 
       {/* 필터 및 검색 */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent sx={{ py: 2.5, px: 2.5 }}>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: 'minmax(180px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) auto',
-              },
-              gap: 2,
-              alignItems: 'flex-end',
-              ...mvsSearchFieldSx,
-            }}
-          >
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            ...expenseApprovalFilterFieldSx,
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'minmax(180px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) auto',
+            },
+            gap: 2,
+            alignItems: 'flex-end',
+          }}
+        >
             <TextField
               fullWidth
               size="small"
@@ -2209,16 +2251,11 @@ const ExpenseApproval: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputLabelProps={{ shrink: true }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  height: 40,
-                  '& .MuiOutlinedInput-input': { py: 0 },
-                },
-              }}
+              sx={expenseApprovalFilterFieldSx}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
+                    <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
                   </InputAdornment>
                 ),
               }}
@@ -2246,7 +2283,7 @@ const ExpenseApproval: React.FC = () => {
                   return statusLabels[String(selected)] ?? String(selected);
                 },
               }}
-              sx={expenseFilterSelectSx}
+              sx={expenseApprovalFilterFieldSx}
             >
               <MenuItem value="">{t('expenseApproval.filters.all')}</MenuItem>
               <MenuItem value="draft">{t('expenseApproval.status.draft')}</MenuItem>
@@ -2277,7 +2314,7 @@ const ExpenseApproval: React.FC = () => {
                   return priorityLabels[String(selected)] ?? String(selected);
                 },
               }}
-              sx={expenseFilterSelectSx}
+              sx={expenseApprovalFilterFieldSx}
             >
               <MenuItem value="">{t('expenseApproval.filters.all')}</MenuItem>
               <MenuItem value="low">{t('expenseApproval.priority.low')}</MenuItem>
@@ -2287,50 +2324,42 @@ const ExpenseApproval: React.FC = () => {
             </TextField>
             <Button
               variant="outlined"
-              startIcon={<FilterIcon />}
+              startIcon={<FilterIcon sx={{ fontSize: 18 }} />}
               onClick={() => {
                 setSearchTerm('');
                 setStatusFilter('');
                 setPriorityFilter('');
               }}
-              sx={{
-                  height: 40,
-                  whiteSpace: 'nowrap',
-                  minWidth: 'fit-content',
-                  px: 2,
-                  borderRadius: '12px',
-                  textTransform: 'none',
-                }}
-              >
+              sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
+            >
                 {t('expenseApproval.actions.reset')}
               </Button>
-          </Box>
-        </CardContent>
+        </Box>
       </Card>
 
       {/* 지출결의서 목록 테이블 */}
-      <Card>
-        <TableContainer>
-          <Table>
-            <TableHead
+      <Box sx={mvsBodyListZoneSx}>
+        {paginatedExpenses.length === 0 ? (
+          <Box sx={listStateBoxSx}>
+            <Typography variant="body2" color="text.secondary">
+              {t('expenseApproval.empty.noResults', { defaultValue: '표시할 지출결의서가 없습니다.' })}
+            </Typography>
+          </Box>
+        ) : (
+          <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+            <Table
+              size="small"
               sx={{
-                bgcolor: 'background.paper',
-                '& .MuiTableCell-head': {
-                  bgcolor: 'background.paper',
-                  color: 'text.primary',
-                  fontWeight: 600,
-                  fontSize: '0.875rem',
-                  textTransform: 'none',
-                  letterSpacing: 'normal',
-                  borderBottom: '2px solid',
-                  borderColor: 'primary.main',
-                  py: 1.25
+                borderCollapse: 'collapse',
+                bgcolor: 'transparent',
+                '& .MuiTableCell-root': {
+                  borderLeft: 'none',
+                  borderRight: 'none',
+                  borderTop: 'none',
                 },
-                '& .MuiTableCell-head:last-of-type': {
-                  textAlign: 'center'
-                }
               }}
             >
+              <TableHead sx={mvsTableHeadHighlightSx}>
               <TableRow>
                 <TableCell>{t('expenseApproval.columns.expenseInfo')}</TableCell>
                 <TableCell>{t('expenseApproval.columns.requester')}</TableCell>
@@ -2340,15 +2369,14 @@ const ExpenseApproval: React.FC = () => {
                 <TableCell>{t('expenseApproval.columns.submittedAt')}</TableCell>
                 <TableCell>{t('expenseApproval.columns.actions')}</TableCell>
               </TableRow>
-            </TableHead>
-            <TableBody>
-              {paginatedExpenses.map((expense) => (
-                <TableRow
-                  key={expense.id}
-                  hover
-                  onClick={() => handleViewExpense(expense)}
-                  sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
-                >
+              </TableHead>
+              <TableBody sx={mvsTableBodyRowSx}>
+                {paginatedExpenses.map((expense) => (
+                  <TableRow
+                    key={expense.id}
+                    onClick={() => handleViewExpense(expense)}
+                    sx={{ cursor: 'pointer', '&:active': { bgcolor: 'action.selected' } }}
+                  >
                   <TableCell>
                     <Box>
                       <Typography variant="subtitle2" fontWeight="bold">
@@ -2439,9 +2467,9 @@ const ExpenseApproval: React.FC = () => {
             </TableBody>
           </Table>
         </TableContainer>
+        )}
 
-        {/* 페이지네이션 */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+        <Box sx={mvsBodyPaginationSx}>
           <Pagination
             count={Math.ceil(filteredExpenses.length / itemsPerPage)}
             page={page}
@@ -2449,7 +2477,7 @@ const ExpenseApproval: React.FC = () => {
             color="primary"
           />
         </Box>
-      </Card>
+      </Box>
 
       {/* 스낵바 */}
       <Snackbar
@@ -2480,8 +2508,8 @@ const ExpenseApproval: React.FC = () => {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteTargetId(null)}>{t('common.cancel')}</Button>
-          <Button variant="contained" color="error" onClick={confirmDeleteExpense}>
+          <Button onClick={() => setDeleteTargetId(null)} sx={mvsBodyOutlinedBtnSx}>{t('common.cancel')}</Button>
+          <Button variant="contained" color="error" disableElevation onClick={confirmDeleteExpense} sx={mvsBodyPrimaryBtnSx}>
             {t('common.delete')}
           </Button>
         </DialogActions>
