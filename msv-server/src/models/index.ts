@@ -490,11 +490,6 @@ const connectDB = async () => {
 
       await ensureUserEmploymentDailyEnum(sequelize);
 
-      // 개발 환경에서만 테이블 동기화
-      // if (process.env.NODE_ENV === 'development') {
-        // await sequelize.sync({ alter: true });
-        // console.log('Database table sync completed');
-      // }
       return;
     } catch (error) {
       retries++;

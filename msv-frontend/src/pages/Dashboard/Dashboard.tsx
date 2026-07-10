@@ -4,7 +4,6 @@ import {
   Card,
   CardContent,
   Typography,
-  Paper,
   Chip,
   IconButton,
   Avatar,
@@ -17,7 +16,6 @@ import {
   Tab,
   Button,
   Tooltip,
-  Grid,
   Alert,
   Checkbox,
   FormControlLabel,
@@ -28,7 +26,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TablePagination,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -52,15 +49,10 @@ import {
   Assessment,
   Notifications,
   Refresh,
-  MoreVert,
   Settings as SettingsIcon,
   Person as PersonIcon,
-  Group as GroupIcon,
   AdminPanelSettings as AdminPanelSettingsIcon,
   ArrowForward as ArrowForwardIcon,
-  Speed as SpeedIcon,
-  Security as SecurityIcon,
-  Analytics as AnalyticsIcon,
   Announcement as AnnouncementIcon,
   CalendarToday as CalendarTodayIcon,
   ChevronLeft as ChevronLeftIcon,
@@ -68,18 +60,16 @@ import {
   Assignment as AssignmentIcon,
   Work as WorkIcon,
   Warning as WarningIcon,
-  CheckCircle as CheckCircleIcon,
   Pending as PendingIcon,
   Business as BusinessIcon,
   FolderSpecial as FolderSpecialIcon,
-  Create as CreateIcon,
-  Cancel as CancelIcon,
   AttachFile as AttachFileIcon,
   Login as CheckInIcon,
   Logout as CheckOutIcon,
-  StarBorder as StarBorderIcon
+  StarBorder as StarBorderIcon,
+  Security as SecurityIcon
 } from '@mui/icons-material';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, ComposedChart } from 'recharts';
+import { Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { useStore, useMenuStore } from '../../store';
 import {
@@ -95,10 +85,19 @@ import {
 import { showErrorPopup } from '../../utils/errorHandler';
 import { isRemovedNavMenuRoute } from '../../utils/isRemovedNavMenuRoute';
 import { useTranslation } from 'react-i18next';
-import { mvsDashboardWidgetGroupSx } from '../../theme/mvsLayout';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import {
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodySectionHeaderSx,
+  mvsDashboardWidgetCardSx,
+  mvsDashboardWidgetGroupSx,
+  mvsKpiCardSx,
+  mvsPageRootSx,
+} from '../../theme/mvsLayout';
 import DepartmentLeaveCalendar, { CALENDAR_DEPARTMENT_ALL_VALUE } from '../HR/DepartmentLeaveCalendar';
 
-// TabPanel 컴포넌트 정의
 interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
@@ -120,7 +119,6 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-// 샘플 데이터 (기본값으로 사용)
 const defaultSalesData = [
   { name: '1월', sales: 0, profit: 0 },
   { name: '2월', sales: 0, profit: 0 },
@@ -169,14 +167,12 @@ const DASHBOARD_CARD_DEFAULT_IDS = [
   'notice'
 ];
 
-/** 하단 대시보드 카드 내부 여백 (카드 패딩 +4~8px 목표) */
 const DASHBOARD_CARD_PAD = 2.5;
 const DASHBOARD_CARD_SPACING = 1.5;
 const DASHBOARD_CARD_CHART_MIN = 168;
 
 type DashboardCardTitleAccent = 'primary' | 'error';
 
-/** 대시보드 카드 제목 영역 — 보더 최소화, 은은한 톤만 */
 const dashboardCardTitleBar = (
   accent: DashboardCardTitleAccent,
   opts?: { noFlex?: boolean }
@@ -192,7 +188,6 @@ const dashboardCardTitleBar = (
   bgcolor: alpha(theme.palette[accent].main, 0.06),
 });
 
-/** 카드·위젯 헤더 — 전역 cardTitle(14px/600)과 동일 */
 const DASHBOARD_CARD_TITLE_TYPO: SxProps<Theme> = {
   fontWeight: 600,
   fontSize: '14px',
@@ -200,6 +195,26 @@ const DASHBOARD_CARD_TITLE_TYPO: SxProps<Theme> = {
   color: '#111827',
   letterSpacing: '-0.01em'
 };
+
+const DASHBOARD_WIDGET_CARD_BASE_SX: SxProps<Theme> = {
+  ...(mvsDashboardWidgetCardSx as object),
+  height: '100%',
+  display: 'flex',
+  flexDirection: 'column',
+  transition: 'box-shadow 0.2s ease',
+  '&:hover': {
+    boxShadow: '0 12px 32px rgba(15, 23, 42, 0.08)',
+  },
+};
+
+const dashboardWidgetCardSx = (
+  order: number,
+  extra?: SxProps<Theme>
+): SxProps<Theme> => ({
+  ...DASHBOARD_WIDGET_CARD_BASE_SX,
+  order,
+  ...(extra && typeof extra !== 'function' ? extra : {}),
+});
 
 const Dashboard: React.FC = () => {
   const theme = useTheme();
@@ -241,17 +256,14 @@ const Dashboard: React.FC = () => {
   const [lowStockItems, setLowStockItems] = useState<any[]>([]);
   const [recentInvoices, setRecentInvoices] = useState<any[]>([]);
   
-  // 개인 대시보드용 데이터
+
   const [myReceivedApprovals, setMyReceivedApprovals] = useState<any[]>([]);
   const [myRequestedApprovals, setMyRequestedApprovals] = useState<any[]>([]);
-  const [, setMyReceivedVacations] = useState<any[]>([]);
-  const [, setMyRequestedVacations] = useState<any[]>([]);
-  const [, setMyProjects] = useState<any[]>([]);
   const [myTasks, setMyTasks] = useState<any[]>([]);
   const [noticeDialogOpen, setNoticeDialogOpen] = useState(false);
   const [selectedNotice, setSelectedNotice] = useState<any | null>(null);
   
-  // 출근/퇴근 관련 상태
+
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [checkOutLoading, setCheckOutLoading] = useState(false);
   const [attendanceMessage, setAttendanceMessage] = useState<string | null>(null);
@@ -268,7 +280,6 @@ const Dashboard: React.FC = () => {
   const [customCalendarSchedules, setCustomCalendarSchedules] = useState<Record<string, CalendarScheduleItem[]>>({});
   const [dashboardLeaveMonth, setDashboardLeaveMonth] = useState(() => new Date());
   const [dashboardLeaveRaw, setDashboardLeaveRaw] = useState<any[]>([]);
-  /** 휴가 달력 부서 필터 — 부서 관리 API 마스터 기준 */
   const [dashboardHrDepartmentNames, setDashboardHrDepartmentNames] = useState<string[]>([]);
   const [dashboardLeaveDept, setDashboardLeaveDept] = useState<string>('');
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
@@ -1201,9 +1212,6 @@ const Dashboard: React.FC = () => {
         myTasksResult,
         receivedRes,
         myApprovals,
-        myApprovalVacations,
-        myVacations,
-        myProjects,
       ] = await Promise.all([
         api.get('/dashboard/stats').catch(() => null),
         api.get('/dashboard/revenue-trend').catch(() => null),
@@ -1222,11 +1230,6 @@ const Dashboard: React.FC = () => {
           ? approvalService.getApprovals({ current_approver_id: uid, status: 'submitted,in_review' }).catch(() => null)
           : Promise.resolve(null),
         uid ? approvalService.getApprovals({ requester_id: uid }).catch(() => null) : Promise.resolve(null),
-        uid
-          ? vacationService.getVacations({ approved_by: user!.id, status: 'pending' }).catch(() => null)
-          : Promise.resolve(null),
-        uid ? vacationService.getVacations({ user_id: user!.id }).catch(() => null) : Promise.resolve(null),
-        uid ? projectService.getProjects({ manager_id: user!.id }).catch(() => null) : Promise.resolve(null),
       ]);
 
       if (statsResponse?.data?.success) {
@@ -1309,21 +1312,6 @@ const Dashboard: React.FC = () => {
         const approvals = raw.filter((a: any) => Number(a.requester_id) === uid);
         setMyRequestedApprovals(approvals.slice(0, 5));
       }
-
-      if (uid && myApprovalVacations?.success) {
-        const vacs = Array.isArray(myApprovalVacations.data) ? myApprovalVacations.data : [];
-        setMyReceivedVacations(vacs.slice(0, 5));
-      }
-
-      if (uid && myVacations?.success) {
-        const vacs = Array.isArray(myVacations.data) ? myVacations.data : [];
-        setMyRequestedVacations(vacs.slice(0, 5));
-      }
-
-      if (uid && myProjects?.success) {
-        const projs = Array.isArray(myProjects.data) ? myProjects.data : [];
-        setMyProjects(projs.slice(0, 5));
-      }
     } catch (error) {
       console.error('대시보드 데이터 로드 오류:', error);
       setError(t('errors.serverError'));
@@ -1361,20 +1349,19 @@ const Dashboard: React.FC = () => {
     }
     
     return (
-      <Card 
-        sx={{ 
-          height: '100%', 
-          position: 'relative', 
+      <Card
+        elevation={0}
+        sx={(th) => ({
+          ...(mvsKpiCardSx as (theme: Theme) => Record<string, unknown>)(th),
+          height: '100%',
+          position: 'relative',
           overflow: 'hidden',
           cursor: onClick ? 'pointer' : 'default',
-          border: '1px solid rgba(0, 0, 0, 0.04)',
-          borderRadius: '18px',
-          boxShadow: '0 10px 28px rgba(0, 0, 0, 0.05)',
-          transition: 'all 0.2s ease',
-          '&:hover': onClick ? {
-            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.06)',
-          } : {}
-        }}
+          transition: 'box-shadow 0.2s ease',
+          '&:hover': onClick
+            ? { boxShadow: '0 12px 32px rgba(15, 23, 42, 0.08)' }
+            : {},
+        })}
         onClick={onClick}
       >
         <CardContent sx={{ p: 3 }}>
@@ -1470,22 +1457,20 @@ const Dashboard: React.FC = () => {
 
   const QuickActionCard = ({ title, icon, color, onClick, disabled = false }: any) => (
     <Card
+      elevation={0}
       sx={{
+        ...(mvsDashboardWidgetCardSx as object),
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.5 : 1,
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        borderRadius: '16px',
-        border: `1px solid ${alpha(theme.palette.divider, 0.65)}`,
-        boxShadow: `0 4px 18px ${alpha('#0f172a', 0.04)}`,
-        bgcolor: 'background.paper',
         transition: 'box-shadow 0.2s ease, background-color 0.2s ease',
         '&:hover': disabled
           ? {}
           : {
-              bgcolor: alpha(theme.palette.grey[500], 0.05),
-              boxShadow: `0 8px 26px ${alpha('#0f172a', 0.07)}`,
+              bgcolor: alpha(theme.palette.grey[500], 0.04),
+              boxShadow: '0 8px 26px rgba(15, 23, 42, 0.08)',
             },
       }}
       onClick={disabled ? undefined : onClick}
@@ -1536,113 +1521,65 @@ const Dashboard: React.FC = () => {
   );
 
   return (
-    <Box
-      sx={{
-        width: '100%',
-        maxWidth: '100%',
-        boxSizing: 'border-box',
-        backgroundColor: 'workArea.main',
-        minHeight: '100%',
-        p: 0,
-      }}
-    >
-      {/* 헤더 섹션 */}
-      <Box
-        sx={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 2,
-          mb: 3.5,
-          p: { xs: 2.25, sm: 3 },
-          backgroundColor: 'background.paper',
-          borderRadius: '20px',
-          boxShadow: `0 8px 30px ${alpha('#0f172a', 0.045)}`,
-          border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
-          <Box
-            sx={{
-              width: 44,
-              height: 44,
-              backgroundColor: 'primary.main',
-              borderRadius: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.35)}`,
-            }}
-          >
-            <DashboardIcon sx={{ color: 'white', fontSize: '1.35rem' }} />
-          </Box>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="pageTitle" sx={{ color: 'text.primary', mb: 0.5, letterSpacing: '-0.02em' }}>
-              {t('dashboard.pageTitle')}
-            </Typography>
-            <Typography variant="pageDescription" sx={{ letterSpacing: '0.01em' }}>
-              {t('dashboard.welcomeWork', { name: user?.username || t('dashboard.userFallback') })}
-            </Typography>
-          </Box>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexShrink: 0 }}>
-          <Tooltip title={t('dashboard.refresh')}>
-            <IconButton
-              onClick={handleRefresh}
-              disabled={loading}
-              size="small"
+    <Box sx={mvsPageRootSx}>
+      <MvsPageHeader
+        title={t('dashboard.pageTitle')}
+        description={t('dashboard.welcomeWork', { name: user?.username || t('dashboard.userFallback') })}
+        icon={<DashboardIcon />}
+        actions={
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexShrink: 0 }}>
+            <Tooltip title={t('dashboard.refresh')}>
+              <IconButton
+                onClick={handleRefresh}
+                disabled={loading}
+                size="small"
+                sx={{
+                  borderRadius: '10px',
+                  border: '1px solid #C5CED9',
+                  bgcolor: '#F8FAFC',
+                  '&:hover': { bgcolor: '#E8EDF3' },
+                }}
+              >
+                <Refresh sx={{ fontSize: '1.125rem' }} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title={t('dashboard.notifications')}>
+              <IconButton
+                size="small"
+                sx={{
+                  borderRadius: '10px',
+                  border: '1px solid #C5CED9',
+                  bgcolor: '#F8FAFC',
+                  '&:hover': { bgcolor: '#E8EDF3' },
+                }}
+              >
+                <Notifications sx={{ fontSize: '1.125rem' }} />
+              </IconButton>
+            </Tooltip>
+            <Avatar
               sx={{
-                borderRadius: '12px',
-                backgroundColor: alpha(theme.palette.grey[500], 0.1),
-                '&:hover': { backgroundColor: alpha(theme.palette.grey[500], 0.16) },
+                width: 34,
+                height: 34,
+                bgcolor: 'error.main',
+                fontSize: '0.875rem',
+                fontWeight: 600,
               }}
             >
-              <Refresh sx={{ fontSize: '1.125rem' }} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title={t('dashboard.notifications')}>
-            <IconButton
-              size="small"
-              sx={{
-                borderRadius: '12px',
-                backgroundColor: alpha(theme.palette.grey[500], 0.1),
-                '&:hover': { backgroundColor: alpha(theme.palette.grey[500], 0.16) },
-              }}
-            >
-              <Notifications sx={{ fontSize: '1.125rem' }} />
-            </IconButton>
-          </Tooltip>
-          <Avatar
-            sx={{
-              width: 34,
-              height: 34,
-              bgcolor: 'error.main',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-            }}
-          >
-            R
-          </Avatar>
-        </Box>
-      </Box>
+              R
+            </Avatar>
+          </Box>
+        }
+      />
 
-      {/* 대시보드 타입 선택 - 고정 탭 */}
-      <Box
-        sx={{
-          mb: 3.5,
-          backgroundColor: 'background.paper',
-          borderRadius: '20px',
-          boxShadow: `0 8px 30px ${alpha('#0f172a', 0.045)}`,
-          border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
-          overflow: 'hidden',
-        }}
-      >
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 2.5, overflow: 'hidden' }}>
         <Tabs
           value={getDisplayIndex(activeTab)}
           onChange={handleTabChange}
+          variant="scrollable"
+          scrollButtons="auto"
           sx={{
+            px: 1,
+            minHeight: 48,
             '& .MuiTabs-indicator': {
               backgroundColor: 'primary.main',
               height: 3,
@@ -1652,55 +1589,35 @@ const Dashboard: React.FC = () => {
               textTransform: 'none',
               fontSize: '0.875rem',
               fontWeight: 600,
-              minHeight: 56,
-              px: 3,
+              minHeight: 48,
+              py: 1.5,
+              px: 2.5,
               letterSpacing: '0.01em',
               color: 'text.secondary',
               '&.Mui-selected': {
-                backgroundColor: alpha(theme.palette.primary.main, 0.08),
                 color: 'primary.main',
               },
             },
           }}
         >
           {availableTabs.map((tab) => (
-            <Tab 
+            <Tab
               key={tab.index}
-              label={tab.label} 
-              icon={<tab.icon sx={{ fontSize: '1rem' }} />} 
+              label={tab.label}
+              icon={<tab.icon sx={{ fontSize: '1rem' }} />}
               iconPosition="start"
             />
           ))}
         </Tabs>
-      </Box>
+      </Card>
 
-      {/* 빠른 액션 */}
-      <Card
-        elevation={0}
-        sx={{
-          mb: 2,
-          mx: 0,
-          bgcolor: alpha(theme.palette.grey[500], 0.06),
-          borderRadius: '20px',
-          boxShadow: `0 4px 22px ${alpha('#0f172a', 0.035)}`,
-          border: `1px solid ${alpha(theme.palette.divider, 0.55)}`,
-          overflow: 'hidden',
-        }}
-      >
-        <CardContent sx={{ p: { xs: 2, sm: 2.75 } }}>
-          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
-            <Typography
-              variant="h6"
-              sx={{
-                fontSize: '1.0625rem',
-                fontWeight: 600,
-                letterSpacing: '-0.02em',
-                color: 'text.primary',
-              }}
-            >
-              {t('dashboard.quickActions')}
-            </Typography>
-          </Box>
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 2.5 }}>
+        <Box sx={mvsBodySectionHeaderSx}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, letterSpacing: '-0.01em', color: 'text.primary' }}>
+            {t('dashboard.quickActions')}
+          </Typography>
+        </Box>
+        <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2 }}>
           <Box
             sx={{
               display: 'flex',
@@ -1709,7 +1626,6 @@ const Dashboard: React.FC = () => {
               flexDirection: { xs: 'column', md: 'row' },
             }}
           >
-            {/* 사용자 설정 빠른 액션 카드 */}
             <Box
               sx={{
                 display: 'grid',
@@ -1750,7 +1666,6 @@ const Dashboard: React.FC = () => {
               )}
             </Box>
             
-            {/* 출근·퇴근·빠른 액션 편집 — 좁은 고정폭 제거로 라벨 잘림 방지 */}
             <Box
               sx={{
                 display: 'flex',
@@ -1771,16 +1686,8 @@ const Dashboard: React.FC = () => {
                 startIcon={<SettingsIcon sx={{ fontSize: '1rem' }} />}
                 onClick={() => setQuickActionDialogOpen(true)}
                 sx={{
-                  textTransform: 'none',
-                  fontSize: '0.8125rem',
-                  fontWeight: 600,
-                  py: 1,
-                  px: 1.5,
-                  borderRadius: '12px',
+                  ...mvsBodyOutlinedBtnSx,
                   width: { xs: '100%', sm: 'auto', md: '100%' },
-                  minHeight: 40,
-                  justifyContent: 'center',
-                  borderColor: alpha(theme.palette.divider, 0.95),
                   whiteSpace: 'nowrap',
                 }}
               >
@@ -1794,13 +1701,8 @@ const Dashboard: React.FC = () => {
                 onClick={handleCheckIn}
                 disabled={checkInLoading || !!todayAttendance?.check_in}
                 sx={{
+                  ...mvsBodyPrimaryBtnSx,
                   width: { xs: '100%', sm: 'auto', md: '100%' },
-                  borderRadius: '12px',
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  fontSize: '0.8125rem',
-                  py: 1,
-                  px: 1.75,
                   minHeight: 40,
                   whiteSpace: 'nowrap',
                   '& .MuiButton-startIcon': { mr: 0.75, ml: 0 },
@@ -1815,21 +1717,10 @@ const Dashboard: React.FC = () => {
                 onClick={handleCheckOut}
                 disabled={checkOutLoading || !todayAttendance?.check_in || !!todayAttendance?.check_out}
                 sx={{
+                  ...mvsBodyOutlinedBtnSx,
                   width: { xs: '100%', sm: 'auto', md: '100%' },
-                  borderRadius: '12px',
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  fontSize: '0.8125rem',
-                  py: 1,
-                  px: 1.75,
                   minHeight: 40,
                   whiteSpace: 'nowrap',
-                  borderColor: alpha(theme.palette.text.secondary, 0.35),
-                  color: 'text.secondary',
-                  '&:hover': {
-                    borderColor: 'text.primary',
-                    bgcolor: alpha(theme.palette.grey[500], 0.06),
-                  },
                   '& .MuiButton-startIcon': { mr: 0.75, ml: 0 },
                 }}
               >
@@ -1837,8 +1728,252 @@ const Dashboard: React.FC = () => {
               </Button>
             </Box>
           </Box>
-        </CardContent>
+        </Box>
       </Card>
+
+      {selectedDashboardCards.includes('calendar') && (
+        <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 2.5 }}>
+          <Box
+            sx={{
+              ...mvsBodySectionHeaderSx,
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1,
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <CalendarTodayIcon color="primary" fontSize="small" />
+              <Typography variant="subtitle1" sx={{ fontWeight: 600, letterSpacing: '-0.01em', color: 'text.primary' }}>
+                {language === 'en' ? 'Weekly Schedule' : '주간 스케줄'}
+              </Typography>
+            </Box>
+            {(() => {
+              const weekDates = Array.from({ length: 7 }, (_, index) => {
+                const date = new Date(currentWeekStart);
+                date.setDate(currentWeekStart.getDate() + index);
+                return date;
+              });
+              const weekEnd = weekDates[6];
+              return (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                  <IconButton
+                    size="small"
+                    onClick={() => setCurrentWeekStart((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 7))}
+                  >
+                    <ChevronLeftIcon fontSize="small" />
+                  </IconButton>
+                  <Typography variant="body2" sx={{ fontWeight: 600, minWidth: { xs: 180, sm: 220 }, textAlign: 'center' }}>
+                    {`${currentWeekStart.toLocaleDateString(language === 'en' ? 'en-US' : 'ko-KR')} ~ ${weekEnd.toLocaleDateString(language === 'en' ? 'en-US' : 'ko-KR')}`}
+                  </Typography>
+                  <IconButton
+                    size="small"
+                    onClick={() => setCurrentWeekStart((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7))}
+                  >
+                    <ChevronRightIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              );
+            })()}
+          </Box>
+          <Box sx={{ px: { xs: 1.5, sm: 2.5 }, py: 2, overflowX: 'auto' }}>
+            {(() => {
+              const weekDaysShort = language === 'en'
+                ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+                : ['일', '월', '화', '수', '목', '금', '토'];
+              const today = new Date();
+              const weekDates = Array.from({ length: 7 }, (_, index) => {
+                const date = new Date(currentWeekStart);
+                date.setDate(currentWeekStart.getDate() + index);
+                return date;
+              });
+
+              const isToday = (date: Date) =>
+                date.getDate() === today.getDate() &&
+                date.getMonth() === today.getMonth() &&
+                date.getFullYear() === today.getFullYear();
+
+              const isWeekend = (date: Date) => {
+                const day = date.getDay();
+                return day === 0 || day === 6;
+              };
+
+              return (
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: {
+                      xs: 'repeat(7, minmax(88px, 1fr))',
+                      md: 'repeat(7, 1fr)',
+                    },
+                    gap: { xs: 1, sm: 1.25 },
+                    minWidth: { xs: 640, md: '100%' },
+                  }}
+                >
+                  {weekDates.map((date) => {
+                    const dayName = weekDaysShort[date.getDay()];
+                    const dateKey = formatDateKey(date);
+                    const holidayNames = getHolidayNames(date);
+                    const customLabels = customCalendarSchedules[dateKey] || [];
+                    const complianceLabels = getComplianceLabels(date);
+                    const hasCompanyHoliday = customLabels.some((item) => item.type === 'company_holiday');
+                    const isHolidayDate = holidayNames.length > 0;
+                    const isTodayDate = isToday(date);
+                    const isWeekendDate = isWeekend(date);
+                    const isWeekendOnly = isWeekendDate && !isHolidayDate;
+                    const hasAnySchedule = holidayNames.length > 0 || customLabels.length > 0 || complianceLabels.length > 0;
+                    const allLabels = [
+                      ...holidayNames.map((name) => ({ key: `h-${name}`, label: getHolidayDisplayName(name), type: 'holiday' as const })),
+                      ...customLabels.map((item) => ({
+                        key: `c-${item.id}`,
+                        label: item.title || (language === 'en' ? 'Company Holiday' : '회사 휴일'),
+                        type: item.type === 'company_holiday' ? 'company_holiday' as const : 'custom' as const,
+                      })),
+                      ...complianceLabels.map((item) => ({ key: `p-${item.id}`, label: item.label, type: 'compliance' as const })),
+                    ];
+                    const visibleLabels = allLabels.slice(0, 2);
+                    const hiddenCount = allLabels.length - visibleLabels.length;
+
+                    return (
+                      <Box
+                        key={dateKey}
+                        onClick={() => openScheduleDialog(date)}
+                        sx={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          px: 1,
+                          py: 1.25,
+                          minHeight: 128,
+                          borderRadius: '12px',
+                          border: '1px solid',
+                          borderColor: hasCompanyHoliday
+                            ? 'warning.main'
+                            : isTodayDate
+                              ? 'primary.main'
+                              : 'divider',
+                          bgcolor: isTodayDate
+                            ? 'primary.main'
+                            : isHolidayDate
+                              ? 'background.paper'
+                              : isWeekendOnly
+                                ? 'rgba(10, 110, 125, 0.14)'
+                                : 'grey.50',
+                          cursor: 'pointer',
+                          transition: 'box-shadow 0.2s ease, transform 0.15s ease',
+                          '&:hover': {
+                            boxShadow: '0 8px 20px rgba(15, 23, 42, 0.08)',
+                            transform: 'translateY(-1px)',
+                          },
+                        }}
+                      >
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontWeight: 700,
+                            color: isTodayDate ? 'common.white' : 'text.secondary',
+                            mb: 0.25,
+                          }}
+                        >
+                          {dayName}
+                        </Typography>
+                        <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.35, mb: 0.75 }}>
+                          <Typography
+                            variant="h6"
+                            sx={{
+                              fontWeight: 800,
+                              lineHeight: 1,
+                              color: isTodayDate ? 'common.white' : 'text.primary',
+                            }}
+                          >
+                            {date.getDate()}
+                          </Typography>
+                          {hasCompanyHoliday && (
+                            <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.05 }}>
+                              <CompanyHolidayStarIcon color={isTodayDate ? '#FFFFFF' : '#FF1744'} />
+                              <CompanyHolidayStarIcon color={isTodayDate ? '#FFFFFF' : '#FF1744'} />
+                            </Box>
+                          )}
+                        </Box>
+                        <Box
+                          sx={{
+                            width: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'stretch',
+                            gap: 0.4,
+                            flex: 1,
+                          }}
+                        >
+                          {visibleLabels.map((item) => (
+                            <Chip
+                              key={`${dateKey}-${item.key}`}
+                              size="small"
+                              label={item.label}
+                              sx={{
+                                height: 20,
+                                maxWidth: '100%',
+                                fontSize: '0.62rem',
+                                fontWeight: 700,
+                                '& .MuiChip-label': {
+                                  px: 0.75,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                },
+                                bgcolor:
+                                  item.type === 'holiday'
+                                    ? 'error.light'
+                                    : item.type === 'company_holiday'
+                                      ? 'warning.dark'
+                                      : item.type === 'compliance'
+                                        ? 'info.light'
+                                        : 'primary.light',
+                                color:
+                                  item.type === 'holiday'
+                                    ? 'error.contrastText'
+                                    : item.type === 'company_holiday'
+                                      ? 'common.white'
+                                      : item.type === 'compliance'
+                                        ? 'info.dark'
+                                        : 'primary.main',
+                              }}
+                            />
+                          ))}
+                          {!hasAnySchedule && (
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                textAlign: 'center',
+                                color: isTodayDate ? 'common.white' : 'text.secondary',
+                                fontWeight: 600,
+                              }}
+                            >
+                              {language === 'en' ? 'No schedules' : '일정 없음'}
+                            </Typography>
+                          )}
+                          {hiddenCount > 0 && (
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                textAlign: 'center',
+                                fontWeight: 700,
+                                color: isTodayDate ? 'common.white' : 'primary.main',
+                              }}
+                            >
+                              +{hiddenCount}
+                            </Typography>
+                          )}
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              );
+            })()}
+          </Box>
+        </Card>
+      )}
 
       <Dialog
         open={quickActionDialogOpen}
@@ -2072,16 +2207,6 @@ const Dashboard: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* 탭별 대시보드 내용 */}
-      {availableTabs.some(tab => tab.index === 0) && (
-        <TabPanel value={activeTab} index={0}>
-          {/* 개인 대시보드 */}
-          <Box>
-          </Box>
-        </TabPanel>
-      )}
-
-      {/* 공지사항 상세 팝업 */}
       <Dialog
         open={noticeDialogOpen}
         onClose={() => {
@@ -2266,9 +2391,7 @@ const Dashboard: React.FC = () => {
 
       {availableTabs.some(tab => tab.index === 2) && (
         <TabPanel value={activeTab} index={2}>
-        {/* 관리자 대시보드 */}
         <Box>
-          {/* 주요 지표 */}
           <Box sx={{
             display: 'grid',
             gridTemplateColumns: {
@@ -2341,7 +2464,6 @@ const Dashboard: React.FC = () => {
         />
       </Box>
 
-          {/* 관리자 통계 차트 */}
           <Box sx={{
             display: 'grid',
             gridTemplateColumns: {
@@ -2351,8 +2473,7 @@ const Dashboard: React.FC = () => {
             gap: 2,
             mb: 3
           }}>
-            {/* 재고 현황 차트 */}
-            <Card>
+            <Card elevation={0} sx={mvsBodyCardSx}>
               <CardContent>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Inventory color="primary" />
@@ -2390,19 +2511,17 @@ const Dashboard: React.FC = () => {
               </CardContent>
             </Card>
           </Box>
-
-          {/* 고객 현황 테이블 - 데이터가 없으므로 표시하지 않음 */}
         </Box>
       </TabPanel>
       )}
 
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
         <Button
           size="small"
           variant="outlined"
           startIcon={<SettingsIcon sx={{ fontSize: '0.9rem' }} />}
           onClick={() => setDashboardCardDialogOpen(true)}
-          sx={{ textTransform: 'none', fontSize: '0.8125rem', fontWeight: 600, py: 0.65, px: 1.5, borderRadius: '12px' }}
+          sx={mvsBodyOutlinedBtnSx}
         >
           {language === 'en' ? 'Edit dashboard cards' : '하단 카드 편집'}
         </Button>
@@ -2424,34 +2543,23 @@ const Dashboard: React.FC = () => {
         gridAutoRows: 'minmax(0, auto)',
         alignItems: 'stretch',
         ...mvsDashboardWidgetGroupSx,
-        border: `1px solid ${alpha(theme.palette.divider, 0.45)}`,
-        boxShadow: `0 4px 24px ${alpha('#0f172a', 0.04)}`,
         '& > .MuiCard-root': {
           minHeight: 0,
           height: '100%',
           alignSelf: 'stretch'
         },
-        /* 휴가 달력: 월 그리드 전체가 보이도록 카드 높이를 내용에 맞춤(내부 스크롤 방지) */
         '& > .MuiCard-root.dashboard-vacation-calendar-card': {
           height: 'auto',
           alignSelf: 'start'
         }
       }}>
-        {/* 전자결재 */}
         {selectedDashboardCards.includes('approval') && (
         <Card
+          elevation={0}
           onClick={() => navigate('/work/approval')}
-          sx={{
-            order: selectedDashboardCards.indexOf('approval'),
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
+          sx={dashboardWidgetCardSx(selectedDashboardCards.indexOf('approval'), {
             cursor: 'pointer',
-            transition: 'box-shadow 0.2s ease',
-            '&:hover': {
-              boxShadow: '0 12px 32px rgba(0, 0, 0, 0.06)',
-            },
-          }}
+          })}
         >
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>
@@ -2575,9 +2683,8 @@ const Dashboard: React.FC = () => {
         </Card>
         )}
 
-        {/* 내 담당 업무 */}
         {selectedDashboardCards.includes('projects') && (
-        <Card sx={{ order: selectedDashboardCards.indexOf('projects'), height: '100%', display: 'flex', flexDirection: 'column', transition: 'all 0.2s ease', '&:hover': { boxShadow: '0 12px 32px rgba(0, 0, 0, 0.06)' } }}>
+        <Card elevation={0} sx={dashboardWidgetCardSx(selectedDashboardCards.indexOf('projects'))}>
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>
               <Box sx={dashboardCardTitleBar('primary')}>
@@ -2661,9 +2768,8 @@ const Dashboard: React.FC = () => {
         </Card>
         )}
 
-        {/* 재고 부족 알림 */}
         {selectedDashboardCards.includes('lowStock') && (
-        <Card sx={{ order: selectedDashboardCards.indexOf('lowStock'), height: '100%', display: 'flex', flexDirection: 'column', transition: 'all 0.2s ease', '&:hover': { boxShadow: '0 12px 32px rgba(0, 0, 0, 0.06)' } }}>
+        <Card elevation={0} sx={dashboardWidgetCardSx(selectedDashboardCards.indexOf('lowStock'))}>
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'hidden', minHeight: 0 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1, flexShrink: 0 }}>
               <Box sx={dashboardCardTitleBar('error')}>
@@ -2734,9 +2840,8 @@ const Dashboard: React.FC = () => {
         </Card>
         )}
 
-        {/* 최근 거래 */}
         {selectedDashboardCards.includes('recentTransactions') && (
-        <Card sx={{ order: selectedDashboardCards.indexOf('recentTransactions'), height: '100%', display: 'flex', flexDirection: 'column', transition: 'all 0.2s ease', '&:hover': { boxShadow: '0 12px 32px rgba(0, 0, 0, 0.06)' } }}>
+        <Card elevation={0} sx={dashboardWidgetCardSx(selectedDashboardCards.indexOf('recentTransactions'))}>
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>
               <Box sx={dashboardCardTitleBar('primary')}>
@@ -2807,222 +2912,11 @@ const Dashboard: React.FC = () => {
         </Card>
         )}
 
-        {/* 달력 */}
-        {selectedDashboardCards.includes('calendar') && (
-        <Card sx={{ order: selectedDashboardCards.indexOf('calendar'), height: '100%', display: 'flex', flexDirection: 'column', transition: 'all 0.2s ease', '&:hover': { boxShadow: '0 12px 32px rgba(0, 0, 0, 0.06)' } }}>
-          <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
-            <Box sx={{ mb: DASHBOARD_CARD_SPACING }}>
-              <Box sx={dashboardCardTitleBar('primary', { noFlex: true })}>
-                <CalendarTodayIcon color="primary" fontSize="small" />
-                <Typography component="div" variant="subtitle1" sx={DASHBOARD_CARD_TITLE_TYPO}>
-                  {language === 'en' ? 'Weekly Schedule' : '주간 스케줄'}
-                </Typography>
-              </Box>
-            </Box>
-            {(() => {
-              const weekDays = language === 'en'
-                ? ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-                : ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'];
-              const today = new Date();
-              const weekDates = Array.from({ length: 7 }, (_, index) => {
-                const date = new Date(currentWeekStart);
-                date.setDate(currentWeekStart.getDate() + index);
-                return date;
-              });
-              const weekEnd = weekDates[6];
-
-              const isToday = (date: Date) =>
-                date.getDate() === today.getDate() &&
-                date.getMonth() === today.getMonth() &&
-                date.getFullYear() === today.getFullYear();
-
-              const isWeekend = (date: Date) => {
-                const day = date.getDay();
-                return day === 0 || day === 6;
-              };
-
-              return (
-                <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  {/* 주차 네비게이션 */}
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING }}>
-                    <IconButton
-                      size="small"
-                      onClick={() => setCurrentWeekStart((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 7))}
-                    >
-                      <ChevronLeftIcon />
-                    </IconButton>
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                      {`${currentWeekStart.toLocaleDateString(language === 'en' ? 'en-US' : 'ko-KR')} ~ ${weekEnd.toLocaleDateString(language === 'en' ? 'en-US' : 'ko-KR')}`}
-                    </Typography>
-                    <IconButton
-                      size="small"
-                      onClick={() => setCurrentWeekStart((prev) => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7))}
-                    >
-                      <ChevronRightIcon />
-                    </IconButton>
-                  </Box>
-
-                  <List sx={{ p: 0, flex: 1, overflow: 'auto' }}>
-                    {weekDates.map((date, index) => {
-                      const dayName = weekDays[date.getDay()];
-                      const dateKey = formatDateKey(date);
-                      const holidayNames = getHolidayNames(date);
-                      const customLabels = customCalendarSchedules[dateKey] || [];
-                      const complianceLabels = getComplianceLabels(date);
-                      const hasCompanyHoliday = customLabels.some((item) => item.type === 'company_holiday');
-                      const isHolidayDate = holidayNames.length > 0;
-                      const isTodayDate = isToday(date);
-                      const isWeekendDate = isWeekend(date);
-                      const isWeekendOnly = isWeekendDate && !isHolidayDate;
-                      const hasAnySchedule = holidayNames.length > 0 || customLabels.length > 0 || complianceLabels.length > 0;
-
-                      return (
-                        <ListItem
-                          key={dateKey}
-                          onClick={() => openScheduleDialog(date)}
-                          sx={{
-                            px: 1,
-                            py: 1,
-                            mb: 0.6,
-                            border: '1px solid',
-                            borderColor: hasCompanyHoliday ? 'warning.main' : 'divider',
-                            borderRadius: 1,
-                            bgcolor: isTodayDate
-                              ? 'primary.light'
-                              : isHolidayDate
-                                ? 'background.paper'
-                                : isWeekendOnly
-                                  ? 'rgba(10, 110, 125, 0.14)'
-                                  : 'background.paper',
-                            cursor: 'pointer',
-                            '&:hover': {
-                              bgcolor: isTodayDate
-                                ? 'primary.main'
-                                : isHolidayDate
-                                  ? 'action.hover'
-                                  : isWeekendOnly
-                                    ? 'rgba(10, 110, 125, 0.22)'
-                                    : 'action.hover'
-                            }
-                          }}
-                        >
-                          <ListItemText
-                            primary={(
-                              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-                                <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
-                                  <Typography
-                                    variant="body2"
-                                    sx={{
-                                      fontWeight: 700,
-                                      minWidth: hasCompanyHoliday ? 24 : 'auto',
-                                      height: hasCompanyHoliday ? 24 : 'auto',
-                                      px: hasCompanyHoliday ? 0.45 : 0,
-                                      borderRadius: hasCompanyHoliday ? '50%' : 0,
-                                      border: hasCompanyHoliday ? '3px solid' : 'none',
-                                      borderColor: hasCompanyHoliday ? (isTodayDate ? 'common.white' : 'warning.dark') : 'transparent',
-                                      bgcolor: hasCompanyHoliday && !isTodayDate ? 'warning.main' : 'transparent',
-                                      color: hasCompanyHoliday && !isTodayDate ? 'common.white' : (isTodayDate ? 'common.white' : 'text.primary'),
-                                      lineHeight: 1.1,
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center'
-                                    }}
-                                  >
-                                    {date.getDate()}
-                                  </Typography>
-                                  {hasCompanyHoliday && (
-                                    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.1 }}>
-                                      <CompanyHolidayStarIcon color={isTodayDate ? '#FFFFFF' : '#FF1744'} />
-                                      <CompanyHolidayStarIcon color={isTodayDate ? '#FFFFFF' : '#FF1744'} />
-                                    </Box>
-                                  )}
-                                </Box>
-                                <Typography variant="body2" sx={{ fontWeight: 700, color: isTodayDate ? 'common.white' : 'text.primary' }}>
-                                  {dayName}
-                                </Typography>
-                              </Box>
-                            )}
-                            secondary={(
-                              <Box sx={{ mt: 0.5, display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                {holidayNames.slice(0, 2).map((name) => (
-                                  <Chip
-                                    key={`${dateKey}-${name}`}
-                                    size="small"
-                                    label={getHolidayDisplayName(name)}
-                                    sx={{ height: 20, fontSize: '0.66rem', fontWeight: 700, bgcolor: 'error.light', color: 'error.contrastText' }}
-                                  />
-                                ))}
-                                {customLabels.slice(0, 2).map((item) => (
-                                  <Chip
-                                    key={`${dateKey}-${item.id}`}
-                                    size="small"
-                                    label={item.title || (language === 'en' ? 'Company Holiday' : '회사 휴일')}
-                                    sx={{
-                                      height: 20,
-                                      fontSize: item.type === 'company_holiday' ? '0.68rem' : '0.66rem',
-                                      fontWeight: 700,
-                                      bgcolor: item.type === 'company_holiday' ? 'warning.dark' : 'primary.light',
-                                      color: item.type === 'company_holiday' ? 'common.white' : 'primary.main'
-                                    }}
-                                  />
-                                ))}
-                                {complianceLabels.slice(0, 2).map((item) => (
-                                  <Chip
-                                    key={`${dateKey}-${item.id}`}
-                                    size="small"
-                                    label={item.label}
-                                    sx={{ height: 20, fontSize: '0.64rem', fontWeight: 700, bgcolor: 'info.light', color: 'info.dark' }}
-                                  />
-                                ))}
-                                {!hasAnySchedule && (
-                                  <Typography variant="caption" sx={{ color: isTodayDate ? 'common.white' : 'text.secondary', fontWeight: 600 }}>
-                                    {language === 'en' ? 'No schedules' : '일정 없음'}
-                                  </Typography>
-                                )}
-                                {holidayNames.length > 2 && (
-                                  <Typography variant="caption" sx={{ color: isTodayDate ? 'common.white' : 'error.main', fontWeight: 700 }}>
-                                    +{holidayNames.length - 2}
-                                  </Typography>
-                                )}
-                                {customLabels.length > 2 && (
-                                  <Typography variant="caption" sx={{ color: isTodayDate ? 'common.white' : 'primary.main', fontWeight: 700 }}>
-                                    +{customLabels.length - 2}
-                                  </Typography>
-                                )}
-                                {complianceLabels.length > 2 && (
-                                  <Typography variant="caption" sx={{ color: isTodayDate ? 'common.white' : 'info.main', fontWeight: 700 }}>
-                                    +{complianceLabels.length - 2}
-                                  </Typography>
-                                )}
-                              </Box>
-                            )}
-                            secondaryTypographyProps={{ component: 'div' }}
-                          />
-                        </ListItem>
-                      );
-                    })}
-                  </List>
-                </Box>
-              );
-            })()}
-          </CardContent>
-        </Card>
-        )}
-
-        {/* 휴가 달력 (부서 일정) */}
         {selectedDashboardCards.includes('vacationCalendar') && (
         <Card
+          elevation={0}
           className="dashboard-vacation-calendar-card"
-          sx={{
-            order: selectedDashboardCards.indexOf('vacationCalendar'),
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            transition: 'all 0.2s ease',
-            '&:hover': {
-              boxShadow: '0 12px 32px rgba(0, 0, 0, 0.06)',
-            },
-          }}
+          sx={dashboardWidgetCardSx(selectedDashboardCards.indexOf('vacationCalendar'))}
         >
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'visible', minHeight: 0 }}>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: DASHBOARD_CARD_SPACING, flexShrink: 0 }}>
@@ -3092,9 +2986,8 @@ const Dashboard: React.FC = () => {
         </Card>
         )}
 
-        {/* 공지사항 */}
         {selectedDashboardCards.includes('notice') && (
-        <Card sx={{ order: selectedDashboardCards.indexOf('notice'), height: '100%', display: 'flex', flexDirection: 'column', transition: 'all 0.2s ease', '&:hover': { boxShadow: '0 12px 32px rgba(0, 0, 0, 0.06)' } }}>
+        <Card elevation={0} sx={dashboardWidgetCardSx(selectedDashboardCards.indexOf('notice'))}>
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>
               <Box sx={dashboardCardTitleBar('primary')}>
@@ -3275,7 +3168,6 @@ const Dashboard: React.FC = () => {
         </DialogActions>
       </Dialog>
       
-      {/* 출근/퇴근 메시지 Snackbar */}
       <Snackbar
         open={attendanceSnackbarOpen}
         autoHideDuration={4000}

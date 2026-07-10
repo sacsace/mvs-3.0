@@ -1198,7 +1198,6 @@ export default {
         daysWorked: '근무\n일수',
         otRate: 'OT\n요율',
         dayOtHour: 'OT\n(시간)',
-        nightOtHour: '야간 OT\n(시간)',
         extraAllowance: '추가\n수당',
         sumTotal: '지급\n합계',
         pfEmployee: 'PF\n(직원)',
@@ -1262,7 +1261,6 @@ export default {
         otherAllowance: '기타 수당',
         totalSalary: '급여 합계',
         dayOt: 'OT',
-        nightOt: '야간 OT',
         otRate: 'OT 요율',
         extraAllowance: '추가 수당',
         sumTotal: '지급 합계',
@@ -3902,4 +3900,3 @@ export default {
   }
 };
 
-// 영어 번역;

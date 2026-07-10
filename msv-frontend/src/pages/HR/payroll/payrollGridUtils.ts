@@ -10,12 +10,8 @@ export type PayrollRecalcContext = {
 
 /** ESIC: 지급합계(Q) ≤ 21,000 이면 Q×0.75% / Q×3.25%, 초과 시 0 */
 export const ESIC_SUM_CEILING_INR = 21000;
-/** @deprecated ESIC_SUM_CEILING_INR 사용 */
-export const ESIC_BASIC_CEILING_INR = ESIC_SUM_CEILING_INR;
 export const ESIC_EMPLOYEE_RATE = 0.0075;
 export const ESIC_EMPLOYER_RATE = 0.0325;
-/** @deprecated ESIC_SUM_CEILING_INR 사용 */
-export const ESI_GROSS_CEILING_INR = ESIC_SUM_CEILING_INR;
 
 /** ESIC 직원 = IF(지급합계>21,000, 0, 지급합계×0.75%) — 엑셀 Q4 */
 export function computeEsicEmployeeFromSumTotal(
@@ -136,7 +132,7 @@ export function isOtEligible(
   return true;
 }
 
-/** extra_fields → OT Rate / OT 시간 (레거시 야간 OT는 주간 OT에 합산) */
+/** extra_fields → OT Rate / OT 시간 */
 function resolveOtInputsFromExtra(
   x: Record<string, unknown>,
   basic: number,

@@ -22,10 +22,8 @@ export type PayrollGridRow = {
   days_worked: string;
   ot_rate: number;
   day_ot_hour: number;
-  /** 레거시 호환 — 항상 0 (야간 OT 미사용) */
   night_ot_hour: number;
   transport_allowance: number;
-  /** 주간 OT시간 × OT Rate (API overtime_pay) */
   overtime: number;
   sum_total: number;
   /** extra_fields.indian_pf_mode — 기본 basic_12pct */

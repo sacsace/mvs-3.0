@@ -45,7 +45,6 @@ export type PayslipLabels = {
   otherAllowance: string;
   totalSalary: string;
   dayOt: string;
-  nightOt: string;
   otRate: string;
   extraAllowance: string;
   sumTotal: string;

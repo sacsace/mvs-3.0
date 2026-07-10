@@ -2395,6 +2395,3 @@ const CompanyManagement: React.FC = () => {
 };
 
 export default CompanyManagement;
-
-// 모듈로 인식되도록 빈 export 추가
-export {};

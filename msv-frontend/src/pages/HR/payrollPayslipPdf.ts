@@ -52,7 +52,6 @@ export function buildPayslipLabels(): PayslipLabels {
     otherAllowance: i18n.t(`${p}.otherAllowance`),
     totalSalary: i18n.t(`${p}.totalSalary`),
     dayOt: i18n.t(`${p}.dayOt`),
-    nightOt: i18n.t(`${p}.nightOt`),
     otRate: i18n.t(`${p}.otRate`),
     extraAllowance: i18n.t(`${p}.extraAllowance`),
     sumTotal: i18n.t(`${p}.sumTotal`),
