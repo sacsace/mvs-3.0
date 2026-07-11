@@ -130,13 +130,43 @@ const partnerTableBodyRowSx: SxProps<Theme> = (theme) => {
   const base = typeof mvsTableBodyRowSx === 'function' ? mvsTableBodyRowSx(theme) : mvsTableBodyRowSx;
   const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
   const hoverBg = theme.palette.mode === 'light' ? '#EFF6FF' : theme.palette.action.hover;
+  const cellPaddingX = { xs: 1, sm: 1.25 };
   return {
     ...(base as object),
+    '& .MuiTableCell-body': {
+      py: 0.75,
+      px: cellPaddingX,
+      fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+      lineHeight: 1.35,
+    },
+    '& .MuiTableCell-body.MuiTableCell-paddingCheckbox': {
+      width: 48,
+      minWidth: 48,
+      maxWidth: 48,
+      px: cellPaddingX,
+      py: 0.75,
+    },
     '& .MuiTableRow-root:nth-of-type(odd)': { bgcolor: rowBg },
     '& .MuiTableRow-root:nth-of-type(even)': { bgcolor: rowBg },
     '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
   };
 };
+
+const partnerListTextSx = {
+  fontSize: 'inherit',
+  lineHeight: 1.35,
+} as const;
+
+const partnerCheckboxColSx = {
+  width: 48,
+  minWidth: 48,
+  maxWidth: 48,
+  px: { xs: 1, sm: 1.25 },
+  py: 0.75,
+  boxSizing: 'border-box' as const,
+} as const;
+
+const partnerChipSx = { fontWeight: 500, borderRadius: '8px', fontSize: '0.75rem' } as const;
 
 interface Partner {
   id: number;
@@ -539,7 +569,7 @@ const PartnerManagement: React.FC = () => {
     };
     const config = statusConfig[status as keyof typeof statusConfig];
     if (!config) return null;
-    return <Chip label={t(config.labelKey)} color={config.color} size="small" />;
+    return <Chip label={t(config.labelKey)} color={config.color} size="small" sx={partnerChipSx} />;
   };
 
   const filteredPartners = partners.filter(partner => {
@@ -634,28 +664,22 @@ const PartnerManagement: React.FC = () => {
     flex: '1 1 auto',
   } as const;
 
-  const thSx = (key: string) => ({
+  const partnerColBaseSx = (key: string) => ({
     width: partColWidthPct(key),
     minWidth: PART_COL_MIN_WIDTH[key] ?? 0,
     maxWidth: partColWidthPct(key),
-    overflow: 'hidden',
     textAlign: partColTableAlign(key),
     verticalAlign: 'middle' as const,
     boxSizing: 'border-box' as const,
+    px: { xs: 1, sm: 1.25 },
+    py: 0.75,
+    overflow: 'hidden',
   });
 
+  const thSx = (key: string) => partnerColBaseSx(key);
+
   const tdSx = (key: string) => ({
-    width: partColWidthPct(key),
-    minWidth: PART_COL_MIN_WIDTH[key] ?? 0,
-    maxWidth: partColWidthPct(key),
-    overflow:
-      key === 'company' ||
-      key === 'representative' ||
-      key === 'industry' ||
-      key === 'contact' ||
-      key === 'contract'
-        ? ('hidden' as const)
-        : ('visible' as const),
+    ...partnerColBaseSx(key),
     textOverflow:
       key === 'company' ||
       key === 'representative' ||
@@ -664,13 +688,20 @@ const PartnerManagement: React.FC = () => {
       key === 'contract'
         ? ('ellipsis' as const)
         : undefined,
-    verticalAlign: 'middle' as const,
-    boxSizing: 'border-box' as const,
   });
 
   const renderHeadCell = (key: string, label: string) => (
     <TableCell key={key} align={partColTableAlign(key)} sx={thSx(key)}>
-      <Box component="span" sx={thLabelEllipsisSx} title={label}>
+      <Box
+        component="span"
+        sx={{
+          ...thLabelEllipsisSx,
+          display: key === 'actions' ? 'flex' : 'block',
+          justifyContent: key === 'actions' ? 'center' : undefined,
+          width: '100%',
+        }}
+        title={label}
+      >
         {label}
       </Box>
     </TableCell>
@@ -1056,9 +1087,27 @@ const PartnerManagement: React.FC = () => {
                   },
                 }}
               >
-              <TableHead sx={mvsTableHeadHighlightSx}>
+              <TableHead
+                sx={(theme) => {
+                  const headBase =
+                    typeof mvsTableHeadHighlightSx === 'function'
+                      ? mvsTableHeadHighlightSx(theme)
+                      : mvsTableHeadHighlightSx;
+                  return {
+                    ...(headBase as object),
+                    '& .MuiTableCell-head': {
+                      py: 0.75,
+                      px: { xs: 1, sm: 1.25 },
+                    },
+                    '& .MuiTableCell-head.MuiTableCell-paddingCheckbox': {
+                      ...partnerCheckboxColSx,
+                      overflow: 'visible',
+                    },
+                  };
+                }}
+              >
                 <TableRow>
-                  <TableCell padding="checkbox" align="center" sx={thSx('select')}>
+                  <TableCell padding="checkbox" align="center" sx={{ ...thSx('select'), ...partnerCheckboxColSx }}>
                     <Checkbox
                       size="small"
                       disabled={menuFlags.menusLoading || !menuFlags.canDelete || paginatedPartners.length === 0}
@@ -1096,7 +1145,7 @@ const PartnerManagement: React.FC = () => {
                     <TableCell
                       padding="checkbox"
                       align="center"
-                      sx={tdSx('select')}
+                      sx={{ ...tdSx('select'), ...partnerCheckboxColSx }}
                       onClick={(e) => e.stopPropagation()}
                     >
                       <Checkbox
@@ -1111,10 +1160,10 @@ const PartnerManagement: React.FC = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'hidden' }}>
                         <Avatar
                           sx={{
-                            mr: 1.5,
-                            width: 36,
-                            height: 36,
-                            fontSize: '0.875rem',
+                            mr: 1.25,
+                            width: 32,
+                            height: 32,
+                            fontSize: '0.75rem',
                             fontWeight: 600,
                             flexShrink: 0,
                             bgcolor:
@@ -1127,11 +1176,18 @@ const PartnerManagement: React.FC = () => {
                           {partner.companyName.charAt(0)}
                         </Avatar>
                         <Typography
-                          variant="subtitle2"
+                          component="span"
                           fontWeight={600}
                           noWrap
                           title={partner.companyName}
-                          sx={{ minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                          sx={{
+                            ...partnerListTextSx,
+                            minWidth: 0,
+                            flex: 1,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            display: 'block',
+                          }}
                         >
                           {partner.companyName}
                         </Typography>
@@ -1139,8 +1195,8 @@ const PartnerManagement: React.FC = () => {
                     </TableCell>
                     <TableCell align={partColTableAlign('representative')} sx={tdSx('representative')}>
                       <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'hidden' }}>
-                        <PersonIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary', flexShrink: 0 }} />
-                        <Typography variant="body2" noWrap title={partner.representative}>
+                        <PersonIcon sx={{ mr: 0.5, fontSize: '0.875rem', color: 'text.secondary', flexShrink: 0 }} />
+                        <Typography component="span" noWrap title={partner.representative} sx={{ ...partnerListTextSx, display: 'block' }}>
                           {partner.representative}
                         </Typography>
                       </Box>
@@ -1150,27 +1206,29 @@ const PartnerManagement: React.FC = () => {
                         label={getTypeLabel(partner.businessType)}
                         color={getTypeColor(partner.businessType) as any}
                         size="small"
+                        sx={partnerChipSx}
                       />
                     </TableCell>
                     <TableCell align={partColTableAlign('industry')} sx={tdSx('industry')}>
-                      <Typography variant="body2" color="text.secondary" noWrap title={partner.industry}>
+                      <Typography component="span" color="text.secondary" noWrap title={partner.industry} sx={{ ...partnerListTextSx, display: 'block' }}>
                         {partner.industry}
                       </Typography>
                     </TableCell>
                     <TableCell align={partColTableAlign('contact')} sx={tdSx('contact')}>
                       <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'hidden' }}>
-                        <EmailIcon sx={{ mr: 1, fontSize: '1rem', color: 'text.secondary', flexShrink: 0 }} />
-                        <Typography variant="body2" noWrap title={partner.email || '-'}>
+                        <EmailIcon sx={{ mr: 0.5, fontSize: '0.875rem', color: 'text.secondary', flexShrink: 0 }} />
+                        <Typography component="span" noWrap title={partner.email || '-'} sx={{ ...partnerListTextSx, display: 'block' }}>
                           {partner.email || '-'}
                         </Typography>
                       </Box>
                     </TableCell>
                     <TableCell align={partColTableAlign('contract')} sx={tdSx('contract')}>
                       <Typography
-                        variant="body2"
+                        component="span"
                         color="text.secondary"
                         noWrap
                         title={partner.contractEndDate || '-'}
+                        sx={{ ...partnerListTextSx, fontVariantNumeric: 'tabular-nums', display: 'block' }}
                       >
                         {partner.contractEndDate || '-'}
                       </Typography>

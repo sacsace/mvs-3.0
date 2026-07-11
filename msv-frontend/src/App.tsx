@@ -75,7 +75,6 @@ const ExpenseTransferLog = lazyPage(() => import('./pages/Accounting/ExpenseTran
 const BudgetManagement = lazyPage(() => import('./pages/Accounting/BudgetManagement'));
 const AssetManagement = lazyPage(() => import('./pages/Accounting/AssetManagement'));
 const AccountingStatistics = lazyPage(() => import('./pages/Accounting/AccountingStatistics'));
-const AccountingBasicInfo = lazyPage(() => import('./pages/Accounting/AccountingBasicInfo'));
 const ExpenseReceiptUpload = lazyPage(() => import('./pages/Accounting/ExpenseReceiptUpload'));
 const AIAutoVoucher = lazyPage(() => import('./pages/Accounting/AIAutoVoucher'));
 const VoucherEntry = lazyPage(() => import('./pages/Accounting/VoucherEntry'));
@@ -238,7 +237,7 @@ function App() {
             <Route path="work/statistics" element={<WorkStatistics />} />
             <Route path="work/approval" element={<ElectronicApproval />} />
             <Route path="work/quotation" element={<QuotationManagement />} />
-            <Route path="work/room-reservation" element={<RoomBookingManagement />} />
+            <Route path="work/room-reservation" element={<Navigate to="/hotel/room-reservation" replace />} />
             <Route path="work/reports" element={<WorkReport />} />
             
             {/* 호텔 관리 */}
@@ -302,7 +301,8 @@ function App() {
             <Route path="customers/contracts" element={<ContractManagement />} />
             
             {/* 회계 관리 */}
-            <Route path="accounting" element={<Navigate to="/accounting/basic-info" replace />} />
+            <Route path="accounting" element={<Navigate to="/accounting/voucher-entry" replace />} />
+            <Route path="accounting/basic-info" element={<Navigate to="/accounting/voucher-entry" replace />} />
             <Route path="accounting/quotation" element={<QuotationManagement />} />
             <Route path="accounting/e-invoice" element={<EInvoiceManagement />} />
             <Route path="accounting/e-invoice/create" element={<EInvoiceCreate />} />
@@ -313,7 +313,6 @@ function App() {
             <Route path="accounting/budget" element={<BudgetManagement />} />
             <Route path="accounting/assets" element={<AssetManagement />} />
             <Route path="accounting/statistics" element={<AccountingStatistics />} />
-            <Route path="accounting/basic-info" element={<AccountingBasicInfo />} />
             <Route path="accounting/books" element={<GeneralLedger />} />
             <Route path="accounting/chart-of-accounts" element={<ChartOfAccounts />} />
             <Route path="accounting/vouchers" element={<Navigate to="/accounting/books?tab=vouchers" replace />} />

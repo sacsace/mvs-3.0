@@ -198,6 +198,24 @@ interface CompanyInfo {
 
 const EXCEL_BASE_FONT_SIZE = '9pt';
 const EXCEL_BASE_LINE_HEIGHT = '20px';
+/** 합계·GST 요약 블록 — 기본 대비 약간 축소, 가독성 유지 */
+const TAX_SUMMARY_LINE_HEIGHT = '18px';
+const TAX_SUMMARY_CELL_PADDING = '5px 8px';
+
+const taxSummaryTableSx = {
+  width: '100%',
+  borderCollapse: 'collapse',
+  tableLayout: 'fixed',
+  '& .MuiTableRow-root': {
+    height: 'auto',
+  },
+  '& .MuiTableCell-root': {
+    padding: `${TAX_SUMMARY_CELL_PADDING} !important`,
+    fontSize: EXCEL_BASE_FONT_SIZE,
+    lineHeight: `${TAX_SUMMARY_LINE_HEIGHT} !important`,
+    borderBottom: 'none',
+  },
+} as const;
 
 const RegularInvoice: React.FC = () => {
   const { user } = useStore();
@@ -813,9 +831,9 @@ const RegularInvoice: React.FC = () => {
               word-break: keep-all !important;
             }
             .invoice-page .tax-summary-table td {
-              padding-top: 2px !important;
-              padding-bottom: 2px !important;
-              line-height: ${EXCEL_BASE_LINE_HEIGHT} !important;
+              padding-top: 4px !important;
+              padding-bottom: 4px !important;
+              line-height: ${TAX_SUMMARY_LINE_HEIGHT} !important;
             }
         `;
         clonedDoc.head.appendChild(style);
@@ -1547,6 +1565,61 @@ const RegularInvoice: React.FC = () => {
     gap: 1.5,
   } as const;
 
+  const invoiceListTableSx = {
+    width: '100%',
+    tableLayout: 'fixed' as const,
+    minWidth: { xs: 880, sm: 960 },
+    borderCollapse: 'collapse',
+    bgcolor: 'transparent',
+    '& .MuiTableCell-root': {
+      borderLeft: 'none',
+      borderRight: 'none',
+      borderTop: 'none',
+    },
+  } as const;
+
+  const invoiceCellBaseSx = {
+    fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+    py: 0.75,
+    px: { xs: 0.5, sm: 1 },
+    verticalAlign: 'middle' as const,
+  } as const;
+
+  const invoiceCellEllipsisSx = {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    maxWidth: 0,
+  } as const;
+
+  const renderInvoiceEllipsisText = (text: string, fontWeight?: number) => (
+    <Tooltip title={text} placement="top-start" enterDelay={400}>
+      <Box
+        component="span"
+        sx={{
+          display: 'block',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          fontWeight,
+        }}
+      >
+        {text}
+      </Box>
+    </Tooltip>
+  );
+
+  const invoiceListColumns = [
+    { key: 'invoiceNo', label: tr('인보이스 번호', 'Invoice No.'), width: '16%', align: 'left' as const, ellipsis: true },
+    { key: 'customer', label: tr('고객', 'Customer'), width: '20%', align: 'left' as const, ellipsis: true },
+    { key: 'issueDate', label: tr('발행일', 'Issue Date'), width: '10%', align: 'left' as const, ellipsis: false },
+    { key: 'dueDate', label: tr('만기일', 'Due Date'), width: '10%', align: 'left' as const, ellipsis: false },
+    { key: 'amount', label: tr('금액', 'Amount'), width: '12%', align: 'left' as const, ellipsis: true },
+    { key: 'approval', label: tr('승인', 'Approval'), width: '11%', align: 'left' as const, ellipsis: false },
+    { key: 'payment', label: tr('결제 상태', 'Payment Status'), width: '11%', align: 'left' as const, ellipsis: false },
+    { key: 'actions', label: tr('작업', 'Actions'), width: '10%', align: 'center' as const, ellipsis: false },
+  ] as const;
+
   return (
     <Box sx={{ ...mvsPageRootSx }}>
       {isInvoicePageMode && (
@@ -1687,6 +1760,13 @@ const RegularInvoice: React.FC = () => {
                 '& .invoice-page .MuiTypography-root, & .invoice-page .MuiTableCell-root': {
                   fontSize: EXCEL_BASE_FONT_SIZE,
                   lineHeight: EXCEL_BASE_LINE_HEIGHT,
+                },
+                '& .invoice-page .tax-summary-table .MuiTableCell-root': {
+                  padding: `${TAX_SUMMARY_CELL_PADDING} !important`,
+                  lineHeight: `${TAX_SUMMARY_LINE_HEIGHT} !important`,
+                },
+                '& .invoice-page .tax-summary-table .MuiTableRow-root': {
+                  height: 'auto',
                 },
               }}
             >
@@ -1878,22 +1958,8 @@ const RegularInvoice: React.FC = () => {
                   {isLast && (
                     <>
                       <Card variant="outlined" sx={{ borderColor: 'grey.400' }}>
-                        <CardContent sx={{ py: 0.5, px: 1.25, '&:last-child': { pb: 0.5 } }}>
-                          <Table
-                            size="small"
-                            className="tax-summary-table"
-                            sx={{
-                              width: '100%',
-                              borderCollapse: 'collapse',
-                              tableLayout: 'fixed',
-                              '& .MuiTableCell-root': {
-                                py: 0.25,
-                                px: 1,
-                                fontSize: EXCEL_BASE_FONT_SIZE,
-                                lineHeight: EXCEL_BASE_LINE_HEIGHT,
-                              },
-                            }}
-                          >
+                        <CardContent sx={{ py: 0.625, px: 1.25, '&:last-child': { pb: 0.625 } }}>
+                          <Table size="small" className="tax-summary-table" sx={taxSummaryTableSx}>
                             <TableBody>
                               <TableRow sx={{ bgcolor: 'grey.100' }}>
                                 {summaryColumnSx.map((col, idx) => {
@@ -2914,28 +2980,38 @@ const RegularInvoice: React.FC = () => {
               </Box>
             ) : (
               <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
-                <Table
-                  size="small"
-                  sx={{
-                    borderCollapse: 'collapse',
-                    bgcolor: 'transparent',
-                    '& .MuiTableCell-root': {
-                      borderLeft: 'none',
-                      borderRight: 'none',
-                      borderTop: 'none',
-                    },
-                  }}
-                >
+                <Table size="small" sx={invoiceListTableSx}>
+                  <colgroup>
+                    {invoiceListColumns.map((col) => (
+                      <col key={col.key} style={{ width: col.width }} />
+                    ))}
+                  </colgroup>
                   <TableHead sx={mvsTableHeadHighlightSx}>
                     <TableRow>
-                      <TableCell>{tr('인보이스 번호', 'Invoice No.')}</TableCell>
-                      <TableCell>{tr('고객', 'Customer')}</TableCell>
-                      <TableCell>{tr('발행일', 'Issue Date')}</TableCell>
-                      <TableCell>{tr('만기일', 'Due Date')}</TableCell>
-                      <TableCell>{tr('금액', 'Amount')}</TableCell>
-                      <TableCell>{tr('승인', 'Approval')}</TableCell>
-                      <TableCell>{tr('결제 상태', 'Payment Status')}</TableCell>
-                      <TableCell align="center">{tr('작업', 'Actions')}</TableCell>
+                      {invoiceListColumns.map((col) => (
+                        <TableCell
+                          key={col.key}
+                          align={col.align}
+                          sx={{
+                            ...invoiceCellBaseSx,
+                            whiteSpace: 'nowrap',
+                            ...(col.ellipsis ? invoiceCellEllipsisSx : {}),
+                          }}
+                        >
+                          <Box
+                            component="span"
+                            sx={{
+                              display: 'block',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                            title={col.label}
+                          >
+                            {col.label}
+                          </Box>
+                        </TableCell>
+                      ))}
                     </TableRow>
                   </TableHead>
                   <TableBody sx={mvsTableBodyRowSx}>
@@ -2945,42 +3021,35 @@ const RegularInvoice: React.FC = () => {
                         onClick={() => handleViewInvoice(invoice)}
                         sx={{ cursor: 'pointer', '&:active': { bgcolor: 'action.selected' } }}
                       >
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={500}>
-                            {invoice.invoice_number}
-                          </Typography>
+                        <TableCell sx={{ ...invoiceCellBaseSx, ...invoiceCellEllipsisSx }}>
+                          {renderInvoiceEllipsisText(invoice.invoice_number, 500)}
                         </TableCell>
-                        <TableCell>
-                          <Box>
-                            <Typography variant="body2" fontWeight={500}>
-                              {invoice.customer_name}
-                            </Typography>
-                          </Box>
+                        <TableCell sx={{ ...invoiceCellBaseSx, ...invoiceCellEllipsisSx }}>
+                          {renderInvoiceEllipsisText(invoice.customer_name, 500)}
                         </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {new Date(invoice.invoice_date).toLocaleDateString()}
-                          </Typography>
+                        <TableCell sx={{ ...invoiceCellBaseSx, whiteSpace: 'nowrap' }}>
+                          {new Date(invoice.invoice_date).toLocaleDateString()}
                         </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {new Date(invoice.due_date).toLocaleDateString()}
-                          </Typography>
+                        <TableCell sx={{ ...invoiceCellBaseSx, whiteSpace: 'nowrap' }}>
+                          {new Date(invoice.due_date).toLocaleDateString()}
                         </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={500}>
-                            {invoice.total_amount.toLocaleString()} {invoice.currency}
-                          </Typography>
+                        <TableCell sx={{ ...invoiceCellBaseSx, ...invoiceCellEllipsisSx }}>
+                          {renderInvoiceEllipsisText(
+                            `${invoice.total_amount.toLocaleString()} ${invoice.currency}`,
+                            500
+                          )}
                         </TableCell>
-                        <TableCell>{renderApprovalCell(invoice)}</TableCell>
-                        <TableCell>
+                        <TableCell sx={{ ...invoiceCellBaseSx, whiteSpace: 'nowrap' }}>
+                          {renderApprovalCell(invoice)}
+                        </TableCell>
+                        <TableCell sx={{ ...invoiceCellBaseSx, whiteSpace: 'nowrap' }}>
                           <Chip
                             label={getPaymentStatusText(invoice.payment_status)}
                             color={getPaymentStatusColor(invoice.payment_status)}
                             size="small"
                           />
                         </TableCell>
-                        <TableCell align="center">
+                        <TableCell align="center" sx={{ ...invoiceCellBaseSx, whiteSpace: 'nowrap' }}>
                           <Stack direction="row" spacing={0.5} justifyContent="center">
                             {invoice.payment_status !== 'paid' && (
                               <Tooltip

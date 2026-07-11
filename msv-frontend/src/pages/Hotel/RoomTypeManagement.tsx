@@ -17,12 +17,17 @@ import {
   DialogContent,
   DialogActions,
   Chip,
-  FormControl,
-  Select,
   MenuItem,
-  InputAdornment
+  InputAdornment,
+  Tooltip,
 } from '@mui/material';
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Search as SearchIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+  Search as SearchIcon,
+  FilterList as FilterIcon,
+} from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { roomTypeService } from '../../services/api';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
@@ -34,8 +39,10 @@ import {
   mvsBodyPrimaryBtnSx,
   mvsBodyListZoneSx,
   mvsBodyListTableSx,
+  mvsBodyFilterWrapSx,
   mvsSearchFieldSx,
   mvsFilterFieldHeightSx,
+  mvsOutlinedLabelProps,
   mvsTableScrollSx,
   mvsTableHeadHighlightSx,
   mvsTableBodyRowSx,
@@ -66,6 +73,51 @@ const listStateBoxSx = {
   py: 6,
   px: 2,
 } as const;
+
+const roomTypeTableSx = {
+  width: '100%',
+  tableLayout: 'fixed' as const,
+  minWidth: { xs: 640, sm: 800 },
+  borderCollapse: 'collapse',
+  bgcolor: 'transparent',
+  '& .MuiTableCell-root': {
+    borderLeft: 'none',
+    borderRight: 'none',
+    borderTop: 'none',
+  },
+} as const;
+
+const roomTypeCellBaseSx = {
+  fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+  py: 0.75,
+  px: { xs: 0.5, sm: 1 },
+  verticalAlign: 'middle' as const,
+} as const;
+
+const roomTypeCellEllipsisSx = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  maxWidth: 0,
+} as const;
+
+const chipSx = { fontWeight: 500, borderRadius: '8px' } as const;
+
+const renderEllipsisText = (text: string) => (
+  <Tooltip title={text} placement="top-start" enterDelay={400}>
+    <Box
+      component="span"
+      sx={{
+        display: 'block',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {text}
+    </Box>
+  </Tooltip>
+);
 
 const RoomTypeManagement: React.FC = () => {
   const { t } = useTranslation();
@@ -235,17 +287,16 @@ const RoomTypeManagement: React.FC = () => {
       />
 
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
-        <Box
-          sx={{
-            px: { xs: 2, sm: 2.5 },
-            py: 2,
-            bgcolor: '#FFFFFF',
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr auto' },
-            gap: 2,
-            alignItems: 'flex-end',
-          }}
-        >
+        <Box sx={mvsBodyFilterWrapSx}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 2fr) minmax(0, 1fr) auto' },
+              gap: 2,
+              alignItems: 'flex-end',
+              ...(mvsSearchFieldSx as Record<string, unknown>),
+            }}
+          >
             <TextField
               fullWidth
               size="small"
@@ -253,7 +304,8 @@ const RoomTypeManagement: React.FC = () => {
               placeholder={t('roomTypeManagement.placeholders.search')}
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              InputLabelProps={{ shrink: true }}
+              sx={roomTypeFilterFieldSx}
+              {...mvsOutlinedLabelProps}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -261,7 +313,6 @@ const RoomTypeManagement: React.FC = () => {
                   </InputAdornment>
                 ),
               }}
-              sx={roomTypeFilterFieldSx}
             />
             <TextField
               fullWidth
@@ -270,12 +321,17 @@ const RoomTypeManagement: React.FC = () => {
               label={t('roomTypeManagement.filters.status')}
               value={statusFilter}
               onChange={(event) => setStatusFilter(event.target.value)}
-              InputLabelProps={{ shrink: true }}
+              sx={roomTypeFilterFieldSx}
+              {...mvsOutlinedLabelProps}
               SelectProps={{
                 displayEmpty: true,
-                renderValue: (selected) => (selected ? selected : t('roomTypeManagement.filters.statusAll')),
+                renderValue: (selected) =>
+                  selected === 'active'
+                    ? t('roomTypeManagement.status.active')
+                    : selected === 'inactive'
+                      ? t('roomTypeManagement.status.inactive')
+                      : t('roomTypeManagement.filters.statusAll'),
               }}
-              sx={roomTypeFilterFieldSx}
             >
               <MenuItem value="">{t('roomTypeManagement.filters.statusAll')}</MenuItem>
               <MenuItem value="active">{t('roomTypeManagement.status.active')}</MenuItem>
@@ -283,89 +339,120 @@ const RoomTypeManagement: React.FC = () => {
             </TextField>
             <Button
               variant="outlined"
+              startIcon={<FilterIcon />}
               onClick={() => {
                 setSearchTerm('');
                 setStatusFilter('');
               }}
-              sx={mvsBodyOutlinedBtnSx}
+              sx={{
+                ...mvsBodyOutlinedBtnSx,
+                height: 40,
+                whiteSpace: 'nowrap',
+                width: { xs: '100%', sm: 'auto' },
+                minWidth: { sm: 120 },
+              }}
             >
               {t('roomTypeManagement.actions.reset')}
             </Button>
+          </Box>
         </Box>
       </Card>
 
-      <Card elevation={0} sx={mvsBodyCardSx}>
-        <Box sx={{ ...mvsBodyListZoneSx, px: { xs: 2, sm: 2.5 }, pb: 2.5, mt: 0 }}>
-          {filteredRoomTypes.length === 0 ? (
-            <Box sx={listStateBoxSx}>
-              <Typography variant="body2" color="text.secondary">
-                {t('roomTypeManagement.empty.noData')}
-              </Typography>
-            </Box>
-          ) : (
-            <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
-              <Table
-                size="small"
-                sx={{
-                  borderCollapse: 'collapse',
-                  bgcolor: 'transparent',
-                  '& .MuiTableCell-root': {
-                    borderLeft: 'none',
-                    borderRight: 'none',
-                    borderTop: 'none',
-                  },
-                }}
-              >
-                <TableHead sx={mvsTableHeadHighlightSx}>
-                  <TableRow>
-                    {[
-                      t('roomTypeManagement.columns.roomType'),
-                      t('roomTypeManagement.columns.roomCount'),
-                      t('roomTypeManagement.columns.nightlyRate'),
-                      t('roomTypeManagement.columns.description'),
-                      t('roomTypeManagement.columns.status'),
-                      t('roomTypeManagement.columns.actions'),
-                    ].map((label, index) => (
-                      <TableCell key={label} align={index === 5 ? 'center' : 'left'}>
-                        {label}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody sx={mvsTableBodyRowSx}>
-                  {filteredRoomTypes.map((roomType) => (
-                <TableRow key={roomType.id} hover>
-                  <TableCell sx={{ fontSize: 13 }}>{roomType.name}</TableCell>
-                  <TableCell sx={{ fontSize: 13 }}>{roomType.count}</TableCell>
-                  <TableCell sx={{ fontSize: 13 }}>
-                    Rs. {roomType.nightlyRate.toLocaleString()}
-                  </TableCell>
-                  <TableCell sx={{ fontSize: 13 }}>{roomType.description || '-'}</TableCell>
-                  <TableCell>
-                    <Chip
-                      label={roomType.isActive ? t('roomTypeManagement.status.active') : t('roomTypeManagement.status.inactive')}
-                      color={roomType.isActive ? 'success' : 'default'}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center' }}>
-                      <IconButton size="small" onClick={() => handleEdit(roomType)}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" onClick={() => handleDelete(roomType.id)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  </TableCell>
+      <Box sx={mvsBodyListZoneSx}>
+        {filteredRoomTypes.length === 0 ? (
+          <Box sx={listStateBoxSx}>
+            <Typography variant="body2" color="text.secondary">
+              {t('roomTypeManagement.empty.noData')}
+            </Typography>
+          </Box>
+        ) : (
+          <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+            <Table size="small" sx={roomTypeTableSx}>
+              <TableHead sx={mvsTableHeadHighlightSx}>
+                <TableRow>
+                  {[
+                    { label: t('roomTypeManagement.columns.roomType'), width: '16%', ellipsis: true },
+                    { label: t('roomTypeManagement.columns.roomCount'), width: '10%' },
+                    { label: t('roomTypeManagement.columns.nightlyRate'), width: '14%' },
+                    { label: t('roomTypeManagement.columns.description'), width: '34%', ellipsis: true },
+                    { label: t('roomTypeManagement.columns.status'), width: '12%' },
+                    { label: t('roomTypeManagement.columns.actions'), width: '14%' },
+                  ].map((col, index) => (
+                    <TableCell
+                      key={col.label}
+                      align={index === 5 ? 'center' : 'left'}
+                      width={col.width}
+                      sx={{
+                        whiteSpace: 'nowrap',
+                        verticalAlign: 'middle',
+                        ...(col.ellipsis ? roomTypeCellEllipsisSx : {}),
+                      }}
+                    >
+                      {col.label}
+                    </TableCell>
+                  ))}
                 </TableRow>
-              ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </Box>
-      </Card>
+              </TableHead>
+              <TableBody sx={mvsTableBodyRowSx}>
+                {filteredRoomTypes.map((roomType) => (
+                  <TableRow key={roomType.id} hover>
+                    <TableCell sx={{ ...roomTypeCellBaseSx, ...roomTypeCellEllipsisSx }}>
+                      {renderEllipsisText(roomType.name)}
+                    </TableCell>
+                    <TableCell sx={{ ...roomTypeCellBaseSx, whiteSpace: 'nowrap' }}>
+                      {roomType.count}
+                    </TableCell>
+                    <TableCell sx={{ ...roomTypeCellBaseSx, whiteSpace: 'nowrap' }}>
+                      Rs. {roomType.nightlyRate.toLocaleString()}
+                    </TableCell>
+                    <TableCell sx={{ ...roomTypeCellBaseSx, ...roomTypeCellEllipsisSx }}>
+                      {roomType.description ? renderEllipsisText(roomType.description) : '-'}
+                    </TableCell>
+                    <TableCell sx={roomTypeCellBaseSx}>
+                      <Chip
+                        label={
+                          roomType.isActive
+                            ? t('roomTypeManagement.status.active')
+                            : t('roomTypeManagement.status.inactive')
+                        }
+                        color={roomType.isActive ? 'success' : 'default'}
+                        size="small"
+                        variant="outlined"
+                        sx={chipSx}
+                      />
+                    </TableCell>
+                    <TableCell
+                      align="center"
+                      sx={{ ...roomTypeCellBaseSx, whiteSpace: 'nowrap' }}
+                    >
+                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                        <Tooltip title={t('common.edit')}>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleEdit(roomType)}
+                            sx={{ borderRadius: '10px' }}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title={t('common.delete')}>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDelete(roomType.id)}
+                            sx={{ borderRadius: '10px' }}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Box>
 
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>
@@ -385,6 +472,7 @@ const RoomTypeManagement: React.FC = () => {
                 size="small"
                 fullWidth
                 placeholder={t('roomTypeManagement.placeholders.roomTypeName')}
+                sx={mvsSearchFieldSx}
               />
             </Box>
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -401,6 +489,7 @@ const RoomTypeManagement: React.FC = () => {
                 size="small"
                 fullWidth
                 placeholder={t('roomTypeManagement.placeholders.roomCount')}
+                sx={mvsSearchFieldSx}
               />
             </Box>
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
@@ -417,23 +506,26 @@ const RoomTypeManagement: React.FC = () => {
                 size="small"
                 fullWidth
                 placeholder={t('roomTypeManagement.placeholders.nightlyRate')}
+                sx={mvsSearchFieldSx}
               />
             </Box>
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
               <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5 }}>
                 {t('roomTypeManagement.fields.status')}
               </Typography>
-              <FormControl size="small" fullWidth>
-                <Select
-                  value={formState.isActive ? 'active' : 'inactive'}
-                  onChange={(event) =>
-                    setFormState((prev) => ({ ...prev, isActive: event.target.value === 'active' }))
-                  }
-                >
-                  <MenuItem value="active">{t('roomTypeManagement.status.active')}</MenuItem>
-                  <MenuItem value="inactive">{t('roomTypeManagement.status.inactive')}</MenuItem>
-                </Select>
-              </FormControl>
+              <TextField
+                select
+                size="small"
+                fullWidth
+                value={formState.isActive ? 'active' : 'inactive'}
+                onChange={(event) =>
+                  setFormState((prev) => ({ ...prev, isActive: event.target.value === 'active' }))
+                }
+                sx={mvsSearchFieldSx}
+              >
+                <MenuItem value="active">{t('roomTypeManagement.status.active')}</MenuItem>
+                <MenuItem value="inactive">{t('roomTypeManagement.status.inactive')}</MenuItem>
+              </TextField>
             </Box>
             <Box sx={{ display: 'flex', flexDirection: 'column', gridColumn: '1 / -1' }}>
               <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5 }}>
@@ -447,13 +539,14 @@ const RoomTypeManagement: React.FC = () => {
                 size="small"
                 fullWidth
                 placeholder={t('roomTypeManagement.placeholders.description')}
+                sx={mvsSearchFieldSx}
               />
             </Box>
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDialog(false)}>{t('common.cancel')}</Button>
-          <Button variant="contained" onClick={handleSave}>
+          <Button variant="contained" disableElevation onClick={handleSave} sx={mvsBodyPrimaryBtnSx}>
             {t('common.save')}
           </Button>
         </DialogActions>

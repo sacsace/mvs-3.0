@@ -43,8 +43,6 @@ import {
   createAsset,
   updateAsset,
   deleteAsset,
-  getAccountingBasicInfo,
-  updateAccountingBasicInfo,
   approveInvoice,
   rejectInvoice,
 } from '../controllers/accountingController';
@@ -624,9 +622,5 @@ router.put(
   updateAsset
 );
 router.delete('/assets/:id', restrictAuditToReadOnly, deleteAsset);
-
-// 회계 기본정보 관리
-router.get('/basic-info', getAccountingBasicInfo);
-router.put('/basic-info', restrictAuditToReadOnly, updateAccountingBasicInfo);
 
 export default router;

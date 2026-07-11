@@ -81,6 +81,41 @@ import { DepartmentManagementPanel } from '../HR/DepartmentManagement';
 const USER_MGMT_MENU_ROUTES = ['/hr/users', '/users'];
 const USERS_PER_PAGE = 10;
 
+/** 사용자 목록 열 너비 — 상태·생성일은 내용에 맞게 좁게 */
+const USER_LIST_COL_WIDTHS = {
+  select: 48,
+  username: '15%',
+  email: '24%',
+  role: '10%',
+  department: '15%',
+  position: '15%',
+  status: 80,
+  created_at: 100,
+} as const;
+
+const userStatusColSx = {
+  width: USER_LIST_COL_WIDTHS.status,
+  minWidth: USER_LIST_COL_WIDTHS.status,
+  maxWidth: USER_LIST_COL_WIDTHS.status,
+  px: { xs: 0.75, sm: 1 },
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  boxSizing: 'border-box',
+} as const;
+
+const userCreatedColSx = {
+  width: USER_LIST_COL_WIDTHS.created_at,
+  minWidth: USER_LIST_COL_WIDTHS.created_at,
+  maxWidth: USER_LIST_COL_WIDTHS.created_at,
+  px: { xs: 0.75, sm: 1 },
+  whiteSpace: 'nowrap',
+  overflow: 'hidden',
+  fontVariantNumeric: 'tabular-nums',
+  boxSizing: 'border-box',
+} as const;
+
+const userListChipSx = { fontSize: '0.75rem', fontWeight: 500, borderRadius: '8px' } as const;
+
 const USER_FILTER_OUTLINED = mvsOutlinedLabelProps;
 const userFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
 const userFormFieldSx = userFilterFieldSx;
@@ -1501,6 +1536,16 @@ const UserManagement: React.FC = () => {
                       },
                     }}
                   >
+                    <colgroup>
+                      <col style={{ width: USER_LIST_COL_WIDTHS.select }} />
+                      <col style={{ width: USER_LIST_COL_WIDTHS.username }} />
+                      <col style={{ width: USER_LIST_COL_WIDTHS.email }} />
+                      <col style={{ width: USER_LIST_COL_WIDTHS.role }} />
+                      <col style={{ width: USER_LIST_COL_WIDTHS.department }} />
+                      <col style={{ width: USER_LIST_COL_WIDTHS.position }} />
+                      <col style={{ width: USER_LIST_COL_WIDTHS.status }} />
+                      <col style={{ width: USER_LIST_COL_WIDTHS.created_at }} />
+                    </colgroup>
                     <TableHead sx={mvsTableHeadHighlightSx}>
                       <TableRow>
                         <TableCell padding="checkbox" align="center">
@@ -1571,7 +1616,7 @@ const UserManagement: React.FC = () => {
                             </Box>
                           </TableSortLabel>
                         </TableCell>
-                        <TableCell sx={{ overflow: 'hidden' }}>
+                        <TableCell sx={{ ...userStatusColSx, overflow: 'hidden' }}>
                           <TableSortLabel
                             active={orderBy === 'status'}
                             direction={orderBy === 'status' ? order : 'asc'}
@@ -1582,7 +1627,7 @@ const UserManagement: React.FC = () => {
                             </Box>
                           </TableSortLabel>
                         </TableCell>
-                        <TableCell sx={{ overflow: 'hidden' }}>
+                        <TableCell sx={{ ...userCreatedColSx, overflow: 'hidden' }}>
                           <TableSortLabel
                             active={orderBy === 'created_at'}
                             direction={orderBy === 'created_at' ? order : 'asc'}
@@ -1643,14 +1688,15 @@ const UserManagement: React.FC = () => {
                               {rowUser.position || '—'}
                             </Typography>
                           </TableCell>
-                          <TableCell>
+                          <TableCell sx={userStatusColSx}>
                             <Chip
                               label={getStatusLabel(rowUser.status)}
                               color={getStatusColor(rowUser.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'}
                               size="small"
+                              sx={userListChipSx}
                             />
                           </TableCell>
-                          <TableCell sx={{ color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                          <TableCell sx={{ ...userCreatedColSx, color: 'text.secondary' }}>
                             {new Date(rowUser.created_at).toLocaleDateString(dateLocale)}
                           </TableCell>
                         </TableRow>

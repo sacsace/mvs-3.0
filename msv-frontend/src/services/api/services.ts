@@ -3,7 +3,6 @@ export * from './domains/users';
 export * from './domains/accounting';
 export {
   accountingService,
-  accountingBasicInfoService,
   payrollService,
   ewayBillService,
 } from './domains/accounting';

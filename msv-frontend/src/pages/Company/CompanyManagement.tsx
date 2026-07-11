@@ -154,13 +154,41 @@ const companyTableBodyRowSx: SxProps<Theme> = (theme) => {
   const base = typeof mvsTableBodyRowSx === 'function' ? mvsTableBodyRowSx(theme) : mvsTableBodyRowSx;
   const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
   const hoverBg = theme.palette.mode === 'light' ? '#EFF6FF' : theme.palette.action.hover;
+  const cellPaddingX = { xs: 1, sm: 1.25 };
   return {
     ...(base as object),
+    '& .MuiTableCell-body': {
+      py: 0.75,
+      px: cellPaddingX,
+      fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+      lineHeight: 1.35,
+    },
+    '& .MuiTableCell-body.MuiTableCell-paddingCheckbox': {
+      width: 48,
+      minWidth: 48,
+      maxWidth: 48,
+      px: cellPaddingX,
+      py: 0.75,
+    },
     '& .MuiTableRow-root:nth-of-type(odd)': { bgcolor: rowBg },
     '& .MuiTableRow-root:nth-of-type(even)': { bgcolor: rowBg },
     '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
   };
 };
+
+const companyListTextSx = {
+  fontSize: 'inherit',
+  lineHeight: 1.35,
+} as const;
+
+const companyCheckboxColSx = {
+  width: 48,
+  minWidth: 48,
+  maxWidth: 48,
+  px: { xs: 1, sm: 1.25 },
+  py: 0.75,
+  boxSizing: 'border-box' as const,
+} as const;
 
 // TabPanel 컴포넌트 정의
 interface TabPanelProps {
@@ -982,16 +1010,25 @@ const CompanyManagement: React.FC = () => {
     flex: '1 1 auto',
   } as const;
 
-  const thSx = (key: string) => {
+  const companyColBaseSx = (key: string) => {
     const align = compColTableAlign(key);
     return {
       width: compColWidthPct(key),
       minWidth: COMP_COL_MIN_WIDTH[key] ?? 0,
       maxWidth: compColWidthPct(key),
-      overflow: 'hidden',
       textAlign: align,
       verticalAlign: 'middle' as const,
       boxSizing: 'border-box' as const,
+      px: { xs: 1, sm: 1.25 },
+      py: 0.75,
+      overflow: 'hidden',
+    };
+  };
+
+  const thSx = (key: string) => {
+    const align = compColTableAlign(key);
+    return {
+      ...companyColBaseSx(key),
       '& .MuiTableSortLabel-root': {
         color: 'inherit',
         display: 'inline-flex',
@@ -1001,24 +1038,27 @@ const CompanyManagement: React.FC = () => {
         overflow: 'hidden',
         ...(align === 'right' ? { flexDirection: 'row-reverse' as const } : {}),
       },
-      '& .MuiTableSortLabel-icon': { flexShrink: 0 },
+      '& .MuiTableSortLabel-icon': {
+        flexShrink: 0,
+        opacity: 0,
+        width: 0,
+        margin: 0,
+      },
+      '& .MuiTableSortLabel-root.Mui-active .MuiTableSortLabel-icon': {
+        opacity: 1,
+        width: '1.125rem',
+        marginLeft: align === 'right' ? 0 : '4px',
+        marginRight: align === 'right' ? '4px' : 0,
+      },
     };
   };
 
   const tdSx = (key: string) => ({
-    width: compColWidthPct(key),
-    minWidth: COMP_COL_MIN_WIDTH[key] ?? 0,
-    maxWidth: compColWidthPct(key),
-    overflow:
-      key === 'name' || key === 'ceo_name' || key === 'industry' || key === 'mvs_start'
-        ? ('hidden' as const)
-        : ('visible' as const),
+    ...companyColBaseSx(key),
     textOverflow:
       key === 'name' || key === 'ceo_name' || key === 'industry' || key === 'mvs_start'
         ? ('ellipsis' as const)
         : undefined,
-    verticalAlign: 'middle' as const,
-    boxSizing: 'border-box' as const,
   });
 
   const renderHeadSortCell = (key: CompanySortKey, label: string) => (
@@ -1933,9 +1973,27 @@ const CompanyManagement: React.FC = () => {
                     },
                   }}
                 >
-                  <TableHead sx={mvsTableHeadHighlightSx}>
+                  <TableHead
+                    sx={(theme) => {
+                      const headBase =
+                        typeof mvsTableHeadHighlightSx === 'function'
+                          ? mvsTableHeadHighlightSx(theme)
+                          : mvsTableHeadHighlightSx;
+                      return {
+                        ...(headBase as object),
+                        '& .MuiTableCell-head': {
+                          py: 0.75,
+                          px: { xs: 1, sm: 1.25 },
+                        },
+                        '& .MuiTableCell-head.MuiTableCell-paddingCheckbox': {
+                          ...companyCheckboxColSx,
+                          overflow: 'visible',
+                        },
+                      };
+                    }}
+                  >
                     <TableRow>
-                      <TableCell padding="checkbox" align="center" sx={thSx('select')}>
+                      <TableCell padding="checkbox" align="center" sx={{ ...thSx('select'), ...companyCheckboxColSx }}>
                         <Checkbox
                           size="small"
                           disabled={menuFlags.menusLoading || !menuFlags.canDelete || paginatedCompanies.length === 0}
@@ -1954,7 +2012,9 @@ const CompanyManagement: React.FC = () => {
                         <Box
                           component="span"
                           sx={{
-                            display: 'inline-block',
+                            display: 'flex',
+                            justifyContent: 'center',
+                            width: '100%',
                             maxWidth: '100%',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -1985,7 +2045,7 @@ const CompanyManagement: React.FC = () => {
                         <TableCell
                           padding="checkbox"
                           align="center"
-                          sx={tdSx('select')}
+                          sx={{ ...tdSx('select'), ...companyCheckboxColSx }}
                           onClick={(e) => e.stopPropagation()}
                         >
                           <Checkbox
@@ -2000,10 +2060,10 @@ const CompanyManagement: React.FC = () => {
                           <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'hidden' }}>
                             <Avatar
                               sx={{
-                                mr: 1.5,
-                                width: 36,
-                                height: 36,
-                                fontSize: '0.875rem',
+                                mr: 1.25,
+                                width: 32,
+                                height: 32,
+                                fontSize: '0.75rem',
                                 fontWeight: 600,
                                 flexShrink: 0,
                                 bgcolor:
@@ -2016,44 +2076,51 @@ const CompanyManagement: React.FC = () => {
                               {company.name.charAt(0)}
                             </Avatar>
                             <Typography
-                              variant="subtitle2"
+                              component="span"
                               fontWeight={600}
                               noWrap
                               title={company.name}
-                              sx={{ minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}
+                              sx={{
+                                ...companyListTextSx,
+                                minWidth: 0,
+                                flex: 1,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                display: 'block',
+                              }}
                             >
                               {company.name}
                             </Typography>
                           </Box>
                         </TableCell>
                         <TableCell align={compColTableAlign('ceo_name')} sx={tdSx('ceo_name')}>
-                          <Typography variant="body2" noWrap title={company.ceo_name} sx={{ fontWeight: 600 }}>
+                          <Typography component="span" noWrap title={company.ceo_name} sx={{ ...companyListTextSx, fontWeight: 600, display: 'block' }}>
                             {company.ceo_name}
                           </Typography>
                         </TableCell>
                         <TableCell align={compColTableAlign('industry')} sx={tdSx('industry')}>
-                          <Typography variant="body2" noWrap title={company.industry || '-'}>
+                          <Typography component="span" noWrap title={company.industry || '-'} sx={{ ...companyListTextSx, display: 'block' }}>
                             {company.industry || '-'}
                           </Typography>
                         </TableCell>
                         <TableCell align={compColTableAlign('employee_count')} sx={tdSx('employee_count')}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                            <PeopleIcon sx={{ mr: 0.75, fontSize: '1rem', color: 'text.secondary', opacity: 0.7 }} />
-                            <Typography variant="body2" noWrap sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', width: '100%' }}>
+                            <PeopleIcon sx={{ mr: 0.5, fontSize: '0.875rem', color: 'text.secondary', opacity: 0.7 }} />
+                            <Typography component="span" noWrap sx={{ ...companyListTextSx, fontVariantNumeric: 'tabular-nums', display: 'block' }}>
                               {t('companyManagement.employeesCount', { count: company.employee_count })}
                             </Typography>
                           </Box>
                         </TableCell>
                         <TableCell align={compColTableAlign('mvs_start')} sx={tdSx('mvs_start')}>
                           <Typography
-                            variant="body2"
+                            component="span"
                             noWrap
                             title={
                               company.mvs_start_date && company.mvs_end_date
                                 ? `${company.mvs_start_date} ~ ${company.mvs_end_date}`
                                 : '-'
                             }
-                            sx={{ fontVariantNumeric: 'tabular-nums' }}
+                            sx={{ ...companyListTextSx, fontVariantNumeric: 'tabular-nums', display: 'block' }}
                           >
                             {company.mvs_start_date && company.mvs_end_date
                               ? `${company.mvs_start_date} ~ ${company.mvs_end_date}`

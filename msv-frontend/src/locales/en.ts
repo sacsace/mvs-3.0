@@ -2553,33 +2553,6 @@ export default {
         updateStatus: 'Failed to update status.'
       }
     },
-    accountingBasicInfo: {
-      title: 'Basic Accounting Information',
-      description: 'Easily register frequently used accounting information for each company.',
-      sections: {
-        accountCategories: 'Account titles',
-        expenseCategories: 'Expense items',
-        taxCodes: 'Tax codes',
-        paymentMethods: 'Payment methods'
-      },
-      placeholders: {
-        accountCategories: 'e.g. Sales, Purchases, Payroll',
-        expenseCategories: 'e.g. Travel, Transportation',
-        taxCodes: 'e.g. VAT 10%, Tax-exempt',
-        paymentMethods: 'e.g. Bank transfer, Card'
-      },
-      add: 'Add',
-      emptyList: 'No items registered.',
-      readOnlyHint: 'Only users with administrator privileges can make changes.',
-      errors: {
-        loadFailed: 'Could not load accounting basic information.',
-        loadError: 'An error occurred while loading accounting basic information.',
-        saveFailed: 'Save failed.',
-        saveError: 'An error occurred while saving.'
-      },
-      successSaved: 'Saved successfully.',
-      saving: 'Saving...'
-    },
     accountingScope: {
       company: 'Company',
       hint: 'In this multi-tenant system, only the selected company\'s ledger, vouchers, and accounts are shown.',
@@ -2606,6 +2579,7 @@ export default {
       },
       system: 'System',
       empty: 'No accounts registered.',
+      emptyNoResults: 'No matching accounts.',
       loading: 'Loading...',
       deleteConfirm: 'Delete this account?',
       success: {

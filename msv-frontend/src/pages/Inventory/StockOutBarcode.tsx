@@ -246,6 +246,16 @@ const StockOutBarcode: React.FC = () => {
     }
   }, [barcode, quantity, releaseReason, txt, language, perm.canMutate, t]);
 
+  const fieldLabelSx = {
+    mb: 1,
+    fontSize: '0.875rem',
+    fontWeight: 600,
+    letterSpacing: '-0.015em',
+    color: 'text.primary',
+    lineHeight: 1.35,
+    display: 'block',
+  } as const;
+
   const appleInputSx = {
     ...(mvsSearchFieldSx as Record<string, unknown>),
     '& .MuiOutlinedInput-root': {
@@ -312,61 +322,104 @@ const StockOutBarcode: React.FC = () => {
 
       <Card elevation={0} sx={mvsBodyCardSx}>
         <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
-          <TextField
-            disabled={perm.menusLoading || !perm.canMutate}
-            inputRef={barcodeRef}
-            label={txt('바코드 / 품목코드 / 제품명', 'Barcode / item code / product name')}
-            value={barcode}
-            onChange={(e) => setBarcode(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') e.preventDefault();
-            }}
-            autoFocus
-            fullWidth
-            size="medium"
-            sx={appleInputSx}
-          />
-          <TextField
-            label={txt('수량', 'Quantity')}
-            type="number"
-            value={quantity}
-            onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
-            inputProps={{ min: 1 }}
-            fullWidth
-            size="medium"
-            disabled={perm.menusLoading || !perm.canMutate}
-            sx={appleInputSx}
-          />
-          <TextField
-            label={txt('출고 이유', 'Reason (optional)')}
-            value={releaseReason}
-            onChange={(e) => setReleaseReason(e.target.value)}
-            disabled={perm.menusLoading || !perm.canMutate}
-            placeholder={txt('선택 입력 (예: 샘플 제공, 현장 반출)', 'Optional (e.g. sample, field use)')}
-            fullWidth
-            size="medium"
-            multiline
-            minRows={2}
-            maxRows={5}
-            inputProps={{ maxLength: 2000 }}
-            helperText={txt(
-              '입력 시 재고 거래 내역 비고에 함께 저장됩니다.',
-              'If set, it is saved with the inventory transaction notes.'
-            )}
-            sx={appleInputSx}
-          />
+          <Stack spacing={2.5}>
+            <Box>
+              <Typography component="label" sx={fieldLabelSx}>
+                {txt('바코드 / 품목코드 / 제품명', 'Barcode / item code / product name')}
+              </Typography>
+              <TextField
+                disabled={perm.menusLoading || !perm.canMutate}
+                inputRef={barcodeRef}
+                hiddenLabel
+                value={barcode}
+                onChange={(e) => setBarcode(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.preventDefault();
+                }}
+                autoFocus
+                fullWidth
+                size="medium"
+                placeholder={txt(
+                  '바코드 스캔 또는 품목코드·제품명 입력',
+                  'Scan barcode or enter item code / product name'
+                )}
+                helperText={txt(
+                  '등록된 품목만 조회됩니다. 입력하면 아래에서 품목 정보를 확인할 수 있습니다.',
+                  'Only registered products are shown. Item details appear below as you type.'
+                )}
+                FormHelperTextProps={{ sx: { mx: 0 } }}
+                sx={appleInputSx}
+              />
+            </Box>
 
-          <Divider sx={{ my: 0.5 }} />
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-            {txt('출고 전 확인 (읽기 전용)', 'Review before release (read-only)')}
-          </Typography>
-          <Box
-            sx={{
-              ...mvsInnerCardSx,
-              minHeight: 120,
-              p: 1.5,
-            }}
-          >
+            <Box sx={{ maxWidth: { xs: '100%', sm: 280 } }}>
+              <Typography component="label" sx={fieldLabelSx}>
+                {txt('수량', 'Quantity')}
+              </Typography>
+              <TextField
+                hiddenLabel
+                type="number"
+                value={quantity}
+                onChange={(e) => setQuantity(Math.max(1, Number(e.target.value) || 1))}
+                inputProps={{ min: 1 }}
+                fullWidth
+                size="medium"
+                disabled={perm.menusLoading || !perm.canMutate}
+                placeholder="1"
+                helperText={txt('출고할 수량을 입력하세요.', 'Enter the quantity to ship out.')}
+                FormHelperTextProps={{ sx: { mx: 0 } }}
+                sx={appleInputSx}
+              />
+            </Box>
+
+            <Box>
+              <Typography component="label" sx={fieldLabelSx}>
+                {txt('출고 이유', 'Reason (optional)')}
+              </Typography>
+              <TextField
+                hiddenLabel
+                value={releaseReason}
+                onChange={(e) => setReleaseReason(e.target.value)}
+                disabled={perm.menusLoading || !perm.canMutate}
+                placeholder={txt('선택 입력 (예: 샘플 제공, 현장 반출)', 'Optional (e.g. sample, field use)')}
+                fullWidth
+                size="medium"
+                multiline
+                minRows={2}
+                maxRows={5}
+                inputProps={{ maxLength: 2000 }}
+                helperText={txt(
+                  '입력 시 재고 거래 내역 비고에 함께 저장됩니다.',
+                  'If set, it is saved with the inventory transaction notes.'
+                )}
+                FormHelperTextProps={{ sx: { mx: 0 } }}
+                sx={appleInputSx}
+              />
+            </Box>
+
+            <Divider sx={{ my: 0.25 }} />
+
+            <Box>
+              <Typography component="label" sx={fieldLabelSx}>
+                {txt('출고 전 확인 (읽기 전용)', 'Review before release (read-only)')}
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block', mb: 1, letterSpacing: '-0.01em', lineHeight: 1.45 }}
+              >
+                {txt(
+                  '바코드·품목코드·제품명을 입력하면 여기에 품목 정보가 표시됩니다.',
+                  'Enter a barcode, item code, or product name to see details here.'
+                )}
+              </Typography>
+              <Box
+                sx={{
+                  ...mvsInnerCardSx,
+                  minHeight: 120,
+                  p: 1.5,
+                }}
+              >
             {previewLoading && (
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 3 }}>
                 <CircularProgress size={28} />
@@ -472,15 +525,13 @@ const StockOutBarcode: React.FC = () => {
             )}
             {!previewLoading && !previewProduct && !previewAmbiguous && !barcode.trim() && (
               <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-                {txt(
-                  '바코드·품목코드·제품명을 입력하면 여기에 품목 정보가 표시됩니다.',
-                  'Enter a barcode, item code, or product name to see details here.'
-                )}
+                {txt('품목을 검색해 주세요.', 'Search for a product.')}
               </Typography>
             )}
-          </Box>
+              </Box>
+            </Box>
 
-          <Tooltip title={t('common.menuNoMutate')} disableHoverListener={perm.menusLoading || perm.canMutate}>
+            <Tooltip title={t('common.menuNoMutate')} disableHoverListener={perm.menusLoading || perm.canMutate}>
             <span style={{ display: 'block' }}>
               <Button
                 variant="contained"
@@ -507,6 +558,7 @@ const StockOutBarcode: React.FC = () => {
               </Button>
             </span>
           </Tooltip>
+          </Stack>
         </CardContent>
       </Card>
 

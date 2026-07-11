@@ -12,7 +12,6 @@ const serviceGroups = {
   'domains/users.ts': ['userService', 'loginInfoService', 'userUiPreferencesService'],
   'domains/accounting.ts': [
     'accountingService',
-    'accountingBasicInfoService',
     'payrollService',
     'ewayBillService',
   ],

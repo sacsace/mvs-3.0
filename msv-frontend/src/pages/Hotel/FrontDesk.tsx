@@ -29,7 +29,8 @@ import {
   TextField,
   Stack,
   Autocomplete,
-  InputAdornment
+  InputAdornment,
+  Tooltip,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -37,14 +38,17 @@ import {
   mvsKpiCardSx,
   mvsBodyCardSx,
   mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
   mvsBodySectionHeaderSx,
-  mvsBodyToolbarSx,
+  mvsBodyFilterWrapSx,
   mvsBodyListZoneSx,
   mvsBodyListTableSx,
   mvsTableScrollSx,
   mvsTableHeadHighlightSx,
   mvsTableBodyRowSx,
   mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsOutlinedLabelProps,
 } from '../../theme/mvsLayout';
 import { Search as SearchIcon } from '@mui/icons-material';
 import { alpha, useTheme } from '@mui/material/styles';
@@ -129,7 +133,60 @@ const getBookingGuestSearchable = (b: any) =>
 
 const frontDeskSearchFieldSx = {
   ...(mvsSearchFieldSx as Record<string, unknown>),
+  ...mvsFilterFieldHeightSx,
 } as const;
+
+const frontDeskTableSx = {
+  width: '100%',
+  tableLayout: 'fixed' as const,
+  minWidth: 720,
+  borderCollapse: 'collapse',
+  bgcolor: 'transparent',
+  '& .MuiTableCell-root': {
+    borderLeft: 'none',
+    borderRight: 'none',
+    borderTop: 'none',
+  },
+  '& .MuiTableSortLabel-root': {
+    color: 'inherit',
+  },
+  '& .MuiTableSortLabel-root.Mui-active': {
+    color: 'text.primary',
+  },
+} as const;
+
+const frontDeskCellBaseSx = {
+  fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+  py: 0.75,
+  px: { xs: 0.5, sm: 1 },
+  verticalAlign: 'middle' as const,
+} as const;
+
+const frontDeskCellEllipsisSx = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  maxWidth: 0,
+} as const;
+
+const chipSx = { fontWeight: 600, borderRadius: '8px' } as const;
+
+const renderEllipsisText = (text: string, fontWeight?: number) => (
+  <Tooltip title={text} placement="top-start" enterDelay={400}>
+    <Box
+      component="span"
+      sx={{
+        display: 'block',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        fontWeight,
+      }}
+    >
+      {text}
+    </Box>
+  </Tooltip>
+);
 
 const FrontDesk: React.FC = () => {
   const theme = useTheme();
@@ -1026,24 +1083,18 @@ const FrontDesk: React.FC = () => {
         description={t('frontDesk.description')}
       />
 
-      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 2.5 }}>
-        <Box sx={{ ...mvsBodySectionHeaderSx, borderBottom: 'none', pb: 1 }}>
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Box sx={mvsBodySectionHeaderSx}>
           <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
             {t('frontDesk.quickActionsTitle')}
           </Typography>
         </Box>
-        <Box
-          sx={{
-            ...mvsBodyToolbarSx,
-            borderBottom: 'none',
-            pb: 2,
-          }}
-        >
+        <Box sx={mvsBodyFilterWrapSx}>
           <Box
             sx={{
               display: 'flex',
               flexDirection: { xs: 'column', sm: 'row' },
-              flexWrap: { xs: 'wrap', sm: 'wrap' },
+              flexWrap: 'wrap',
               gap: 1.25,
               alignItems: 'stretch',
               width: '100%',
@@ -1081,158 +1132,133 @@ const FrontDesk: React.FC = () => {
         </Box>
       </Card>
 
-      <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2.5, mb: 3 }}>
         {summaryCards.map((item) => (
-          <Grid key={item.label} size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
-              <CardContent sx={{ py: 2.25, px: 2.5 }}>
-                <Typography
-                  variant="caption"
-                  sx={{ color: 'text.secondary', fontWeight: 600, letterSpacing: '0.02em', display: 'block', mb: 0.75 }}
-                >
-                  {item.label}
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 700, letterSpacing: '-0.02em' }}>
-                  {item.value}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12 }}>
-          <Card elevation={0} sx={mvsBodyCardSx}>
-            <Box sx={mvsBodySectionHeaderSx}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
-                {t('frontDesk.bookingListTitle')}
+          <Card key={item.label} elevation={0} sx={mvsKpiCardSx}>
+            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                {item.label}
               </Typography>
-            </Box>
-            <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 1.5, bgcolor: '#FFFFFF' }}>
-              <TextField
-                size="small"
-                placeholder={t('frontDesk.searchPlaceholder')}
-                value={bookingListSearch}
-                onChange={(e) => setBookingListSearch(e.target.value)}
-                fullWidth
-                sx={frontDeskSearchFieldSx}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon fontSize="small" sx={{ color: 'text.secondary', opacity: 0.85 }} />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Box>
-            <Box sx={{ ...mvsBodyListZoneSx, px: { xs: 2, sm: 2.5 }, pb: 2.5, mt: 0 }}>
-              {bookings.length === 0 || filteredBookings.length === 0 ? (
-                <Box sx={listStateBoxSx}>
-                  <Typography variant="body2" color="text.secondary">
-                    {bookings.length === 0
-                      ? t('frontDesk.empty.noData')
-                      : t('frontDesk.searchNoResults')}
-                  </Typography>
-                </Box>
-              ) : (
-                <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
-                  <Table
-                    size="small"
-                    sx={{
-                      minWidth: 720,
-                      width: '100%',
-                      borderCollapse: 'collapse',
-                      bgcolor: 'transparent',
-                      '& .MuiTableCell-root': {
-                        borderLeft: 'none',
-                        borderRight: 'none',
-                        borderTop: 'none',
-                      },
-                      '& .MuiTableSortLabel-root': {
-                        color: 'inherit',
-                      },
-                      '& .MuiTableSortLabel-root.Mui-active': {
-                        color: 'text.primary',
-                      },
-                    }}
-                  >
-                    <TableHead sx={mvsTableHeadHighlightSx}>
-                      <TableRow>
-                      <TableCell sortDirection={bookingSortBy === 'bookingNo' ? bookingSortDir : false}>
+              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
+                {item.value}
+              </Typography>
+            </CardContent>
+          </Card>
+        ))}
+      </Box>
+
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 0 }}>
+        <Box sx={mvsBodySectionHeaderSx}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+            {t('frontDesk.bookingListTitle')}
+          </Typography>
+        </Box>
+        <Box sx={mvsBodyFilterWrapSx}>
+          <TextField
+            size="small"
+            label={t('frontDesk.searchLabel', { defaultValue: '검색' })}
+            placeholder={t('frontDesk.searchPlaceholder')}
+            value={bookingListSearch}
+            onChange={(e) => setBookingListSearch(e.target.value)}
+            fullWidth
+            sx={frontDeskSearchFieldSx}
+            {...mvsOutlinedLabelProps}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                </InputAdornment>
+              ),
+            }}
+          />
+        </Box>
+      </Card>
+
+      <Box sx={mvsBodyListZoneSx}>
+        {bookings.length === 0 || filteredBookings.length === 0 ? (
+          <Box sx={listStateBoxSx}>
+            <Typography variant="body2" color="text.secondary">
+              {bookings.length === 0
+                ? t('frontDesk.empty.noData')
+                : t('frontDesk.searchNoResults')}
+            </Typography>
+          </Box>
+        ) : (
+          <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+            <Table size="small" sx={frontDeskTableSx}>
+              <TableHead sx={mvsTableHeadHighlightSx}>
+                <TableRow>
+                  {[
+                    { key: 'bookingNo' as const, label: t('frontDesk.columns.bookingNo'), width: '16%', ellipsis: true },
+                    { key: 'guestName' as const, label: t('frontDesk.columns.guestName'), width: '14%', ellipsis: true },
+                    { key: 'checkIn' as const, label: t('frontDesk.columns.checkin'), width: '12%' },
+                    { key: 'checkOut' as const, label: t('frontDesk.columns.checkout'), width: '12%' },
+                    { key: 'status' as const, label: t('frontDesk.columns.status'), width: '12%' },
+                    { key: null, label: t('frontDesk.columns.actions'), width: '34%', align: 'right' as const },
+                  ].map((col) => (
+                    <TableCell
+                      key={col.label}
+                      align={col.align || 'left'}
+                      width={col.width}
+                      sortDirection={col.key && bookingSortBy === col.key ? bookingSortDir : false}
+                      sx={{
+                        whiteSpace: 'nowrap',
+                        verticalAlign: 'middle',
+                        ...(col.ellipsis ? frontDeskCellEllipsisSx : {}),
+                      }}
+                    >
+                      {col.key ? (
                         <TableSortLabel
-                          active={bookingSortBy === 'bookingNo'}
-                          direction={bookingSortBy === 'bookingNo' ? bookingSortDir : 'asc'}
-                          onClick={() => handleBookingSort('bookingNo')}
+                          active={bookingSortBy === col.key}
+                          direction={bookingSortBy === col.key ? bookingSortDir : 'asc'}
+                          onClick={() => handleBookingSort(col.key!)}
+                          sx={{
+                            color: 'inherit',
+                            '& .MuiTableSortLabel-icon': { color: 'inherit' },
+                          }}
                         >
-                          {t('frontDesk.columns.bookingNo')}
+                          {col.label}
                         </TableSortLabel>
-                      </TableCell>
-                      <TableCell sortDirection={bookingSortBy === 'guestName' ? bookingSortDir : false}>
-                        <TableSortLabel
-                          active={bookingSortBy === 'guestName'}
-                          direction={bookingSortBy === 'guestName' ? bookingSortDir : 'asc'}
-                          onClick={() => handleBookingSort('guestName')}
-                        >
-                          {t('frontDesk.columns.guestName')}
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell sortDirection={bookingSortBy === 'checkIn' ? bookingSortDir : false}>
-                        <TableSortLabel
-                          active={bookingSortBy === 'checkIn'}
-                          direction={bookingSortBy === 'checkIn' ? bookingSortDir : 'asc'}
-                          onClick={() => handleBookingSort('checkIn')}
-                        >
-                          {t('frontDesk.columns.checkin')}
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell sortDirection={bookingSortBy === 'checkOut' ? bookingSortDir : false}>
-                        <TableSortLabel
-                          active={bookingSortBy === 'checkOut'}
-                          direction={bookingSortBy === 'checkOut' ? bookingSortDir : 'asc'}
-                          onClick={() => handleBookingSort('checkOut')}
-                        >
-                          {t('frontDesk.columns.checkout')}
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell sortDirection={bookingSortBy === 'status' ? bookingSortDir : false}>
-                        <TableSortLabel
-                          active={bookingSortBy === 'status'}
-                          direction={bookingSortBy === 'status' ? bookingSortDir : 'asc'}
-                          onClick={() => handleBookingSort('status')}
-                        >
-                          {t('frontDesk.columns.status')}
-                        </TableSortLabel>
-                      </TableCell>
-                      <TableCell align="right" sx={{ minWidth: 280, width: '32%' }}>
-                        {t('frontDesk.columns.actions')}
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody sx={mvsTableBodyRowSx}>
-                    {sortedBookings.map((booking) => (
-                        <TableRow key={booking.id} hover>
-                          <TableCell>{booking.booking_id || booking.id}</TableCell>
-                          <TableCell>{getBookingGuestSearchable(booking) || '-'}</TableCell>
-                          <TableCell>{formatDate(booking.check_in_date, i18n.language === 'en' ? 'en-US' : 'ko-KR')}</TableCell>
-                          <TableCell>{formatDate(booking.check_out_date, i18n.language === 'en' ? 'en-US' : 'ko-KR')}</TableCell>
-                          <TableCell>
-                            <Chip
-                              label={statusLabel(booking.status)}
-                              size="small"
-                              variant="outlined"
-                              color={statusColor(booking.status)}
-                              sx={{ fontWeight: 600, borderRadius: '10px' }}
-                            />
-                          </TableCell>
-                          <TableCell
-                            align="right"
-                            sx={{
-                              verticalAlign: 'middle',
-                              minWidth: 280,
-                              width: '32%'
-                            }}
-                          >
+                      ) : (
+                        col.label
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody sx={mvsTableBodyRowSx}>
+                {sortedBookings.map((booking) => (
+                  <TableRow key={booking.id} hover>
+                    <TableCell sx={{ ...frontDeskCellBaseSx, ...frontDeskCellEllipsisSx }}>
+                      {renderEllipsisText(String(booking.booking_id || booking.id), 600)}
+                    </TableCell>
+                    <TableCell sx={{ ...frontDeskCellBaseSx, ...frontDeskCellEllipsisSx }}>
+                      {renderEllipsisText(getBookingGuestSearchable(booking) || '-')}
+                    </TableCell>
+                    <TableCell sx={{ ...frontDeskCellBaseSx, whiteSpace: 'nowrap' }}>
+                      {formatDate(booking.check_in_date, i18n.language === 'en' ? 'en-US' : 'ko-KR')}
+                    </TableCell>
+                    <TableCell sx={{ ...frontDeskCellBaseSx, whiteSpace: 'nowrap' }}>
+                      {formatDate(booking.check_out_date, i18n.language === 'en' ? 'en-US' : 'ko-KR')}
+                    </TableCell>
+                    <TableCell sx={frontDeskCellBaseSx}>
+                      <Chip
+                        label={statusLabel(booking.status)}
+                        size="small"
+                        variant="outlined"
+                        color={statusColor(booking.status)}
+                        sx={{
+                          ...chipSx,
+                          maxWidth: '100%',
+                          '& .MuiChip-label': {
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          },
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell align="right" sx={{ ...frontDeskCellBaseSx, whiteSpace: 'nowrap' }}>
                             <Box
                               sx={{
                                 display: 'flex',
@@ -1286,17 +1312,14 @@ const FrontDesk: React.FC = () => {
                                 {t('frontDesk.actions.cancelBooking')}
                               </Button>
                             </Box>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-              )}
-            </Box>
-          </Card>
-        </Grid>
-      </Grid>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
+      </Box>
 
       <Dialog
         open={walkInOpen}

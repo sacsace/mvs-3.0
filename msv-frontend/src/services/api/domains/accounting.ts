@@ -720,34 +720,7 @@ export const accountingService = {
   },
 };
 
-// ?�사 관�?API ?�비??
-export const accountingBasicInfoService = {
-  getBasicInfo: async () => {
-    try {
-      const response = await api.get('/accounting/basic-info');
-      return response.data;
-    } catch (error) {
-      console.error('?�계 기본?�보 조회 ?�류:', error);
-      throw error;
-    }
-  },
-  updateBasicInfo: async (data: {
-    accountCategories: string[];
-    expenseCategories: string[];
-    taxCodes: string[];
-    paymentMethods: string[];
-  }) => {
-    try {
-      const response = await api.put('/accounting/basic-info', data);
-      return response.data;
-    } catch (error) {
-      console.error('?�계 기본?�보 ?�???�류:', error);
-      throw error;
-    }
-  }
-};
 
-// 급여 관�?API ?�비??
 export const payrollService = {
   // 급여 목록 조회
   getPayrolls: async (params?: { page?: number; limit?: number; employee_id?: number; period?: string }) => {

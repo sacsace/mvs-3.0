@@ -21,7 +21,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Button
+  Button,
+  Tooltip,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -405,6 +406,50 @@ const InventoryStatus: React.FC = () => {
     gap: 1.5,
   } as const;
 
+  const statusTableSx = {
+    width: '100%',
+    tableLayout: 'fixed' as const,
+    minWidth: { xs: 960, sm: 1100 },
+    borderCollapse: 'collapse',
+    bgcolor: 'transparent',
+    '& .MuiTableCell-root': {
+      borderLeft: 'none',
+      borderRight: 'none',
+      borderTop: 'none',
+    },
+  } as const;
+
+  const statusCellBaseSx = {
+    fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+    py: 0.75,
+    px: { xs: 0.5, sm: 1 },
+    verticalAlign: 'middle' as const,
+  } as const;
+
+  const statusCellEllipsisSx = {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    maxWidth: 0,
+  } as const;
+
+  const renderEllipsisText = (text: string, fontWeight?: number) => (
+    <Tooltip title={text} placement="top-start" enterDelay={400}>
+      <Box
+        component="span"
+        sx={{
+          display: 'block',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          fontWeight,
+        }}
+      >
+        {text}
+      </Box>
+    </Tooltip>
+  );
+
   return (
     <Box sx={{ ...mvsPageRootSx }}>
       <MvsPageHeader
@@ -530,122 +575,46 @@ const InventoryStatus: React.FC = () => {
           </Box>
         ) : (
           <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
-              <Table
-                size="small"
-                sx={{
-                  width: '100%',
-                  minWidth: 960,
-                  borderCollapse: 'collapse',
-                  bgcolor: 'transparent',
-                  '& .MuiTableCell-root': {
-                    borderLeft: 'none',
-                    borderRight: 'none',
-                    borderTop: 'none',
-                  },
-                }}
-              >
+              <Table size="small" sx={statusTableSx}>
                 <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
-                    <TableCell sortDirection={orderBy === 'productCode' ? order : false}>
-                      <TableSortLabel
-                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                        active={orderBy === 'productCode'}
-                        direction={orderBy === 'productCode' ? order : 'asc'}
-                        onClick={() => handleRequestSort('productCode')}
+                    {[
+                      { key: 'productCode' as const, label: t('inventoryStatus.columns.productCode'), width: '12%', align: 'left' as const, ellipsis: true },
+                      { key: 'productName' as const, label: t('inventoryStatus.columns.productName'), width: '12%', align: 'left' as const, ellipsis: true },
+                      { key: 'category' as const, label: t('inventoryStatus.columns.category'), width: '12%', align: 'left' as const, ellipsis: true },
+                      { key: 'currentStock' as const, label: t('inventoryStatus.columns.currentStock'), width: '8%', align: 'right' as const },
+                      { key: 'minStock' as const, label: t('inventoryStatus.columns.minStock'), width: '8%', align: 'right' as const },
+                      { key: 'maxStock' as const, label: t('inventoryStatus.columns.maxStock'), width: '8%', align: 'right' as const },
+                      { key: 'stockRate' as const, label: t('inventoryStatus.columns.stockRate'), width: '12%', align: 'right' as const },
+                      { key: 'unitPrice' as const, label: t('inventoryStatus.columns.unitPrice'), width: '9%', align: 'right' as const },
+                      { key: 'totalValue' as const, label: t('inventoryStatus.columns.totalValue'), width: '10%', align: 'right' as const },
+                      { key: 'status' as const, label: t('inventoryStatus.columns.status'), width: '11%', align: 'left' as const },
+                    ].map((col) => (
+                      <TableCell
+                        key={col.key}
+                        align={col.align}
+                        width={col.width}
+                        sortDirection={orderBy === col.key ? order : false}
+                        sx={{
+                          whiteSpace: 'nowrap',
+                          verticalAlign: 'middle',
+                          ...(col.ellipsis ? statusCellEllipsisSx : {}),
+                        }}
                       >
-                        {t('inventoryStatus.columns.productCode')}
-                      </TableSortLabel>
-                    </TableCell>
-                    <TableCell sortDirection={orderBy === 'productName' ? order : false}>
-                      <TableSortLabel
-                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                        active={orderBy === 'productName'}
-                        direction={orderBy === 'productName' ? order : 'asc'}
-                        onClick={() => handleRequestSort('productName')}
-                      >
-                        {t('inventoryStatus.columns.productName')}
-                      </TableSortLabel>
-                    </TableCell>
-                    <TableCell sortDirection={orderBy === 'category' ? order : false}>
-                      <TableSortLabel
-                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                        active={orderBy === 'category'}
-                        direction={orderBy === 'category' ? order : 'asc'}
-                        onClick={() => handleRequestSort('category')}
-                      >
-                        {t('inventoryStatus.columns.category')}
-                      </TableSortLabel>
-                    </TableCell>
-                    <TableCell align="right" sortDirection={orderBy === 'currentStock' ? order : false}>
-                      <TableSortLabel
-                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                        active={orderBy === 'currentStock'}
-                        direction={orderBy === 'currentStock' ? order : 'asc'}
-                        onClick={() => handleRequestSort('currentStock')}
-                      >
-                        {t('inventoryStatus.columns.currentStock')}
-                      </TableSortLabel>
-                    </TableCell>
-                    <TableCell align="right" sortDirection={orderBy === 'minStock' ? order : false}>
-                      <TableSortLabel
-                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                        active={orderBy === 'minStock'}
-                        direction={orderBy === 'minStock' ? order : 'asc'}
-                        onClick={() => handleRequestSort('minStock')}
-                      >
-                        {t('inventoryStatus.columns.minStock')}
-                      </TableSortLabel>
-                    </TableCell>
-                    <TableCell align="right" sortDirection={orderBy === 'maxStock' ? order : false}>
-                      <TableSortLabel
-                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                        active={orderBy === 'maxStock'}
-                        direction={orderBy === 'maxStock' ? order : 'asc'}
-                        onClick={() => handleRequestSort('maxStock')}
-                      >
-                        {t('inventoryStatus.columns.maxStock')}
-                      </TableSortLabel>
-                    </TableCell>
-                    <TableCell align="right" sortDirection={orderBy === 'stockRate' ? order : false}>
-                      <TableSortLabel
-                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                        active={orderBy === 'stockRate'}
-                        direction={orderBy === 'stockRate' ? order : 'asc'}
-                        onClick={() => handleRequestSort('stockRate')}
-                      >
-                        {t('inventoryStatus.columns.stockRate')}
-                      </TableSortLabel>
-                    </TableCell>
-                    <TableCell align="right" sortDirection={orderBy === 'unitPrice' ? order : false}>
-                      <TableSortLabel
-                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                        active={orderBy === 'unitPrice'}
-                        direction={orderBy === 'unitPrice' ? order : 'asc'}
-                        onClick={() => handleRequestSort('unitPrice')}
-                      >
-                        {t('inventoryStatus.columns.unitPrice')}
-                      </TableSortLabel>
-                    </TableCell>
-                    <TableCell align="right" sortDirection={orderBy === 'totalValue' ? order : false}>
-                      <TableSortLabel
-                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                        active={orderBy === 'totalValue'}
-                        direction={orderBy === 'totalValue' ? order : 'asc'}
-                        onClick={() => handleRequestSort('totalValue')}
-                      >
-                        {t('inventoryStatus.columns.totalValue')}
-                      </TableSortLabel>
-                    </TableCell>
-                    <TableCell sortDirection={orderBy === 'status' ? order : false}>
-                      <TableSortLabel
-                        disabled={menuFlags.menusLoading || !menuFlags.canRead}
-                        active={orderBy === 'status'}
-                        direction={orderBy === 'status' ? order : 'asc'}
-                        onClick={() => handleRequestSort('status')}
-                      >
-                        {t('inventoryStatus.columns.status')}
-                      </TableSortLabel>
-                    </TableCell>
+                        <TableSortLabel
+                          disabled={menuFlags.menusLoading || !menuFlags.canRead}
+                          active={orderBy === col.key}
+                          direction={orderBy === col.key ? order : 'asc'}
+                          onClick={() => handleRequestSort(col.key)}
+                          sx={{
+                            color: 'inherit',
+                            '& .MuiTableSortLabel-icon': { color: 'inherit' },
+                          }}
+                        >
+                          {col.label}
+                        </TableSortLabel>
+                      </TableCell>
+                    ))}
                   </TableRow>
                 </TableHead>
                 <TableBody sx={mvsTableBodyRowSx}>
@@ -665,28 +634,35 @@ const InventoryStatus: React.FC = () => {
                           '&:active': { bgcolor: menuFlags.canRead ? 'action.selected' : undefined },
                         }}
                       >
-                        <TableCell>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                            {item.productCode}
-                          </Typography>
+                        <TableCell sx={{ ...statusCellBaseSx, ...statusCellEllipsisSx }}>
+                          {renderEllipsisText(item.productCode, 700)}
                         </TableCell>
-                        <TableCell>{item.productName}</TableCell>
-                        <TableCell>{item.category}</TableCell>
-                        <TableCell>
+                        <TableCell sx={{ ...statusCellBaseSx, ...statusCellEllipsisSx }}>
+                          {renderEllipsisText(item.productName)}
+                        </TableCell>
+                        <TableCell sx={{ ...statusCellBaseSx, ...statusCellEllipsisSx }}>
+                          {renderEllipsisText(item.category)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ ...statusCellBaseSx, whiteSpace: 'nowrap' }}>
                           <Typography
                             variant="subtitle2"
                             sx={{
                               fontWeight: 'bold',
-                              color: lowOrOut ? 'error.main' : 'text.primary'
+                              fontSize: 'inherit',
+                              color: lowOrOut ? 'error.main' : 'text.primary',
                             }}
                           >
                             {t('inventoryStatus.pieces', { n: item.currentStock })}
                           </Typography>
                         </TableCell>
-                        <TableCell>{t('inventoryStatus.pieces', { n: item.minStock })}</TableCell>
-                        <TableCell>{t('inventoryStatus.pieces', { n: item.maxStock })}</TableCell>
-                        <TableCell>
-                          <Box sx={{ width: 100 }}>
+                        <TableCell align="right" sx={{ ...statusCellBaseSx, whiteSpace: 'nowrap' }}>
+                          {t('inventoryStatus.pieces', { n: item.minStock })}
+                        </TableCell>
+                        <TableCell align="right" sx={{ ...statusCellBaseSx, whiteSpace: 'nowrap' }}>
+                          {t('inventoryStatus.pieces', { n: item.maxStock })}
+                        </TableCell>
+                        <TableCell align="right" sx={statusCellBaseSx}>
+                          <Box sx={{ width: '100%', maxWidth: 120, ml: 'auto' }}>
                             <LinearProgress
                               variant="determinate"
                               value={barFill}
@@ -708,19 +684,27 @@ const InventoryStatus: React.FC = () => {
                             </Typography>
                           </Box>
                         </TableCell>
-                        <TableCell>{formatCurrency(item.unitPrice)}</TableCell>
-                        <TableCell>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                        <TableCell align="right" sx={{ ...statusCellBaseSx, whiteSpace: 'nowrap' }}>
+                          {formatCurrency(item.unitPrice)}
+                        </TableCell>
+                        <TableCell align="right" sx={{ ...statusCellBaseSx, whiteSpace: 'nowrap' }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 'bold', fontSize: 'inherit' }}>
                             {formatCurrency(item.totalValue)}
                           </Typography>
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={statusCellBaseSx}>
                           <Chip
                             icon={statusInfo.icon}
                             label={statusInfo.label}
                             size="small"
                             sx={{
                               ...softChipSx(statusInfo.chipTone),
+                              maxWidth: '100%',
+                              '& .MuiChip-label': {
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              },
                               '& .MuiChip-icon': { color: 'inherit', opacity: 0.92, ml: '6px' },
                             }}
                           />

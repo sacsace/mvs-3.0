@@ -42,7 +42,8 @@ import {
   Business,
   Email,
   RequestQuote,
-  MenuBook
+  MenuBook,
+  Hotel,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
@@ -79,16 +80,19 @@ const SIDEBAR_HOVER_CLOSE_DELAY_MS = 380;
 /** 선택 메뉴 — 브랜드 컬러 한 가지 + 연한 배경만 */
 const MENU_ITEM_RADIUS_PX = 10;
 const MENU_ACTIVE_COLOR = '#007A83';
+const MENU_MAIN_TEXT_COLOR = '#374151';
+const MENU_SUB_TEXT_COLOR = '#4B5563';
 
 const menuItemButtonSx = (
   theme: { palette: { action: { hover: string } } },
   isActive: boolean,
-  extra: Record<string, unknown>
+  extra: Record<string, unknown>,
+  level: number = 0
 ) => ({
   ...extra,
   borderLeft: 'none',
   backgroundColor: isActive ? alpha(MENU_ACTIVE_COLOR, 0.12) : 'transparent',
-  color: isActive ? MENU_ACTIVE_COLOR : '#4B5563',
+  color: isActive ? MENU_ACTIVE_COLOR : level === 0 ? MENU_MAIN_TEXT_COLOR : MENU_SUB_TEXT_COLOR,
   transition: 'background-color 0.2s ease, color 0.2s ease',
   '&:hover': {
     backgroundColor: isActive ? alpha(MENU_ACTIVE_COLOR, 0.18) : theme.palette.action.hover,
@@ -437,7 +441,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (normalized.includes('/work/projects')) return <ViewKanban />;
     if (normalized.includes('/work/statistics')) return <Assessment />;
     if (normalized.includes('/work/approval')) return <Description />;
-    if (normalized.includes('/work/room-reservation')) return <LocalShipping />;
+    if (normalized.includes('/hotel/room-reservation')) return <Hotel />;
     if (normalized.includes('/work/reports')) return <ReceiptLong />;
 
     if (normalized.includes('/hotel/front-desk')) return <Dashboard />;
@@ -467,7 +471,6 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (normalized.includes('/accounting/budget')) return <AttachMoney />;
     if (normalized.includes('/accounting/assets')) return <AccountBalance />;
     if (normalized.includes('/accounting/statistics')) return <Assessment />;
-    if (normalized.includes('/accounting/basic-info')) return <Settings />;
 
     if (normalized.includes('/customers/contracts')) return <Description />;
 
@@ -640,7 +643,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     py: isActive ? activePaddingY : itemPaddingY,
                     justifyContent: 'center',
                     borderRadius: MENU_ITEM_RADIUS_PX,
-                  })
+                  }, level)
                 }
               >
                 <ListItemIcon
@@ -665,13 +668,13 @@ const Sidebar: React.FC<SidebarProps> = ({
                   py: isActive ? activePaddingY : itemPaddingY,
                   minHeight: level === 0 ? topLevelMinHeight : 'auto',
                   borderRadius: MENU_ITEM_RADIUS_PX,
-                })
+                }, level)
               }
             >
               <ListItemIcon
                 sx={menuItemIconSx({
                   minWidth: '36px',
-                  opacity: isActive ? 1 : 0.55,
+                  opacity: isActive ? 1 : level === 0 ? 0.72 : 0.55,
                   '& .MuiSvgIcon-root': {
                     fontSize: '1rem',
                   },
@@ -691,7 +694,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                   whiteSpace: 'nowrap',
                   '& .MuiListItemText-primary': {
                     fontSize: '13px',
-                    fontWeight: isActive ? 600 : 400,
+                    fontWeight: isActive ? 600 : level === 0 ? 500 : 400,
                     color: 'inherit',
                     lineHeight: level === 0 ? (isEnglish ? 1.2 : 0.94) : (isEnglish ? 1.28 : 1.12)
                   },

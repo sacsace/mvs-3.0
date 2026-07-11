@@ -2621,33 +2621,6 @@ export default {
         updateStatus: '상태를 업데이트하는데 실패했습니다.'
       }
     },
-    accountingBasicInfo: {
-      title: '회계 기본정보 관리',
-      description: '회사별로 자주 쓰는 회계 기본정보를 간단히 등록하세요.',
-      sections: {
-        accountCategories: '계정과목',
-        expenseCategories: '비용항목',
-        taxCodes: '세금코드',
-        paymentMethods: '결제수단'
-      },
-      placeholders: {
-        accountCategories: '예: 매출, 매입, 인건비',
-        expenseCategories: '예: 출장비, 교통비',
-        taxCodes: '예: VAT 10%, 면세',
-        paymentMethods: '예: 계좌이체, 카드'
-      },
-      add: '추가',
-      emptyList: '등록된 항목이 없습니다.',
-      readOnlyHint: '관리 권한이 있는 사용자만 수정할 수 있습니다.',
-      errors: {
-        loadFailed: '회계 기본정보를 불러올 수 없습니다.',
-        loadError: '회계 기본정보를 불러오는 중 오류가 발생했습니다.',
-        saveFailed: '저장에 실패했습니다.',
-        saveError: '저장 중 오류가 발생했습니다.'
-      },
-      successSaved: '저장되었습니다.',
-      saving: '저장 중...'
-    },
     accountingScope: {
       company: '회사',
       hint: '멀티 테넌트 환경에서 선택한 회사의 장부·전표·계정과목만 표시됩니다.',
@@ -2674,6 +2647,7 @@ export default {
       },
       system: '시스템',
       empty: '등록된 계정과목이 없습니다.',
+      emptyNoResults: '검색 결과가 없습니다.',
       loading: '불러오는 중...',
       deleteConfirm: '이 계정과목을 삭제하시겠습니까?',
       success: {

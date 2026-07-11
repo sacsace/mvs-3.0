@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Card,
-  CardContent,
   Typography,
   IconButton,
   Button,
@@ -12,27 +11,61 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Alert,
   CircularProgress,
   TextField,
-  FormControl,
-  Select,
   MenuItem,
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  InputAdornment,
+  Tooltip,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsPageRootSx,
+  mvsBodyCardSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsBodyFilterWrapSx,
+  mvsBodyListZoneSx,
+  mvsBodyListTableSx,
+  mvsSearchFieldSx,
+  mvsFilterFieldHeightSx,
+  mvsOutlinedLabelProps,
+  mvsTableHeadHighlightSx,
+  mvsTableScrollSx,
+} from '../../theme/mvsLayout';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
-import { ChevronLeft, ChevronRight } from '@mui/icons-material';
+import { ChevronLeft, ChevronRight, Search as SearchIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { roomBookingService, roomTypeRoomService, roomTypeService } from '../../services/api';
 import RoomBookingManagement from '../Work/RoomBookingManagement';
-import { mvsFilterToolbarSx, mvsSearchFieldSx, mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
+
+const reservationFilterFieldSx = {
+  ...(mvsSearchFieldSx as Record<string, unknown>),
+  ...mvsFilterFieldHeightSx,
+} as const;
+
+const reservationMonthNavSx = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 0.25,
+  px: 1,
+  py: 0.25,
+  borderRadius: '10px',
+  bgcolor: '#F1F5F9',
+  border: '1px solid #C5CED9',
+} as const;
+
+const reservationMemoEllipsisSx = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  maxWidth: 120,
+} as const;
 
 type BookingStatus = 'pending' | 'confirmed' | 'checked_in' | 'checked_out' | 'cancelled' | 'no_show';
 
@@ -594,109 +627,119 @@ const ReservationStatus: React.FC = () => {
     }
   };
 
-  const headBg =
-    theme.palette.mode === 'light' ? alpha(theme.palette.grey[500], 0.08) : theme.palette.grey[900];
-  const headBorder = alpha(theme.palette.divider, 0.9);
-  const stickyRoomBg = theme.palette.mode === 'light' ? '#F8FAFC' : theme.palette.grey[900];
+  const gridBorder = theme.palette.mode === 'light' ? '#D1DAE4' : theme.palette.divider;
+  const stickyRoomBg = theme.palette.mode === 'light' ? '#F1F5F9' : theme.palette.grey[900];
   const pastCellBg = alpha(theme.palette.grey[500], 0.14);
+  const groupRowBg = theme.palette.mode === 'light' ? '#F4F7FB' : alpha(theme.palette.common.white, 0.04);
+
+  const calendarCellBorderSx = {
+    borderRight: `1px solid ${gridBorder}`,
+    borderBottom: `1px solid ${gridBorder}`,
+  } as const;
+
+  const calendarRoomRowHeight = 34;
+  const calendarRoomFontSize = '0.68rem';
+
+  const calendarHeadCellSx = {
+    py: '2px !important',
+    px: 0.25,
+    lineHeight: 1.1,
+    textAlign: 'center' as const,
+  } as const;
+
+  const calendarSideHeadCellSx = {
+    ...calendarHeadCellSx,
+    fontWeight: 600,
+    fontSize: `${calendarRoomFontSize} !important`,
+  } as const;
+
+  const calendarGroupCellSx = {
+    py: '2px !important',
+    height: 36,
+    minHeight: 36,
+    maxHeight: 36,
+    lineHeight: '36px',
+    textAlign: 'center' as const,
+  } as const;
+
+  const calendarRoomCellSx = {
+    py: '1px !important',
+    px: '0.35rem !important',
+    height: calendarRoomRowHeight,
+    minHeight: calendarRoomRowHeight,
+    maxHeight: calendarRoomRowHeight,
+    lineHeight: `${calendarRoomRowHeight}px`,
+    fontSize: calendarRoomFontSize,
+    fontWeight: 600,
+    textAlign: 'center' as const,
+  } as const;
+
+  const calendarDateCellSx = {
+    height: calendarRoomRowHeight,
+    minHeight: calendarRoomRowHeight,
+    maxHeight: calendarRoomRowHeight,
+    py: '1px !important',
+    px: 0,
+    lineHeight: `${calendarRoomRowHeight}px`,
+    fontSize: '0.62rem',
+  } as const;
 
   return (
     <Box sx={{ ...mvsPageRootSx }}>
-      <Card
-        elevation={0}
-        sx={{
-          width: '100%',
-          maxWidth: '100%',
-          borderRadius: '20px',
-          border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
-          boxShadow: `0 4px 24px ${alpha('#0f172a', 0.055)}`,
-          bgcolor: 'background.paper',
-          overflow: 'hidden'
-        }}
-      >
-        <CardContent sx={{ p: { xs: 2, sm: 3 }, width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
-          <MvsPageHeader
-            title={t('reservationStatus.title')}
-            description={t('reservationStatus.description')}
-            mb={2.5}
-            actions={
-              <>
-              <Button
+      <MvsPageHeader
+        title={t('reservationStatus.title')}
+        description={t('reservationStatus.description')}
+        actions={
+          <>
+            <Button
+              variant="contained"
+              disableElevation
+              onClick={() => navigate('/hotel/room-reservation')}
+              sx={mvsBodyPrimaryBtnSx}
+            >
+              {t('reservationStatus.actions.book')}
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={handleOpenRoomTypeDialog}
+              sx={mvsBodyOutlinedBtnSx}
+            >
+              {t('reservationStatus.actions.roomTypeInput')}
+            </Button>
+            <Box sx={reservationMonthNavSx}>
+              <IconButton
+                onClick={handlePrevMonth}
                 size="small"
-                variant="contained"
-                disableElevation
-                onClick={() => navigate('/work/room-reservation')}
-                sx={{
-                  borderRadius: '12px',
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  px: 2
-                }}
+                aria-label="previous month"
+                sx={{ borderRadius: '10px' }}
               >
-                {t('reservationStatus.actions.book')}
-              </Button>
-              <Button
+                <ChevronLeft fontSize="small" />
+              </IconButton>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, letterSpacing: '0.01em', px: 0.5, whiteSpace: 'nowrap' }}>
+                {monthLabel}
+              </Typography>
+              <IconButton
+                onClick={handleNextMonth}
                 size="small"
-                variant="outlined"
-                onClick={handleOpenRoomTypeDialog}
-                sx={{
-                  borderRadius: '12px',
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  px: 2,
-                  borderColor: alpha(theme.palette.divider, 0.95)
-                }}
+                aria-label="next month"
+                sx={{ borderRadius: '10px' }}
               >
-                {t('reservationStatus.actions.roomTypeInput')}
-              </Button>
-              <Box
-                sx={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 0.25,
-                  px: 1,
-                  py: 0.25,
-                  borderRadius: '12px',
-                  bgcolor: alpha(theme.palette.grey[500], 0.08),
-                  border: `1px solid ${alpha(theme.palette.divider, 0.6)}`
-                }}
-              >
-                <IconButton
-                  onClick={handlePrevMonth}
-                  size="small"
-                  aria-label="previous month"
-                  sx={{ borderRadius: '10px' }}
-                >
-                  <ChevronLeft fontSize="small" />
-                </IconButton>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, letterSpacing: '0.01em', px: 0.5 }}>
-                  {monthLabel}
-                </Typography>
-                <IconButton
-                  onClick={handleNextMonth}
-                  size="small"
-                  aria-label="next month"
-                  sx={{ borderRadius: '10px' }}
-                >
-                  <ChevronRight fontSize="small" />
-                </IconButton>
-              </Box>
-              </>
-            }
-          />
+                <ChevronRight fontSize="small" />
+              </IconButton>
+            </Box>
+          </>
+        }
+      />
 
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Box sx={mvsBodyFilterWrapSx}>
           <Box
             sx={{
-              ...mvsFilterToolbarSx,
-              ...mvsSearchFieldSx,
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr' },
+              gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 2fr) minmax(0, 1fr)' },
               gap: 2,
-              mb: 2,
-              alignItems: 'end',
-              boxSizing: 'border-box',
-              width: '100%',
-              maxWidth: '100%'
+              alignItems: 'flex-end',
+              ...(mvsSearchFieldSx as Record<string, unknown>),
             }}
           >
             <TextField
@@ -706,12 +749,14 @@ const ReservationStatus: React.FC = () => {
               placeholder={t('reservationStatus.placeholders.search')}
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              InputLabelProps={{ shrink: true }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '12px',
-                  bgcolor: 'background.paper'
-                }
+              sx={reservationFilterFieldSx}
+              {...mvsOutlinedLabelProps}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon fontSize="small" sx={{ color: 'text.secondary' }} />
+                  </InputAdornment>
+                ),
               }}
             />
             <TextField
@@ -721,16 +766,11 @@ const ReservationStatus: React.FC = () => {
               label={t('reservationStatus.filters.roomType')}
               value={roomTypeFilter}
               onChange={(event) => setRoomTypeFilter(event.target.value)}
-              InputLabelProps={{ shrink: true }}
+              sx={reservationFilterFieldSx}
+              {...mvsOutlinedLabelProps}
               SelectProps={{
                 displayEmpty: true,
                 renderValue: (selected) => (selected ? selected : t('reservationStatus.filters.all')),
-              }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '12px',
-                  bgcolor: 'background.paper'
-                }
               }}
             >
               <MenuItem value="">{t('reservationStatus.filters.all')}</MenuItem>
@@ -741,40 +781,45 @@ const ReservationStatus: React.FC = () => {
               ))}
             </TextField>
           </Box>
+        </Box>
+      </Card>
 
-          {error && (
-            <Alert severity="error" sx={{ mb: 2, borderRadius: '12px' }}>
-              {error}
-            </Alert>
-          )}
+      {error && (
+        <Alert severity="error" sx={{ mb: 2, borderRadius: '12px' }}>
+          {error}
+        </Alert>
+      )}
 
-          <TableContainer
-            component={Paper}
-            elevation={0}
+      <Box sx={mvsBodyListZoneSx}>
+        <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+          <Table
+            size="small"
+            stickyHeader
             sx={{
               width: '100%',
-              maxWidth: '100%',
-              maxHeight: 'none',
-              overflowX: 'auto',
-              overflowY: 'visible',
-              borderRadius: '16px',
-              border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
-              boxShadow: `0 2px 14px ${alpha('#0f172a', 0.04)}`,
-              bgcolor: 'background.paper',
-              boxSizing: 'border-box'
+              minWidth: { xs: 640, sm: 800 },
+              tableLayout: 'fixed',
+              borderCollapse: 'separate',
+              borderSpacing: 0,
+              bgcolor: 'transparent',
+              '& .MuiTableCell-root': {
+                borderLeft: 'none',
+                borderTop: 'none',
+                ...calendarCellBorderSx,
+              },
+              '& .MuiTableCell-sizeSmall': {
+                paddingTop: '1px',
+                paddingBottom: '1px',
+              },
+              '& .MuiTableBody-root .MuiTableRow-root': {
+                height: calendarRoomRowHeight,
+              },
+              '& .MuiTableBody-root .MuiTableCell-root': {
+                paddingTop: '1px',
+                paddingBottom: '1px',
+              },
             }}
           >
-            <Table
-              size="small"
-              stickyHeader
-              sx={{
-                width: '100%',
-                minWidth: { xs: 640, sm: 800 },
-                tableLayout: 'fixed',
-                borderCollapse: 'separate',
-                borderSpacing: 0
-              }}
-            >
               <colgroup>
                 <col style={{ width: 104 }} />
                 {dateRange.map((date) => (
@@ -784,31 +829,28 @@ const ReservationStatus: React.FC = () => {
                 <col style={{ width: 92 }} />
                 <col style={{ width: 120 }} />
               </colgroup>
-              <TableHead>
-                <TableRow
-                  sx={{
-                    '& .MuiTableCell-head': {
-                      bgcolor: headBg,
-                      color: 'text.secondary',
-                      fontWeight: 600,
-                      fontSize: '0.75rem',
-                      letterSpacing: '0.02em',
-                      borderBottom: `1px solid ${headBorder}`
-                    }
-                  }}
-                >
+              <TableHead
+                sx={{
+                  ...mvsTableHeadHighlightSx,
+                  '& .MuiTableCell-head': {
+                    py: '2px !important',
+                    px: 0.25,
+                    lineHeight: 1.1,
+                  },
+                }}
+              >
+                <TableRow>
                   <TableCell
+                    align="center"
                     sx={{
-                      fontWeight: 700,
+                      ...calendarSideHeadCellSx,
                       position: 'sticky',
                       left: 0,
                       zIndex: 3,
                       bgcolor: `${stickyRoomBg} !important`,
-                      borderRight: `1px solid ${headBorder}`,
+                      borderRight: `2px solid ${gridBorder}`,
                       color: 'text.primary',
-                      fontSize: '0.75rem',
-                      lineHeight: 1.21,
-                      width: 104
+                      width: 104,
                     }}
                   >
                     {t('reservationStatus.columns.room')}
@@ -821,39 +863,39 @@ const ReservationStatus: React.FC = () => {
                         align="center"
                         sx={{
                           fontWeight: 700,
-                          fontSize: '0.7rem',
-                          lineHeight: 1.21,
-                          overflow: 'hidden',
+                      fontSize: '0.7rem',
+                      lineHeight: 1.1,
+                      overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
                           px: 0.25
                         }}
                       >
-                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.21 }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+                          <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1.1, fontSize: '0.65rem' }}>
                             {day}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.21 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.1, fontSize: '0.6rem' }}>
                             {weekday}
                           </Typography>
                         </Box>
                       </TableCell>
                     );
                   })}
-                  <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', lineHeight: 1.21, width: 76 }}>
+                  <TableCell align="center" sx={{ ...calendarSideHeadCellSx, width: 76 }}>
                     {t('reservationStatus.columns.booked')}
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', lineHeight: 1.21, width: 92 }}>
+                  <TableCell align="center" sx={{ ...calendarSideHeadCellSx, width: 92 }}>
                     {t('reservationStatus.columns.remaining')}
                   </TableCell>
-                  <TableCell sx={{ fontWeight: 700, fontSize: '0.75rem', lineHeight: 1.21, width: 120 }}>
+                  <TableCell align="center" sx={{ ...calendarSideHeadCellSx, width: 120 }}>
                     {t('reservationStatus.columns.memo')}
                   </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {loading && (
-                  <TableRow>
+                  <TableRow sx={{ height: 'auto !important' }}>
                     <TableCell colSpan={dateRange.length + 4} align="center">
                       <Box sx={{ py: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
                         <CircularProgress size={20} />
@@ -863,7 +905,7 @@ const ReservationStatus: React.FC = () => {
                   </TableRow>
                 )}
                 {!loading && filteredRooms.length === 0 && (
-                  <TableRow>
+                  <TableRow sx={{ height: 'auto !important' }}>
                     <TableCell colSpan={dateRange.length + 4} align="center">
                       <Typography variant="body2" color="text.secondary">
                         {t('reservationStatus.empty.noData')}
@@ -875,17 +917,18 @@ const ReservationStatus: React.FC = () => {
                   <React.Fragment key={roomType}>
                     <TableRow>
                     <TableCell
+                        align="center"
                         colSpan={dateRange.length + 4}
                         sx={{
+                          ...calendarGroupCellSx,
                           position: 'sticky',
                           left: 0,
-                          backgroundColor: alpha(theme.palette.grey[500], 0.1),
+                          backgroundColor: groupRowBg,
                           fontWeight: 700,
                           color: 'text.primary',
-                          borderRight: `1px solid ${headBorder}`,
-                          fontSize: '0.75rem',
-                          lineHeight: 1.21,
-                          letterSpacing: '0.01em'
+                          borderRight: `2px solid ${gridBorder}`,
+                          fontSize: '0.7rem',
+                          letterSpacing: '0.01em',
                         }}
                       >
                         {roomType} ({rooms.length})
@@ -911,31 +954,34 @@ const ReservationStatus: React.FC = () => {
                           }}
                         >
                           <TableCell
+                            align="center"
                             sx={{
+                              ...calendarRoomCellSx,
                               position: 'sticky',
                               left: 0,
                               backgroundColor: `${theme.palette.background.paper} !important`,
-                              borderRight: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
+                              borderRight: `2px solid ${gridBorder}`,
                               fontWeight: 600,
                               zIndex: 2,
                               color: 'text.primary',
-                              fontSize: '0.75rem',
-                              lineHeight: 0.62,
-                              boxShadow: `4px 0 12px ${alpha('#0f172a', 0.04)}`
+                              boxShadow: `4px 0 12px ${alpha('#0f172a', 0.04)}`,
                             }}
                           >
                             <Box
-                              sx={{ cursor: room.roomTypeId ? 'pointer' : 'default' }}
+                              component="span"
+                              sx={{
+                                cursor: room.roomTypeId ? 'pointer' : 'default',
+                                display: 'block',
+                                width: '100%',
+                                textAlign: 'center',
+                                fontWeight: 600,
+                                color: 'text.primary',
+                                lineHeight: `${calendarRoomRowHeight}px`,
+                                fontSize: calendarRoomFontSize,
+                              }}
                               onClick={() => room.roomTypeId && handleOpenRoomNameDialog(room)}
                             >
-                              <Typography
-                                variant="body2"
-                                fontWeight={600}
-                                color="text.primary"
-                                sx={{ lineHeight: 0.62, fontSize: '0.75rem' }}
-                              >
-                                {room.roomName || room.roomNumber}
-                              </Typography>
+                              {room.roomName || room.roomNumber}
                             </Box>
                           </TableCell>
                           {dateRange.map((date) => {
@@ -970,13 +1016,10 @@ const ReservationStatus: React.FC = () => {
                                           : hasCheckoutHalf
                                             ? `linear-gradient(90deg, ${checkoutGuestColor} 0 50%, transparent 50% 100%)`
                                             : undefined,
-                                  borderRight: `1px solid ${alpha(theme.palette.divider, 0.55)}`,
-                                  height: '26.4px',
                                   cursor: iso < todayIso ? 'not-allowed' : 'pointer',
                                   opacity: iso < todayIso ? 0.45 : 1,
                                   color: hasReservationMark ? '#1f2a14' : undefined,
-                                  fontSize: '0.7rem',
-                                  lineHeight: 1.21
+                                  ...calendarDateCellSx,
                                 }}
                                 onClick={() => handleCellClick(room, iso, isBooked, isCheckoutHalf)}
                               >
@@ -987,33 +1030,70 @@ const ReservationStatus: React.FC = () => {
                           <TableCell
                             align="center"
                             sx={{
-                              fontWeight: 600,
-                              fontSize: '0.75rem',
-                              lineHeight: 0.62,
-                              borderRight: `1px solid ${alpha(theme.palette.divider, 0.45)}`
+                              whiteSpace: 'nowrap',
+                              ...calendarRoomCellSx,
                             }}
                           >
-                            {bookedCount}
+                            <Box
+                              component="span"
+                              sx={{
+                                display: 'block',
+                                width: '100%',
+                                textAlign: 'center',
+                                fontWeight: 600,
+                                lineHeight: `${calendarRoomRowHeight}px`,
+                                fontSize: calendarRoomFontSize,
+                              }}
+                            >
+                              {bookedCount}
+                            </Box>
                           </TableCell>
                           <TableCell
                             align="center"
                             sx={{
-                              fontSize: '0.75rem',
-                              lineHeight: 0.62,
-                              borderRight: `1px solid ${alpha(theme.palette.divider, 0.45)}`
+                              whiteSpace: 'nowrap',
+                              ...calendarRoomCellSx,
                             }}
                           >
-                            {availableCount}
+                            <Box
+                              component="span"
+                              sx={{
+                                display: 'block',
+                                width: '100%',
+                                textAlign: 'center',
+                                fontWeight: 600,
+                                lineHeight: `${calendarRoomRowHeight}px`,
+                                fontSize: calendarRoomFontSize,
+                              }}
+                            >
+                              {availableCount}
+                            </Box>
                           </TableCell>
                           <TableCell
+                            align="center"
                             sx={{
-                              fontSize: '0.75rem',
-                              lineHeight: 1.35,
-                              wordBreak: 'break-word',
-                              color: 'text.secondary'
+                              color: 'text.secondary',
+                              ...calendarRoomCellSx,
+                              ...reservationMemoEllipsisSx,
                             }}
                           >
-                            {room.note || '-'}
+                            {room.note ? (
+                              <Tooltip title={room.note} placement="top-start" enterDelay={400}>
+                                <Box
+                                  component="span"
+                                  sx={{
+                                    ...reservationMemoEllipsisSx,
+                                    display: 'inline-block',
+                                    maxWidth: '100%',
+                                    textAlign: 'center',
+                                  }}
+                                >
+                                  {room.note}
+                                </Box>
+                              </Tooltip>
+                            ) : (
+                              '-'
+                            )}
                           </TableCell>
                         </TableRow>
                       );
@@ -1023,8 +1103,7 @@ const ReservationStatus: React.FC = () => {
               </TableBody>
             </Table>
           </TableContainer>
-        </CardContent>
-      </Card>
+      </Box>
 
       <Dialog open={roomTypeDialogOpen} onClose={() => setRoomTypeDialogOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>{t('reservationStatus.dialog.roomTypeTitle')}</DialogTitle>
@@ -1043,6 +1122,7 @@ const ReservationStatus: React.FC = () => {
                 onChange={(event) =>
                   setRoomTypeForm((prev) => ({ ...prev, name: event.target.value }))
                 }
+                sx={mvsSearchFieldSx}
               />
             </Box>
             <Box>
@@ -1059,6 +1139,7 @@ const ReservationStatus: React.FC = () => {
                 onChange={(event) =>
                   setRoomTypeForm((prev) => ({ ...prev, count: event.target.value }))
                 }
+                sx={mvsSearchFieldSx}
               />
             </Box>
             <Box>
@@ -1075,6 +1156,7 @@ const ReservationStatus: React.FC = () => {
                 onChange={(event) =>
                   setRoomTypeForm((prev) => ({ ...prev, nightlyRate: event.target.value }))
                 }
+                sx={mvsSearchFieldSx}
               />
             </Box>
             <Box>
@@ -1091,13 +1173,14 @@ const ReservationStatus: React.FC = () => {
                 onChange={(event) =>
                   setRoomTypeForm((prev) => ({ ...prev, description: event.target.value }))
                 }
+                sx={mvsSearchFieldSx}
               />
             </Box>
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setRoomTypeDialogOpen(false)}>{t('common.cancel')}</Button>
-          <Button variant="contained" onClick={handleApplyRoomType}>
+          <Button variant="contained" disableElevation onClick={handleApplyRoomType} sx={mvsBodyPrimaryBtnSx}>
             {t('reservationStatus.actions.apply')}
           </Button>
         </DialogActions>
@@ -1116,6 +1199,7 @@ const ReservationStatus: React.FC = () => {
                 value={roomNameForm.roomTypeName}
                 InputProps={{ readOnly: true }}
                 fullWidth
+                sx={mvsSearchFieldSx}
               />
             </Box>
             <Box>
@@ -1127,6 +1211,7 @@ const ReservationStatus: React.FC = () => {
                 value={roomNameForm.roomNumber}
                 InputProps={{ readOnly: true }}
                 fullWidth
+                sx={mvsSearchFieldSx}
               />
             </Box>
             <Box>
@@ -1141,13 +1226,14 @@ const ReservationStatus: React.FC = () => {
                   setRoomNameForm((prev) => ({ ...prev, roomName: event.target.value }))
                 }
                 fullWidth
+                sx={mvsSearchFieldSx}
               />
             </Box>
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setRoomNameDialogOpen(false)}>{t('common.cancel')}</Button>
-          <Button variant="contained" onClick={handleSaveRoomName}>
+          <Button variant="contained" disableElevation onClick={handleSaveRoomName} sx={mvsBodyPrimaryBtnSx}>
             {t('common.save')}
           </Button>
         </DialogActions>
@@ -1236,7 +1322,7 @@ const ReservationStatus: React.FC = () => {
             variant="outlined"
             onClick={() => {
               if (bookingInfo) {
-                navigate('/work/room-reservation', {
+                navigate('/hotel/room-reservation', {
                   state: { viewBookingId: bookingInfo.id }
                 });
               }

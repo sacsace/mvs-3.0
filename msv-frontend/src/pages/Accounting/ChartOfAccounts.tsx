@@ -4,8 +4,8 @@ import {
   Box,
   Button,
   Card,
-  CardContent,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -15,6 +15,7 @@ import {
   InputAdornment,
   InputLabel,
   MenuItem,
+  Pagination,
   Select,
   Snackbar,
   Table,
@@ -27,10 +28,13 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import { alpha, useTheme, type SxProps, type Theme } from '@mui/material/styles';
 import {
+  AccountBalance as AccountBalanceIcon,
   Add as AddIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
+  RestartAlt as ResetIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -45,9 +49,15 @@ import { getGlAccountName } from '../../utils/glAccountLabel';
 import {
   mvsBodyCardSx,
   mvsBodyListTableSx,
+  mvsBodyListZoneSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPaginationSx,
   mvsBodyPrimaryBtnSx,
+  mvsFilterFieldHeightSx,
+  mvsOutlinedLabelProps,
   mvsPageRootSx,
   mvsSearchFieldSx,
+  mvsTableBodyRowSx,
   mvsTableHeadHighlightSx,
   mvsTableScrollSx,
 } from '../../theme/mvsLayout';
@@ -64,6 +74,57 @@ type GlAccount = {
   is_system?: boolean;
 };
 
+const ACCOUNTS_PER_PAGE = 10;
+
+const chartFilterFieldSx = {
+  ...(mvsSearchFieldSx as Record<string, unknown>),
+  ...mvsFilterFieldHeightSx,
+} as const;
+
+const chartTableSx = {
+  width: '100%',
+  tableLayout: 'fixed' as const,
+  minWidth: 480,
+  borderCollapse: 'collapse',
+  bgcolor: 'transparent',
+  '& .MuiTableCell-root': {
+    borderLeft: 'none',
+    borderRight: 'none',
+    borderTop: 'none',
+  },
+} as const;
+
+const chartCellEllipsisSx = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  maxWidth: 0,
+} as const;
+
+const chartTableBodyRowSx: SxProps<Theme> = (theme) => {
+  const base = typeof mvsTableBodyRowSx === 'function' ? mvsTableBodyRowSx(theme) : mvsTableBodyRowSx;
+  const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
+  const hoverBg = theme.palette.mode === 'light' ? '#EFF6FF' : theme.palette.action.hover;
+  return {
+    ...(base as object),
+    '& .MuiTableRow-root:nth-of-type(odd)': { bgcolor: rowBg },
+    '& .MuiTableRow-root:nth-of-type(even)': { bgcolor: rowBg },
+    '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
+  };
+};
+
+const listStateBoxSx = {
+  ...mvsBodyListTableSx,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  textAlign: 'center',
+  py: { xs: 6, sm: 8 },
+  px: 3,
+  gap: 1.5,
+} as const;
+
 const emptyForm = () => ({
   code: '',
   name: '',
@@ -71,8 +132,25 @@ const emptyForm = () => ({
   nature: 'expense',
 });
 
+const renderEllipsisText = (text: string) => (
+  <Tooltip title={text} placement="top-start" enterDelay={400}>
+    <Box
+      component="span"
+      sx={{
+        display: 'block',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {text}
+    </Box>
+  </Tooltip>
+);
+
 const ChartOfAccounts: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const theme = useTheme();
   const navigate = useNavigate();
   const { user } = useStore();
   const canManage = user?.role === 'root' || user?.role === 'admin';
@@ -89,6 +167,7 @@ const ChartOfAccounts: React.FC = () => {
   const [rows, setRows] = useState<GlAccount[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -130,6 +209,29 @@ const ChartOfAccounts: React.FC = () => {
           .includes(q)
     );
   }, [rows, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / ACCOUNTS_PER_PAGE));
+
+  const paginatedRows = useMemo(
+    () => filteredRows.slice((page - 1) * ACCOUNTS_PER_PAGE, page * ACCOUNTS_PER_PAGE),
+    [filteredRows, page]
+  );
+
+  const hasActiveFilters = Boolean(search.trim());
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, effectiveCompanyId]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const handleResetFilters = () => {
+    setSearch('');
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -213,26 +315,16 @@ const ChartOfAccounts: React.FC = () => {
     );
   };
 
+  const booksPath =
+    effectiveCompanyId
+      ? `/accounting/books?tab=accounts&company_id=${effectiveCompanyId}`
+      : '/accounting/books?tab=accounts';
+
   return (
     <Box sx={mvsPageRootSx}>
       <MvsPageHeader
         title={t('chartOfAccounts.title')}
         description={t('chartOfAccounts.description')}
-        actions={
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={() =>
-              navigate(
-                effectiveCompanyId
-                  ? `/accounting/books?tab=accounts&company_id=${effectiveCompanyId}`
-                  : '/accounting/books?tab=accounts'
-              )
-            }
-          >
-            {t('chartOfAccounts.booksLink')}
-          </Button>
-        }
       />
 
       <AccountingCompanyBar
@@ -243,95 +335,248 @@ const ChartOfAccounts: React.FC = () => {
         onChangeCompany={changeCompany}
       />
 
-      <Card elevation={0} sx={mvsBodyCardSx}>
-        <CardContent>
-          <Box sx={{ display: 'flex', gap: 1.5, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-            <TextField
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', md: 'row' },
+            flexWrap: 'wrap',
+            alignItems: { xs: 'stretch', md: 'center' },
+            justifyContent: { md: 'space-between' },
+            gap: { xs: 1.25, md: 1 },
+            px: { xs: 2, sm: 2.5 },
+            py: 1.5,
+            bgcolor: '#FFFFFF',
+          }}
+        >
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
+            <Button
+              variant="outlined"
               size="small"
-              placeholder={t('chartOfAccounts.search')}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              sx={{ ...mvsSearchFieldSx, minWidth: 240, flex: 1 }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-              }}
-            />
+              onClick={() => navigate(booksPath)}
+              sx={mvsBodyOutlinedBtnSx}
+            >
+              {t('chartOfAccounts.booksLink')}
+            </Button>
             {canManage && (
-              <>
-                <Button variant="outlined" onClick={handleSeed}>
-                  {t('chartOfAccounts.seed')}
-                </Button>
-                <Button variant="contained" startIcon={<AddIcon />} sx={mvsBodyPrimaryBtnSx} onClick={openCreate}>
-                  {t('chartOfAccounts.add')}
-                </Button>
-              </>
+              <Button variant="outlined" size="small" onClick={handleSeed} sx={mvsBodyOutlinedBtnSx}>
+                {t('chartOfAccounts.seed')}
+              </Button>
             )}
           </Box>
+          {canManage && (
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: 1,
+                flexShrink: 0,
+                width: { xs: '100%', md: 'auto' },
+                ml: { md: 'auto' },
+              }}
+            >
+              <Button
+                variant="contained"
+                disableElevation
+                size="small"
+                startIcon={<AddIcon fontSize="small" />}
+                sx={mvsBodyPrimaryBtnSx}
+                onClick={openCreate}
+              >
+                {t('chartOfAccounts.add')}
+              </Button>
+            </Box>
+          )}
+        </Box>
 
-          <TableContainer sx={{ ...mvsTableScrollSx, maxHeight: { xs: '50vh', md: 'min(65vh, 640px)' } }}>
-            <Table size="small" sx={{ ...mvsBodyListTableSx, minWidth: 480 }}>
-              <TableHead sx={mvsTableHeadHighlightSx}>
-                <TableRow>
-                  <TableCell width={120}>{t('chartOfAccounts.columns.code')}</TableCell>
-                  <TableCell>{t('chartOfAccounts.columns.name')}</TableCell>
-                  {canManage && <TableCell width={120} align="center">{t('chartOfAccounts.columns.actions')}</TableCell>}
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredRows.map((row) => (
-                  <TableRow key={row.id} hover>
-                    <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600 }}>{row.code}</TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                        <Typography variant="body2">{getGlAccountName(row, i18n.language)}</Typography>
-                        {row.is_system && (
-                          <Chip size="small" label={t('chartOfAccounts.system')} variant="outlined" />
-                        )}
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
+            py: 2,
+            bgcolor: '#FFFFFF',
+            ...(mvsSearchFieldSx as Record<string, unknown>),
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'minmax(0, 1fr) auto' },
+            gap: 2,
+            alignItems: 'flex-end',
+          }}
+        >
+          <TextField
+            fullWidth
+            size="small"
+            label={t('common.search')}
+            placeholder={t('chartOfAccounts.search')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            sx={chartFilterFieldSx}
+            {...mvsOutlinedLabelProps}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
+                </InputAdornment>
+              ),
+            }}
+          />
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<ResetIcon fontSize="small" />}
+            onClick={handleResetFilters}
+            sx={{
+              ...mvsBodyOutlinedBtnSx,
+              height: 40,
+              whiteSpace: 'nowrap',
+              width: { xs: '100%', sm: 'auto' },
+              minWidth: { sm: 120 },
+            }}
+          >
+            {t('common.reset')}
+          </Button>
+        </Box>
+      </Card>
+
+      <Box sx={mvsBodyListZoneSx}>
+        {loading ? (
+          <Box sx={listStateBoxSx}>
+            <CircularProgress size={36} />
+            <Typography variant="body2" color="text.secondary">
+              {t('chartOfAccounts.loading')}
+            </Typography>
+          </Box>
+        ) : filteredRows.length === 0 ? (
+          <Box sx={listStateBoxSx}>
+            <AccountBalanceIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.3 }} />
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+              {hasActiveFilters ? t('chartOfAccounts.emptyNoResults') : t('chartOfAccounts.empty')}
+            </Typography>
+            {hasActiveFilters ? (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<ResetIcon fontSize="small" />}
+                onClick={handleResetFilters}
+                sx={mvsBodyOutlinedBtnSx}
+              >
+                {t('common.reset')}
+              </Button>
+            ) : canManage ? (
+              <Button
+                variant="contained"
+                disableElevation
+                size="small"
+                startIcon={<AddIcon fontSize="small" />}
+                sx={mvsBodyPrimaryBtnSx}
+                onClick={openCreate}
+              >
+                {t('chartOfAccounts.add')}
+              </Button>
+            ) : null}
+          </Box>
+        ) : (
+          <>
+            <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+              <Table size="small" sx={chartTableSx}>
+                <TableHead sx={mvsTableHeadHighlightSx}>
+                  <TableRow>
+                    <TableCell width="18%" sx={{ whiteSpace: 'nowrap' }}>
+                      <Box component="span" sx={chartCellEllipsisSx} title={t('chartOfAccounts.columns.code')}>
+                        {t('chartOfAccounts.columns.code')}
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={chartCellEllipsisSx}>
+                      <Box component="span" sx={chartCellEllipsisSx} title={t('chartOfAccounts.columns.name')}>
+                        {t('chartOfAccounts.columns.name')}
                       </Box>
                     </TableCell>
                     {canManage && (
-                      <TableCell align="center">
-                        <Tooltip title={t('common.edit')}>
-                          <span>
-                            <IconButton size="small" onClick={() => openEdit(row)}>
-                              <EditIcon fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                        <Tooltip title={t('common.delete')}>
-                          <span>
-                            <IconButton
-                              size="small"
-                              color="error"
-                              disabled={Boolean(row.is_system)}
-                              onClick={() => handleDelete(row)}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
+                      <TableCell width="14%" align="center" sx={{ whiteSpace: 'nowrap' }}>
+                        <Box component="span" sx={chartCellEllipsisSx} title={t('chartOfAccounts.columns.actions')}>
+                          {t('chartOfAccounts.columns.actions')}
+                        </Box>
                       </TableCell>
                     )}
                   </TableRow>
-                ))}
-                {!loading && filteredRows.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={canManage ? 3 : 2} align="center">
-                      <Typography color="text.secondary" py={2}>
-                        {loading ? t('chartOfAccounts.loading') : t('chartOfAccounts.empty')}
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
+                </TableHead>
+                <TableBody sx={chartTableBodyRowSx}>
+                  {paginatedRows.map((row) => {
+                    const accountName = getGlAccountName(row, i18n.language);
+                    return (
+                      <TableRow key={row.id} hover>
+                        <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          {row.code}
+                        </TableCell>
+                        <TableCell sx={chartCellEllipsisSx}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                            <Box sx={{ minWidth: 0, flex: 1 }}>{renderEllipsisText(accountName)}</Box>
+                            {row.is_system && (
+                              <Chip
+                                size="small"
+                                label={t('chartOfAccounts.system')}
+                                variant="outlined"
+                                sx={{ flexShrink: 0, fontWeight: 500, borderRadius: '8px' }}
+                              />
+                            )}
+                          </Box>
+                        </TableCell>
+                        {canManage && (
+                          <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
+                            <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
+                              <Tooltip title={t('common.edit')}>
+                                <IconButton size="small" onClick={() => openEdit(row)} sx={{ borderRadius: '10px' }}>
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title={t('common.delete')}>
+                                <span>
+                                  <IconButton
+                                    size="small"
+                                    disabled={Boolean(row.is_system)}
+                                    onClick={() => handleDelete(row)}
+                                    sx={{
+                                      color: alpha(
+                                        theme.palette.text.secondary,
+                                        theme.palette.mode === 'light' ? 0.72 : 1
+                                      ),
+                                      borderRadius: '10px',
+                                      transition: 'color 0.15s ease, background-color 0.15s ease',
+                                      '&:hover': {
+                                        color: 'error.main',
+                                        bgcolor: alpha(theme.palette.error.main, 0.12),
+                                      },
+                                    }}
+                                  >
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                </span>
+                              </Tooltip>
+                            </Box>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+
+            {totalPages > 1 && (
+              <Box sx={mvsBodyPaginationSx}>
+                <Pagination
+                  count={totalPages}
+                  page={page}
+                  onChange={(_, value) => setPage(value)}
+                  color="primary"
+                  shape="rounded"
+                  size="small"
+                />
+              </Box>
+            )}
+          </>
+        )}
+      </Box>
 
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>

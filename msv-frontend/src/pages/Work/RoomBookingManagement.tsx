@@ -24,13 +24,13 @@ import {
   Divider,
   Avatar,
   Grid,
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Pagination,
   Autocomplete,
   TableSortLabel,
@@ -176,6 +176,104 @@ const listStateBoxSx = {
   px: 2,
 } as const;
 
+const bookingTableSx = {
+  width: '100%',
+  tableLayout: 'fixed' as const,
+  minWidth: { xs: 720, sm: 960 },
+  borderCollapse: 'collapse',
+  bgcolor: 'transparent',
+  '& .MuiTableCell-root': {
+    borderLeft: 'none',
+    borderRight: 'none',
+    borderTop: 'none',
+  },
+} as const;
+
+const bookingCellBaseSx = {
+  fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+  py: 0.75,
+  px: { xs: 0.5, sm: 1 },
+  verticalAlign: 'middle' as const,
+} as const;
+
+const bookingCellEllipsisSx = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+  maxWidth: 0,
+} as const;
+
+const renderEllipsisText = (text: string) => (
+  <Tooltip title={text} placement="top-start" enterDelay={400}>
+    <Box
+      component="span"
+      sx={{
+        display: 'block',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {text}
+    </Box>
+  </Tooltip>
+);
+
+const invoicePanelSx = {
+  p: 2,
+  height: '100%',
+  borderRadius: '14px',
+  border: '1px solid #C5CED9',
+  bgcolor: '#FAFBFC',
+  boxSizing: 'border-box',
+} as const;
+
+const invoicePanelTitleSx = {
+  fontSize: '0.75rem',
+  fontWeight: 700,
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+  color: 'text.secondary',
+  mb: 1.5,
+} as const;
+
+const invoiceMetaLabelSx = {
+  fontSize: '0.6875rem',
+  fontWeight: 600,
+  color: 'text.secondary',
+  display: 'block',
+  mb: 0.25,
+} as const;
+
+const invoiceTableSx = {
+  width: '100%',
+  tableLayout: 'fixed' as const,
+  borderCollapse: 'collapse',
+  bgcolor: 'transparent',
+  '& .MuiTableCell-root': {
+    borderLeft: 'none',
+    borderRight: 'none',
+    borderTop: 'none',
+  },
+} as const;
+
+const invoiceCellSx = {
+  fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+  py: 1,
+  px: { xs: 1, sm: 1.5 },
+  verticalAlign: 'middle' as const,
+} as const;
+
+const invoiceTaxSelectSx = {
+  minWidth: 68,
+  height: 28,
+  fontSize: '0.75rem',
+  '& .MuiSelect-select': { py: 0.25, px: 1 },
+  '& .MuiOutlinedInput-notchedOutline': { border: 'none' },
+  '&:hover .MuiOutlinedInput-notchedOutline': { border: 'none' },
+  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { border: 'none' },
+} as const;
+
 const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   dialogOnly = false,
   initialFormState,
@@ -262,70 +360,70 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   const apiBaseUrl = useMemo(() => API_BASE_URL.replace(/\/api$/, ''), []);
 
   const billToInputSx = {
+    fontSize: '0.8125rem',
     '& .MuiInputBase-root': {
-      fontSize: 14,
+      fontSize: 'inherit',
       backgroundColor: 'transparent',
       boxShadow: 'none',
-      border: 'none'
+      border: 'none',
     },
     '& .MuiInputBase-input': {
-      padding: 0,
+      padding: '2px 0 4px',
       border: 'none',
       outline: 'none',
-      boxShadow: 'none'
+      boxShadow: 'none',
+      borderBottom: '1px dashed',
+      borderColor: 'divider',
     },
     '& input': {
       border: 'none',
       outline: 'none',
-      boxShadow: 'none'
+      boxShadow: 'none',
     },
     '& .MuiInput-underline:before': {
-      borderBottom: 'none'
+      borderBottom: 'none',
     },
     '& .MuiInput-underline:after': {
-      borderBottom: 'none'
+      borderBottom: 'none',
     },
     '& .MuiInput-underline:hover:not(.Mui-disabled):before': {
-      borderBottom: 'none'
+      borderBottom: 'none',
     },
     '& .MuiOutlinedInput-notchedOutline': {
-      border: 'none !important'
-    }
+      border: 'none !important',
+    },
   };
   const invoiceInputSx = {
+    fontSize: '0.8125rem',
     '& .MuiInputBase-root': {
-      fontSize: 14,
+      fontSize: 'inherit',
       backgroundColor: 'transparent',
       boxShadow: 'none',
-      border: 'none'
+      border: 'none',
     },
     '& .MuiInputBase-input': {
-      padding: 0,
+      padding: '2px 0',
       border: 'none',
       outline: 'none',
-      boxShadow: 'none'
+      boxShadow: 'none',
     },
     '& input': {
       border: 'none',
       outline: 'none',
-      boxShadow: 'none'
+      boxShadow: 'none',
     },
     '& .MuiInput-underline:before': {
-      borderBottom: 'none'
+      borderBottom: 'none',
     },
     '& .MuiInput-underline:after': {
-      borderBottom: 'none'
+      borderBottom: 'none',
     },
     '& .MuiInput-underline:hover:not(.Mui-disabled):before': {
-      borderBottom: 'none'
+      borderBottom: 'none',
     },
     '& .MuiOutlinedInput-notchedOutline': {
-      border: 'none !important'
-    }
-  };
-  const invoiceTableFontSx = {
-    fontSize: '0.75rem',
-    '& *': { fontSize: '0.75rem' }
+      border: 'none !important',
+    },
   };
   const [roomTypeMaster, setRoomTypeMaster] = useState<RoomTypeMaster[]>([]);
   const [roomTypeRooms, setRoomTypeRooms] = useState<RoomTypeRoom[]>([]);
@@ -1807,125 +1905,199 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   }
 
   if (viewMode === 'view' && selectedBooking) {
+    const nightlyRate = selectedBooking.totalNights
+      ? Math.round(selectedBooking.totalAmount / selectedBooking.totalNights)
+      : selectedBooking.totalAmount;
+    const cgstAmount = Number(selectedBooking.totalAmount || 0) * (cgstRate / 100);
+    const sgstAmount = Number(selectedBooking.totalAmount || 0) * (sgstRate / 100);
+    const invoiceTotal = Number(selectedBooking.totalAmount || 0) * (1 + (cgstRate + sgstRate) / 100);
+
     return (
-      <Box sx={{ 
-        p: 0,
-        backgroundColor: 'workArea.main',
-        borderRadius: 2,
-        minHeight: '100%'
-      }} className="invoice-print-root">
+      <Box sx={{ ...mvsPageRootSx }} className="invoice-print-root">
         <Box className="no-print">
-          <MvsPageHeader title="Tax Invoice" icon={<HotelIcon />} />
+          <MvsPageHeader
+            title="Tax Invoice"
+            icon={<HotelIcon />}
+            onBack={() => setViewMode('list')}
+          />
         </Box>
 
-        <Card>
-          <CardContent ref={invoiceRef} className="tax-invoice-print" sx={{ lineHeight: 1.25 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-              <Box>
-                <Typography variant="h4" fontWeight={800} sx={{ fontSize: '1.2em' }}>
-                  Tax Invoice
+        <Card elevation={0} sx={{ ...mvsBodyCardSx, overflow: 'hidden' }}>
+          <CardContent
+            ref={invoiceRef}
+            className="tax-invoice-print"
+            sx={{ p: { xs: 2.5, md: 4 }, lineHeight: 1.45 }}
+          >
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                gap: 3,
+                mb: 3,
+                flexWrap: 'wrap',
+              }}
+            >
+              <Box sx={{ minWidth: 0, flex: '1 1 280px' }}>
+                <Typography
+                  variant="h5"
+                  sx={{ fontWeight: 800, letterSpacing: '0.05em', color: 'text.primary', mb: 1 }}
+                >
+                  TAX INVOICE
                 </Typography>
                 {issuerCompany?.companyLogo && (
-                  <Box sx={{ mt: 1 }}>
+                  <Box sx={{ mb: 1.5 }}>
                     <AuthMedia
                       src={issuerCompany.companyLogo}
                       alt="Company logo"
-                      style={{ height: 36, objectFit: 'contain' }}
+                      style={{ height: 40, maxWidth: 200, objectFit: 'contain' }}
                     />
                   </Box>
                 )}
-                <Typography variant="body2" color="text.secondary">
-                  Invoice No: {formatInvoiceNumber(selectedBooking.id)}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Invoice Date: {selectedBooking.checkInDate}
-                </Typography>
+                <Stack spacing={0.75}>
+                  <Box>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>
+                      Invoice No
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600}>
+                      {formatInvoiceNumber(selectedBooking.id)}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>
+                      Invoice Date
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600}>
+                      {selectedBooking.checkInDate}
+                    </Typography>
+                  </Box>
+                </Stack>
               </Box>
-              <Box sx={{ textAlign: 'right' }}>
-                <Typography variant="h5" fontWeight={700} color="primary.main">
+              <Box
+                sx={{
+                  textAlign: 'right',
+                  px: 2.5,
+                  py: 1.75,
+                  borderRadius: '14px',
+                  bgcolor: alpha(theme.palette.primary.main, 0.06),
+                  border: '1px solid',
+                  borderColor: alpha(theme.palette.primary.main, 0.18),
+                  minWidth: 180,
+                }}
+              >
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                  Total Amount
+                </Typography>
+                <Typography variant="h5" fontWeight={700} color="primary.main" sx={{ mt: 0.25 }}>
                   Rs. {formatCurrency(selectedBooking.totalAmount)}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {selectedBooking.totalNights}{t('roomBookingManagement.units.night')}
+                  {selectedBooking.totalNights}
+                  {t('roomBookingManagement.units.night')}
                 </Typography>
               </Box>
             </Box>
 
-            <Divider sx={{ my: 2 }} />
+            <Divider sx={{ mb: 2.5, borderColor: '#C5CED9' }} />
 
-            <Grid container spacing={2} sx={{ mb: 2 }} alignItems="stretch">
+            <Grid container spacing={2} sx={{ mb: 2.5 }} alignItems="stretch">
               <Grid size={{ xs: 12, md: 6 }}>
-                <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, minHeight: 170, height: '100%' }}>
-                  <Typography variant="subtitle2" gutterBottom>Issuer</Typography>
-                  <Typography variant="body2">{issuerCompany?.name || '-'}</Typography>
-                  {issuerCompany?.businessNumber && (
-                    <Typography variant="body2">Business No: {issuerCompany.businessNumber}</Typography>
-                  )}
-                  <Typography variant="body2">{issuerCompany?.address || '-'}</Typography>
-                  <Typography variant="body2">{issuerCompany?.phone || '-'}</Typography>
-                  <Typography variant="body2">{issuerCompany?.email || '-'}</Typography>
+                <Box sx={invoicePanelSx}>
+                  <Typography sx={invoicePanelTitleSx}>Issuer</Typography>
+                  <Stack spacing={0.75}>
+                    <Typography variant="body2" fontWeight={600}>
+                      {issuerCompany?.name || '-'}
+                    </Typography>
+                    {issuerCompany?.businessNumber && (
+                      <Typography variant="body2" color="text.secondary">
+                        Business No: {issuerCompany.businessNumber}
+                      </Typography>
+                    )}
+                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
+                      {issuerCompany?.address || '-'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {issuerCompany?.phone || '-'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {issuerCompany?.email || '-'}
+                    </Typography>
+                  </Stack>
                 </Box>
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, minHeight: 170, height: '100%' }}>
-                  <Typography variant="subtitle2" gutterBottom>Bill To</Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                    <InputBase
-                      value={billTo.name}
-                      onChange={(event) => setBillTo((prev) => ({ ...prev, name: event.target.value }))}
-                      placeholder="Name"
-                      fullWidth
-                      sx={billToInputSx}
-                    />
-                    <InputBase
-                      value={billTo.company}
-                      onChange={(event) => setBillTo((prev) => ({ ...prev, company: event.target.value }))}
-                      placeholder="Company"
-                      fullWidth
-                      sx={billToInputSx}
-                    />
-                    <InputBase
-                      value={billTo.email}
-                      onChange={(event) => setBillTo((prev) => ({ ...prev, email: event.target.value }))}
-                      placeholder="Email"
-                      fullWidth
-                      sx={billToInputSx}
-                    />
-                    <InputBase
-                      value={billTo.phone}
-                      onChange={(event) => setBillTo((prev) => ({ ...prev, phone: event.target.value }))}
-                      placeholder="Phone"
-                      fullWidth
-                      sx={billToInputSx}
-                    />
-                    <InputBase
-                      value={billTo.gst}
-                      onChange={(event) => setBillTo((prev) => ({ ...prev, gst: event.target.value }))}
-                      placeholder="GST"
-                      fullWidth
-                      sx={billToInputSx}
-                    />
-                  </Box>
+                <Box sx={invoicePanelSx}>
+                  <Typography sx={invoicePanelTitleSx}>Bill To</Typography>
+                  <Stack spacing={1}>
+                    <Box>
+                      <Typography sx={invoiceMetaLabelSx}>Name</Typography>
+                      <InputBase
+                        value={billTo.name}
+                        onChange={(event) => setBillTo((prev) => ({ ...prev, name: event.target.value }))}
+                        placeholder="Name"
+                        fullWidth
+                        sx={billToInputSx}
+                      />
+                    </Box>
+                    <Box>
+                      <Typography sx={invoiceMetaLabelSx}>Company</Typography>
+                      <InputBase
+                        value={billTo.company}
+                        onChange={(event) => setBillTo((prev) => ({ ...prev, company: event.target.value }))}
+                        placeholder="Company"
+                        fullWidth
+                        sx={billToInputSx}
+                      />
+                    </Box>
+                    <Box>
+                      <Typography sx={invoiceMetaLabelSx}>Email</Typography>
+                      <InputBase
+                        value={billTo.email}
+                        onChange={(event) => setBillTo((prev) => ({ ...prev, email: event.target.value }))}
+                        placeholder="Email"
+                        fullWidth
+                        sx={billToInputSx}
+                      />
+                    </Box>
+                    <Box>
+                      <Typography sx={invoiceMetaLabelSx}>Phone</Typography>
+                      <InputBase
+                        value={billTo.phone}
+                        onChange={(event) => setBillTo((prev) => ({ ...prev, phone: event.target.value }))}
+                        placeholder="Phone"
+                        fullWidth
+                        sx={billToInputSx}
+                      />
+                    </Box>
+                    <Box>
+                      <Typography sx={invoiceMetaLabelSx}>GST</Typography>
+                      <InputBase
+                        value={billTo.gst}
+                        onChange={(event) => setBillTo((prev) => ({ ...prev, gst: event.target.value }))}
+                        placeholder="GST"
+                        fullWidth
+                        sx={billToInputSx}
+                      />
+                    </Box>
+                  </Stack>
                 </Box>
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                  <Typography variant="subtitle2" gutterBottom>GST Details</Typography>
+                <Box sx={invoicePanelSx}>
+                  <Typography sx={invoicePanelTitleSx}>GST Details</Typography>
                   <Box
                     sx={{
                       display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
-                      gap: 1.5
+                      gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+                      gap: 1.5,
                     }}
                   >
                     <Box>
-                      <Typography variant="caption">GSTIN (Issuer)</Typography>
-                      <Typography variant="body2">
-                        {issuerCompany?.gstNumbers?.[0] || '-'}
-                      </Typography>
+                      <Typography sx={invoiceMetaLabelSx}>GSTIN (Issuer)</Typography>
+                      <Typography variant="body2">{issuerCompany?.gstNumbers?.[0] || '-'}</Typography>
                     </Box>
                     <Box>
-                      <Typography variant="caption">GSTIN (Recipient)</Typography>
+                      <Typography sx={invoiceMetaLabelSx}>GSTIN (Recipient)</Typography>
                       <InputBase
                         value={billTo.gst}
                         onChange={(event) => setBillTo((prev) => ({ ...prev, gst: event.target.value }))}
@@ -1935,11 +2107,15 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                       />
                     </Box>
                     <Box>
-                      <Typography variant="caption">SAC Code</Typography>
+                      <Typography sx={invoiceMetaLabelSx}>SAC Code</Typography>
                       <Typography variant="body2">996311</Typography>
                     </Box>
                     <Box>
-                      <Typography variant="caption">Place of Supply</Typography>
+                      <Typography sx={invoiceMetaLabelSx}>Supply Type</Typography>
+                      <Typography variant="body2">{billTo.gst ? 'B2B' : 'B2C'}</Typography>
+                    </Box>
+                    <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                      <Typography sx={invoiceMetaLabelSx}>Place of Supply</Typography>
                       <InputBase
                         value={placeOfSupply}
                         onChange={(event) => setPlaceOfSupply(event.target.value)}
@@ -1948,65 +2124,63 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                         sx={billToInputSx}
                       />
                     </Box>
-                    <Box>
-                      <Typography variant="caption">Supply Type</Typography>
-                      <Typography variant="body2">
-                        {billTo.gst ? 'B2B' : 'B2C'}
-                      </Typography>
-                    </Box>
-                    <Box />
                   </Box>
                 </Box>
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-                  <Typography variant="subtitle2" gutterBottom>Stay Details</Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                    <Typography variant="body2">
-                      Room: {getRoomDisplayLabel(selectedBooking)} ({getRoomTypeLabel(selectedBooking.roomType)})
-                    </Typography>
-                    <Typography variant="body2">Guests: {selectedBooking.numberOfGuests}</Typography>
-                    <Typography variant="body2">
-                      Check-in: {selectedBooking.checkInDate}{selectedBooking.checkInTime ? ` ${selectedBooking.checkInTime}` : ''}
-                    </Typography>
-                    <Typography variant="body2">
-                      Check-out: {selectedBooking.checkOutDate}{selectedBooking.checkOutTime ? ` ${selectedBooking.checkOutTime}` : ''}
-                    </Typography>
-                  </Box>
+                <Box sx={invoicePanelSx}>
+                  <Typography sx={invoicePanelTitleSx}>Stay Details</Typography>
+                  <Stack spacing={0.75}>
+                    <Box>
+                      <Typography sx={invoiceMetaLabelSx}>Room</Typography>
+                      <Typography variant="body2">
+                        {getRoomDisplayLabel(selectedBooking)} ({getRoomTypeLabel(selectedBooking.roomType)})
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography sx={invoiceMetaLabelSx}>Guests</Typography>
+                      <Typography variant="body2">{selectedBooking.numberOfGuests}</Typography>
+                    </Box>
+                    <Box>
+                      <Typography sx={invoiceMetaLabelSx}>Check-in</Typography>
+                      <Typography variant="body2">
+                        {selectedBooking.checkInDate}
+                        {selectedBooking.checkInTime ? ` ${selectedBooking.checkInTime}` : ''}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography sx={invoiceMetaLabelSx}>Check-out</Typography>
+                      <Typography variant="body2">
+                        {selectedBooking.checkOutDate}
+                        {selectedBooking.checkOutTime ? ` ${selectedBooking.checkOutTime}` : ''}
+                      </Typography>
+                    </Box>
+                  </Stack>
                 </Box>
               </Grid>
             </Grid>
 
-            <TableContainer component={Paper} variant="outlined" sx={{ mb: 2, fontSize: '0.75rem' }}>
-              <Table size="small" sx={invoiceTableFontSx}>
-                <TableHead
-                  sx={{
-                    bgcolor: 'background.paper',
-                    '& .MuiTableCell-head': {
-                      bgcolor: 'background.paper',
-                      color: 'text.primary',
-                      fontWeight: 600,
-                      fontSize: '0.75rem',
-                      textTransform: 'none',
-                      letterSpacing: 'normal',
-                      borderBottom: '2px solid',
-                      borderColor: 'primary.main',
-                      py: 1.25
-                    }
-                  }}
-                >
+            <TableContainer sx={{ ...mvsBodyListTableSx, mb: 2.5 }}>
+              <Table size="small" sx={invoiceTableSx}>
+                <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
-                  <TableCell sx={{ fontSize: '0.75rem' }}>Description</TableCell>
-                  <TableCell sx={{ fontSize: '0.75rem' }}>Check-in</TableCell>
-                  <TableCell sx={{ fontSize: '0.75rem' }}>Check-out</TableCell>
-                    <TableCell align="right" sx={{ fontSize: '0.75rem' }}>Qty</TableCell>
-                    <TableCell align="right" sx={{ fontSize: '0.75rem' }}>Unit Price</TableCell>
-                    <TableCell align="right" sx={{ fontSize: '0.75rem' }}>Amount</TableCell>
+                    <TableCell width="34%">Description</TableCell>
+                    <TableCell width="14%">Check-in</TableCell>
+                    <TableCell width="14%">Check-out</TableCell>
+                    <TableCell align="right" width="8%">
+                      Qty
+                    </TableCell>
+                    <TableCell align="right" width="15%">
+                      Unit Price
+                    </TableCell>
+                    <TableCell align="right" width="15%">
+                      Amount
+                    </TableCell>
                   </TableRow>
                 </TableHead>
-                <TableBody>
+                <TableBody sx={mvsTableBodyRowSx}>
                   <TableRow>
-                    <TableCell sx={{ fontSize: '0.75rem' }}>
+                    <TableCell sx={invoiceCellSx}>
                       <InputBase
                         value={invoiceDescription}
                         onChange={(event) => setInvoiceDescription(event.target.value)}
@@ -2015,17 +2189,15 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                         sx={invoiceInputSx}
                       />
                     </TableCell>
-                    <TableCell sx={{ fontSize: '0.75rem' }}>{selectedBooking.checkInDate}</TableCell>
-                    <TableCell sx={{ fontSize: '0.75rem' }}>{selectedBooking.checkOutDate}</TableCell>
-                    <TableCell align="right" sx={{ fontSize: '0.75rem' }}>{selectedBooking.totalNights}</TableCell>
-                    <TableCell align="right" sx={{ fontSize: '0.75rem' }}>
-                      Rs. {formatCurrency(
-                        selectedBooking.totalNights
-                          ? Math.round(selectedBooking.totalAmount / selectedBooking.totalNights)
-                          : selectedBooking.totalAmount
-                      )}
+                    <TableCell sx={invoiceCellSx}>{selectedBooking.checkInDate}</TableCell>
+                    <TableCell sx={invoiceCellSx}>{selectedBooking.checkOutDate}</TableCell>
+                    <TableCell align="right" sx={invoiceCellSx}>
+                      {selectedBooking.totalNights}
                     </TableCell>
-                    <TableCell align="right" sx={{ fontSize: '0.75rem' }}>
+                    <TableCell align="right" sx={invoiceCellSx}>
+                      Rs. {formatCurrency(nightlyRate)}
+                    </TableCell>
+                    <TableCell align="right" sx={{ ...invoiceCellSx, fontWeight: 600 }}>
                       Rs. {formatCurrency(selectedBooking.totalAmount)}
                     </TableCell>
                   </TableRow>
@@ -2033,24 +2205,43 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
               </Table>
             </TableContainer>
 
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <Box sx={{ minWidth: 240 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                alignItems: 'flex-start',
+                gap: { xs: 2, md: 4 },
+                flexWrap: 'wrap',
+              }}
+            >
+              <Box
+                sx={{
+                  minWidth: { xs: '100%', sm: 280 },
+                  maxWidth: 340,
+                  p: 2,
+                  borderRadius: '14px',
+                  border: '1px solid #C5CED9',
+                  bgcolor: '#FAFBFC',
+                }}
+              >
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2">Subtotal</Typography>
-                  <Typography variant="body2">Rs. {formatCurrency(selectedBooking.totalAmount)}</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Subtotal
+                  </Typography>
+                  <Typography variant="body2" fontWeight={600}>
+                    Rs. {formatCurrency(selectedBooking.totalAmount)}
+                  </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2">CGST</Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      CGST
+                    </Typography>
                     <FormControl size="small">
                       <Select
                         value={cgstRate}
                         onChange={(event) => handleCgstChange(Number(event.target.value))}
-                        sx={{
-                          '& .MuiOutlinedInput-notchedOutline': { border: 'none' },
-                          '&:hover .MuiOutlinedInput-notchedOutline': { border: 'none' },
-                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { border: 'none' }
-                        }}
+                        sx={invoiceTaxSelectSx}
                       >
                         {[2.5, 6, 9].map((rate) => (
                           <MenuItem key={rate} value={rate}>
@@ -2060,22 +2251,20 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                       </Select>
                     </FormControl>
                   </Box>
-                  <Typography variant="body2">
-                    Rs. {formatCurrency((Number(selectedBooking.totalAmount || 0) * (cgstRate / 100)).toFixed(2))}
+                  <Typography variant="body2" fontWeight={600}>
+                    Rs. {formatCurrency(cgstAmount.toFixed(2))}
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2">SGST</Typography>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      SGST
+                    </Typography>
                     <FormControl size="small">
                       <Select
                         value={sgstRate}
                         onChange={(event) => handleSgstChange(Number(event.target.value))}
-                        sx={{
-                          '& .MuiOutlinedInput-notchedOutline': { border: 'none' },
-                          '&:hover .MuiOutlinedInput-notchedOutline': { border: 'none' },
-                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { border: 'none' }
-                        }}
+                        sx={invoiceTaxSelectSx}
                       >
                         {[2.5, 6, 9].map((rate) => (
                           <MenuItem key={rate} value={rate}>
@@ -2085,100 +2274,124 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                       </Select>
                     </FormControl>
                   </Box>
-                  <Typography variant="body2">
-                    Rs. {formatCurrency((Number(selectedBooking.totalAmount || 0) * (sgstRate / 100)).toFixed(2))}
+                  <Typography variant="body2" fontWeight={600}>
+                    Rs. {formatCurrency(sgstAmount.toFixed(2))}
                   </Typography>
                 </Box>
-                <Divider sx={{ my: 1 }} />
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="subtitle2">Total</Typography>
-                  <Typography variant="subtitle2">
-                    Rs. {formatCurrency(
-                      (Number(selectedBooking.totalAmount || 0) *
-                        (1 + (cgstRate + sgstRate) / 100)).toFixed(2)
-                    )}
+                <Divider sx={{ my: 1.25, borderColor: '#C5CED9' }} />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Typography variant="subtitle2" fontWeight={700}>
+                    Total
+                  </Typography>
+                  <Typography variant="subtitle1" fontWeight={700} color="primary.main">
+                    Rs. {formatCurrency(invoiceTotal.toFixed(2))}
                   </Typography>
                 </Box>
-                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
-                  <Box sx={{ textAlign: 'center', minWidth: 180 }}>
-                    <Typography variant="caption">Authorised Signature</Typography>
-                    {issuerCompany?.authorizedSignature ? (
-                      <Box sx={{ mt: 1 }}>
-                        <AuthMedia
-                          src={issuerCompany.authorizedSignature}
-                          alt="Authorized signature"
-                          style={{ width: '4cm', height: '4cm', objectFit: 'contain' }}
-                        />
-                      </Box>
-                    ) : (
-                      <Box sx={{ mt: 2, borderBottom: '1px solid', height: 24 }} />
-                    )}
+              </Box>
+
+              <Box sx={{ textAlign: 'center', minWidth: 160, pt: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                  Authorised Signature
+                </Typography>
+                {issuerCompany?.authorizedSignature ? (
+                  <Box sx={{ mt: 1, display: 'flex', justifyContent: 'center' }}>
+                    <AuthMedia
+                      src={issuerCompany.authorizedSignature}
+                      alt="Authorized signature"
+                      style={{ maxHeight: 72, maxWidth: 180, objectFit: 'contain' }}
+                    />
                   </Box>
-                </Box>
+                ) : (
+                  <Box sx={{ mt: 2.5, borderBottom: '1px solid', borderColor: 'divider', height: 48, width: 160, mx: 'auto' }} />
+                )}
               </Box>
             </Box>
 
             {selectedBooking.specialRequests && (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle2" gutterBottom>Notes</Typography>
-                <Typography variant="body2">{selectedBooking.specialRequests}</Typography>
+              <Box
+                sx={{
+                  mt: 2.5,
+                  p: 2,
+                  borderRadius: '14px',
+                  border: '1px solid #C5CED9',
+                  bgcolor: '#FAFBFC',
+                }}
+              >
+                <Typography sx={invoicePanelTitleSx}>Notes</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {selectedBooking.specialRequests}
+                </Typography>
               </Box>
             )}
-
           </CardContent>
+
+          <Box
+            className="no-print"
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 1,
+              justifyContent: 'flex-end',
+              px: { xs: 2.5, md: 4 },
+              py: 2,
+              borderTop: '1px solid #C5CED9',
+              bgcolor: '#F8FAFC',
+            }}
+          >
+            <Button
+              variant="outlined"
+              startIcon={<PrintIcon />}
+              onClick={handlePrintInvoice}
+              sx={mvsBodyOutlinedBtnSx}
+            >
+              {t('roomBookingManagement.actions.printInvoice')}
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleDownloadPdf}
+              sx={mvsBodyOutlinedBtnSx}
+            >
+              {t('roomBookingManagement.actions.downloadPdf')}
+            </Button>
+            {selectedBooking.paymentStatus !== 'paid' && (
+              <Button
+                variant="contained"
+                disableElevation
+                onClick={handleSettleBooking}
+                disabled={settling}
+                sx={mvsBodyPrimaryBtnSx}
+              >
+                {t('roomBookingManagement.actions.settle')}
+              </Button>
+            )}
+            {selectedBooking.status === 'confirmed' && (
+              <Button
+                variant="contained"
+                color="info"
+                disableElevation
+                startIcon={<CheckCircleIcon />}
+                onClick={() => handleCheckIn(selectedBooking.id)}
+                sx={mvsBodyPrimaryBtnSx}
+              >
+                {t('roomBookingManagement.actions.checkin')}
+              </Button>
+            )}
+            {selectedBooking.status === 'checked_in' && (
+              <Button
+                variant="contained"
+                color="success"
+                disableElevation
+                startIcon={<CheckCircleIcon />}
+                onClick={() => handleCheckOut(selectedBooking.id)}
+                sx={mvsBodyPrimaryBtnSx}
+              >
+                {t('roomBookingManagement.actions.checkout')}
+              </Button>
+            )}
+          </Box>
         </Card>
-        <Box sx={{ mt: 2, display: 'flex', gap: 2, justifyContent: 'flex-end' }} className="no-print">
-          <Button
-            variant="outlined"
-            onClick={() => setViewMode('list')}
-          >
-            {t('roomBookingManagement.actions.backToList')}
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<PrintIcon />}
-            onClick={handlePrintInvoice}
-          >
-            {t('roomBookingManagement.actions.printInvoice')}
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={handleDownloadPdf}
-          >
-            {t('roomBookingManagement.actions.downloadPdf')}
-          </Button>
-          {selectedBooking.paymentStatus !== 'paid' && (
-            <Button
-              variant="contained"
-              color="success"
-              onClick={handleSettleBooking}
-              disabled={settling}
-            >
-              {t('roomBookingManagement.actions.settle')}
-            </Button>
-          )}
-          {selectedBooking.status === 'confirmed' && (
-            <Button
-              variant="contained"
-              color="info"
-              startIcon={<CheckCircleIcon />}
-              onClick={() => handleCheckIn(selectedBooking.id)}
-            >
-              {t('roomBookingManagement.actions.checkin')}
-            </Button>
-          )}
-          {selectedBooking.status === 'checked_in' && (
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<CheckCircleIcon />}
-              onClick={() => handleCheckOut(selectedBooking.id)}
-            >
-              {t('roomBookingManagement.actions.checkout')}
-            </Button>
-          )}
-        </Box>
+
         <style>
           {`
             @page {
@@ -2230,6 +2443,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                 max-width: none !important;
                 margin: 0 !important;
                 box-shadow: none !important;
+                border: none !important;
               }
               .tax-invoice-print {
                 width: 100%;
@@ -2421,45 +2635,32 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
           </Box>
         ) : (
           <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
-            <Table
-              size="small"
-              sx={{
-                width: '100%',
-                tableLayout: 'auto',
-                minWidth: { xs: 720, sm: 960 },
-                borderCollapse: 'collapse',
-                bgcolor: 'transparent',
-                '& .MuiTableCell-root': {
-                  borderLeft: 'none',
-                  borderRight: 'none',
-                  borderTop: 'none',
-                },
-              }}
-            >
+            <Table size="small" sx={bookingTableSx}>
               <TableHead sx={mvsTableHeadHighlightSx}>
                 <TableRow>
                   {[
-                    { label: t('roomBookingManagement.columns.guestName'), key: 'guestName' },
-                    { label: t('roomBookingManagement.columns.companyName'), key: 'companyName' },
-                    { label: t('roomBookingManagement.columns.roomNo'), key: 'roomNumber' },
-                    { label: t('roomBookingManagement.columns.roomType'), key: 'roomType' },
-                    { label: t('roomBookingManagement.columns.checkIn'), key: 'checkInDate' },
-                    { label: t('roomBookingManagement.columns.checkOut'), key: 'checkOutDate' },
-                    { label: t('roomBookingManagement.columns.nights'), key: 'totalNights' },
-                    { label: t('roomBookingManagement.columns.nightlyRate'), key: 'nightlyRate' },
-                    { label: t('roomBookingManagement.columns.amount'), key: 'totalAmount' },
-                    { label: t('roomBookingManagement.columns.payment'), key: 'paymentStatus' },
-                    { label: t('roomBookingManagement.columns.status'), key: 'status' },
-                    { label: t('roomBookingManagement.columns.note'), key: 'specialRequests' },
-                    { label: t('roomBookingManagement.columns.actions') },
+                    { label: t('roomBookingManagement.columns.guestName'), key: 'guestName', width: '10%', ellipsis: true },
+                    { label: t('roomBookingManagement.columns.companyName'), key: 'companyName', width: '16%', ellipsis: true },
+                    { label: t('roomBookingManagement.columns.roomNo'), key: 'roomNumber', width: '6%' },
+                    { label: t('roomBookingManagement.columns.roomType'), key: 'roomType', width: '8%', ellipsis: true },
+                    { label: t('roomBookingManagement.columns.checkIn'), key: 'checkInDate', width: '8%' },
+                    { label: t('roomBookingManagement.columns.checkOut'), key: 'checkOutDate', width: '8%' },
+                    { label: t('roomBookingManagement.columns.nights'), key: 'totalNights', width: '5%' },
+                    { label: t('roomBookingManagement.columns.nightlyRate'), key: 'nightlyRate', width: '9%' },
+                    { label: t('roomBookingManagement.columns.amount'), key: 'totalAmount', width: '9%' },
+                    { label: t('roomBookingManagement.columns.payment'), key: 'paymentStatus', width: '8%' },
+                    { label: t('roomBookingManagement.columns.status'), key: 'status', width: '8%' },
+                    { label: t('roomBookingManagement.columns.actions'), width: '10%' },
                   ].map((col) => (
                     <TableCell
                       key={col.label}
                       align={col.key ? 'left' : 'center'}
+                      width={col.width}
                       sx={{
                         whiteSpace: 'nowrap',
                         cursor: col.key ? 'pointer' : 'default',
                         verticalAlign: 'middle',
+                        ...(col.ellipsis ? bookingCellEllipsisSx : {}),
                       }}
                       onClick={() => handleSort(col.key)}
                     >
@@ -2490,31 +2691,24 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     sx={{ cursor: 'pointer', '&:active': { bgcolor: 'action.selected' } }}
                   >
                     {[
-                      booking.guestName,
-                      booking.companyName || '-',
-                      getRoomDisplayLabel(booking),
-                      getRoomTypeLabel(booking.roomType),
-                      booking.checkInDate,
-                      booking.checkOutDate,
-                      `${booking.totalNights}${t('roomBookingManagement.units.night')}`,
-                      `Rs. ${booking.totalNights ? Math.round(booking.totalAmount / booking.totalNights).toLocaleString() : '-'}`,
-                      `Rs. ${booking.totalAmount.toLocaleString()}`,
-                    ].map((value, index) => (
+                      { value: booking.guestName, ellipsis: true },
+                      { value: booking.companyName || '-', ellipsis: true },
+                      { value: getRoomDisplayLabel(booking), ellipsis: false },
+                      { value: getRoomTypeLabel(booking.roomType), ellipsis: true },
+                      { value: booking.checkInDate, ellipsis: false },
+                      { value: booking.checkOutDate, ellipsis: false },
+                      { value: `${booking.totalNights}${t('roomBookingManagement.units.night')}`, ellipsis: false },
+                      { value: `Rs. ${booking.totalNights ? Math.round(booking.totalAmount / booking.totalNights).toLocaleString() : '-'}`, ellipsis: false },
+                      { value: `Rs. ${booking.totalAmount.toLocaleString()}`, ellipsis: false },
+                    ].map((cell, index) => (
                       <TableCell
                         key={`${booking.id}-${index}`}
                         sx={{
-                          fontSize: { xs: '0.75rem', sm: '0.8125rem' },
-                          py: 0.75,
-                          px: { xs: 0.5, sm: 1 },
-                          whiteSpace: index === 0 || index === 1 ? 'normal' : 'nowrap',
-                          wordBreak: index === 0 || index === 1 ? 'break-word' : undefined,
-                          maxWidth: index === 0 ? { xs: 140, sm: 180 } : index === 1 ? { xs: 120, sm: 200 } : undefined,
-                          overflow: 'hidden',
-                          textOverflow: index === 0 || index === 1 ? 'ellipsis' : undefined,
-                          verticalAlign: 'middle',
+                          ...bookingCellBaseSx,
+                          ...(cell.ellipsis ? bookingCellEllipsisSx : { whiteSpace: 'nowrap' }),
                         }}
                       >
-                        {value}
+                        {cell.ellipsis ? renderEllipsisText(String(cell.value)) : cell.value}
                       </TableCell>
                     ))}
                     <TableCell
@@ -2539,19 +2733,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                       }}
                     >
                       {getStatusChip(booking.status)}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        fontSize: { xs: '0.75rem', sm: '0.8125rem' },
-                        py: 0.75,
-                        px: { xs: 0.5, sm: 1 },
-                        whiteSpace: 'normal',
-                        wordBreak: 'break-word',
-                        maxWidth: { xs: 140, sm: 240 },
-                        verticalAlign: 'middle',
-                      }}
-                    >
-                      {booking.specialRequests || '-'}
                     </TableCell>
                     <TableCell
                       align="center"
