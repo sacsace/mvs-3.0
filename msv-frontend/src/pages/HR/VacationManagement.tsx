@@ -1385,9 +1385,11 @@ const VacationManagement: React.FC = () => {
         return (
           <Box sx={mvsBodyListZoneSx}>
             <Box sx={{ ...mvsBodyCardSx, overflow: 'hidden' }}>
-              <Alert severity="info" variant="outlined" sx={{ m: { xs: 2, sm: 2.5 }, mb: 0, borderRadius: 2 }}>
-                {t('vacationManagement.fiscalYearResetNote')}
-              </Alert>
+              <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: { xs: 2, sm: 2.5 } }}>
+                <Alert severity="info" variant="outlined" sx={{ width: 'auto', borderRadius: 2 }}>
+                  {t('vacationManagement.fiscalYearResetNote')}
+                </Alert>
+              </Box>
               <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: 2, pb: { xs: 2, sm: 2.5 } }}>
               <Grid container spacing={3}>
               {/* 연차 (Earned Leave) */}

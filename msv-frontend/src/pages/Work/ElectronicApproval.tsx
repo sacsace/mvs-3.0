@@ -959,128 +959,6 @@ const ElectronicApproval: React.FC = () => {
     };
   }, [normalizeApprovalStep, normalizeEditorHtml, parseJsonArray, t]);
 
-  // 샘플 데이터 (폴백용)
-  const sampleData = useMemo<ApprovalDocument[]>(() => [
-    {
-      id: 1,
-      documentId: 'APP-2024-001',
-      title: '개발팀 장비 구매 신청',
-      type: 'purchase',
-      category: 'IT 장비',
-      amount: 5000000,
-      requesterId: 1001,
-      requesterName: '김개발',
-      requesterDepartment: '개발팀',
-      requesterPosition: '개발팀장',
-      description: '개발팀 업무 효율성 향상을 위한 고성능 개발 장비 구매 신청',
-      attachments: ['견적서.pdf', '제품사양서.pdf'],
-      status: 'in_review',
-      priority: 'high',
-      currentApproverId: 2001,
-      currentApproverName: '이부장',
-      approvalFlow: [
-        {
-          id: 1,
-          stepOrder: 1,
-          approverId: 2001,
-          approverName: '이부장',
-          approverDepartment: 'IT부',
-          approverPosition: '부장',
-          status: 'approved',
-          approvedAt: '2024-01-15 10:30:00',
-          comment: '필요성 인정, 다음 단계로 진행'
-        },
-        {
-          id: 2,
-          stepOrder: 2,
-          approverId: 3001,
-          approverName: '박이사',
-          approverDepartment: '경영진',
-          approverPosition: '이사',
-          status: 'pending'
-        }
-      ],
-      createdAt: '2024-01-15 09:00:00',
-      updatedAt: '2024-01-15 10:30:00',
-      dueDate: '2024-01-20',
-      comments: [
-        {
-          id: 1,
-          userId: 2001,
-          userName: '이부장',
-          comment: '예산 범위 내에서 진행 가능합니다.',
-          createdAt: '2024-01-15 10:30:00',
-          isInternal: false
-        }
-      ]
-    },
-    {
-      id: 2,
-      documentId: 'APP-2024-002',
-      title: '연차 사용 신청',
-      type: 'vacation',
-      category: '휴가',
-      requesterId: 1002,
-      requesterName: '이프론트',
-      requesterDepartment: '개발팀',
-      requesterPosition: '프론트엔드 개발자',
-      description: '개인 사정으로 인한 연차 사용 신청 (2024-01-25 ~ 2024-01-26)',
-      attachments: [],
-      status: 'approved',
-      priority: 'medium',
-      approvalFlow: [
-        {
-          id: 3,
-          stepOrder: 1,
-          approverId: 1001,
-          approverName: '김개발',
-          approverDepartment: '개발팀',
-          approverPosition: '개발팀장',
-          status: 'approved',
-          approvedAt: '2024-01-20 14:00:00',
-          comment: '승인합니다. 즐거운 휴가 되세요.'
-        }
-      ],
-      createdAt: '2024-01-20 13:30:00',
-      updatedAt: '2024-01-20 14:00:00',
-      dueDate: '2024-01-22',
-      comments: []
-    },
-    {
-      id: 3,
-      documentId: 'APP-2024-003',
-      title: '교육비 지출 신청',
-      type: 'expense',
-      category: '교육비',
-      amount: 300000,
-      requesterId: 1003,
-      requesterName: '박백엔드',
-      requesterDepartment: '개발팀',
-      requesterPosition: '백엔드 개발자',
-      description: 'AWS 클라우드 아키텍처 교육 과정 수강료 지출 신청',
-      attachments: ['교육과정안내.pdf', '수강신청서.pdf'],
-      status: 'submitted',
-      priority: 'medium',
-      currentApproverId: 1001,
-      currentApproverName: '김개발',
-      approvalFlow: [
-        {
-          id: 4,
-          stepOrder: 1,
-          approverId: 1001,
-          approverName: '김개발',
-          approverDepartment: '개발팀',
-          approverPosition: '개발팀장',
-          status: 'pending'
-        }
-      ],
-      createdAt: '2024-01-22 11:00:00',
-      updatedAt: '2024-01-22 11:00:00',
-      dueDate: '2024-01-25',
-      comments: []
-    }
-  ], []);
-
   const loadApprovalData = useCallback(async () => {
     setError('');
     try {
@@ -1089,17 +967,17 @@ const ElectronicApproval: React.FC = () => {
         const documentsData: ApprovalDocument[] = (response.data || []).map((d: any) =>
           mapApprovalFromApi(d, usersRef.current)
         );
-        setDocuments(documentsData.length > 0 ? documentsData : sampleData);
+        setDocuments(documentsData);
       } else {
         setError(response.message || t('approval.errors.loadList'));
-        setDocuments(sampleData);
+        setDocuments([]);
       }
     } catch (error: any) {
       console.error('전자 결제 목록 조회 오류:', error);
       setError(error.response?.data?.message || t('approval.errors.loadListFailed'));
-      setDocuments(sampleData);
+      setDocuments([]);
     }
-  }, [mapApprovalFromApi, sampleData, t]);
+  }, [mapApprovalFromApi, t]);
 
   useEffect(() => {
     if (!editor) return;
