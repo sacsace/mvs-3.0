@@ -36,9 +36,14 @@ import {
   CircularProgress,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
-  Notifications as NotificationsIcon,
+  mvsBodyCardSx,
+  mvsBodyListTableSx,
+  mvsBodyListZoneSx,
+  mvsBodyOutlinedBtnSx,
+  mvsPageRootSx,
+} from '../../theme/mvsLayout';
+import {
   Check as CheckIcon,
   DeleteSweep as DeleteSweepIcon,
   Refresh as RefreshIcon,
@@ -69,12 +74,7 @@ import {
 type FilterMode = 'all' | 'unread';
 type TabKey = 'history' | 'send' | 'settings' | 'templates';
 
-const CARD_SX = {
-  border: '1px solid',
-  borderColor: 'divider',
-  borderRadius: 2,
-  boxShadow: '0 1px 4px rgba(15, 23, 42, 0.07)',
-} as const;
+const CARD_SX = mvsBodyCardSx;
 
 const DEFAULT_SETTINGS: NonNullable<UserUiPreferencesData['notificationSettings']> = {
   realtime: true,
@@ -317,7 +317,8 @@ const NotificationManagement: React.FC = () => {
 
   const renderHistoryTab = () => (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, overflow: 'visible' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1, p: 2, flexWrap: 'wrap' }}>
         <ToggleButtonGroup
           size="small"
           value={filter}
@@ -342,17 +343,18 @@ const NotificationManagement: React.FC = () => {
         </Tooltip>
         <Button
           size="small"
-          color="inherit"
+          variant="outlined"
           startIcon={<DeleteSweepIcon />}
           onClick={handleClearAll}
           disabled={items.length === 0}
-          sx={{ textTransform: 'none' }}
+          sx={mvsBodyOutlinedBtnSx}
         >
           {t('notifications.clearAll')}
         </Button>
-      </Box>
+        </Box>
+      </Card>
 
-      <Card sx={CARD_SX}>
+      <Card elevation={0} sx={{ ...mvsBodyListZoneSx, ...mvsBodyListTableSx }}>
         <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
           {loading ? (
             <Box sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
@@ -787,25 +789,44 @@ const NotificationManagement: React.FC = () => {
   );
 
   return (
-    <Box sx={{ ...mvsPageRootSx, p: { xs: 2, sm: 3 } }}>
+    <Box sx={mvsPageRootSx}>
       <MvsPageHeader
         title={t('notificationManagement.title')}
         description={t('notificationManagement.description')}
-        icon={<NotificationsIcon color="primary" />}
-        mb={2}
       />
 
-      <Tabs value={activeTab} onChange={handleTabChange} sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}>
-        <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label={t('notificationManagement.tabHistory')} />
-        <Tab icon={<SendIcon fontSize="small" />} iconPosition="start" label={t('notificationManagement.tabSend')} />
-        <Tab icon={<SettingsIcon fontSize="small" />} iconPosition="start" label={t('notificationManagement.tabSettings')} />
-        <Tab icon={<TemplateIcon fontSize="small" />} iconPosition="start" label={t('notificationManagement.tabTemplates')} />
-      </Tabs>
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 0 }}>
+        <Tabs
+          value={activeTab}
+          onChange={handleTabChange}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{
+            px: 1,
+            minHeight: 48,
+            '& .MuiTab-root': {
+              py: 1.5,
+              textTransform: 'none',
+              fontWeight: 600,
+              color: 'text.secondary',
+              '&.Mui-selected': { color: 'primary.main' },
+            },
+            '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' },
+          }}
+        >
+          <Tab icon={<HistoryIcon fontSize="small" />} iconPosition="start" label={t('notificationManagement.tabHistory')} />
+          <Tab icon={<SendIcon fontSize="small" />} iconPosition="start" label={t('notificationManagement.tabSend')} />
+          <Tab icon={<SettingsIcon fontSize="small" />} iconPosition="start" label={t('notificationManagement.tabSettings')} />
+          <Tab icon={<TemplateIcon fontSize="small" />} iconPosition="start" label={t('notificationManagement.tabTemplates')} />
+        </Tabs>
+      </Card>
 
-      {activeTab === 0 && renderHistoryTab()}
-      {activeTab === 1 && renderSendTab()}
-      {activeTab === 2 && renderSettingsTab()}
-      {activeTab === 3 && renderTemplatesTab()}
+      <Box sx={{ mt: 2.5 }}>
+        {activeTab === 0 && renderHistoryTab()}
+        {activeTab === 1 && renderSendTab()}
+        {activeTab === 2 && renderSettingsTab()}
+        {activeTab === 3 && renderTemplatesTab()}
+      </Box>
 
       <NotificationDetailDialog
         open={detailOpen}

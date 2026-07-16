@@ -45,6 +45,8 @@ import Asset from './Asset';
 import AutoVoucher from './AutoVoucher';
 import AutoVoucherRule from './AutoVoucherRule';
 import AutoVoucherAuditLog from './AutoVoucherAuditLog';
+import AccountingBrainAuditLog from './AccountingBrainAuditLog';
+import AiLearningCorrection from './AiLearningCorrection';
 import GlAccount from './GlAccount';
 import GlVoucher from './GlVoucher';
 import GlVoucherLine from './GlVoucherLine';
@@ -395,6 +397,20 @@ AutoVoucherAuditLog.belongsTo(AutoVoucher, { foreignKey: 'auto_voucher_id', as: 
 (User as any).hasMany(AutoVoucherAuditLog, { foreignKey: 'actor_id', as: 'autoVoucherAuditActions' });
 AutoVoucherAuditLog.belongsTo(User, { foreignKey: 'actor_id', as: 'actor' });
 
+(Tenant as any).hasMany(AccountingBrainAuditLog, { foreignKey: 'tenant_id', as: 'accountingBrainAuditLogs' });
+AccountingBrainAuditLog.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(Company as any).hasMany(AccountingBrainAuditLog, { foreignKey: 'company_id', as: 'accountingBrainAuditLogs' });
+AccountingBrainAuditLog.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+(User as any).hasMany(AccountingBrainAuditLog, { foreignKey: 'user_id', as: 'accountingBrainActions' });
+AccountingBrainAuditLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+(Tenant as any).hasMany(AiLearningCorrection, { foreignKey: 'tenant_id', as: 'aiLearningCorrections' });
+AiLearningCorrection.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(Company as any).hasMany(AiLearningCorrection, { foreignKey: 'company_id', as: 'aiLearningCorrections' });
+AiLearningCorrection.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+(User as any).hasMany(AiLearningCorrection, { foreignKey: 'user_id', as: 'aiLearningCorrections' });
+AiLearningCorrection.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
 (GlAccount as any).belongsTo(GlAccount, { foreignKey: 'parent_id', as: 'parent' });
 (GlAccount as any).hasMany(GlAccount, { foreignKey: 'parent_id', as: 'children' });
 (Tenant as any).hasMany(GlAccount, { foreignKey: 'tenant_id', as: 'glAccounts' });
@@ -553,6 +569,8 @@ export {
   AutoVoucher,
   AutoVoucherRule,
   AutoVoucherAuditLog,
+  AccountingBrainAuditLog,
+  AiLearningCorrection,
   GlAccount,
   GlVoucher,
   GlVoucherLine,

@@ -15,6 +15,11 @@ interface GlAccountAttributes {
   current_balance: number;
   is_system: boolean;
   is_active: boolean;
+  search_aliases?: string | null;
+  account_group?: string | null;
+  is_cash_or_bank?: boolean;
+  is_ar_ap?: boolean;
+  party_required?: boolean;
   created_by?: number | null;
   updated_by?: number | null;
   created_at?: Date;
@@ -31,6 +36,11 @@ interface GlAccountCreationAttributes
     | 'current_balance'
     | 'is_system'
     | 'is_active'
+    | 'search_aliases'
+    | 'account_group'
+    | 'is_cash_or_bank'
+    | 'is_ar_ap'
+    | 'party_required'
     | 'created_by'
     | 'updated_by'
     | 'created_at'
@@ -51,6 +61,11 @@ class GlAccount extends Model<GlAccountAttributes, GlAccountCreationAttributes> 
   public current_balance!: number;
   public is_system!: boolean;
   public is_active!: boolean;
+  public search_aliases?: string | null;
+  public account_group?: string | null;
+  public is_cash_or_bank?: boolean;
+  public is_ar_ap?: boolean;
+  public party_required?: boolean;
   public created_by?: number | null;
   public updated_by?: number | null;
   public readonly created_at!: Date;
@@ -75,6 +90,11 @@ GlAccount.init(
     current_balance: { type: DataTypes.DECIMAL(15, 2), allowNull: false, defaultValue: 0 },
     is_system: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     is_active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    search_aliases: { type: DataTypes.TEXT, allowNull: true },
+    account_group: { type: DataTypes.STRING(100), allowNull: true },
+    is_cash_or_bank: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    is_ar_ap: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    party_required: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     created_by: { type: DataTypes.INTEGER, allowNull: true },
     updated_by: { type: DataTypes.INTEGER, allowNull: true },
   },

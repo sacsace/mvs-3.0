@@ -302,10 +302,9 @@ export const mvsBodyTableFrameSx: MvsStyleObject = {
   boxShadow: '0 2px 8px rgba(15, 23, 42, 0.06)',
 };
 
-/** Body 테이블 바디 — 줄무늬·호버·구분선 (외곽 박스 없이 행 색으로 구분) */
+/** Body 테이블 바디 — 줄무늬 없음(전 행 흰색), hover만 구분 */
 export const mvsTableBodyRowSx: SxProps<Theme> = (theme) => {
-  const oddBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
-  const stripe = theme.palette.mode === 'light' ? '#F4F7FB' : 'rgba(255,255,255,0.04)';
+  const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
   const hover = theme.palette.mode === 'light' ? '#EFF6FF' : 'action.hover';
   const border = theme.palette.mode === 'light' ? '#D1DAE4' : theme.palette.divider;
   return {
@@ -315,11 +314,8 @@ export const mvsTableBodyRowSx: SxProps<Theme> = (theme) => {
       fontSize: '0.875rem',
       borderBottom: `1px solid ${border}`,
     },
-    '& .MuiTableRow-root:nth-of-type(odd)': {
-      bgcolor: oddBg,
-    },
-    '& .MuiTableRow-root:nth-of-type(even)': {
-      bgcolor: stripe,
+    '& .MuiTableRow-root': {
+      bgcolor: rowBg,
     },
     '& .MuiTableRow-root:hover': {
       bgcolor: hover,

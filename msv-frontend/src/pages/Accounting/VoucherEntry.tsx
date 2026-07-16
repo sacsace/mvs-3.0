@@ -673,9 +673,6 @@ const VoucherEntry: React.FC = () => {
 
         <Box sx={{ ...mvsBodySectionHeaderSx, borderRadius: '20px', border: '1px solid #C5CED9', boxShadow: '0 4px 14px rgba(15, 23, 42, 0.07)', justifyContent: 'flex-end' }}>
           <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
-            <Button variant="outlined" sx={mvsBodyOutlinedBtnSx} onClick={() => navigate('/accounting/settings/masters')}>
-              {t('voucherEntry.manageMasters')}
-            </Button>
             <Tooltip title={!balanced ? t('voucherEntry.errors.notBalanced') : ''}>
               <span>
                 <Button variant="outlined" sx={mvsBodyOutlinedBtnSx} disabled={saving} onClick={() => void handleSave('draft')}>

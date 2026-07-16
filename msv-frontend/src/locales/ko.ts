@@ -2664,10 +2664,90 @@ export default {
         codeNameRequired: '코드와 계정과목명은 필수입니다.',
       },
     },
+    tallyImport: {
+      title: 'Tally 임포트',
+      description:
+        'Tally에서 Export한 XML/JSON을 올려 계정과목·전표를 MSV로 가져옵니다. 전표는 임시(draft)로만 생성되며 자동 전기되지 않습니다.',
+      booksLink: '회계장부',
+      moreTools: '관리·도구',
+      selectFile: '파일 선택',
+      noFile: '선택된 파일 없음 (.xml / .json)',
+      preview: '파싱 미리보기',
+      dryRun: '시뮬레이션',
+      import: '임포트 실행',
+      previewTitle: '파싱된 전표 미리보기',
+      resultTitle: '임포트 결과',
+      resultDryRun: '시뮬레이션 (DB 미반영)',
+      empty: {
+        loading: '불러오는 중...',
+        noItems: 'Tally Export 파일(.xml / .json)을 선택해 주세요.',
+        fileReady: '선택됨: {{name}}',
+        fileReadyHint: '위에서 파싱 미리보기 · 시뮬레이션 · 임포트 실행을 진행하세요.',
+      },
+      emptyVouchers: '파일에서 전표를 찾지 못했습니다. Ledger만 포함된 Export일 수 있습니다.',
+      emptyIssues: '이슈 없음',
+      emptyErrors: '실패 로그가 없습니다.',
+      logFilter: {
+        label: '로그 필터',
+        all: '전체',
+        error: '실패',
+        warn: '경고',
+        info: '정보',
+      },
+      issueLevel: {
+        error: '실패',
+        warn: '경고',
+        info: '정보',
+      },
+      hint:
+        'Tally: Gateway of Tally → Export → XML (Masters / Vouchers 또는 Day Book). 이미 임포트된 전표(번호·GUID·Tally 전표번호+일자)와 파일 내 중복은 자동으로 건너뜁니다. 계정·거래처도 이름/GUID·GSTIN으로 재사용합니다. 장부 반영은 회계장부에서 Post 하세요.',
+      options: {
+        importLedgers: 'Ledger(계정) 임포트',
+        importVouchers: 'Voucher(전표) 임포트',
+        createMissing: '미매칭 계정 자동 생성',
+        createParties: '거래처(Debtors/Creditors) 자동 생성',
+      },
+      kpi: {
+        parsedLedgers: '파싱 Ledger',
+        parsedVouchers: '파싱 Voucher',
+        createdAccounts: '생성 계정',
+        createdVouchers: '생성 전표',
+        format: '형식',
+        file: '파일',
+      },
+      columns: {
+        date: '일자',
+        type: '유형',
+        number: '번호',
+        lines: '라인',
+        debit: '차변',
+        credit: '대변',
+        level: '수준',
+        message: '메시지',
+        context: '사유·상세',
+      },
+      resultSummary:
+        '계정 매칭 {{matched}} · 계정 생성 {{createdAcc}} · 전표 생성 {{createdVch}} · 건너뜀 {{skipped}} · 실패 {{failed}}',
+      success: {
+        preview: '파일 파싱이 완료되었습니다.',
+        dryRun: '시뮬레이션이 완료되었습니다.',
+        import: '임포트가 완료되었습니다. 전표는 임시 상태입니다.',
+      },
+      errors: {
+        noFile: '파일을 선택해 주세요.',
+        noCompany: '회사를 선택해 주세요.',
+        preview: '미리보기에 실패했습니다.',
+        import: '임포트에 실패했습니다.',
+        fileTooLarge: '파일이 너무 큽니다. 최대 2GB까지 업로드할 수 있습니다.',
+      },
+    },
     generalLedger: {
       title: '회계장부',
-      description: '전표 입력 → 차변·대변 검증 → 장부 반영. Tally형 복식부기를 한 화면에서 처리합니다.',
+      description: 'Tally에서 가져온 전표·장부·시산표를 조회하고 장부에 반영합니다.',
       voucherEntryLink: '전표입력',
+      tallyImportLink: 'Tally 임포트',
+      moreTools: '관리·도구',
+      tallyViewHint: '이 화면은 Tally 임포트 데이터를 조회·반영하는 용도입니다. 신규 입력은 Tally Export 파일을 임포트하세요.',
       company: '회사',
       companyHint: '선택한 회사의 전표·장부·계정과목만 표시됩니다.',
       tabs: {
@@ -2681,6 +2761,10 @@ export default {
         draft: '미반영',
         posted: '반영됨',
         totalDebit: '누적 차변'
+      },
+      listView: {
+        page: '페이지로 보기',
+        all: '전체로 보기'
       },
       status: {
         draft: '임시',
@@ -2700,12 +2784,18 @@ export default {
         listTitle: '전표 목록',
         detailTitle: '전표 상세',
         selectHint: '목록에서 전표를 선택하세요.',
-        empty: '전표가 없습니다. 위에서 입력해 주세요.',
+        empty: '전표가 없습니다. Tally Export 파일을 임포트해 주세요.',
+        emptyHint: '수동 입력은 사용하지 않습니다. Tally에서 Export한 XML/JSON을 임포트하세요.',
+        emptySearch: '검색 결과가 없습니다.',
+        searchPlaceholder: '전표번호·일자·상태·적요 검색',
+        filteredCount: '{{count}}건',
         date: '일자',
         narration: '적요',
         saveDraft: '임시저장',
         saveAndPost: '저장 + 장부반영',
         postToLedger: '장부 반영',
+        postAllDrafts: '전체 장부 반영 ({{count}})',
+        postAllConfirm: '임시 전표 {{count}}건을 모두 장부에 반영할까요?',
         viewInLedger: '장부에서 보기',
         columns: {
           no: '번호',
@@ -2716,11 +2806,26 @@ export default {
       },
       ledger: {
         account: '계정',
+        accountSearchPlaceholder: '코드·계정명 입력하면 자동완성',
+        accountNoOptions: '일치하는 계정이 없습니다',
+        period: '기간',
+        periods: {
+          all: '전체',
+          thisMonth: '이번 달',
+          lastMonth: '지난달',
+          last3Months: '최근 3개월',
+          fiscalYear: '현재 회계년도'
+        },
         from: '부터',
         to: '까지',
         search: '조회',
         balance: '잔액',
-        empty: '해당 기간 장부 내역이 없습니다.',
+        total: '합계',
+        empty: '데이터가 없습니다. 해당 기간에 장부 반영된 전표 내역이 없습니다.',
+        emptySearch: '검색 결과가 없습니다.',
+        searchPlaceholder: '전표번호·일자·적요 검색',
+        filteredCount: '{{count}}건',
+        excelDownload: '엑셀 다운로드',
         columns: {
           date: '일자',
           voucher: '전표',
@@ -2733,6 +2838,11 @@ export default {
       trial: {
         total: '합계',
         mismatch: '차변·대변 합계가 일치하지 않습니다.',
+        empty: '시산표 데이터가 없습니다. 조회 기간을 확인하거나 장부 반영된 전표가 있는지 확인해 주세요.',
+        emptySearch: '검색 결과가 없습니다.',
+        searchPlaceholder: '코드·계정명 검색',
+        filteredCount: '{{count}}건',
+        excelDownload: '엑셀 다운로드',
         columns: {
           code: '코드',
           account: '계정',
@@ -2749,17 +2859,27 @@ export default {
         name: '계정명',
         nameEn: '영문명',
         nature: '성격',
-        register: '등록'
+        register: '등록',
+        searchPlaceholder: '코드·계정명 검색',
+        empty: '등록된 계정이 없습니다.',
+        emptySearch: '검색 결과가 없습니다.'
       },
       success: {
         posted: '장부에 반영되었습니다.',
+        bulkPosted: '임시 전표 {{posted}}건 반영 완료 (실패 {{failed}}건).',
         saved: '전표가 저장되었습니다.',
-        accountCreated: '계정이 등록되었습니다.'
+        accountCreated: '계정이 등록되었습니다.',
+        excelDownloaded: '엑셀 파일이 다운로드되었습니다.'
       },
       errors: {
         saveVoucher: '전표 저장 실패',
         postVoucher: '장부 반영 실패',
-        createAccount: '계정 등록 실패'
+        loadVoucher: '전표 상세 조회 실패',
+        bulkPost: '일괄 장부 반영 실패',
+        bulkPostPartial: '{{voucherNo}}: {{message}}',
+        createAccount: '계정 등록 실패',
+        noDataForExport: '다운로드할 데이터가 없습니다. 먼저 조회해 주세요.',
+        exportFailed: '엑셀 다운로드에 실패했습니다.'
       }
     },
     voucherEntry: {
@@ -2846,6 +2966,7 @@ export default {
       to: '종료일',
       search: '조회',
       total: '합계',
+      excelDownload: '엑셀 다운로드',
       hint: '장부 반영(posted)된 전표만 집계됩니다. 수익·비용 계정(nature: income/expense)만 포함합니다.',
       formula: '당기순이익 = 총수익 {{income}} − 총비용 {{expense}}',
       tabs: {
@@ -2874,7 +2995,53 @@ export default {
         hint: '기간을 조정하거나 장부 반영된 전표가 있는지 확인해 주세요.'
       },
       errors: {
-        load: '손익계산서 조회에 실패했습니다.'
+        load: '손익계산서 조회에 실패했습니다.',
+        noDataForExport: '내보낼 손익계산서 데이터가 없습니다. 먼저 조회해 주세요.',
+        exportFailed: '엑셀 다운로드에 실패했습니다.'
+      }
+    },
+    balanceSheet: {
+      title: '재무상태표',
+      description: '자산·부채·자본 계정을 집계하여 재무 상태를 확인합니다.',
+      from: '시작일',
+      asOf: '기준일',
+      search: '조회',
+      total: '합계',
+      excelDownload: '엑셀 다운로드',
+      hint: '기초잔액 + 장부 반영(posted) 전표를 집계합니다. 당기손익은 자본에 반영됩니다. Tally 임포트 후 회계장부에서 「장부 반영」을 해야 전표 금액이 포함됩니다.',
+      unbalancedHint: '자산과 부채+자본이 일치하지 않습니다. 전표·계정 매핑을 확인해 주세요.',
+      formula: '자산 {{assets}} = 부채+자본 {{liabilityEquity}}',
+      tabs: {
+        assets: '자산',
+        liabilities: '부채',
+        equity: '자본',
+        summary: '요약'
+      },
+      kpi: {
+        totalAssets: '총 자산',
+        totalLiabilities: '총 부채',
+        totalEquity: '총 자본',
+        liabilitiesAndEquity: '부채 + 자본'
+      },
+      sections: {
+        equation: '대차 검증'
+      },
+      columns: {
+        code: '코드',
+        account: '계정과목',
+        amount: '금액'
+      },
+      empty: {
+        assets: '해당 기간에 자산 계정 내역이 없습니다.',
+        liabilities: '해당 기간에 부채 계정 내역이 없습니다.',
+        equity: '해당 기간에 자본 계정 내역이 없습니다.',
+        hint: '기초잔액이 없거나 장부 반영된 전표가 없습니다. 기간·회사를 확인하거나 Tally 임포트·장부 반영을 진행해 주세요.',
+        draftHint: '미반영 전표 {{count}}건이 있습니다. 회계장부에서 「전체 장부 반영」을 실행하면 재무상태표에 포함됩니다.'
+      },
+      errors: {
+        load: '재무상태표 조회에 실패했습니다.',
+        noDataForExport: '내보낼 재무상태표 데이터가 없습니다. 먼저 조회해 주세요.',
+        exportFailed: '엑셀 다운로드에 실패했습니다.'
       }
     },
     accountingMasters: {
@@ -2928,6 +3095,14 @@ export default {
       title: '전표입력',
       description: '증빙 업로드 → 차변·대변 검토 → 승인 → 장부 반영',
       booksLink: '회계장부',
+      brainDisclaimer:
+        'Accounting Brain은 추천만 합니다. 검증·장부 반영은 승인 후 회계 엔진에서만 수행되며 AI가 전표를 게시하지 않습니다.',
+      kpi: {
+        review: '검토 필요',
+        approved: '승인됨',
+        posted: '장부 반영',
+        avgConfidence: '평균 검토점수'
+      },
       upload: {
         title: '증빙 업로드',
         docType: '문서 유형',
@@ -2935,6 +3110,23 @@ export default {
         noFile: '선택된 파일 없음',
         processing: '처리 중...',
         submit: '업로드 + 전표 생성'
+      },
+      bridge: {
+        title: '기존 문서에서 추천 (게시 없음)',
+        hint: '인보이스·경비 ID로 Accounting Brain 분개 추천만 조회합니다. 장부 반영은 하지 않습니다.',
+        invoiceId: '인보이스 ID',
+        expenseId: '경비 ID',
+        recommendInvoice: '인보이스 추천',
+        recommendExpense: '경비 추천',
+        invalidId: '유효한 ID를 입력해 주세요.',
+        success: '추천 결과만 표시했습니다. 전표는 생성·게시되지 않았습니다.',
+        failed: '문서 추천에 실패했습니다.'
+      },
+      ask: {
+        title: 'Accounting Brain 질문',
+        placeholder: '예: GST input credit은 어떤 계정으로 처리하나요?',
+        submit: '질문하기',
+        failed: '질문에 응답하지 못했습니다.'
       },
       list: {
         title: '전표 목록',
@@ -3018,7 +3210,8 @@ export default {
         postFailed: '장부 반영에 실패했습니다.',
         rejectReasonRequired: '반려 사유를 입력해 주세요.',
         rejectFailed: '반려 처리에 실패했습니다.',
-        duplicateFileName: '이미 등록된 파일명입니다: {{fileName}} (전표: {{vouchers}})'
+        duplicateFileName: '이미 등록된 파일명입니다: {{fileName}} (전표: {{vouchers}})',
+        unresolvedLedgers: '모든 분개 행에 활성 계정과목(accountId)을 선택한 뒤 승인/장부반영하세요. 미해결 계정은 게시하지 않습니다.'
       }
     },
     voucherLines: {

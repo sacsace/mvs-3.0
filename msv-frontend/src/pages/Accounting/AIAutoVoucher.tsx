@@ -6,6 +6,7 @@ import {
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -25,6 +26,11 @@ import {
   Typography,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
+import {
+  AccountBalance as BooksIcon,
+  CloudUpload as UploadIcon,
+  RestartAlt as ResetIcon,
+} from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
@@ -32,7 +38,22 @@ import VoucherLinesEditor, { VoucherLineRow } from '../../components/Accounting/
 import AccountingCompanyBar from '../../components/Accounting/AccountingCompanyBar';
 import { useGlAccounts } from '../../hooks/useGlAccounts';
 import { useAccountingCompany } from '../../hooks/useAccountingCompany';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsBodyCardSx,
+  mvsBodyFilterWrapSx,
+  mvsBodyListTableSx,
+  mvsBodyListZoneSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPrimaryBtnSx,
+  mvsFilterFieldHeightSx,
+  mvsKpiCardSx,
+  mvsOutlinedLabelProps,
+  mvsPageRootSx,
+  mvsSearchFieldSx,
+  mvsTableBodyRowSx,
+  mvsTableHeadHighlightSx,
+  mvsTableScrollSx,
+} from '../../theme/mvsLayout';
 import { accountingService } from '../../services/api';
 import { useStore } from '../../store';
 
@@ -61,7 +82,16 @@ type AutoVoucher = {
   total_debit: number;
   total_credit: number;
   duplicate_check?: { hasDuplicate?: boolean; matchedVoucherCodes?: string[] };
-  ai_analysis?: { reason?: string; ruleName?: string; transactionType?: string };
+  ai_analysis?: {
+    reason?: string;
+    ruleName?: string;
+    transactionType?: string;
+    needsReview?: boolean;
+    disclaimer?: string;
+    requestId?: string;
+    appliedRules?: Array<{ layer?: string; code?: string; reason?: string; priority?: number }>;
+    historicalMatches?: Array<{ source?: string; code?: string; counterparty?: string; similarity?: string }>;
+  };
   ocr_data?: { ocrAccuracy?: number };
   final_lines?: any[];
   auditLogs?: Array<{ id: number; action: string; created_at?: string; createdAt?: string }>;
@@ -70,6 +100,7 @@ type AutoVoucher = {
 const mapLines = (raw: any[] | undefined): VoucherLineRow[] =>
   (Array.isArray(raw) ? raw : []).map((line, index) => ({
     lineNo: Number(line?.lineNo || index + 1),
+    accountId: line?.accountId != null ? Number(line.accountId) : undefined,
     accountName: String(line?.accountName || ''),
     debit: Number(line?.debit || 0),
     credit: Number(line?.credit || 0),
@@ -126,6 +157,13 @@ const AIAutoVoucher: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [docType, setDocType] = useState('receipt');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [bridgeInvoiceId, setBridgeInvoiceId] = useState('');
+  const [bridgeExpenseId, setBridgeExpenseId] = useState('');
+  const [bridgeLoading, setBridgeLoading] = useState(false);
+  const [bridgePreview, setBridgePreview] = useState<any>(null);
+  const [askQuestion, setAskQuestion] = useState('');
+  const [askAnswer, setAskAnswer] = useState('');
+  const [askLoading, setAskLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -145,6 +183,64 @@ const AIAutoVoucher: React.FC = () => {
   );
 
   const postAllowed = useMemo(() => user?.role === 'root' || user?.role === 'admin', [user?.role]);
+
+  const linesResolvedStrict = useMemo(
+    () => form.lines.length >= 2 && form.lines.every((line) => Boolean(line.accountId)),
+    [form.lines]
+  );
+
+  const kpis = useMemo(() => {
+    const review = rows.filter((r) => r.status === 'review_required' || r.ai_analysis?.needsReview).length;
+    const posted = rows.filter((r) => r.status === 'posted').length;
+    const approved = rows.filter((r) => r.status === 'approved').length;
+    const avg =
+      rows.length > 0
+        ? rows.reduce((sum, r) => sum + Number(r.confidence_score || 0), 0) / rows.length
+        : 0;
+    return [
+      { key: 'review', label: t('autoVoucher.kpi.review'), value: String(review), color: 'warning.main' },
+      { key: 'approved', label: t('autoVoucher.kpi.approved'), value: String(approved), color: 'success.main' },
+      { key: 'posted', label: t('autoVoucher.kpi.posted'), value: String(posted), color: 'primary.main' },
+      {
+        key: 'confidence',
+        label: t('autoVoucher.kpi.avgConfidence'),
+        value: rows.length ? `${avg.toFixed(0)}%` : '—',
+        color: 'text.primary',
+      },
+    ];
+  }, [rows, t]);
+
+  const filterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx };
+  const cellEllipsisSx = {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    maxWidth: 0,
+  } as const;
+  const tableSx = {
+    width: '100%',
+    tableLayout: 'fixed',
+    borderCollapse: 'collapse',
+    bgcolor: 'transparent',
+    '& .MuiTableCell-root': { borderLeft: 'none', borderRight: 'none', borderTop: 'none' },
+  } as const;
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    py: { xs: 6, sm: 8 },
+    px: 3,
+    gap: 1.5,
+  } as const;
+
+  const handleResetFilters = () => {
+    setStatusFilter('');
+    setDocType('receipt');
+    setSelectedFile(null);
+  };
 
   const loadList = useCallback(async () => {
     try {
@@ -239,6 +335,51 @@ const AIAutoVoucher: React.FC = () => {
     }
   };
 
+  const handleBridgeRecommend = async (kind: 'invoice' | 'expense') => {
+    const raw = kind === 'invoice' ? bridgeInvoiceId : bridgeExpenseId;
+    const id = Number(raw);
+    if (!id) {
+      setError(t('autoVoucher.bridge.invalidId'));
+      return;
+    }
+    setBridgeLoading(true);
+    setError('');
+    try {
+      const response =
+        kind === 'invoice'
+          ? await accountingService.brainRecommendFromInvoice(id, effectiveCompanyId)
+          : await accountingService.brainRecommendFromExpense(id, effectiveCompanyId);
+      setBridgePreview(response?.data || null);
+      setSuccess(t('autoVoucher.bridge.success'));
+    } catch (err: any) {
+      setError(err?.response?.data?.message || t('autoVoucher.bridge.failed'));
+      setBridgePreview(null);
+    } finally {
+      setBridgeLoading(false);
+    }
+  };
+
+  const handleAsk = async () => {
+    const q = askQuestion.trim();
+    if (!q) return;
+    setAskLoading(true);
+    setError('');
+    try {
+      const response = await accountingService.brainAsk(q, effectiveCompanyId);
+      const payload = response?.data;
+      setAskAnswer(
+        [payload?.answer, ...(Array.isArray(payload?.reasons) ? payload.reasons : [])]
+          .filter(Boolean)
+          .join('\n') || payload?.disclaimer || ''
+      );
+    } catch (err: any) {
+      setError(err?.response?.data?.message || t('autoVoucher.ask.failed'));
+      setAskAnswer('');
+    } finally {
+      setAskLoading(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!selected) return;
     try {
@@ -266,6 +407,10 @@ const AIAutoVoucher: React.FC = () => {
 
   const handleApprove = async () => {
     if (!selected) return;
+    if (!linesResolvedStrict) {
+      setError(t('autoVoucher.errors.unresolvedLedgers'));
+      return;
+    }
     try {
       setSaving(true);
       await accountingService.approveAutoVoucher(selected.id, effectiveCompanyId);
@@ -281,6 +426,10 @@ const AIAutoVoucher: React.FC = () => {
 
   const handlePost = async () => {
     if (!selected) return;
+    if (!linesResolvedStrict) {
+      setError(t('autoVoucher.errors.unresolvedLedgers'));
+      return;
+    }
     try {
       setSaving(true);
       const response = await accountingService.postAutoVoucher(selected.id, effectiveCompanyId);
@@ -317,25 +466,7 @@ const AIAutoVoucher: React.FC = () => {
 
   return (
     <Box sx={mvsPageRootSx}>
-      <MvsPageHeader
-        title={t('autoVoucher.title')}
-        description={t('autoVoucher.description')}
-        actions={
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={() =>
-              navigate(
-                effectiveCompanyId
-                  ? `/accounting/books?company_id=${effectiveCompanyId}`
-                  : '/accounting/books'
-              )
-            }
-          >
-            {t('autoVoucher.booksLink')}
-          </Button>
-        }
-      />
+      <MvsPageHeader title={t('autoVoucher.title')} description={t('autoVoucher.description')} />
 
       <AccountingCompanyBar
         canSelectCompany={canSelectCompany}
@@ -345,14 +476,83 @@ const AIAutoVoucher: React.FC = () => {
         onChangeCompany={changeCompany}
       />
 
-      <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2, mb: 2 }}>
-        <CardContent>
-          <Typography variant="subtitle1" sx={{ mb: 1.5, fontWeight: 700 }}>
-            {t('autoVoucher.upload.title')}
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center' }}>
-            <FormControl size="small" sx={{ minWidth: 220 }}>
-              <InputLabel>{t('autoVoucher.upload.docType')}</InputLabel>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2.5, mb: 3 }}>
+        {kpis.map((kpi) => (
+          <Card key={kpi.key} elevation={0} sx={mvsKpiCardSx}>
+            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                {kpi.label}
+              </Typography>
+              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: kpi.color }}>
+                {loading ? '…' : kpi.value}
+              </Typography>
+            </CardContent>
+          </Card>
+        ))}
+      </Box>
+
+      <Alert severity="info" sx={{ mb: 2 }}>
+        {t('autoVoucher.brainDisclaimer')}
+      </Alert>
+
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 0 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', md: 'row' },
+            flexWrap: 'wrap',
+            alignItems: { xs: 'stretch', md: 'center' },
+            justifyContent: { md: 'space-between' },
+            gap: { xs: 1.25, md: 1 },
+            px: { xs: 2, sm: 2.5 },
+            py: 1.5,
+            bgcolor: '#FFFFFF',
+          }}
+        >
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<BooksIcon fontSize="small" />}
+              sx={mvsBodyOutlinedBtnSx}
+              onClick={() =>
+                navigate(
+                  effectiveCompanyId
+                    ? `/accounting/books?company_id=${effectiveCompanyId}`
+                    : '/accounting/books'
+                )
+              }
+            >
+              {t('autoVoucher.booksLink')}
+            </Button>
+          </Box>
+          <Button
+            variant="contained"
+            disableElevation
+            size="small"
+            startIcon={<UploadIcon fontSize="small" />}
+            sx={mvsBodyPrimaryBtnSx}
+            onClick={handleUpload}
+            disabled={uploading || !selectedFile}
+          >
+            {uploading ? t('autoVoucher.upload.processing') : t('autoVoucher.upload.submit')}
+          </Button>
+        </Box>
+
+        <Box sx={mvsBodyFilterWrapSx}>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'minmax(0, 1.2fr) minmax(0, 1fr) auto auto auto',
+              },
+              gap: 2,
+              alignItems: 'flex-end',
+            }}
+          >
+            <FormControl size="small" fullWidth sx={filterFieldSx}>
+              <InputLabel shrink>{t('autoVoucher.upload.docType')}</InputLabel>
               <Select
                 label={t('autoVoucher.upload.docType')}
                 value={docType}
@@ -365,7 +565,22 @@ const AIAutoVoucher: React.FC = () => {
                 ))}
               </Select>
             </FormControl>
-            <Button variant="outlined" component="label">
+            <FormControl size="small" fullWidth sx={filterFieldSx}>
+              <InputLabel shrink>{t('autoVoucher.list.status')}</InputLabel>
+              <Select
+                label={t('autoVoucher.list.status')}
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(String(e.target.value))}
+              >
+                <MenuItem value="">{t('autoVoucher.list.all')}</MenuItem>
+                {AUTO_VOUCHER_STATUSES.map((value) => (
+                  <MenuItem key={value} value={value}>
+                    {statusLabel(value)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button variant="outlined" component="label" sx={{ ...mvsBodyOutlinedBtnSx, height: 40 }}>
               {t('autoVoucher.upload.selectFile')}
               <input
                 hidden
@@ -374,90 +589,145 @@ const AIAutoVoucher: React.FC = () => {
                 onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
               />
             </Button>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" sx={{ py: 1, ...cellEllipsisSx, maxWidth: 180 }}>
               {selectedFile ? selectedFile.name : t('autoVoucher.upload.noFile')}
             </Typography>
-            <Button variant="contained" onClick={handleUpload} disabled={uploading}>
-              {uploading ? t('autoVoucher.upload.processing') : t('autoVoucher.upload.submit')}
+            <Button
+              variant="outlined"
+              startIcon={<ResetIcon fontSize="small" />}
+              sx={{ ...mvsBodyOutlinedBtnSx, height: 40 }}
+              onClick={handleResetFilters}
+            >
+              {t('common.reset')}
             </Button>
           </Box>
-        </CardContent>
+
+          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', alignItems: 'center', mt: 2 }}>
+            <TextField
+              size="small"
+              label={t('autoVoucher.bridge.invoiceId')}
+              value={bridgeInvoiceId}
+              onChange={(e) => setBridgeInvoiceId(e.target.value)}
+              sx={{ width: 140, ...filterFieldSx }}
+              {...mvsOutlinedLabelProps}
+            />
+            <Button
+              variant="outlined"
+              disabled={bridgeLoading}
+              onClick={() => void handleBridgeRecommend('invoice')}
+              sx={mvsBodyOutlinedBtnSx}
+            >
+              {t('autoVoucher.bridge.recommendInvoice')}
+            </Button>
+            <TextField
+              size="small"
+              label={t('autoVoucher.bridge.expenseId')}
+              value={bridgeExpenseId}
+              onChange={(e) => setBridgeExpenseId(e.target.value)}
+              sx={{ width: 140, ...filterFieldSx }}
+              {...mvsOutlinedLabelProps}
+            />
+            <Button
+              variant="outlined"
+              disabled={bridgeLoading}
+              onClick={() => void handleBridgeRecommend('expense')}
+              sx={mvsBodyOutlinedBtnSx}
+            >
+              {t('autoVoucher.bridge.recommendExpense')}
+            </Button>
+            <TextField
+              size="small"
+              placeholder={t('autoVoucher.ask.placeholder')}
+              value={askQuestion}
+              onChange={(e) => setAskQuestion(e.target.value)}
+              sx={{ flex: '1 1 200px', minWidth: 200, ...filterFieldSx }}
+            />
+            <Button variant="contained" disableElevation disabled={askLoading} onClick={() => void handleAsk()} sx={mvsBodyPrimaryBtnSx}>
+              {t('autoVoucher.ask.submit')}
+            </Button>
+          </Box>
+          {bridgePreview && (
+            <Alert severity="success" sx={{ mt: 1.5 }} onClose={() => setBridgePreview(null)}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {bridgePreview.debitLedger?.accountName || '—'} ← Dr / Cr →{' '}
+                {bridgePreview.creditLedger?.accountName || '—'} ·{' '}
+                {t('autoVoucher.list.columns.confidence')}: {bridgePreview.confidenceScore ?? '—'}
+              </Typography>
+            </Alert>
+          )}
+          {askAnswer && (
+            <Alert severity="info" sx={{ mt: 1.5, whiteSpace: 'pre-wrap' }} onClose={() => setAskAnswer('')}>
+              {askAnswer}
+            </Alert>
+          )}
+        </Box>
       </Card>
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.1fr 1fr' }, gap: 2 }}>
-        <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1.5, gap: 1.5 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                {t('autoVoucher.list.title')}
-              </Typography>
-              <FormControl size="small" sx={{ minWidth: 180 }}>
-                <InputLabel>{t('autoVoucher.list.status')}</InputLabel>
-                <Select
-                  label={t('autoVoucher.list.status')}
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(String(e.target.value))}
-                >
-                  <MenuItem value="">{t('autoVoucher.list.all')}</MenuItem>
-                  {AUTO_VOUCHER_STATUSES.map((value) => (
-                    <MenuItem key={value} value={value}>
-                      {statusLabel(value)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Box>
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>{t('autoVoucher.list.columns.no')}</TableCell>
-                    <TableCell>{t('autoVoucher.list.columns.voucher')}</TableCell>
-                    <TableCell>{t('autoVoucher.list.columns.status')}</TableCell>
-                    <TableCell>{t('autoVoucher.list.columns.confidence')}</TableCell>
-                    <TableCell align="right">{t('autoVoucher.list.columns.amount')}</TableCell>
+      <Box sx={{ ...mvsBodyListZoneSx, display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1.05fr 1fr' }, gap: 2.5 }}>
+        {loading ? (
+          <Box sx={listStateBoxSx}>
+            <CircularProgress size={36} />
+            <Typography variant="body2" color="text.secondary">
+              {t('autoVoucher.list.loading')}
+            </Typography>
+          </Box>
+        ) : rows.length === 0 ? (
+          <Box sx={listStateBoxSx}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+              {t('autoVoucher.list.empty')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {t('autoVoucher.upload.title')}
+            </Typography>
+          </Box>
+        ) : (
+          <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+            <Table size="small" sx={tableSx}>
+              <TableHead sx={mvsTableHeadHighlightSx}>
+                <TableRow>
+                  <TableCell width="8%">{t('autoVoucher.list.columns.no')}</TableCell>
+                  <TableCell width="36%">{t('autoVoucher.list.columns.voucher')}</TableCell>
+                  <TableCell width="20%">{t('autoVoucher.list.columns.status')}</TableCell>
+                  <TableCell width="16%">{t('autoVoucher.list.columns.confidence')}</TableCell>
+                  <TableCell width="20%" align="right">
+                    {t('autoVoucher.list.columns.amount')}
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody sx={mvsTableBodyRowSx}>
+                {rows.map((row, index) => (
+                  <TableRow
+                    key={row.id}
+                    hover
+                    onClick={() => loadDetail(row.id)}
+                    selected={selected?.id === row.id}
+                    sx={{ cursor: 'pointer' }}
+                  >
+                    <TableCell sx={cellEllipsisSx}>{index + 1}</TableCell>
+                    <TableCell sx={cellEllipsisSx}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
+                        {row.voucher_code}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" noWrap display="block">
+                        {row.source_file_name}
+                      </Typography>
+                    </TableCell>
+                    <TableCell sx={cellEllipsisSx}>
+                      <Chip size="small" label={statusLabel(row.status)} />
+                    </TableCell>
+                    <TableCell sx={cellEllipsisSx}>{Number(row.confidence_score || 0).toFixed(1)}%</TableCell>
+                    <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                      {Number(row.total_debit || 0).toLocaleString()}
+                    </TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {rows.map((row, index) => (
-                    <TableRow
-                      key={row.id}
-                      hover
-                      onClick={() => loadDetail(row.id)}
-                      sx={{ cursor: 'pointer' }}
-                      selected={selected?.id === row.id}
-                    >
-                      <TableCell>{index + 1}</TableCell>
-                      <TableCell>
-                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                          {row.voucher_code}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {row.source_file_name}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip size="small" label={statusLabel(row.status)} />
-                      </TableCell>
-                      <TableCell>{Number(row.confidence_score || 0).toFixed(1)}%</TableCell>
-                      <TableCell align="right">{Number(row.total_debit || 0).toLocaleString()}</TableCell>
-                    </TableRow>
-                  ))}
-                  {rows.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={5} align="center">
-                        {loading ? t('autoVoucher.list.loading') : t('autoVoucher.list.empty')}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </CardContent>
-        </Card>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
 
-        <Card elevation={0} sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
-          <CardContent>
+        <Card elevation={0} sx={mvsBodyCardSx}>
+          <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2 }}>
             <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1.5 }}>
               {t('autoVoucher.review.title')}
             </Typography>
@@ -481,6 +751,53 @@ const AIAutoVoucher: React.FC = () => {
                 <Typography variant="body2" color="text.secondary">
                   {t('autoVoucher.review.rule')}: {selected.ai_analysis?.ruleName || '-'}
                 </Typography>
+                {selected.ai_analysis?.needsReview && (
+                  <Alert severity="info" sx={{ py: 0.5 }}>
+                    Needs review — Accounting Brain flagged this recommendation before any posting.
+                  </Alert>
+                )}
+                {!linesResolvedStrict && selected.status !== 'posted' && (
+                  <Alert severity="error" sx={{ py: 0.5 }}>
+                    {t('autoVoucher.errors.unresolvedLedgers')}
+                  </Alert>
+                )}
+                {Array.isArray(selected.ai_analysis?.appliedRules) && selected.ai_analysis!.appliedRules!.length > 0 && (
+                  <Box
+                    sx={{
+                      p: 1.25,
+                      borderRadius: 1.5,
+                      border: '1px solid #C5CED9',
+                      bgcolor: alpha(theme.palette.primary.main, 0.04),
+                    }}
+                  >
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.75 }}>
+                      Applied rules (priority order)
+                    </Typography>
+                    {selected.ai_analysis!.appliedRules!.map((rule, idx) => (
+                      <Typography key={`${rule.code}-${idx}`} variant="caption" display="block" sx={{ mb: 0.35 }}>
+                        [{rule.layer || 'rule'}] {rule.code || '-'} — {rule.reason || '-'}
+                      </Typography>
+                    ))}
+                  </Box>
+                )}
+                {Array.isArray(selected.ai_analysis?.historicalMatches) &&
+                  selected.ai_analysis!.historicalMatches!.length > 0 && (
+                    <Box sx={{ p: 1.25, borderRadius: 1.5, border: '1px solid #C5CED9' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.75 }}>
+                        Historical matches
+                      </Typography>
+                      {selected.ai_analysis!.historicalMatches!.map((m, idx) => (
+                        <Typography key={`${m.code}-${idx}`} variant="caption" display="block">
+                          {m.code || m.source || '-'} · {m.counterparty || '-'} · {m.similarity || '-'}
+                        </Typography>
+                      ))}
+                    </Box>
+                  )}
+                {selected.ai_analysis?.disclaimer && (
+                  <Typography variant="caption" color="text.secondary">
+                    {selected.ai_analysis.disclaimer}
+                  </Typography>
+                )}
                 <Typography variant="body2" color="text.secondary">
                   {t('autoVoucher.review.ocrAccuracy')}:{' '}
                   {selected.ocr_data?.ocrAccuracy ? `${Math.round(selected.ocr_data.ocrAccuracy * 100)}%` : '-'}
@@ -498,18 +815,24 @@ const AIAutoVoucher: React.FC = () => {
                   label={t('autoVoucher.review.transactionDate')}
                   value={form.transactionDate}
                   onChange={(e) => setForm((prev) => ({ ...prev, transactionDate: e.target.value }))}
+                  sx={filterFieldSx}
+                  {...mvsOutlinedLabelProps}
                 />
                 <TextField
                   size="small"
                   label={t('autoVoucher.review.counterparty')}
                   value={form.counterpartyName}
                   onChange={(e) => setForm((prev) => ({ ...prev, counterpartyName: e.target.value }))}
+                  sx={filterFieldSx}
+                  {...mvsOutlinedLabelProps}
                 />
                 <TextField
                   size="small"
                   label={t('autoVoucher.review.narration')}
                   value={form.narration}
                   onChange={(e) => setForm((prev) => ({ ...prev, narration: e.target.value }))}
+                  sx={filterFieldSx}
+                  {...mvsOutlinedLabelProps}
                 />
                 <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                   {t('autoVoucher.review.linesTitle')}
@@ -538,15 +861,22 @@ const AIAutoVoucher: React.FC = () => {
                 </Box>
 
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  <Button variant="outlined" onClick={handleSave} disabled={saving}>
+                  <Button variant="outlined" onClick={handleSave} disabled={saving} sx={mvsBodyOutlinedBtnSx}>
                     {t('autoVoucher.review.save')}
                   </Button>
                   {reviewAllowed && (
                     <Button
                       variant="contained"
                       color="success"
+                      disableElevation
                       onClick={handleApprove}
-                      disabled={saving || selected.status === 'approved' || selected.status === 'posted'}
+                      disabled={
+                        saving ||
+                        !linesResolvedStrict ||
+                        selected.status === 'approved' ||
+                        selected.status === 'posted'
+                      }
+                      sx={mvsBodyPrimaryBtnSx}
                     >
                       {t('autoVoucher.review.approve')}
                     </Button>
@@ -555,27 +885,42 @@ const AIAutoVoucher: React.FC = () => {
                     <Button
                       variant="contained"
                       color="secondary"
+                      disableElevation
                       onClick={handlePost}
-                      disabled={saving || selected.status !== 'approved'}
+                      disabled={saving || !linesResolvedStrict || selected.status !== 'approved'}
+                      sx={mvsBodyPrimaryBtnSx}
                     >
                       {t('autoVoucher.review.post')}
                     </Button>
                   )}
                   {selected.status === 'posted' && (
-                    <Button variant="outlined" onClick={() => navigate(
-                      effectiveCompanyId
-                        ? `/accounting/books?tab=ledger&company_id=${effectiveCompanyId}`
-                        : '/accounting/books?tab=ledger'
-                    )}>
+                    <Button
+                      variant="outlined"
+                      sx={mvsBodyOutlinedBtnSx}
+                      onClick={() =>
+                        navigate(
+                          effectiveCompanyId
+                            ? `/accounting/books?tab=ledger&company_id=${effectiveCompanyId}`
+                            : '/accounting/books?tab=ledger'
+                        )
+                      }
+                    >
                       {t('autoVoucher.review.viewLedger')}
                     </Button>
                   )}
                   {reviewAllowed && (
                     <Button
                       variant="outlined"
-                      color="error"
                       onClick={() => setRejectOpen(true)}
                       disabled={saving || selected.status === 'posted'}
+                      sx={{
+                        ...mvsBodyOutlinedBtnSx,
+                        '&:hover': {
+                          color: 'error.main',
+                          borderColor: alpha(theme.palette.error.main, 0.4),
+                          bgcolor: alpha(theme.palette.error.main, 0.08),
+                        },
+                      }}
                     >
                       {t('autoVoucher.review.reject')}
                     </Button>
@@ -585,7 +930,7 @@ const AIAutoVoucher: React.FC = () => {
                 <Typography variant="subtitle2" sx={{ mt: 1, fontWeight: 700 }}>
                   {t('autoVoucher.review.auditLog')}
                 </Typography>
-                <Box sx={{ maxHeight: 180, overflowY: 'auto', border: '1px solid', borderColor: 'divider', borderRadius: 1.5, p: 1 }}>
+                <Box sx={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #C5CED9', borderRadius: 1.5, p: 1 }}>
                   {(selected.auditLogs || []).length === 0 && (
                     <Typography variant="caption" color="text.secondary">
                       {t('autoVoucher.review.noLog')}
@@ -595,15 +940,15 @@ const AIAutoVoucher: React.FC = () => {
                     const ts = log.created_at || log.createdAt;
                     const label = ts ? new Date(ts).toLocaleString() : '-';
                     return (
-                    <Typography key={log.id} variant="caption" display="block" sx={{ py: 0.25 }}>
-                      {log.action} - {label}
-                    </Typography>
+                      <Typography key={log.id} variant="caption" display="block" sx={{ py: 0.25 }}>
+                        {log.action} - {label}
+                      </Typography>
                     );
                   })}
                 </Box>
               </Box>
             )}
-          </CardContent>
+          </Box>
         </Card>
       </Box>
 
@@ -618,12 +963,14 @@ const AIAutoVoucher: React.FC = () => {
             label={t('autoVoucher.rejectDialog.reason')}
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
-            sx={{ mt: 1 }}
+            sx={{ mt: 1, ...mvsSearchFieldSx }}
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRejectOpen(false)}>{t('common.cancel')}</Button>
-          <Button color="error" variant="contained" onClick={handleReject} disabled={saving}>
+          <Button onClick={() => setRejectOpen(false)} sx={mvsBodyOutlinedBtnSx}>
+            {t('common.cancel')}
+          </Button>
+          <Button color="error" variant="contained" disableElevation onClick={handleReject} disabled={saving}>
             {t('autoVoucher.rejectDialog.confirm')}
           </Button>
         </DialogActions>

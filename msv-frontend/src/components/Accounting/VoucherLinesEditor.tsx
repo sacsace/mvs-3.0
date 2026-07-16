@@ -131,7 +131,7 @@ const VoucherLinesEditor: React.FC<Props> = ({
                       onChange={(_, account) =>
                         updateLine(index, {
                           accountId: account?.id,
-                          accountName: account?.name || '',
+                          accountName: account ? (account.name_en || account.name || '') : '',
                         })
                       }
                       getOptionLabel={(o) => getGlAccountLabel(o, i18n.language)}

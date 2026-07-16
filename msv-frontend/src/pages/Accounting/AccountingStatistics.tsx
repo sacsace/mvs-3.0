@@ -446,7 +446,6 @@ const AccountingStatistics: React.FC = () => {
   };
 
   const handleDownloadReport = async () => {
-    const XLSX = await import('xlsx');
     const periodLabelMap: Record<string, string> = {
       day: '일간',
       week: '주간',
@@ -532,53 +531,72 @@ const AccountingStatistics: React.FC = () => {
       지급상태: row.payment_status,
     }));
 
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryRows), '요약');
-    XLSX.utils.book_append_sheet(
+    const ExcelJS = (await import('exceljs')).default;
+    const { addSheetFromObjects, downloadExcelWorkbook } = await import('../../utils/excelExportStyle');
+    const workbook = new ExcelJS.Workbook();
+    addSheetFromObjects(workbook, '요약', summaryRows);
+    addSheetFromObjects(
       workbook,
-      XLSX.utils.json_to_sheet(trendRows.length > 0 ? trendRows : [{ 기간: '-', 수익: 0, 비용: 0, 순이익: 0, 예산: 0 }]),
-      '추이'
+      '추이',
+      trendRows.length > 0 ? trendRows : [{ 기간: '-', 수익: 0, 비용: 0, 순이익: 0, 예산: 0 }]
     );
-    XLSX.utils.book_append_sheet(
+    addSheetFromObjects(
       workbook,
-      XLSX.utils.json_to_sheet(invoiceRows.length > 0 ? invoiceRows : [{ 상태: '-', 건수: 0, 금액: 0 }]),
-      '인보이스현황'
+      '인보이스현황',
+      invoiceRows.length > 0 ? invoiceRows : [{ 상태: '-', 건수: 0, 금액: 0 }]
     );
-    XLSX.utils.book_append_sheet(
+    addSheetFromObjects(
       workbook,
-      XLSX.utils.json_to_sheet(
-        revenueCategoryRows.length > 0 ? revenueCategoryRows : [{ 카테고리: '-', 금액: 0, 비중: '0%' }]
-      ),
-      '수익카테고리'
+      '수익카테고리',
+      revenueCategoryRows.length > 0 ? revenueCategoryRows : [{ 카테고리: '-', 금액: 0, 비중: '0%' }]
     );
-    XLSX.utils.book_append_sheet(
+    addSheetFromObjects(
       workbook,
-      XLSX.utils.json_to_sheet(
-        expenseCategoryRows.length > 0 ? expenseCategoryRows : [{ 카테고리: '-', 금액: 0, 비중: '0%' }]
-      ),
-      '비용카테고리'
+      '비용카테고리',
+      expenseCategoryRows.length > 0 ? expenseCategoryRows : [{ 카테고리: '-', 금액: 0, 비중: '0%' }]
     );
-    XLSX.utils.book_append_sheet(
+    addSheetFromObjects(
       workbook,
-      XLSX.utils.json_to_sheet(
-        salesRows.length > 0
-          ? [...salesRows, { 문서번호: '합계', 일자: '', 거래처: '', 유형: '', 공급가액: '', 세액: '', 합계: salesTotal, 결제상태: '' }]
-          : [{ 문서번호: '-', 일자: '-', 거래처: '-', 유형: '-', 공급가액: 0, 세액: 0, 합계: 0, 결제상태: '-' }]
-      ),
-      '매출통계'
+      '매출통계',
+      salesRows.length > 0
+        ? [...salesRows, { 문서번호: '합계', 일자: '', 거래처: '', 유형: '', 공급가액: '', 세액: '', 합계: salesTotal, 결제상태: '' }]
+        : [{ 문서번호: '-', 일자: '-', 거래처: '-', 유형: '-', 공급가액: 0, 세액: 0, 합계: 0, 결제상태: '-' }]
     );
-    XLSX.utils.book_append_sheet(
+    addSheetFromObjects(
       workbook,
-      XLSX.utils.json_to_sheet(
-        purchaseRows.length > 0
-          ? [...purchaseRows, { 문서번호: '합계', 일자: '', 제목: '', 신청자: '', 부서: '', 용도: '', 금액: purchaseTotal, 상태: '', 지급상태: '' }]
-          : [{ 문서번호: '-', 일자: '-', 제목: '-', 신청자: '-', 부서: '-', 용도: '-', 금액: 0, 상태: '-', 지급상태: '-' }]
-      ),
-      '매입통계'
+      '매입통계',
+      purchaseRows.length > 0
+        ? [
+            ...purchaseRows,
+            {
+              문서번호: '합계',
+              일자: '',
+              제목: '',
+              신청자: '',
+              부서: '',
+              용도: '',
+              금액: purchaseTotal,
+              상태: '',
+              지급상태: '',
+            },
+          ]
+        : [
+            {
+              문서번호: '-',
+              일자: '-',
+              제목: '-',
+              신청자: '-',
+              부서: '-',
+              용도: '-',
+              금액: 0,
+              상태: '-',
+              지급상태: '-',
+            },
+          ]
     );
 
     const dateToken = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    XLSX.writeFile(workbook, `회계통계_보고서_${dateToken}.xlsx`);
+    await downloadExcelWorkbook(workbook, `회계통계_보고서_${dateToken}.xlsx`);
   };
 
   return (

@@ -44,6 +44,7 @@ import {
   RequestQuote,
   MenuBook,
   Hotel,
+  UploadFile,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { alpha } from '@mui/material/styles';
@@ -62,6 +63,8 @@ interface SidebarProps {
   isCollapsed?: boolean;
   collapsedWidth?: number;
   onCollapseChange?: (collapsed: boolean) => void;
+  /** 헤더 버튼으로 아이콘만 보이게 접기 */
+  iconOnly?: boolean;
 }
 
 /** AppBar Toolbar 높이와 동일 */
@@ -141,7 +144,8 @@ const Sidebar: React.FC<SidebarProps> = ({
   autoCollapseEnabled = false,
   isCollapsed = false,
   collapsedWidth = 72,
-  onCollapseChange
+  onCollapseChange,
+  iconOnly = false,
 }) => {
   const [sidebarWidth, setSidebarWidth] = useState<number>(width);
   const [isResizing, setIsResizing] = useState(false);
@@ -149,8 +153,10 @@ const Sidebar: React.FC<SidebarProps> = ({
   const startXRef = useRef<number>(0);
   const startWidthRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
-  const isExpandedVisual = isMobile || !autoCollapseEnabled || !isCollapsed || peekOpen;
-  const isCompact = !isMobile && autoCollapseEnabled && !isExpandedVisual;
+  const isExpandedVisual =
+    isMobile || (iconOnly ? peekOpen : !autoCollapseEnabled || !isCollapsed || peekOpen);
+  const isCompact =
+    !isMobile && (iconOnly ? !peekOpen : autoCollapseEnabled && !isExpandedVisual);
   const effectiveWidth = isExpandedVisual ? sidebarWidth : collapsedWidth;
   const leaveTimerRef = useRef<number | null>(null);
   const peekCloseTimerRef = useRef<number | null>(null);
@@ -239,10 +245,14 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, []);
 
   useEffect(() => {
-    if (!autoCollapseEnabled) {
+    if (!autoCollapseEnabled && !iconOnly) {
       setPeekOpen(false);
     }
-  }, [autoCollapseEnabled]);
+  }, [autoCollapseEnabled, iconOnly]);
+
+  useEffect(() => {
+    setPeekOpen(false);
+  }, [iconOnly]);
 
   const schedulePeekClose = useCallback(() => {
     if (peekCloseTimerRef.current) {
@@ -255,7 +265,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, []);
 
   const handleSidebarMouseEnter = useCallback(() => {
-    if (!autoCollapseEnabled) return;
+    if (!iconOnly && !autoCollapseEnabled) return;
     if (leaveTimerRef.current) {
       window.clearTimeout(leaveTimerRef.current);
       leaveTimerRef.current = null;
@@ -265,22 +275,24 @@ const Sidebar: React.FC<SidebarProps> = ({
       peekCloseTimerRef.current = null;
     }
     setPeekOpen(true);
-    if (isCollapsed) {
+    if (!iconOnly && isCollapsed) {
       onCollapseChange?.(false);
     }
-  }, [autoCollapseEnabled, isCollapsed, onCollapseChange]);
+  }, [autoCollapseEnabled, iconOnly, isCollapsed, onCollapseChange]);
 
   const handleSidebarMouseLeave = useCallback(() => {
-    if (!autoCollapseEnabled) return;
+    if (!iconOnly && !autoCollapseEnabled) return;
     if (leaveTimerRef.current) {
       window.clearTimeout(leaveTimerRef.current);
     }
     leaveTimerRef.current = window.setTimeout(() => {
-      onCollapseChange?.(true);
+      if (!iconOnly) {
+        onCollapseChange?.(true);
+      }
       schedulePeekClose();
       leaveTimerRef.current = null;
     }, SIDEBAR_HOVER_CLOSE_DELAY_MS);
-  }, [autoCollapseEnabled, onCollapseChange, schedulePeekClose]);
+  }, [autoCollapseEnabled, iconOnly, onCollapseChange, schedulePeekClose]);
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useStore();
@@ -458,6 +470,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (normalized.includes('/inventory/report')) return <ReceiptLong />;
 
     if (normalized.includes('/accounting/books')) return <MenuBook />;
+    if (normalized.includes('/accounting/tally-import')) return <UploadFile />;
     if (normalized.includes('/accounting/chart-of-accounts')) return <AccountBalance />;
     if (normalized.includes('/accounting/vouchers')) return <ReceiptLong />;
     if (normalized.includes('/accounting/ledger')) return <Description />;
@@ -468,7 +481,6 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (normalized.includes('/accounting/eway-bill')) return <LocalShipping />;
     if (normalized.includes('/accounting/auto-voucher')) return <ReceiptLong />;
     if (normalized.includes('/accounting/expense')) return <AttachMoney />;
-    if (normalized.includes('/accounting/budget')) return <AttachMoney />;
     if (normalized.includes('/accounting/assets')) return <AccountBalance />;
     if (normalized.includes('/accounting/statistics')) return <Assessment />;
 
@@ -591,6 +603,13 @@ const Sidebar: React.FC<SidebarProps> = ({
   // 메뉴 클릭 처리
   const handleMenuClick = (menu: any) => {
     if (menu.children && menu.children.length > 0) {
+      if (isCompact) {
+        setPeekOpen(true);
+        const newExpanded = new Set(expandedMenus);
+        newExpanded.add(menu.id);
+        setExpandedMenus(newExpanded);
+        return;
+      }
       handleMenuToggle(menu.id);
     } else if (menu.route) {
       navigate(menu.route);
@@ -741,11 +760,11 @@ const Sidebar: React.FC<SidebarProps> = ({
     minHeight: SIDEBAR_HEIGHT_CALC,
     backgroundColor: '#F7F8FA',
     borderRight: '1px solid #C5CED9',
-    zIndex: autoCollapseEnabled && peekOpen && isCollapsed ? 1300 : 1200,
+    zIndex: (iconOnly || autoCollapseEnabled) && peekOpen && (iconOnly || isCollapsed) ? 1300 : 1200,
     willChange: 'width, box-shadow',
     overflowX: 'hidden' as const,
     boxShadow:
-      autoCollapseEnabled && peekOpen
+      (iconOnly || autoCollapseEnabled) && peekOpen
         ? '8px 0 28px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.04)'
         : 'none',
     transition: isResizing
@@ -933,14 +952,14 @@ const Sidebar: React.FC<SidebarProps> = ({
         position: 'relative',
         width:
           effectiveWidth +
-          (autoCollapseEnabled && isCollapsed && !peekOpen ? 12 : 0),
+          ((iconOnly || autoCollapseEnabled) && (iconOnly || isCollapsed) && !peekOpen ? 12 : 0),
         flexShrink: 0,
         transition: isResizing
           ? 'none'
           : `width ${SIDEBAR_WIDTH_TRANSITION_MS}ms ${SIDEBAR_WIDTH_EASING}`,
       }}
-      onMouseEnter={handleSidebarMouseEnter}
-      onMouseLeave={handleSidebarMouseLeave}
+      onMouseEnter={iconOnly || autoCollapseEnabled ? handleSidebarMouseEnter : undefined}
+      onMouseLeave={iconOnly || autoCollapseEnabled ? handleSidebarMouseLeave : undefined}
     >
       <Drawer
         variant="permanent"

@@ -305,6 +305,7 @@ app.use('*', (req, res) => {
 // 에러 핸들러
 app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const isMulterError = err?.name === 'MulterError';
+  const isFileTooLarge = isMulterError && err?.code === 'LIMIT_FILE_SIZE';
   const isFileValidationError = typeof err?.message === 'string' && err.message.includes('허용되지 않은 파일');
   const isPayloadTooLarge =
     err?.type === 'entity.too.large' ||
@@ -312,14 +313,20 @@ app.use((err: any, req: express.Request, res: express.Response, _next: express.N
     err?.statusCode === 413 ||
     err?.name === 'PayloadTooLargeError' ||
     (typeof err?.message === 'string' && err.message.toLowerCase().includes('request entity too large'));
-  const statusCode = isPayloadTooLarge ? 413 : (isMulterError || isFileValidationError ? 400 : 500);
-  const message = isMulterError
-    ? '업로드 파일 처리 중 오류가 발생했습니다.'
-    : isFileValidationError
-      ? err.message
-      : isPayloadTooLarge
-        ? '요청 데이터가 너무 큽니다. 이미지 크기를 줄이거나 압축 후 다시 시도해주세요.'
-        : 'Internal server error';
+  const statusCode = isPayloadTooLarge || isFileTooLarge
+    ? 413
+    : isMulterError || isFileValidationError
+      ? 400
+      : 500;
+  const message = isFileTooLarge
+    ? `업로드 파일이 너무 큽니다. Tally Export 최대 용량은 ${process.env.TALLY_IMPORT_MAX_MB || 2048}MB입니다. (.env의 TALLY_IMPORT_MAX_MB로 변경 가능)`
+    : isMulterError
+      ? '업로드 파일 처리 중 오류가 발생했습니다.'
+      : isFileValidationError
+        ? err.message
+        : isPayloadTooLarge
+          ? '요청 데이터가 너무 큽니다. 이미지 크기를 줄이거나 압축 후 다시 시도해주세요.'
+          : 'Internal server error';
 
   console.error('Error:', {
     message: err?.message,

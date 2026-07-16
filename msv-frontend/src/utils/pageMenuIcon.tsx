@@ -107,7 +107,6 @@ export function getPageIconByRoute(route: string): React.ReactElement | null {
   if (normalized.includes('/accounting/e-invoice')) return <ReceiptLong />;
   if (normalized.includes('/accounting/eway')) return <LocalShipping />;
   if (normalized.includes('/accounting/expense')) return <AttachMoney />;
-  if (normalized.includes('/accounting/budget')) return <AttachMoney />;
   if (normalized.includes('/accounting/assets')) return <AccountBalance />;
   if (normalized.includes('/accounting/statistics')) return <Assessment />;
   if (normalized.includes('/accounting')) return <AttachMoney />;

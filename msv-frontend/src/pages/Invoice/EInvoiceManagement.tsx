@@ -30,7 +30,10 @@ import {
   Tabs,
   Tab,
   InputAdornment,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
   mvsPageRootSx,
@@ -46,6 +49,9 @@ import {
   mvsTableScrollSx,
   mvsTableHeadHighlightSx,
   mvsTableBodyRowSx,
+  mvsSearchZoneSx,
+  mvsOutlinedLabelProps,
+  mvsBodyToolbarSx,
 } from '../../theme/mvsLayout';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import {
@@ -57,7 +63,7 @@ import {
   Print as PrintIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
-  FilterList as FilterListIcon,
+  RestartAlt as RestartAltIcon,
   Search as SearchIcon,
   QrCode as QrCodeIcon,
   LocalShipping as LocalShippingIcon,
@@ -90,10 +96,92 @@ function TabPanel(props: TabPanelProps) {
       aria-labelledby={`simple-tab-${index}`}
       {...other}
     >
-      {value === index && <Box sx={{ pt: 2 }}>{children}</Box>}
+      {value === index && <Box sx={{ pt: { xs: 1.5, sm: 2 } }}>{children}</Box>}
     </div>
   );
 }
+
+const eInvoiceMainTabsSx = {
+  minHeight: 44,
+  px: { xs: 1, sm: 1.5 },
+  bgcolor: '#FFFFFF',
+  borderBottom: '1px solid #E8EDF3',
+  '& .MuiTabs-indicator': {
+    height: 3,
+    borderRadius: '3px 3px 0 0',
+  },
+  '& .MuiTab-root': {
+    textTransform: 'none',
+    fontWeight: 500,
+    fontSize: '0.8125rem',
+    minHeight: 44,
+    py: 1,
+    px: { xs: 1.25, sm: 2 },
+    letterSpacing: '-0.01em',
+    color: 'text.secondary',
+    transition: 'color 0.2s ease',
+  },
+  '& .MuiTab-root.Mui-selected': {
+    color: 'primary.main',
+    fontWeight: 700,
+  },
+} as const;
+
+const eInvoiceSubTabSx = {
+  bgcolor: '#F1F5F9',
+  borderRadius: '10px',
+  p: 0.35,
+  border: '1px solid #D8E0EA',
+  '& .MuiToggleButtonGroup-grouped': {
+    border: 0,
+    mx: 0.2,
+    borderRadius: '8px !important',
+    px: { xs: 1.25, sm: 1.75 },
+    py: 0.55,
+    fontSize: '0.8125rem',
+    fontWeight: 600,
+    textTransform: 'none',
+    letterSpacing: '-0.01em',
+    color: 'text.secondary',
+    lineHeight: 1.35,
+    '&.Mui-selected': {
+      bgcolor: '#FFFFFF',
+      color: 'primary.main',
+      boxShadow: '0 1px 4px rgba(15, 23, 42, 0.08)',
+      '&:hover': {
+        bgcolor: '#FFFFFF',
+      },
+    },
+  },
+} as const;
+
+const eInvoiceChipSx = {
+  height: 22,
+  fontSize: '0.6875rem',
+  fontWeight: 600,
+  '& .MuiChip-label': { px: 0.75 },
+} as const;
+
+const eInvoiceActionBarSx = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 0.25,
+  flexWrap: 'wrap',
+  p: 0.35,
+  borderRadius: '10px',
+  bgcolor: '#F8FAFC',
+  border: '1px solid #E2E8F0',
+  '& .MuiIconButton-root': {
+    width: 28,
+    height: 28,
+    borderRadius: '8px',
+    color: 'text.secondary',
+    '&:hover': {
+      bgcolor: alpha('#0F172A', 0.06),
+      color: 'primary.main',
+    },
+  },
+} as const;
 
 const eInvoiceFilterFieldSx = {
   ...(mvsSearchFieldSx as Record<string, unknown>),
@@ -692,6 +780,7 @@ const EInvoiceManagement: React.FC = () => {
 
   const listStateBoxSx = {
     ...mvsBodyListTableSx,
+    borderRadius: 0,
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -700,7 +789,124 @@ const EInvoiceManagement: React.FC = () => {
     py: { xs: 6, sm: 8 },
     px: 3,
     gap: 1.5,
+    '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:first-of-type': {
+      borderTopLeftRadius: 0,
+    },
+    '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:last-of-type': {
+      borderTopRightRadius: 0,
+    },
+    '& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-body:first-of-type': {
+      borderBottomLeftRadius: 0,
+    },
+    '& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-body:last-of-type': {
+      borderBottomRightRadius: 0,
+    },
   } as const;
+
+  const eInvoiceListTableSx = {
+    width: '100%',
+    tableLayout: 'fixed' as const,
+    borderCollapse: 'collapse',
+    bgcolor: 'transparent',
+    '& .MuiTableCell-root': {
+      borderLeft: 'none',
+      borderRight: 'none',
+      borderTop: 'none',
+    },
+  } as const;
+
+  const eInvoiceListContainerSx = {
+    ...mvsBodyListTableSx,
+    overflow: 'hidden',
+    overflowX: 'hidden',
+    borderRadius: 0,
+    '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:first-of-type': {
+      borderTopLeftRadius: 0,
+    },
+    '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:last-of-type': {
+      borderTopRightRadius: 0,
+    },
+    '& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-body:first-of-type': {
+      borderBottomLeftRadius: 0,
+    },
+    '& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-body:last-of-type': {
+      borderBottomRightRadius: 0,
+    },
+  } as const;
+
+  const eInvoiceCellBaseSx = {
+    fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+    py: { xs: 0.85, sm: 1 },
+    px: { xs: 0.75, sm: 1.25 },
+    verticalAlign: 'middle' as const,
+    lineHeight: 1.45,
+  } as const;
+
+  const eInvoiceTableHeadCellSx = {
+    ...eInvoiceCellBaseSx,
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    color: '#475569',
+    letterSpacing: '0.01em',
+    whiteSpace: 'nowrap' as const,
+  } as const;
+
+  const eInvoiceCellEllipsisSx = {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    maxWidth: 0,
+  } as const;
+
+  const renderEllipsisText = (text: string, fontWeight?: number, color?: string) => (
+    <Tooltip title={text} placement="top-start" enterDelay={400}>
+      <Box
+        component="span"
+        sx={{
+          display: 'block',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          fontWeight,
+          color,
+          minWidth: 0,
+        }}
+      >
+        {text}
+      </Box>
+    </Tooltip>
+  );
+
+  const eInvoiceListColumns = [
+    { key: 'invoiceNumber', width: '12%', ellipsis: true },
+    { key: 'irn', width: '10%', ellipsis: true },
+    { key: 'irp', width: '7%', ellipsis: false },
+    { key: 'buyer', width: '18%', ellipsis: true },
+    { key: 'transactionType', width: '6%', ellipsis: false },
+    { key: 'amount', width: '8%', ellipsis: true },
+    { key: 'status', width: '12%', ellipsis: false },
+    { key: 'issueDate', width: '8%', ellipsis: false },
+    { key: 'ewayBill', width: '7%', ellipsis: false },
+    { key: 'actions', width: '12%', ellipsis: false },
+  ] as const;
+
+  const proformaListColumns = [
+    { key: 'invoiceNumber', width: '22%', ellipsis: true },
+    { key: 'customer', width: '34%', ellipsis: true },
+    { key: 'amount', width: '14%', ellipsis: true },
+    { key: 'status', width: '12%', ellipsis: false },
+    { key: 'actions', width: '18%', ellipsis: false },
+  ] as const;
+
+  const listKpiStats = useMemo(
+    () => ({
+      total: einvoices.length,
+      draft: einvoices.filter((e) => e.status === 'draft').length,
+      irnReady: einvoices.filter((e) => e.irpStatus === 'irn_generated').length,
+      pending: einvoices.filter((e) => e.approvalStatus === 'pending_approval').length,
+    }),
+    [einvoices]
+  );
 
   return (
     <Box sx={{ ...mvsPageRootSx }}>
@@ -715,32 +921,14 @@ const EInvoiceManagement: React.FC = () => {
         </Alert>
       )}
 
-      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: { xs: 2, sm: 2.5 }, overflow: 'hidden' }}>
         <Tabs
           value={activeTab}
           onChange={handleTabChange}
-          sx={{
-            minHeight: 40,
-            px: { xs: 1, sm: 1.5 },
-            bgcolor: '#FFFFFF',
-            '& .MuiTabs-indicator': {
-              height: 3,
-              borderRadius: '3px 3px 0 0',
-            },
-            '& .MuiTab-root': {
-              textTransform: 'none',
-              fontWeight: 500,
-              fontSize: '0.8125rem',
-              minHeight: 40,
-              py: 0.75,
-              letterSpacing: '-0.01em',
-              color: 'text.secondary',
-            },
-            '& .MuiTab-root.Mui-selected': {
-              color: 'primary.main',
-              fontWeight: 700,
-            },
-          }}
+          variant="scrollable"
+          scrollButtons="auto"
+          allowScrollButtonsMobile
+          sx={eInvoiceMainTabsSx}
         >
           <Tab label={t('eInvoiceManagement.tabs.list')} />
           <Tab label={t('eInvoiceManagement.tabs.fromProforma')} />
@@ -962,19 +1150,74 @@ const EInvoiceManagement: React.FC = () => {
               </Card>
             ) : (
               <>
-                <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+                    gap: { xs: 1.5, sm: 2 },
+                    mb: { xs: 2, sm: 2.5 },
+                  }}
+                >
+                  {[
+                    {
+                      label: t('eInvoiceManagement.analytics.totalEInvoices'),
+                      value: listKpiStats.total,
+                      color: 'primary.main',
+                    },
+                    {
+                      label: t('eInvoiceManagement.status.draft'),
+                      value: listKpiStats.draft,
+                      color: 'text.primary',
+                    },
+                    {
+                      label: t('eInvoiceManagement.columns.irn'),
+                      value: listKpiStats.irnReady,
+                      color: 'success.main',
+                    },
+                    {
+                      label: t('eInvoiceManagement.approval.tabPending'),
+                      value: listKpiStats.pending,
+                      color: 'warning.main',
+                    },
+                  ].map((item) => (
+                    <Card key={item.label} elevation={0} sx={mvsKpiCardSx}>
+                      <CardContent sx={{ py: 1.75, px: 2, '&:last-child': { pb: 1.75 } }}>
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontWeight: 600, letterSpacing: '0.02em', display: 'block' }}
+                        >
+                          {item.label}
+                        </Typography>
+                        <Typography
+                          variant="h6"
+                          sx={{ mt: 0.5, fontWeight: 700, letterSpacing: '-0.02em', color: item.color, lineHeight: 1.2 }}
+                        >
+                          {item.value.toLocaleString()}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Box>
+
+                <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: { xs: 2, sm: 2.5 }, overflow: 'hidden' }}>
                   <Box
                     sx={{
+                      ...mvsSearchZoneSx,
+                      m: 0,
+                      mb: 0,
+                      borderRadius: 0,
+                      border: 'none',
+                      borderBottom: '1px solid #C5CED9',
+                      bgcolor: '#F0F4F8',
                       px: { xs: 2, sm: 2.5 },
-                      py: 2,
-                      bgcolor: '#FFFFFF',
-                      ...eInvoiceFilterFieldSx,
+                      py: { xs: 1.5, sm: 2 },
                       display: 'grid',
                       gridTemplateColumns: {
                         xs: '1fr',
-                        sm: (user?.role === 'root' || user?.role === 'audit') ? '2fr 1fr 1fr 1fr' : '2fr 1fr 1fr',
+                        sm: (user?.role === 'root' || user?.role === 'audit') ? '2fr 1fr 1fr auto' : '2fr 1fr auto',
                       },
-                      gap: 2,
+                      gap: { xs: 1.5, sm: 2 },
                       alignItems: 'flex-end',
                     }}
                   >
@@ -985,7 +1228,7 @@ const EInvoiceManagement: React.FC = () => {
                         placeholder={t('eInvoiceManagement.filters.searchPlaceholder')}
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        InputLabelProps={{ shrink: true }}
+                        {...mvsOutlinedLabelProps}
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">
@@ -1011,7 +1254,7 @@ const EInvoiceManagement: React.FC = () => {
                               setSelectedCompanyId(isNaN(num) ? '' : num);
                             }
                           }}
-                          InputLabelProps={{ shrink: true }}
+                          {...mvsOutlinedLabelProps}
                           SelectProps={{ displayEmpty: true }}
                           sx={eInvoiceFilterFieldSx}
                         >
@@ -1030,7 +1273,7 @@ const EInvoiceManagement: React.FC = () => {
                         label={t('eInvoiceManagement.filters.status')}
                         value={filterStatus}
                         onChange={(e) => setFilterStatus(e.target.value)}
-                        InputLabelProps={{ shrink: true }}
+                        {...mvsOutlinedLabelProps}
                         SelectProps={{ displayEmpty: true }}
                         sx={eInvoiceFilterFieldSx}
                       >
@@ -1042,48 +1285,53 @@ const EInvoiceManagement: React.FC = () => {
                       </TextField>
                       <Button
                         variant="outlined"
-                        startIcon={<FilterListIcon sx={{ fontSize: 18 }} />}
+                        startIcon={<RestartAltIcon sx={{ fontSize: 18 }} />}
                         onClick={() => {
                           setSearchTerm('');
                           setFilterStatus('all');
                           setSelectedCompanyId('');
                         }}
-                        sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
+                        sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap', alignSelf: { xs: 'stretch', sm: 'flex-end' } }}
                       >
                         {t('eInvoiceManagement.actions.reset')}
                       </Button>
                   </Box>
-                </Card>
 
-                <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
-                  <Tabs
-                    value={listSubTab}
-                    onChange={(_, v) => setListSubTab(v)}
-                    sx={{
-                      minHeight: 40,
-                      px: { xs: 1, sm: 1.5 },
-                      bgcolor: '#FFFFFF',
-                      '& .MuiTabs-indicator': { height: 3, borderRadius: '3px 3px 0 0' },
-                      '& .MuiTab-root': {
-                        minHeight: 40,
-                        textTransform: 'none',
-                        fontWeight: 500,
-                        fontSize: '0.8125rem',
-                        color: 'text.secondary',
-                      },
-                      '& .MuiTab-root.Mui-selected': { color: 'primary.main', fontWeight: 700 },
-                    }}
-                  >
-                    <Tab value="requested" label={t('eInvoiceManagement.approval.tabRequested')} />
-                    <Tab value="pending" label={t('eInvoiceManagement.approval.tabPending')} />
-                  </Tabs>
-                </Card>
-
-                <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 0 }}>
-                  <Box sx={mvsBodySectionHeaderSx}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+                  <Box sx={{ ...mvsBodyToolbarSx, bgcolor: '#FFFFFF', borderBottom: '1px solid #E8EDF3' }}>
+                    <ToggleButtonGroup
+                      exclusive
+                      size="small"
+                      value={listSubTab}
+                      onChange={(_, value: 'requested' | 'pending' | null) => {
+                        if (value) setListSubTab(value);
+                      }}
+                      sx={eInvoiceSubTabSx}
+                    >
+                      <ToggleButton value="requested" disableRipple>
+                        {t('eInvoiceManagement.approval.tabRequested')}
+                      </ToggleButton>
+                      <ToggleButton value="pending" disableRipple>
+                        {t('eInvoiceManagement.approval.tabPending')}
+                      </ToggleButton>
+                    </ToggleButtonGroup>
+                    <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto', fontWeight: 500 }}>
                       {t('eInvoiceManagement.list.title', { count: filteredEInvoices.length })}
                     </Typography>
+                  </Box>
+                </Card>
+
+                <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 0, overflow: 'hidden' }}>
+                  <Box sx={{ ...mvsBodySectionHeaderSx, borderBottom: '1px solid #E8EDF3', py: 1.75 }}>
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary', lineHeight: 1.3 }}>
+                        {t('eInvoiceManagement.list.title', { count: filteredEInvoices.length })}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.35 }}>
+                        {listSubTab === 'pending'
+                          ? t('eInvoiceManagement.approval.tabPending')
+                          : t('eInvoiceManagement.approval.tabRequested')}
+                      </Typography>
+                    </Box>
                     <Button
                       variant="contained"
                       disableElevation
@@ -1094,148 +1342,134 @@ const EInvoiceManagement: React.FC = () => {
                       {t('eInvoiceManagement.actions.newEInvoice')}
                     </Button>
                   </Box>
-                </Card>
 
-                <Box sx={mvsBodyListZoneSx}>
+                <Box sx={{ ...mvsBodyListZoneSx, border: 'none', boxShadow: 'none', bgcolor: 'transparent', p: 0 }}>
                 {filteredEInvoices.length === 0 ? (
-                  <Box sx={listStateBoxSx}>
-                    <Typography variant="body2" color="text.secondary">
+                  <Box sx={{ ...listStateBoxSx, border: 'none', boxShadow: 'none', borderRadius: 0 }}>
+                    <ReceiptLongIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 0.5 }} />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary' }}>
                       {einvoices.length === 0 ? t('eInvoiceManagement.empty.noInvoices') : t('eInvoiceManagement.empty.noSearchResults')}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('eInvoiceManagement.filters.searchPlaceholder')}
                     </Typography>
                   </Box>
                 ) : (
-                  <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
-                    <Table
-                      size="small"
-                      sx={{
-                        borderCollapse: 'collapse',
-                        bgcolor: 'transparent',
-                        '& .MuiTableCell-root': {
-                          borderLeft: 'none',
-                          borderRight: 'none',
-                          borderTop: 'none',
-                        },
-                      }}
-                    >
+                  <TableContainer sx={eInvoiceListContainerSx}>
+                    <Table size="small" sx={eInvoiceListTableSx}>
+                      <colgroup>
+                        {eInvoiceListColumns.map((col) => (
+                          <col key={col.key} style={{ width: col.width }} />
+                        ))}
+                      </colgroup>
                       <TableHead sx={mvsTableHeadHighlightSx}>
                         <TableRow>
-                          <TableCell>{t('eInvoiceManagement.columns.invoiceNumber')}</TableCell>
-                          <TableCell>{t('eInvoiceManagement.columns.irn')}</TableCell>
-                          <TableCell>{t('eInvoiceManagement.columns.irp')}</TableCell>
-                          <TableCell>{t('eInvoiceManagement.columns.buyer')}</TableCell>
-                          <TableCell>{t('eInvoiceManagement.columns.transactionType')}</TableCell>
-                          <TableCell>{t('eInvoiceManagement.columns.amount')}</TableCell>
-                          <TableCell>{t('eInvoiceManagement.columns.status')}</TableCell>
-                          <TableCell>{t('eInvoiceManagement.columns.issueDate')}</TableCell>
-                          <TableCell>E-Way Bill</TableCell>
-                          <TableCell>{t('eInvoiceManagement.columns.actions')}</TableCell>
+                          <TableCell sx={eInvoiceTableHeadCellSx}>{t('eInvoiceManagement.columns.invoiceNumber')}</TableCell>
+                          <TableCell sx={eInvoiceTableHeadCellSx}>{t('eInvoiceManagement.columns.irn')}</TableCell>
+                          <TableCell sx={eInvoiceTableHeadCellSx}>{t('eInvoiceManagement.columns.irp')}</TableCell>
+                          <TableCell sx={eInvoiceTableHeadCellSx}>{t('eInvoiceManagement.columns.buyer')}</TableCell>
+                          <TableCell sx={eInvoiceTableHeadCellSx}>{t('eInvoiceManagement.columns.transactionType')}</TableCell>
+                          <TableCell sx={eInvoiceTableHeadCellSx}>{t('eInvoiceManagement.columns.amount')}</TableCell>
+                          <TableCell sx={eInvoiceTableHeadCellSx}>{t('eInvoiceManagement.columns.status')}</TableCell>
+                          <TableCell sx={eInvoiceTableHeadCellSx}>{t('eInvoiceManagement.columns.issueDate')}</TableCell>
+                          <TableCell sx={eInvoiceTableHeadCellSx}>E-Way Bill</TableCell>
+                          <TableCell sx={eInvoiceTableHeadCellSx} align="center">{t('eInvoiceManagement.columns.actions')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody sx={mvsTableBodyRowSx}>
                         {filteredEInvoices.map((einvoice) => (
                         <TableRow key={einvoice.id}>
-                          <TableCell>
-                            <Typography variant="body2" fontWeight="bold">
-                              {einvoice.invoiceNumber}
-                            </Typography>
+                          <TableCell sx={{ ...eInvoiceCellBaseSx, ...(eInvoiceListColumns[0].ellipsis ? eInvoiceCellEllipsisSx : {}) }}>
+                            {renderEllipsisText(einvoice.invoiceNumber, 600)}
                           </TableCell>
-                          <TableCell sx={{ maxWidth: 200 }}>
+                          <TableCell sx={{ ...eInvoiceCellBaseSx, ...eInvoiceCellEllipsisSx }}>
                             {einvoice.irn ? (
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <VerifiedIcon fontSize="small" color="success" />
-                                <Typography variant="body2" color="primary" sx={{ wordBreak: 'break-all' }}>
-                                  {einvoice.irn.length > 20 ? `${einvoice.irn.slice(0, 16)}…` : einvoice.irn}
-                                </Typography>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0, overflow: 'hidden' }}>
+                                <VerifiedIcon fontSize="small" color="success" sx={{ flexShrink: 0 }} />
+                                {renderEllipsisText(einvoice.irn, undefined, 'primary.main')}
                               </Box>
                             ) : (
-                              <Typography variant="body2" color="text.secondary">
-                                {t('eInvoiceManagement.irp.pendingIrn')}
-                              </Typography>
+                              renderEllipsisText(t('eInvoiceManagement.irp.pendingIrn'))
                             )}
                           </TableCell>
-                          <TableCell>
+                          <TableCell sx={eInvoiceCellBaseSx}>
                             <Chip
                               size="small"
                               label={getIrpStatusLabel(einvoice.irpStatus)}
                               color={getIrpStatusColor(einvoice.irpStatus) as any}
+                              sx={eInvoiceChipSx}
                             />
                             {einvoice.irpLastError ? (
-                              <Typography variant="caption" color="error" display="block" sx={{ mt: 0.5 }}>
-                                {einvoice.irpLastError.slice(0, 80)}
-                                {einvoice.irpLastError.length > 80 ? '…' : ''}
-                              </Typography>
+                              <Box sx={{ mt: 0.5, minWidth: 0, overflow: 'hidden' }}>
+                                {renderEllipsisText(einvoice.irpLastError)}
+                              </Box>
                             ) : null}
                           </TableCell>
-                          <TableCell>
-                            <Box>
-                              <Typography variant="body2" fontWeight="bold">
-                                {einvoice.buyer.name}
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary">
-                                GSTIN: {einvoice.buyer.gstin}
-                              </Typography>
-                            </Box>
+                          <TableCell sx={{ ...eInvoiceCellBaseSx, ...eInvoiceCellEllipsisSx }}>
+                            {renderEllipsisText(einvoice.buyer.name, 600)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell sx={eInvoiceCellBaseSx}>
                             <Chip
                               label={einvoice.transactionType}
                               size="small"
                               color={getTransactionTypeColor(einvoice.transactionType) as any}
+                              sx={eInvoiceChipSx}
                             />
                           </TableCell>
-                          <TableCell>
-                            <Typography variant="body2" fontWeight="bold">
-                              Rs. {einvoice.totalAmount.toLocaleString()}
-                            </Typography>
+                          <TableCell sx={{ ...eInvoiceCellBaseSx, ...eInvoiceCellEllipsisSx }}>
+                            {renderEllipsisText(`Rs. ${einvoice.totalAmount.toLocaleString()}`, 600)}
                           </TableCell>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, alignItems: 'flex-start' }}>
+                          <TableCell sx={eInvoiceCellBaseSx}>
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
                               <Chip
                                 label={getStatusLabel(einvoice.status)}
                                 size="small"
                                 color={getStatusColor(einvoice.status) as any}
+                                sx={eInvoiceChipSx}
                               />
                               {einvoice.approvalStatus === 'pending_approval' && (
-                                <Chip size="small" label={t('eInvoiceManagement.approval.pendingChip')} color="warning" />
+                                <Chip size="small" label={t('eInvoiceManagement.approval.pendingChip')} color="warning" sx={eInvoiceChipSx} />
                               )}
                               {einvoice.approvalStatus === 'approved' && (
-                                <Chip size="small" label={t('eInvoiceManagement.approval.approvedChip')} color="success" />
+                                <Chip size="small" label={t('eInvoiceManagement.approval.approvedChip')} color="success" sx={eInvoiceChipSx} />
                               )}
                               {einvoice.approvalStatus === 'rejected' && (
-                                <Chip size="small" label={t('eInvoiceManagement.approval.rejectedChip')} color="error" />
+                                <Chip size="small" label={t('eInvoiceManagement.approval.rejectedChip')} color="error" sx={eInvoiceChipSx} />
                               )}
                             </Box>
                           </TableCell>
-                          <TableCell>
-                            <Typography variant="body2">
+                          <TableCell sx={eInvoiceCellBaseSx}>
+                            <Typography variant="body2" sx={{ whiteSpace: 'nowrap', color: 'text.secondary' }}>
                               {new Date(einvoice.issueDate).toLocaleDateString()}
                             </Typography>
                           </TableCell>
-                          <TableCell>
+                          <TableCell sx={eInvoiceCellBaseSx}>
                             {einvoice.ewayBillId ? (
                               <Chip
                                 label={t('eInvoiceManagement.eway.generated')}
                                 size="small"
                                 color="success"
-                                icon={<LocalShippingIcon />}
+                                icon={<LocalShippingIcon sx={{ fontSize: '0.9rem !important' }} />}
+                                sx={eInvoiceChipSx}
                               />
                             ) : einvoice.irpStatus === 'irn_generated' ? (
                               <Button
                                 variant="outlined"
                                 size="small"
-                                startIcon={<LocalShippingIcon />}
+                                startIcon={<LocalShippingIcon sx={{ fontSize: '0.95rem !important' }} />}
                                 onClick={() => handleCreateEWayBill(einvoice.id)}
+                                sx={{ ...mvsBodyOutlinedBtnSx, minHeight: 28, py: 0.25, px: 1, fontSize: '0.6875rem' }}
                               >
                                 {t('common.create')}
                               </Button>
                             ) : (
-                              <Typography variant="body2" color="text.secondary">
+                              <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
                                 {t('eInvoiceManagement.eway.pending')}
                               </Typography>
                             )}
                           </TableCell>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                          <TableCell sx={eInvoiceCellBaseSx} align="center">
+                            <Box sx={eInvoiceActionBarSx}>
                               {einvoice.irpStatus !== 'irn_generated' && (
                                 <Tooltip
                                   title={
@@ -1255,6 +1489,7 @@ const EInvoiceManagement: React.FC = () => {
                                         !isEInvoiceExportAllowed(einvoice)
                                       }
                                       onClick={() => handleGenerateIrn(einvoice.id)}
+                                      sx={{ minHeight: 28, py: 0.25, px: 1, fontSize: '0.6875rem', borderRadius: '8px' }}
                                     >
                                       {irnLoadingId === einvoice.id ? '…' : 'IRN'}
                                     </Button>
@@ -1320,6 +1555,7 @@ const EInvoiceManagement: React.FC = () => {
                   </TableContainer>
                 )}
                 </Box>
+                </Card>
               </>
             )}
           </TabPanel>
@@ -1369,59 +1605,45 @@ const EInvoiceManagement: React.FC = () => {
               </Box>
             </Card>
             <Box sx={mvsBodyListZoneSx}>
-            <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
-              <Table
-                size="small"
-                sx={{
-                  borderCollapse: 'collapse',
-                  bgcolor: 'transparent',
-                  '& .MuiTableCell-root': {
-                    borderLeft: 'none',
-                    borderRight: 'none',
-                    borderTop: 'none',
-                  },
-                }}
-              >
+            <TableContainer sx={eInvoiceListContainerSx}>
+              <Table size="small" sx={eInvoiceListTableSx}>
+                <colgroup>
+                  {proformaListColumns.map((col) => (
+                    <col key={col.key} style={{ width: col.width }} />
+                  ))}
+                </colgroup>
                 <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
-                    <TableCell>{t('eInvoiceManagement.proforma.columns.proformaInvoiceNumber')}</TableCell>
-                    <TableCell>{t('eInvoiceManagement.proforma.columns.customer')}</TableCell>
-                    <TableCell>{t('eInvoiceManagement.proforma.columns.amount')}</TableCell>
-                    <TableCell>{t('eInvoiceManagement.proforma.columns.status')}</TableCell>
-                    <TableCell>{t('eInvoiceManagement.proforma.columns.actions')}</TableCell>
+                    <TableCell sx={eInvoiceTableHeadCellSx}>{t('eInvoiceManagement.proforma.columns.proformaInvoiceNumber')}</TableCell>
+                    <TableCell sx={eInvoiceTableHeadCellSx}>{t('eInvoiceManagement.proforma.columns.customer')}</TableCell>
+                    <TableCell sx={eInvoiceTableHeadCellSx}>{t('eInvoiceManagement.proforma.columns.amount')}</TableCell>
+                    <TableCell sx={eInvoiceTableHeadCellSx}>{t('eInvoiceManagement.proforma.columns.status')}</TableCell>
+                    <TableCell sx={eInvoiceTableHeadCellSx}>{t('eInvoiceManagement.proforma.columns.actions')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody sx={mvsTableBodyRowSx}>
                   {proformaInvoices.map((proformaInvoice) => (
                     <TableRow key={proformaInvoice.id}>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight="bold">
-                          {proformaInvoice.invoiceNumber}
-                        </Typography>
+                      <TableCell sx={{ ...eInvoiceCellBaseSx, ...eInvoiceCellEllipsisSx }}>
+                        {renderEllipsisText(proformaInvoice.invoiceNumber, 700)}
                       </TableCell>
-                      <TableCell>
-                        <Box>
-                          <Typography variant="body2" fontWeight="bold">
-                            {proformaInvoice.customer?.name || proformaInvoice.customer_name || t('eInvoiceManagement.defaults.unspecified')}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            GSTIN: {proformaInvoice.customer?.gstin || '-'}
-                          </Typography>
-                        </Box>
+                      <TableCell sx={{ ...eInvoiceCellBaseSx, ...eInvoiceCellEllipsisSx }}>
+                        {renderEllipsisText(
+                          proformaInvoice.customer?.name || proformaInvoice.customer_name || t('eInvoiceManagement.defaults.unspecified'),
+                          700
+                        )}
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight="bold">
-                          Rs. {proformaInvoice.totalAmount.toLocaleString()}
-                        </Typography>
+                      <TableCell sx={{ ...eInvoiceCellBaseSx, ...eInvoiceCellEllipsisSx }}>
+                        {renderEllipsisText(`Rs. ${proformaInvoice.totalAmount.toLocaleString()}`, 700)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={eInvoiceCellBaseSx}>
                         <Chip
                           label={t('eInvoiceManagement.proforma.approved')}
                           size="small"
                           color="success"
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ ...eInvoiceCellBaseSx, whiteSpace: 'nowrap' }}>
                         <Button
                           variant="contained"
                           disableElevation

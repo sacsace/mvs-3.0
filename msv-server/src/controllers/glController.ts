@@ -43,7 +43,7 @@ export const seedGlAccounts = async (req: RequestWithUser, res: Response) => {
     return res.json({
       success: true,
       data: result,
-      message: result.created > 0 ? '기본 계정과목이 생성되었습니다.' : '이미 계정과목이 존재합니다.',
+      message: '계정과목은 Tally 임포트로 등록합니다. 한글 기본 계정과목 자동 생성은 사용하지 않습니다.',
     });
   } catch (error: any) {
     console.error('계정과목 시드 오류:', error);
@@ -56,8 +56,6 @@ export const getGlAccounts = async (req: RequestWithUser, res: Response) => {
     const { tenantId, companyId } = resolveCompanyScope(req);
     const tree = String(req.query.tree || '') === 'true';
     const ledgerOnly = String(req.query.ledgerOnly || '') === 'true';
-
-    await ensureDefaultChartOfAccounts({ tenantId, companyId, userId: req.user.id });
 
     const where: any = { tenant_id: tenantId, company_id: companyId, is_active: true };
     if (ledgerOnly) where.account_type = 'ledger';
@@ -166,10 +164,6 @@ export const deleteGlAccount = async (req: RequestWithUser, res: Response) => {
       where: { id, tenant_id: tenantId, company_id: companyId, is_active: true },
     });
     if (!row) return res.status(404).json({ success: false, message: '계정과목을 찾을 수 없습니다.' });
-    if (row.is_system) {
-      return res.status(400).json({ success: false, message: '시스템 기본 계정과목은 삭제할 수 없습니다.' });
-    }
-
     const childCount = await (GlAccount as any).count({
       where: { parent_id: row.id, tenant_id: tenantId, company_id: companyId, is_active: true },
     });
@@ -299,6 +293,76 @@ export const postGlVoucher = async (req: RequestWithUser, res: Response) => {
     console.error('전표 장부 반영 오류:', error);
     const statusCode = String(error.message || '').includes('이미') ? 400 : 500;
     return res.status(statusCode).json({ success: false, message: error.message || '장부 반영에 실패했습니다.' });
+  }
+};
+
+/** Post all (or selected) draft vouchers for the company */
+export const bulkPostGlVouchers = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { tenantId, companyId } = resolveCompanyScope(req);
+    const { id: userId, role } = req.user;
+    if (!(role === 'root' || role === 'admin')) {
+      return res.status(403).json({ success: false, message: '장부 반영 권한이 없습니다.' });
+    }
+
+    const idsRaw = Array.isArray(req.body?.ids) ? req.body.ids : null;
+    const where: any = {
+      tenant_id: tenantId,
+      company_id: companyId,
+      status: 'draft',
+      is_active: true,
+    };
+    if (idsRaw && idsRaw.length > 0) {
+      where.id = { [Op.in]: idsRaw.map((v: unknown) => Number(v)).filter((n: number) => Number.isFinite(n) && n > 0) };
+    }
+
+    const drafts = await (GlVoucher as any).findAll({
+      where,
+      order: [['voucher_date', 'ASC'], ['id', 'ASC']],
+      attributes: ['id', 'voucher_no'],
+    });
+
+    if (!drafts.length) {
+      return res.json({
+        success: true,
+        message: '반영할 임시 전표가 없습니다.',
+        data: { posted: 0, failed: 0, failures: [] },
+      });
+    }
+
+    const failures: Array<{ id: number; voucherNo: string; message: string }> = [];
+    let posted = 0;
+
+    for (const row of drafts) {
+      try {
+        await postVoucherToLedger({
+          voucherId: Number(row.id),
+          tenantId,
+          companyId,
+          userId,
+        });
+        posted += 1;
+      } catch (err: any) {
+        failures.push({
+          id: Number(row.id),
+          voucherNo: String(row.voucher_no || ''),
+          message: err?.message || '반영 실패',
+        });
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `임시 전표 ${posted}건이 장부에 반영되었습니다.${failures.length ? ` (실패 ${failures.length}건)` : ''}`,
+      data: {
+        posted,
+        failed: failures.length,
+        failures: failures.slice(0, 50),
+      },
+    });
+  } catch (error: any) {
+    console.error('전표 일괄 장부 반영 오류:', error);
+    return res.status(500).json({ success: false, message: error.message || '일괄 장부 반영에 실패했습니다.' });
   }
 };
 
@@ -524,6 +588,171 @@ export const getProfitAndLoss = async (req: RequestWithUser, res: Response) => {
   } catch (error: any) {
     console.error('손익계산서 조회 오류:', error);
     return res.status(500).json({ success: false, message: '손익계산서 조회에 실패했습니다.' });
+  }
+};
+
+export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { tenantId, companyId } = resolveCompanyScope(req);
+    const asOf = req.query.asOf ? String(req.query.asOf) : undefined;
+    const from = req.query.from ? String(req.query.from) : undefined;
+
+    await ensureDefaultChartOfAccounts({ tenantId, companyId, userId: req.user.id });
+
+    const accounts = await (GlAccount as any).findAll({
+      where: {
+        tenant_id: tenantId,
+        company_id: companyId,
+        is_active: true,
+        account_type: 'ledger',
+        nature: { [Op.in]: ['asset', 'liability', 'equity'] },
+      },
+      order: [['code', 'ASC']],
+    });
+
+    // 재무상태표는 시점 잔액: 기초잔액 + 기준일까지 장부 반영된 전표 이동
+    const positionWhere: any = {
+      tenant_id: tenantId,
+      company_id: companyId,
+      status: 'posted',
+      is_active: true,
+    };
+    if (asOf) {
+      positionWhere.voucher_date = { [Op.lte]: asOf };
+    }
+
+    // 당기손익(자본 반영)용 기간 — from~asOf (미지정 시 전체 posted)
+    const pnlWhere: any = {
+      tenant_id: tenantId,
+      company_id: companyId,
+      status: 'posted',
+      is_active: true,
+    };
+    if (from || asOf) {
+      pnlWhere.voucher_date = {};
+      if (from) pnlWhere.voucher_date[Op.gte] = from;
+      if (asOf) pnlWhere.voucher_date[Op.lte] = asOf;
+    }
+
+    const applyDelta = (nature: string, debit: number, credit: number) =>
+      nature === 'asset' || nature === 'expense' ? debit - credit : credit - debit;
+
+    const assetRows: any[] = [];
+    const liabilityRows: any[] = [];
+    const equityRows: any[] = [];
+    let totalAssets = 0;
+    let totalLiabilities = 0;
+    let totalEquity = 0;
+
+    for (const account of accounts) {
+      const lines = await (GlVoucherLine as any).findAll({
+        where: { account_id: account.id },
+        include: [{ model: GlVoucher, as: 'voucher', required: true, where: positionWhere }],
+      });
+      const debit = lines.reduce((sum: number, line: any) => sum + parseAmount(line.debit), 0);
+      const credit = lines.reduce((sum: number, line: any) => sum + parseAmount(line.credit), 0);
+      const opening = parseAmount(account.opening_balance);
+      const amount = Number((opening + applyDelta(String(account.nature), debit, credit)).toFixed(2));
+      if (amount === 0) continue;
+
+      const rowBase = {
+        accountId: account.id,
+        code: account.code,
+        name: account.name,
+        nameEn: account.name_en,
+        nature: account.nature,
+        debit: Number(debit.toFixed(2)),
+        credit: Number(credit.toFixed(2)),
+        opening: Number(opening.toFixed(2)),
+        amount,
+      };
+
+      if (account.nature === 'asset') {
+        totalAssets += amount;
+        assetRows.push(rowBase);
+      } else if (account.nature === 'liability') {
+        totalLiabilities += amount;
+        liabilityRows.push(rowBase);
+      } else {
+        totalEquity += amount;
+        equityRows.push(rowBase);
+      }
+    }
+
+    // Period P&L plugged into equity as current year earnings (accounting view, not a posted JE)
+    const pnlAccounts = await (GlAccount as any).findAll({
+      where: {
+        tenant_id: tenantId,
+        company_id: companyId,
+        is_active: true,
+        account_type: 'ledger',
+        nature: { [Op.in]: ['income', 'expense'] },
+      },
+    });
+    let periodIncome = 0;
+    let periodExpense = 0;
+    for (const account of pnlAccounts) {
+      const lines = await (GlVoucherLine as any).findAll({
+        where: { account_id: account.id },
+        include: [{ model: GlVoucher, as: 'voucher', required: true, where: pnlWhere }],
+      });
+      const debit = lines.reduce((sum: number, line: any) => sum + parseAmount(line.debit), 0);
+      const credit = lines.reduce((sum: number, line: any) => sum + parseAmount(line.credit), 0);
+      if (account.nature === 'income') periodIncome += credit - debit;
+      else periodExpense += debit - credit;
+    }
+    const netProfit = Number((periodIncome - periodExpense).toFixed(2));
+    if (netProfit !== 0) {
+      equityRows.push({
+        accountId: 0,
+        code: 'PL',
+        name: 'Current Period Profit/(Loss)',
+        nameEn: 'Current Period Profit/(Loss)',
+        nature: 'equity',
+        debit: 0,
+        credit: 0,
+        opening: 0,
+        amount: netProfit,
+        synthetic: true,
+      });
+      totalEquity += netProfit;
+    }
+
+    totalAssets = Number(totalAssets.toFixed(2));
+    totalLiabilities = Number(totalLiabilities.toFixed(2));
+    totalEquity = Number(totalEquity.toFixed(2));
+    const totalLiabilitiesAndEquity = Number((totalLiabilities + totalEquity).toFixed(2));
+    const balanced = Math.abs(totalAssets - totalLiabilitiesAndEquity) <= 0.05;
+
+    const draftCount = await (GlVoucher as any).count({
+      where: {
+        tenant_id: tenantId,
+        company_id: companyId,
+        status: 'draft',
+        is_active: true,
+      },
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        asOf: asOf || null,
+        from: from || null,
+        assetRows,
+        liabilityRows,
+        equityRows,
+        totalAssets,
+        totalLiabilities,
+        totalEquity,
+        totalLiabilitiesAndEquity,
+        netProfit,
+        balanced,
+        draftCount,
+      },
+    });
+  } catch (error: any) {
+    console.error('재무상태표 조회 오류:', error);
+    return res.status(500).json({ success: false, message: '재무상태표 조회에 실패했습니다.' });
   }
 };
 

@@ -60,12 +60,16 @@ interface HeaderProps {
   showMobileNav?: boolean;
   mobileNavOpen?: boolean;
   onMobileNavToggle?: () => void;
+  sidebarIconOnly?: boolean;
+  onSidebarIconOnlyToggle?: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
   showMobileNav = false,
   mobileNavOpen = false,
   onMobileNavToggle,
+  sidebarIconOnly = false,
+  onSidebarIconOnlyToggle,
 }) => {
   const { user, logout } = useStore();
   const { language, setLanguage } = useMenuStore();
@@ -76,13 +80,14 @@ const Header: React.FC<HeaderProps> = ({
   const isAiRoute =
     location.pathname.startsWith('/ai') ||
     /^\/(cost-analysis|efficiency|forecasting|recommendations)(\/|$)/.test(location.pathname);
-  const { errors, notifications, clearNotifications, clearErrors } = useErrorStore();
+  const { errors, notifications } = useErrorStore();
   const {
     items: notificationItems,
+    headerDismissedIds,
     mergeFromSources,
     markRead,
     markAllRead,
-    clearAll: clearNotificationStore,
+    dismissAllFromHeader,
   } = useNotificationStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [languageAnchorEl, setLanguageAnchorEl] = useState<null | HTMLElement>(null);
@@ -246,13 +251,16 @@ const Header: React.FC<HeaderProps> = ({
   }, [user?.id, language]);
 
   const displayNotificationFeed = useMemo(
-    () => notificationItems.slice(0, 40),
-    [notificationItems]
+    () => {
+      const dismissed = new Set(headerDismissedIds);
+      return notificationItems.filter((item) => !dismissed.has(item.id)).slice(0, 40);
+    },
+    [notificationItems, headerDismissedIds]
   );
 
   const unreadCount = useMemo(
-    () => notificationItems.filter((item) => !item.read).length,
-    [notificationItems]
+    () => displayNotificationFeed.filter((item) => !item.read).length,
+    [displayNotificationFeed]
   );
 
   const handleNotificationMenu = (event: React.MouseEvent<HTMLElement>) => {
@@ -276,9 +284,7 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   const handleClearNotificationFeed = () => {
-    clearNotificationStore();
-    clearNotifications();
-    clearErrors();
+    dismissAllFromHeader();
     handleNotificationClose();
   };
 
@@ -328,9 +334,60 @@ const Header: React.FC<HeaderProps> = ({
           </IconButton>
         ) : null}
 
-        {/* 왼쪽: 회사 로고 및 회사명 */}
+        {/* 왼쪽: 회사 로고 및 회사명 — 데스크톱에서 로고 클릭 시 사이드바 접기/펼치기 */}
         {companyInfo && (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 1.5 }, mr: { xs: 1, sm: 4 }, minWidth: 0 }}>
+          <Tooltip
+            title={
+              showMobileNav
+                ? ''
+                : sidebarIconOnly
+                  ? language === 'en'
+                    ? 'Expand menu'
+                    : '메뉴 펼치기'
+                  : language === 'en'
+                    ? 'Collapse menu to icons'
+                    : '메뉴 아이콘만 보기'
+            }
+            disableHoverListener={showMobileNav}
+          >
+            <Box
+              component={showMobileNav ? 'div' : 'button'}
+              type={showMobileNav ? undefined : 'button'}
+              onClick={showMobileNav ? undefined : onSidebarIconOnlyToggle}
+              aria-label={
+                showMobileNav
+                  ? undefined
+                  : sidebarIconOnly
+                    ? language === 'en'
+                      ? 'Expand sidebar menu'
+                      : '사이드바 메뉴 펼치기'
+                    : language === 'en'
+                      ? 'Collapse sidebar to icons'
+                      : '사이드바 아이콘만 보기'
+              }
+              aria-pressed={showMobileNav ? undefined : sidebarIconOnly}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: { xs: 1, sm: 1.5 },
+                mr: { xs: 1, sm: 4 },
+                minWidth: 0,
+                border: 'none',
+                background: 'none',
+                p: 0,
+                m: 0,
+                textAlign: 'left',
+                cursor: showMobileNav ? 'default' : 'pointer',
+                borderRadius: '10px',
+                transition: 'opacity 0.2s ease, transform 0.2s ease',
+                '&:hover': showMobileNav
+                  ? {}
+                  : {
+                      opacity: 0.86,
+                      transform: 'translateY(-1px)',
+                    },
+              }}
+            >
             {companyInfo.logo ? (
               <Box
                 sx={{
@@ -386,7 +443,8 @@ const Header: React.FC<HeaderProps> = ({
                 {cleanCompanyName(companyInfo.name) || t('common.companyNameFallback')}
               </Typography>
             </Box>
-          </Box>
+            </Box>
+          </Tooltip>
         )}
 
         {/* 빈 공간 */}

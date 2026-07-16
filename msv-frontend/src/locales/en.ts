@@ -2596,10 +2596,90 @@ export default {
         codeNameRequired: 'Code and account name are required.',
       },
     },
+    tallyImport: {
+      title: 'Tally Import',
+      description:
+        'Upload a Tally Export (XML/JSON) to bring ledgers and vouchers into MSV. Vouchers are created as draft only and are never auto-posted.',
+      booksLink: 'General Ledger',
+      moreTools: 'Tools',
+      selectFile: 'Select file',
+      noFile: 'No file selected (.xml / .json)',
+      preview: 'Parse preview',
+      dryRun: 'Simulate',
+      import: 'Run import',
+      previewTitle: 'Parsed voucher preview',
+      resultTitle: 'Import result',
+      resultDryRun: 'Simulation (no DB write)',
+      empty: {
+        loading: 'Loading...',
+        noItems: 'Please select a Tally Export file (.xml / .json).',
+        fileReady: 'Selected: {{name}}',
+        fileReadyHint: 'Use Parse preview, Simulate, or Run import above.',
+      },
+      emptyVouchers: 'No vouchers found. The file may contain masters only.',
+      emptyIssues: 'No issues',
+      emptyErrors: 'No failure logs.',
+      logFilter: {
+        label: 'Log filter',
+        all: 'All',
+        error: 'Failed',
+        warn: 'Warning',
+        info: 'Info',
+      },
+      issueLevel: {
+        error: 'Failed',
+        warn: 'Warning',
+        info: 'Info',
+      },
+      hint:
+        'Tally: Gateway of Tally → Export → XML (Masters / Vouchers or Day Book). Already-imported vouchers (MSV no., GUID, Tally no.+date) and in-file duplicates are skipped. Accounts/parties are reused by name/GUID/GSTIN. Post from General Ledger.',
+      options: {
+        importLedgers: 'Import ledgers',
+        importVouchers: 'Import vouchers',
+        createMissing: 'Auto-create unmatched accounts',
+        createParties: 'Auto-create parties (Debtors/Creditors)',
+      },
+      kpi: {
+        parsedLedgers: 'Parsed ledgers',
+        parsedVouchers: 'Parsed vouchers',
+        createdAccounts: 'Accounts created',
+        createdVouchers: 'Vouchers created',
+        format: 'Format',
+        file: 'File',
+      },
+      columns: {
+        date: 'Date',
+        type: 'Type',
+        number: 'Number',
+        lines: 'Lines',
+        debit: 'Debit',
+        credit: 'Credit',
+        level: 'Level',
+        message: 'Message',
+        context: 'Reason / detail',
+      },
+      resultSummary:
+        'Matched {{matched}} · Accounts created {{createdAcc}} · Vouchers created {{createdVch}} · Skipped {{skipped}} · Failed {{failed}}',
+      success: {
+        preview: 'File parsed successfully.',
+        dryRun: 'Simulation completed.',
+        import: 'Import completed. Vouchers are in draft status.',
+      },
+      errors: {
+        noFile: 'Please select a file.',
+        noCompany: 'Please select a company.',
+        preview: 'Preview failed.',
+        import: 'Import failed.',
+        fileTooLarge: 'File is too large. Maximum upload size is 2GB.',
+      },
+    },
     generalLedger: {
       title: 'General Ledger',
-      description: 'Enter vouchers, verify debit/credit, and post to the ledger — Tally-style double entry in one screen.',
+      description: 'View vouchers, ledgers, and trial balance imported from Tally, then post them to the books.',
       voucherEntryLink: 'Voucher Entry',
+      tallyImportLink: 'Tally Import',
+      moreTools: 'Tools',
+      tallyViewHint: 'This screen is for viewing and posting Tally import data. Add new data by importing a Tally Export file.',
       company: 'Company',
       companyHint: 'Shows vouchers, ledger, and accounts for the selected company only.',
       tabs: {
@@ -2613,6 +2693,10 @@ export default {
         draft: 'Unposted',
         posted: 'Posted',
         totalDebit: 'Total Debit'
+      },
+      listView: {
+        page: 'View by page',
+        all: 'View all'
       },
       status: {
         draft: 'Draft',
@@ -2632,12 +2716,18 @@ export default {
         listTitle: 'Voucher List',
         detailTitle: 'Voucher Detail',
         selectHint: 'Select a voucher from the list.',
-        empty: 'No vouchers yet. Use quick entry above.',
+        empty: 'No vouchers yet. Import a Tally Export file.',
+        emptyHint: 'Manual entry is disabled. Import XML/JSON exported from Tally.',
+        emptySearch: 'No matching vouchers.',
+        searchPlaceholder: 'Search by voucher no., date, status, narration',
+        filteredCount: '{{count}} rows',
         date: 'Date',
         narration: 'Narration',
         saveDraft: 'Save Draft',
         saveAndPost: 'Save & Post',
         postToLedger: 'Post to Ledger',
+        postAllDrafts: 'Post all drafts ({{count}})',
+        postAllConfirm: 'Post all {{count}} draft vouchers to the ledger?',
         viewInLedger: 'View in Ledger',
         columns: {
           no: 'No.',
@@ -2648,11 +2738,26 @@ export default {
       },
       ledger: {
         account: 'Account',
+        accountSearchPlaceholder: 'Type code or name to autocomplete',
+        accountNoOptions: 'No matching accounts',
+        period: 'Period',
+        periods: {
+          all: 'All',
+          thisMonth: 'This month',
+          lastMonth: 'Last month',
+          last3Months: 'Last 3 months',
+          fiscalYear: 'Current FY'
+        },
         from: 'From',
         to: 'To',
         search: 'Search',
         balance: 'Balance',
-        empty: 'No ledger entries for this period.',
+        total: 'Total',
+        empty: 'No data. There are no posted ledger entries for this period.',
+        emptySearch: 'No matching ledger entries.',
+        searchPlaceholder: 'Search by voucher no., date, narration',
+        filteredCount: '{{count}} rows',
+        excelDownload: 'Download Excel',
         columns: {
           date: 'Date',
           voucher: 'Voucher',
@@ -2665,6 +2770,11 @@ export default {
       trial: {
         total: 'Total',
         mismatch: 'Debit and credit totals do not match.',
+        empty: 'No trial balance data. Check the date range or whether vouchers have been posted.',
+        emptySearch: 'No matching accounts.',
+        searchPlaceholder: 'Search by code or account name',
+        filteredCount: '{{count}} rows',
+        excelDownload: 'Download Excel',
         columns: {
           code: 'Code',
           account: 'Account',
@@ -2681,17 +2791,27 @@ export default {
         name: 'Account Name',
         nameEn: 'English Name',
         nature: 'Nature',
-        register: 'Register'
+        register: 'Register',
+        searchPlaceholder: 'Search by code or account name',
+        empty: 'No accounts registered.',
+        emptySearch: 'No matching accounts.'
       },
       success: {
         posted: 'Posted to ledger.',
+        bulkPosted: 'Posted {{posted}} draft voucher(s) ({{failed}} failed).',
         saved: 'Voucher saved.',
-        accountCreated: 'Account registered.'
+        accountCreated: 'Account registered.',
+        excelDownloaded: 'Excel file downloaded.'
       },
       errors: {
         saveVoucher: 'Failed to save voucher',
         postVoucher: 'Failed to post to ledger',
-        createAccount: 'Failed to register account'
+        loadVoucher: 'Failed to load voucher detail',
+        bulkPost: 'Bulk post failed',
+        bulkPostPartial: '{{voucherNo}}: {{message}}',
+        createAccount: 'Failed to register account',
+        noDataForExport: 'No data to download. Please search first.',
+        exportFailed: 'Failed to download Excel.'
       }
     },
     voucherEntry: {
@@ -2778,6 +2898,7 @@ export default {
       to: 'To',
       search: 'Search',
       total: 'Total',
+      excelDownload: 'Download Excel',
       hint: 'Only posted vouchers are included. Accounts with nature income/expense only.',
       formula: 'Net profit = Total income {{income}} − Total expense {{expense}}',
       tabs: {
@@ -2806,7 +2927,53 @@ export default {
         hint: 'Adjust the date range or ensure posted vouchers exist.'
       },
       errors: {
-        load: 'Failed to load profit and loss statement.'
+        load: 'Failed to load profit and loss statement.',
+        noDataForExport: 'No profit & loss data to export. Search first.',
+        exportFailed: 'Excel download failed.'
+      }
+    },
+    balanceSheet: {
+      title: 'Balance Sheet',
+      description: 'Summarize asset, liability and equity accounts as of a date.',
+      from: 'From',
+      asOf: 'As of',
+      search: 'Search',
+      total: 'Total',
+      excelDownload: 'Download Excel',
+      hint: 'Includes opening balances plus posted vouchers. Current-period P&L is plugged into equity. After Tally import, post drafts in General Ledger so voucher amounts appear.',
+      unbalancedHint: 'Assets do not equal liabilities + equity. Check vouchers and account mapping.',
+      formula: 'Assets {{assets}} = Liabilities + Equity {{liabilityEquity}}',
+      tabs: {
+        assets: 'Assets',
+        liabilities: 'Liabilities',
+        equity: 'Equity',
+        summary: 'Summary'
+      },
+      kpi: {
+        totalAssets: 'Total Assets',
+        totalLiabilities: 'Total Liabilities',
+        totalEquity: 'Total Equity',
+        liabilitiesAndEquity: 'Liabilities + Equity'
+      },
+      sections: {
+        equation: 'Balance check'
+      },
+      columns: {
+        code: 'Code',
+        account: 'Account',
+        amount: 'Amount'
+      },
+      empty: {
+        assets: 'No asset accounts for this period.',
+        liabilities: 'No liability accounts for this period.',
+        equity: 'No equity accounts for this period.',
+        hint: 'No opening balances or posted vouchers. Check dates/company, or run Tally import and post to ledger.',
+        draftHint: '{{count}} unposted draft voucher(s) found. Use Post all drafts in General Ledger to include them on the balance sheet.'
+      },
+      errors: {
+        load: 'Failed to load balance sheet.',
+        noDataForExport: 'No balance sheet data to export. Search first.',
+        exportFailed: 'Excel download failed.'
       }
     },
     accountingMasters: {
@@ -2860,6 +3027,14 @@ export default {
       title: 'Voucher Entry',
       description: 'Upload evidence → review debit/credit → approve → post to ledger',
       booksLink: 'General Ledger',
+      brainDisclaimer:
+        'Accounting Brain recommends only. Validation and posting stay in the Accounting Engine after approval — AI never posts vouchers.',
+      kpi: {
+        review: 'Needs review',
+        approved: 'Approved',
+        posted: 'Posted',
+        avgConfidence: 'Avg. confidence'
+      },
       upload: {
         title: 'Upload Evidence',
         docType: 'Document Type',
@@ -2867,6 +3042,23 @@ export default {
         noFile: 'No file selected',
         processing: 'Processing...',
         submit: 'Upload & Create Voucher'
+      },
+      bridge: {
+        title: 'Recommend from existing document (no posting)',
+        hint: 'Look up an Invoice or Expense by ID for Accounting Brain journal recommendations only. Nothing is posted.',
+        invoiceId: 'Invoice ID',
+        expenseId: 'Expense ID',
+        recommendInvoice: 'Recommend Invoice',
+        recommendExpense: 'Recommend Expense',
+        invalidId: 'Enter a valid ID.',
+        success: 'Recommendation shown only. No voucher was created or posted.',
+        failed: 'Document recommendation failed.'
+      },
+      ask: {
+        title: 'Ask Accounting Brain',
+        placeholder: 'e.g. Which ledger should I use for GST input credit?',
+        submit: 'Ask',
+        failed: 'Could not answer the question.'
       },
       list: {
         title: 'Voucher List',
@@ -2950,7 +3142,9 @@ export default {
         postFailed: 'Failed to post.',
         rejectReasonRequired: 'Please enter a rejection reason.',
         rejectFailed: 'Failed to reject.',
-        duplicateFileName: 'This file name is already registered: {{fileName}} (voucher: {{vouchers}})'
+        duplicateFileName: 'This file name is already registered: {{fileName}} (voucher: {{vouchers}})',
+        unresolvedLedgers:
+          'Select an active ledger (accountId) on every journal line before approve/post. Unresolved accounts are blocked.'
       }
     },
     voucherLines: {

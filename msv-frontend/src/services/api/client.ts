@@ -249,6 +249,28 @@ const maybeRefreshSessionByActivity = async () => {
 // 요청 인터셉터
 api.interceptors.request.use(
   async (config) => {
+    // FormData 업로드 시 기본 application/json 제거 → 브라우저가 boundary 포함 multipart 설정
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+      const headers = config.headers as any;
+      if (headers) {
+        if (typeof headers.delete === 'function') {
+          headers.delete('Content-Type');
+          headers.delete('content-type');
+        } else {
+          delete headers['Content-Type'];
+          delete headers['content-type'];
+          if (headers.common) {
+            delete headers.common['Content-Type'];
+            delete headers.common['content-type'];
+          }
+          if (headers.post) {
+            delete headers.post['Content-Type'];
+            delete headers.post['content-type'];
+          }
+        }
+      }
+    }
+
     const storedAuth = readStoredAuthToken();
     if (storedAuth?.token) {
       let activeToken = storedAuth.token;

@@ -25,6 +25,25 @@ const WORK_AREA_OUTSET = 16;
 const HEADER_MENU_GAP_PX = 8;
 /** Toolbar와 동일 — 고정 헤더용 레이아웃 스페이서 높이 */
 const HEADER_LAYOUT_HEIGHT = 60;
+const SIDEBAR_ICON_ONLY_STORAGE_KEY = 'mvs.sidebarIconOnly';
+
+const readSidebarIconOnlyPref = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(SIDEBAR_ICON_ONLY_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
+
+const writeSidebarIconOnlyPref = (value: boolean) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(SIDEBAR_ICON_ONLY_STORAGE_KEY, value ? '1' : '0');
+  } catch {
+    // ignore
+  }
+};
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const theme = useTheme();
@@ -32,6 +51,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [sidebarOpen] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState<number>(280);
+  const [sidebarIconOnly, setSidebarIconOnly] = useState<boolean>(() => readSidebarIconOnlyPref());
   const [autoCollapseEnabled, setAutoCollapseEnabled] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const collapsedWidth = 72;
@@ -52,6 +72,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       setMobileNavOpen((prev) => !prev);
     }
   };
+
+  const handleSidebarIconOnlyToggle = useCallback(() => {
+    setSidebarIconOnly((prev) => {
+      const next = !prev;
+      writeSidebarIconOnlyPref(next);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (!isMobileNav) {
@@ -202,7 +230,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   const contentInsetLeft = isMobileNav
     ? WORK_AREA_OUTSET
-    : (autoCollapseEnabled && isSidebarCollapsed ? collapsedWidth : sidebarWidth) + WORK_AREA_OUTSET;
+    : (sidebarIconOnly || (autoCollapseEnabled && isSidebarCollapsed) ? collapsedWidth : sidebarWidth) +
+      WORK_AREA_OUTSET;
 
   const useChromelessWorkArea = true;
 
@@ -228,6 +257,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         showMobileNav={isMobileNav}
         mobileNavOpen={mobileNavOpen}
         onMobileNavToggle={handleSidebarToggle}
+        sidebarIconOnly={sidebarIconOnly}
+        onSidebarIconOnlyToggle={handleSidebarIconOnlyToggle}
       />
       <Box
         aria-hidden
@@ -265,6 +296,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           isCollapsed={isSidebarCollapsed}
           collapsedWidth={collapsedWidth}
           onCollapseChange={setIsSidebarCollapsed}
+          iconOnly={sidebarIconOnly}
         />
         
         {/* 메인 콘텐츠 영역 - 사이드바 공간을 고려한 중앙 정렬 */}

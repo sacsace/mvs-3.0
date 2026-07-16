@@ -19,11 +19,12 @@ import {
   Typography,
 } from '@mui/material';
 import {
+  AccountBalance as EquityIcon,
   RestartAlt as ResetIcon,
   Search as SearchIcon,
   FileDownload as DownloadIcon,
-  TrendingDown,
-  TrendingUp,
+  AccountBalanceWallet as AssetIcon,
+  CreditCard as LiabilityIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
@@ -32,7 +33,7 @@ import { useAccountingCompany } from '../../hooks/useAccountingCompany';
 import { accountingService } from '../../services/api';
 import { getGlAccountLabel } from '../../utils/glAccountLabel';
 import { formatInr } from '../../utils/formatInr';
-import { exportProfitAndLossExcel } from '../../utils/exportFinancialStatementExcel';
+import { exportBalanceSheetExcel } from '../../utils/exportFinancialStatementExcel';
 import {
   mvsBodyCardSx,
   mvsBodyFilterWrapSx,
@@ -50,22 +51,28 @@ import {
   mvsTableScrollSx,
 } from '../../theme/mvsLayout';
 
-type PlRow = {
+type BsRow = {
   accountId: number;
   code: string;
   name: string;
   nameEn?: string | null;
   amount: number;
+  synthetic?: boolean;
 };
 
-type PlData = {
+type BsData = {
+  asOf: string | null;
   from: string | null;
-  to: string | null;
-  incomeRows: PlRow[];
-  expenseRows: PlRow[];
-  totalIncome: number;
-  totalExpense: number;
+  assetRows: BsRow[];
+  liabilityRows: BsRow[];
+  equityRows: BsRow[];
+  totalAssets: number;
+  totalLiabilities: number;
+  totalEquity: number;
+  totalLiabilitiesAndEquity: number;
   netProfit: number;
+  balanced: boolean;
+  draftCount?: number;
 };
 
 const cellEllipsisSx = {
@@ -87,7 +94,7 @@ const tableSx = {
   },
 } as const;
 
-const ProfitAndLoss: React.FC = () => {
+const BalanceSheet: React.FC = () => {
   const { t, i18n } = useTranslation();
   const {
     canSelectCompany,
@@ -100,9 +107,9 @@ const ProfitAndLoss: React.FC = () => {
   } = useAccountingCompany();
 
   const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [asOf, setAsOf] = useState('');
   const [tab, setTab] = useState(0);
-  const [data, setData] = useState<PlData | null>(null);
+  const [data, setData] = useState<BsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -112,19 +119,19 @@ const ProfitAndLoss: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const response = await accountingService.getProfitAndLoss({
+      const response = await accountingService.getBalanceSheet({
         from: from || undefined,
-        to: to || undefined,
+        asOf: asOf || undefined,
         ...companyQuery,
       });
       setData(response?.data || null);
     } catch (err: any) {
-      setError(err?.response?.data?.message || t('profitAndLoss.errors.load'));
+      setError(err?.response?.data?.message || t('balanceSheet.errors.load'));
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [from, to, effectiveCompanyId, companyQuery, t]);
+  }, [from, asOf, effectiveCompanyId, companyQuery, t]);
 
   useEffect(() => {
     void load();
@@ -132,25 +139,25 @@ const ProfitAndLoss: React.FC = () => {
 
   const handleReset = () => {
     setFrom('');
-    setTo('');
+    setAsOf('');
     setTab(0);
   };
 
   const handleExcelDownload = async () => {
     if (!data) {
-      setError(t('profitAndLoss.errors.noDataForExport'));
+      setError(t('balanceSheet.errors.noDataForExport'));
       return;
     }
     try {
       setExporting(true);
-      await exportProfitAndLossExcel({
+      await exportBalanceSheetExcel({
         data,
         companyName: selectedCompanyName || undefined,
         language: i18n.language,
-        filePrefix: i18n.language?.startsWith('en') ? 'Profit_and_Loss' : '손익계산서',
+        filePrefix: i18n.language?.startsWith('en') ? 'Balance_Sheet' : '재무상태표',
       });
     } catch (err: any) {
-      setError(err?.message || t('profitAndLoss.errors.exportFailed'));
+      setError(err?.message || t('balanceSheet.errors.exportFailed'));
     } finally {
       setExporting(false);
     }
@@ -159,22 +166,22 @@ const ProfitAndLoss: React.FC = () => {
   const kpis = useMemo(
     () => [
       {
-        key: 'income',
-        label: t('profitAndLoss.kpi.totalIncome'),
-        value: data?.totalIncome ?? 0,
+        key: 'assets',
+        label: t('balanceSheet.kpi.totalAssets'),
+        value: data?.totalAssets ?? 0,
         color: 'primary.main',
       },
       {
-        key: 'expense',
-        label: t('profitAndLoss.kpi.totalExpense'),
-        value: data?.totalExpense ?? 0,
-        color: 'error.main',
+        key: 'liab',
+        label: t('balanceSheet.kpi.totalLiabilities'),
+        value: data?.totalLiabilities ?? 0,
+        color: 'warning.main',
       },
       {
-        key: 'net',
-        label: t('profitAndLoss.kpi.netProfit'),
-        value: data?.netProfit ?? 0,
-        color: (data?.netProfit ?? 0) >= 0 ? 'success.main' : 'error.main',
+        key: 'equity',
+        label: t('balanceSheet.kpi.totalEquity'),
+        value: data?.totalEquity ?? 0,
+        color: 'success.main',
       },
     ],
     [data, t]
@@ -194,7 +201,7 @@ const ProfitAndLoss: React.FC = () => {
 
   const filterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx };
 
-  const renderAmountTable = (rows: PlRow[], total: number, emptyKey: string, totalColor: string) => {
+  const renderAmountTable = (rows: BsRow[], total: number, emptyKey: string, totalColor: string) => {
     if (loading) {
       return (
         <Box sx={listStateBoxSx}>
@@ -212,8 +219,10 @@ const ProfitAndLoss: React.FC = () => {
           <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
             {t(emptyKey)}
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
-            {t('profitAndLoss.empty.hint')}
+          <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 480 }}>
+            {Number(data?.draftCount || 0) > 0
+              ? t('balanceSheet.empty.draftHint', { count: data?.draftCount })
+              : t('balanceSheet.empty.hint')}
           </Typography>
         </Box>
       );
@@ -224,18 +233,20 @@ const ProfitAndLoss: React.FC = () => {
         <Table size="small" sx={tableSx}>
           <TableHead sx={mvsTableHeadHighlightSx}>
             <TableRow>
-              <TableCell width="18%">{t('profitAndLoss.columns.code')}</TableCell>
-              <TableCell width="52%">{t('profitAndLoss.columns.account')}</TableCell>
+              <TableCell width="18%">{t('balanceSheet.columns.code')}</TableCell>
+              <TableCell width="52%">{t('balanceSheet.columns.account')}</TableCell>
               <TableCell width="30%" align="right">
-                {t('profitAndLoss.columns.amount')}
+                {t('balanceSheet.columns.amount')}
               </TableCell>
             </TableRow>
           </TableHead>
           <TableBody sx={mvsTableBodyRowSx}>
             {rows.map((row) => (
-              <TableRow key={row.accountId} hover>
+              <TableRow key={`${row.accountId}-${row.code}`} hover>
                 <TableCell sx={cellEllipsisSx}>{row.code}</TableCell>
-                <TableCell sx={cellEllipsisSx}>{getGlAccountLabel(row, i18n.language)}</TableCell>
+                <TableCell sx={cellEllipsisSx}>
+                  {row.synthetic ? row.name : getGlAccountLabel(row, i18n.language)}
+                </TableCell>
                 <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                   {formatInr(row.amount)}
                 </TableCell>
@@ -243,7 +254,7 @@ const ProfitAndLoss: React.FC = () => {
             ))}
             <TableRow sx={{ bgcolor: '#F8FAFC !important' }}>
               <TableCell colSpan={2} sx={{ fontWeight: 700 }}>
-                {t('profitAndLoss.total')}
+                {t('balanceSheet.total')}
               </TableCell>
               <TableCell align="right" sx={{ fontWeight: 700, color: totalColor, fontVariantNumeric: 'tabular-nums' }}>
                 {formatInr(total)}
@@ -257,7 +268,7 @@ const ProfitAndLoss: React.FC = () => {
 
   return (
     <Box sx={mvsPageRootSx}>
-      <MvsPageHeader title={t('profitAndLoss.title')} description={t('profitAndLoss.description')} />
+      <MvsPageHeader title={t('balanceSheet.title')} description={t('balanceSheet.description')} />
 
       <AccountingCompanyBar
         canSelectCompany={canSelectCompany}
@@ -285,8 +296,12 @@ const ProfitAndLoss: React.FC = () => {
         ))}
       </Box>
 
-      <Alert severity="info" sx={{ mb: 2 }}>
-        {t('profitAndLoss.hint')}
+      <Alert severity={data?.balanced === false ? 'warning' : 'info'} sx={{ mb: 2 }}>
+        {data?.balanced === false
+          ? t('balanceSheet.unbalancedHint')
+          : Number(data?.draftCount || 0) > 0
+            ? `${t('balanceSheet.hint')} ${t('balanceSheet.empty.draftHint', { count: data?.draftCount })}`
+            : t('balanceSheet.hint')}
       </Alert>
 
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 2 }}>
@@ -308,7 +323,7 @@ const ProfitAndLoss: React.FC = () => {
               fullWidth
               size="small"
               type="date"
-              label={t('profitAndLoss.from')}
+              label={t('balanceSheet.from')}
               value={from}
               onChange={(e) => setFrom(e.target.value)}
               disabled={loading}
@@ -319,9 +334,9 @@ const ProfitAndLoss: React.FC = () => {
               fullWidth
               size="small"
               type="date"
-              label={t('profitAndLoss.to')}
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
+              label={t('balanceSheet.asOf')}
+              value={asOf}
+              onChange={(e) => setAsOf(e.target.value)}
               disabled={loading}
               sx={filterFieldSx}
               {...mvsOutlinedLabelProps}
@@ -334,7 +349,7 @@ const ProfitAndLoss: React.FC = () => {
               onClick={() => void load()}
               disabled={loading}
             >
-              {t('profitAndLoss.search')}
+              {t('balanceSheet.search')}
             </Button>
             <Button
               variant="outlined"
@@ -352,7 +367,7 @@ const ProfitAndLoss: React.FC = () => {
               onClick={handleExcelDownload}
               disabled={loading || exporting || !data}
             >
-              {t('profitAndLoss.excelDownload')}
+              {t('balanceSheet.excelDownload')}
             </Button>
           </Box>
         </Box>
@@ -366,19 +381,31 @@ const ProfitAndLoss: React.FC = () => {
           scrollButtons="auto"
           sx={{ px: 1, minHeight: 48, '& .MuiTab-root': { py: 1.5, textTransform: 'none', fontWeight: 600 } }}
         >
-          <Tab icon={<TrendingUp fontSize="small" />} iconPosition="start" label={t('profitAndLoss.tabs.income')} />
-          <Tab icon={<TrendingDown fontSize="small" />} iconPosition="start" label={t('profitAndLoss.tabs.expense')} />
-          <Tab label={t('profitAndLoss.tabs.summary')} />
+          <Tab icon={<AssetIcon fontSize="small" />} iconPosition="start" label={t('balanceSheet.tabs.assets')} />
+          <Tab
+            icon={<LiabilityIcon fontSize="small" />}
+            iconPosition="start"
+            label={t('balanceSheet.tabs.liabilities')}
+          />
+          <Tab icon={<EquityIcon fontSize="small" />} iconPosition="start" label={t('balanceSheet.tabs.equity')} />
+          <Tab label={t('balanceSheet.tabs.summary')} />
         </Tabs>
       </Card>
 
       <Box sx={mvsBodyListZoneSx}>
         {tab === 0 &&
-          renderAmountTable(data?.incomeRows || [], data?.totalIncome ?? 0, 'profitAndLoss.empty.income', 'primary.main')}
+          renderAmountTable(data?.assetRows || [], data?.totalAssets ?? 0, 'balanceSheet.empty.assets', 'primary.main')}
         {tab === 1 &&
-          renderAmountTable(data?.expenseRows || [], data?.totalExpense ?? 0, 'profitAndLoss.empty.expense', 'error.main')}
-        {tab === 2 && (
-          loading ? (
+          renderAmountTable(
+            data?.liabilityRows || [],
+            data?.totalLiabilities ?? 0,
+            'balanceSheet.empty.liabilities',
+            'warning.main'
+          )}
+        {tab === 2 &&
+          renderAmountTable(data?.equityRows || [], data?.totalEquity ?? 0, 'balanceSheet.empty.equity', 'success.main')}
+        {tab === 3 &&
+          (loading ? (
             <Box sx={listStateBoxSx}>
               <CircularProgress size={36} />
               <Typography variant="body2" color="text.secondary">
@@ -390,49 +417,54 @@ const ProfitAndLoss: React.FC = () => {
               <Table size="small" sx={tableSx}>
                 <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
-                    <TableCell width="60%">{t('profitAndLoss.sections.netProfit')}</TableCell>
+                    <TableCell width="60%">{t('balanceSheet.sections.equation')}</TableCell>
                     <TableCell width="40%" align="right">
-                      {t('profitAndLoss.columns.amount')}
+                      {t('balanceSheet.columns.amount')}
                     </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody sx={mvsTableBodyRowSx}>
                   <TableRow hover>
-                    <TableCell>{t('profitAndLoss.kpi.totalIncome')}</TableCell>
+                    <TableCell>{t('balanceSheet.kpi.totalAssets')}</TableCell>
                     <TableCell align="right" sx={{ color: 'primary.main', fontVariantNumeric: 'tabular-nums' }}>
-                      {formatInr(data?.totalIncome ?? 0)}
+                      {formatInr(data?.totalAssets ?? 0)}
                     </TableCell>
                   </TableRow>
                   <TableRow hover>
-                    <TableCell>{t('profitAndLoss.kpi.totalExpense')}</TableCell>
-                    <TableCell align="right" sx={{ color: 'error.main', fontVariantNumeric: 'tabular-nums' }}>
-                      {formatInr(data?.totalExpense ?? 0)}
+                    <TableCell>{t('balanceSheet.kpi.totalLiabilities')}</TableCell>
+                    <TableCell align="right" sx={{ color: 'warning.main', fontVariantNumeric: 'tabular-nums' }}>
+                      {formatInr(data?.totalLiabilities ?? 0)}
+                    </TableCell>
+                  </TableRow>
+                  <TableRow hover>
+                    <TableCell>{t('balanceSheet.kpi.totalEquity')}</TableCell>
+                    <TableCell align="right" sx={{ color: 'success.main', fontVariantNumeric: 'tabular-nums' }}>
+                      {formatInr(data?.totalEquity ?? 0)}
                     </TableCell>
                   </TableRow>
                   <TableRow sx={{ bgcolor: '#F8FAFC !important' }}>
-                    <TableCell sx={{ fontWeight: 700 }}>{t('profitAndLoss.kpi.netProfit')}</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>{t('balanceSheet.kpi.liabilitiesAndEquity')}</TableCell>
                     <TableCell
                       align="right"
                       sx={{
                         fontWeight: 800,
                         fontSize: '1.05rem',
-                        color: (data?.netProfit ?? 0) >= 0 ? 'success.main' : 'error.main',
+                        color: data?.balanced ? 'success.main' : 'error.main',
                         fontVariantNumeric: 'tabular-nums',
                       }}
                     >
-                      {formatInr(data?.netProfit ?? 0)}
+                      {formatInr(data?.totalLiabilitiesAndEquity ?? 0)}
                     </TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
             </TableContainer>
-          )
-        )}
-        {!loading && tab === 2 && (
+          ))}
+        {!loading && tab === 3 && (
           <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
-            {t('profitAndLoss.formula', {
-              income: formatInr(data?.totalIncome ?? 0),
-              expense: formatInr(data?.totalExpense ?? 0),
+            {t('balanceSheet.formula', {
+              assets: formatInr(data?.totalAssets ?? 0),
+              liabilityEquity: formatInr(data?.totalLiabilitiesAndEquity ?? 0),
             })}
           </Typography>
         )}
@@ -443,4 +475,4 @@ const ProfitAndLoss: React.FC = () => {
   );
 };
 
-export default ProfitAndLoss;
+export default BalanceSheet;

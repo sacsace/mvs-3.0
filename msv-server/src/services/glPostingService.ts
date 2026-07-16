@@ -3,6 +3,8 @@ import sequelize from '../config/database';
 import GlAccount from '../models/GlAccount';
 import GlVoucher from '../models/GlVoucher';
 import GlVoucherLine from '../models/GlVoucherLine';
+import { resolveLedgerStrict } from '../utils/accountResolution';
+import { ensureDefaultChartOfAccounts } from './chartOfAccountsService';
 
 export type VoucherLineInput = {
   lineNo?: number;
@@ -20,48 +22,7 @@ const parseAmount = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const DEFAULT_COA: Array<{
-  code: string;
-  name: string;
-  nameEn?: string;
-  accountType: 'group' | 'ledger';
-  nature: 'asset' | 'liability' | 'income' | 'expense' | 'equity';
-  parentCode?: string;
-}> = [
-  { code: '1000', name: '자산', nameEn: 'Assets', accountType: 'group', nature: 'asset' },
-  { code: '1100', name: '유동자산', nameEn: 'Current Assets', accountType: 'group', nature: 'asset', parentCode: '1000' },
-  { code: '1101', name: '현금', nameEn: 'Cash', accountType: 'ledger', nature: 'asset', parentCode: '1100' },
-  { code: '1102', name: '보통예금', nameEn: 'Bank Account', accountType: 'ledger', nature: 'asset', parentCode: '1100' },
-  { code: '1103', name: '외상매출금', nameEn: 'Accounts Receivable', accountType: 'ledger', nature: 'asset', parentCode: '1100' },
-  { code: '1200', name: '비유동자산', nameEn: 'Fixed Assets', accountType: 'group', nature: 'asset', parentCode: '1000' },
-  { code: '2000', name: '부채', nameEn: 'Liabilities', accountType: 'group', nature: 'liability' },
-  { code: '2100', name: '유동부채', nameEn: 'Current Liabilities', accountType: 'group', nature: 'liability', parentCode: '2000' },
-  { code: '2101', name: '외상매입금', nameEn: 'Accounts Payable', accountType: 'ledger', nature: 'liability', parentCode: '2100' },
-  { code: '2102', name: '부가세예수금', nameEn: 'GST Payable', accountType: 'ledger', nature: 'liability', parentCode: '2100' },
-  { code: '3000', name: '자본', nameEn: 'Equity', accountType: 'group', nature: 'equity' },
-  { code: '3100', name: '자본금', nameEn: 'Capital', accountType: 'ledger', nature: 'equity', parentCode: '3000' },
-  { code: '3200', name: '이익잉여금', nameEn: 'Retained Earnings', accountType: 'ledger', nature: 'equity', parentCode: '3000' },
-  { code: '4000', name: '수익', nameEn: 'Income', accountType: 'group', nature: 'income' },
-  { code: '4100', name: '매출', nameEn: 'Sales Revenue', accountType: 'ledger', nature: 'income', parentCode: '4000' },
-  { code: '4200', name: '기타수익', nameEn: 'Other Income', accountType: 'ledger', nature: 'income', parentCode: '4000' },
-  { code: '5000', name: '비용', nameEn: 'Expenses', accountType: 'group', nature: 'expense' },
-  { code: '5100', name: '매입비용', nameEn: 'Purchase Expense', accountType: 'ledger', nature: 'expense', parentCode: '5000' },
-  { code: '5200', name: '판관비', nameEn: 'Office Expense', accountType: 'ledger', nature: 'expense', parentCode: '5000' },
-  { code: '5299', name: '미분류비용', nameEn: 'Expense - Unclassified', accountType: 'ledger', nature: 'expense', parentCode: '5000' },
-];
-
-const NAME_ALIASES: Record<string, string> = {
-  'accounts receivable': '1103',
-  'accounts payable': '2101',
-  'sales revenue': '4100',
-  'purchase expense': '5100',
-  'office expense': '5200',
-  'expense - unclassified': '5299',
-  'output gst': '2102',
-  'gst payable': '2102',
-  cash: '1101',
-  bank: '1102',
-};
+export { ensureDefaultChartOfAccounts } from './chartOfAccountsService';
 
 export const computeTotals = (lines: VoucherLineInput[]) => {
   const totalDebit = round2(lines.reduce((sum, line) => sum + parseAmount(line.debit), 0));
@@ -87,103 +48,44 @@ const applyBalanceDelta = (nature: string, debit: number, credit: number) => {
   return credit - debit;
 };
 
-export const ensureDefaultChartOfAccounts = async ({
-  tenantId,
-  companyId,
-  userId,
-}: {
-  tenantId: number;
-  companyId: number;
-  userId?: number;
-}) => {
-  const existing = await (GlAccount as any).count({
-    where: { tenant_id: tenantId, company_id: companyId, is_active: true },
-  });
-  if (existing > 0) return { created: 0 };
-
-  const codeToId = new Map<string, number>();
-  let created = 0;
-
-  for (const row of DEFAULT_COA) {
-    const parentId = row.parentCode ? codeToId.get(row.parentCode) ?? null : null;
-    const account = await (GlAccount as any).create({
-      tenant_id: tenantId,
-      company_id: companyId,
-      parent_id: parentId,
-      code: row.code,
-      name: row.name,
-      name_en: row.nameEn || null,
-      account_type: row.accountType,
-      nature: row.nature,
-      opening_balance: 0,
-      current_balance: 0,
-      is_system: true,
-      is_active: true,
-      created_by: userId ?? null,
-      updated_by: userId ?? null,
-    });
-    codeToId.set(row.code, account.id);
-    created += 1;
-  }
-
-  return { created };
-};
-
 export const resolveAccount = async ({
   tenantId,
   companyId,
   accountId,
   accountName,
   userId,
+  allowUnclassifiedFallback = false,
 }: {
   tenantId: number;
   companyId: number;
   accountId?: number;
   accountName?: string;
   userId?: number;
+  /** Only for legacy callers that explicitly opt in — prefer false */
+  allowUnclassifiedFallback?: boolean;
 }) => {
   await ensureDefaultChartOfAccounts({ tenantId, companyId, userId });
 
-  if (accountId) {
-    const byId = await (GlAccount as any).findOne({
-      where: { id: accountId, tenant_id: tenantId, company_id: companyId, is_active: true, account_type: 'ledger' },
-    });
-    if (byId) return byId;
-  }
-
-  const rawName = String(accountName || '').trim();
-  if (!rawName) {
-    throw new Error('계정과목을 선택해 주세요.');
-  }
-
-  const aliasCode = NAME_ALIASES[rawName.toLowerCase()];
-  if (aliasCode) {
-    const byAlias = await (GlAccount as any).findOne({
-      where: { tenant_id: tenantId, company_id: companyId, code: aliasCode, is_active: true, account_type: 'ledger' },
-    });
-    if (byAlias) return byAlias;
-  }
-
-  const byName = await (GlAccount as any).findOne({
-    where: {
-      tenant_id: tenantId,
-      company_id: companyId,
-      is_active: true,
-      account_type: 'ledger',
-      [Op.or]: [
-        { name: { [Op.iLike]: rawName } },
-        { name_en: { [Op.iLike]: rawName } },
-      ],
-    },
+  const resolved = await resolveLedgerStrict({
+    tenantId,
+    companyId,
+    accountId,
+    accountName,
+    allowPartialName: false,
   });
-  if (byName) return byName;
+  if (resolved) {
+    const row = await (GlAccount as any).findByPk(resolved.id);
+    if (row) return row;
+  }
 
-  const fallback = await (GlAccount as any).findOne({
-    where: { tenant_id: tenantId, company_id: companyId, code: '5299', is_active: true },
-  });
-  if (fallback) return fallback;
+  if (allowUnclassifiedFallback) {
+    const fallback = await (GlAccount as any).findOne({
+      where: { tenant_id: tenantId, company_id: companyId, code: '5299', is_active: true },
+    });
+    if (fallback) return fallback;
+  }
 
-  throw new Error(`계정과목을 찾을 수 없습니다: ${rawName}`);
+  throw new Error(`계정과목을 찾을 수 없습니다: ${String(accountName || accountId || '').trim() || '(empty)'}`);
 };
 
 export const generateVoucherNo = async (tenantId: number, companyId: number) => {
@@ -379,6 +281,7 @@ export const postAutoVoucherToLedger = async ({
   const lines = Array.isArray(autoVoucher.final_lines) ? autoVoucher.final_lines : [];
   const mapped: VoucherLineInput[] = lines.map((line: any, index: number) => ({
     lineNo: Number(line?.lineNo || index + 1),
+    accountId: line?.accountId != null ? Number(line.accountId) : undefined,
     accountName: String(line?.accountName || '').trim(),
     debit: parseAmount(line?.debit),
     credit: parseAmount(line?.credit),

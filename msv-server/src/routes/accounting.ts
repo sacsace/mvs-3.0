@@ -58,6 +58,14 @@ import {
   upsertAutoVoucherRule,
 } from '../controllers/autoVoucherController';
 import {
+  brainAsk,
+  brainLearn,
+  brainListAudits,
+  brainRecommend,
+  brainRecommendFromExpense,
+  brainRecommendFromInvoice,
+} from '../controllers/accountingBrainController';
+import {
   createGlAccount,
   createGlVoucher,
   deleteGlAccount,
@@ -68,10 +76,13 @@ import {
   getTrialBalance,
   getProfitAndLoss,
   postGlVoucher,
+  bulkPostGlVouchers,
   seedGlAccounts,
   updateGlAccount,
   validateGlVoucherLines,
+  getBalanceSheet,
 } from '../controllers/glController';
+import { previewTallyImport, runTallyImport } from '../controllers/tallyImportController';
 import {
   seedAccountingMasters,
   getVoucherTypes,
@@ -165,6 +176,43 @@ const autoVoucherUpload = multer({
   },
 });
 
+const tallyImportPath = path.join(uploadPath, 'tally-imports');
+if (!fs.existsSync(tallyImportPath)) {
+  fs.mkdirSync(tallyImportPath, { recursive: true });
+}
+const tallyImportStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, tallyImportPath),
+  filename: (_req, file, cb) => {
+    const safeName = (file.originalname || 'tally-export').replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    cb(null, `${Date.now()}_${safeName}`);
+  },
+});
+/** Tally Day Book XML can be multi-GB — default 2GB (override with TALLY_IMPORT_MAX_MB) */
+const TALLY_IMPORT_MAX_BYTES =
+  Math.max(1, Number(process.env.TALLY_IMPORT_MAX_MB) || 2048) * 1024 * 1024;
+const tallyImportUpload = multer({
+  storage: tallyImportStorage,
+  limits: { fileSize: TALLY_IMPORT_MAX_BYTES },
+  fileFilter: (_req, file, cb) => {
+    const name = String(file.originalname || '').toLowerCase();
+    const allowedExt =
+      name.endsWith('.xml') ||
+      name.endsWith('.json') ||
+      name.endsWith('.txt') ||
+      /\.xml$/i.test(name);
+    const mime = String(file.mimetype || '').toLowerCase();
+    const allowedMime =
+      !mime ||
+      mime === 'application/octet-stream' ||
+      mime.includes('xml') ||
+      mime.includes('json') ||
+      mime.includes('text') ||
+      mime.includes('csv');
+    if (allowedExt || allowedMime) return cb(null, true);
+    cb(new Error(`Tally Export는 XML / JSON 파일만 지원합니다. (받은 형식: ${file.mimetype || 'unknown'})`));
+  },
+});
+
 // 토큰으로 영수증 업로드 (인증 미들웨어 없음 - 휴대폰에서 QR 스캔 후 호출)
 router.post('/expenses/upload-receipt', receiptUpload.single('file'), uploadExpenseReceiptByToken);
 
@@ -182,6 +230,14 @@ router.post('/auto-vouchers/:id/reject', restrictAuditToReadOnly, rejectAutoVouc
 router.get('/auto-voucher-rules', getAutoVoucherRules);
 router.post('/auto-voucher-rules', restrictAuditToReadOnly, upsertAutoVoucherRule);
 
+// Accounting Brain — recommend / Q&A / learning only (NEVER posts)
+router.post('/brain/recommend', brainRecommend);
+router.post('/brain/ask', brainAsk);
+router.post('/brain/learn', restrictAuditToReadOnly, brainLearn);
+router.post('/brain/from-invoice/:id', brainRecommendFromInvoice);
+router.post('/brain/from-expense/:id', brainRecommendFromExpense);
+router.get('/brain/audits', brainListAudits);
+
 // 장부 / 계정과목 / 전표 (Tally형)
 router.get('/gl/accounts', getGlAccounts);
 router.post('/gl/accounts', restrictAuditToReadOnly, createGlAccount);
@@ -191,11 +247,17 @@ router.post('/gl/accounts/seed-defaults', restrictAuditToReadOnly, seedGlAccount
 router.get('/gl/vouchers', getGlVouchers);
 router.get('/gl/vouchers/:id', getGlVoucherById);
 router.post('/gl/vouchers', restrictAuditToReadOnly, createGlVoucher);
+router.post('/gl/vouchers/bulk-post', restrictAuditToReadOnly, bulkPostGlVouchers);
 router.post('/gl/vouchers/:id/post', restrictAuditToReadOnly, postGlVoucher);
 router.post('/gl/vouchers/validate-lines', validateGlVoucherLines);
 router.get('/gl/ledger', getAccountLedger);
 router.get('/gl/trial-balance', getTrialBalance);
 router.get('/gl/profit-and-loss', getProfitAndLoss);
+router.get('/gl/balance-sheet', getBalanceSheet);
+
+// Tally Export → MSV Import (XML/JSON, draft vouchers only)
+router.post('/tally/preview', restrictAuditToReadOnly, tallyImportUpload.single('file'), previewTallyImport);
+router.post('/tally/import', restrictAuditToReadOnly, tallyImportUpload.single('file'), runTallyImport);
 
 // 전표 입력 마스터 & 직관적 전표 API
 router.post('/masters/seed', restrictAuditToReadOnly, seedAccountingMasters);

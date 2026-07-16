@@ -490,6 +490,82 @@ export const accountingService = {
     }
   },
 
+  /** Accounting Brain — recommend only (never posts) */
+  brainRecommend: async (
+    data: {
+      description?: string;
+      sourceDocType?: string;
+      vendorName?: string;
+      customerName?: string;
+      invoiceNumber?: string;
+      amount?: number;
+      currency?: string;
+      transactionDate?: string;
+      gstin?: string;
+      ocrText?: string;
+      narration?: string;
+      source?: string;
+    },
+    companyId?: number
+  ) => {
+    const response = await api.post('/accounting/brain/recommend', data, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  brainAsk: async (question: string, companyId?: number) => {
+    const response = await api.post(
+      '/accounting/brain/ask',
+      { question },
+      { params: companyId ? { company_id: companyId } : undefined }
+    );
+    return response.data;
+  },
+
+  brainLearn: async (
+    data: {
+      fieldName: string;
+      afterValue: string;
+      beforeValue?: string;
+      counterpartyName?: string;
+      keyword?: string;
+      docType?: string;
+      sourceType?: string;
+      sourceId?: number;
+      recommendationSnapshot?: Record<string, unknown>;
+    },
+    companyId?: number
+  ) => {
+    const response = await api.post('/accounting/brain/learn', data, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  brainRecommendFromInvoice: async (invoiceId: number, companyId?: number) => {
+    const response = await api.post(
+      `/accounting/brain/from-invoice/${invoiceId}`,
+      {},
+      { params: companyId ? { company_id: companyId } : undefined }
+    );
+    return response.data;
+  },
+
+  brainRecommendFromExpense: async (expenseId: number, companyId?: number) => {
+    const response = await api.post(
+      `/accounting/brain/from-expense/${expenseId}`,
+      {},
+      { params: companyId ? { company_id: companyId } : undefined }
+    );
+    return response.data;
+  },
+
+  brainListAudits: async (params?: { limit?: number; company_id?: number }) => {
+    const response = await api.get('/accounting/brain/audits', { params });
+    return response.data;
+  },
+
   // AI 자동 전표 규칙 저장
   upsertAutoVoucherRule: async (data: any) => {
     try {
@@ -566,6 +642,19 @@ export const accountingService = {
     return response.data;
   },
 
+  /** Post all draft vouchers (or selected ids) for the company */
+  bulkPostGlVouchers: async (companyId?: number, ids?: number[]) => {
+    const response = await api.post(
+      '/accounting/gl/vouchers/bulk-post',
+      ids?.length ? { ids } : {},
+      {
+        params: companyId ? { company_id: companyId } : undefined,
+        timeout: 300000,
+      }
+    );
+    return response.data;
+  },
+
   getAccountLedger: async (params: { accountId: number; from?: string; to?: string; company_id?: number }) => {
     const response = await api.get('/accounting/gl/ledger', { params });
     return response.data;
@@ -578,6 +667,39 @@ export const accountingService = {
 
   getProfitAndLoss: async (params?: { from?: string; to?: string; company_id?: number }) => {
     const response = await api.get('/accounting/gl/profit-and-loss', { params });
+    return response.data;
+  },
+
+  getBalanceSheet: async (params?: { from?: string; asOf?: string; company_id?: number }) => {
+    const response = await api.get('/accounting/gl/balance-sheet', { params });
+    return response.data;
+  },
+
+  /** Tally Export XML/JSON preview (no DB write) */
+  previewTallyImport: async (formData: FormData, companyId?: number) => {
+    const response = await api.post('/accounting/tally/preview', formData, {
+      params: companyId ? { company_id: companyId } : undefined,
+      timeout: 600000,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      // Content-Type 생략: client 인터셉터가 FormData면 multipart+boundary로 설정
+      transformRequest: [(data) => data],
+    });
+    return response.data;
+  },
+
+  /** Tally Export → MSV GL (draft vouchers; never auto-posts) */
+  importTallyExport: async (
+    formData: FormData,
+    companyId?: number
+  ) => {
+    const response = await api.post('/accounting/tally/import', formData, {
+      params: companyId ? { company_id: companyId } : undefined,
+      timeout: 600000,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      transformRequest: [(data) => data],
+    });
     return response.data;
   },
 

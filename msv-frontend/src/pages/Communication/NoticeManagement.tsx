@@ -47,7 +47,22 @@ import {
   FormControlLabel
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import {
+  mvsBodyCardSx,
+  mvsBodyFilterWrapSx,
+  mvsBodyListTableSx,
+  mvsBodyListZoneSx,
+  mvsBodyOutlinedBtnSx,
+  mvsBodyPaginationSx,
+  mvsBodyPrimaryBtnSx,
+  mvsFilterFieldHeightSx,
+  mvsOutlinedLabelProps,
+  mvsPageRootSx,
+  mvsSearchFieldSx,
+  mvsTableBodyRowSx,
+  mvsTableHeadHighlightSx,
+  mvsTableScrollSx,
+} from '../../theme/mvsLayout';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
   Add as AddIcon,
@@ -69,6 +84,7 @@ import {
   Print as PrintIcon,
   Download as DownloadIcon,
   Refresh as RefreshIcon,
+  RestartAlt as ResetIcon,
   CalendarToday as CalendarTodayIcon,
   Business as BusinessIcon,
   Category as CategoryIcon,
@@ -88,7 +104,6 @@ import {
   PushPin as PushPinIcon
 } from '@mui/icons-material';
 import { useStore } from '../../store';
-import { mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
 import { noticeService, userUiPreferencesService } from '../../services/api';
 import { useTranslation } from 'react-i18next';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
@@ -1899,65 +1914,95 @@ const NoticeManagement: React.FC = () => {
     );
   }
 
-  const shellCardSx = {
-    borderRadius: '20px',
-    border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
-    boxShadow: `0 4px 24px ${alpha('#0f172a', 0.055)}`,
-    bgcolor: 'background.paper',
-    overflow: 'hidden' as const,
-    boxSizing: 'border-box' as const,
+  const listStateBoxSx = {
+    ...mvsBodyListTableSx,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    py: { xs: 6, sm: 8 },
+    px: 3,
+    gap: 1.5,
+  } as const;
+
+  const cellEllipsisSx = {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    maxWidth: 0,
+  } as const;
+
+  const noticeTableSx = {
+    width: '100%',
+    tableLayout: 'fixed',
+    borderCollapse: 'collapse',
+    bgcolor: 'transparent',
+    '& .MuiTableCell-root': {
+      borderLeft: 'none',
+      borderRight: 'none',
+      borderTop: 'none',
+    },
+  } as const;
+
+  const filterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx };
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setPage(1);
+  };
+
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value);
+    setPage(1);
+  };
+
+  const handleResetFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('');
+    setPage(1);
   };
 
   return (
-    <Box
-      sx={{
-        ...mvsPageRootSx,
-        p: { xs: 1.5, sm: 2 },
-      }}
-    >
-      <Box sx={{ mb: 2.5 }}>
-        <MvsPageHeader
-          title={<>공지사항{isEn ? ' Notice Board' : ''}</>}
-          description={txt('중요한 공지사항과 업무 관련 정보를 확인하는 페이지입니다.', 'This page shows important notices and work-related updates.')}
-          mb={2}
-        />
+    <Box sx={mvsPageRootSx}>
+      <MvsPageHeader
+        title={<>공지사항{isEn ? ' Notice Board' : ''}</>}
+        description={txt('중요한 공지사항과 업무 관련 정보를 확인하는 페이지입니다.', 'This page shows important notices and work-related updates.')}
+      />
 
-        {/* 탭 네비게이션 */}
-        <Card elevation={0} sx={{ ...shellCardSx, mb: 2 }}>
-          <Tabs
-            value={activeTab}
-            onChange={(_, newValue) => setActiveTab(newValue)}
-            sx={{
-              px: { xs: 0.5, sm: 1 },
-              borderBottom: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
-              '& .MuiTabs-indicator': {
-                height: 3,
-                borderRadius: '3px 3px 0 0',
-                bgcolor: 'primary.main',
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 2 }}>
+        <Tabs
+          value={activeTab}
+          onChange={(_, newValue) => setActiveTab(newValue)}
+          sx={{
+            px: { xs: 0.5, sm: 1 },
+            minHeight: 48,
+            '& .MuiTabs-indicator': {
+              height: 3,
+              borderRadius: '3px 3px 0 0',
+              bgcolor: 'primary.main',
+            },
+            '& .MuiTab-root': {
+              textTransform: 'none',
+              fontWeight: 600,
+              fontSize: '0.875rem',
+              letterSpacing: '0.01em',
+              minHeight: 48,
+              py: 1.5,
+              color: 'text.secondary',
+              '&.Mui-selected': {
+                color: 'primary.main',
               },
-              '& .MuiTab-root': {
-                textTransform: 'none',
-                fontWeight: 600,
-                fontSize: '0.875rem',
-                letterSpacing: '0.01em',
-                minHeight: 52,
-                py: 1.25,
-                color: 'text.secondary',
-                '&.Mui-selected': {
-                  color: 'primary.main',
-                  bgcolor: alpha(theme.palette.primary.main, 0.06),
-                },
-              },
-            }}
-          >
-            <Tab label={txt('공지사항', 'Notices')} disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead} />
-            <Tab
-              label={txt('연간 스케줄표', 'Yearly Schedule')}
-              disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
-            />
-          </Tabs>
-        </Card>
-      </Box>
+            },
+          }}
+        >
+          <Tab label={txt('공지사항', 'Notices')} disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead} />
+          <Tab
+            label={txt('연간 스케줄표', 'Yearly Schedule')}
+            disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
+          />
+        </Tabs>
+      </Card>
 
       {!noticeMenuFlags.menusLoading && !noticeMenuFlags.canRead && (
         <Alert severity="warning" sx={{ mb: 2 }}>
@@ -1969,14 +2014,17 @@ const NoticeManagement: React.FC = () => {
       {activeTab === 0 && (
         <>
       {/* 필터 및 검색 */}
-      <Card elevation={0} sx={{ ...shellCardSx, mb: 2.5 }}>
-        <CardContent sx={{ py: 2.25, px: { xs: 2, sm: 2.5 }, '&:last-child': { pb: 2.25 } }}>
+      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 0 }}>
+        <Box sx={mvsBodyFilterWrapSx}>
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr auto' },
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'minmax(0, 2fr) minmax(0, 1fr) auto auto',
+              },
               gap: 2,
-              alignItems: 'center',
+              alignItems: 'flex-end',
             }}
           >
             <TextField
@@ -1985,19 +2033,14 @@ const NoticeManagement: React.FC = () => {
               label={txt('검색', 'Search')}
               placeholder={txt('제목, 내용, 작성자 검색', 'Search title, content, author')}
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
-              InputLabelProps={{ shrink: true }}
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: '12px',
-                  bgcolor: alpha(theme.palette.grey[500], 0.04),
-                },
-              }}
+              sx={filterFieldSx}
+              {...mvsOutlinedLabelProps}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon sx={{ color: 'text.secondary', opacity: 0.85 }} />
+                    <SearchIcon sx={{ color: 'text.secondary', opacity: 0.85, fontSize: '1.125rem' }} />
                   </InputAdornment>
                 ),
               }}
@@ -2006,93 +2049,91 @@ const NoticeManagement: React.FC = () => {
               fullWidth
               size="small"
               disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
-              sx={{
-                '& .MuiOutlinedInput-root': { borderRadius: '12px', bgcolor: alpha(theme.palette.grey[500], 0.04) },
-              }}
+              sx={filterFieldSx}
             >
               <InputLabel shrink>{txt('상태', 'Status')}</InputLabel>
-              <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} label={txt('상태', 'Status')}>
+              <Select
+                value={statusFilter}
+                onChange={(e) => handleStatusFilterChange(String(e.target.value))}
+                label={txt('상태', 'Status')}
+              >
                 <MenuItem value="">{txt('전체', 'All')}</MenuItem>
                 <MenuItem value="published">{txt('게시됨', 'Published')}</MenuItem>
               </Select>
             </FormControl>
+            <Button
+              variant="outlined"
+              startIcon={<ResetIcon fontSize="small" />}
+              onClick={handleResetFilters}
+              disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
+              sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
+            >
+              {t('common.reset')}
+            </Button>
             <Tooltip title={t('common.menuNoCreate')} disableHoverListener={noticeMenuFlags.menusLoading || noticeMenuFlags.canCreate}>
-              <span style={{ display: 'block', width: '100%' }}>
+              <span style={{ display: 'block' }}>
                 <Button
-                  fullWidth
                   variant="contained"
                   disableElevation
-                  startIcon={<AddIcon />}
+                  startIcon={<AddIcon fontSize="small" />}
                   onClick={handleOpenCreateDialog}
                   disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canCreate}
-                  sx={{
-                    borderRadius: '12px',
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    px: 2,
-                    py: 1,
-                    minHeight: 42,
-                    width: { xs: '100%', sm: 'auto' },
-                    whiteSpace: 'nowrap',
-                  }}
+                  sx={{ ...mvsBodyPrimaryBtnSx, height: 40, whiteSpace: 'nowrap' }}
                 >
                   {txt('새 공지사항', 'New Notice')}
                 </Button>
               </span>
             </Tooltip>
           </Box>
-        </CardContent>
+        </Box>
       </Card>
 
-          {/* 공지사항 목록 테이블 */}
-          <Card elevation={0} sx={shellCardSx}>
-            <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
+          {/* 공지사항 목록 */}
+          <Box sx={mvsBodyListZoneSx}>
               {loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 4 }}>
-                  <CircularProgress />
-                </Box>
-              ) : notices.length === 0 ? (
-                <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Box sx={listStateBoxSx}>
+                  <CircularProgress size={36} />
                   <Typography variant="body2" color="text.secondary">
-                    {txt('공지사항이 없습니다.', 'No notices found.')}
+                    {t('common.loading')}
                   </Typography>
                 </Box>
+              ) : notices.length === 0 ? (
+                <Box sx={listStateBoxSx}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+                    {txt('공지사항이 없습니다.', 'No notices found.')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
+                    {searchTerm || statusFilter
+                      ? txt('검색 조건에 맞는 공지가 없습니다. 필터를 초기화해 보세요.', 'No notices match your filters. Try resetting.')
+                      : txt('새 공지사항을 등록해 보세요.', 'Create a new notice to get started.')}
+                  </Typography>
+                  {!searchTerm && !statusFilter && (
+                    <Button
+                      variant="contained"
+                      disableElevation
+                      startIcon={<AddIcon fontSize="small" />}
+                      onClick={handleOpenCreateDialog}
+                      disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canCreate}
+                      sx={mvsBodyPrimaryBtnSx}
+                    >
+                      {txt('새 공지사항', 'New Notice')}
+                    </Button>
+                  )}
+                </Box>
               ) : (
-                <TableContainer
-                  component={Paper}
-                  elevation={0}
-                  sx={{
-                    width: '100%',
-                    maxWidth: '100%',
-                    overflowX: 'auto',
-                    borderRadius: '16px',
-                    border: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
-                    boxShadow: `0 2px 14px ${alpha('#0f172a', 0.04)}`,
-                  }}
-                >
-                  <Table size="small" sx={{ minWidth: 640, width: '100%' }}>
-                    <TableHead>
-                      <TableRow
-                        sx={{
-                          '& .MuiTableCell-head': {
-                            bgcolor: alpha(theme.palette.grey[500], 0.08),
-                            color: 'text.secondary',
-                            fontWeight: 600,
-                            fontSize: '0.75rem',
-                            letterSpacing: '0.02em',
-                            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
-                            py: 1.25,
-                          },
-                        }}
-                      >
-                        <TableCell>{txt('제목', 'Title')}</TableCell>
-                        <TableCell>{txt('작성자', 'Author')}</TableCell>
-                        <TableCell>{txt('발행일', 'Published Date')}</TableCell>
-                        <TableCell>{txt('조회수', 'Views')}</TableCell>
-                        <TableCell align="right">{txt('작업', 'Action')}</TableCell>
+                <>
+                <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+                  <Table size="small" sx={noticeTableSx}>
+                    <TableHead sx={mvsTableHeadHighlightSx}>
+                      <TableRow>
+                        <TableCell width="42%">{txt('제목', 'Title')}</TableCell>
+                        <TableCell width="22%">{txt('작성자', 'Author')}</TableCell>
+                        <TableCell width="16%">{txt('발행일', 'Published Date')}</TableCell>
+                        <TableCell width="10%">{txt('조회수', 'Views')}</TableCell>
+                        <TableCell width="10%" align="right">{txt('작업', 'Action')}</TableCell>
                       </TableRow>
                     </TableHead>
-            <TableBody>
+            <TableBody sx={mvsTableBodyRowSx}>
               {[...notices].sort((a, b) => {
                 const aPinned = (a as any).isPinned ? 1 : 0;
                 const bPinned = (b as any).isPinned ? 1 : 0;
@@ -2104,42 +2145,40 @@ const NoticeManagement: React.FC = () => {
                   onClick={() => handleViewNotice(notice)}
                   sx={{ cursor: 'pointer' }}
                 >
-                  <TableCell>
-                    <Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                  <TableCell sx={cellEllipsisSx}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
                         {(notice as any).isPinned && (
                           <Chip 
                             label={txt('고정', 'Pinned')} 
                             color="warning" 
                             size="small" 
                             icon={<PushPinIcon sx={{ fontSize: '0.875rem' }} />}
-                            sx={{ height: 20, fontSize: '0.7rem', fontWeight: 600 }}
+                            sx={{ height: 20, fontSize: '0.7rem', fontWeight: 600, flexShrink: 0 }}
                           />
                         )}
                         {notice.priority === 'urgent' && (
-                          <WarningIcon sx={{ fontSize: 18, color: 'error.main' }} />
+                          <WarningIcon sx={{ fontSize: 18, color: 'error.main', flexShrink: 0 }} />
                         )}
-                        <Typography variant="subtitle2" fontWeight="bold">
+                        <Typography variant="subtitle2" fontWeight={700} noWrap sx={{ minWidth: 0 }}>
                           {stripHtmlTags(notice.title)}
                         </Typography>
                         {notice.attachments && notice.attachments.length > 0 && (
                           <Tooltip title={txt(`첨부파일 ${notice.attachments.length}개`, `${notice.attachments.length} attachment(s)`)}>
-                            <AttachFileIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                            <AttachFileIcon sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />
                           </Tooltip>
                         )}
-                      </Box>
                     </Box>
                   </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: '0.875rem' }}>
+                  <TableCell sx={cellEllipsisSx}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                      <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: '0.875rem', flexShrink: 0 }}>
                         {notice.author.charAt(0)}
                       </Avatar>
-                      <Typography variant="body2">{notice.author}</Typography>
+                      <Typography variant="body2" noWrap>{notice.author}</Typography>
                     </Box>
                   </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">
+                  <TableCell sx={cellEllipsisSx}>
+                    <Typography variant="body2" noWrap>
                       {notice.publishedAt
                         ? new Date(notice.publishedAt).toLocaleDateString(
                             isEn ? 'en-US' : 'ko-KR',
@@ -2148,8 +2187,8 @@ const NoticeManagement: React.FC = () => {
                         : '-'}
                     </Typography>
                   </TableCell>
-                  <TableCell>
-                    <Typography variant="body2">
+                  <TableCell sx={cellEllipsisSx}>
+                    <Typography variant="body2" noWrap>
                       {isEn ? `${notice.views}` : `${notice.views}회`}
                     </Typography>
                   </TableCell>
@@ -2161,10 +2200,17 @@ const NoticeManagement: React.FC = () => {
                             size="small"
                             disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canDelete}
                             onClick={() => handleDeleteNotice(notice)}
-                            color="error"
-                            sx={{ borderRadius: '10px' }}
+                            sx={{
+                              color: alpha(theme.palette.text.secondary, theme.palette.mode === 'light' ? 0.72 : 1),
+                              borderRadius: '10px',
+                              transition: 'color 0.15s ease, background-color 0.15s ease',
+                              '&:hover': {
+                                color: 'error.main',
+                                bgcolor: alpha(theme.palette.error.main, 0.12),
+                              },
+                            }}
                           >
-                            <DeleteIcon />
+                            <DeleteIcon fontSize="small" />
                           </IconButton>
                         </span>
                       </Tooltip>
@@ -2175,11 +2221,8 @@ const NoticeManagement: React.FC = () => {
                     </TableBody>
                   </Table>
                 </TableContainer>
-              )}
 
-              {/* 페이지네이션 */}
-              {notices.length > 0 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', pt: 2.5, pb: 0.5 }}>
+              <Box sx={mvsBodyPaginationSx}>
                   <Pagination
                     count={totalPages}
                     page={page}
@@ -2188,16 +2231,16 @@ const NoticeManagement: React.FC = () => {
                     shape="rounded"
                     sx={{ '& .MuiPaginationItem-root': { borderRadius: '10px', fontWeight: 600 } }}
                   />
-                </Box>
+              </Box>
+                </>
               )}
-            </CardContent>
-          </Card>
+          </Box>
         </>
       )}
 
       {/* 연간 스케줄표 탭 */}
       {activeTab === 1 && (
-        <Card elevation={0} sx={{ ...shellCardSx, mb: 2 }}>
+        <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 2 }}>
           <CardContent sx={{ py: 2, px: { xs: 2, sm: 2.5 }, '&:last-child': { pb: 2 } }}>
             <Box
               sx={{

@@ -394,7 +394,7 @@ export const createEnhancedVoucher = async (req: RequestWithUser, res: Response)
       postImmediately: false,
     });
 
-    const voucher = result.voucher;
+    const voucher = result as any;
     await voucher.update({
       voucher_type_id: voucherTypeId,
       financial_year_id: financialYearId ?? null,

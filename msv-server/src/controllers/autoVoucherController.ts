@@ -5,10 +5,14 @@ import { Response } from 'express';
 import { RequestWithUser } from '../types';
 import { AutoVoucher, AutoVoucherAuditLog, AutoVoucherRule } from '../models';
 import { postAutoVoucherToLedger } from '../services/glPostingService';
+import { classifyDocumentForAutoVoucher, recordLearningCorrection } from '../services/accountingBrainService';
+import { extractTextFromDocument } from '../services/documentOcrService';
 import { resolveCompanyScope } from '../utils/companyScope';
+import { assertLinesHaveResolvedAccounts } from '../utils/accountResolution';
 
 type VoucherLine = {
   lineNo: number;
+  accountId?: number | null;
   accountName: string;
   debit: number;
   credit: number;
@@ -16,65 +20,6 @@ type VoucherLine = {
   taxRate?: number;
   narration?: string;
 };
-
-const DEFAULT_RULES = [
-  {
-    keyword: 'salary',
-    debitAccount: 'Salary Expense',
-    creditAccount: 'Bank',
-    transactionType: 'salary',
-    reason: 'Keyword salary matched',
-    confidenceBoost: 18,
-  },
-  {
-    keyword: 'indian oil',
-    debitAccount: 'Fuel Expense',
-    creditAccount: 'Bank',
-    transactionType: 'expense',
-    reason: 'Vendor Indian Oil matched',
-    confidenceBoost: 22,
-  },
-  {
-    keyword: 'amazon',
-    debitAccount: 'Office Expense',
-    creditAccount: 'Accounts Payable',
-    transactionType: 'expense',
-    reason: 'Vendor Amazon matched',
-    confidenceBoost: 20,
-  },
-  {
-    keyword: 'gst challan',
-    debitAccount: 'GST Payable',
-    creditAccount: 'Bank',
-    transactionType: 'gst_payment',
-    reason: 'GST challan keyword matched',
-    confidenceBoost: 24,
-  },
-  {
-    keyword: 'tds challan',
-    debitAccount: 'TDS Payable',
-    creditAccount: 'Bank',
-    transactionType: 'tds_payment',
-    reason: 'TDS challan keyword matched',
-    confidenceBoost: 24,
-  },
-  {
-    keyword: 'interest',
-    debitAccount: 'Bank',
-    creditAccount: 'Interest Income',
-    transactionType: 'interest_income',
-    reason: 'Interest keyword matched',
-    confidenceBoost: 12,
-  },
-  {
-    keyword: 'emi',
-    debitAccount: 'Loan Account',
-    creditAccount: 'Bank',
-    transactionType: 'loan_payment',
-    reason: 'EMI keyword matched',
-    confidenceBoost: 14,
-  },
-];
 
 const SUPPORTED_UPLOAD_TYPES = [
   'purchase_invoice',
@@ -102,23 +47,8 @@ const parseAmount = (value: unknown) => {
 const clamp = (v: number, min = 0, max = 100) => Math.max(min, Math.min(max, v));
 
 const readTextFromUploadedFile = async (absolutePath: string, mimetype?: string) => {
-  const lowerMime = String(mimetype || '').toLowerCase();
-  const ext = path.extname(absolutePath).toLowerCase();
-  if (
-    lowerMime.includes('csv') ||
-    lowerMime.includes('text') ||
-    ext === '.csv' ||
-    ext === '.txt' ||
-    ext === '.json'
-  ) {
-    try {
-      return await fs.readFile(absolutePath, 'utf-8');
-    } catch {
-      return '';
-    }
-  }
-  // PDF/이미지/OCR은 1차 버전에서 placeholder 처리
-  return '';
+  const extracted = await extractTextFromDocument(absolutePath, mimetype);
+  return extracted;
 };
 
 const extractStructuredFields = (rawText: string, fallbackFileName: string) => {
@@ -146,6 +76,7 @@ const extractStructuredFields = (rawText: string, fallbackFileName: string) => {
     totalAmount: round2(totalAmount),
     currency: currency.toUpperCase(),
     narration: text.slice(0, 500) || fallbackFileName,
+    rawText: text.slice(0, 8000),
     rawTextLength: text.length,
   };
 };
@@ -168,6 +99,7 @@ const normalizeLines = (raw: unknown): VoucherLine[] => {
   const arr = Array.isArray(raw) ? raw : [];
   return arr.map((line: any, index) => ({
     lineNo: Number(line?.lineNo || index + 1),
+    accountId: line?.accountId != null && line.accountId !== '' ? Number(line.accountId) : null,
     accountName: String(line?.accountName || '').trim(),
     debit: round2(parseAmount(line?.debit)),
     credit: round2(parseAmount(line?.credit)),
@@ -178,89 +110,6 @@ const normalizeLines = (raw: unknown): VoucherLine[] => {
 };
 
 const canReview = (role: string) => role === 'root' || role === 'admin' || role === 'audit';
-
-const classifyWithRules = async ({
-  tenantId,
-  companyId,
-  sourceDocType,
-  ocr,
-}: {
-  tenantId: number;
-  companyId: number;
-  sourceDocType: string;
-  ocr: Record<string, any>;
-}) => {
-  const corpus = [
-    ocr.vendorName,
-    ocr.customerName,
-    ocr.invoiceNumber,
-    ocr.narration,
-    sourceDocType,
-  ]
-    .join(' ')
-    .toLowerCase();
-
-  const customRules = await (AutoVoucherRule as any).findAll({
-    where: { tenant_id: tenantId, company_id: companyId, is_active: true },
-    order: [['priority', 'DESC'], ['id', 'DESC']],
-  });
-
-  const customMatch = customRules.find((rule: any) => {
-    const keyword = String(rule.keyword || '').trim().toLowerCase();
-    if (!keyword) return false;
-    if (rule.doc_type && String(rule.doc_type).trim() && String(rule.doc_type) !== sourceDocType) return false;
-    return corpus.includes(keyword);
-  });
-
-  if (customMatch) {
-    return {
-      debitAccount: String(customMatch.debit_account),
-      creditAccount: String(customMatch.credit_account),
-      taxAccount: customMatch.tax_account ? String(customMatch.tax_account) : null,
-      transactionType: String(customMatch.transaction_type || 'expense'),
-      reason:
-        String(customMatch.reason_template || '').trim() ||
-        `Matched custom rule "${customMatch.keyword}"`,
-      ruleName: `custom:${customMatch.keyword}`,
-      confidenceBoost: Number(customMatch.confidence_boost || 10),
-    };
-  }
-
-  const fallback = DEFAULT_RULES.find((rule) => corpus.includes(rule.keyword));
-  if (fallback) {
-    return {
-      debitAccount: fallback.debitAccount,
-      creditAccount: fallback.creditAccount,
-      taxAccount: null,
-      transactionType: fallback.transactionType,
-      reason: fallback.reason,
-      ruleName: `default:${fallback.keyword}`,
-      confidenceBoost: fallback.confidenceBoost,
-    };
-  }
-
-  if (sourceDocType === 'sales_invoice') {
-    return {
-      debitAccount: 'Accounts Receivable',
-      creditAccount: 'Sales Revenue',
-      taxAccount: 'Output GST',
-      transactionType: 'sales',
-      reason: 'Sales invoice default mapping',
-      ruleName: 'default:sales_invoice',
-      confidenceBoost: 12,
-    };
-  }
-
-  return {
-    debitAccount: 'Expense - Unclassified',
-    creditAccount: 'Accounts Payable',
-    taxAccount: null,
-    transactionType: 'expense',
-    reason: 'No exact rule found, used fallback mapping',
-    ruleName: 'fallback:unclassified',
-    confidenceBoost: 0,
-  };
-};
 
 const buildSuggestedLines = ({
   amount,
@@ -442,37 +291,51 @@ export const uploadAndGenerateAutoVoucher = async (req: RequestWithUser, res: Re
       });
     }
 
-    const fileText = await readTextFromUploadedFile(filePath, file.mimetype);
+    const extracted = await readTextFromUploadedFile(filePath, file.mimetype);
+    const fileText = extracted.text || '';
     const ocr = extractStructuredFields(fileText, file.originalname || file.filename);
-    const ruleResult = await classifyWithRules({
+    const brain = await classifyDocumentForAutoVoucher({
       tenantId,
       companyId,
+      userId,
       sourceDocType,
-      ocr,
+      ocr: {
+        ...ocr,
+        ocrEngine: extracted.engine,
+        ocrNotes: extracted.notes,
+      },
     });
 
-    const suggestedLines = buildSuggestedLines({
-      amount: parseAmount(ocr.totalAmount),
-      debitAccount: ruleResult.debitAccount,
-      creditAccount: ruleResult.creditAccount,
-      narration: ocr.narration,
-    });
+    const suggestedLines =
+      Array.isArray(brain.lines) && brain.lines.length >= 2
+        ? brain.lines.map((line, index) => ({
+            lineNo: Number(line.lineNo || index + 1),
+            accountId: line.accountId != null ? Number(line.accountId) : null,
+            accountName: String(line.accountName || ''),
+            debit: round2(parseAmount(line.debit)),
+            credit: round2(parseAmount(line.credit)),
+            narration: line.narration ? String(line.narration) : ocr.narration,
+          }))
+        : buildSuggestedLines({
+            amount: parseAmount(ocr.totalAmount),
+            debitAccount: brain.debitAccount,
+            creditAccount: brain.creditAccount,
+            narration: ocr.narration,
+          });
+    const unresolvedLedgers = suggestedLines.filter((l) => !l.accountId && !String(l.accountName || '').trim());
     const totals = computeTotals(suggestedLines);
-    const duplicateCheck = await detectDuplicate({
-      tenantId,
-      companyId,
-      invoiceNumber: ocr.invoiceNumber,
-      transactionDate: ocr.transactionDate,
-      amount: ocr.totalAmount,
-      counterparty: ocr.vendorName || ocr.customerName,
-    });
+    const duplicateCheck = brain.duplicateCheck?.hasDuplicate
+      ? brain.duplicateCheck
+      : await detectDuplicate({
+          tenantId,
+          companyId,
+          invoiceNumber: ocr.invoiceNumber,
+          transactionDate: ocr.transactionDate,
+          amount: ocr.totalAmount,
+          counterparty: ocr.vendorName || ocr.customerName,
+        });
 
-    const confidence = clamp(
-      60 +
-      ruleResult.confidenceBoost +
-      (ocr.rawTextLength > 0 ? 8 : 0) +
-      (duplicateCheck.hasDuplicate ? -25 : 0)
-    );
+    const confidence = clamp(Number(brain.confidenceScore ?? 60));
     const voucherCode = `VCH-${new Date().getFullYear()}-${String(Date.now()).slice(-8)}`;
 
     const created = await (AutoVoucher as any).create({
@@ -485,14 +348,22 @@ export const uploadAndGenerateAutoVoucher = async (req: RequestWithUser, res: Re
       source_file_mime: file.mimetype || null,
       ocr_data: {
         ...ocr,
-        ocrAccuracy: ocr.rawTextLength > 0 ? 0.88 : 0.55,
+        ocrEngine: extracted.engine,
+        ocrNotes: extracted.notes,
+        ocrAccuracy: extracted.confidence || (ocr.rawTextLength > 0 ? 0.88 : 0.55),
       },
       ai_analysis: {
-        transactionType: ruleResult.transactionType,
+        transactionType: brain.transactionType,
         confidence,
-        reason: ruleResult.reason,
-        ruleName: ruleResult.ruleName,
+        reason: brain.reason,
+        ruleName: brain.ruleName,
+        needsReview: Boolean(brain.needsReview || unresolvedLedgers.length || !suggestedLines.every((l: any) => l.accountId)),
+        validationMessages: brain.recommendation?.validation?.messages || [],
+        appliedRules: brain.appliedRules,
+        historicalMatches: brain.historicalMatches,
+        requestId: brain.recommendation?.requestId,
         matchedCounterparty: ocr.vendorName || ocr.customerName || null,
+        disclaimer: brain.recommendation?.disclaimer,
       },
       duplicate_check: duplicateCheck,
       suggested_lines: suggestedLines,
@@ -637,6 +508,58 @@ export const updateAutoVoucher = async (req: RequestWithUser, res: Response) => 
       payload.final_lines = lines;
       payload.total_debit = totals.totalDebit;
       payload.total_credit = totals.totalCredit;
+
+      // Learning: capture accountant ledger overrides for future Brain recommendations
+      const suggested = normalizeLines(row.suggested_lines);
+      const suggestedDebit = suggested.find((l) => l.debit > 0)?.accountName || '';
+      const suggestedCredit = suggested.find((l) => l.credit > 0)?.accountName || '';
+      const finalDebit = lines.find((l) => l.debit > 0)?.accountName || '';
+      const finalCredit = lines.find((l) => l.credit > 0)?.accountName || '';
+      const keywordSeed =
+        String(row.counterparty_name || row.narration || row.source_doc_type || '')
+          .split(/\s+/)
+          .find((t: string) => t.length > 3) || undefined;
+
+      if (finalDebit && suggestedDebit && finalDebit !== suggestedDebit) {
+        await recordLearningCorrection({
+          tenantId,
+          companyId,
+          userId,
+          sourceType: 'auto_voucher',
+          sourceId: Number(row.id),
+          counterpartyName: row.counterparty_name || undefined,
+          keyword: keywordSeed,
+          docType: row.source_doc_type || undefined,
+          fieldName: 'debit_account',
+          beforeValue: suggestedDebit,
+          afterValue: finalDebit,
+          recommendationSnapshot: {
+            voucherCode: row.voucher_code,
+            suggested_lines: suggested,
+            final_lines: lines,
+          },
+        });
+      }
+      if (finalCredit && suggestedCredit && finalCredit !== suggestedCredit) {
+        await recordLearningCorrection({
+          tenantId,
+          companyId,
+          userId,
+          sourceType: 'auto_voucher',
+          sourceId: Number(row.id),
+          counterpartyName: row.counterparty_name || undefined,
+          keyword: keywordSeed,
+          docType: row.source_doc_type || undefined,
+          fieldName: 'credit_account',
+          beforeValue: suggestedCredit,
+          afterValue: finalCredit,
+          recommendationSnapshot: {
+            voucherCode: row.voucher_code,
+            suggested_lines: suggested,
+            final_lines: lines,
+          },
+        });
+      }
     }
 
     if (req.body.status) payload.status = String(req.body.status);
@@ -687,6 +610,7 @@ export const approveAutoVoucher = async (req: RequestWithUser, res: Response) =>
 
     const lines = normalizeLines(row.final_lines || []);
     assertBalanced(lines);
+    await assertLinesHaveResolvedAccounts({ tenantId, companyId, lines });
 
     const beforeStatus = row.status;
     await row.update({
@@ -709,7 +633,9 @@ export const approveAutoVoucher = async (req: RequestWithUser, res: Response) =>
     return res.json({ success: true, data: row });
   } catch (error: any) {
     console.error('AI 자동 전표 승인 오류:', error);
-    const statusCode = String(error.message || '').includes('복식부기 불일치') ? 400 : 500;
+    const msg = String(error.message || '');
+    const statusCode =
+      msg.includes('복식부기 불일치') || msg.includes('계정과목') ? 400 : 500;
     return res.status(statusCode).json({ success: false, message: error.message || '승인에 실패했습니다.' });
   }
 };
@@ -735,6 +661,7 @@ export const postAutoVoucher = async (req: RequestWithUser, res: Response) => {
 
     const lines = normalizeLines(row.final_lines || []);
     assertBalanced(lines);
+    await assertLinesHaveResolvedAccounts({ tenantId, companyId, lines });
 
     const glVoucher = await postAutoVoucherToLedger({ autoVoucher: row, userId });
 
@@ -763,7 +690,9 @@ export const postAutoVoucher = async (req: RequestWithUser, res: Response) => {
     });
   } catch (error: any) {
     console.error('AI 자동 전표 Post 오류:', error);
-    const statusCode = String(error.message || '').includes('복식부기 불일치') ? 400 : 500;
+    const msg = String(error.message || '');
+    const statusCode =
+      msg.includes('복식부기 불일치') || msg.includes('계정과목') || msg.includes('금액이 0') ? 400 : 500;
     return res.status(statusCode).json({ success: false, message: error.message || 'Post 처리에 실패했습니다.' });
   }
 };
