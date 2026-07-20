@@ -49,7 +49,36 @@ module.exports = {
           `,
           { bind: [partnerMenu.id, customerMenuId] }
         ).catch(() => undefined);
+
+        // Copy per-user permissions onto partners when missing
+        await sequelize.query(
+          `
+          INSERT INTO user_permissions (
+            user_id, menu_id, can_view, can_create, can_edit, can_delete, created_at, updated_at
+          )
+          SELECT
+            up.user_id,
+            $1,
+            up.can_view,
+            up.can_create,
+            up.can_edit,
+            up.can_delete,
+            NOW(),
+            NOW()
+          FROM user_permissions up
+          WHERE up.menu_id = $2
+            AND NOT EXISTS (
+              SELECT 1 FROM user_permissions x
+              WHERE x.user_id = up.user_id AND x.menu_id = $1
+            )
+          `,
+          { bind: [partnerMenu.id, customerMenuId] }
+        ).catch(() => undefined);
       }
+
+      await sequelize.query(`DELETE FROM user_permissions WHERE menu_id = $1`, {
+        bind: [customerMenuId],
+      });
 
       await sequelize.query(`DELETE FROM menu_permissions WHERE menu_id = $1`, {
         bind: [customerMenuId],
