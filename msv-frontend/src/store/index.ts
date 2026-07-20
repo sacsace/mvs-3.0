@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Menu, UserPermission } from '../services/menuService';
 import i18n, { ensureI18nLanguage } from '../locales/i18n';
+import { useNotificationStore } from './notificationStore';
+import { useErrorStore } from './errorStore';
 
 export interface User {
   id: number;
@@ -55,6 +57,10 @@ export const useStore = create<AuthState>()(
         });
       },
       logout: () => {
+        useNotificationStore.getState().clearAll();
+        useNotificationStore.setState({ headerDismissedIds: [] });
+        useErrorStore.getState().clearNotifications();
+        useErrorStore.getState().clearErrors();
         set({
           isAuthenticated: false,
           token: null,

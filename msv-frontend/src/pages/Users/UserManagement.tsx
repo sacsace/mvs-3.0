@@ -146,6 +146,7 @@ interface User {
   username: string;
   email: string;
   role: string;
+  company_id?: number | null;
   department?: string;
   department_id?: number | null;
   position?: string;
@@ -517,18 +518,33 @@ const UserManagement: React.FC = () => {
           }
   }, [searchTerm, selectedCompanyId, user?.role, t]);
 
-  const loadDepartments = useCallback(async () => {
+  const loadDepartments = useCallback(async (companyId?: number | null) => {
+    const cid =
+      companyId != null && Number.isFinite(Number(companyId))
+        ? Number(companyId)
+        : user?.role === 'root' || user?.role === 'audit'
+          ? null
+          : user?.company_id != null
+            ? Number(user.company_id)
+            : null;
+    if (cid == null) {
+      setDepartments([]);
+      return;
+    }
     try {
-      const res = await departmentService.list(false);
+      const res = await departmentService.list(false, cid);
       if (res.success && Array.isArray(res.data)) {
         setDepartments(
           (res.data as { id: number; name: string }[]).map((d) => ({ id: d.id, name: d.name }))
         );
+      } else {
+        setDepartments([]);
       }
     } catch (e) {
       console.error('부서 목록:', e);
+      setDepartments([]);
     }
-  }, []);
+  }, [user?.company_id, user?.role]);
 
   useEffect(() => {
     fetchUsers();
@@ -539,9 +555,14 @@ const UserManagement: React.FC = () => {
 
   useEffect(() => {
     if (viewMode === 'create' || viewMode === 'edit') {
-      void loadDepartments();
+      const cid =
+        formData.company_id ??
+        editingUser?.company_id ??
+        user?.company_id ??
+        null;
+      void loadDepartments(cid != null ? Number(cid) : null);
     }
-  }, [viewMode, loadDepartments]);
+  }, [viewMode, loadDepartments, formData.company_id, editingUser?.company_id, user?.company_id]);
 
   useEffect(() => {
     if (searchParams.get('tab') !== 'departments') return;
@@ -1726,14 +1747,49 @@ const UserManagement: React.FC = () => {
         </>
       )}
 
-      {/* 부서 관리 (탭) */}
+      {/* 부서 관리 (탭) — 회사별 */}
       {pageTab === 2 && (
-        <DepartmentManagementPanel
-          embedded
-          canCreate={hrElevated || userMgmtMenuFlags.canCreate}
-          canEdit={hrElevated || userMgmtMenuFlags.canEdit}
-          canDelete={hrElevated || userMgmtMenuFlags.canDelete}
-        />
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {(user?.role === 'root' || user?.role === 'audit') && (
+            <Card elevation={0} sx={mvsBodyCardSx}>
+              <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2, maxWidth: 420 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  select
+                  label={t('userManagement.company')}
+                  {...USER_FILTER_OUTLINED}
+                  value={selectedCompanyId}
+                  onChange={(e) => setSelectedCompanyId(e.target.value as number | '')}
+                  SelectProps={{ displayEmpty: true }}
+                  sx={userFilterFieldSx}
+                >
+                  <MenuItem value="">{t('departmentManagement.selectCompanyFirst')}</MenuItem>
+                  {companies.map((company) => (
+                    <MenuItem key={company.id} value={company.id}>
+                      {company.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Box>
+            </Card>
+          )}
+          <DepartmentManagementPanel
+            embedded
+            companyId={
+              user?.role === 'root' || user?.role === 'audit'
+                ? selectedCompanyId === ''
+                  ? null
+                  : Number(selectedCompanyId)
+                : user?.company_id != null
+                  ? Number(user.company_id)
+                  : null
+            }
+            canCreate={hrElevated || userMgmtMenuFlags.canCreate}
+            canEdit={hrElevated || userMgmtMenuFlags.canEdit}
+            canDelete={hrElevated || userMgmtMenuFlags.canDelete}
+          />
+        </Box>
       )}
 
       {/* 사용자 생성/편집 폼 */}
@@ -2150,7 +2206,12 @@ const UserManagement: React.FC = () => {
                         value={(formData as any).company_id || ''}
                         onChange={(e) => {
                           const company_id = Number(e.target.value);
-                          setFormData({ ...formData, company_id });
+                          setFormData({
+                            ...formData,
+                            company_id,
+                            department_id: '',
+                            department: '',
+                          });
                         }}
                         required
                       >

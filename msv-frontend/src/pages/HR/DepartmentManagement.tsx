@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { departmentService } from '../../services/api';
+import { useStore } from '../../store';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import {
@@ -86,12 +87,15 @@ type DeptFormState = {
 /** embedded: 사용자 관리 페이지 탭 안에 넣을 때 true (외곽 패딩·배경 중복 방지) */
 export const DepartmentManagementPanel: React.FC<{
   embedded?: boolean;
+  /** 회사별 부서 — 미지정 시 목록/등록 불가 */
+  companyId?: number | null;
   /** 미전달 시 전부 true (단독 부서 관리 페이지) */
   canCreate?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
 }> = ({
   embedded = false,
+  companyId = null,
   canCreate = true,
   canEdit = true,
   canDelete = true,
@@ -124,11 +128,19 @@ export const DepartmentManagementPanel: React.FC<{
     gap: 1.5,
   } as const;
 
+  const scopedCompanyId =
+    companyId != null && Number.isFinite(Number(companyId)) ? Number(companyId) : null;
+
   const load = useCallback(async () => {
+    if (scopedCompanyId == null) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError('');
     try {
-      const res = await departmentService.list(true);
+      const res = await departmentService.list(true, scopedCompanyId);
       if (res.success && Array.isArray(res.data)) {
         setRows(res.data as DeptRow[]);
       } else {
@@ -141,7 +153,7 @@ export const DepartmentManagementPanel: React.FC<{
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [scopedCompanyId, t]);
 
   useEffect(() => {
     void load();
@@ -164,7 +176,7 @@ export const DepartmentManagementPanel: React.FC<{
 
   useEffect(() => {
     setPage(1);
-  }, [rows.length]);
+  }, [rows.length, scopedCompanyId]);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -173,7 +185,7 @@ export const DepartmentManagementPanel: React.FC<{
   }, [page, totalPages]);
 
   const openCreate = () => {
-    if (!canCreate) return;
+    if (!canCreate || scopedCompanyId == null) return;
     setEditingId(null);
     setForm({ name: '', sort_order: 0, is_active: true });
     setDialogOpen(true);
@@ -196,6 +208,10 @@ export const DepartmentManagementPanel: React.FC<{
       setError(t('departmentManagement.nameRequired'));
       return;
     }
+    if (scopedCompanyId == null) {
+      setError(t('departmentManagement.selectCompanyFirst'));
+      return;
+    }
     if (editingId != null && !canEdit) return;
     if (editingId == null && !canCreate) return;
     setError('');
@@ -205,6 +221,7 @@ export const DepartmentManagementPanel: React.FC<{
           name,
           sort_order: form.sort_order,
           is_active: form.is_active,
+          company_id: scopedCompanyId,
         });
         if (!res.success) throw new Error();
       } else {
@@ -212,6 +229,7 @@ export const DepartmentManagementPanel: React.FC<{
           name,
           sort_order: form.sort_order,
           is_active: form.is_active,
+          company_id: scopedCompanyId,
         });
         if (!res.success) throw new Error();
       }
@@ -224,13 +242,13 @@ export const DepartmentManagementPanel: React.FC<{
   };
 
   const handleDelete = (row: DeptRow) => {
-    if (!canDelete) return;
+    if (!canDelete || scopedCompanyId == null) return;
     showConfirm(
       t('departmentManagement.deleteConfirm'),
       () => {
         void (async () => {
           try {
-            const res = await departmentService.delete(row.id);
+            const res = await departmentService.delete(row.id, scopedCompanyId);
             if (!res.success) throw new Error();
             setSuccess(t('departmentManagement.deleted'));
             await load();
@@ -248,6 +266,22 @@ export const DepartmentManagementPanel: React.FC<{
       }
     );
   };
+
+  if (scopedCompanyId == null) {
+    const selectCompanyBlock = (
+      <Box sx={listStateBoxSx}>
+        <AccountTreeIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.35 }} />
+        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+          {t('departmentManagement.selectCompanyFirst')}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {t('departmentManagement.selectCompanyHint')}
+        </Typography>
+      </Box>
+    );
+    if (embedded) return selectCompanyBlock;
+    return <Box sx={mvsPageRootSx}>{selectCompanyBlock}</Box>;
+  }
 
   const content = (
     <>
@@ -560,6 +594,13 @@ export const DepartmentManagementPanel: React.FC<{
   );
 };
 
-const DepartmentManagement: React.FC = () => <DepartmentManagementPanel />;
+const DepartmentManagement: React.FC = () => {
+  const { user } = useStore();
+  return (
+    <DepartmentManagementPanel
+      companyId={user?.company_id != null ? Number(user.company_id) : null}
+    />
+  );
+};
 
 export default DepartmentManagement;

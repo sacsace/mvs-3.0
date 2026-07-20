@@ -72,7 +72,99 @@ type BsData = {
   totalLiabilitiesAndEquity: number;
   netProfit: number;
   balanced: boolean;
-  draftCount?: number;
+  source?: string;
+  tallyVoucherCount?: number;
+};
+
+type FinancialYearRow = {
+  id: number;
+  name: string;
+  start_date: string;
+  end_date: string;
+  is_open: boolean;
+};
+
+type BsPeriodKey = 'q1' | 'q2' | 'q3' | 'q4' | 'fiscalYear';
+
+const BS_PERIOD_KEYS: BsPeriodKey[] = ['q1', 'q2', 'q3', 'q4', 'fiscalYear'];
+
+const toYmdLocal = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const resolveCurrentFinancialYear = (
+  rows: FinancialYearRow[],
+  now = new Date()
+): FinancialYearRow | null => {
+  if (!rows.length) return null;
+  const today = toYmdLocal(now);
+  const containing = rows.filter((fy) => today >= fy.start_date && today <= fy.end_date);
+  if (containing.length) {
+    return containing.find((fy) => fy.is_open) || containing[0];
+  }
+  return rows[0];
+};
+
+/** 회계연도 마스터 없거나 폴백: 인도식 FY (4/1 ~ 익년 3/31) */
+const fallbackIndiaFiscalYear = (now = new Date()): { start_date: string; end_date: string } => {
+  const y = now.getFullYear();
+  const startYear = now.getMonth() + 1 >= 4 ? y : y - 1;
+  return { start_date: `${startYear}-04-01`, end_date: `${startYear + 1}-03-31` };
+};
+
+const parseYmdLocal = (ymd: string) => {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+};
+
+const getBalanceSheetPeriodRange = (
+  key: BsPeriodKey,
+  fiscalYear?: FinancialYearRow | null
+): { from: string; asOf: string } => {
+  const fy = fiscalYear?.start_date && fiscalYear?.end_date
+    ? { start_date: fiscalYear.start_date, end_date: fiscalYear.end_date }
+    : fallbackIndiaFiscalYear();
+
+  if (key === 'fiscalYear') {
+    return { from: fy.start_date, asOf: fy.end_date };
+  }
+
+  const quarterIndex = ({ q1: 0, q2: 1, q3: 2, q4: 3 } as const)[key];
+  const fyStart = parseYmdLocal(fy.start_date);
+  const qStart = new Date(fyStart.getFullYear(), fyStart.getMonth() + quarterIndex * 3, fyStart.getDate());
+  const qEndExclusive = new Date(fyStart.getFullYear(), fyStart.getMonth() + (quarterIndex + 1) * 3, fyStart.getDate());
+  const qEnd = new Date(qEndExclusive);
+  qEnd.setDate(qEnd.getDate() - 1);
+
+  const from = toYmdLocal(qStart);
+  let asOf = toYmdLocal(qEnd);
+  if (asOf > fy.end_date) asOf = fy.end_date;
+  if (from < fy.start_date) return { from: fy.start_date, asOf };
+  return { from, asOf };
+};
+
+const periodToggleGroupSx = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 0.75,
+  flex: '1 1 auto',
+  minWidth: 0,
+} as const;
+
+const periodBtnSx = {
+  border: '1px solid #C5CED9',
+  borderRadius: '10px',
+  px: 1.25,
+  height: 40,
+  minWidth: 0,
+  textTransform: 'none' as const,
+  fontWeight: 600,
+  fontSize: '0.8125rem',
+  whiteSpace: 'nowrap' as const,
+  boxShadow: 'none',
 };
 
 const cellEllipsisSx = {
@@ -108,11 +200,39 @@ const BalanceSheet: React.FC = () => {
 
   const [from, setFrom] = useState('');
   const [asOf, setAsOf] = useState('');
+  const [periodKey, setPeriodKey] = useState<BsPeriodKey | null>(null);
+  const [financialYears, setFinancialYears] = useState<FinancialYearRow[]>([]);
   const [tab, setTab] = useState(0);
   const [data, setData] = useState<BsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
+
+  const currentFinancialYear = useMemo(
+    () => resolveCurrentFinancialYear(financialYears),
+    [financialYears]
+  );
+
+  useEffect(() => {
+    if (!effectiveCompanyId) {
+      setFinancialYears([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await accountingService.getFinancialYears(effectiveCompanyId);
+        if (!cancelled) {
+          setFinancialYears(Array.isArray(res?.data) ? res.data : []);
+        }
+      } catch {
+        if (!cancelled) setFinancialYears([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [effectiveCompanyId]);
 
   const load = useCallback(async () => {
     if (!effectiveCompanyId) return;
@@ -137,9 +257,17 @@ const BalanceSheet: React.FC = () => {
     void load();
   }, [load]);
 
+  const applyPeriod = (key: BsPeriodKey) => {
+    const range = getBalanceSheetPeriodRange(key, currentFinancialYear);
+    setPeriodKey(key);
+    setFrom(range.from);
+    setAsOf(range.asOf);
+  };
+
   const handleReset = () => {
     setFrom('');
     setAsOf('');
+    setPeriodKey(null);
     setTab(0);
   };
 
@@ -220,9 +348,7 @@ const BalanceSheet: React.FC = () => {
             {t(emptyKey)}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 480 }}>
-            {Number(data?.draftCount || 0) > 0
-              ? t('balanceSheet.empty.draftHint', { count: data?.draftCount })
-              : t('balanceSheet.empty.hint')}
+            {t('balanceSheet.empty.hint')}
           </Typography>
         </Box>
       );
@@ -297,78 +423,114 @@ const BalanceSheet: React.FC = () => {
       </Box>
 
       <Alert severity={data?.balanced === false ? 'warning' : 'info'} sx={{ mb: 2 }}>
-        {data?.balanced === false
-          ? t('balanceSheet.unbalancedHint')
-          : Number(data?.draftCount || 0) > 0
-            ? `${t('balanceSheet.hint')} ${t('balanceSheet.empty.draftHint', { count: data?.draftCount })}`
-            : t('balanceSheet.hint')}
+        {data?.balanced === false ? t('balanceSheet.unbalancedHint') : t('balanceSheet.hint')}
       </Alert>
 
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 2 }}>
         <Box sx={mvsBodyFilterWrapSx}>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: 'minmax(0, 1fr) minmax(0, 1fr) auto auto auto',
-              },
-              gap: 2,
-              alignItems: 'flex-end',
-              maxWidth: { sm: 920 },
-              ...(mvsSearchFieldSx as Record<string, unknown>),
-            }}
-          >
-            <TextField
-              fullWidth
-              size="small"
-              type="date"
-              label={t('balanceSheet.from')}
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              disabled={loading}
-              sx={filterFieldSx}
-              {...mvsOutlinedLabelProps}
-            />
-            <TextField
-              fullWidth
-              size="small"
-              type="date"
-              label={t('balanceSheet.asOf')}
-              value={asOf}
-              onChange={(e) => setAsOf(e.target.value)}
-              disabled={loading}
-              sx={filterFieldSx}
-              {...mvsOutlinedLabelProps}
-            />
-            <Button
-              variant="contained"
-              disableElevation
-              startIcon={<SearchIcon fontSize="small" />}
-              sx={{ ...mvsBodyPrimaryBtnSx, height: 40, whiteSpace: 'nowrap' }}
-              onClick={() => void load()}
-              disabled={loading}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <Box sx={periodToggleGroupSx}>
+              {BS_PERIOD_KEYS.map((key) => {
+                const selected = periodKey === key;
+                return (
+                  <Button
+                    key={key}
+                    size="small"
+                    variant={selected ? 'contained' : 'outlined'}
+                    disableElevation
+                    disabled={loading}
+                    onClick={() => applyPeriod(key)}
+                    sx={{
+                      ...periodBtnSx,
+                      ...(selected
+                        ? {
+                            bgcolor: 'primary.main',
+                            color: '#fff',
+                            borderColor: 'primary.main',
+                            '&:hover': { bgcolor: 'primary.dark', borderColor: 'primary.dark' },
+                          }
+                        : {
+                            bgcolor: '#fff',
+                            color: 'text.primary',
+                            '&:hover': { bgcolor: '#F8FAFC', borderColor: '#9AA8B8' },
+                          }),
+                    }}
+                  >
+                    {t(`balanceSheet.periods.${key}`)}
+                  </Button>
+                );
+              })}
+            </Box>
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: '1fr',
+                  sm: 'minmax(0, 1fr) minmax(0, 1fr) auto auto auto',
+                },
+                gap: 2,
+                alignItems: 'flex-end',
+                maxWidth: { sm: 920 },
+                ...(mvsSearchFieldSx as Record<string, unknown>),
+              }}
             >
-              {t('balanceSheet.search')}
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<ResetIcon fontSize="small" />}
-              sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
-              onClick={handleReset}
-              disabled={loading}
-            >
-              {t('common.reset')}
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<DownloadIcon fontSize="small" />}
-              sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
-              onClick={handleExcelDownload}
-              disabled={loading || exporting || !data}
-            >
-              {t('balanceSheet.excelDownload')}
-            </Button>
+              <TextField
+                fullWidth
+                size="small"
+                type="date"
+                label={t('balanceSheet.from')}
+                value={from}
+                onChange={(e) => {
+                  setPeriodKey(null);
+                  setFrom(e.target.value);
+                }}
+                disabled={loading}
+                sx={filterFieldSx}
+                {...mvsOutlinedLabelProps}
+              />
+              <TextField
+                fullWidth
+                size="small"
+                type="date"
+                label={t('balanceSheet.asOf')}
+                value={asOf}
+                onChange={(e) => {
+                  setPeriodKey(null);
+                  setAsOf(e.target.value);
+                }}
+                disabled={loading}
+                sx={filterFieldSx}
+                {...mvsOutlinedLabelProps}
+              />
+              <Button
+                variant="contained"
+                disableElevation
+                startIcon={<SearchIcon fontSize="small" />}
+                sx={{ ...mvsBodyPrimaryBtnSx, height: 40, whiteSpace: 'nowrap' }}
+                onClick={() => void load()}
+                disabled={loading}
+              >
+                {t('balanceSheet.search')}
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<ResetIcon fontSize="small" />}
+                sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
+                onClick={handleReset}
+                disabled={loading}
+              >
+                {t('common.reset')}
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon fontSize="small" />}
+                sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
+                onClick={handleExcelDownload}
+                disabled={loading || exporting || !data}
+              >
+                {t('balanceSheet.excelDownload')}
+              </Button>
+            </Box>
           </Box>
         </Box>
       </Card>

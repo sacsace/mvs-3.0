@@ -27,15 +27,64 @@ async function ensureDepartmentColumns(): Promise<void> {
       ALTER TABLE "departments"
       ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
     `);
+    // company_id: 없으면 추가 후 백필(마이그레이션 전 런타임 방어)
+    const [cols] = await sequelize.query(`
+      SELECT 1 FROM information_schema.columns
+      WHERE table_name = 'departments' AND column_name = 'company_id'
+    `);
+    if (!(cols as any[]).length) {
+      await sequelize.query(`
+        ALTER TABLE "departments"
+        ADD COLUMN "company_id" INTEGER REFERENCES companies(id) ON UPDATE CASCADE ON DELETE CASCADE;
+      `);
+      await sequelize.query(`
+        UPDATE departments d
+        SET company_id = sub.cid
+        FROM (
+          SELECT t.id AS tid, MIN(c.id) AS cid
+          FROM tenants t
+          JOIN companies c ON c.tenant_id = t.id
+          GROUP BY t.id
+        ) sub
+        WHERE d.tenant_id = sub.tid AND d.company_id IS NULL
+      `);
+      await sequelize.query(`DELETE FROM departments WHERE company_id IS NULL`);
+      await sequelize.query(`
+        ALTER TABLE "departments" ALTER COLUMN "company_id" SET NOT NULL;
+      `);
+    }
   } catch (e) {
     console.warn('[department] ensureDepartmentColumns:', e);
   }
 }
 
-/** 사용자 저장 시 department_id → 부서명 반영 */
+/** root/audit는 query·body의 company_id, 그 외는 JWT company_id */
+function resolveCompanyId(req: AuthRequest, source: 'query' | 'body' | 'either' = 'either'): number | null {
+  const role = req.user?.role;
+  const jwtCompanyId = req.user?.company_id != null ? Number(req.user.company_id) : NaN;
+
+  if (role === 'root' || role === 'audit') {
+    const raw =
+      source === 'query'
+        ? req.query.company_id
+        : source === 'body'
+          ? (req.body as any)?.company_id
+          : (req.query.company_id ?? (req.body as any)?.company_id);
+    if (raw === undefined || raw === null || String(raw).trim() === '') {
+      return Number.isFinite(jwtCompanyId) ? jwtCompanyId : null;
+    }
+    const id = parseInt(String(raw), 10);
+    return Number.isFinite(id) ? id : null;
+  }
+
+  return Number.isFinite(jwtCompanyId) ? jwtCompanyId : null;
+}
+
+/** 사용자 저장 시 department_id → 부서명 반영 (회사 일치 검증) */
 export async function resolveDepartmentFieldsForUser(
   tenantId: number,
-  departmentId: unknown
+  departmentId: unknown,
+  companyId?: number | null
 ): Promise<
   | { kind: 'skip' }
   | { kind: 'ok'; department_id: number | null; department: string | null }
@@ -50,9 +99,11 @@ export async function resolveDepartmentFieldsForUser(
     return { kind: 'err', message: '부서 ID가 올바르지 않습니다.' };
   }
   await ensureDepartmentColumns();
-  const dept = await Department.findOne({
-    where: { id, tenant_id: tenantId, is_active: true }
-  });
+  const where: Record<string, unknown> = { id, tenant_id: tenantId, is_active: true };
+  if (companyId != null && Number.isFinite(Number(companyId))) {
+    where.company_id = Number(companyId);
+  }
+  const dept = await Department.findOne({ where });
   if (!dept) {
     return { kind: 'err', message: '선택한 부서를 찾을 수 없습니다.' };
   }
@@ -63,9 +114,14 @@ export async function listDepartments(req: AuthRequest, res: Response) {
   try {
     await ensureDepartmentColumns();
     const tenantId = req.user!.tenant_id;
+    const companyId = resolveCompanyId(req, 'query');
+    if (companyId == null) {
+      return res.status(400).json({ success: false, message: '회사를 선택해주세요.' });
+    }
+
     const includeInactive =
       req.query.include_inactive === '1' || String(req.query.include_inactive).toLowerCase() === 'true';
-    const where: Record<string, unknown> = { tenant_id: tenantId };
+    const where: Record<string, unknown> = { tenant_id: tenantId, company_id: companyId };
     if (!includeInactive) {
       where.is_active = true;
     }
@@ -73,8 +129,8 @@ export async function listDepartments(req: AuthRequest, res: Response) {
       where,
       order: [
         ['sort_order', 'ASC'],
-        ['name', 'ASC']
-      ]
+        ['name', 'ASC'],
+      ],
     });
     res.json({ success: true, data: rows.map((r) => r.toJSON()) });
   } catch (e: any) {
@@ -87,6 +143,11 @@ export async function createDepartment(req: AuthRequest, res: Response) {
   try {
     await ensureDepartmentColumns();
     const tenantId = req.user!.tenant_id;
+    const companyId = resolveCompanyId(req, 'body');
+    if (companyId == null) {
+      return res.status(400).json({ success: false, message: '회사를 선택해주세요.' });
+    }
+
     const name = String(req.body?.name || '').trim();
     if (!name) {
       return res.status(400).json({ success: false, message: '부서명을 입력해주세요.' });
@@ -97,17 +158,18 @@ export async function createDepartment(req: AuthRequest, res: Response) {
         ? parseInt(String(req.body.sort_order), 10)
         : 0;
 
-    const dup = await Department.findOne({ where: { tenant_id: tenantId, name } });
+    const dup = await Department.findOne({ where: { tenant_id: tenantId, company_id: companyId, name } });
     if (dup) {
       return res.status(409).json({ success: false, message: '같은 이름의 부서가 이미 있습니다.' });
     }
 
     const row = await Department.create({
       tenant_id: tenantId,
+      company_id: companyId,
       name,
       code,
       sort_order: Number.isFinite(sort_order) ? sort_order : 0,
-      is_active: req.body?.is_active !== false
+      is_active: req.body?.is_active !== false,
     });
     res.status(201).json({ success: true, data: row.toJSON() });
   } catch (e: any) {
@@ -120,11 +182,16 @@ export async function updateDepartment(req: AuthRequest, res: Response) {
   try {
     await ensureDepartmentColumns();
     const tenantId = req.user!.tenant_id;
+    const companyId = resolveCompanyId(req, 'either');
     const id = parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) {
       return res.status(400).json({ success: false, message: '잘못된 요청입니다.' });
     }
-    const row = await Department.findOne({ where: { id, tenant_id: tenantId } });
+
+    const where: Record<string, unknown> = { id, tenant_id: tenantId };
+    if (companyId != null) where.company_id = companyId;
+
+    const row = await Department.findOne({ where });
     if (!row) {
       return res.status(404).json({ success: false, message: '부서를 찾을 수 없습니다.' });
     }
@@ -135,7 +202,12 @@ export async function updateDepartment(req: AuthRequest, res: Response) {
     }
     if (name !== row.name) {
       const dup = await Department.findOne({
-        where: { tenant_id: tenantId, name, id: { [Op.ne]: id } }
+        where: {
+          tenant_id: tenantId,
+          company_id: row.company_id,
+          name,
+          id: { [Op.ne]: id },
+        },
       });
       if (dup) {
         return res.status(409).json({ success: false, message: '같은 이름의 부서가 이미 있습니다.' });
@@ -154,7 +226,7 @@ export async function updateDepartment(req: AuthRequest, res: Response) {
 
     await User.update(
       { department: row.name },
-      { where: { department_id: id, tenant_id: tenantId } }
+      { where: { department_id: id, tenant_id: tenantId, company_id: row.company_id } }
     );
 
     const fresh = await Department.findByPk(id);
@@ -169,20 +241,27 @@ export async function deleteDepartment(req: AuthRequest, res: Response) {
   try {
     await ensureDepartmentColumns();
     const tenantId = req.user!.tenant_id;
+    const companyId = resolveCompanyId(req, 'query');
     const id = parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) {
       return res.status(400).json({ success: false, message: '잘못된 요청입니다.' });
     }
-    const row = await Department.findOne({ where: { id, tenant_id: tenantId } });
+
+    const where: Record<string, unknown> = { id, tenant_id: tenantId };
+    if (companyId != null) where.company_id = companyId;
+
+    const row = await Department.findOne({ where });
     if (!row) {
       return res.status(404).json({ success: false, message: '부서를 찾을 수 없습니다.' });
     }
 
-    const cnt = await User.count({ where: { department_id: id, tenant_id: tenantId } });
+    const cnt = await User.count({
+      where: { department_id: id, tenant_id: tenantId, company_id: row.company_id },
+    });
     if (cnt > 0) {
       return res.status(400).json({
         success: false,
-        message: `이 부서에 소속된 사용자가 ${cnt}명 있어 삭제할 수 없습니다.`
+        message: `이 부서에 소속된 사용자가 ${cnt}명 있어 삭제할 수 없습니다.`,
       });
     }
 

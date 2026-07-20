@@ -4,6 +4,7 @@ import sequelize from '../config/database';
 interface DepartmentAttributes {
   id: number;
   tenant_id: number;
+  company_id: number;
   name: string;
   code?: string | null;
   sort_order: number;
@@ -12,11 +13,13 @@ interface DepartmentAttributes {
   updated_at?: Date;
 }
 
-interface DepartmentCreationAttributes extends Optional<DepartmentAttributes, 'id' | 'created_at' | 'updated_at'> {}
+interface DepartmentCreationAttributes
+  extends Optional<DepartmentAttributes, 'id' | 'code' | 'sort_order' | 'is_active' | 'created_at' | 'updated_at'> {}
 
 class Department extends Model<DepartmentAttributes, DepartmentCreationAttributes> implements DepartmentAttributes {
   public id!: number;
   public tenant_id!: number;
+  public company_id!: number;
   public name!: string;
   public code?: string | null;
   public sort_order!: number;
@@ -30,30 +33,34 @@ Department.init(
     id: {
       type: DataTypes.INTEGER,
       autoIncrement: true,
-      primaryKey: true
+      primaryKey: true,
     },
     tenant_id: {
       type: DataTypes.INTEGER,
-      allowNull: false
+      allowNull: false,
+    },
+    company_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
     },
     name: {
       type: DataTypes.STRING(200),
-      allowNull: false
+      allowNull: false,
     },
     code: {
       type: DataTypes.STRING(50),
-      allowNull: true
+      allowNull: true,
     },
     sort_order: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      defaultValue: 0
+      defaultValue: 0,
     },
     is_active: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
-      defaultValue: true
-    }
+      defaultValue: true,
+    },
   },
   {
     sequelize,
@@ -62,7 +69,11 @@ Department.init(
     timestamps: true,
     createdAt: 'created_at',
     updatedAt: 'updated_at',
-    indexes: [{ fields: ['tenant_id'] }]
+    indexes: [
+      { fields: ['tenant_id'] },
+      { fields: ['tenant_id', 'company_id'] },
+      { unique: true, fields: ['tenant_id', 'company_id', 'name'] },
+    ],
   }
 );
 

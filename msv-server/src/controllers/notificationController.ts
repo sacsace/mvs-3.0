@@ -50,23 +50,21 @@ const canApproveExpensePayment = (expense: any, user: any) => {
   if (expense.requester_id != null && Number(expense.requester_id) === Number(user.id)) {
     return false;
   }
-  if (user.role === 'admin' || user.role === 'root' || user.role === 'audit') return true;
   const meta = parseExpenseItemsMeta(expense.items);
   const approvedById = meta.approvedById ? Number(meta.approvedById) : null;
-  return approvedById !== null && approvedById === user.id;
+  if (approvedById !== null && approvedById === Number(user.id)) return true;
+  // 결제 담당자만 (admin/root 전원에게 알림 브로드캐스트하지 않음)
+  if (user.is_payment_officer === true) return true;
+  return false;
 };
 
-const isElevatedRole = (role: string | undefined) =>
-  role === 'admin' || role === 'root' || role === 'audit';
-
-/** 결제·휴가·견적 등 승인 대기 건 — 알림 드롭다운용 */
+/** 결제·휴가·견적 등 승인 대기 건 — 로그인 사용자에게 지정된 건만 */
 export const getActionInbox = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
     const userId = user?.id;
     const tenantId = user?.tenant_id;
     const companyId = user?.company_id;
-    const userRole = user?.role;
 
     if (!userId) {
       return res.status(401).json({ success: false, message: '인증이 필요합니다.' });
@@ -85,7 +83,7 @@ export const getActionInbox = async (req: Request, res: Response) => {
       if (companyId) where.company_id = companyId;
     };
 
-    // 1) 지출결의서 결제 승인 대기
+    // 1) 지출결의서 결제 승인 대기 — 지정 승인자/결제담당자만
     try {
       const expenseWhere: any = {
         is_active: true,
@@ -122,17 +120,15 @@ export const getActionInbox = async (req: Request, res: Response) => {
       console.warn('알림 인박스: expense_reports 조회 건너뜀 —', (expenseError as Error).message);
     }
 
-    // 2) 휴가 승인 대기 — 타인이 신청한 건만 (본인 신청 분은 제외)
+    // 2) 휴가 승인 대기 — 지정 결재자(본인)에게 온 건만
     try {
       const vacWhere: any = {
         is_active: true,
         status: 'pending',
-        user_id: { [Op.ne]: userId }
+        user_id: { [Op.ne]: userId },
+        approved_by: userId,
       };
       baseCompany(vacWhere);
-      if (!isElevatedRole(userRole)) {
-        vacWhere.approved_by = userId;
-      }
 
       const vacations = await (Vacation as any).findAll({
         where: vacWhere,
@@ -174,17 +170,15 @@ export const getActionInbox = async (req: Request, res: Response) => {
       console.warn('알림 인박스: vacations 조회 건너뜀 —', (vacationError as Error).message);
     }
 
-    // 3) 견적서 승인 대기 — 내가 작성한 견적은 제외(남이 올려 나에게 승인이 온 건만)
+    // 3) 견적서 승인 대기 — 지정 승인자(본인)에게 온 건만
     try {
       const qWhere: any = {
         is_active: true,
         status: 'pending_approval',
-        created_by: { [Op.ne]: userId }
+        created_by: { [Op.ne]: userId },
+        approver_user_id: userId,
       };
       baseCompany(qWhere);
-      if (!isElevatedRole(userRole)) {
-        qWhere.approver_user_id = userId;
-      }
 
       const quotations = await (Quotation as any).findAll({
         where: qWhere,

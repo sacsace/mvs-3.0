@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -38,12 +38,13 @@ import {
   mvsTableScrollSx,
   mvsTableHeadHighlightSx,
   mvsTableBodyRowSx,
+  mvsOutlinedLabelProps,
 } from '../../theme/mvsLayout';
 import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   Download as DownloadIcon,
-  Refresh as RefreshIcon,
+  Search as SearchIcon,
   AccountBalance as AccountBalanceIcon,
   ShowChart as ShowChartIcon,
   PieChart as PieChartIcon,
@@ -68,9 +69,61 @@ import {
   ComposedChart,
 } from 'recharts';
 import { alpha, useTheme } from '@mui/material/styles';
+import { useTranslation } from 'react-i18next';
 import { useStore } from '../../store';
 import { accountingService } from '../../services/api';
 import { UTILS } from '../../constants';
+
+type PeriodMode = 'date' | 'quarter' | 'fiscalYear';
+
+type FyOption = {
+  startYear: number;
+  start_date: string;
+  end_date: string;
+  label: string;
+};
+
+const toYmdLocal = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const getIndiaFyStartYear = (now = new Date()) =>
+  now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+
+const buildFiscalYearOptions = (now = new Date(), past = 3, future = 3): FyOption[] => {
+  const currentStart = getIndiaFyStartYear(now);
+  const options: FyOption[] = [];
+  for (let y = currentStart - past; y <= currentStart + future; y += 1) {
+    options.push({
+      startYear: y,
+      start_date: `${y}-04-01`,
+      end_date: `${y + 1}-03-31`,
+      label: `FY ${y}-${String(y + 1).slice(-2)}`,
+    });
+  }
+  return options;
+};
+
+const parseYmdLocal = (ymd: string) => {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+};
+
+const getFyQuarterRange = (fy: FyOption, quarter: 1 | 2 | 3 | 4) => {
+  const fyStart = parseYmdLocal(fy.start_date);
+  const qStart = new Date(fyStart.getFullYear(), fyStart.getMonth() + (quarter - 1) * 3, fyStart.getDate());
+  const qEndExclusive = new Date(fyStart.getFullYear(), fyStart.getMonth() + quarter * 3, fyStart.getDate());
+  const qEnd = new Date(qEndExclusive);
+  qEnd.setDate(qEnd.getDate() - 1);
+  let from = toYmdLocal(qStart);
+  let to = toYmdLocal(qEnd);
+  if (from < fy.start_date) from = fy.start_date;
+  if (to > fy.end_date) to = fy.end_date;
+  return { start_date: from, end_date: to };
+};
 
 interface AccountingStats {
   totalRevenue: number;
@@ -163,6 +216,66 @@ const accountingStatsFilterFieldSx = {
 
 const LIST_PAGE_SIZE = 10;
 
+type ListViewMode = 'page' | 'all';
+
+const listViewModeBarSx = {
+  mb: 1.25,
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: 0.75,
+} as const;
+
+const listViewModeBtnSx = {
+  height: 32,
+  minWidth: 0,
+  px: 1.5,
+  textTransform: 'none' as const,
+  fontWeight: 600,
+  fontSize: '0.75rem',
+  borderRadius: '10px',
+  boxShadow: 'none',
+  whiteSpace: 'nowrap' as const,
+};
+
+const ListViewModeButtons: React.FC<{
+  value: ListViewMode;
+  onChange: (mode: ListViewMode) => void;
+  allLabel: string;
+  pageLabel: string;
+}> = ({ value, onChange, allLabel, pageLabel }) => (
+  <Box sx={listViewModeBarSx}>
+    <Button
+      size="small"
+      disableElevation
+      variant={value === 'all' ? 'contained' : 'outlined'}
+      onClick={() => onChange('all')}
+      sx={{
+        ...listViewModeBtnSx,
+        ...(value === 'all'
+          ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+          : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+      }}
+    >
+      {allLabel}
+    </Button>
+    <Button
+      size="small"
+      disableElevation
+      variant={value === 'page' ? 'contained' : 'outlined'}
+      onClick={() => onChange('page')}
+      sx={{
+        ...listViewModeBtnSx,
+        ...(value === 'page'
+          ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+          : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+      }}
+    >
+      {pageLabel}
+    </Button>
+  </Box>
+);
+
 const bodyCardTableContainerSx = {
   ...mvsTableScrollSx,
   width: '100%',
@@ -180,6 +293,7 @@ const listStateInlineSx = {
 
 const AccountingStatistics: React.FC = () => {
   const theme = useTheme();
+  const { t, i18n } = useTranslation();
   const { user } = useStore();
   const canSelectCompany = user?.role === 'root' || user?.role === 'audit';
   const [stats, setStats] = useState<AccountingStats>({
@@ -199,9 +313,17 @@ const AccountingStatistics: React.FC = () => {
     expenseGrowth: 0,
     averageInvoiceAmount: 0,
   });
-  const [selectedPeriod, setSelectedPeriod] = useState('year');
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [periodMode, setPeriodMode] = useState<PeriodMode>('fiscalYear');
+  const fyOptions = useMemo(() => buildFiscalYearOptions(), []);
+  const currentFyStartYear = useMemo(() => getIndiaFyStartYear(), []);
+  const [fyStartYear, setFyStartYear] = useState(currentFyStartYear);
+  const [selectedQuarter, setSelectedQuarter] = useState<1 | 2 | 3 | 4>(1);
+  const [dateFrom, setDateFrom] = useState(() => {
+    const fy = buildFiscalYearOptions().find((o) => o.startYear === getIndiaFyStartYear());
+    return fy?.start_date || toYmdLocal(new Date());
+  });
+  const [dateTo, setDateTo] = useState(() => toYmdLocal(new Date()));
+  const [appliedRangeLabel, setAppliedRangeLabel] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState(0);
@@ -220,16 +342,70 @@ const AccountingStatistics: React.FC = () => {
   const [purchasePaidTotal, setPurchasePaidTotal] = useState(0);
   const [salesPage, setSalesPage] = useState(1);
   const [purchasePage, setPurchasePage] = useState(1);
+  const [salesListViewMode, setSalesListViewMode] = useState<ListViewMode>('page');
+  const [purchaseListViewMode, setPurchaseListViewMode] = useState<ListViewMode>('page');
 
-  const paginatedSalesList = useMemo(() => {
+  const selectedFy = useMemo(
+    () =>
+      fyOptions.find((o) => o.startYear === fyStartYear) ||
+      fyOptions.find((o) => o.startYear === currentFyStartYear) ||
+      fyOptions[0],
+    [fyOptions, fyStartYear, currentFyStartYear]
+  );
+
+  const getQuarterLabel = useCallback(
+    (quarter: 1 | 2 | 3 | 4) => t(`purchaseSalesStats.quarters.q${quarter}`),
+    [t]
+  );
+
+  const resolveQueryRange = useCallback(() => {
+    if (periodMode === 'date') {
+      const start = dateFrom || dateTo;
+      const end = dateTo || dateFrom;
+      return {
+        start_date: start,
+        end_date: end,
+        label: t('purchaseSalesStats.appliedRange.byDate', { start: start || '-', end: end || '-' }),
+      };
+    }
+    if (!selectedFy) {
+      return { start_date: '', end_date: '', label: '' };
+    }
+    if (periodMode === 'quarter') {
+      const range = getFyQuarterRange(selectedFy, selectedQuarter);
+      return {
+        ...range,
+        label: t('purchaseSalesStats.appliedRange.byQuarter', {
+          fy: selectedFy.label,
+          quarterLabel: getQuarterLabel(selectedQuarter),
+        }),
+      };
+    }
+    return {
+      start_date: selectedFy.start_date,
+      end_date: selectedFy.end_date,
+      label: t('purchaseSalesStats.appliedRange.byFiscalYear', { fy: selectedFy.label }),
+    };
+  }, [periodMode, dateFrom, dateTo, selectedFy, selectedQuarter, t, getQuarterLabel]);
+
+  // 언어 전환 시 적용 기간 문구만 갱신
+  useEffect(() => {
+    if (!appliedRangeLabel) return;
+    setAppliedRangeLabel(resolveQueryRange().label);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 언어 변경 시에만
+  }, [i18n.language]);
+
+  const displayedSalesList = useMemo(() => {
+    if (salesListViewMode === 'all') return salesList;
     const start = (salesPage - 1) * LIST_PAGE_SIZE;
     return salesList.slice(start, start + LIST_PAGE_SIZE);
-  }, [salesList, salesPage]);
+  }, [salesList, salesPage, salesListViewMode]);
 
-  const paginatedPurchaseList = useMemo(() => {
+  const displayedPurchaseList = useMemo(() => {
+    if (purchaseListViewMode === 'all') return purchaseList;
     const start = (purchasePage - 1) * LIST_PAGE_SIZE;
     return purchaseList.slice(start, start + LIST_PAGE_SIZE);
-  }, [purchaseList, purchasePage]);
+  }, [purchaseList, purchasePage, purchaseListViewMode]);
 
   useEffect(() => {
     setSalesPage(1);
@@ -251,11 +427,6 @@ const AccountingStatistics: React.FC = () => {
     }
   }, [user?.company_id, selectedCompanyId]);
 
-  useEffect(() => {
-    loadStatistics();
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- loadStatistics는 상위 상태를 클로저로 사용
-  }, [selectedPeriod, selectedYear, selectedMonth, selectedCompanyId, user?.company_id, user?.role]);
-
   const loadCompanies = async () => {
     try {
       const { api } = await import('../../services/api');
@@ -268,22 +439,32 @@ const AccountingStatistics: React.FC = () => {
     }
   };
 
-  const loadStatistics = async () => {
+  const loadStatistics = useCallback(async () => {
+    const range = resolveQueryRange();
+    if (!range.start_date || !range.end_date) {
+      setError(t('purchaseSalesStats.errors.selectPeriod'));
+      return;
+    }
+    if (range.start_date > range.end_date) {
+      setError(t('purchaseSalesStats.errors.invalidDateRange'));
+      return;
+    }
+
     setLoading(true);
     setError('');
     try {
       const params: any = {
-        period: selectedPeriod,
-        year: selectedYear,
-        month: selectedMonth,
+        start_date: range.start_date,
+        end_date: range.end_date,
       };
-      
+
       if (selectedCompanyId) {
         params.company_id = selectedCompanyId;
       }
 
       const response = await accountingService.getAccountingStats(params);
-      
+      setAppliedRangeLabel(range.label);
+
       if (response.success) {
         const data = response.data || {};
         setStats({
@@ -346,7 +527,7 @@ const AccountingStatistics: React.FC = () => {
       }
     } catch (error) {
       console.error('통계 데이터 로드 실패:', error);
-      setError('통계 데이터를 불러오는데 실패했습니다.');
+      setError(t('purchaseSalesStats.errors.loadFailed'));
       setStats({
         totalRevenue: 0,
         combinedRevenue: 0,
@@ -378,7 +559,13 @@ const AccountingStatistics: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [resolveQueryRange, selectedCompanyId, t]);
+
+  // 최초 1회만 자동 조회 (이후는 조회 버튼)
+  useEffect(() => {
+    void loadStatistics();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const formatCurrency = (amount: number) => UTILS.formatCurrency(amount);
 
@@ -386,16 +573,16 @@ const AccountingStatistics: React.FC = () => {
     if (!value) return '-';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
-    return date.toLocaleDateString('ko-KR');
+    return date.toLocaleDateString(i18n.language === 'ko' ? 'ko-KR' : 'en-US');
   };
 
   const getPaymentStatusChip = (status?: string) => {
     const normalized = String(status || '').toLowerCase();
     if (normalized === 'paid') {
-      return <Chip size="small" label="결제완료" color="success" variant="outlined" />;
+      return <Chip size="small" label={t('purchaseSalesStats.paymentStatus.paid')} color="success" variant="outlined" />;
     }
     if (normalized === 'pending') {
-      return <Chip size="small" label="대기" color="warning" variant="outlined" />;
+      return <Chip size="small" label={t('purchaseSalesStats.paymentStatus.pending')} color="warning" variant="outlined" />;
     }
     if (normalized === 'partial' || normalized === 'refunded') {
       return <Chip size="small" label={status} color="default" variant="outlined" />;
@@ -404,17 +591,19 @@ const AccountingStatistics: React.FC = () => {
   };
 
   const getExpenseStatusChip = (status?: string) => {
-    const map: Record<string, { label: string; color: 'default' | 'success' | 'warning' | 'error' | 'info' }> = {
-      draft: { label: '임시저장', color: 'default' },
-      submitted: { label: '제출', color: 'info' },
-      in_review: { label: '검토중', color: 'warning' },
-      approved: { label: '승인', color: 'success' },
-      rejected: { label: '반려', color: 'error' },
-      paid: { label: '지급완료', color: 'success' },
+    const map: Record<string, { labelKey: string; color: 'default' | 'success' | 'warning' | 'error' | 'info' }> = {
+      draft: { labelKey: 'purchaseSalesStats.expenseStatus.draft', color: 'default' },
+      submitted: { labelKey: 'purchaseSalesStats.expenseStatus.submitted', color: 'info' },
+      in_review: { labelKey: 'purchaseSalesStats.expenseStatus.in_review', color: 'warning' },
+      approved: { labelKey: 'purchaseSalesStats.expenseStatus.approved', color: 'success' },
+      rejected: { labelKey: 'purchaseSalesStats.expenseStatus.rejected', color: 'error' },
+      paid: { labelKey: 'purchaseSalesStats.expenseStatus.paid', color: 'success' },
     };
     const key = String(status || '').toLowerCase();
-    const item = map[key] || { label: status || '-', color: 'default' as const };
-    return <Chip size="small" label={item.label} color={item.color} variant="outlined" />;
+    const item = map[key];
+    const label = item ? t(item.labelKey) : status || '-';
+    const color = item?.color || 'default';
+    return <Chip size="small" label={label} color={color} variant="outlined" />;
   };
 
   const formatAxisAmount = (value: number) => {
@@ -429,44 +618,33 @@ const AccountingStatistics: React.FC = () => {
   };
 
   const getChartData = () => {
-    switch (selectedPeriod) {
-      case 'day':
-        return dailyData;
-      case 'week':
-        return monthlyRevenueData.slice(0, 4);
-      case 'month':
-        return monthlyRevenueData;
-      case 'quarter':
-        return quarterlyData;
-      case 'year':
-        return quarterlyData;
-      default:
-        return monthlyRevenueData;
-    }
+    if (periodMode === 'date') return dailyData.length ? dailyData : monthlyRevenueData;
+    if (periodMode === 'quarter') return monthlyRevenueData.length ? monthlyRevenueData : quarterlyData;
+    return quarterlyData.length ? quarterlyData : monthlyRevenueData;
+  };
+
+  const getChartXKey = () => {
+    if (periodMode === 'date') return dailyData.length ? 'day' : 'month';
+    if (periodMode === 'quarter') return monthlyRevenueData.length ? 'month' : 'quarter';
+    return quarterlyData.length ? 'quarter' : 'month';
   };
 
   const handleDownloadReport = async () => {
-    const periodLabelMap: Record<string, string> = {
-      day: '일간',
-      week: '주간',
-      month: '월간',
-      quarter: '분기',
-      year: '연간'
-    };
+    const range = resolveQueryRange();
 
     const companyLabel =
       selectedCompanyId === ''
-        ? '전체 회사'
+        ? t('purchaseSalesStats.export.allCompanies')
         : companies.find((company) => company.id === selectedCompanyId)?.name ||
-          (selectedCompanyId ? `회사 ${selectedCompanyId}` : '') ||
+          (selectedCompanyId ? t('purchaseSalesStats.export.companyWithId', { id: selectedCompanyId }) : '') ||
           user?.username ||
-          '선택 회사';
+          t('purchaseSalesStats.export.selectedCompany');
 
     const summaryRows = [
       { 항목: '생성일시', 값: new Date().toLocaleString('ko-KR') },
-      { 항목: '기간 구분', 값: periodLabelMap[selectedPeriod] || selectedPeriod },
-      { 항목: '조회 연도', 값: `${selectedYear}` },
-      { 항목: '조회 월', 값: `${selectedMonth}` },
+      { 항목: '기간 구분', 값: appliedRangeLabel || range.label },
+      { 항목: '시작일', 값: range.start_date },
+      { 항목: '종료일', 값: range.end_date },
       { 항목: '조회 회사', 값: companyLabel },
       { 항목: '총 매출(인보이스)', 값: stats.totalRevenue || 0 },
       { 항목: '수금액', 값: stats.collectedRevenue || 0 },
@@ -596,25 +774,15 @@ const AccountingStatistics: React.FC = () => {
     );
 
     const dateToken = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    await downloadExcelWorkbook(workbook, `회계통계_보고서_${dateToken}.xlsx`);
+    await downloadExcelWorkbook(workbook, `매입매출통계_보고서_${dateToken}.xlsx`);
   };
 
   return (
     <Box sx={{ ...mvsPageRootSx }}>
       <MvsPageHeader
-        title="회계 통계"
-        description="수익, 비용, 수익성 등 회계 관련 통계를 종합적으로 분석하세요."
+        title={t('purchaseSalesStats.title')}
+        description={t('purchaseSalesStats.description')}
         actions={
-          <>
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon fontSize="small" />}
-            onClick={loadStatistics}
-            disabled={loading}
-            sx={mvsBodyOutlinedBtnSx}
-          >
-            새로고침
-          </Button>
           <Button
             variant="contained"
             disableElevation
@@ -622,9 +790,8 @@ const AccountingStatistics: React.FC = () => {
             onClick={handleDownloadReport}
             sx={mvsBodyPrimaryBtnSx}
           >
-            보고서 다운로드
+            {t('purchaseSalesStats.downloadReport')}
           </Button>
-          </>
         }
       />
 
@@ -634,6 +801,10 @@ const AccountingStatistics: React.FC = () => {
         </Alert>
       )}
 
+      <Alert severity="info" sx={{ mb: 2 }}>
+        {t('purchaseSalesStats.infoAlert')}
+      </Alert>
+
       {/* 필터 섹션 */}
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
         <Box
@@ -641,114 +812,130 @@ const AccountingStatistics: React.FC = () => {
             px: { xs: 2, sm: 2.5 },
             py: 2,
             bgcolor: '#FFFFFF',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'flex-end',
+            gap: 1.25,
             ...accountingStatsFilterFieldSx,
           }}
         >
-          <Grid container spacing={2} alignItems="flex-end">
-            {canSelectCompany && (
-              <Grid size={{ xs: 12, sm: 9, md: 3 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  select
-                  label="회사"
-                  value={selectedCompanyId}
-                  onChange={(e) => {
-                    const value = String(e.target.value);
-                    if (value === '') {
-                      setSelectedCompanyId('');
-                    } else {
-                      const num = Number(value);
-                      setSelectedCompanyId(isNaN(num) ? '' : num);
-                    }
-                  }}
-                  InputLabelProps={{ shrink: true }}
-                  SelectProps={{ displayEmpty: true }}
-                  sx={accountingStatsFilterFieldSx}
-                >
-                  <MenuItem value="">전체 회사</MenuItem>
-                  {companies.map((company) => (
-                    <MenuItem key={company.id} value={company.id}>
-                      {company.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-            )}
-            <Grid size={{ xs: 12, sm: 6, md: 2 }}>
+          {canSelectCompany && (
+            <TextField
+              size="small"
+              select
+              label={t('purchaseSalesStats.filters.company')}
+              value={selectedCompanyId}
+              onChange={(e) => {
+                const value = String(e.target.value);
+                if (value === '') {
+                  setSelectedCompanyId('');
+                } else {
+                  const num = Number(value);
+                  setSelectedCompanyId(isNaN(num) ? '' : num);
+                }
+              }}
+              InputLabelProps={{ shrink: true }}
+              SelectProps={{ displayEmpty: true }}
+              sx={{ ...accountingStatsFilterFieldSx, width: { xs: '100%', sm: 220 }, minWidth: 180, flex: '0 0 auto' }}
+            >
+              <MenuItem value="">{t('purchaseSalesStats.filters.allCompanies')}</MenuItem>
+              {companies.map((company) => (
+                <MenuItem key={company.id} value={company.id}>
+                  {company.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+
+          <TextField
+            size="small"
+            select
+            label={t('purchaseSalesStats.filters.period')}
+            value={periodMode}
+            onChange={(e) => setPeriodMode(e.target.value as PeriodMode)}
+            InputLabelProps={{ shrink: true }}
+            sx={{ ...accountingStatsFilterFieldSx, width: { xs: '100%', sm: 170 }, minWidth: 150, flex: '0 1 auto' }}
+          >
+            <MenuItem value="date">{t('purchaseSalesStats.filters.byDate')}</MenuItem>
+            <MenuItem value="quarter">{t('purchaseSalesStats.filters.byQuarter')}</MenuItem>
+            <MenuItem value="fiscalYear">{t('purchaseSalesStats.filters.byFiscalYear')}</MenuItem>
+          </TextField>
+
+          {periodMode === 'date' && (
+            <>
               <TextField
-                fullWidth
                 size="small"
-                select
-                label="기간"
-                value={selectedPeriod}
-                onChange={(e) => setSelectedPeriod(e.target.value)}
-                InputLabelProps={{ shrink: true }}
-                SelectProps={{ displayEmpty: true }}
-                sx={accountingStatsFilterFieldSx}
-              >
-                <MenuItem value="day">일간</MenuItem>
-                <MenuItem value="week">주간</MenuItem>
-                <MenuItem value="month">월간</MenuItem>
-                <MenuItem value="quarter">분기</MenuItem>
-                <MenuItem value="year">연간</MenuItem>
-              </TextField>
-              </Grid>
-            {selectedPeriod === 'year' && (
-              <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  select
-                  label="연도"
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(Number(e.target.value))}
-                  InputLabelProps={{ shrink: true }}
-                  sx={accountingStatsFilterFieldSx}
-                >
-                  {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
-                    <MenuItem key={year} value={year}>{year}년</MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-            )}
-            {selectedPeriod === 'month' && (
-              <>
-                <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    select
-                    label="연도"
-                    value={selectedYear}
-                    onChange={(e) => setSelectedYear(Number(e.target.value))}
-                    InputLabelProps={{ shrink: true }}
-                    sx={accountingStatsFilterFieldSx}
-                  >
-                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(year => (
-                      <MenuItem key={year} value={year}>{year}년</MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
-                <Grid size={{ xs: 12, sm: 6, md: 2 }}>
-                  <TextField
-                    fullWidth
-                    size="small"
-                    select
-                    label="월"
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                    InputLabelProps={{ shrink: true }}
-                    sx={accountingStatsFilterFieldSx}
-                  >
-                    {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
-                      <MenuItem key={month} value={month}>{month}월</MenuItem>
-                    ))}
-                  </TextField>
-                </Grid>
-              </>
-            )}
-          </Grid>
+                type="date"
+                label={t('purchaseSalesStats.filters.from')}
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                sx={{ ...accountingStatsFilterFieldSx, width: { xs: '100%', sm: 150 }, minWidth: 140, flex: '0 0 auto' }}
+                {...mvsOutlinedLabelProps}
+              />
+              <TextField
+                size="small"
+                type="date"
+                label={t('purchaseSalesStats.filters.to')}
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                sx={{ ...accountingStatsFilterFieldSx, width: { xs: '100%', sm: 150 }, minWidth: 140, flex: '0 0 auto' }}
+                {...mvsOutlinedLabelProps}
+              />
+            </>
+          )}
+
+          {(periodMode === 'quarter' || periodMode === 'fiscalYear') && (
+            <TextField
+              size="small"
+              select
+              label={t('purchaseSalesStats.filters.fiscalYear')}
+              value={fyStartYear}
+              onChange={(e) => setFyStartYear(Number(e.target.value))}
+              InputLabelProps={{ shrink: true }}
+              sx={{ ...accountingStatsFilterFieldSx, width: { xs: '100%', sm: 180 }, minWidth: 160, flex: '0 0 auto' }}
+            >
+              {fyOptions.map((opt) => (
+                <MenuItem key={opt.startYear} value={opt.startYear}>
+                  {opt.label}
+                  {opt.startYear === currentFyStartYear ? ` (${t('purchaseSalesStats.filters.currentFy')})` : ''}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
+
+          {periodMode === 'quarter' && (
+            <TextField
+              size="small"
+              select
+              label={t('purchaseSalesStats.filters.quarter')}
+              value={selectedQuarter}
+              onChange={(e) => setSelectedQuarter(Number(e.target.value) as 1 | 2 | 3 | 4)}
+              InputLabelProps={{ shrink: true }}
+              sx={{ ...accountingStatsFilterFieldSx, width: { xs: '100%', sm: 120 }, minWidth: 100, flex: '0 0 auto' }}
+            >
+              <MenuItem value={1}>{getQuarterLabel(1)}</MenuItem>
+              <MenuItem value={2}>{getQuarterLabel(2)}</MenuItem>
+              <MenuItem value={3}>{getQuarterLabel(3)}</MenuItem>
+              <MenuItem value={4}>{getQuarterLabel(4)}</MenuItem>
+            </TextField>
+          )}
+
+          <Button
+            variant="contained"
+            disableElevation
+            startIcon={<SearchIcon fontSize="small" />}
+            onClick={() => void loadStatistics()}
+            disabled={loading}
+            sx={{ ...mvsBodyPrimaryBtnSx, height: 40, whiteSpace: 'nowrap', flex: '0 0 auto' }}
+          >
+            {t('purchaseSalesStats.filters.search')}
+          </Button>
+
+          {appliedRangeLabel && (
+            <Typography variant="caption" color="text.secondary" sx={{ alignSelf: 'center', ml: { sm: 0.5 } }}>
+              {t('purchaseSalesStats.filters.applied')}: {appliedRangeLabel}
+            </Typography>
+          )}
         </Box>
       </Card>
 
@@ -758,16 +945,22 @@ const AccountingStatistics: React.FC = () => {
           <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
             <CardContent sx={{ py: 2.25, px: 2.5, height: '100%' }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-                총 매출 (인보이스 기준)
+                {t('purchaseSalesStats.kpi.totalRevenue')}
               </Typography>
               <Typography variant="h5" fontWeight={600} color="success.main" sx={{ mt: 0.75, letterSpacing: '-0.02em' }}>
                 {formatCurrency(stats.totalRevenue)}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75, fontSize: '0.72rem', lineHeight: 1.35 }}>
-                수금액 {formatCurrency(stats.collectedRevenue || 0)} | 미수금 {formatCurrency(stats.outstandingRevenue || 0)}
+                {t('purchaseSalesStats.kpi.collectedOutstanding', {
+                  collected: formatCurrency(stats.collectedRevenue || 0),
+                  outstanding: formatCurrency(stats.outstandingRevenue || 0),
+                })}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.35, fontSize: '0.72rem', lineHeight: 1.35 }}>
-                참고: 객실예약 {formatCurrency(stats.roomBookingRevenue || 0)} 포함 통합매출은 {formatCurrency(stats.combinedRevenue || stats.totalRevenue)}
+                {t('purchaseSalesStats.kpi.roomBookingNote', {
+                  roomBooking: formatCurrency(stats.roomBookingRevenue || 0),
+                  combined: formatCurrency(stats.combinedRevenue || stats.totalRevenue),
+                })}
               </Typography>
             </CardContent>
           </Card>
@@ -776,14 +969,15 @@ const AccountingStatistics: React.FC = () => {
           <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
             <CardContent sx={{ py: 2.25, px: 2.5, height: '100%' }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-                총 지출
+                {t('purchaseSalesStats.kpi.totalExpenses')}
               </Typography>
               <Typography variant="h5" fontWeight={600} color="error.main" sx={{ mt: 0.75, letterSpacing: '-0.02em' }}>
                 {formatCurrency(stats.totalExpenses)}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-                {stats.expenseGrowth > 0 ? '+' : ''}
-                {stats.expenseGrowth}% 전월 대비
+                {t('purchaseSalesStats.kpi.vsLastMonth', {
+                  percent: `${stats.expenseGrowth > 0 ? '+' : ''}${stats.expenseGrowth}`,
+                })}
               </Typography>
             </CardContent>
           </Card>
@@ -792,13 +986,13 @@ const AccountingStatistics: React.FC = () => {
           <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
             <CardContent sx={{ py: 2.25, px: 2.5, height: '100%' }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-                순이익
+                {t('purchaseSalesStats.kpi.netProfit')}
               </Typography>
               <Typography variant="h5" fontWeight={600} color="info.main" sx={{ mt: 0.75, letterSpacing: '-0.02em' }}>
                 {formatCurrency(stats.netProfit)}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-                수익률: {getProfitMargin()}%
+                {t('purchaseSalesStats.kpi.profitMargin', { percent: getProfitMargin() })}
               </Typography>
             </CardContent>
           </Card>
@@ -807,13 +1001,13 @@ const AccountingStatistics: React.FC = () => {
           <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
             <CardContent sx={{ py: 2.25, px: 2.5, height: '100%' }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-                총 인보이스
+                {t('purchaseSalesStats.kpi.totalInvoices')}
               </Typography>
               <Typography variant="h5" fontWeight={600} sx={{ mt: 0.75, letterSpacing: '-0.02em' }}>
                 {stats.totalInvoices}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-                평균: {formatCurrency(stats.averageInvoiceAmount)}
+                {t('purchaseSalesStats.kpi.average', { amount: formatCurrency(stats.averageInvoiceAmount) })}
               </Typography>
             </CardContent>
           </Card>
@@ -850,12 +1044,12 @@ const AccountingStatistics: React.FC = () => {
                 '& .MuiTab-root.Mui-selected': { color: 'primary.main', fontWeight: 700 },
               }}
             >
-              <Tab icon={<ReceiptLongIcon />} iconPosition="start" label="매출 통계" />
-              <Tab icon={<ShoppingCartIcon />} iconPosition="start" label="매입 통계" />
-              <Tab icon={<ShowChartIcon />} iconPosition="start" label="수익/비용 추이" />
-              <Tab icon={<PieChartIcon />} iconPosition="start" label="카테고리별 분석" />
-              <Tab icon={<BarChartIcon />} iconPosition="start" label="인보이스 현황" />
-              <Tab icon={<AccountBalanceIcon />} iconPosition="start" label="예산 대비 실적" />
+              <Tab icon={<ReceiptLongIcon />} iconPosition="start" label={t('purchaseSalesStats.tabs.sales')} />
+              <Tab icon={<ShoppingCartIcon />} iconPosition="start" label={t('purchaseSalesStats.tabs.purchase')} />
+              <Tab icon={<ShowChartIcon />} iconPosition="start" label={t('purchaseSalesStats.tabs.trend')} />
+              <Tab icon={<PieChartIcon />} iconPosition="start" label={t('purchaseSalesStats.tabs.categoryAnalysis')} />
+              <Tab icon={<BarChartIcon />} iconPosition="start" label={t('purchaseSalesStats.tabs.invoiceStatus')} />
+              <Tab icon={<AccountBalanceIcon />} iconPosition="start" label={t('purchaseSalesStats.tabs.budgetVsActual')} />
             </Tabs>
           </Card>
 
@@ -865,14 +1059,14 @@ const AccountingStatistics: React.FC = () => {
               <Box sx={{ ...mvsBodySectionHeaderSx, alignItems: 'flex-start' }}>
                 <Box>
                   <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
-                    매출 통계
+                    {t('purchaseSalesStats.sales.title')}
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    인보이스 및 객실예약 매출 내역 ({salesList.length}건)
+                    {t('purchaseSalesStats.sales.subtitle', { count: salesList.length })}
                   </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'right' }}>
-                  <Typography variant="caption" color="text.secondary">합산금</Typography>
+                  <Typography variant="caption" color="text.secondary">{t('purchaseSalesStats.sales.totalAmount')}</Typography>
                   <Typography variant="h6" fontWeight={700} color="success.main">
                     {formatCurrency(salesTotal)}
                   </Typography>
@@ -882,11 +1076,22 @@ const AccountingStatistics: React.FC = () => {
                 {salesList.length === 0 ? (
                   <Box sx={listStateInlineSx}>
                     <Typography variant="body2" color="text.secondary">
-                      조회 기간에 해당하는 매출 내역이 없습니다.
+                      {t('purchaseSalesStats.sales.empty')}
                     </Typography>
                   </Box>
                 ) : (
                   <>
+                  <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: 1.5 }}>
+                    <ListViewModeButtons
+                      value={salesListViewMode}
+                      onChange={(mode) => {
+                        setSalesListViewMode(mode);
+                        if (mode === 'page') setSalesPage(1);
+                      }}
+                      allLabel={t('purchaseSalesStats.listView.viewAll')}
+                      pageLabel={t('purchaseSalesStats.listView.viewPages')}
+                    />
+                  </Box>
                   <TableContainer sx={bodyCardTableContainerSx}>
                     <Table
                       size="small"
@@ -902,18 +1107,18 @@ const AccountingStatistics: React.FC = () => {
                     >
                       <TableHead sx={mvsTableHeadHighlightSx}>
                         <TableRow>
-                          <TableCell>문서번호</TableCell>
-                          <TableCell>일자</TableCell>
-                          <TableCell>거래처</TableCell>
-                          <TableCell>유형</TableCell>
-                          <TableCell align="right">공급가액</TableCell>
-                          <TableCell align="right">세액</TableCell>
-                          <TableCell align="right">합계</TableCell>
-                          <TableCell align="center">결제상태</TableCell>
+                          <TableCell>{t('purchaseSalesStats.columns.documentNumber')}</TableCell>
+                          <TableCell>{t('purchaseSalesStats.columns.date')}</TableCell>
+                          <TableCell>{t('purchaseSalesStats.columns.counterparty')}</TableCell>
+                          <TableCell>{t('purchaseSalesStats.columns.type')}</TableCell>
+                          <TableCell align="right">{t('purchaseSalesStats.columns.supplyAmount')}</TableCell>
+                          <TableCell align="right">{t('purchaseSalesStats.columns.taxAmount')}</TableCell>
+                          <TableCell align="right">{t('purchaseSalesStats.columns.total')}</TableCell>
+                          <TableCell align="center">{t('purchaseSalesStats.columns.paymentStatus')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody sx={mvsTableBodyRowSx}>
-                        {paginatedSalesList.map((row) => (
+                        {displayedSalesList.map((row) => (
                           <TableRow key={`${row.source}-${row.id}`} hover>
                             <TableCell>{row.document_number}</TableCell>
                             <TableCell>{formatDate(row.date)}</TableCell>
@@ -930,7 +1135,7 @@ const AccountingStatistics: React.FC = () => {
                           </TableRow>
                         ))}
                         <TableRow sx={{ bgcolor: alpha(theme.palette.success.main, 0.08) }}>
-                          <TableCell colSpan={6} sx={{ fontWeight: 700 }}>합산금</TableCell>
+                          <TableCell colSpan={6} sx={{ fontWeight: 700 }}>{t('purchaseSalesStats.sales.totalAmount')}</TableCell>
                           <TableCell align="right" sx={{ fontWeight: 700, color: 'success.main' }}>
                             {formatCurrency(salesTotal)}
                           </TableCell>
@@ -939,7 +1144,7 @@ const AccountingStatistics: React.FC = () => {
                       </TableBody>
                     </Table>
                   </TableContainer>
-                  {salesList.length > LIST_PAGE_SIZE && (
+                  {salesListViewMode === 'page' && salesList.length > LIST_PAGE_SIZE && (
                     <Box sx={mvsBodyPaginationSx}>
                       <Pagination
                         count={Math.ceil(salesList.length / LIST_PAGE_SIZE)}
@@ -961,14 +1166,17 @@ const AccountingStatistics: React.FC = () => {
               <Box sx={{ ...mvsBodySectionHeaderSx, alignItems: 'flex-start' }}>
                 <Box>
                   <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
-                    매입 통계
+                    {t('purchaseSalesStats.purchase.title')}
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-                    지출결의서 매입 내역 ({purchaseList.length}건) · 지급완료 {formatCurrency(purchasePaidTotal)}
+                    {t('purchaseSalesStats.purchase.subtitle', {
+                      count: purchaseList.length,
+                      paidTotal: formatCurrency(purchasePaidTotal),
+                    })}
                   </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'right' }}>
-                  <Typography variant="caption" color="text.secondary">합산금</Typography>
+                  <Typography variant="caption" color="text.secondary">{t('purchaseSalesStats.purchase.totalAmount')}</Typography>
                   <Typography variant="h6" fontWeight={700} color="error.main">
                     {formatCurrency(purchaseTotal)}
                   </Typography>
@@ -978,11 +1186,22 @@ const AccountingStatistics: React.FC = () => {
                 {purchaseList.length === 0 ? (
                   <Box sx={listStateInlineSx}>
                     <Typography variant="body2" color="text.secondary">
-                      조회 기간에 해당하는 매입 내역이 없습니다.
+                      {t('purchaseSalesStats.purchase.empty')}
                     </Typography>
                   </Box>
                 ) : (
                   <>
+                  <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: 1.5 }}>
+                    <ListViewModeButtons
+                      value={purchaseListViewMode}
+                      onChange={(mode) => {
+                        setPurchaseListViewMode(mode);
+                        if (mode === 'page') setPurchasePage(1);
+                      }}
+                      allLabel={t('purchaseSalesStats.listView.viewAll')}
+                      pageLabel={t('purchaseSalesStats.listView.viewPages')}
+                    />
+                  </Box>
                   <TableContainer sx={bodyCardTableContainerSx}>
                     <Table
                       size="small"
@@ -998,19 +1217,19 @@ const AccountingStatistics: React.FC = () => {
                     >
                       <TableHead sx={mvsTableHeadHighlightSx}>
                         <TableRow>
-                          <TableCell>문서번호</TableCell>
-                          <TableCell>일자</TableCell>
-                          <TableCell>제목</TableCell>
-                          <TableCell>신청자</TableCell>
-                          <TableCell>부서</TableCell>
-                          <TableCell>용도</TableCell>
-                          <TableCell align="right">금액</TableCell>
-                          <TableCell align="center">상태</TableCell>
-                          <TableCell align="center">지급상태</TableCell>
+                          <TableCell>{t('purchaseSalesStats.columns.documentNumber')}</TableCell>
+                          <TableCell>{t('purchaseSalesStats.columns.date')}</TableCell>
+                          <TableCell>{t('purchaseSalesStats.columns.title')}</TableCell>
+                          <TableCell>{t('purchaseSalesStats.columns.requester')}</TableCell>
+                          <TableCell>{t('purchaseSalesStats.columns.department')}</TableCell>
+                          <TableCell>{t('purchaseSalesStats.columns.purpose')}</TableCell>
+                          <TableCell align="right">{t('purchaseSalesStats.columns.amount')}</TableCell>
+                          <TableCell align="center">{t('purchaseSalesStats.columns.status')}</TableCell>
+                          <TableCell align="center">{t('purchaseSalesStats.columns.expensePaymentStatus')}</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody sx={mvsTableBodyRowSx}>
-                        {paginatedPurchaseList.map((row) => (
+                        {displayedPurchaseList.map((row) => (
                           <TableRow key={row.id} hover>
                             <TableCell>{row.document_number}</TableCell>
                             <TableCell>{formatDate(row.date)}</TableCell>
@@ -1026,7 +1245,7 @@ const AccountingStatistics: React.FC = () => {
                           </TableRow>
                         ))}
                         <TableRow sx={{ bgcolor: alpha(theme.palette.error.main, 0.08) }}>
-                          <TableCell colSpan={6} sx={{ fontWeight: 700 }}>합산금</TableCell>
+                          <TableCell colSpan={6} sx={{ fontWeight: 700 }}>{t('purchaseSalesStats.purchase.totalAmount')}</TableCell>
                           <TableCell align="right" sx={{ fontWeight: 700, color: 'error.main' }}>
                             {formatCurrency(purchaseTotal)}
                           </TableCell>
@@ -1035,7 +1254,7 @@ const AccountingStatistics: React.FC = () => {
                       </TableBody>
                     </Table>
                   </TableContainer>
-                  {purchaseList.length > LIST_PAGE_SIZE && (
+                  {purchaseListViewMode === 'page' && purchaseList.length > LIST_PAGE_SIZE && (
                     <Box sx={mvsBodyPaginationSx}>
                       <Pagination
                         count={Math.ceil(purchaseList.length / LIST_PAGE_SIZE)}
@@ -1056,14 +1275,14 @@ const AccountingStatistics: React.FC = () => {
             <Card elevation={0} sx={mvsBodyCardSx}>
               <Box sx={mvsBodySectionHeaderSx}>
                 <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
-                  수익/비용 추이
+                  {t('purchaseSalesStats.tabs.trend')}
                 </Typography>
               </Box>
               <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
                       <ResponsiveContainer width="100%" height={400}>
                         <ComposedChart data={getChartData()}>
                           <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey={selectedPeriod === 'day' ? 'day' : selectedPeriod === 'quarter' ? 'quarter' : 'month'} />
+                          <XAxis dataKey={getChartXKey()} />
                           <YAxis tickFormatter={formatAxisAmount} />
                           <RechartsTooltip 
                             formatter={(value: number) => formatCurrency(value)}
@@ -1076,7 +1295,7 @@ const AccountingStatistics: React.FC = () => {
                             fillOpacity={0.3}
                             stroke="#4caf50"
                             strokeWidth={2}
-                            name="수익"
+                            name={t('purchaseSalesStats.chart.revenue')}
                           />
                           <Area 
                             type="monotone" 
@@ -1085,14 +1304,14 @@ const AccountingStatistics: React.FC = () => {
                             fillOpacity={0.3}
                             stroke="#f44336"
                             strokeWidth={2}
-                            name="비용"
+                            name={t('purchaseSalesStats.chart.expenses')}
                           />
                           <Line 
                             type="monotone" 
                             dataKey="profit" 
                             stroke="#2196f3" 
                             strokeWidth={3}
-                            name="순이익"
+                            name={t('purchaseSalesStats.chart.profit')}
                           />
                         </ComposedChart>
                       </ResponsiveContainer>
@@ -1107,7 +1326,7 @@ const AccountingStatistics: React.FC = () => {
                 <Card elevation={0} sx={{ ...mvsBodyCardSx, width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
                   <Box sx={mvsBodySectionHeaderSx}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
-                      카테고리별 비용 분포
+                      {t('purchaseSalesStats.category.expenseDistribution')}
                     </Typography>
                   </Box>
                   <Box sx={{ flex: 1, px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
@@ -1161,7 +1380,7 @@ const AccountingStatistics: React.FC = () => {
                 <Card elevation={0} sx={{ ...mvsBodyCardSx, width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
                   <Box sx={mvsBodySectionHeaderSx}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
-                      카테고리별 수익 분포
+                      {t('purchaseSalesStats.category.revenueDistribution')}
                     </Typography>
                   </Box>
                   <Box sx={{ flex: 1, px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
@@ -1221,7 +1440,7 @@ const AccountingStatistics: React.FC = () => {
                 <Card elevation={0} sx={{ ...mvsBodyCardSx, width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
                   <Box sx={mvsBodySectionHeaderSx}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
-                      인보이스 상태별 현황
+                      {t('purchaseSalesStats.invoice.statusChart')}
                     </Typography>
                   </Box>
                   <Box sx={{ flex: 1, px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
@@ -1232,13 +1451,15 @@ const AccountingStatistics: React.FC = () => {
                           <YAxis />
                           <RechartsTooltip 
                             formatter={(value: number, name: string) => [
-                              name === 'count' ? value + '개' : formatCurrency(value),
-                              name === 'count' ? '건수' : '금액'
+                              name === 'count'
+                                ? t('purchaseSalesStats.chart.countUnit', { count: value })
+                                : formatCurrency(value),
+                              name === 'count' ? t('purchaseSalesStats.chart.count') : t('purchaseSalesStats.chart.amount')
                             ]}
                           />
                           <Legend />
-                          <Bar dataKey="count" fill="#8884d8" name="건수" />
-                          <Bar dataKey="amount" fill="#82ca9d" name="금액" />
+                          <Bar dataKey="count" fill="#8884d8" name={t('purchaseSalesStats.chart.count')} />
+                          <Bar dataKey="amount" fill="#82ca9d" name={t('purchaseSalesStats.chart.amount')} />
                         </BarChart>
                       </ResponsiveContainer>
                   </Box>
@@ -1248,7 +1469,7 @@ const AccountingStatistics: React.FC = () => {
                 <Card elevation={0} sx={{ ...mvsBodyCardSx, width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
                   <Box sx={mvsBodySectionHeaderSx}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
-                      인보이스 상태 요약
+                      {t('purchaseSalesStats.invoice.statusSummary')}
                     </Typography>
                   </Box>
                   <Box sx={{ flex: 1, px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
@@ -1269,7 +1490,7 @@ const AccountingStatistics: React.FC = () => {
                                 <Typography variant="body2" fontWeight={500}>{item.status}</Typography>
                               </Box>
                               <Typography variant="body2" fontWeight={500}>
-                                {item.count}건
+                                {t('purchaseSalesStats.invoice.countWithUnit', { count: item.count })}
                               </Typography>
                             </Box>
                             <Typography variant="h6" color={item.color}>
@@ -1280,7 +1501,7 @@ const AccountingStatistics: React.FC = () => {
                         ))}
                         <Divider />
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
-                          <Typography variant="body1" fontWeight={600}>총계</Typography>
+                          <Typography variant="body1" fontWeight={600}>{t('purchaseSalesStats.invoice.grandTotal')}</Typography>
                           <Typography variant="h6" fontWeight={600}>
                             {formatCurrency(invoiceStatusData.reduce((sum, item) => sum + item.amount, 0))}
                           </Typography>
@@ -1299,7 +1520,7 @@ const AccountingStatistics: React.FC = () => {
                 <Card elevation={0} sx={mvsBodyCardSx}>
                   <Box sx={mvsBodySectionHeaderSx}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
-                      예산 대비 실적 분석
+                      {t('purchaseSalesStats.budget.analysis')}
                     </Typography>
                   </Box>
                   <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
@@ -1312,13 +1533,13 @@ const AccountingStatistics: React.FC = () => {
                             formatter={(value: number) => formatCurrency(value)}
                           />
                           <Legend />
-                          <Bar dataKey="budget" fill="#9e9e9e" name="예산" />
+                          <Bar dataKey="budget" fill="#9e9e9e" name={t('purchaseSalesStats.chart.budget')} />
                           <Line 
                             type="monotone" 
                             dataKey="revenue" 
                             stroke="#4caf50" 
                             strokeWidth={3}
-                            name="실제 수익"
+                            name={t('purchaseSalesStats.chart.actualRevenue')}
                           />
                         </ComposedChart>
                       </ResponsiveContainer>
@@ -1329,7 +1550,7 @@ const AccountingStatistics: React.FC = () => {
                 <Card elevation={0} sx={mvsBodyCardSx}>
                   <Box sx={mvsBodySectionHeaderSx}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
-                      월별 예산 대비 실적 상세
+                      {t('purchaseSalesStats.budget.monthlyDetail')}
                     </Typography>
                   </Box>
                   <Box sx={{ ...mvsBodyListZoneSx, mt: 0, pb: 0 }}>
@@ -1348,11 +1569,11 @@ const AccountingStatistics: React.FC = () => {
                         >
                           <TableHead sx={mvsTableHeadHighlightSx}>
                             <TableRow>
-                              <TableCell>월</TableCell>
-                              <TableCell align="right">예산</TableCell>
-                              <TableCell align="right">실제 수익</TableCell>
-                              <TableCell align="right">차이</TableCell>
-                              <TableCell align="right">달성률</TableCell>
+                              <TableCell>{t('purchaseSalesStats.columns.month')}</TableCell>
+                              <TableCell align="right">{t('purchaseSalesStats.columns.budget')}</TableCell>
+                              <TableCell align="right">{t('purchaseSalesStats.columns.actualRevenue')}</TableCell>
+                              <TableCell align="right">{t('purchaseSalesStats.columns.difference')}</TableCell>
+                              <TableCell align="right">{t('purchaseSalesStats.columns.achievementRate')}</TableCell>
                             </TableRow>
                           </TableHead>
                           <TableBody sx={mvsTableBodyRowSx}>

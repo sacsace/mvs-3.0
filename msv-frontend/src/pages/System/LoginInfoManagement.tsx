@@ -189,32 +189,39 @@ const LoginInfoManagement: React.FC = () => {
   const loadCompanies = useCallback(async () => {
     try {
       const companyList = await useReferenceDataStore.getState().fetchCompanies();
-      setCompanies(companyList);
+      // root만 전체 회사 선택 가능, 그 외는 로그인 회사만
+      const isRoot = user?.role === 'root';
+      const scopedList =
+        isRoot || !user?.company_id
+          ? companyList
+          : companyList.filter((company: Company) => company.id === Number(user.company_id));
 
-        if (!companyList.length) {
-          setSelectedCompanyId('');
-          return;
-        }
+      setCompanies(scopedList);
 
-        const hasSelectedCompany =
-          selectedCompanyId !== '' &&
-          companyList.some((company: Company) => company.id === selectedCompanyId);
+      if (!scopedList.length) {
+        setSelectedCompanyId('');
+        return;
+      }
 
-        if (hasSelectedCompany) {
-          return;
-        }
+      const hasSelectedCompany =
+        selectedCompanyId !== '' &&
+        scopedList.some((company: Company) => company.id === selectedCompanyId);
 
-        const userCompanyId = user?.company_id;
-        const hasUserCompany =
-          !!userCompanyId &&
-          companyList.some((company: Company) => company.id === userCompanyId);
+      if (hasSelectedCompany) {
+        return;
+      }
 
-        setSelectedCompanyId(hasUserCompany ? Number(userCompanyId) : companyList[0].id);
+      const userCompanyId = user?.company_id;
+      const hasUserCompany =
+        !!userCompanyId &&
+        scopedList.some((company: Company) => company.id === userCompanyId);
+
+      setSelectedCompanyId(hasUserCompany ? Number(userCompanyId) : scopedList[0].id);
     } catch (error: any) {
       console.error('회사 목록 로드 오류:', error);
       setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.loadCompaniesFailed'));
     }
-  }, [selectedCompanyId, t, user?.company_id]);
+  }, [selectedCompanyId, t, user?.company_id, user?.role]);
 
   const loadTabs = useCallback(
     async (companyId: number, preferTabId?: number) => {
@@ -707,7 +714,8 @@ const LoginInfoManagement: React.FC = () => {
             onChange={(_, newValue) => setSelectedCompanyId(newValue?.id ?? '')}
             getOptionLabel={(option) => option.name}
             isOptionEqualToValue={(option, value) => option.id === value.id}
-            disabled={menuFlags.menusLoading || !menuFlags.canRead}
+            disabled={menuFlags.menusLoading || !menuFlags.canRead || user?.role !== 'root'}
+            disableClearable={user?.role !== 'root'}
             sx={{ width: '100%', minWidth: 0 }}
             renderInput={(params) => (
               <TextField

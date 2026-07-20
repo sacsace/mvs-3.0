@@ -6,6 +6,7 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  MenuItem,
   Snackbar,
   Tab,
   Table,
@@ -66,6 +67,96 @@ type PlData = {
   totalIncome: number;
   totalExpense: number;
   netProfit: number;
+  source?: string;
+  tallyVoucherCount?: number;
+};
+
+type PlPeriodKey = 'q1' | 'q2' | 'q3' | 'q4' | 'fiscalYear';
+
+type FyOption = {
+  startYear: number;
+  start_date: string;
+  end_date: string;
+  label: string;
+};
+
+const PL_PERIOD_KEYS: PlPeriodKey[] = ['q1', 'q2', 'q3', 'q4', 'fiscalYear'];
+
+const toYmdLocal = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+/** 인도식 FY: 4/1 ~ 익년 3/31 */
+const getIndiaFyStartYear = (now = new Date()) =>
+  now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+
+const buildFiscalYearOptions = (now = new Date(), past = 3, future = 3): FyOption[] => {
+  const currentStart = getIndiaFyStartYear(now);
+  const options: FyOption[] = [];
+  for (let y = currentStart - past; y <= currentStart + future; y += 1) {
+    const endShort = String(y + 1).slice(-2);
+    options.push({
+      startYear: y,
+      start_date: `${y}-04-01`,
+      end_date: `${y + 1}-03-31`,
+      label: `FY ${y}-${endShort}`,
+    });
+  }
+  return options;
+};
+
+const parseYmdLocal = (ymd: string) => {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+};
+
+const getProfitAndLossPeriodRange = (
+  key: PlPeriodKey,
+  fy: Pick<FyOption, 'start_date' | 'end_date'>
+): { from: string; to: string } => {
+  if (key === 'fiscalYear') {
+    return { from: fy.start_date, to: fy.end_date };
+  }
+  const quarterIndex = ({ q1: 0, q2: 1, q3: 2, q4: 3 } as const)[key];
+  const fyStart = parseYmdLocal(fy.start_date);
+  const qStart = new Date(fyStart.getFullYear(), fyStart.getMonth() + quarterIndex * 3, fyStart.getDate());
+  const qEndExclusive = new Date(
+    fyStart.getFullYear(),
+    fyStart.getMonth() + (quarterIndex + 1) * 3,
+    fyStart.getDate()
+  );
+  const qEnd = new Date(qEndExclusive);
+  qEnd.setDate(qEnd.getDate() - 1);
+
+  let from = toYmdLocal(qStart);
+  let to = toYmdLocal(qEnd);
+  if (from < fy.start_date) from = fy.start_date;
+  if (to > fy.end_date) to = fy.end_date;
+  return { from, to };
+};
+
+const periodToggleGroupSx = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: 0.75,
+  flex: '1 1 auto',
+  minWidth: 0,
+} as const;
+
+const periodBtnSx = {
+  border: '1px solid #C5CED9',
+  borderRadius: '10px',
+  px: 1.25,
+  height: 40,
+  minWidth: 0,
+  textTransform: 'none' as const,
+  fontWeight: 600,
+  fontSize: '0.8125rem',
+  whiteSpace: 'nowrap' as const,
+  boxShadow: 'none',
 };
 
 const cellEllipsisSx = {
@@ -99,13 +190,39 @@ const ProfitAndLoss: React.FC = () => {
     changeCompany,
   } = useAccountingCompany();
 
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const fyOptions = useMemo(() => buildFiscalYearOptions(), []);
+  const currentFyStartYear = useMemo(() => getIndiaFyStartYear(), []);
+
+  const [fyStartYear, setFyStartYear] = useState(currentFyStartYear);
+  const [periodKey, setPeriodKey] = useState<PlPeriodKey>('fiscalYear');
+  const [from, setFrom] = useState(() => {
+    const fy = buildFiscalYearOptions().find((o) => o.startYear === getIndiaFyStartYear());
+    return fy?.start_date || '';
+  });
+  const [to, setTo] = useState(() => {
+    const fy = buildFiscalYearOptions().find((o) => o.startYear === getIndiaFyStartYear());
+    return fy?.end_date || '';
+  });
   const [tab, setTab] = useState(0);
   const [data, setData] = useState<PlData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
+
+  const selectedFy = useMemo(() => {
+    return (
+      fyOptions.find((o) => o.startYear === fyStartYear) ||
+      fyOptions.find((o) => o.startYear === currentFyStartYear) ||
+      fyOptions[0]
+    );
+  }, [fyOptions, fyStartYear, currentFyStartYear]);
+
+  const applyPeriod = useCallback((key: PlPeriodKey, fy: FyOption) => {
+    const range = getProfitAndLossPeriodRange(key, fy);
+    setPeriodKey(key);
+    setFrom(range.from);
+    setTo(range.to);
+  }, []);
 
   const load = useCallback(async () => {
     if (!effectiveCompanyId) return;
@@ -130,9 +247,20 @@ const ProfitAndLoss: React.FC = () => {
     void load();
   }, [load]);
 
+  const handleFyChange = (startYear: number) => {
+    const fy = fyOptions.find((o) => o.startYear === startYear);
+    if (!fy) return;
+    setFyStartYear(startYear);
+    applyPeriod(periodKey, fy);
+  };
+
   const handleReset = () => {
-    setFrom('');
-    setTo('');
+    const fy = fyOptions.find((o) => o.startYear === currentFyStartYear);
+    if (!fy) return;
+    setFyStartYear(currentFyStartYear);
+    setPeriodKey('fiscalYear');
+    setFrom(fy.start_date);
+    setTo(fy.end_date);
     setTab(0);
   };
 
@@ -293,44 +421,95 @@ const ProfitAndLoss: React.FC = () => {
         <Box sx={mvsBodyFilterWrapSx}>
           <Box
             sx={{
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: 'minmax(0, 1fr) minmax(0, 1fr) auto auto auto',
-              },
-              gap: 2,
+              display: 'flex',
+              flexWrap: 'wrap',
               alignItems: 'flex-end',
-              maxWidth: { sm: 920 },
+              gap: 1.25,
               ...(mvsSearchFieldSx as Record<string, unknown>),
             }}
           >
             <TextField
-              fullWidth
+              size="small"
+              select
+              label={t('profitAndLoss.fiscalYear')}
+              value={fyStartYear}
+              onChange={(e) => handleFyChange(Number(e.target.value))}
+              disabled={loading}
+              sx={{ ...filterFieldSx, width: { xs: '100%', sm: 180 }, minWidth: 160, flex: '0 0 auto' }}
+              {...mvsOutlinedLabelProps}
+            >
+              {fyOptions.map((opt) => (
+                <MenuItem key={opt.startYear} value={opt.startYear}>
+                  {opt.label}
+                  {opt.startYear === currentFyStartYear ? ` (${t('profitAndLoss.currentFy')})` : ''}
+                </MenuItem>
+              ))}
+            </TextField>
+
+            <Box
+              sx={{
+                ...periodToggleGroupSx,
+                flex: { xs: '1 1 100%', md: '0 1 auto' },
+                maxWidth: '100%',
+              }}
+            >
+              {PL_PERIOD_KEYS.map((key) => {
+                const selected = periodKey === key;
+                return (
+                  <Button
+                    key={key}
+                    size="small"
+                    variant={selected ? 'contained' : 'outlined'}
+                    disableElevation
+                    disabled={loading || !selectedFy}
+                    onClick={() => selectedFy && applyPeriod(key, selectedFy)}
+                    sx={{
+                      ...periodBtnSx,
+                      ...(selected
+                        ? {
+                            bgcolor: 'primary.main',
+                            color: '#fff',
+                            borderColor: 'primary.main',
+                            '&:hover': { bgcolor: 'primary.dark', borderColor: 'primary.dark' },
+                          }
+                        : {
+                            bgcolor: '#fff',
+                            color: 'text.primary',
+                            '&:hover': { bgcolor: '#F8FAFC', borderColor: '#9AA8B8' },
+                          }),
+                    }}
+                  >
+                    {t(`profitAndLoss.periods.${key}`)}
+                  </Button>
+                );
+              })}
+            </Box>
+
+            <TextField
               size="small"
               type="date"
               label={t('profitAndLoss.from')}
               value={from}
-              onChange={(e) => setFrom(e.target.value)}
+              InputProps={{ readOnly: true }}
               disabled={loading}
-              sx={filterFieldSx}
+              sx={{ ...filterFieldSx, width: { xs: '100%', sm: 150 }, minWidth: 140, flex: '0 0 auto' }}
               {...mvsOutlinedLabelProps}
             />
             <TextField
-              fullWidth
               size="small"
               type="date"
               label={t('profitAndLoss.to')}
               value={to}
-              onChange={(e) => setTo(e.target.value)}
+              InputProps={{ readOnly: true }}
               disabled={loading}
-              sx={filterFieldSx}
+              sx={{ ...filterFieldSx, width: { xs: '100%', sm: 150 }, minWidth: 140, flex: '0 0 auto' }}
               {...mvsOutlinedLabelProps}
             />
             <Button
               variant="contained"
               disableElevation
               startIcon={<SearchIcon fontSize="small" />}
-              sx={{ ...mvsBodyPrimaryBtnSx, height: 40, whiteSpace: 'nowrap' }}
+              sx={{ ...mvsBodyPrimaryBtnSx, height: 40, whiteSpace: 'nowrap', flex: '0 0 auto' }}
               onClick={() => void load()}
               disabled={loading}
             >
@@ -339,7 +518,7 @@ const ProfitAndLoss: React.FC = () => {
             <Button
               variant="outlined"
               startIcon={<ResetIcon fontSize="small" />}
-              sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
+              sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap', flex: '0 0 auto' }}
               onClick={handleReset}
               disabled={loading}
             >
@@ -348,7 +527,7 @@ const ProfitAndLoss: React.FC = () => {
             <Button
               variant="outlined"
               startIcon={<DownloadIcon fontSize="small" />}
-              sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
+              sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap', flex: '0 0 auto' }}
               onClick={handleExcelDownload}
               disabled={loading || exporting || !data}
             >
@@ -377,8 +556,8 @@ const ProfitAndLoss: React.FC = () => {
           renderAmountTable(data?.incomeRows || [], data?.totalIncome ?? 0, 'profitAndLoss.empty.income', 'primary.main')}
         {tab === 1 &&
           renderAmountTable(data?.expenseRows || [], data?.totalExpense ?? 0, 'profitAndLoss.empty.expense', 'error.main')}
-        {tab === 2 && (
-          loading ? (
+        {tab === 2 &&
+          (loading ? (
             <Box sx={listStateBoxSx}>
               <CircularProgress size={36} />
               <Typography variant="body2" color="text.secondary">
@@ -426,8 +605,7 @@ const ProfitAndLoss: React.FC = () => {
                 </TableBody>
               </Table>
             </TableContainer>
-          )
-        )}
+          ))}
         {!loading && tab === 2 && (
           <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
             {t('profitAndLoss.formula', {

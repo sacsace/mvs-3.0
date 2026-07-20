@@ -32,6 +32,7 @@ import {
   useMediaQuery,
   Checkbox,
   Pagination,
+  TableSortLabel,
 } from '@mui/material';
 import { alpha, useTheme, type SxProps, type Theme } from '@mui/material/styles';
 import {
@@ -50,7 +51,7 @@ import {
   MoreHoriz as MoreHorizIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
-import { partnerService } from '../../services/api';
+import { api, partnerService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
@@ -72,9 +73,43 @@ import {
   mvsBodyPaginationSx,
 } from '../../theme/mvsLayout';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+import { normalizePartnerCompanyName } from '../../utils/partnerCompanyName';
 
-const PARTNER_MENU_ROUTES = ['/basic-info/partners', '/basic-info'] as const;
+const PARTNER_MENU_ROUTES = ['/basic-info/partners', '/basic-info', '/customers/info', '/customers'] as const;
+/** Avoid ID collisions when merging customers into the partners list UI */
+const CUSTOMER_LIST_ID_OFFSET = 2_000_000_000;
 const PARTNERS_PER_PAGE = 10;
+
+type ListViewMode = 'page' | 'all';
+type PartnerSortKey =
+  | 'company'
+  | 'representative'
+  | 'type'
+  | 'industry'
+  | 'contact'
+  | 'contract'
+  | 'status';
+type SortDirection = 'asc' | 'desc';
+
+const listViewModeBarSx = {
+  mb: 1.25,
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: 0.75,
+} as const;
+
+const listViewModeBtnSx = {
+  height: 32,
+  minWidth: 0,
+  px: 1.5,
+  textTransform: 'none' as const,
+  fontWeight: 600,
+  fontSize: '0.75rem',
+  borderRadius: '10px',
+  boxShadow: 'none',
+  whiteSpace: 'nowrap' as const,
+};
 
 const PARTNER_FILTER_OUTLINED = mvsOutlinedLabelProps;
 const partnerFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
@@ -175,7 +210,7 @@ interface Partner {
   panNumber?: string;
   gstNumbers: string[];
   representative: string;
-  businessType: 'partner' | 'customer' | 'other';
+  businessType: 'partner' | 'customer' | 'customer_partner' | 'other' | 'room_guest';
   industry: string;
   address: string;
   phone: string;
@@ -190,6 +225,9 @@ interface Partner {
   status: 'active' | 'inactive' | 'suspended';
   notes: string;
   avatar?: string;
+  /** partner = partners table; customer/room_guest = customers API */
+  recordSource?: 'partner' | 'customer' | 'room_guest';
+  sourceId?: number;
 }
 
 const PartnerManagement: React.FC = () => {
@@ -202,8 +240,10 @@ const PartnerManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [listViewMode, setListViewMode] = useState<ListViewMode>('page');
+  const [sortKey, setSortKey] = useState<PartnerSortKey>('company');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [openDialog, setOpenDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState<'view' | 'edit' | 'add'>('view');
   const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
@@ -241,7 +281,64 @@ const PartnerManagement: React.FC = () => {
       contractEndDate: p.contract_end_date ? p.contract_end_date.split('T')[0] : '',
       status: p.status,
       notes: p.notes || '',
+      recordSource: 'partner' as const,
+      sourceId: p.id,
     }));
+  }, []);
+
+  const formatCustomersAsPartners = useCallback((customersData: any[], existingPartners: Partner[]): Partner[] => {
+    const partnerNameKeys = new Set(
+      existingPartners.map((p) => normalizePartnerCompanyName(p.companyName).toLowerCase()).filter(Boolean)
+    );
+    const partnerBizKeys = new Set(
+      existingPartners
+        .map((p) => String(p.businessNumber || '').trim().toLowerCase())
+        .filter((v) => v && !v.startsWith('tally-') && v !== '-')
+    );
+
+    return customersData
+      .map((c: any): Partner | null => {
+        const sourceType = c.source_type === 'room_guest' ? 'room_guest' : 'customer';
+        const name = String(c.name || '').trim();
+        const biz = String(c.business_number || '').trim();
+        const nameKey = normalizePartnerCompanyName(name).toLowerCase();
+
+        // Skip legacy customers already represented in partners (keep hotel guests)
+        if (sourceType === 'customer') {
+          if (nameKey && partnerNameKeys.has(nameKey)) return null;
+          if (biz && partnerBizKeys.has(biz.toLowerCase())) return null;
+        }
+
+        const listId = sourceType === 'room_guest' ? Number(c.id) : CUSTOMER_LIST_ID_OFFSET + Number(c.id);
+        return {
+          id: listId,
+          companyName: normalizePartnerCompanyName(name) || name,
+          businessNumber: biz || '-',
+          panNumber: '',
+          gstNumbers: [],
+          representative: c.ceo_name || '',
+          businessType: sourceType === 'room_guest' ? 'room_guest' : 'customer',
+          industry: c.industry || '',
+          address: c.address || '',
+          phone: c.phone || '',
+          email: c.email || '',
+          website: c.website || '',
+          bankName: '',
+          accountNumber: '',
+          ifsc: '',
+          accountHolder: '',
+          contractStartDate: '',
+          contractEndDate: '',
+          status: c.status === 'inactive' ? 'inactive' : 'active',
+          notes:
+            sourceType === 'room_guest'
+              ? `[Hotel Guest] booking=${c.source_booking_id || c.id}`
+              : '[Customer Info]',
+          recordSource: sourceType,
+          sourceId: Number(c.id),
+        };
+      })
+      .filter((row): row is Partner => row != null);
   }, []);
 
   const removePartnersFromList = useCallback((ids: number[]) => {
@@ -250,7 +347,7 @@ const PartnerManagement: React.FC = () => {
     setSelectedPartnerIds((prev) => prev.filter((id) => !idSet.has(id)));
   }, []);
 
-  // 파트너 목록 불러오기
+  // 파트너 + 고객정보(레거시/숙박손님) 통합 목록
   const loadPartners = useCallback(async () => {
     if (menuFlags.menusLoading || !menuFlags.canRead) {
       setPartners([]);
@@ -259,28 +356,37 @@ const PartnerManagement: React.FC = () => {
     }
     try {
       setLoading(true);
-      const response = await partnerService.getPartners();
-      const partnersData = Array.isArray(response?.data)
-        ? response.data
-        : Array.isArray(response)
-          ? response
+      const [partnerResponse, customerResponse] = await Promise.all([
+        partnerService.getPartners(),
+        api.get('/customers').catch(() => ({ data: [] })),
+      ]);
+      const partnersData = Array.isArray(partnerResponse?.data)
+        ? partnerResponse.data
+        : Array.isArray(partnerResponse)
+          ? partnerResponse
           : [];
+      const customersRaw = Array.isArray((customerResponse as any)?.data?.data)
+        ? (customerResponse as any).data.data
+        : Array.isArray((customerResponse as any)?.data)
+          ? (customerResponse as any).data
+          : Array.isArray(customerResponse)
+            ? customerResponse
+            : [];
+
       useReferenceDataStore.setState({
         partners: { data: partnersData, fetchedAt: Date.now(), promise: null },
       });
-      setPartners(formatPartners(partnersData));
+
+      const partnerRows = formatPartners(partnersData);
+      const customerRows = formatCustomersAsPartners(customersRaw, partnerRows);
+      setPartners([...partnerRows, ...customerRows]);
     } catch (error: any) {
       console.error('❌ [파트너 관리] 파트너 목록 로드 오류:', error);
-      console.error('❌ [파트너 관리] 에러 상세:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
       setPartners([]);
     } finally {
       setLoading(false);
-          }
-  }, [menuFlags.menusLoading, menuFlags.canRead, formatPartners]);
+    }
+  }, [menuFlags.menusLoading, menuFlags.canRead, formatPartners, formatCustomersAsPartners]);
 
   useEffect(() => {
     void loadPartners();
@@ -361,28 +467,49 @@ const PartnerManagement: React.FC = () => {
   };
 
   const handleSave = async () => {
-    // GST 번호 검증: 최소 1개 이상, 빈 값 제거
+    if (selectedPartner?.recordSource === 'room_guest') {
+      setNotify({ message: t('partnerManagement.roomGuestReadOnly'), severity: 'info' });
+      return;
+    }
+
+    // GST 번호 검증: 최소 1개 이상, 빈 값 제거 (파트너 마스터만)
     const validGstNumbers = formData.gstNumbers.filter(gst => gst.trim() !== '');
-    if (validGstNumbers.length === 0) {
+    const isLegacyCustomer = selectedPartner?.recordSource === 'customer';
+
+    if (!isLegacyCustomer && validGstNumbers.length === 0) {
       setNotify({ message: t('partnerManagement.gstMinOneRequired'), severity: 'warning' });
       return;
     }
     
     const formDataWithValidGst = {
       ...formData,
-      gstNumbers: validGstNumbers
+      companyName: normalizePartnerCompanyName(formData.companyName),
+      gstNumbers: validGstNumbers.length > 0 ? validGstNumbers : [''],
     };
 
+    // Reflect normalized name in the form immediately
+    setFormData((prev) => ({ ...prev, companyName: formDataWithValidGst.companyName }));
+
     try {
-      if (selectedPartner) {
-        // 수정
+      if (isLegacyCustomer && selectedPartner?.sourceId) {
+        const payload = {
+          name: formDataWithValidGst.companyName,
+          business_number: formDataWithValidGst.businessNumber,
+          ceo_name: formDataWithValidGst.representative,
+          phone: formDataWithValidGst.phone,
+          email: formDataWithValidGst.email,
+          address: formDataWithValidGst.address,
+          website: formDataWithValidGst.website,
+          industry: formDataWithValidGst.industry,
+          status: formDataWithValidGst.status === 'suspended' ? 'inactive' : formDataWithValidGst.status,
+        };
+        await api.put(`/customers/${selectedPartner.sourceId}`, payload);
+      } else if (selectedPartner && (selectedPartner.recordSource || 'partner') === 'partner') {
         await partnerService.updatePartner(selectedPartner.id, formDataWithValidGst);
       } else {
-        // 생성
         await partnerService.createPartner(formDataWithValidGst);
       }
       setOpenDialog(false);
-      // 목록 다시 불러오기
       loadPartners();
     } catch (error: any) {
       console.error('파트너 저장 오류:', error);
@@ -415,12 +542,21 @@ const PartnerManagement: React.FC = () => {
   };
 
   const handleDelete = (id: number) => {
+    const row = partners.find((p) => p.id === id);
+    if (row?.recordSource === 'room_guest') {
+      setNotify({ message: t('partnerManagement.roomGuestReadOnly'), severity: 'info' });
+      return;
+    }
     showConfirm(
       t('partnerManagement.confirmDelete'),
       () => {
         void (async () => {
           try {
-            await partnerService.deletePartner(id);
+            if (row?.recordSource === 'customer' && row.sourceId) {
+              await api.delete(`/customers/${row.sourceId}`);
+            } else {
+              await partnerService.deletePartner(id);
+            }
             removePartnersFromList([id]);
             setNotify({
               message: t('partnerManagement.deleteSelectedSuccess', { count: 1 }),
@@ -443,14 +579,29 @@ const PartnerManagement: React.FC = () => {
     if (!menuFlags.canDelete) return;
     if (selectedPartnerIds.length === 0) return;
 
-    const idsToDelete = [...selectedPartnerIds];
+    const idsToDelete = selectedPartnerIds.filter((id) => {
+      const row = partners.find((p) => p.id === id);
+      return row?.recordSource !== 'room_guest';
+    });
+    if (idsToDelete.length === 0) {
+      setNotify({ message: t('partnerManagement.roomGuestReadOnly'), severity: 'info' });
+      return;
+    }
 
     showConfirm(
       t('partnerManagement.deleteSelectedConfirm', { count: idsToDelete.length }),
       () => {
         void (async () => {
           try {
-            await Promise.all(idsToDelete.map((id) => partnerService.deletePartner(id)));
+            await Promise.all(
+              idsToDelete.map((id) => {
+                const row = partners.find((p) => p.id === id);
+                if (row?.recordSource === 'customer' && row.sourceId) {
+                  return api.delete(`/customers/${row.sourceId}`);
+                }
+                return partnerService.deletePartner(id);
+              })
+            );
             removePartnersFromList(idsToDelete);
             setNotify({
               message: t('partnerManagement.deleteSelectedSuccess', { count: idsToDelete.length }),
@@ -547,18 +698,21 @@ const PartnerManagement: React.FC = () => {
       partner: t('partnerManagement.typePartner'),
       customer: t('partnerManagement.typeCustomer'),
       customer_partner: t('partnerManagement.typeCustomerPartner'),
-      other: t('partnerManagement.typeOther')
+      other: t('partnerManagement.typeOther'),
+      room_guest: t('partnerManagement.typeRoomGuest'),
     };
     return typeConfig[type] || type;
   };
 
   const getTypeColor = (type: string) => {
-    const colorConfig = {
+    const colorConfig: Record<string, string> = {
       partner: 'primary',
       customer: 'success',
-      other: 'default'
+      customer_partner: 'info',
+      other: 'default',
+      room_guest: 'warning',
     };
-    return colorConfig[type as keyof typeof colorConfig] || 'default';
+    return colorConfig[type] || 'default';
   };
 
   const getStatusChip = (status: string) => {
@@ -572,29 +726,92 @@ const PartnerManagement: React.FC = () => {
     return <Chip label={t(config.labelKey)} color={config.color} size="small" sx={partnerChipSx} />;
   };
 
-  const filteredPartners = partners.filter(partner => {
-    const matchesSearch = searchTerm === '' || 
-                          partner.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (partner.representative && partner.representative.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                          (partner.industry && partner.industry.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                          (partner.address && partner.address.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                          partner.businessNumber.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || partner.status === statusFilter;
-    const matchesType = typeFilter === 'all' || partner.businessType === typeFilter;
-    return matchesSearch && matchesStatus && matchesType;
-  });
+  const getSortValue = (partner: Partner, key: PartnerSortKey): string => {
+    switch (key) {
+      case 'company':
+        return String(partner.companyName || '').toLowerCase();
+      case 'representative':
+        return String(partner.representative || '').toLowerCase();
+      case 'type':
+        return String(partner.businessType || '').toLowerCase();
+      case 'industry':
+        return String(partner.industry || '').toLowerCase();
+      case 'contact':
+        return String(partner.email || partner.phone || '').toLowerCase();
+      case 'contract':
+        return String(partner.contractEndDate || '');
+      case 'status':
+        return String(partner.status || '').toLowerCase();
+      default:
+        return '';
+    }
+  };
 
-  const partnerStats = useMemo(() => ({
-    total: partners.length,
-    active: partners.filter((p) => p.status === 'active').length,
-  }), [partners]);
+  const filteredPartners = useMemo(() => {
+    const filtered = partners.filter((partner) => {
+      const matchesSearch =
+        searchTerm === '' ||
+        partner.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (partner.representative &&
+          partner.representative.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (partner.industry && partner.industry.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (partner.address && partner.address.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        partner.businessNumber.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesType =
+        typeFilter === 'all' ||
+        partner.businessType === typeFilter ||
+        (typeFilter === 'customer' &&
+          (partner.recordSource === 'customer' || partner.businessType === 'customer'));
+      return matchesSearch && matchesType;
+    });
+
+    const sorted = [...filtered];
+    sorted.sort((a, b) => {
+      const aValue = getSortValue(a, sortKey);
+      const bValue = getSortValue(b, sortKey);
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return String(a.companyName || '').localeCompare(String(b.companyName || ''), undefined, {
+        sensitivity: 'base',
+      });
+    });
+    return sorted;
+  }, [partners, searchTerm, typeFilter, sortKey, sortDirection]);
+
+  const handleSort = (key: PartnerSortKey) => {
+    if (sortKey === key) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDirection('asc');
+    }
+    setPage(1);
+  };
+
+  const partnerStats = useMemo(() => {
+    const isPartnerType = (p: Partner) =>
+      p.businessType === 'partner' || p.businessType === 'customer_partner';
+    const isCustomerType = (p: Partner) =>
+      p.businessType === 'customer' ||
+      p.businessType === 'customer_partner' ||
+      p.recordSource === 'customer';
+    const isRoomGuest = (p: Partner) =>
+      p.businessType === 'room_guest' || p.recordSource === 'room_guest';
+
+    return {
+      total: partners.length,
+      active: partners.filter((p) => p.status === 'active').length,
+      partners: partners.filter((p) => !isRoomGuest(p) && isPartnerType(p)).length,
+      customers: partners.filter((p) => !isRoomGuest(p) && isCustomerType(p)).length,
+    };
+  }, [partners]);
 
   const totalPages = Math.max(1, Math.ceil(filteredPartners.length / PARTNERS_PER_PAGE));
 
-  const paginatedPartners = useMemo(
-    () => filteredPartners.slice((page - 1) * PARTNERS_PER_PAGE, page * PARTNERS_PER_PAGE),
-    [filteredPartners, page]
-  );
+  const paginatedPartners = useMemo(() => {
+    if (listViewMode === 'all') return filteredPartners;
+    return filteredPartners.slice((page - 1) * PARTNERS_PER_PAGE, page * PARTNERS_PER_PAGE);
+  }, [filteredPartners, page, listViewMode]);
 
   const visiblePartnerIds = useMemo(
     () => paginatedPartners.map((partner) => partner.id),
@@ -608,7 +825,7 @@ const PartnerManagement: React.FC = () => {
   useEffect(() => {
     setPage(1);
     setSelectedPartnerIds([]);
-  }, [searchTerm, statusFilter, typeFilter]);
+  }, [searchTerm, typeFilter, listViewMode]);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -633,12 +850,11 @@ const PartnerManagement: React.FC = () => {
   };
 
   const hasActiveFilters = Boolean(
-    searchTerm.trim() || statusFilter !== 'all' || typeFilter !== 'all'
+    searchTerm.trim() || typeFilter !== 'all'
   );
 
   const handleResetFilters = () => {
     setSearchTerm('');
-    setStatusFilter('all');
     setTypeFilter('all');
   };
 
@@ -676,7 +892,24 @@ const PartnerManagement: React.FC = () => {
     overflow: 'hidden',
   });
 
-  const thSx = (key: string) => partnerColBaseSx(key);
+  const thSx = (key: string) => {
+    const align = partColTableAlign(key);
+    return {
+      ...partnerColBaseSx(key),
+      '& .MuiTableSortLabel-root': {
+        color: 'inherit',
+        display: 'inline-flex',
+        width: '100%',
+        maxWidth: '100%',
+        justifyContent: align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start',
+        overflow: 'hidden',
+        ...(align === 'right' ? { flexDirection: 'row-reverse' as const } : {}),
+      },
+      '& .MuiTableSortLabel-icon': {
+        flexShrink: 0,
+      },
+    };
+  };
 
   const tdSx = (key: string) => ({
     ...partnerColBaseSx(key),
@@ -690,20 +923,43 @@ const PartnerManagement: React.FC = () => {
         : undefined,
   });
 
-  const renderHeadCell = (key: string, label: string) => (
+  const renderHeadCell = (key: string, label: string, sortable?: PartnerSortKey) => (
     <TableCell key={key} align={partColTableAlign(key)} sx={thSx(key)}>
-      <Box
-        component="span"
-        sx={{
-          ...thLabelEllipsisSx,
-          display: key === 'actions' ? 'flex' : 'block',
-          justifyContent: key === 'actions' ? 'center' : undefined,
-          width: '100%',
-        }}
-        title={label}
-      >
-        {label}
-      </Box>
+      {sortable ? (
+        <TableSortLabel
+          active={sortKey === sortable}
+          direction={sortKey === sortable ? sortDirection : 'asc'}
+          onClick={() => handleSort(sortable)}
+          sx={{
+            '& .MuiTableSortLabel-icon': { color: 'inherit !important' },
+          }}
+        >
+          <Box
+            component="span"
+            sx={{
+              ...thLabelEllipsisSx,
+              display: 'block',
+              width: '100%',
+            }}
+            title={label}
+          >
+            {label}
+          </Box>
+        </TableSortLabel>
+      ) : (
+        <Box
+          component="span"
+          sx={{
+            ...thLabelEllipsisSx,
+            display: key === 'actions' ? 'flex' : 'block',
+            justifyContent: key === 'actions' ? 'center' : undefined,
+            width: '100%',
+          }}
+          title={label}
+        >
+          {label}
+        </Box>
+      )}
     </TableCell>
   );
 
@@ -723,14 +979,20 @@ const PartnerManagement: React.FC = () => {
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+          gridTemplateColumns: {
+            xs: '1fr',
+            sm: 'repeat(2, 1fr)',
+            md: 'repeat(4, 1fr)',
+          },
           gap: 2.5,
           mb: 3,
         }}
       >
         {[
-          { key: 'active', label: t('partnerManagement.stats.activePartners'), value: partnerStats.active },
-          { key: 'total', label: t('partnerManagement.stats.totalPartners'), value: partnerStats.total },
+          { key: 'total', label: t('partnerManagement.stats.total'), value: partnerStats.total },
+          { key: 'active', label: t('partnerManagement.stats.active'), value: partnerStats.active },
+          { key: 'partners', label: t('partnerManagement.stats.partners'), value: partnerStats.partners },
+          { key: 'customers', label: t('partnerManagement.stats.customers'), value: partnerStats.customers },
         ].map((item) => (
           <Card key={item.key} elevation={0} sx={mvsKpiCardSx}>
             <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
@@ -944,8 +1206,8 @@ const PartnerManagement: React.FC = () => {
             display: 'grid',
             gridTemplateColumns: {
               xs: '1fr',
-              sm: 'repeat(2, minmax(0, 1fr))',
-              lg: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto',
+              sm: 'minmax(0, 1fr) minmax(0, 1fr) auto',
+              lg: 'minmax(0, 2fr) minmax(0, 1fr) auto',
             },
             gap: 2,
             alignItems: 'flex-end',
@@ -973,23 +1235,6 @@ const PartnerManagement: React.FC = () => {
             fullWidth
             size="small"
             select
-            label={t('partnerManagement.status')}
-            {...PARTNER_FILTER_OUTLINED}
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            disabled={menuFlags.menusLoading || !menuFlags.canRead}
-            SelectProps={{ displayEmpty: true }}
-            sx={partnerFilterFieldSx}
-          >
-            <MenuItem value="all">{t('partnerManagement.allStatus')}</MenuItem>
-            <MenuItem value="active">{t('partnerManagement.active')}</MenuItem>
-            <MenuItem value="inactive">{t('partnerManagement.inactive')}</MenuItem>
-            <MenuItem value="suspended">{t('partnerManagement.suspended')}</MenuItem>
-          </TextField>
-          <TextField
-            fullWidth
-            size="small"
-            select
             label={t('partnerManagement.companyType')}
             {...PARTNER_FILTER_OUTLINED}
             value={typeFilter}
@@ -1002,6 +1247,7 @@ const PartnerManagement: React.FC = () => {
             <MenuItem value="partner">{t('partnerManagement.typePartner')}</MenuItem>
             <MenuItem value="customer">{t('partnerManagement.typeCustomer')}</MenuItem>
             <MenuItem value="customer_partner">{t('partnerManagement.typeCustomerPartner')}</MenuItem>
+            <MenuItem value="room_guest">{t('partnerManagement.typeRoomGuest')}</MenuItem>
             <MenuItem value="other">{t('partnerManagement.typeOther')}</MenuItem>
           </TextField>
           <Button
@@ -1072,6 +1318,36 @@ const PartnerManagement: React.FC = () => {
           </Box>
         ) : (
           <>
+            <Box sx={listViewModeBarSx}>
+              <Button
+                size="small"
+                disableElevation
+                variant={listViewMode === 'all' ? 'contained' : 'outlined'}
+                onClick={() => setListViewMode('all')}
+                sx={{
+                  ...listViewModeBtnSx,
+                  ...(listViewMode === 'all'
+                    ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                    : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                }}
+              >
+                {t('partnerManagement.listView.viewAll')}
+              </Button>
+              <Button
+                size="small"
+                disableElevation
+                variant={listViewMode === 'page' ? 'contained' : 'outlined'}
+                onClick={() => setListViewMode('page')}
+                sx={{
+                  ...listViewModeBtnSx,
+                  ...(listViewMode === 'page'
+                    ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                    : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                }}
+              >
+                {t('partnerManagement.listView.viewPages')}
+              </Button>
+            </Box>
             <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
               <Table
                 size="small"
@@ -1117,13 +1393,13 @@ const PartnerManagement: React.FC = () => {
                       inputProps={{ 'aria-label': t('partnerManagement.selectAll') }}
                     />
                   </TableCell>
-                  {renderHeadCell('company', t('partnerManagement.companyInfo'))}
-                  {renderHeadCell('representative', t('partnerManagement.representative'))}
-                  {renderHeadCell('type', t('partnerManagement.companyType'))}
-                  {renderHeadCell('industry', t('partnerManagement.industry'))}
-                  {renderHeadCell('contact', t('partnerManagement.contact'))}
-                  {renderHeadCell('contract', t('partnerManagement.contractExpiryDate'))}
-                  {renderHeadCell('status', t('partnerManagement.status'))}
+                  {renderHeadCell('company', t('partnerManagement.companyInfo'), 'company')}
+                  {renderHeadCell('representative', t('partnerManagement.representative'), 'representative')}
+                  {renderHeadCell('type', t('partnerManagement.companyType'), 'type')}
+                  {renderHeadCell('industry', t('partnerManagement.industry'), 'industry')}
+                  {renderHeadCell('contact', t('partnerManagement.contact'), 'contact')}
+                  {renderHeadCell('contract', t('partnerManagement.contractExpiryDate'), 'contract')}
+                  {renderHeadCell('status', t('partnerManagement.status'), 'status')}
                   {renderHeadCell('actions', t('partnerManagement.actions'))}
                 </TableRow>
               </TableHead>
@@ -1238,12 +1514,24 @@ const PartnerManagement: React.FC = () => {
                     </TableCell>
                     <TableCell align={partColTableAlign('actions')} sx={tdSx('actions')} onClick={(e) => e.stopPropagation()}>
                       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
-                        <Tooltip title={menuFlags.menusLoading || !menuFlags.canDelete ? t('common.menuNoDelete') : t('partnerManagement.delete')}>
+                        <Tooltip
+                          title={
+                            partner.recordSource === 'room_guest'
+                              ? t('partnerManagement.roomGuestReadOnly')
+                              : menuFlags.menusLoading || !menuFlags.canDelete
+                                ? t('common.menuNoDelete')
+                                : t('partnerManagement.delete')
+                          }
+                        >
                           <span style={{ display: 'inline-flex' }}>
                             <IconButton
                               className="partner-delete-btn"
                               size="small"
-                              disabled={menuFlags.menusLoading || !menuFlags.canDelete}
+                              disabled={
+                                menuFlags.menusLoading ||
+                                !menuFlags.canDelete ||
+                                partner.recordSource === 'room_guest'
+                              }
                               onClick={() => handleDelete(partner.id)}
                               aria-label={t('partnerManagement.delete')}
                               sx={{
@@ -1268,6 +1556,7 @@ const PartnerManagement: React.FC = () => {
             </Table>
           </TableContainer>
 
+          {listViewMode === 'page' && totalPages > 1 && (
           <Box sx={mvsBodyPaginationSx}>
             <Pagination
               count={totalPages}
@@ -1283,6 +1572,7 @@ const PartnerManagement: React.FC = () => {
               }}
             />
           </Box>
+          )}
           </>
         )}
       </Box>
@@ -1303,6 +1593,13 @@ const PartnerManagement: React.FC = () => {
                   fullWidth
                   value={formData.companyName}
                   onChange={(e) => setFormData({...formData, companyName: e.target.value})}
+                  onBlur={() => {
+                    if (dialogMode === 'view') return;
+                    const normalized = normalizePartnerCompanyName(formData.companyName);
+                    if (normalized !== formData.companyName) {
+                      setFormData((prev) => ({ ...prev, companyName: normalized }));
+                    }
+                  }}
                   placeholder={t('partnerManagement.placeholderCompanyName')}
                   disabled={dialogMode === 'view'}
                 />
@@ -1361,9 +1658,19 @@ const PartnerManagement: React.FC = () => {
                     value={gstNumber}
                     onChange={(e) => handleGstNumberChange(index, e.target.value)}
                     placeholder={t('partnerManagement.placeholderGst', { index: index + 1 })}
-                    required
-                    error={gstNumber.trim() === '' && formData.gstNumbers.filter(g => g.trim() !== '').length === 0}
-                    helperText={gstNumber.trim() === '' && formData.gstNumbers.filter(g => g.trim() !== '').length === 0 ? t('partnerManagement.placeholderGstRequired') : ''}
+                    required={dialogMode !== 'view'}
+                    error={
+                      dialogMode !== 'view' &&
+                      gstNumber.trim() === '' &&
+                      formData.gstNumbers.filter((g) => g.trim() !== '').length === 0
+                    }
+                    helperText={
+                      dialogMode !== 'view' &&
+                      gstNumber.trim() === '' &&
+                      formData.gstNumbers.filter((g) => g.trim() !== '').length === 0
+                        ? t('partnerManagement.placeholderGstRequired')
+                        : ''
+                    }
                     disabled={dialogMode === 'view'}
                   />
                   {dialogMode !== 'view' && (
@@ -1592,7 +1899,18 @@ const PartnerManagement: React.FC = () => {
           {dialogMode === 'view' ? (
             <>
               <Button onClick={() => setOpenDialog(false)}>{t('partnerManagement.close')}</Button>
-              <Tooltip title={t('common.menuNoEdit')} disableHoverListener={menuFlags.menusLoading || menuFlags.canEdit}>
+              <Tooltip
+                title={
+                  selectedPartner?.recordSource === 'room_guest'
+                    ? t('partnerManagement.roomGuestReadOnly')
+                    : t('common.menuNoEdit')
+                }
+                disableHoverListener={
+                  selectedPartner?.recordSource === 'room_guest'
+                    ? false
+                    : menuFlags.menusLoading || menuFlags.canEdit
+                }
+              >
                 <span style={{ display: 'inline-flex' }}>
                   <Button 
                     onClick={() => {
@@ -1600,7 +1918,11 @@ const PartnerManagement: React.FC = () => {
                     }} 
                     variant="contained"
                     startIcon={<EditIcon />}
-                    disabled={menuFlags.menusLoading || !menuFlags.canEdit}
+                    disabled={
+                      menuFlags.menusLoading ||
+                      !menuFlags.canEdit ||
+                      selectedPartner?.recordSource === 'room_guest'
+                    }
                   >
                     {t('partnerManagement.edit')}
                   </Button>

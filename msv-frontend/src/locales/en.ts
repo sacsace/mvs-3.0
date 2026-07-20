@@ -85,7 +85,7 @@ export default {
       selectPlaceholder: 'Select'
     },
     app: {
-      accountingTitle: 'Accounting Management',
+      accountingTitle: 'Accounting (Tally)',
       accountingDesc: 'This page provides comprehensive accounting and financial management features.',
       accountingFeature1: 'Debit/Credit management',
       accountingFeature2: 'Chart of accounts setup',
@@ -722,8 +722,8 @@ export default {
       contact: 'Contact'
     },
     partnerManagement: {
-      pageTitle: 'Partner Company Management',
-      description: 'This page is for managing and querying partner company information.',
+      pageTitle: 'Partners / Customers',
+      description: 'Manage partner companies and customers in one place.',
       excelSampleDownload: 'Download Excel Sample',
       excelExport: 'Export to Excel',
       excelImport: 'Import from Excel',
@@ -731,6 +731,10 @@ export default {
       reset: 'Reset',
       moreTools: 'Tools',
       stats: {
+        total: 'Total',
+        active: 'Active',
+        partners: 'Partners',
+        customers: 'Customers',
         totalPartners: 'Total Partners',
         activePartners: 'Active Partners',
       },
@@ -741,6 +745,12 @@ export default {
         noResults: 'No partners match your criteria.',
         noResultsHint: 'Try changing your search or reset filters.',
       },
+      roomGuestReadOnly: 'Hotel guest (booking-linked) records cannot be edited or deleted here.',
+      listView: {
+        viewAll: 'View full list',
+        viewPages: 'View as pages',
+      },
+      typeRoomGuest: 'Hotel guest',
       searchPlaceholder: 'Search by company name, representative, industry, address...',
       searchLabel: 'Search',
       status: 'Status',
@@ -1315,7 +1325,7 @@ export default {
     },
     departmentManagement: {
       title: 'Departments',
-      description: 'Manage departments used for user registration and HR information.',
+      description: 'Manage departments per company for user registration and HR information.',
       stats: {
         total: 'Total departments',
         active: 'Active',
@@ -1345,7 +1355,9 @@ export default {
       noDepartment: 'None',
       usersBlockedDelete: 'Cannot delete while users are assigned to this department.',
       saved: 'Saved.',
-      deleted: 'Deleted.'
+      deleted: 'Deleted.',
+      selectCompanyFirst: 'Please select a company.',
+      selectCompanyHint: 'Departments are registered per company. Select a company first.',
     },
     workBoards: {
       title: 'Work Management',
@@ -2597,7 +2609,7 @@ export default {
       },
     },
     tallyImport: {
-      title: 'Tally Import',
+      title: 'Load Tally Data',
       description:
         'Upload a Tally Export (XML/JSON) to bring ledgers and vouchers into MSV. Vouchers are created as draft only and are never auto-posted.',
       booksLink: 'General Ledger',
@@ -2626,6 +2638,7 @@ export default {
         warn: 'Warning',
         info: 'Info',
       },
+      downloadLog: 'Download log',
       issueLevel: {
         error: 'Failed',
         warn: 'Warning',
@@ -2664,6 +2677,7 @@ export default {
         preview: 'File parsed successfully.',
         dryRun: 'Simulation completed.',
         import: 'Import completed. Vouchers are in draft status.',
+        logDownloaded: 'Import log downloaded.',
       },
       errors: {
         noFile: 'Please select a file.',
@@ -2671,13 +2685,14 @@ export default {
         preview: 'Preview failed.',
         import: 'Import failed.',
         fileTooLarge: 'File is too large. Maximum upload size is 2GB.',
+        noLogToDownload: 'There is no log to download.',
       },
     },
     generalLedger: {
       title: 'General Ledger',
       description: 'View vouchers, ledgers, and trial balance imported from Tally, then post them to the books.',
       voucherEntryLink: 'Voucher Entry',
-      tallyImportLink: 'Tally Import',
+      tallyImportLink: 'Load Tally Data',
       moreTools: 'Tools',
       tallyViewHint: 'This screen is for viewing and posting Tally import data. Add new data by importing a Tally Export file.',
       company: 'Company',
@@ -2893,13 +2908,22 @@ export default {
     },
     profitAndLoss: {
       title: 'Profit & Loss',
-      description: 'Summarize income and expense accounts for the period and view net profit.',
+      description: 'View period income and expenses from imported Tally data and check net profit.',
       from: 'From',
       to: 'To',
       search: 'Search',
       total: 'Total',
       excelDownload: 'Download Excel',
-      hint: 'Only posted vouchers are included. Accounts with nature income/expense only.',
+      fiscalYear: 'Fiscal Year',
+      currentFy: 'Current',
+      periods: {
+        q1: 'Q1',
+        q2: 'Q2',
+        q3: 'Q3',
+        q4: 'Q4',
+        fiscalYear: 'Full Year'
+      },
+      hint: 'Only vouchers and accounts from Load Tally Data are included. Draft imports count immediately; manually entered vouchers are excluded.',
       formula: 'Net profit = Total income {{income}} − Total expense {{expense}}',
       tabs: {
         income: 'Income',
@@ -2924,7 +2948,7 @@ export default {
       empty: {
         income: 'No income accounts for this period.',
         expense: 'No expense accounts for this period.',
-        hint: 'Adjust the date range or ensure posted vouchers exist.'
+        hint: 'Check the date range and company, or run Load Tally Data.'
       },
       errors: {
         load: 'Failed to load profit and loss statement.',
@@ -2932,16 +2956,158 @@ export default {
         exportFailed: 'Excel download failed.'
       }
     },
+    purchaseSalesStats: {
+      title: 'Purchase/Sales Statistics',
+      description: 'Aggregates purchases and sales from tax invoices and expense reports issued in MVS. Separate from Tally data.',
+      infoAlert: 'Sales are based on MVS tax invoices (standard and e-invoice); purchases are based on paid expense reports. Tally import data is not included.',
+      downloadReport: 'Download Report',
+      filters: {
+        company: 'Company',
+        allCompanies: 'All Companies',
+        period: 'Period',
+        byDate: 'By date',
+        byQuarter: 'By quarter',
+        byFiscalYear: 'By fiscal year',
+        from: 'From',
+        to: 'To',
+        fiscalYear: 'Fiscal Year',
+        quarter: 'Quarter',
+        search: 'Search',
+        applied: 'Applied',
+        currentFy: 'Current'
+      },
+      quarters: {
+        q1: 'Q1',
+        q2: 'Q2',
+        q3: 'Q3',
+        q4: 'Q4'
+      },
+      listView: {
+        viewAll: 'View full list',
+        viewPages: 'View as pages'
+      },
+      kpi: {
+        totalRevenue: 'Total Revenue (Invoice Basis)',
+        collectedOutstanding: 'Collected {{collected}} | Outstanding {{outstanding}}',
+        roomBookingNote: 'Note: Combined revenue incl. room bookings {{combined}} (room bookings {{roomBooking}})',
+        totalExpenses: 'Total Expenses',
+        vsLastMonth: '{{percent}}% vs last month',
+        netProfit: 'Net Profit',
+        profitMargin: 'Profit margin: {{percent}}%',
+        totalInvoices: 'Total Invoices',
+        average: 'Average: {{amount}}'
+      },
+      tabs: {
+        sales: 'Sales Statistics',
+        purchase: 'Purchase Statistics',
+        trend: 'Revenue/Expense Trend',
+        categoryAnalysis: 'Category Analysis',
+        invoiceStatus: 'Invoice Status',
+        budgetVsActual: 'Budget vs Actual'
+      },
+      sales: {
+        title: 'Sales Statistics',
+        subtitle: 'Invoice and room booking sales ({{count}} items)',
+        totalAmount: 'Total',
+        empty: 'No sales records for the selected period.'
+      },
+      purchase: {
+        title: 'Purchase Statistics',
+        subtitle: 'Expense report purchases ({{count}} items) · Paid {{paidTotal}}',
+        totalAmount: 'Total',
+        empty: 'No purchase records for the selected period.'
+      },
+      columns: {
+        documentNumber: 'Document No.',
+        date: 'Date',
+        counterparty: 'Counterparty',
+        type: 'Type',
+        supplyAmount: 'Taxable Amount',
+        taxAmount: 'Tax',
+        total: 'Total',
+        paymentStatus: 'Payment Status',
+        title: 'Title',
+        requester: 'Requester',
+        department: 'Department',
+        purpose: 'Purpose',
+        amount: 'Amount',
+        status: 'Status',
+        expensePaymentStatus: 'Payment Status',
+        month: 'Month',
+        budget: 'Budget',
+        actualRevenue: 'Actual Revenue',
+        difference: 'Variance',
+        achievementRate: 'Achievement'
+      },
+      chart: {
+        revenue: 'Revenue',
+        expenses: 'Expenses',
+        profit: 'Net Profit',
+        budget: 'Budget',
+        actualRevenue: 'Actual Revenue',
+        count: 'Count',
+        amount: 'Amount',
+        countUnit: '{{count}} items'
+      },
+      category: {
+        expenseDistribution: 'Expense by Category',
+        revenueDistribution: 'Revenue by Category'
+      },
+      invoice: {
+        statusChart: 'Invoice Status Breakdown',
+        statusSummary: 'Invoice Status Summary',
+        grandTotal: 'Grand Total',
+        countWithUnit: '{{count}} items'
+      },
+      budget: {
+        analysis: 'Budget vs Actual Analysis',
+        monthlyDetail: 'Monthly Budget vs Actual Detail'
+      },
+      paymentStatus: {
+        paid: 'Paid',
+        pending: 'Pending'
+      },
+      expenseStatus: {
+        draft: 'Draft',
+        submitted: 'Submitted',
+        in_review: 'In Review',
+        approved: 'Approved',
+        rejected: 'Rejected',
+        paid: 'Paid'
+      },
+      appliedRange: {
+        byDate: 'By date {{start}} ~ {{end}}',
+        byQuarter: '{{fy}} {{quarterLabel}}',
+        byFiscalYear: '{{fy}} (Fiscal Year)'
+      },
+      errors: {
+        selectPeriod: 'Please select a date range.',
+        invalidDateRange: 'Start date cannot be after end date.',
+        loadFailed: 'Failed to load statistics data.'
+      },
+      export: {
+        allCompanies: 'All Companies',
+        selectedCompany: 'Selected Company',
+        companyWithId: 'Company {{id}}'
+      }
+    },
     balanceSheet: {
       title: 'Balance Sheet',
-      description: 'Summarize asset, liability and equity accounts as of a date.',
+      description: 'View assets, liabilities and equity from imported Tally data.',
       from: 'From',
       asOf: 'As of',
       search: 'Search',
       total: 'Total',
       excelDownload: 'Download Excel',
-      hint: 'Includes opening balances plus posted vouchers. Current-period P&L is plugged into equity. After Tally import, post drafts in General Ledger so voucher amounts appear.',
-      unbalancedHint: 'Assets do not equal liabilities + equity. Check vouchers and account mapping.',
+      periods: {
+        q1: 'Q1',
+        q2: 'Q2',
+        q3: 'Q3',
+        q4: 'Q4',
+        fiscalYear: 'Fiscal Year'
+      },
+      hint: 'Only opening balances and vouchers from Load Tally Data are included. Draft imports count immediately; current-period P&L is plugged into equity. Manually entered vouchers are excluded.',
+      unbalancedHint: 'Assets do not equal liabilities + equity. Check Tally account mapping and vouchers.',
       formula: 'Assets {{assets}} = Liabilities + Equity {{liabilityEquity}}',
       tabs: {
         assets: 'Assets',
@@ -2967,8 +3133,8 @@ export default {
         assets: 'No asset accounts for this period.',
         liabilities: 'No liability accounts for this period.',
         equity: 'No equity accounts for this period.',
-        hint: 'No opening balances or posted vouchers. Check dates/company, or run Tally import and post to ledger.',
-        draftHint: '{{count}} unposted draft voucher(s) found. Use Post all drafts in General Ledger to include them on the balance sheet.'
+        hint: 'No Tally opening balances or vouchers. Check dates/company, or run Load Tally Data.',
+        draftHint: ''
       },
       errors: {
         load: 'Failed to load balance sheet.',

@@ -612,8 +612,12 @@ router.post(
       employee_number: finalEmployeeNumber
     };
 
-    // 부서: department_id 우선, 없으면 기존 department 문자열
-    const createDeptRes = await resolveDepartmentFieldsForUser(targetTenantId, (req.body as any).department_id);
+    // 부서: department_id 우선, 없으면 기존 department 문자열 (회사 스코프)
+    const createDeptRes = await resolveDepartmentFieldsForUser(
+      targetTenantId,
+      (req.body as any).department_id,
+      targetCompanyId
+    );
     if (createDeptRes.kind === 'err') {
       return res.status(400).json({ success: false, message: createDeptRes.message });
     }
@@ -836,7 +840,11 @@ router.put(
     if (role !== undefined) updateData.role = role;
     if (status !== undefined) updateData.status = status;
 
-    const deptRes = await resolveDepartmentFieldsForUser(tenantId, (req.body as any).department_id);
+    const deptRes = await resolveDepartmentFieldsForUser(
+      tenantId,
+      (req.body as any).department_id,
+      user.company_id
+    );
     if (deptRes.kind === 'err') {
       return res.status(400).json({ success: false, message: deptRes.message });
     }

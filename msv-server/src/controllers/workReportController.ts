@@ -81,65 +81,6 @@ async function batchAttachCcUsers(rows: any[]) {
   }
 }
 
-/** 제출 알림: 같은 회사 root·admin·audit 사본(작성자·수신자 제외, 수신자 단독 알림과 중복 없음) */
-async function notifyElevatedUsersWorkReportSubmitted(
-  req: RequestWithUser,
-  params: {
-    tenantId?: number;
-    companyId?: number;
-    reportDbId: number;
-    reportIdStr: string;
-    recipientUserId: number | null;
-    authorUserId: number;
-    title: string;
-    authorName: string;
-  }
-): Promise<void> {
-  const { tenantId, companyId, reportDbId, reportIdStr, recipientUserId, authorUserId, title, authorName } = params;
-  if (tenantId == null || companyId == null) return;
-  try {
-    const elevated = await User.findAll({
-      where: {
-        tenant_id: tenantId,
-        company_id: companyId,
-        role: { [Op.in]: ['root', 'admin', 'audit'] },
-        status: 'active'
-      },
-      attributes: ['id']
-    });
-    const titleShort = String(title || '').slice(0, 120);
-    const msg = `${authorName}님이 "${titleShort}" 보고서를 제출했습니다. 확인해 주세요.`;
-    for (const row of elevated) {
-      const rid = Number((row as any).id);
-      if (!Number.isInteger(rid) || rid <= 0) continue;
-      if (rid === authorUserId) continue;
-      if (recipientUserId != null && Number.isInteger(recipientUserId) && rid === recipientUserId) continue;
-      pushNotification(
-        {
-          title: '업무 보고서 제출',
-          message: msg,
-          type: 'info',
-          target_type: 'user',
-          target_id: rid,
-          tenant_id: tenantId,
-          company_id: companyId,
-          sender_user_id: authorUserId,
-          data: {
-            feature: 'work_report',
-            id: reportDbId,
-            report_id: reportIdStr,
-            submitted: true,
-            list: 'received'
-          }
-        },
-        (req as any).socketService
-      );
-    }
-  } catch {
-    /* 알림 보조 경로 실패 시 제출 본편은 유지 */
-  }
-}
-
 async function trySendWorkReportSubmittedEmail(params: Parameters<typeof sendWorkReportSubmittedEmail>[0]): Promise<WorkReportMailResult> {
   try {
     const result = await sendWorkReportSubmittedEmail(params);
@@ -519,18 +460,7 @@ export const createWorkReport = async (req: RequestWithUser, res: Response) => {
         (reportWithUser as any)?.author?.userid ||
         req.user?.username ||
         '작성자';
-      const recipElevated =
-        Number.isInteger(recipientNum) && recipientNum > 0 ? recipientNum : null;
-      await notifyElevatedUsersWorkReportSubmitted(req, {
-        tenantId,
-        companyId,
-        reportDbId: report.id,
-        reportIdStr: reportIdFinal,
-        recipientUserId: recipElevated,
-        authorUserId: Number(userId),
-        title: String(title),
-        authorName: authorNameElevated
-      });
+      // 수신자·참조(CC)에게만 알림 (회사 admin 전원 브로드캐스트 제거)
       const msgCc = `${authorNameElevated}님이 "${String(title).slice(0, 120)}" 보고서를 제출했습니다. 확인해 주세요.`;
       for (const ccUid of ccIdsFinal) {
         if (!Number.isInteger(ccUid) || ccUid <= 0 || ccUid === Number(userId)) continue;
@@ -927,18 +857,6 @@ export const submitWorkReport = async (req: RequestWithUser, res: Response) => {
         (req as any).socketService
       );
     }
-
-    await notifyElevatedUsersWorkReportSubmitted(req, {
-      tenantId,
-      companyId,
-      reportDbId: report.id,
-      reportIdStr: String(report.report_id || ''),
-      recipientUserId:
-        Number.isInteger(recipientIdNum) && recipientIdNum > 0 ? recipientIdNum : null,
-      authorUserId: Number.isInteger(authorIdNum) ? authorIdNum : Number(userId),
-      title: String(report.title || ''),
-      authorName
-    });
 
     const ccListSubmit = normalizeCcUserIdsRaw(
       (reportWithUser as any)?.cc_user_ids ?? (report as any).cc_user_ids

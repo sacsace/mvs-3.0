@@ -28,6 +28,7 @@ import {
 import { useTheme, type SxProps, type Theme } from '@mui/material/styles';
 import {
   CloudUpload as UploadIcon,
+  Download as DownloadIcon,
   MenuBook as BooksIcon,
   MoreHoriz as MoreHorizIcon,
   Preview as PreviewIcon,
@@ -260,6 +261,76 @@ const TallyImport: React.FC = () => {
     if (level === 'warn') return t('tallyImport.issueLevel.warn');
     if (level === 'info') return t('tallyImport.issueLevel.info');
     return level;
+  };
+
+  const handleDownloadImportLog = async () => {
+    if (!result) return;
+    const allIssues = result.issues || [];
+    if (allIssues.length === 0) {
+      setError(t('tallyImport.errors.noLogToDownload'));
+      return;
+    }
+
+    try {
+      const stamp = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const fileStamp = `${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}-${pad(stamp.getHours())}${pad(stamp.getMinutes())}${pad(stamp.getSeconds())}`;
+
+      const ExcelJS = (await import('exceljs')).default;
+      const { addSheetFromAoA, downloadExcelWorkbook } = await import('../../utils/excelExportStyle');
+      const {
+        tallyIssueLevelToEn,
+        tallyIssueMessageToEn,
+        tallyIssueContextToEn,
+      } = await import('../../utils/tallyImportLogEn');
+
+      const workbook = new ExcelJS.Workbook();
+      const header = ['Level', 'Message', 'Reason / Detail'];
+
+      const toEnRows = (issues: typeof allIssues) =>
+        issues.map((issue) => [
+          tallyIssueLevelToEn(issue.level),
+          tallyIssueMessageToEn(issue.message),
+          tallyIssueContextToEn(issue.context),
+        ]);
+
+      const failed = allIssues.filter((i) => i.level === 'error');
+      const warnings = allIssues.filter((i) => i.level === 'warn');
+      const infos = allIssues.filter((i) => i.level === 'info');
+
+      addSheetFromAoA(workbook, 'Summary', [
+        ['Tally Import Result' + (result.dryRun ? ' (Simulation — no DB write)' : '')],
+        [
+          `Accounts matched ${result.ledgers.matched} · Accounts created ${result.ledgers.created} · Vouchers created ${result.vouchers.created} · Skipped ${result.vouchers.skipped} · Failed ${result.vouchers.failed}`,
+        ],
+        [`Failed ${failed.length} · Warning ${warnings.length} · Info ${infos.length} · Total ${allIssues.length}`],
+        ...(file?.name ? [[`File: ${file.name}`]] : []),
+        [],
+        ['Sheet', 'Rows'],
+        ['Failed', failed.length],
+        ['Warning', warnings.length],
+        ['Info', infos.length],
+      ]);
+
+      addSheetFromAoA(
+        workbook,
+        'Failed',
+        failed.length ? [header, ...toEnRows(failed)] : [header, ['-', 'No failed logs', '-']]
+      );
+      addSheetFromAoA(
+        workbook,
+        'Warning',
+        warnings.length ? [header, ...toEnRows(warnings)] : [header, ['-', 'No warning logs', '-']]
+      );
+      if (infos.length > 0) {
+        addSheetFromAoA(workbook, 'Info', [header, ...toEnRows(infos)]);
+      }
+
+      await downloadExcelWorkbook(workbook, `tally-import-log-${fileStamp}.xlsx`, { rowHeight: 20 });
+      setSuccess(t('tallyImport.success.logDownloaded'));
+    } catch (err: any) {
+      setError(err?.message || t('tallyImport.errors.import'));
+    }
   };
 
   const closeToolbarMenu = () => setToolbarMenuAnchor(null);
@@ -785,49 +856,61 @@ const TallyImport: React.FC = () => {
                   flexWrap="wrap"
                   useFlexGap
                   spacing={1}
-                  sx={{ mb: 1.5, alignItems: 'center' }}
+                  sx={{ mb: 1.5, alignItems: 'center', justifyContent: 'space-between' }}
                 >
-                  <Typography variant="body2" color="text.secondary" sx={{ mr: 0.5 }}>
-                    {t('tallyImport.logFilter.label')}
-                  </Typography>
-                  {(
-                    [
-                      { key: 'all' as const, count: issueCounts.all },
-                      { key: 'error' as const, count: issueCounts.error },
-                      { key: 'warn' as const, count: issueCounts.warn },
-                      { key: 'info' as const, count: issueCounts.info },
-                    ] as const
-                  ).map(({ key, count }) => (
-                    <Button
-                      key={key}
-                      size="small"
-                      variant={issueLevelFilter === key ? 'contained' : 'outlined'}
-                      color={
-                        key === 'error'
-                          ? 'error'
-                          : key === 'warn'
-                            ? 'warning'
-                            : key === 'info'
-                              ? 'info'
-                              : 'inherit'
-                      }
-                      disabled={key !== 'all' && count === 0}
-                      onClick={() => {
-                        setIssueLevelFilter(key);
-                        setIssuesPage(1);
-                      }}
-                      sx={{
-                        ...mvsBodyOutlinedBtnSx,
-                        minWidth: 0,
-                        px: 1.25,
-                        ...(issueLevelFilter === key
-                          ? { boxShadow: 'none', color: '#fff' }
-                          : {}),
-                      }}
-                    >
-                      {t(`tallyImport.logFilter.${key}`)} ({count})
-                    </Button>
-                  ))}
+                  <Stack direction="row" flexWrap="wrap" useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mr: 0.5 }}>
+                      {t('tallyImport.logFilter.label')}
+                    </Typography>
+                    {(
+                      [
+                        { key: 'all' as const, count: issueCounts.all },
+                        { key: 'error' as const, count: issueCounts.error },
+                        { key: 'warn' as const, count: issueCounts.warn },
+                        { key: 'info' as const, count: issueCounts.info },
+                      ] as const
+                    ).map(({ key, count }) => (
+                      <Button
+                        key={key}
+                        size="small"
+                        variant={issueLevelFilter === key ? 'contained' : 'outlined'}
+                        color={
+                          key === 'error'
+                            ? 'error'
+                            : key === 'warn'
+                              ? 'warning'
+                              : key === 'info'
+                                ? 'info'
+                                : 'inherit'
+                        }
+                        disabled={key !== 'all' && count === 0}
+                        onClick={() => {
+                          setIssueLevelFilter(key);
+                          setIssuesPage(1);
+                        }}
+                        sx={{
+                          ...mvsBodyOutlinedBtnSx,
+                          minWidth: 0,
+                          px: 1.25,
+                          ...(issueLevelFilter === key
+                            ? { boxShadow: 'none', color: '#fff' }
+                            : {}),
+                        }}
+                      >
+                        {t(`tallyImport.logFilter.${key}`)} ({count})
+                      </Button>
+                    ))}
+                  </Stack>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<DownloadIcon fontSize="small" />}
+                    disabled={issueRows.length === 0}
+                    onClick={handleDownloadImportLog}
+                    sx={mvsBodyOutlinedBtnSx}
+                  >
+                    {t('tallyImport.downloadLog')}
+                  </Button>
                 </Stack>
                 <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
                   <Table size="small" sx={tableSx}>

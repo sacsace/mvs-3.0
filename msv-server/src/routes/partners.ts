@@ -7,6 +7,7 @@ import multer from 'multer';
 import * as XLSX from 'xlsx';
 import path from 'path';
 import { isMissingTableError } from '../utils/dbErrors';
+import { normalizePartnerCompanyName } from '../utils/partnerCompanyName';
 import {
   buildReferenceCacheKey,
   referenceCacheGet,
@@ -187,7 +188,7 @@ router.post(
       ...partnerFormData,
       tenant_id: tenantId,
       company_id: companyId,
-      company_name: partnerFormData.companyName,
+      company_name: normalizePartnerCompanyName(partnerFormData.companyName),
       business_number: partnerFormData.businessNumber,
       pan_number: partnerFormData.panNumber || null,
       representative: partnerFormData.representative || null,
@@ -325,7 +326,9 @@ router.put(
 
     // 파트너 정보 업데이트
     await partner.update({
-      company_name: partnerData.companyName || partner.company_name,
+      company_name: partnerData.companyName
+        ? normalizePartnerCompanyName(partnerData.companyName)
+        : partner.company_name,
       business_number: partnerData.businessNumber || partner.business_number,
       pan_number: partnerData.panNumber !== undefined ? partnerData.panNumber : partner.pan_number,
       representative: partnerData.representative !== undefined ? partnerData.representative : partner.representative,
@@ -707,7 +710,7 @@ router.post('/excel/import', authenticateToken, upload.single('file'), async (re
         const partner = await (Partner as any).create({
           tenant_id: tenantId,
           company_id: companyId,
-          company_name: row['회사명'].toString().trim(),
+          company_name: normalizePartnerCompanyName(row['회사명']),
           business_number: row['사업자번호'].toString().trim(),
           pan_number: row['PAN 번호'] ? row['PAN 번호'].toString().trim() : null,
           representative: row['대표자명'] ? row['대표자명'].toString().trim() : null,

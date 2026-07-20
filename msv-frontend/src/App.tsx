@@ -80,9 +80,7 @@ const ProfitAndLoss = lazyPage(() => import('./pages/Accounting/ProfitAndLoss'))
 const BalanceSheet = lazyPage(() => import('./pages/Accounting/BalanceSheet'));
 const TallyImport = lazyPage(() => import('./pages/Accounting/TallyImport'));
 const ContractManagement = lazyPage(() => import('./pages/Sales/ContractManagement'));
-const CustomerInformation = lazyPage(() => import('./pages/Sales/CustomerInformation'));
 const RegularInvoice = lazyPage(() => import('./pages/Invoice/RegularInvoice'));
-const EWayBill = lazyPage(() => import('./pages/Invoice/EWayBill'));
 
 const Reports = () => {
   const { t } = useTranslation();
@@ -205,6 +203,7 @@ function App() {
             <Route path="basic-info" element={<Navigate to="/basic-info/company" replace />} />
             <Route path="basic-info/company" element={<CompanyManagement />} />
             <Route path="basic-info/partners" element={<PartnerManagement />} />
+            <Route path="customers/info" element={<Navigate to="/basic-info/partners" replace />} />
             <Route path="basic-info/organization" element={<OrganizationChart />} />
             <Route path="basic-info/menu-permissions" element={<MenuPermissionManagement />} />
             <Route path="basic-info/login-info" element={<LoginInfoManagement />} />
@@ -230,6 +229,7 @@ function App() {
             <Route path="work" element={<Navigate to="/work/projects" replace />} />
             <Route path="work/projects" element={<WorkBoardsPage />} />
             <Route path="work/projects/:boardId" element={<WorkBoardDetailPage />} />
+            <Route path="customers/contracts" element={<ContractManagement />} />
             <Route path="work/statistics" element={<WorkStatistics />} />
             <Route path="work/approval" element={<ElectronicApproval />} />
             <Route path="work/quotation" element={<QuotationManagement />} />
@@ -284,31 +284,29 @@ function App() {
             <Route path="e-invoice/status" element={<Navigate to="/accounting/e-invoice" replace />} />
             
             {/* E-Way Bill */}
-            <Route path="eway-bill" element={<Navigate to="/accounting/eway-bill" replace />} />
-            <Route path="eway-bill/list" element={<Navigate to="/accounting/eway-bill" replace />} />
-            <Route path="eway-bill/create" element={<Navigate to="/accounting/eway-bill" replace />} />
-            <Route path="eway-bill/send" element={<Navigate to="/accounting/eway-bill" replace />} />
-            <Route path="eway-bill/track" element={<Navigate to="/accounting/eway-bill" replace />} />
+            <Route path="eway-bill" element={<Navigate to="/basic-info/partners" replace />} />
+            <Route path="eway-bill/list" element={<Navigate to="/basic-info/partners" replace />} />
+            <Route path="eway-bill/create" element={<Navigate to="/basic-info/partners" replace />} />
+            <Route path="eway-bill/send" element={<Navigate to="/basic-info/partners" replace />} />
+            <Route path="eway-bill/track" element={<Navigate to="/basic-info/partners" replace />} />
+            <Route path="accounting/eway-bill" element={<Navigate to="/basic-info/partners" replace />} />
             
-            {/* 매출 관리 */}
-            <Route path="sales" element={<Navigate to="/customers/info" replace />} />
-            <Route path="customers" element={<Navigate to="/customers/info" replace />} />
-            <Route path="customers/info" element={<CustomerInformation />} />
-            <Route path="customers/contracts" element={<ContractManagement />} />
-            
-            {/* 회계 관리 — Tally 임포트·조회 중심 */}
-            <Route path="accounting" element={<Navigate to="/accounting/books" replace />} />
-            <Route path="accounting/basic-info" element={<Navigate to="/accounting/books" replace />} />
+            {/* 매입/매출 관리 */}
+            <Route path="sales" element={<Navigate to="/accounting/quotation" replace />} />
+            <Route path="customers" element={<Navigate to="/basic-info/partners" replace />} />
             <Route path="accounting/quotation" element={<QuotationManagement />} />
             <Route path="accounting/e-invoice" element={<EInvoiceManagement />} />
             <Route path="accounting/e-invoice/create" element={<EInvoiceCreate />} />
             <Route path="accounting/invoice" element={<RegularInvoice />} />
-            <Route path="accounting/eway-bill" element={<EWayBill />} />
             <Route path="accounting/expense" element={<ExpenseApproval />} />
             <Route path="accounting/expense/transfer-log/:id" element={<ExpenseTransferLog />} />
+            <Route path="accounting/statistics" element={<AccountingStatistics />} />
+            
+            {/* 회계관리 (Tally) */}
+            <Route path="accounting" element={<Navigate to="/accounting/books" replace />} />
+            <Route path="accounting/basic-info" element={<Navigate to="/accounting/books" replace />} />
             <Route path="accounting/budget" element={<Navigate to="/accounting/books" replace />} />
             <Route path="accounting/assets" element={<AssetManagement />} />
-            <Route path="accounting/statistics" element={<AccountingStatistics />} />
             <Route path="accounting/books" element={<GeneralLedger />} />
             <Route path="accounting/chart-of-accounts" element={<Navigate to="/accounting/books?tab=accounts" replace />} />
             <Route path="accounting/tally-import" element={<TallyImport />} />

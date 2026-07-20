@@ -17,6 +17,44 @@ const parseAmount = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+/** 손익·재무상태표: Tally 임포트 전표만 (draft 포함, 수동 전표 제외) */
+const buildTallyStatementVoucherWhere = (params: {
+  tenantId: number;
+  companyId: number;
+  dateField?: 'voucher_date';
+  from?: string;
+  to?: string;
+  asOf?: string;
+}) => {
+  const where: Record<string, unknown> = {
+    tenant_id: params.tenantId,
+    company_id: params.companyId,
+    is_active: true,
+    // 임포트는 draft로 생성되므로 draft+posted 모두 집계
+    status: { [Op.in]: ['draft', 'posted', 'approved', 'review_required'] },
+    input_mode: 'tally_import',
+  };
+
+  if (params.asOf) {
+    where.voucher_date = { [Op.lte]: params.asOf };
+  } else if (params.from || params.to) {
+    const range: Record<symbol, string> = {};
+    if (params.from) range[Op.gte] = params.from;
+    if (params.to) range[Op.lte] = params.to;
+    where.voucher_date = range;
+  }
+
+  return where;
+};
+
+/** Tally에서 가져온 계정과목만 (수동/한글 기본 COA 제외) */
+const tallyAccountWhereExtra = {
+  [Op.or]: [
+    { code: { [Op.iLike]: 'TLY%' } },
+    { search_aliases: { [Op.iLike]: '%guid:%' } },
+  ],
+};
+
 const buildAccountTree = (rows: any[]) => {
   const map = new Map<number, any>();
   rows.forEach((row) => map.set(row.id, { ...row.toJSON(), children: [] }));
@@ -521,16 +559,17 @@ export const getProfitAndLoss = async (req: RequestWithUser, res: Response) => {
         is_active: true,
         account_type: 'ledger',
         nature: { [Op.in]: ['income', 'expense'] },
+        ...tallyAccountWhereExtra,
       },
       order: [['code', 'ASC']],
     });
 
-    const voucherWhere: any = { tenant_id: tenantId, company_id: companyId, status: 'posted', is_active: true };
-    if (from || to) {
-      voucherWhere.voucher_date = {};
-      if (from) voucherWhere.voucher_date[Op.gte] = from;
-      if (to) voucherWhere.voucher_date[Op.lte] = to;
-    }
+    const voucherWhere = buildTallyStatementVoucherWhere({
+      tenantId,
+      companyId,
+      from,
+      to,
+    });
 
     const incomeRows: any[] = [];
     const expenseRows: any[] = [];
@@ -572,6 +611,16 @@ export const getProfitAndLoss = async (req: RequestWithUser, res: Response) => {
     totalExpense = Number(totalExpense.toFixed(2));
     const netProfit = Number((totalIncome - totalExpense).toFixed(2));
 
+    const tallyVoucherCount = await (GlVoucher as any).count({
+      where: {
+        tenant_id: tenantId,
+        company_id: companyId,
+        is_active: true,
+        input_mode: 'tally_import',
+        status: { [Op.in]: ['draft', 'posted', 'approved', 'review_required'] },
+      },
+    });
+
     return res.json({
       success: true,
       data: {
@@ -583,6 +632,8 @@ export const getProfitAndLoss = async (req: RequestWithUser, res: Response) => {
         totalExpense,
         netProfit,
         grossProfit: totalIncome,
+        source: 'tally_import',
+        tallyVoucherCount,
       },
     });
   } catch (error: any) {
@@ -606,33 +657,25 @@ export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
         is_active: true,
         account_type: 'ledger',
         nature: { [Op.in]: ['asset', 'liability', 'equity'] },
+        ...tallyAccountWhereExtra,
       },
       order: [['code', 'ASC']],
     });
 
-    // 재무상태표는 시점 잔액: 기초잔액 + 기준일까지 장부 반영된 전표 이동
-    const positionWhere: any = {
-      tenant_id: tenantId,
-      company_id: companyId,
-      status: 'posted',
-      is_active: true,
-    };
-    if (asOf) {
-      positionWhere.voucher_date = { [Op.lte]: asOf };
-    }
+    // 재무상태표: Tally 기초잔액 + Tally 전표(draft 포함) 이동
+    const positionWhere = buildTallyStatementVoucherWhere({
+      tenantId,
+      companyId,
+      asOf,
+    });
 
-    // 당기손익(자본 반영)용 기간 — from~asOf (미지정 시 전체 posted)
-    const pnlWhere: any = {
-      tenant_id: tenantId,
-      company_id: companyId,
-      status: 'posted',
-      is_active: true,
-    };
-    if (from || asOf) {
-      pnlWhere.voucher_date = {};
-      if (from) pnlWhere.voucher_date[Op.gte] = from;
-      if (asOf) pnlWhere.voucher_date[Op.lte] = asOf;
-    }
+    // 당기손익(자본 반영)용 기간 — from~asOf
+    const pnlWhere = buildTallyStatementVoucherWhere({
+      tenantId,
+      companyId,
+      from,
+      to: asOf,
+    });
 
     const applyDelta = (nature: string, debit: number, credit: number) =>
       nature === 'asset' || nature === 'expense' ? debit - credit : credit - debit;
@@ -679,7 +722,7 @@ export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
       }
     }
 
-    // Period P&L plugged into equity as current year earnings (accounting view, not a posted JE)
+    // Period P&L plugged into equity (Tally vouchers only)
     const pnlAccounts = await (GlAccount as any).findAll({
       where: {
         tenant_id: tenantId,
@@ -687,6 +730,7 @@ export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
         is_active: true,
         account_type: 'ledger',
         nature: { [Op.in]: ['income', 'expense'] },
+        ...tallyAccountWhereExtra,
       },
     });
     let periodIncome = 0;
@@ -724,12 +768,13 @@ export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
     const totalLiabilitiesAndEquity = Number((totalLiabilities + totalEquity).toFixed(2));
     const balanced = Math.abs(totalAssets - totalLiabilitiesAndEquity) <= 0.05;
 
-    const draftCount = await (GlVoucher as any).count({
+    const tallyVoucherCount = await (GlVoucher as any).count({
       where: {
         tenant_id: tenantId,
         company_id: companyId,
-        status: 'draft',
         is_active: true,
+        input_mode: 'tally_import',
+        status: { [Op.in]: ['draft', 'posted', 'approved', 'review_required'] },
       },
     });
 
@@ -747,7 +792,9 @@ export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
         totalLiabilitiesAndEquity,
         netProfit,
         balanced,
-        draftCount,
+        draftCount: 0,
+        source: 'tally_import',
+        tallyVoucherCount,
       },
     });
   } catch (error: any) {

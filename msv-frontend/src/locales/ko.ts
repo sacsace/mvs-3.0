@@ -85,7 +85,7 @@ export default {
       selectPlaceholder: '선택하세요'
     },
     app: {
-      accountingTitle: '회계 관리',
+      accountingTitle: '회계관리 (Tally)',
       accountingDesc: '종합적인 회계 및 재무 관리 기능을 제공하는 페이지입니다.',
       accountingFeature1: '차변/대변 관리',
       accountingFeature2: '계정과목 설정',
@@ -790,8 +790,8 @@ export default {
       contact: '연락처'
     },
     partnerManagement: {
-      pageTitle: '파트너 업체 관리',
-      description: '파트너 업체 정보를 관리하고 조회하는 페이지입니다.',
+      pageTitle: '파트너 업체/고객 관리',
+      description: '파트너 업체와 고객 정보를 한곳에서 관리합니다.',
       excelSampleDownload: 'Excel 샘플 다운로드',
       excelExport: 'Excel 내보내기',
       excelImport: 'Excel 가져오기',
@@ -799,6 +799,10 @@ export default {
       reset: '초기화',
       moreTools: '관리·도구',
       stats: {
+        total: '전체',
+        active: '활성',
+        partners: '협력업체',
+        customers: '고객사',
         totalPartners: '총 파트너',
         activePartners: '활성 파트너',
       },
@@ -809,6 +813,12 @@ export default {
         noResults: '조건에 맞는 파트너가 없습니다.',
         noResultsHint: '검색어를 변경하거나 초기화해 보세요.',
       },
+      roomGuestReadOnly: '숙박손님(예약연동) 정보는 이 화면에서 수정·삭제할 수 없습니다.',
+      listView: {
+        viewAll: '전체 리스트로 보기',
+        viewPages: '페이지로 보기',
+      },
+      typeRoomGuest: '숙박손님',
       searchPlaceholder: '회사명, 대표자, 업종, 주소로 검색...',
       searchLabel: '검색',
       status: '상태',
@@ -1382,7 +1392,7 @@ export default {
     },
     departmentManagement: {
       title: '부서 관리',
-      description: '사용자 등록·인사 정보에 사용할 부서를 관리합니다.',
+      description: '회사별로 사용자 등록·인사 정보에 사용할 부서를 관리합니다.',
       stats: {
         total: '총 부서',
         active: '사용 중',
@@ -1412,7 +1422,9 @@ export default {
       noDepartment: '선택 안 함',
       usersBlockedDelete: '소속 사용자가 있어 삭제할 수 없습니다.',
       saved: '저장되었습니다.',
-      deleted: '삭제되었습니다.'
+      deleted: '삭제되었습니다.',
+      selectCompanyFirst: '회사를 선택해주세요.',
+      selectCompanyHint: '부서는 회사마다 따로 등록됩니다. 관리할 회사를 먼저 선택하세요.',
     },
     workBoards: {
       title: '업무 관리',
@@ -2665,7 +2677,7 @@ export default {
       },
     },
     tallyImport: {
-      title: 'Tally 임포트',
+      title: 'Tally Data 불러오기',
       description:
         'Tally에서 Export한 XML/JSON을 올려 계정과목·전표를 MSV로 가져옵니다. 전표는 임시(draft)로만 생성되며 자동 전기되지 않습니다.',
       booksLink: '회계장부',
@@ -2694,6 +2706,7 @@ export default {
         warn: '경고',
         info: '정보',
       },
+      downloadLog: '로그 다운로드',
       issueLevel: {
         error: '실패',
         warn: '경고',
@@ -2732,6 +2745,7 @@ export default {
         preview: '파일 파싱이 완료되었습니다.',
         dryRun: '시뮬레이션이 완료되었습니다.',
         import: '임포트가 완료되었습니다. 전표는 임시 상태입니다.',
+        logDownloaded: '임포트 로그를 다운로드했습니다.',
       },
       errors: {
         noFile: '파일을 선택해 주세요.',
@@ -2739,13 +2753,14 @@ export default {
         preview: '미리보기에 실패했습니다.',
         import: '임포트에 실패했습니다.',
         fileTooLarge: '파일이 너무 큽니다. 최대 2GB까지 업로드할 수 있습니다.',
+        noLogToDownload: '다운로드할 로그가 없습니다.',
       },
     },
     generalLedger: {
       title: '회계장부',
       description: 'Tally에서 가져온 전표·장부·시산표를 조회하고 장부에 반영합니다.',
       voucherEntryLink: '전표입력',
-      tallyImportLink: 'Tally 임포트',
+      tallyImportLink: 'Tally Data 불러오기',
       moreTools: '관리·도구',
       tallyViewHint: '이 화면은 Tally 임포트 데이터를 조회·반영하는 용도입니다. 신규 입력은 Tally Export 파일을 임포트하세요.',
       company: '회사',
@@ -2961,13 +2976,22 @@ export default {
     },
     profitAndLoss: {
       title: '손익계산서',
-      description: '기간별 수익·비용 계정을 집계하여 당기순이익을 확인합니다.',
+      description: 'Tally에서 불러온 데이터로 기간별 수익·비용을 집계하여 당기순이익을 확인합니다.',
       from: '시작일',
       to: '종료일',
       search: '조회',
       total: '합계',
       excelDownload: '엑셀 다운로드',
-      hint: '장부 반영(posted)된 전표만 집계됩니다. 수익·비용 계정(nature: income/expense)만 포함합니다.',
+      fiscalYear: '회계년도',
+      currentFy: '현재',
+      periods: {
+        q1: '1분기',
+        q2: '2분기',
+        q3: '3분기',
+        q4: '4분기',
+        fiscalYear: '회계년도 전체'
+      },
+      hint: 'Tally Data 불러오기로 가져온 전표·계정만 집계합니다. 임포트 직후(draft) 전표도 포함되며, 수동 전표는 제외됩니다.',
       formula: '당기순이익 = 총수익 {{income}} − 총비용 {{expense}}',
       tabs: {
         income: '수익',
@@ -2992,7 +3016,7 @@ export default {
       empty: {
         income: '해당 기간에 수익 계정 내역이 없습니다.',
         expense: '해당 기간에 비용 계정 내역이 없습니다.',
-        hint: '기간을 조정하거나 장부 반영된 전표가 있는지 확인해 주세요.'
+        hint: '기간·회사를 확인하거나 Tally Data 불러오기를 실행해 주세요.'
       },
       errors: {
         load: '손익계산서 조회에 실패했습니다.',
@@ -3000,16 +3024,158 @@ export default {
         exportFailed: '엑셀 다운로드에 실패했습니다.'
       }
     },
+    purchaseSalesStats: {
+      title: '매입/매출 통계',
+      description: 'MVS에서 발행한 세금계산서(인보이스)와 지출결의서를 기준으로 매입·매출을 집계합니다. Tally 데이터와는 별개입니다.',
+      infoAlert: '매출은 MVS 세금계산서(일반·전자), 매입은 지출결의서(지급완료) 기준으로 집계합니다. Tally 불러오기 데이터는 포함되지 않습니다.',
+      downloadReport: '보고서 다운로드',
+      filters: {
+        company: '회사',
+        allCompanies: '전체 회사',
+        period: '기간',
+        byDate: '날짜별',
+        byQuarter: '분기별',
+        byFiscalYear: '회계연도별',
+        from: '시작일',
+        to: '종료일',
+        fiscalYear: '회계년도',
+        quarter: '분기',
+        search: '조회',
+        applied: '적용',
+        currentFy: '현재'
+      },
+      quarters: {
+        q1: '1분기',
+        q2: '2분기',
+        q3: '3분기',
+        q4: '4분기'
+      },
+      listView: {
+        viewAll: '전체 리스트로 보기',
+        viewPages: '페이지로 보기'
+      },
+      kpi: {
+        totalRevenue: '총 매출 (인보이스 기준)',
+        collectedOutstanding: '수금액 {{collected}} | 미수금 {{outstanding}}',
+        roomBookingNote: '참고: 객실예약 {{roomBooking}} 포함 통합매출은 {{combined}}',
+        totalExpenses: '총 지출',
+        vsLastMonth: '{{percent}}% 전월 대비',
+        netProfit: '순이익',
+        profitMargin: '수익률: {{percent}}%',
+        totalInvoices: '총 인보이스',
+        average: '평균: {{amount}}'
+      },
+      tabs: {
+        sales: '매출 통계',
+        purchase: '매입 통계',
+        trend: '수익/비용 추이',
+        categoryAnalysis: '카테고리별 분석',
+        invoiceStatus: '인보이스 현황',
+        budgetVsActual: '예산 대비 실적'
+      },
+      sales: {
+        title: '매출 통계',
+        subtitle: '인보이스 및 객실예약 매출 내역 ({{count}}건)',
+        totalAmount: '합산금',
+        empty: '조회 기간에 해당하는 매출 내역이 없습니다.'
+      },
+      purchase: {
+        title: '매입 통계',
+        subtitle: '지출결의서 매입 내역 ({{count}}건) · 지급완료 {{paidTotal}}',
+        totalAmount: '합산금',
+        empty: '조회 기간에 해당하는 매입 내역이 없습니다.'
+      },
+      columns: {
+        documentNumber: '문서번호',
+        date: '일자',
+        counterparty: '거래처',
+        type: '유형',
+        supplyAmount: '공급가액',
+        taxAmount: '세액',
+        total: '합계',
+        paymentStatus: '결제상태',
+        title: '제목',
+        requester: '신청자',
+        department: '부서',
+        purpose: '용도',
+        amount: '금액',
+        status: '상태',
+        expensePaymentStatus: '지급상태',
+        month: '월',
+        budget: '예산',
+        actualRevenue: '실제 수익',
+        difference: '차이',
+        achievementRate: '달성률'
+      },
+      chart: {
+        revenue: '수익',
+        expenses: '비용',
+        profit: '순이익',
+        budget: '예산',
+        actualRevenue: '실제 수익',
+        count: '건수',
+        amount: '금액',
+        countUnit: '{{count}}건'
+      },
+      category: {
+        expenseDistribution: '카테고리별 비용 분포',
+        revenueDistribution: '카테고리별 수익 분포'
+      },
+      invoice: {
+        statusChart: '인보이스 상태별 현황',
+        statusSummary: '인보이스 상태 요약',
+        grandTotal: '총계',
+        countWithUnit: '{{count}}건'
+      },
+      budget: {
+        analysis: '예산 대비 실적 분석',
+        monthlyDetail: '월별 예산 대비 실적 상세'
+      },
+      paymentStatus: {
+        paid: '결제완료',
+        pending: '대기'
+      },
+      expenseStatus: {
+        draft: '임시저장',
+        submitted: '제출',
+        in_review: '검토중',
+        approved: '승인',
+        rejected: '반려',
+        paid: '지급완료'
+      },
+      appliedRange: {
+        byDate: '날짜별 {{start}} ~ {{end}}',
+        byQuarter: '{{fy}} {{quarterLabel}}',
+        byFiscalYear: '{{fy}} (회계년도)'
+      },
+      errors: {
+        selectPeriod: '조회 기간을 선택해 주세요.',
+        invalidDateRange: '시작일이 종료일보다 늦을 수 없습니다.',
+        loadFailed: '통계 데이터를 불러오는데 실패했습니다.'
+      },
+      export: {
+        allCompanies: '전체 회사',
+        selectedCompany: '선택 회사',
+        companyWithId: '회사 {{id}}'
+      }
+    },
     balanceSheet: {
       title: '재무상태표',
-      description: '자산·부채·자본 계정을 집계하여 재무 상태를 확인합니다.',
+      description: 'Tally에서 불러온 데이터로 자산·부채·자본을 집계하여 재무 상태를 확인합니다.',
       from: '시작일',
       asOf: '기준일',
       search: '조회',
       total: '합계',
       excelDownload: '엑셀 다운로드',
-      hint: '기초잔액 + 장부 반영(posted) 전표를 집계합니다. 당기손익은 자본에 반영됩니다. Tally 임포트 후 회계장부에서 「장부 반영」을 해야 전표 금액이 포함됩니다.',
-      unbalancedHint: '자산과 부채+자본이 일치하지 않습니다. 전표·계정 매핑을 확인해 주세요.',
+      periods: {
+        q1: '1분기',
+        q2: '2분기',
+        q3: '3분기',
+        q4: '4분기',
+        fiscalYear: '회계년도'
+      },
+      hint: 'Tally Data 불러오기로 가져온 기초잔액·전표만 집계합니다. 임포트 직후(draft) 전표도 포함되며, 당기손익은 자본에 반영됩니다. 수동 전표는 제외됩니다.',
+      unbalancedHint: '자산과 부채+자본이 일치하지 않습니다. Tally 계정 매핑·전표를 확인해 주세요.',
       formula: '자산 {{assets}} = 부채+자본 {{liabilityEquity}}',
       tabs: {
         assets: '자산',
@@ -3035,8 +3201,8 @@ export default {
         assets: '해당 기간에 자산 계정 내역이 없습니다.',
         liabilities: '해당 기간에 부채 계정 내역이 없습니다.',
         equity: '해당 기간에 자본 계정 내역이 없습니다.',
-        hint: '기초잔액이 없거나 장부 반영된 전표가 없습니다. 기간·회사를 확인하거나 Tally 임포트·장부 반영을 진행해 주세요.',
-        draftHint: '미반영 전표 {{count}}건이 있습니다. 회계장부에서 「전체 장부 반영」을 실행하면 재무상태표에 포함됩니다.'
+        hint: 'Tally 기초잔액·전표가 없습니다. 기간·회사를 확인하거나 Tally Data 불러오기를 실행해 주세요.',
+        draftHint: ''
       },
       errors: {
         load: '재무상태표 조회에 실패했습니다.',

@@ -74,6 +74,8 @@ import EmploymentContractAuditLog from './EmploymentContractAuditLog';
 
 (Tenant as any).hasMany(Department, { foreignKey: 'tenant_id', as: 'departments' });
 (Department as any).belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(Company as any).hasMany(Department, { foreignKey: 'company_id', as: 'departments' });
+(Department as any).belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 (User as any).belongsTo(Department, { foreignKey: 'department_id', as: 'departmentEntity' });
 (Department as any).hasMany(User, { foreignKey: 'department_id', as: 'users' });
 

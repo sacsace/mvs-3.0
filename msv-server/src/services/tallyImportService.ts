@@ -15,9 +15,12 @@ import GlAccount from '../models/GlAccount';
 import GlVoucher from '../models/GlVoucher';
 import GlVoucherLine from '../models/GlVoucherLine';
 import Partner from '../models/Partner';
+import PartnerGstNumber from '../models/PartnerGstNumber';
 import { createGlVoucherWithLines, ensureDefaultChartOfAccounts } from './glPostingService';
 import { LEDGER_NAME_ALIASES, resolveLedgerStrict } from '../utils/accountResolution';
 import { ensureAccountingMasters } from './voucherMasterService';
+import { normalizePartnerCompanyName } from '../utils/partnerCompanyName';
+import { referenceCacheDel } from '../utils/redisCache';
 
 export type TallyNature = 'asset' | 'liability' | 'income' | 'expense' | 'equity';
 
@@ -71,6 +74,10 @@ export type ParsedTallyVoucher = {
   narration?: string;
   guid?: string;
   partyLedgerName?: string;
+  partyGstin?: string;
+  partyAddress?: string;
+  partyEmail?: string;
+  partyPhone?: string;
   isInvoice?: boolean;
   currencyCode?: string;
   exchangeRate?: number;
@@ -170,11 +177,17 @@ const childText = (block: string, tag: string) => {
   return decodeXmlEntities(normalizeName(inner));
 };
 
-const childTextRaw = (block: string, tag: string) => {
-  const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'i');
-  const m = block.match(re);
-  if (!m) return '';
-  return decodeXmlEntities(m[1].replace(/<[^>]+>/g, ' ').trim());
+/** All direct/nested text values for a tag (e.g. multiple Tally ADDRESS lines). */
+const allChildTexts = (block: string, tag: string): string[] => {
+  const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'gi');
+  const out: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(block))) {
+    const inner = decodeXmlEntities(m[1].replace(/<[^>]+>/g, ' ').trim());
+    const n = normalizeName(inner);
+    if (n) out.push(n);
+  }
+  return out;
 };
 
 const extractBlocks = (xml: string, tag: string) => {
@@ -186,6 +199,126 @@ const extractBlocks = (xml: string, tag: string) => {
   }
   return blocks;
 };
+
+/** Indian GSTIN: 15 chars (state + PAN + entity + Z + check). */
+const GSTIN_RE = /\b([0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z])\b/i;
+
+const normalizeGstin = (value: unknown): string => {
+  const raw = normalizeName(value).toUpperCase().replace(/[\s-]/g, '');
+  if (!raw) return '';
+  const m = raw.match(GSTIN_RE);
+  return m ? m[1].toUpperCase() : '';
+};
+
+const isValidEmail = (value: unknown): boolean => {
+  const s = normalizeName(value);
+  if (!s || s.length > 255) return false;
+  // Reject company names / mailing names mistakenly mapped as email
+  if (!s.includes('@')) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+};
+
+const sanitizePartyEmail = (value: unknown): string | undefined => {
+  const s = normalizeName(value);
+  return isValidEmail(s) ? s : undefined;
+};
+
+/** Pull GSTIN from common Tally ledger / voucher locations. */
+const extractPartyGstin = (body: string): string | undefined => {
+  const nested = [
+    ...extractBlocks(body, 'LEDGSTREGDETAILS.LIST'),
+    ...extractBlocks(body, 'GSTDETAILS.LIST'),
+    ...extractBlocks(body, 'LEDGSTINDETAILS.LIST'),
+    ...extractBlocks(body, 'GSTREGISTRATIONDETAILS.LIST'),
+    ...extractBlocks(body, 'LEDMULTIADDRESSLIST.LIST'),
+    ...extractBlocks(body, 'LEDMAILINGDETAILS.LIST'),
+  ].flatMap((b) => [
+    childText(b.body, 'GSTIN'),
+    childText(b.body, 'PARTYGSTIN'),
+    childText(b.body, 'GSTINUIN'),
+    childText(b.body, 'UIN'),
+    childText(b.body, 'GSTREGISTRATIONNUMBER'),
+  ]);
+
+  const candidates = [
+    childText(body, 'PARTYGSTIN'),
+    childText(body, 'GSTIN'),
+    childText(body, 'GSTINUIN'),
+    childText(body, 'UIN'),
+    childText(body, 'GSTREGISTRATIONNUMBER'),
+    ...allChildTexts(body, 'PARTYGSTIN'),
+    ...allChildTexts(body, 'GSTIN'),
+    ...allChildTexts(body, 'GSTINUIN'),
+    ...nested,
+  ];
+
+  for (const c of candidates) {
+    const gstin = normalizeGstin(c);
+    if (gstin) return gstin;
+  }
+
+  // Last resort: scan plain text for a GSTIN-shaped token (covers odd Tally layouts)
+  const plain = body.replace(/<[^>]+>/g, ' ').toUpperCase();
+  const scanned = plain.match(GSTIN_RE);
+  return scanned ? scanned[1].toUpperCase() : undefined;
+};
+
+/**
+ * Collect Tally ADDRESS lines (+ PIN/STATE/COUNTRY) into a single comma-separated line.
+ */
+const extractPartyAddressOneLine = (body: string): string | undefined => {
+  const mailingBodies = [
+    body,
+    ...extractBlocks(body, 'LEDMAILINGDETAILS.LIST').map((b) => b.body),
+    ...extractBlocks(body, 'LEDMULTIADDRESSLIST.LIST').map((b) => b.body),
+    ...extractBlocks(body, 'BASICBUYERADDRESS.LIST').map((b) => b.body),
+  ];
+
+  const lines: string[] = [];
+  for (const chunk of mailingBodies) {
+    lines.push(...allChildTexts(chunk, 'ADDRESS'));
+  }
+
+  const extras = [
+    childText(body, 'PINCODE') || childText(body, 'PINCODENUMBER'),
+    childText(body, 'STATE') || childText(body, 'STATENAME'),
+    childText(body, 'COUNTRY') || childText(body, 'COUNTRYOFRESIDENCE'),
+    ...mailingBodies.flatMap((chunk) => [
+      childText(chunk, 'PINCODE') || childText(chunk, 'PINCODENUMBER'),
+      childText(chunk, 'STATE') || childText(chunk, 'STATENAME'),
+      childText(chunk, 'COUNTRY') || childText(chunk, 'COUNTRYOFRESIDENCE'),
+    ]),
+  ]
+    .map((v) => normalizeName(v))
+    .filter(Boolean);
+
+  const unique: string[] = [];
+  for (const part of [...lines, ...extras]) {
+    if (!unique.some((u) => u.toLowerCase() === part.toLowerCase())) unique.push(part);
+  }
+  return unique.length ? unique.join(', ') : undefined;
+};
+
+/** Prefer filled fields when the same ledger appears more than once in the export. */
+const mergeParsedLedger = (base: ParsedTallyLedger, next: ParsedTallyLedger): ParsedTallyLedger => ({
+  ...base,
+  parent: base.parent || next.parent,
+  openingBalance: base.openingBalance ?? next.openingBalance,
+  guid: base.guid || next.guid,
+  mailingName: base.mailingName || next.mailingName,
+  gstin: base.gstin || next.gstin,
+  pan: base.pan || next.pan,
+  email: base.email || next.email,
+  phone: base.phone || next.phone,
+  address: base.address || next.address,
+  alias: base.alias || next.alias,
+  isBillWise: base.isBillWise || next.isBillWise,
+  isCostCentresOn: base.isCostCentresOn || next.isCostCentresOn,
+  isGroup: base.isGroup || next.isGroup,
+});
+
+const isPlaceholderBusinessNumber = (value: unknown) =>
+  /^TALLY-/i.test(normalizeName(value));
 
 const isYes = (value: unknown) => {
   const s = normalizeName(value).toLowerCase();
@@ -214,7 +347,9 @@ export const natureFromParent = (parent?: string): TallyNature => {
 
 const isPartyParent = (parent?: string) => {
   const p = normalizeName(parent).toLowerCase();
-  return /sundry debtors|sundry creditors/.test(p);
+  return /sundry debtors|sundry creditors|\bdebtors\b|\bcreditors\b|accounts?\s*receivable|accounts?\s*payable/.test(
+    p
+  );
 };
 
 const isCashOrBankParent = (parent?: string, name?: string) => {
@@ -295,10 +430,11 @@ const parseLedgerBlock = (open: string, body: string): ParsedTallyLedger | null 
   if (!name) return null;
   const parent = childText(body, 'PARENT') || undefined;
   const opening = parseAmount(childText(body, 'OPENINGBALANCE'));
-  const addressParts = [
-    childTextRaw(body, 'ADDRESS'),
-    ...extractBlocks(body, 'ADDRESS.LIST').map((b) => normalizeName(b.body.replace(/<[^>]+>/g, ' '))),
-  ].filter(Boolean);
+  const gstin = extractPartyGstin(body);
+  const panRaw =
+    childText(body, 'INCOMETAXNUMBER') ||
+    childText(body, 'PANNUMBER') ||
+    (gstin && gstin.length === 15 ? gstin.slice(2, 12) : '');
   return {
     name,
     parent,
@@ -306,11 +442,16 @@ const parseLedgerBlock = (open: string, body: string): ParsedTallyLedger | null 
     isGroup: false,
     guid: childText(body, 'GUID') || attr(open, 'RESERVEDNAME') || undefined,
     mailingName: childText(body, 'MAILINGNAME') || undefined,
-    gstin: childText(body, 'PARTYGSTIN') || childText(body, 'GSTIN') || undefined,
-    pan: childText(body, 'INCOMETAXNUMBER') || childText(body, 'PANNUMBER') || undefined,
-    email: childText(body, 'EMAIL') || undefined,
-    phone: childText(body, 'LEDGERPHONE') || childText(body, 'PHONE') || undefined,
-    address: addressParts.join(', ') || undefined,
+    gstin: gstin || undefined,
+    pan: normalizeName(panRaw) || undefined,
+    email: sanitizePartyEmail(childText(body, 'EMAIL') || childText(body, 'EMAILCC') || childText(body, 'LEDGEREMAIL')),
+    phone:
+      childText(body, 'LEDGERPHONE') ||
+      childText(body, 'PHONE') ||
+      childText(body, 'LEDGERMOBILE') ||
+      childText(body, 'MOBILENUMBERS') ||
+      undefined,
+    address: extractPartyAddressOneLine(body),
     alias: childText(body, 'ALIAS') || childText(body, 'ADDITIONALNAME') || undefined,
     isBillWise: isYes(childText(body, 'ISBILLWISEON')),
     isCostCentresOn: isYes(childText(body, 'ISCOSTCENTRESON')),
@@ -373,6 +514,16 @@ const parseVoucherBlock = (open: string, body: string): ParsedTallyVoucher | nul
     narration,
     guid,
     partyLedgerName,
+    partyGstin: extractPartyGstin(body),
+    partyAddress: extractPartyAddressOneLine(body),
+    partyEmail: sanitizePartyEmail(
+      childText(body, 'EMAIL') || childText(body, 'PARTYEMAIL') || childText(body, 'BASICBUYEREMAIL')
+    ),
+    partyPhone:
+      childText(body, 'BASICBUYERPHONE') ||
+      childText(body, 'LEDGERPHONE') ||
+      childText(body, 'PHONE') ||
+      undefined,
     isInvoice: isYes(childText(body, 'ISINVOICE')),
     currencyCode: childText(body, 'CURRENCYNAME') || 'INR',
     exchangeRate: fxRate > 0 ? fxRate : 1,
@@ -398,6 +549,11 @@ export const parseTallyXml = (xml: string): TallyParseResult => {
     const l = parseLedgerBlock(block.open, block.body);
     if (!l) continue;
     const key = `l:${l.name.toLowerCase()}`;
+    const existingIdx = ledgers.findIndex((row) => !row.isGroup && row.name.toLowerCase() === l.name.toLowerCase());
+    if (existingIdx >= 0) {
+      ledgers[existingIdx] = mergeParsedLedger(ledgers[existingIdx], l);
+      continue;
+    }
     if (seenLedgers.has(key)) continue;
     seenLedgers.add(key);
     ledgers.push(l);
@@ -435,9 +591,21 @@ export const parseTallyJson = (jsonText: string): TallyParseResult => {
         openingBalance: parseAmount(item?.openingBalance || item?.OPENINGBALANCE) || undefined,
         isGroup: Boolean(item?.isGroup || item?.accountType === 'group'),
         guid: normalizeName(item?.guid || item?.GUID) || undefined,
-        gstin: normalizeName(item?.gstin || item?.GSTIN) || undefined,
-        pan: normalizeName(item?.pan || item?.PAN) || undefined,
+        gstin:
+          normalizeGstin(
+            item?.gstin || item?.GSTIN || item?.partyGstin || item?.PARTYGSTIN || item?.gstRegistrationNumber
+          ) || undefined,
+        pan: normalizeName(item?.pan || item?.PAN || item?.INCOMETAXNUMBER) || undefined,
         email: normalizeName(item?.email || item?.EMAIL) || undefined,
+        phone: normalizeName(item?.phone || item?.PHONE || item?.LEDGERPHONE) || undefined,
+        address: (() => {
+          const raw = item?.address || item?.ADDRESS || item?.mailingAddress;
+          if (Array.isArray(raw)) {
+            const parts = raw.map((v) => normalizeName(v)).filter(Boolean);
+            return parts.length ? parts.join(', ') : undefined;
+          }
+          return normalizeName(raw) || undefined;
+        })(),
         alias: normalizeName(item?.alias || item?.ALIAS) || undefined,
       });
     }
@@ -630,6 +798,65 @@ const buildImportVoucherNo = (v: ParsedTallyVoucher) => {
   return `TLY-${base || Date.now()}`.slice(0, 50);
 };
 
+const ensurePartnerGstNumber = async (partnerId: number, gstin: string) => {
+  if (!gstin || partnerId <= 0) return;
+  const existing = await (PartnerGstNumber as any).findOne({
+    where: { partner_id: partnerId, gst_number: { [Op.iLike]: gstin } },
+  });
+  if (existing) return;
+  await (PartnerGstNumber as any).create({
+    partner_id: partnerId,
+    gst_number: gstin,
+  });
+};
+
+const enrichPartyFromLedger = async (party: any, ledger: ParsedTallyLedger) => {
+  if (!party || party.id <= 0) return party;
+  const gstin = normalizeGstin(ledger.gstin);
+  const address = normalizeName(ledger.address || '');
+  const pan = normalizeName(ledger.pan || '');
+  const phone = normalizeName(ledger.phone || '');
+  const companyName = normalizePartnerCompanyName(ledger.name) || normalizePartnerCompanyName(party.company_name);
+  const patch: Record<string, unknown> = {};
+
+  if (companyName && String(party.company_name || '') !== companyName) {
+    patch.company_name = companyName;
+  }
+  if (gstin && (isPlaceholderBusinessNumber(party.business_number) || !normalizeName(party.business_number))) {
+    patch.business_number = gstin;
+  }
+  if (address && !normalizeName(party.address)) {
+    patch.address = address;
+  }
+  if (pan && isPlaceholderBusinessNumber(party.business_number) && !gstin) {
+    patch.business_number = pan;
+  }
+  if (pan && !normalizeName(party.pan_number)) {
+    patch.pan_number = pan;
+  }
+  if (phone && !normalizeName(party.phone)) {
+    patch.phone = phone.slice(0, 20);
+  }
+  const cleanEmail = sanitizePartyEmail(ledger.email);
+  if (cleanEmail && (!normalizeName(party.email) || !isValidEmail(party.email) || String(party.email).endsWith('@tally.import'))) {
+    patch.email = cleanEmail;
+  } else if (normalizeName(party.email) && !isValidEmail(party.email)) {
+    // Repair bad values like company name stored in email from older imports
+    patch.email = `${String(party.company_name || ledger.name || 'tally')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .slice(0, 24)
+      .toLowerCase() || 'tally'}@tally.import`;
+  }
+
+  if (Object.keys(patch).length) {
+    await party.update(patch);
+  }
+  if (gstin) {
+    await ensurePartnerGstNumber(party.id, gstin);
+  }
+  return party;
+};
+
 const findOrCreateParty = async ({
   tenantId,
   companyId,
@@ -641,8 +868,10 @@ const findOrCreateParty = async ({
   ledger: ParsedTallyLedger;
   dryRun: boolean;
 }) => {
-  const gstinOrBiz = normalizeName(ledger.gstin || '');
+  const gstinOrBiz = normalizeGstin(ledger.gstin);
   const pan = normalizeName(ledger.pan || '');
+  const addressOneLine = normalizeName(ledger.address || '') || null;
+  const companyName = normalizePartnerCompanyName(ledger.name) || normalizeName(ledger.name);
 
   if (gstinOrBiz) {
     const byGstin = await (Partner as any).findOne({
@@ -653,7 +882,31 @@ const findOrCreateParty = async ({
         status: { [Op.ne]: 'suspended' },
       },
     });
-    if (byGstin) return { party: byGstin, created: false };
+    if (byGstin) {
+      if (!dryRun) await enrichPartyFromLedger(byGstin, ledger);
+      return { party: byGstin, created: false };
+    }
+
+    // Also match via partner_gst_numbers table
+    const gstRow = await (PartnerGstNumber as any).findOne({
+      where: { gst_number: { [Op.iLike]: gstinOrBiz } },
+      include: [
+        {
+          model: Partner,
+          as: 'partner',
+          required: true,
+          where: {
+            tenant_id: tenantId,
+            company_id: companyId,
+            status: { [Op.ne]: 'suspended' },
+          },
+        },
+      ],
+    });
+    if (gstRow?.partner) {
+      if (!dryRun) await enrichPartyFromLedger(gstRow.partner, ledger);
+      return { party: gstRow.partner, created: false };
+    }
   }
 
   if (pan) {
@@ -665,18 +918,27 @@ const findOrCreateParty = async ({
         status: { [Op.ne]: 'suspended' },
       },
     });
-    if (byPan) return { party: byPan, created: false };
+    if (byPan) {
+      if (!dryRun) await enrichPartyFromLedger(byPan, ledger);
+      return { party: byPan, created: false };
+    }
   }
 
   const existing = await (Partner as any).findOne({
     where: {
       tenant_id: tenantId,
       company_id: companyId,
-      company_name: { [Op.iLike]: ledger.name },
       status: { [Op.ne]: 'suspended' },
+      [Op.or]: [
+        { company_name: { [Op.iLike]: companyName } },
+        { company_name: { [Op.iLike]: normalizeName(ledger.name) } },
+      ],
     },
   });
-  if (existing) return { party: existing, created: false };
+  if (existing) {
+    if (!dryRun) await enrichPartyFromLedger(existing, ledger);
+    return { party: existing, created: false };
+  }
 
   const parentLower = normalizeName(ledger.parent).toLowerCase();
   const businessType = /sundry debtors/.test(parentLower)
@@ -687,24 +949,34 @@ const findOrCreateParty = async ({
 
   if (dryRun) {
     return {
-      party: { id: -1, company_name: ledger.name },
+      party: { id: -1, company_name: companyName },
       created: true,
     };
   }
 
+  const businessNumber =
+    gstinOrBiz || pan || `TALLY-${Date.now().toString(36).slice(-8)}`;
+
   const party = await (Partner as any).create({
     tenant_id: tenantId,
     company_id: companyId,
-    company_name: ledger.name,
-    business_number: ledger.gstin || ledger.pan || `TALLY-${Date.now().toString(36).slice(-8)}`,
-    pan_number: ledger.pan || null,
+    company_name: companyName,
+    business_number: businessNumber,
+    pan_number: pan || (gstinOrBiz ? gstinOrBiz.slice(2, 12) : null),
     business_type: businessType,
-    address: ledger.address || null,
-    phone: ledger.phone || null,
-    email: ledger.email || `${ledger.name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 24).toLowerCase() || 'tally'}@tally.import`,
+    address: addressOneLine,
+    phone: ledger.phone ? normalizeName(ledger.phone).slice(0, 20) : null,
+    email:
+      sanitizePartyEmail(ledger.email) ||
+      `${companyName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 24).toLowerCase() || 'tally'}@tally.import`,
     status: 'active',
     notes: `[Tally Import] parent=${ledger.parent || ''} guid=${ledger.guid || ''}`.slice(0, 500),
   });
+
+  if (gstinOrBiz) {
+    await ensurePartnerGstNumber(party.id, gstinOrBiz);
+  }
+
   return { party, created: true };
 };
 
@@ -744,6 +1016,30 @@ export const importTallyExport = async (
   let vouchersFailed = 0;
   const resolvedNames = new Set<string>();
   const createdNames = new Set<string>();
+  const syncedPartyNames = new Set<string>();
+
+  const syncPartyFromLedger = async (ledger: ParsedTallyLedger) => {
+    if (!createMissingParties || dryRun || ledger.isGroup) return null;
+    if (!isPartyParent(ledger.parent)) return null;
+    const { party, created: partyWasCreated } = await findOrCreateParty({
+      tenantId,
+      companyId,
+      ledger,
+      dryRun: false,
+    });
+    const pkey = ledger.name.toLowerCase();
+    if (!syncedPartyNames.has(pkey)) {
+      syncedPartyNames.add(pkey);
+      if (partyWasCreated) partiesCreated += 1;
+      else partiesMatched += 1;
+      mapping.push({
+        tally: ledger.name,
+        msv: `partner#${party.id}`,
+        kind: partyWasCreated ? 'party-create' : 'party-match',
+      });
+    }
+    return party;
+  };
 
   let accounts: any[] = await (GlAccount as any).findAll({
     where: { tenant_id: tenantId, company_id: companyId, is_active: true },
@@ -795,6 +1091,25 @@ export const importTallyExport = async (
         if (Object.keys(patch).length) {
           await existing.update(patch);
           Object.assign(existing, patch);
+        }
+      }
+      // Re-import: existing accounts were previously skipped for party sync — enrich GST/address now
+      if (!dryRun) {
+        await syncPartyFromLedger({
+          ...ledger,
+          parent: ledger.parent || existing.account_group || undefined,
+        });
+        // Also sync when GL already marked AR/AP but parent string missing in this file row
+        if (
+          createMissingParties &&
+          !ledger.isGroup &&
+          (existing.is_ar_ap || isPartyParent(existing.account_group)) &&
+          !isPartyParent(ledger.parent)
+        ) {
+          await syncPartyFromLedger({
+            ...ledger,
+            parent: existing.account_group || 'Sundry Debtors',
+          });
         }
       }
       return existing;
@@ -899,19 +1214,7 @@ export const importTallyExport = async (
     });
 
     if (createMissingParties && !ledger.isGroup && isPartyParent(ledger.parent)) {
-      const { party, created: partyWasCreated } = await findOrCreateParty({
-        tenantId,
-        companyId,
-        ledger,
-        dryRun: false,
-      });
-      if (partyWasCreated) partiesCreated += 1;
-      else partiesMatched += 1;
-      mapping.push({
-        tally: ledger.name,
-        msv: `partner#${party.id}`,
-        kind: partyWasCreated ? 'party-create' : 'party-match',
-      });
+      await syncPartyFromLedger(ledger);
     }
 
     return row;
@@ -922,6 +1225,46 @@ export const importTallyExport = async (
     const leafLedgers = parsed.ledgers.filter((l) => !l.isGroup);
     for (const g of groups) await ensureAccount(g);
     for (const ledger of leafLedgers) await ensureAccount(ledger);
+  }
+
+  // Enrich partners from voucher-level party GSTIN/address (masters often omit these)
+  if (createMissingParties && !dryRun) {
+    const fromVouchers = new Map<string, ParsedTallyLedger>();
+    for (const v of parsed.vouchers) {
+      const name = normalizeName(v.partyLedgerName);
+      if (!name) continue;
+      if (!v.partyGstin && !v.partyAddress && !v.partyEmail && !v.partyPhone) continue;
+      const key = name.toLowerCase();
+      const prev = fromVouchers.get(key) || { name, parent: 'Sundry Debtors' };
+      fromVouchers.set(key, {
+        ...prev,
+        gstin: prev.gstin || v.partyGstin,
+        address: prev.address || v.partyAddress,
+        email: prev.email || v.partyEmail,
+        phone: prev.phone || v.partyPhone,
+      });
+    }
+    for (const ledger of fromVouchers.values()) {
+      await syncPartyFromLedger(ledger);
+    }
+
+    const withGst = parsed.ledgers.filter((l) => !l.isGroup && l.gstin).length;
+    const withAddr = parsed.ledgers.filter((l) => !l.isGroup && l.address).length;
+    const partyLedgers = parsed.ledgers.filter((l) => !l.isGroup && isPartyParent(l.parent)).length;
+    const voucherGst = [...fromVouchers.values()].filter((l) => l.gstin).length;
+    issues.push({
+      level: withGst + voucherGst > 0 ? 'info' : 'warn',
+      message: `파트너 마스터 파싱: 거래처원장 ${partyLedgers}건 · GSTIN ${withGst}건 · 주소 ${withAddr}건`,
+      context: `전표 거래처보강 ${fromVouchers.size}건 · 전표GSTIN ${voucherGst}건`,
+    });
+    if (partyLedgers > 0 && withGst === 0 && voucherGst === 0) {
+      issues.push({
+        level: 'warn',
+        message:
+          'Tally 파일에 거래처 GSTIN이 없습니다. Gateway of Tally → Export → Masters(Ledgers)에서 GST 상세가 포함된 XML을 다시보내 주세요.',
+        context: 'GST 번호는 Tally LEDGER의 PARTYGSTIN / LEDGSTREGDETAILS.GSTIN 에서만 가져옵니다.',
+      });
+    }
   }
 
   // Collect ledger names referenced only by vouchers
@@ -1149,15 +1492,15 @@ export const importTallyExport = async (
         let partyId: number | null = null;
         const partyName = v.partyLedgerName || lines.find((l) => l.isPartyLedger)?.accountName;
         if (partyName && createMissingParties) {
-          const { party, created: partyWasCreated } = await findOrCreateParty({
-            tenantId,
-            companyId,
-            ledger: { name: partyName, parent: 'Sundry Debtors' },
-            dryRun: false,
+          const party = await syncPartyFromLedger({
+            name: partyName,
+            parent: 'Sundry Debtors',
+            gstin: v.partyGstin,
+            address: v.partyAddress,
+            email: v.partyEmail,
+            phone: v.partyPhone,
           });
-          partyId = party.id > 0 ? party.id : null;
-          if (partyWasCreated) partiesCreated += 1;
-          else if (partyId) partiesMatched += 1;
+          partyId = party?.id > 0 ? party.id : null;
         }
 
         const narrationParts = [
@@ -1266,6 +1609,63 @@ export const importTallyExport = async (
           });
         }
       }
+    }
+  }
+
+  // Always re-apply company-name pattern for Tally partners (fixes ALL CAPS / Pvt Ltd leftovers)
+  if (!dryRun) {
+    try {
+      const tallyPartners = await (Partner as any).findAll({
+        where: {
+          tenant_id: tenantId,
+          company_id: companyId,
+          status: { [Op.ne]: 'suspended' },
+          [Op.or]: [
+            { notes: { [Op.iLike]: '%[Tally Import]%' } },
+            { email: { [Op.iLike]: '%@tally.import' } },
+            { business_number: { [Op.iLike]: 'TALLY-%' } },
+          ],
+        },
+      });
+      let renamed = 0;
+      let emailFixed = 0;
+      for (const p of tallyPartners) {
+        const next = normalizePartnerCompanyName(p.company_name);
+        const patch: Record<string, unknown> = {};
+        if (next && next !== String(p.company_name || '')) {
+          patch.company_name = next;
+          renamed += 1;
+        }
+        if (!isValidEmail(p.email)) {
+          const nameForMail = String(next || p.company_name || 'tally');
+          patch.email = `${nameForMail.replace(/[^a-zA-Z0-9]/g, '').slice(0, 24).toLowerCase() || 'tally'}@tally.import`;
+          emailFixed += 1;
+        }
+        if (Object.keys(patch).length) {
+          await p.update(patch);
+        }
+      }
+      if (renamed > 0) {
+        issues.push({
+          level: 'info',
+          message: `파트너 회사명 정규화: ${renamed}건 (Title Case · Pvt Ltd → Private Limited)`,
+        });
+      }
+      if (emailFixed > 0) {
+        issues.push({
+          level: 'info',
+          message: `파트너 이메일 보정: ${emailFixed}건 (잘못된 회사명 값 → @tally.import)`,
+        });
+      }
+      // Partner list API may serve Redis cache — always bust after Tally party sync/rename
+      if (renamed > 0 || emailFixed > 0 || partiesCreated > 0 || partiesMatched > 0) {
+        await referenceCacheDel('ref:partners:*').catch(() => undefined);
+      }
+    } catch (err: any) {
+      issues.push({
+        level: 'warn',
+        message: `파트너 회사명 정규화 중 오류: ${err?.message || 'unknown'}`,
+      });
     }
   }
 

@@ -9,8 +9,8 @@ import { AuthRequest } from '../types';
 const router = express.Router();
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** 프론트 `App.tsx` 고객 정보 경로 및 DB `menus.route` 후보 */
-const CUSTOMER_MENU_ROUTES = ['/customers/info', '/customers'];
+/** 고객 CRUD는 파트너/고객 통합 메뉴 권한으로 검사 (구 /customers/info 제거됨) */
+const CUSTOMER_MENU_ROUTES = ['/basic-info/partners', '/basic-info', '/customers/info', '/customers'];
 /** 예약에서 합성한 숙박손님 행 id (`1000000000 + booking.id`) */
 const GUEST_CUSTOMER_ID_BASE = 1000000000;
 

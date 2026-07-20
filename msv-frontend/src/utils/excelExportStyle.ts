@@ -27,19 +27,31 @@ const cellToDisplayText = (value: ExcelJS.CellValue): string => {
   return String(value);
 };
 
-/** Font 9 + column widths that fit content */
-export const applyExcelFontAndAutoWidth = (sheet: ExcelJS.Worksheet) => {
+/** Font 9 + column widths that fit content (no wrap / no collapsed rows) */
+export const applyExcelFontAndAutoWidth = (
+  sheet: ExcelJS.Worksheet,
+  options?: { rowHeight?: number }
+) => {
   const font = { name: 'Calibri', size: EXCEL_EXPORT_FONT_SIZE };
+  const rowHeight = options?.rowHeight ?? 15;
   let maxCol = 0;
 
+  sheet.properties.outlineLevelRow = 0;
+  sheet.properties.outlineLevelCol = 0;
+
   sheet.eachRow({ includeEmpty: false }, (row) => {
+    row.hidden = false;
+    row.outlineLevel = 0;
+    row.height = rowHeight;
     row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
       maxCol = Math.max(maxCol, colNumber);
       cell.font = { ...(cell.font || {}), ...font };
       cell.alignment = {
         ...(cell.alignment || {}),
         vertical: 'middle',
+        horizontal: 'left',
         wrapText: false,
+        shrinkToFit: false,
       };
     });
   });
@@ -50,12 +62,17 @@ export const applyExcelFontAndAutoWidth = (sheet: ExcelJS.Worksheet) => {
       const cell = row.getCell(c);
       maxW = Math.max(maxW, measureCellDisplayWidth(cellToDisplayText(cell.value)));
     });
-    sheet.getColumn(c).width = Math.min(Math.max(maxW * 1.05 + 2.5, 9), 85);
+    // Wide enough for long log context; still capped so Excel stays usable
+    sheet.getColumn(c).width = Math.min(Math.max(maxW * 1.05 + 2.5, 9), 120);
   }
 };
 
-export const downloadExcelWorkbook = async (workbook: ExcelJS.Workbook, fileName: string) => {
-  workbook.eachSheet((sheet) => applyExcelFontAndAutoWidth(sheet));
+export const downloadExcelWorkbook = async (
+  workbook: ExcelJS.Workbook,
+  fileName: string,
+  options?: { rowHeight?: number }
+) => {
+  workbook.eachSheet((sheet) => applyExcelFontAndAutoWidth(sheet, options));
   const buf = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buf], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

@@ -337,27 +337,42 @@ export const employmentContractService = {
 /** ?�사 ??부??관�?*/
 
 export const departmentService = {
-  list: async (includeInactive = false) => {
-    const response = await api.get('/hr/departments', {
-      params: includeInactive ? { include_inactive: '1' } : undefined
-    });
+  list: async (includeInactive = false, companyId?: number) => {
+    const params: Record<string, string | number> = {};
+    if (includeInactive) params.include_inactive = '1';
+    if (companyId != null) params.company_id = companyId;
+    const response = await api.get('/hr/departments', { params });
     return response.data;
   },
-  create: async (data: { name: string; code?: string; sort_order?: number; is_active?: boolean }) => {
+  create: async (data: {
+    name: string;
+    code?: string;
+    sort_order?: number;
+    is_active?: boolean;
+    company_id?: number;
+  }) => {
     const response = await api.post('/hr/departments', data);
     return response.data;
   },
   update: async (
     id: number,
-    data: { name?: string; code?: string | null; sort_order?: number; is_active?: boolean }
+    data: {
+      name?: string;
+      code?: string | null;
+      sort_order?: number;
+      is_active?: boolean;
+      company_id?: number;
+    }
   ) => {
     const response = await api.put(`/hr/departments/${id}`, data);
     return response.data;
   },
-  delete: async (id: number) => {
-    const response = await api.delete(`/hr/departments/${id}`);
+  delete: async (id: number, companyId?: number) => {
+    const response = await api.delete(`/hr/departments/${id}`, {
+      params: companyId != null ? { company_id: companyId } : undefined,
+    });
     return response.data;
-  }
+  },
 };
 
 // ?�로?�트 관�?API ?�비??

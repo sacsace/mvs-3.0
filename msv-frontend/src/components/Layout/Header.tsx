@@ -162,6 +162,14 @@ const Header: React.FC<HeaderProps> = ({
     void ensureI18nLanguage(language);
   }, [language]);
 
+  useEffect(() => {
+    if (!user?.id) {
+      setServerNotifications([]);
+      setInboxActions([]);
+      return;
+    }
+  }, [user?.id]);
+
   useNotificationFeed({
     userId: user?.id,
     onServerNotifications: setServerNotifications,

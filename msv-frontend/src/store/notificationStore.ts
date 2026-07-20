@@ -18,14 +18,12 @@ export const useNotificationStore = create<NotificationState>((set) => ({
 
   mergeFromSources: (incoming) => {
     set((state) => {
-      const map = new Map(state.items.map((item) => [item.id, item]));
-      for (const item of incoming) {
-        const existing = map.get(item.id);
-        map.set(item.id, existing ? { ...item, read: existing.read } : item);
-      }
-      const merged = Array.from(map.values()).sort(
-        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-      );
+      // 소스 목록으로 교체(이전 사용자·만료 인박스 잔존 방지). 읽음만 유지.
+      const readMap = new Map(state.items.map((item) => [item.id, item.read]));
+      const merged = incoming.map((item) => ({
+        ...item,
+        read: readMap.has(item.id) ? Boolean(readMap.get(item.id)) : item.read,
+      }));
       return { items: merged.slice(0, 200) };
     });
   },

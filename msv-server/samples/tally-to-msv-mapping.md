@@ -8,7 +8,9 @@
 | LEDGER.PARENT | parent_id, account_group, nature | Sundry Debtors/Creditors → party |
 | LEDGER.OPENINGBALANCE | opening_balance + current_balance | not auto-posted JE |
 | LEDGER.ALIAS / GUID | search_aliases | |
-| LEDGER GSTIN/PAN/EMAIL | partners.* when party parent | |
+| LEDGER GSTIN / PARTYGSTIN / LEDGSTREGDETAILS | partners.business_number + partner_gst_numbers | GSTIN required when present in export |
+| LEDGER ADDRESS.LIST (+ PIN/STATE) | partners.address | joined as one comma-separated line |
+| LEDGER PAN/EMAIL/PHONE | partners.pan_number / email / phone | |
 | VOUCHER.DATE | voucher_date | YYYYMMDD → ISO |
 | VOUCHER.EFFECTIVEDATE | posting_date | |
 | VOUCHERTYPENAME | voucher_type enum | payment/receipt/sales/… |

@@ -3,5 +3,5 @@ export function isRemovedNavMenuRoute(route: string | undefined | null): boolean
   const n = String(route || '')
     .trim()
     .replace(/^\/+|\/+$/g, '');
-  return n === 'customers/support';
+  return n === 'customers/support' || n === 'customers/info';
 }

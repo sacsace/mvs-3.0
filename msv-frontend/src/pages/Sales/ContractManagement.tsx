@@ -53,7 +53,6 @@ import {
   CalendarToday as CalendarIcon,
   Refresh as RefreshIcon,
   Schedule as ScheduleIcon,
-  FileCopy as FileCopyIcon,
   AttachFile as AttachFileIcon
 } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
@@ -660,8 +659,8 @@ const ContractManagement: React.FC = () => {
                 size="small"
                 label={txt('검색', 'Search')}
                 placeholder={txt(
-                  '계약명, 계약번호, 고객명으로 검색...',
-                  'Search by title, number, customer…'
+                  '계약명, 고객명으로 검색...',
+                  'Search by title or customer…'
                 )}
                 value={searchTerm}
                 onChange={handleSearch}
@@ -744,7 +743,6 @@ const ContractManagement: React.FC = () => {
             <TableHead sx={mvsTableHeadHighlightSx}>
                 <TableRow>
                   <TableCell>{txt('계약명', 'Title')}</TableCell>
-                  <TableCell>{txt('계약번호', 'Contract no.')}</TableCell>
                   <TableCell>{txt('고객', 'Customer')}</TableCell>
                   <TableCell>{txt('계약 구분', 'Type')}</TableCell>
                   <TableCell>{txt('계약 가치', 'Value')}</TableCell>
@@ -776,14 +774,6 @@ const ContractManagement: React.FC = () => {
                                 : contract.description}
                             </Typography>
                           )}
-                        </Box>
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                          <FileCopyIcon sx={{ fontSize: '1rem', color: 'text.secondary' }} />
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {contract.contract_number}
-                          </Typography>
                         </Box>
                       </TableCell>
                       <TableCell>
@@ -971,27 +961,6 @@ const ContractManagement: React.FC = () => {
                   ))}
                 </Select>
               </FormControl>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              {dialogMode === 'create' ? (
-                <TextField
-                  fullWidth
-                  label={txt('계약번호', 'Contract number')}
-                  value={txt('자동 생성', 'Auto-generated')}
-                  disabled
-                  helperText={txt(
-                    '등록 시 계약번호가 자동으로 생성됩니다.',
-                    'A contract number will be assigned when you save.'
-                  )}
-                />
-              ) : (
-                <TextField
-                  fullWidth
-                  label={txt('계약번호', 'Contract number')}
-                  value={formData.contract_number}
-                  disabled
-                />
-              )}
             </Grid>
             <Grid size={{ xs: 12 }}>
               <TextField
