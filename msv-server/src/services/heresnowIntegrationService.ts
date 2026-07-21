@@ -131,6 +131,23 @@ const getDateInTimeZone = (value: Date) => {
   return formatter.format(value);
 };
 
+/** Asia/Kolkata 벽시계 ISO (+05:30). toISOString() UTC를 client_time에 넣으면 표시가 5.5시간 밀린다. */
+const toIstClientTimeISO = (value: Date) => {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
+  const parts = formatter.formatToParts(value);
+  const lookup = (type: string) => parts.find((part) => part.type === type)?.value || '00';
+  return `${lookup('year')}-${lookup('month')}-${lookup('day')}T${lookup('hour')}:${lookup('minute')}:${lookup('second')}+05:30`;
+};
+
 const looksLikeCuid = (value: string) => /^c[a-z0-9]{20,}$/i.test(value.trim());
 
 const parseTimestamp = (value?: string | { timestamp?: string | null } | null) => {
@@ -561,21 +578,22 @@ async function upsertAttendanceRecord(
   if (['late', 'early', 'overtime', 'absent', 'normal'].includes(rawStatus)) {
     status = rawStatus as typeof status;
   } else if (checkIn) {
-    const standardTime = new Date(checkIn);
-    standardTime.setHours(9, 0, 0, 0);
-    status = checkIn > standardTime ? 'late' : 'normal';
+    const standardTime = new Date(`${date}T09:00:00+05:30`);
+    status = checkIn.getTime() > standardTime.getTime() ? 'late' : 'normal';
   }
 
   const notes = input.noteTag ? `[HeresNow] ${input.noteTag}` : '[HeresNow] synced';
+  const checkInClientTime = checkIn ? toIstClientTimeISO(checkIn) : undefined;
+  const checkOutClientTime = checkOut ? toIstClientTimeISO(checkOut) : undefined;
 
   if (attendance) {
     if (input.checkIn) {
       attendance.check_in = checkIn;
-      attendance.check_in_client_time = checkIn.toISOString();
+      attendance.check_in_client_time = checkInClientTime;
     }
     if (input.checkOut) {
       attendance.check_out = checkOut;
-      attendance.check_out_client_time = checkOut?.toISOString();
+      attendance.check_out_client_time = checkOutClientTime;
     }
     attendance.work_hours = workHours ?? attendance.work_hours;
     attendance.status = status;
@@ -591,8 +609,8 @@ async function upsertAttendanceRecord(
     date,
     check_in: checkIn ?? undefined,
     check_out: checkOut ?? undefined,
-    check_in_client_time: checkIn ? checkIn.toISOString() : undefined,
-    check_out_client_time: checkOut ? checkOut.toISOString() : undefined,
+    check_in_client_time: checkInClientTime,
+    check_out_client_time: checkOutClientTime,
     work_hours: workHours ?? undefined,
     status,
     notes,

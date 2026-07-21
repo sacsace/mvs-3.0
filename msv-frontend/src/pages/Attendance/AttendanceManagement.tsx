@@ -538,7 +538,16 @@ const AttendanceManagement: React.FC = () => {
 
   const formatClientTimeString = (value?: string) => {
     if (!value) return null;
-    const match = value.match(/T(\d{2}):(\d{2})/);
+    const raw = String(value).trim();
+    if (!raw) return null;
+    const offsetMatch = raw.match(/([zZ]|[+-]\d{2}:\d{2})$/);
+    if (offsetMatch) {
+      const offset = offsetMatch[1];
+      if (/z/i.test(offset) || offset !== '+05:30') {
+        return formatTime(raw);
+      }
+    }
+    const match = raw.match(/T(\d{2}):(\d{2})/);
     if (!match) return null;
     const hours = Number(match[1]);
     const minutes = match[2];

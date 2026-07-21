@@ -50,7 +50,17 @@ const pad2 = (value: number) => value.toString().padStart(2, '0');
 const toIstDate = (value: Date) => new Date(value.getTime() + IST_OFFSET_MINUTES * 60 * 1000);
 const formatClientTimeString = (value?: string | null) => {
   if (!value) return null;
-  const match = value.match(/T(\d{2}):(\d{2})/);
+  const raw = String(value).trim();
+  if (!raw) return null;
+  // UTC(…Z) 또는 비-IST 오프셋은 벽시계가 아니라 절대시각 → Asia/Kolkata로 변환
+  const offsetMatch = raw.match(/([zZ]|[+-]\d{2}:\d{2})$/);
+  if (offsetMatch) {
+    const offset = offsetMatch[1];
+    if (/z/i.test(offset) || offset !== '+05:30') {
+      return formatTimeInZone(raw);
+    }
+  }
+  const match = raw.match(/T(\d{2}):(\d{2})/);
   if (!match) return null;
   const hours = Number(match[1]);
   const minutes = match[2];
