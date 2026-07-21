@@ -9,7 +9,6 @@ import {
   TextField,
   InputBase,
   FormControl,
-  InputLabel,
   Select,
   MenuItem,
   Dialog,
@@ -21,7 +20,6 @@ import {
   Snackbar,
   InputAdornment,
   Divider,
-  Avatar,
   Grid,
   Stack,
   Table,
@@ -33,7 +31,6 @@ import {
   Pagination,
   Autocomplete,
   TableSortLabel,
-  useTheme
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -50,7 +47,6 @@ import {
   mvsTableHeadHighlightSx,
   mvsTableBodyRowSx,
 } from '../../theme/mvsLayout';
-import { alpha } from '@mui/material/styles';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -58,7 +54,6 @@ import {
   Search as SearchIcon,
   FilterList as FilterIcon,
   Hotel as HotelIcon,
-  Person as PersonIcon,
   CheckCircle as CheckCircleIcon,
   Cancel as CancelIcon,
   Print as PrintIcon,
@@ -68,16 +63,13 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
 import {
-  API_BASE_URL,
   accountingService,
-  companyService,
   roomBookingService,
   roomTypeRoomService,
   roomTypeService,
   userUiPreferencesService
 } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
-import { getUploadUrl } from '../../utils/uploadUrl';
 import AuthMedia from '../../components/Common/AuthMedia';
 import { generateRoomBookingId } from '../../utils/bookingId';
 
@@ -228,29 +220,46 @@ const renderEllipsisText = (text: string) => (
 );
 
 const invoicePanelSx = {
-  p: 2,
+  p: 1.25,
   height: '100%',
-  borderRadius: '14px',
+  borderRadius: '10px',
   border: '1px solid #C5CED9',
   bgcolor: '#FAFBFC',
   boxSizing: 'border-box',
 } as const;
 
 const invoicePanelTitleSx = {
-  fontSize: '0.75rem',
+  fontSize: '0.6875rem',
   fontWeight: 700,
-  letterSpacing: '0.06em',
+  letterSpacing: '0.05em',
   textTransform: 'uppercase',
   color: 'text.secondary',
-  mb: 1.5,
+  mb: 0.75,
 } as const;
 
 const invoiceMetaLabelSx = {
   fontSize: '0.6875rem',
   fontWeight: 600,
   color: 'text.secondary',
-  display: 'block',
-  mb: 0.25,
+  display: 'inline',
+  mr: 0.5,
+  whiteSpace: 'nowrap',
+} as const;
+
+const invoiceInlineRowSx = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  columnGap: 1.25,
+  rowGap: 0.5,
+  lineHeight: 1.4,
+} as const;
+
+const invoiceInlineItemSx = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 0.5,
+  minWidth: 0,
 } as const;
 
 const invoiceTableSx = {
@@ -288,7 +297,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   onCloseDialog
 }) => {
   const { t } = useTranslation();
-  const theme = useTheme();
   const { user } = useStore();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -367,7 +375,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   const invoiceRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const apiBaseUrl = useMemo(() => API_BASE_URL.replace(/\/api$/, ''), []);
 
   const billToInputSx = {
     fontSize: '0.8125rem',
@@ -810,8 +817,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     return `${companyPrefix}/${fy}/INV/${seq}`;
   };
 
-  const resolveLogoUrl = (logo?: string) => getUploadUrl(logo);
-
   const formatCurrency = (value?: string | number) => {
     if (value === null || value === undefined) return '';
     const raw = String(value).replace(/,/g, '');
@@ -979,23 +984,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
         return <Chip label={t('roomBookingManagement.status.noShow')} color="error" size="small" variant="outlined" sx={chipSx} />;
       default:
         return <Chip label={t('roomBookingManagement.unknown')} color="default" size="small" variant="outlined" sx={chipSx} />;
-    }
-  };
-
-  const getRoomStatusChip = (status: string) => {
-    switch (status) {
-      case 'available':
-        return <Chip label={t('roomBookingManagement.roomStatus.available')} color="success" size="small" />;
-      case 'occupied':
-        return <Chip label={t('roomBookingManagement.roomStatus.occupied')} color="error" size="small" />;
-      case 'maintenance':
-        return <Chip label={t('roomBookingManagement.roomStatus.maintenance')} color="warning" size="small" />;
-      case 'reserved':
-        return <Chip label={t('roomBookingManagement.roomStatus.reserved')} color="info" size="small" />;
-      case 'cleaning':
-        return <Chip label={t('roomBookingManagement.roomStatus.cleaning')} color="default" size="small" />;
-      default:
-        return <Chip label={t('roomBookingManagement.unknown')} color="default" size="small" />;
     }
   };
 
@@ -1345,13 +1333,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     await handleCancelBooking(cancelTargetId);
     closeCancelDialog();
   };
-
-  const todayCheckIns = bookings.filter(booking => booking.checkInDate === new Date().toISOString().split('T')[0]);
-  const occupiedRooms = rooms.filter(room => room.status === 'occupied').length;
-  const availableRooms = rooms.filter(room => room.status === 'available').length;
-  const totalRevenue = bookings
-    .filter(booking => booking.status === 'checked_out' && booking.paymentStatus === 'paid')
-    .reduce((sum, booking) => sum + booking.totalAmount, 0);
 
   const getSortValue = (booking: Booking, key: string) => {
     switch (key) {
@@ -1972,241 +1953,195 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
           <CardContent
             ref={invoiceRef}
             className="tax-invoice-print"
-            sx={{ p: { xs: 2.5, md: 4 }, lineHeight: 1.45 }}
+            sx={{ p: { xs: 2, md: 2.5 }, lineHeight: 1.35 }}
           >
             <Box
               sx={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                gap: 3,
-                mb: 3,
+                alignItems: 'center',
+                gap: 2,
+                mb: 1.5,
                 flexWrap: 'wrap',
               }}
             >
-              <Box sx={{ minWidth: 0, flex: '1 1 280px' }}>
-                <Typography
-                  variant="h5"
-                  sx={{ fontWeight: 800, letterSpacing: '0.05em', color: 'text.primary', mb: 1 }}
-                >
-                  TAX INVOICE
-                </Typography>
-                {issuerCompany?.companyLogo && (
-                  <Box sx={{ mb: 1.5 }}>
+              <Box sx={{ minWidth: 0, flex: '1 1 260px' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', mb: 0.75 }}>
+                  <Typography
+                    variant="h6"
+                    sx={{ fontWeight: 800, letterSpacing: '0.04em', color: 'text.primary', m: 0 }}
+                  >
+                    TAX INVOICE
+                  </Typography>
+                  {issuerCompany?.companyLogo && (
                     <AuthMedia
                       src={issuerCompany.companyLogo}
                       alt="Company logo"
-                      style={{ height: 40, maxWidth: 200, objectFit: 'contain' }}
+                      style={{ height: 28, maxWidth: 140, objectFit: 'contain' }}
                     />
-                  </Box>
-                )}
-                <Stack spacing={0.75}>
-                  <Box>
-                    <Typography component="span" sx={invoiceMetaLabelSx}>
-                      Invoice No
-                    </Typography>
-                    <Typography variant="body2" fontWeight={600}>
+                  )}
+                </Box>
+                <Typography variant="body2" sx={{ ...invoiceInlineRowSx, color: 'text.secondary' }}>
+                  <Box component="span" sx={invoiceInlineItemSx}>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>Invoice No</Typography>
+                    <Typography component="span" variant="body2" fontWeight={600} color="text.primary">
                       {formatInvoiceNumber(selectedBooking.id)}
                     </Typography>
                   </Box>
-                  <Box>
-                    <Typography component="span" sx={invoiceMetaLabelSx}>
-                      Invoice Date
-                    </Typography>
-                    <Typography variant="body2" fontWeight={600}>
+                  <Box component="span" sx={invoiceInlineItemSx}>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>Date</Typography>
+                    <Typography component="span" variant="body2" fontWeight={600} color="text.primary">
                       {selectedBooking.checkInDate}
                     </Typography>
                   </Box>
-                </Stack>
+                  <Box component="span" sx={invoiceInlineItemSx}>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>Nights</Typography>
+                    <Typography component="span" variant="body2" fontWeight={600} color="text.primary">
+                      {selectedBooking.totalNights}
+                      {t('roomBookingManagement.units.night')}
+                    </Typography>
+                  </Box>
+                </Typography>
               </Box>
-              <Box
-                sx={{
-                  textAlign: 'right',
-                  px: 2.5,
-                  py: 1.75,
-                  borderRadius: '14px',
-                  bgcolor: alpha(theme.palette.primary.main, 0.06),
-                  border: '1px solid',
-                  borderColor: alpha(theme.palette.primary.main, 0.18),
-                  minWidth: 180,
-                }}
-              >
+              <Box sx={{ textAlign: 'right' }}>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
                   Total Amount
                 </Typography>
-                <Typography variant="h5" fontWeight={700} color="primary.main" sx={{ mt: 0.25 }}>
+                <Typography variant="h6" fontWeight={700} color="primary.main" sx={{ mt: 0.1, lineHeight: 1.2 }}>
                   Rs. {formatCurrency(invoiceSubtotal)}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {selectedBooking.totalNights}
-                  {t('roomBookingManagement.units.night')}
                 </Typography>
               </Box>
             </Box>
 
-            <Divider sx={{ mb: 2.5, borderColor: '#C5CED9' }} />
+            <Divider sx={{ mb: 1.5, borderColor: '#C5CED9' }} />
 
-            <Grid container spacing={2} sx={{ mb: 2.5 }} alignItems="stretch">
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Box sx={invoicePanelSx}>
-                  <Typography sx={invoicePanelTitleSx}>Issuer</Typography>
-                  <Stack spacing={0.75}>
-                    <Typography variant="body2" fontWeight={600}>
-                      {issuerCompany?.name || '-'}
-                    </Typography>
-                    {issuerCompany?.businessNumber && (
-                      <Typography variant="body2" color="text.secondary">
-                        Business No: {issuerCompany.businessNumber}
-                      </Typography>
-                    )}
-                    <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-line' }}>
-                      {issuerCompany?.address || '-'}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {issuerCompany?.phone || '-'}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {issuerCompany?.email || '-'}
-                    </Typography>
-                  </Stack>
-                </Box>
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Box sx={invoicePanelSx}>
-                  <Typography sx={invoicePanelTitleSx}>Bill To</Typography>
-                  <Stack spacing={1}>
-                    <Box>
-                      <Typography sx={invoiceMetaLabelSx}>Name</Typography>
-                      <InputBase
-                        value={billTo.name}
-                        onChange={(event) => setBillTo((prev) => ({ ...prev, name: event.target.value }))}
-                        placeholder="Name"
-                        fullWidth
-                        sx={billToInputSx}
-                      />
-                    </Box>
-                    <Box>
-                      <Typography sx={invoiceMetaLabelSx}>Company</Typography>
-                      <InputBase
-                        value={billTo.company}
-                        onChange={(event) => setBillTo((prev) => ({ ...prev, company: event.target.value }))}
-                        placeholder="Company"
-                        fullWidth
-                        sx={billToInputSx}
-                      />
-                    </Box>
-                    <Box>
-                      <Typography sx={invoiceMetaLabelSx}>Email</Typography>
-                      <InputBase
-                        value={billTo.email}
-                        onChange={(event) => setBillTo((prev) => ({ ...prev, email: event.target.value }))}
-                        placeholder="Email"
-                        fullWidth
-                        sx={billToInputSx}
-                      />
-                    </Box>
-                    <Box>
-                      <Typography sx={invoiceMetaLabelSx}>Phone</Typography>
-                      <InputBase
-                        value={billTo.phone}
-                        onChange={(event) => setBillTo((prev) => ({ ...prev, phone: event.target.value }))}
-                        placeholder="Phone"
-                        fullWidth
-                        sx={billToInputSx}
-                      />
-                    </Box>
-                    <Box>
-                      <Typography sx={invoiceMetaLabelSx}>GST</Typography>
-                      <InputBase
-                        value={billTo.gst}
-                        onChange={(event) => setBillTo((prev) => ({ ...prev, gst: event.target.value }))}
-                        placeholder="GST"
-                        fullWidth
-                        sx={billToInputSx}
-                      />
-                    </Box>
-                  </Stack>
-                </Box>
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Box sx={invoicePanelSx}>
-                  <Typography sx={invoicePanelTitleSx}>GST Details</Typography>
+            <Stack spacing={1} sx={{ mb: 1.5 }}>
+              <Box sx={invoicePanelSx}>
+                <Typography sx={invoicePanelTitleSx}>Issuer</Typography>
+                <Typography variant="body2" fontWeight={600} sx={{ mb: 0.35 }}>
+                  {issuerCompany?.name || '-'}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.45 }}>
+                  {[
+                    issuerCompany?.businessNumber
+                      ? `Biz No ${issuerCompany.businessNumber}`
+                      : null,
+                    issuerCompany?.address,
+                    issuerCompany?.phone,
+                    issuerCompany?.email,
+                  ]
+                    .filter(Boolean)
+                    .join(' / ') || '-'}
+                </Typography>
+              </Box>
+
+              <Box sx={invoicePanelSx}>
+                <Typography sx={invoicePanelTitleSx}>Bill To</Typography>
+                <Box sx={invoiceInlineRowSx}>
+                  <Box sx={invoiceInlineItemSx}>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>Name</Typography>
+                    <InputBase
+                      value={billTo.name}
+                      onChange={(event) => setBillTo((prev) => ({ ...prev, name: event.target.value }))}
+                      placeholder="Name"
+                      sx={{ ...billToInputSx, minWidth: 110, flex: '0 1 140px' }}
+                    />
+                  </Box>
                   <Box
                     sx={{
-                      display: 'grid',
-                      gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                      gap: 1.5,
+                      ...invoiceInlineItemSx,
+                      flex: '1 1 280px',
+                      minWidth: 220,
                     }}
                   >
-                    <Box>
-                      <Typography sx={invoiceMetaLabelSx}>GSTIN (Issuer)</Typography>
-                      <Typography variant="body2">{issuerCompany?.gstNumbers?.[0] || '-'}</Typography>
-                    </Box>
-                    <Box>
-                      <Typography sx={invoiceMetaLabelSx}>GSTIN (Recipient)</Typography>
-                      <InputBase
-                        value={billTo.gst}
-                        onChange={(event) => setBillTo((prev) => ({ ...prev, gst: event.target.value }))}
-                        placeholder="GSTIN"
-                        fullWidth
-                        sx={billToInputSx}
-                      />
-                    </Box>
-                    <Box>
-                      <Typography sx={invoiceMetaLabelSx}>SAC Code</Typography>
-                      <Typography variant="body2">996311</Typography>
-                    </Box>
-                    <Box>
-                      <Typography sx={invoiceMetaLabelSx}>Supply Type</Typography>
-                      <Typography variant="body2">{billTo.gst ? 'B2B' : 'B2C'}</Typography>
-                    </Box>
-                    <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
-                      <Typography sx={invoiceMetaLabelSx}>Place of Supply</Typography>
-                      <InputBase
-                        value={placeOfSupply}
-                        onChange={(event) => setPlaceOfSupply(event.target.value)}
-                        placeholder="State/UT"
-                        fullWidth
-                        sx={billToInputSx}
-                      />
-                    </Box>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>Company</Typography>
+                    <InputBase
+                      value={billTo.company}
+                      onChange={(event) => setBillTo((prev) => ({ ...prev, company: event.target.value }))}
+                      placeholder="Company"
+                      sx={{ ...billToInputSx, minWidth: 0, width: '100%', flex: 1 }}
+                    />
+                  </Box>
+                  <Box sx={invoiceInlineItemSx}>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>Email</Typography>
+                    <InputBase
+                      value={billTo.email}
+                      onChange={(event) => setBillTo((prev) => ({ ...prev, email: event.target.value }))}
+                      placeholder="Email"
+                      sx={{ ...billToInputSx, minWidth: 140, flex: '0 1 180px' }}
+                    />
+                  </Box>
+                  <Box sx={invoiceInlineItemSx}>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>Phone</Typography>
+                    <InputBase
+                      value={billTo.phone}
+                      onChange={(event) => setBillTo((prev) => ({ ...prev, phone: event.target.value }))}
+                      placeholder="Phone"
+                      sx={{ ...billToInputSx, minWidth: 100, flex: '0 1 120px' }}
+                    />
+                  </Box>
+                  <Box sx={invoiceInlineItemSx}>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>GST</Typography>
+                    <InputBase
+                      value={billTo.gst}
+                      onChange={(event) => setBillTo((prev) => ({ ...prev, gst: event.target.value }))}
+                      placeholder="GST"
+                      sx={{ ...billToInputSx, minWidth: 110, flex: '0 1 140px' }}
+                    />
                   </Box>
                 </Box>
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Box sx={invoicePanelSx}>
-                  <Typography sx={invoicePanelTitleSx}>Stay Details</Typography>
-                  <Stack spacing={0.75}>
-                    <Box>
-                      <Typography sx={invoiceMetaLabelSx}>Room</Typography>
-                      <Typography variant="body2">
-                        {getRoomDisplayLabel(selectedBooking)} ({getRoomTypeLabel(selectedBooking.roomType)})
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography sx={invoiceMetaLabelSx}>Guests</Typography>
-                      <Typography variant="body2">{selectedBooking.numberOfGuests}</Typography>
-                    </Box>
-                    <Box>
-                      <Typography sx={invoiceMetaLabelSx}>Check-in</Typography>
-                      <Typography variant="body2">
-                        {selectedBooking.checkInDate}
-                        {selectedBooking.checkInTime ? ` ${selectedBooking.checkInTime}` : ''}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography sx={invoiceMetaLabelSx}>Check-out</Typography>
-                      <Typography variant="body2">
-                        {selectedBooking.checkOutDate}
-                        {selectedBooking.checkOutTime ? ` ${selectedBooking.checkOutTime}` : ''}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </Box>
-              </Grid>
-            </Grid>
+              </Box>
 
-            <TableContainer sx={{ ...mvsBodyListTableSx, mb: 2.5 }}>
+              <Box sx={invoicePanelSx}>
+                <Typography sx={invoicePanelTitleSx}>GST / Stay</Typography>
+                <Box sx={invoiceInlineRowSx}>
+                  <Box sx={invoiceInlineItemSx}>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>GSTIN(I)</Typography>
+                    <Typography component="span" variant="body2">
+                      {issuerCompany?.gstNumbers?.[0] || '-'}
+                    </Typography>
+                  </Box>
+                  <Box sx={invoiceInlineItemSx}>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>GSTIN(R)</Typography>
+                    <InputBase
+                      value={billTo.gst}
+                      onChange={(event) => setBillTo((prev) => ({ ...prev, gst: event.target.value }))}
+                      placeholder="GSTIN"
+                      sx={{ ...billToInputSx, minWidth: 110, flex: '0 1 140px' }}
+                    />
+                  </Box>
+                  <Box sx={invoiceInlineItemSx}>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>SAC</Typography>
+                    <Typography component="span" variant="body2">996311</Typography>
+                  </Box>
+                  <Box sx={invoiceInlineItemSx}>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>Type</Typography>
+                    <Typography component="span" variant="body2">{billTo.gst ? 'B2B' : 'B2C'}</Typography>
+                  </Box>
+                  <Box sx={invoiceInlineItemSx}>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>POS</Typography>
+                    <InputBase
+                      value={placeOfSupply}
+                      onChange={(event) => setPlaceOfSupply(event.target.value)}
+                      placeholder="State/UT"
+                      sx={{ ...billToInputSx, minWidth: 100, flex: '0 1 120px' }}
+                    />
+                  </Box>
+                  <Box sx={invoiceInlineItemSx}>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>Room</Typography>
+                    <Typography component="span" variant="body2">
+                      {getRoomDisplayLabel(selectedBooking)} ({getRoomTypeLabel(selectedBooking.roomType)})
+                    </Typography>
+                  </Box>
+                  <Box sx={invoiceInlineItemSx}>
+                    <Typography component="span" sx={invoiceMetaLabelSx}>Guests</Typography>
+                    <Typography component="span" variant="body2">{selectedBooking.numberOfGuests}</Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Stack>
+
+            <TableContainer sx={{ ...mvsBodyListTableSx, mb: 1.5 }}>
               <Table size="small" sx={invoiceTableSx}>
                 <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
@@ -2274,26 +2209,18 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
               </Table>
             </TableContainer>
 
-            <Box
-              sx={{
-                display: 'flex',
-                justifyContent: 'flex-end',
-                alignItems: 'flex-start',
-                gap: { xs: 2, md: 4 },
-                flexWrap: 'wrap',
-              }}
-            >
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
               <Box
                 sx={{
                   minWidth: { xs: '100%', sm: 280 },
-                  maxWidth: 340,
-                  p: 2,
-                  borderRadius: '14px',
+                  maxWidth: 320,
+                  p: 1.5,
+                  borderRadius: '10px',
                   border: '1px solid #C5CED9',
                   bgcolor: '#FAFBFC',
                 }}
               >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
                   <Typography variant="body2" color="text.secondary">
                     Subtotal
                   </Typography>
@@ -2301,7 +2228,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     Rs. {formatCurrency(invoiceSubtotal)}
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center', gap: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75, alignItems: 'center', gap: 1 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                     <Typography variant="body2" color="text.secondary">
                       CGST
@@ -2324,7 +2251,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     Rs. {formatCurrency(cgstAmount.toFixed(2))}
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center', gap: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75, alignItems: 'center', gap: 1 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                     <Typography variant="body2" color="text.secondary">
                       SGST
@@ -2347,7 +2274,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     Rs. {formatCurrency(sgstAmount.toFixed(2))}
                   </Typography>
                 </Box>
-                <Divider sx={{ my: 1.25, borderColor: '#C5CED9' }} />
+                <Divider sx={{ my: 1, borderColor: '#C5CED9' }} />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="subtitle2" fontWeight={700}>
                     Total
@@ -2357,41 +2284,57 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                   </Typography>
                 </Box>
               </Box>
-
-              <Box sx={{ textAlign: 'center', minWidth: 160, pt: 1 }}>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-                  Authorised Signature
-                </Typography>
-                {issuerCompany?.authorizedSignature ? (
-                  <Box sx={{ mt: 1, display: 'flex', justifyContent: 'center' }}>
-                    <AuthMedia
-                      src={issuerCompany.authorizedSignature}
-                      alt="Authorized signature"
-                      style={{ maxHeight: 72, maxWidth: 180, objectFit: 'contain' }}
-                    />
-                  </Box>
-                ) : (
-                  <Box sx={{ mt: 2.5, borderBottom: '1px solid', borderColor: 'divider', height: 48, width: 160, mx: 'auto' }} />
-                )}
-              </Box>
             </Box>
 
             {selectedBooking.specialRequests && (
               <Box
                 sx={{
-                  mt: 2.5,
-                  p: 2,
-                  borderRadius: '14px',
+                  mb: 2,
+                  p: 1.25,
+                  borderRadius: '10px',
                   border: '1px solid #C5CED9',
                   bgcolor: '#FAFBFC',
                 }}
               >
-                <Typography sx={invoicePanelTitleSx}>Notes</Typography>
+                <Typography sx={{ ...invoicePanelTitleSx, mb: 0.5 }}>Notes</Typography>
                 <Typography variant="body2" color="text.secondary">
                   {selectedBooking.specialRequests}
                 </Typography>
               </Box>
             )}
+
+            <Box
+              sx={{
+                mt: selectedBooking.specialRequests ? 0 : 3,
+                pt: 2,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-end',
+              }}
+            >
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                Authorised Signature
+              </Typography>
+              {issuerCompany?.authorizedSignature ? (
+                <Box sx={{ mt: 0.75 }}>
+                  <AuthMedia
+                    src={issuerCompany.authorizedSignature}
+                    alt="Authorized signature"
+                    style={{ maxHeight: 64, maxWidth: 180, objectFit: 'contain' }}
+                  />
+                </Box>
+              ) : (
+                <Box
+                  sx={{
+                    mt: 2,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    height: 40,
+                    width: 160,
+                  }}
+                />
+              )}
+            </Box>
           </CardContent>
 
           <Box

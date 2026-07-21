@@ -360,18 +360,23 @@ interface StatusSummary {
   unassigned: number;
 }
 
-/** WorkBoardDetailPage·백엔드와 동일한 “완료” 열 규칙 (업무 종료 시 이동하는 열과 집계 일치) */
+/** WorkBoardDetailPage·백엔드와 동일한 “업무 완료” 열 규칙 (완료 시 이동하는 열과 집계 일치) */
 const isCompletedListTitle = (title: string): boolean => {
   const normalized = String(title || '').trim().toLowerCase();
   if (!normalized) return false;
-  const keywords = ['완료', '종료', 'done', 'completed', 'closed'];
-  return keywords.some((keyword) => normalized.includes(keyword));
+  const keywords = ['업무 완료', '완료', '종료', 'done', 'completed', 'closed', 'work completed'];
+  return keywords.some((keyword) => normalized.includes(keyword.toLowerCase()));
 };
 
 const resolveCompletedListId = (
   lists: { id: number; title: string; position: number }[]
 ): number | null => {
   const sorted = [...lists].sort((a, b) => a.position - b.position);
+  const preferred = sorted.find((list) => {
+    const title = String(list.title || '').trim().toLowerCase();
+    return title === '업무 완료' || title.includes('업무 완료') || title.includes('work completed');
+  });
+  if (preferred) return preferred.id;
   const byTitle = sorted.find((l) => isCompletedListTitle(l.title));
   if (byTitle) return byTitle.id;
   if (sorted.length >= 2) return sorted[sorted.length - 1].id;

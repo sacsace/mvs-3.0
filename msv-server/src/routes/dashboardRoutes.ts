@@ -299,7 +299,15 @@ router.get('/notices', async (_req, res) => {
 
 const classifyTaskStatus = (listTitle: string): 'todo' | 'in_progress' | 'done' => {
   const normalized = (listTitle || '').replace(/\s+/g, '').toLowerCase();
-  if (normalized.includes('완료') || normalized.includes('done')) return 'done';
+  if (
+    normalized.includes('업무완료') ||
+    normalized.includes('완료') ||
+    normalized.includes('done') ||
+    normalized.includes('closed') ||
+    normalized.includes('workcompleted')
+  ) {
+    return 'done';
+  }
   if (normalized.includes('진행') || normalized.includes('doing') || normalized.includes('progress')) {
     return 'in_progress';
   }

@@ -15,6 +15,7 @@ import {
   IconButton,
   Menu,
   MenuItem,
+  Pagination,
   Popper,
   Paper,
   TextField,
@@ -85,6 +86,8 @@ type BoardCard = {
   due_date?: string | null;
   position: number;
   list_id?: number;
+  created_by?: number | null;
+  completed_at?: string | null;
   assignee?: { id: number; username: string };
   comments?: BoardCardComment[];
 };
@@ -137,6 +140,7 @@ type CardDetailState = {
   color: string;
   assigneeUserId: number | null;
   referenceUserIds: number[];
+  createdBy: number | null;
   listId: number;
   originalListId: number;
   listTitle: string;
@@ -154,16 +158,35 @@ const CARD_COLOR_PRESETS = [
   '#ED6C02',
   '#D32F2F',
   '#7B1FA2',
+  '#00897B',
+  '#0288D1',
+  '#C2185B',
   '#455A64',
   '#6D4C41'
 ];
 
-const COMPLETED_LIST_KEYWORDS = ['완료', '종료', 'done', 'completed', 'closed'];
+const COMPLETED_LIST_KEYWORDS = ['업무 완료', '완료', '종료', 'done', 'completed', 'closed', 'work completed'];
 
 const isCompletedListTitle = (title?: string): boolean => {
   const normalized = String(title || '').trim().toLowerCase();
   if (!normalized) return false;
-  return COMPLETED_LIST_KEYWORDS.some((keyword) => normalized.includes(keyword));
+  return COMPLETED_LIST_KEYWORDS.some((keyword) => normalized.includes(keyword.toLowerCase()));
+};
+
+const resolveCompletedList = <T extends { id: number; title: string; position: number }>(
+  lists: T[]
+): T | undefined => {
+  const sorted = [...lists].sort((a, b) => a.position - b.position);
+  const preferred = sorted.find((list) => {
+    const title = String(list.title || '').trim().toLowerCase();
+    return title === '업무 완료' || title.includes('업무 완료') || title.includes('work completed');
+  });
+  if (preferred) return preferred;
+  const byKeyword = sorted.find((list) => isCompletedListTitle(list.title));
+  if (byKeyword) return byKeyword;
+  // 완료 열이 명시되지 않은 보드: 2열 이상이면 마지막 열을 완료 이동 대상으로 사용
+  if (sorted.length >= 2) return sorted[sorted.length - 1];
+  return undefined;
 };
 
 /** DB에 한글 기본값으로 저장된 리스트 제목을 영어 UI에서만 치환 (저장 값은 그대로) */
@@ -183,6 +206,7 @@ const displayBoardListTitle = (title: string, lang: 'ko' | 'en'): string => {
     진행: 'In Progress',
     'in progress': 'In Progress',
     완료: 'Done',
+    '업무 완료': 'Done',
     종료: 'Closed',
     대기: 'Pending',
     '검토 대기': 'Pending review',
@@ -272,7 +296,7 @@ const DRAG_TRANSITION = 'transform 40ms ease-out';
 const DRAG_LAYOUT_TRANSITION = 'none';
 
 /** 칸반 — 트렐로형 라운드·라벤더 보드 */
-const KANBAN_DETAIL_SHELL_RADIUS = '2px';
+const KANBAN_DETAIL_SHELL_RADIUS = '12px';
 const KANBAN_SURFACE_RADIUS = '12px';
 const KANBAN_CHIP_RADIUS = '6px';
 const KANBAN_CONTROL_RADIUS = '8px';
@@ -339,17 +363,6 @@ const cardDetailFormSectionSx = {
   flexShrink: 0,
 } as const;
 
-const cardDetailFieldOutlinelessRootSx = {
-  borderRadius: KANBAN_CONTROL_RADIUS,
-  '& .MuiOutlinedInput-notchedOutline': { border: 'none' },
-  '&:hover .MuiOutlinedInput-notchedOutline': { border: 'none' },
-  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { border: 'none' },
-  '&.Mui-focused': {
-    boxShadow: '0 0 0 2px',
-    boxShadowColor: 'primary.main',
-  },
-} as const;
-
 const cardDetailInputSx = {
   '& .MuiOutlinedInput-root': {
     borderRadius: KANBAN_CONTROL_RADIUS,
@@ -405,11 +418,13 @@ function renderCommentWithMentions(text: string): React.ReactNode {
         component="span"
         key={`mention-${m.index}-${key++}`}
         sx={{
-          color: 'primary.main',
-          fontWeight: 600,
-          bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1),
-          px: 0.35,
-          borderRadius: 0.5
+          color: '#4C6A6E',
+          fontWeight: 700,
+          bgcolor: alpha('#6A8F93', 0.14),
+          px: 0.45,
+          py: 0.1,
+          borderRadius: 0.75,
+          border: `1px solid ${alpha('#6A8F93', 0.28)}`,
         }}
       >
         {token}
@@ -1196,6 +1211,10 @@ const WorkBoardDetailPage: React.FC = () => {
   const [newListDescription, setNewListDescription] = useState('');
   const [creatingList, setCreatingList] = useState(false);
   const [addListOpen, setAddListOpen] = useState(false);
+  const [completedTasksOpen, setCompletedTasksOpen] = useState(false);
+  const [completedTaskSearch, setCompletedTaskSearch] = useState('');
+  const [completedTaskPage, setCompletedTaskPage] = useState(1);
+  const [reopeningCardId, setReopeningCardId] = useState<number | null>(null);
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [companyUsers, setCompanyUsers] = useState<any[]>([]);
@@ -1597,6 +1616,7 @@ const WorkBoardDetailPage: React.FC = () => {
       referenceUserIds: Array.isArray(card.reference_user_ids)
         ? card.reference_user_ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
         : [],
+      createdBy: card.created_by != null ? Number(card.created_by) : null,
       listId,
       originalListId: listId,
       listTitle
@@ -1848,7 +1868,7 @@ const WorkBoardDetailPage: React.FC = () => {
     if (!menuCanEdit) {
       showErrorPopup(
         txt('업무 상태를 변경할 권한이 없습니다.', 'You do not have permission to change task status.'),
-        txt('업무 종료', 'Complete task')
+        txt('업무 완료', 'Complete task')
       );
       return;
     }
@@ -1859,19 +1879,67 @@ const WorkBoardDetailPage: React.FC = () => {
     const isCardAssignee = assigneeUid != null && myUid != null && assigneeUid === myUid;
     if (!isOwnerCt && assigneeUid != null && !isCardAssignee) {
       showErrorPopup(
-        '업무 종료는 담당자 또는 보드 소유자만 할 수 있습니다.',
-        '업무 종료'
+        txt(
+          '업무 완료는 담당자 또는 보드 소유자만 할 수 있습니다.',
+          'Only the assignee or board owner can complete this task.'
+        ),
+        txt('업무 완료', 'Complete task')
       );
       return;
     }
-    if (!completedList?.id) {
-      showErrorPopup(
-        '완료 상태로 이동할 목록이 없습니다. 보드에 목록을 하나 더 추가하거나, 이름에 「완료」「종료」「Done」 등이 들어가는 열을 만드세요.',
-        '업무 종료'
-      );
-      return;
+
+    let targetCompletedListId = completedList?.id;
+    // 완료 열이 없으면 「업무 완료」 목록을 만들어 그곳으로 이동·기록
+    if (!targetCompletedListId) {
+      try {
+        setCardSaving(true);
+        const createRes = await workBoardService.createList(boardId, {
+          title: txt('업무 완료', 'Done'),
+        });
+        if (!createRes.success || !createRes.data?.id) {
+          showErrorPopup(
+            createRes.message ||
+              txt(
+                '업무 완료 목록을 만들 수 없습니다. 보드에 「업무 완료」 목록을 추가해 주세요.',
+                'Could not create a Done list. Please add a “Done” list to the board.'
+              ),
+            txt('업무 완료', 'Complete task')
+          );
+          return;
+        }
+        targetCompletedListId = Number(createRes.data.id);
+        await loadBoard();
+      } catch (error: any) {
+        showErrorPopup(error, txt('업무 완료', 'Complete task'));
+        return;
+      } finally {
+        setCardSaving(false);
+      }
     }
-    await persistCardDetail(completedList.id, '업무가 종료되었습니다.');
+
+    await persistCardDetail(
+      targetCompletedListId,
+      txt('업무가 완료되어 「업무 완료」 목록으로 이동했습니다.', 'Task completed and moved to the Done list.')
+    );
+  };
+
+  const handleCompleteTask = () => {
+    if (!cardDetail || !board) return;
+    showConfirm(
+      txt(
+        '이 업무를 완료 처리하고 「업무 완료」 목록으로 이동하시겠습니까?',
+        'Complete this task and move it to the Done list?'
+      ),
+      () => {
+        void completeTask();
+      },
+      {
+        title: txt('업무 완료 확인', 'Confirm task completion'),
+        confirmText: txt('업무 완료', 'Complete Task'),
+        cancelText: txt('취소', 'Cancel'),
+        confirmColor: 'primary',
+      }
+    );
   };
 
   const handleDeleteCard = () => {
@@ -2055,10 +2123,107 @@ const WorkBoardDetailPage: React.FC = () => {
   const canManageMembers = isOwner && menuCanEdit;
   const canDeleteBoard = myMember?.role === 'owner' && menuCanDelete;
   const lists: BoardList[] = [...(board?.lists || [])].sort((a, b) => a.position - b.position);
-  /** 제목에 완료/종료/done 등이 없으면 칸반이 2열 이상일 때 마지막 열을 완료 이동 목적으로 사용 */
-  const completedListByTitle = lists.find((list) => isCompletedListTitle(list.title));
-  const completedList =
-    completedListByTitle ?? (lists.length >= 2 ? lists[lists.length - 1] : undefined);
+  /** 「업무 완료」 우선, 없으면 완료/Done 키워드, 그래도 없으면 마지막 열 */
+  const completedList = resolveCompletedList(lists);
+  const activeLists = completedList
+    ? lists.filter((list) => list.id !== completedList.id)
+    : lists;
+  const completedCards = [...(completedList?.cards || [])].sort((a, b) => {
+    const aTime = new Date(a.completed_at || 0).getTime();
+    const bTime = new Date(b.completed_at || 0).getTime();
+    if (aTime !== bTime) return bTime - aTime;
+    return b.id - a.id;
+  });
+  const normalizedCompletedSearch = completedTaskSearch.trim().toLowerCase();
+  const filteredCompletedCards = completedCards.filter((card) => {
+    if (!normalizedCompletedSearch) return true;
+    const creator = (board?.members || []).find(
+      (member: any) => Number(member.user_id) === Number(card.created_by)
+    );
+    const searchable = [
+      card.title,
+      getPlainTextFromHtml(card.description),
+      card.assignee?.username,
+      creator?.user?.username,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return searchable.includes(normalizedCompletedSearch);
+  });
+  const completedTasksPerPage = 10;
+  const completedTaskPageCount = Math.max(
+    1,
+    Math.ceil(filteredCompletedCards.length / completedTasksPerPage)
+  );
+  const paginatedCompletedCards = filteredCompletedCards.slice(
+    (completedTaskPage - 1) * completedTasksPerPage,
+    completedTaskPage * completedTasksPerPage
+  );
+  const reopenTargetList =
+    activeLists.find((list) => {
+      const title = String(list.title || '').replace(/\s+/g, '').toLowerCase();
+      return title.includes('진행') || title.includes('progress') || title.includes('doing');
+    }) ?? activeLists[0];
+  const isCardDetailCompleted =
+    !!cardDetail && !!completedList && cardDetail.listId === completedList.id;
+  const completedCardDetail = isCardDetailCompleted
+    ? completedCards.find((card) => card.id === cardDetail?.cardId)
+    : undefined;
+  const canReopenCardDetail =
+    isCardDetailCompleted &&
+    (() => {
+      const uid = Number(user?.id);
+      if (!uid) return false;
+      const isCreator =
+        cardDetail?.createdBy != null && Number(cardDetail.createdBy) === uid;
+      const isAssignee =
+        cardDetail?.assigneeUserId != null && Number(cardDetail.assigneeUserId) === uid;
+      return isCreator || isAssignee;
+    })();
+
+  const canReopenCard = (card: BoardCard) => {
+    const uid = Number(user?.id);
+    if (!uid) return false;
+    const isCreator = card.created_by != null && Number(card.created_by) === uid;
+    const isAssignee = card.assignee?.id != null && Number(card.assignee.id) === uid;
+    return isCreator || isAssignee;
+  };
+
+  const handleReopenCard = async (card: BoardCard, fromDetail = false) => {
+    if (!reopenTargetList?.id || !canReopenCard(card)) return;
+    setReopeningCardId(card.id);
+    try {
+      const response = await workBoardService.moveCard(
+        boardId,
+        card.id,
+        reopenTargetList.id,
+        reopenTargetList.cards?.length ?? 0
+      );
+      if (!response.success) {
+        showErrorPopup(
+          response.message || txt('업무 재오픈에 실패했습니다.', 'Failed to reopen task.'),
+          txt('완료된 업무', 'Completed Tasks')
+        );
+        return;
+      }
+      await loadBoard({ silent: true });
+      setCompletedTaskPage(1);
+      if (fromDetail) {
+        closeCardDetail();
+      }
+      showSuccessToast(
+        txt(
+          `업무를 「${displayBoardListTitle(reopenTargetList.title, language)}」 목록으로 재오픈했습니다.`,
+          `Task reopened in “${displayBoardListTitle(reopenTargetList.title, language)}”.`
+        )
+      );
+    } catch (error: any) {
+      showErrorPopup(error, txt('완료된 업무', 'Completed Tasks'));
+    } finally {
+      setReopeningCardId(null);
+    }
+  };
   /** 담당자가 있으면 담당자·보드 소유자·root만 완료 열로 이동 가능. 담당자 없으면 보드 멤버 누구나. */
   const assigneeUidComplete =
     cardDetail?.assigneeUserId != null ? Number(cardDetail.assigneeUserId) : null;
@@ -2185,6 +2350,30 @@ const WorkBoardDetailPage: React.FC = () => {
         description={board.description?.trim() || undefined}
         actions={
           <>
+        <Button
+          startIcon={<CheckCircleIcon sx={{ fontSize: 18 }} />}
+          variant="contained"
+          color="success"
+          disableElevation
+          onClick={() => {
+            setCompletedTaskSearch('');
+            setCompletedTaskPage(1);
+            setCompletedTasksOpen(true);
+          }}
+          sx={{
+            textTransform: 'none',
+            fontWeight: 700,
+            borderRadius: '12px',
+            px: 2,
+            bgcolor: 'success.main',
+            color: '#FFFFFF',
+            '&:hover': {
+              bgcolor: 'success.dark',
+            },
+          }}
+        >
+          {txt('완료된 업무', 'Completed Tasks')} ({completedCards.length})
+        </Button>
         {menuCanEdit && (
           <Button
             startIcon={<PersonAddIcon sx={{ fontSize: 18 }} />}
@@ -2197,10 +2386,18 @@ const WorkBoardDetailPage: React.FC = () => {
             }}
             sx={{
               textTransform: 'none',
-              fontWeight: 600,
+              fontWeight: 700,
               borderRadius: '12px',
               px: 2,
-              borderColor: alpha(theme.palette.divider, 0.95),
+              borderWidth: 1.5,
+              borderColor: alpha(theme.palette.primary.main, 0.55),
+              bgcolor: alpha(theme.palette.primary.main, 0.06),
+              color: theme.palette.primary.dark,
+              '&:hover': {
+                borderWidth: 1.5,
+                borderColor: theme.palette.primary.main,
+                bgcolor: alpha(theme.palette.primary.main, 0.12),
+              },
             }}
           >
             {txt('멤버 초대', 'Invite Member')}
@@ -2209,8 +2406,9 @@ const WorkBoardDetailPage: React.FC = () => {
         {menuCanCreate && (
           <Button
             startIcon={<LibraryAddOutlinedIcon sx={{ fontSize: 18 }} />}
-            variant="outlined"
+            variant="contained"
             color="primary"
+            disableElevation
             onClick={() => {
               setNewListTitle('');
               setNewListDescription('');
@@ -2218,10 +2416,13 @@ const WorkBoardDetailPage: React.FC = () => {
             }}
             sx={{
               textTransform: 'none',
-              fontWeight: 600,
+              fontWeight: 700,
               borderRadius: '12px',
               px: 2,
-              borderColor: alpha(theme.palette.divider, 0.95),
+              color: '#FFFFFF',
+              '&:hover': {
+                boxShadow: '0 4px 10px rgba(31, 111, 115, 0.22)',
+              },
             }}
           >
             {txt('대분류 추가', 'Add List')}
@@ -2521,7 +2722,7 @@ const WorkBoardDetailPage: React.FC = () => {
                 boxSizing: 'border-box',
               }}
             >
-            {lists.map((list) => (
+            {activeLists.map((list) => (
               <ListColumn
                 key={list.id}
                 list={list}
@@ -2651,8 +2852,8 @@ const WorkBoardDetailPage: React.FC = () => {
             const accent = custom || theme.palette.primary.main;
             return {
               mt: 1.5,
+              mb: 2,
               height: 'auto',
-              maxHeight: 'calc(100vh - 190px)',
               borderRadius: KANBAN_DETAIL_SHELL_RADIUS,
               boxShadow: '0 1px 0 #C5CED9, 0 4px 14px rgba(15, 23, 42, 0.07)',
               overflow: 'hidden',
@@ -2677,63 +2878,67 @@ const WorkBoardDetailPage: React.FC = () => {
         >
           <Button
             size="small"
-            variant="outlined"
-            startIcon={<ArrowBackIcon />}
+            variant="text"
+            startIcon={<ArrowBackIcon sx={{ fontSize: 20 }} />}
             onClick={closeCardDetail}
             sx={{
-              borderRadius: KANBAN_CONTROL_RADIUS,
-              minWidth: 96,
-              fontWeight: 600,
-              borderColor: '#C5CED9',
-              bgcolor: '#FFFFFF',
+              minWidth: 0,
+              px: 0.5,
+              py: 0.25,
+              fontWeight: 700,
+              fontSize: '1rem',
+              letterSpacing: '-0.01em',
+              color: 'text.primary',
+              textTransform: 'none',
+              '&:hover': {
+                bgcolor: 'transparent',
+                color: 'primary.main',
+              },
             }}
           >
             {txt('뒤로 가기', 'Back')}
           </Button>
-          <Box sx={{ minWidth: 0, ml: 0.5 }}>
-            <Typography variant="subtitle1" fontWeight={700} noWrap sx={{ letterSpacing: '-0.01em' }}>
-              {txt('카드 세부사항', 'Card Details')}
-            </Typography>
-          </Box>
           <Box sx={{ flexGrow: 1 }} />
-          {menuCanDelete && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            {menuCanDelete && (
+              <Button
+                size="small"
+                color="error"
+                variant="outlined"
+                onClick={handleDeleteCard}
+                disabled={cardSaving || !cardDetail?.cardId}
+                sx={{
+                  borderRadius: KANBAN_CONTROL_RADIUS,
+                  minWidth: 88,
+                  fontWeight: 700,
+                  borderWidth: 1.5,
+                  bgcolor: alpha('#D32F2F', 0.04),
+                  '&:hover': {
+                    borderWidth: 1.5,
+                    bgcolor: alpha('#D32F2F', 0.1),
+                  },
+                }}
+              >
+                {txt('카드 삭제', 'Delete Card')}
+              </Button>
+            )}
             <Button
               size="small"
-              color="error"
-              variant="outlined"
-              onClick={handleDeleteCard}
-              disabled={cardSaving || !cardDetail?.cardId}
-              sx={{ borderRadius: KANBAN_CONTROL_RADIUS, minWidth: 84, fontWeight: 600 }}
+              variant="contained"
+              color="primary"
+              disableElevation
+              onClick={saveCardDetail}
+              disabled={!menuCanEdit || cardSaving || !cardDetail?.title?.trim()}
+              sx={{
+                borderRadius: KANBAN_CONTROL_RADIUS,
+                minWidth: 80,
+                fontWeight: 700,
+                boxShadow: 'none',
+              }}
             >
-              {txt('카드 삭제', 'Delete Card')}
+              {cardSaving ? <CircularProgress size={18} color="inherit" /> : txt('저장', 'Save')}
             </Button>
-          )}
-          <Button
-            size="small"
-            color="success"
-            variant="outlined"
-            onClick={completeTask}
-            disabled={
-              !menuCanEdit ||
-              cardSaving ||
-              !cardDetail?.title?.trim() ||
-              !completedList?.id ||
-              cardDetail?.listId === completedList?.id ||
-              !canUserCompleteTask
-            }
-            sx={{ borderRadius: KANBAN_CONTROL_RADIUS, minWidth: 84, fontWeight: 600 }}
-          >
-            {cardDetail?.listId === completedList?.id ? txt('종료됨', 'Completed') : txt('업무 종료', 'Complete Task')}
-          </Button>
-          <Button
-            size="small"
-            variant="contained"
-            onClick={saveCardDetail}
-            disabled={!menuCanEdit || cardSaving || !cardDetail?.title?.trim()}
-            sx={{ borderRadius: KANBAN_CONTROL_RADIUS, minWidth: 72, fontWeight: 600, boxShadow: 'none' }}
-          >
-            {cardSaving ? <CircularProgress size={18} color="inherit" /> : txt('저장', 'Save')}
-          </Button>
+          </Box>
         </Box>
         <Box
           sx={{
@@ -2742,14 +2947,9 @@ const WorkBoardDetailPage: React.FC = () => {
             pb: 1.25,
             display: 'flex',
             flexDirection: 'column',
-            flex: 1,
-            minHeight: 0,
             gap: 1.4,
             bgcolor: '#F8FAFC',
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            WebkitOverflowScrolling: 'touch',
-            overscrollBehaviorY: 'auto',
+            overflow: 'visible',
           }}
         >
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.42 }}>
@@ -2757,6 +2957,9 @@ const WorkBoardDetailPage: React.FC = () => {
             sx={{
               ...cardDetailFormSectionSx,
               py: 0.32,
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 1,
             }}
           >
           <TextField
@@ -2773,8 +2976,82 @@ const WorkBoardDetailPage: React.FC = () => {
             }
             disabled={!menuCanEdit}
             placeholder={txt('카드 제목', 'Card Title')}
-            sx={cardDetailOutlinedWhiteSx}
+            sx={{
+              ...cardDetailOutlinedWhiteSx,
+              flex: 1,
+              minWidth: 0,
+            }}
           />
+          <Tooltip
+            title={
+              isCardDetailCompleted && !canReopenCardDetail
+                ? txt(
+                    '담당자 또는 업무를 지시한 사람만 재오픈할 수 있습니다.',
+                    'Only the assignee or task creator can reopen it.'
+                  )
+                : ''
+            }
+          >
+            <span style={{ display: 'inline-flex', marginTop: 2 }}>
+              <Button
+                size="small"
+                color={isCardDetailCompleted ? 'primary' : 'success'}
+                variant={isCardDetailCompleted ? 'outlined' : 'contained'}
+                disableElevation
+                onClick={() => {
+                  if (isCardDetailCompleted) {
+                    if (completedCardDetail) {
+                      void handleReopenCard(completedCardDetail, true);
+                    }
+                    return;
+                  }
+                  handleCompleteTask();
+                }}
+                disabled={
+                  isCardDetailCompleted
+                    ? !canReopenCardDetail ||
+                      !completedCardDetail ||
+                      !reopenTargetList?.id ||
+                      reopeningCardId === cardDetail?.cardId
+                    : !menuCanEdit ||
+                      cardSaving ||
+                      !cardDetail?.title?.trim() ||
+                      !canUserCompleteTask
+                }
+                sx={{
+                  borderRadius: KANBAN_CONTROL_RADIUS,
+                  minWidth: 104,
+                  height: 40,
+                  fontWeight: 700,
+                  flexShrink: 0,
+                  ...(isCardDetailCompleted
+                    ? {
+                        borderWidth: 1.5,
+                        bgcolor: alpha('#6A8F93', 0.06),
+                        '&:hover': {
+                          borderWidth: 1.5,
+                          bgcolor: alpha('#6A8F93', 0.12),
+                        },
+                      }
+                    : {
+                        bgcolor: 'success.main',
+                        color: '#FFFFFF',
+                        '&:hover': { bgcolor: 'success.dark' },
+                        '&.Mui-disabled': {
+                          bgcolor: alpha('#7FA88A', 0.4),
+                          color: '#FFFFFF',
+                        },
+                      }),
+                }}
+              >
+                {reopeningCardId === cardDetail?.cardId
+                  ? <CircularProgress size={16} color="inherit" />
+                  : isCardDetailCompleted
+                    ? txt('재오픈', 'Reopen')
+                    : txt('업무 완료', 'Complete Task')}
+              </Button>
+            </span>
+          </Tooltip>
           </Box>
 
           <Box
@@ -3041,11 +3318,23 @@ const WorkBoardDetailPage: React.FC = () => {
               ...cardDetailSectionPaperSx,
               display: 'flex',
               flexDirection: 'column',
-              flex: 1,
-              minHeight: 0,
+              flexShrink: 0,
+              p: 1.5,
+              borderRadius: KANBAN_SURFACE_RADIUS,
+              border: '1px solid #C5CED9',
+              bgcolor: '#FFFFFF',
+              boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)',
             }}
           >
-          <Typography variant="caption" sx={cardDetailFieldLabelSx}>
+          <Typography
+            variant="caption"
+            sx={{
+              ...cardDetailFieldLabelSx,
+              mb: 1,
+              fontSize: '0.8125rem',
+              color: '#334155',
+            }}
+          >
             {txt('댓글 및 활동', 'Comments & Activity')}
           </Typography>
           {commentsBlockedUntilSave ? (
@@ -3225,14 +3514,16 @@ const WorkBoardDetailPage: React.FC = () => {
           <Paper
             elevation={0}
             sx={{
-              p: 0.75,
+              p: 1,
               minHeight: 96,
               overflowY: 'visible',
-              bgcolor: 'background.paper',
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 1,
-              overflow: 'hidden'
+              bgcolor: '#F8FAFC',
+              border: '1px solid #D5DCE3',
+              borderRadius: KANBAN_CONTROL_RADIUS,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0.75,
             }}
           >
             {commentLoading ? (
@@ -3240,7 +3531,7 @@ const WorkBoardDetailPage: React.FC = () => {
                 <CircularProgress size={20} />
               </Box>
             ) : cardComments.length === 0 ? (
-              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.4 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.4, px: 0.5, py: 1 }}>
                 {txt('아직 댓글이 없습니다.', 'No comments yet.')}
               </Typography>
             ) : (
@@ -3253,14 +3544,14 @@ const WorkBoardDetailPage: React.FC = () => {
                   <Box
                     key={comment.id}
                     sx={{
-                      px: 0.25,
-                      py: 0.35,
-                      pl: isReply ? 2 : 0.25,
-                      borderBottom: '1px solid',
-                      borderColor: 'divider',
-                      borderLeft: isReply ? '2px solid' : 'none',
-                      borderLeftColor: isReply ? 'divider' : 'transparent',
-                      '&:last-child': { borderBottom: 'none', pb: 0 }
+                      px: 1.1,
+                      py: 0.9,
+                      pl: isReply ? 2 : 1.1,
+                      borderRadius: KANBAN_CONTROL_RADIUS,
+                      border: '1px solid #E2E8F0',
+                      borderLeft: isReply ? '3px solid #6A8F93' : '1px solid #E2E8F0',
+                      bgcolor: '#FFFFFF',
+                      boxShadow: '0 1px 2px rgba(15, 23, 42, 0.03)',
                     }}
                   >
                     <Box
@@ -3275,8 +3566,8 @@ const WorkBoardDetailPage: React.FC = () => {
                       <Box
                         sx={{
                           display: 'flex',
-                          alignItems: 'baseline',
-                          gap: 0.75,
+                          flexDirection: 'column',
+                          gap: 0.35,
                           flex: 1,
                           minWidth: 0
                         }}
@@ -3285,7 +3576,7 @@ const WorkBoardDetailPage: React.FC = () => {
                           variant="caption"
                           color="text.secondary"
                           component="span"
-                          sx={{ flexShrink: 0, lineHeight: 1.35 }}
+                          sx={{ flexShrink: 0, lineHeight: 1.35, fontWeight: 600 }}
                         >
                           {(comment.user?.username || txt('알 수 없는 사용자', 'Unknown user'))} ·{' '}
                           {formatDateTime(comment.created_at)}
@@ -3296,9 +3587,10 @@ const WorkBoardDetailPage: React.FC = () => {
                           sx={{
                             whiteSpace: 'pre-wrap',
                             wordBreak: 'break-word',
-                            lineHeight: 1.35,
+                            lineHeight: 1.45,
                             flex: 1,
-                            minWidth: 0
+                            minWidth: 0,
+                            color: '#1E293B',
                           }}
                         >
                           {renderCommentWithMentions(comment.content || '')}
@@ -3407,6 +3699,163 @@ const WorkBoardDetailPage: React.FC = () => {
             disabled={creatingList || !newListTitle.trim()}
           >
             {creatingList ? <CircularProgress size={22} /> : txt('추가', 'Add')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={completedTasksOpen}
+        onClose={() => !reopeningCardId && setCompletedTasksOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {txt('완료된 업무', 'Completed Tasks')} ({completedCards.length})
+        </DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <TextField
+            fullWidth
+            size="small"
+            value={completedTaskSearch}
+            onChange={(event) => {
+              setCompletedTaskSearch(event.target.value);
+              setCompletedTaskPage(1);
+            }}
+            placeholder={txt(
+              '업무명, 내용, 담당자, 작업 지시자 검색',
+              'Search title, details, assignee, or creator'
+            )}
+            sx={{
+              mb: 2,
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '12px',
+                bgcolor: '#FFFFFF',
+              },
+            }}
+          />
+          {filteredCompletedCards.length === 0 ? (
+            <Box sx={{ py: 5, textAlign: 'center' }}>
+              <Typography color="text.secondary">
+                {completedTaskSearch.trim()
+                  ? txt('검색 결과가 없습니다.', 'No completed tasks match your search.')
+                  : txt('완료된 업무가 없습니다.', 'There are no completed tasks.')}
+              </Typography>
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {paginatedCompletedCards.map((card) => {
+                const creator = members.find(
+                  (member: any) => Number(member.user_id) === Number(card.created_by)
+                );
+                const creatorName =
+                  creator?.user?.username ||
+                  (card.created_by ? `${txt('사용자', 'User')} ${card.created_by}` : '-');
+                const reopenAllowed = canReopenCard(card);
+                return (
+                  <Box
+                    key={card.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      if (!completedList) return;
+                      setCompletedTasksOpen(false);
+                      openCardDetail(card, completedList.title, completedList.id);
+                    }}
+                    onKeyDown={(event) => {
+                      if ((event.key === 'Enter' || event.key === ' ') && completedList) {
+                        event.preventDefault();
+                        setCompletedTasksOpen(false);
+                        openCardDetail(card, completedList.title, completedList.id);
+                      }
+                    }}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 1.5,
+                      p: 1.5,
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: '12px',
+                      bgcolor: '#FAFBFC',
+                      cursor: 'pointer',
+                      transition: 'border-color 0.15s ease, background-color 0.15s ease',
+                      '&:hover': {
+                        borderColor: 'primary.main',
+                        bgcolor: '#F4F8FA',
+                      },
+                      '&:focus-visible': {
+                        outline: '2px solid',
+                        outlineColor: 'primary.main',
+                        outlineOffset: 2,
+                      },
+                    }}
+                  >
+                    <CheckCircleIcon sx={{ color: 'success.main', flexShrink: 0 }} />
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Typography variant="subtitle2" fontWeight={700} noWrap>
+                        {card.title}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {txt('작업 지시자', 'Created by')}: {creatorName}
+                        {card.completed_at
+                          ? ` · ${txt('완료', 'Completed')}: ${formatDateTime(card.completed_at)}`
+                          : ''}
+                      </Typography>
+                    </Box>
+                    <Tooltip
+                      title={
+                        reopenAllowed
+                          ? txt('업무를 다시 진행 상태로 이동합니다.', 'Move this task back to active work.')
+                          : txt(
+                              '담당자 또는 업무를 지시한 사람만 재오픈할 수 있습니다.',
+                              'Only the assignee or task creator can reopen it.'
+                            )
+                      }
+                    >
+                      <span>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={
+                            !reopenAllowed ||
+                            !reopenTargetList?.id ||
+                            reopeningCardId === card.id
+                          }
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleReopenCard(card);
+                          }}
+                          sx={{ minWidth: 88, borderRadius: '10px', fontWeight: 600 }}
+                        >
+                          {reopeningCardId === card.id
+                            ? <CircularProgress size={16} />
+                            : txt('재오픈', 'Reopen')}
+                        </Button>
+                      </span>
+                    </Tooltip>
+                  </Box>
+                );
+              })}
+              {completedTaskPageCount > 1 && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', pt: 1.5 }}>
+                  <Pagination
+                    count={completedTaskPageCount}
+                    page={Math.min(completedTaskPage, completedTaskPageCount)}
+                    onChange={(_event, page) => setCompletedTaskPage(page)}
+                    color="primary"
+                    size="small"
+                  />
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setCompletedTasksOpen(false)}
+            disabled={reopeningCardId !== null}
+          >
+            {txt('닫기', 'Close')}
           </Button>
         </DialogActions>
       </Dialog>

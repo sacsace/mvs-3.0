@@ -16,7 +16,7 @@ import {
 const DEFAULT_LISTS = [
   { title: '할 일', position: 0 },
   { title: '진행 중', position: 1 },
-  { title: '완료', position: 2 }
+  { title: '업무 완료', position: 2 }
 ];
 
 let workBoardSchemaEnsured = false;
@@ -235,17 +235,22 @@ const normalizeCardDescription = (value: unknown): string | null | undefined => 
   return String(value);
 };
 
-const COMPLETED_LIST_KEYWORDS = ['완료', '종료', 'done', 'completed', 'closed'];
+const COMPLETED_LIST_KEYWORDS = ['업무 완료', '완료', '종료', 'done', 'completed', 'closed', 'work completed'];
 
 const isCompletedListTitle = (title?: string): boolean => {
   const normalized = String(title || '').trim().toLowerCase();
   if (!normalized) return false;
-  return COMPLETED_LIST_KEYWORDS.some((keyword) => normalized.includes(keyword));
+  return COMPLETED_LIST_KEYWORDS.some((keyword) => normalized.includes(keyword.toLowerCase()));
 };
 
 /** 프론트 WorkBoardDetailPage 의 resolveCompletedList 와 동일 규칙 */
 const resolveCompletedListId = (lists: { id: number; title: string; position: number }[]): number | null => {
   const sorted = [...lists].sort((a, b) => a.position - b.position);
+  const preferred = sorted.find((list) => {
+    const title = String(list.title || '').trim().toLowerCase();
+    return title === '업무 완료' || title.includes('업무 완료') || title.includes('work completed');
+  });
+  if (preferred) return preferred.id;
   const byTitle = sorted.find((l) => isCompletedListTitle(l.title));
   if (byTitle) return byTitle.id;
   if (sorted.length >= 2) return sorted[sorted.length - 1].id;
@@ -1090,8 +1095,18 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
         oldListId !== newList.id &&
         completedListId != null &&
         newList.id === completedListId;
+      const isMovingOutOfCompleted =
+        oldListId !== newList.id &&
+        completedListId != null &&
+        oldListId === completedListId;
       if (isMovingIntoCompleted && !canMoveToCompleted) {
         throw new Error('FORBIDDEN_COMPLETE');
+      }
+      const createdByUserId =
+        (card as any).created_by != null ? Number((card as any).created_by) : null;
+      const canReopen = createdByUserId === uid || isAssignee;
+      if (isMovingOutOfCompleted && !canReopen) {
+        throw new Error('FORBIDDEN_REOPEN');
       }
 
       const oldId = card.id;
@@ -1145,6 +1160,12 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
       return res.status(403).json({
         success: false,
         message: '완료 처리는 담당자 또는 보드 소유자만 할 수 있습니다.'
+      });
+    }
+    if (error?.message === 'FORBIDDEN_REOPEN') {
+      return res.status(403).json({
+        success: false,
+        message: '담당자 또는 업무를 지시한 사람만 완료된 업무를 재오픈할 수 있습니다.'
       });
     }
     console.error('moveWorkBoardCard:', error);
