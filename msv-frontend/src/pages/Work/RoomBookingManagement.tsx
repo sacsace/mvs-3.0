@@ -119,6 +119,7 @@ interface RoomTypeMaster {
 }
 
 interface RoomTypeRoom {
+  id: number;
   roomTypeId: number;
   roomNumber: string;
   roomName?: string;
@@ -687,11 +688,17 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
         if (response.success) {
           const mapped = (response.data || [])
             .map((item: any) => ({
+              id: Number(item?.id),
               roomTypeId: Number(item?.room_type_id),
               roomNumber: String(item?.room_number || '').trim(),
               roomName: item?.room_name ? String(item.room_name).trim() : ''
             }))
-            .filter((item: RoomTypeRoom) => Number.isFinite(item.roomTypeId) && !!item.roomNumber);
+            .filter(
+              (item: RoomTypeRoom) =>
+                Number.isFinite(item.id) &&
+                Number.isFinite(item.roomTypeId) &&
+                !!item.roomNumber
+            );
           setRoomTypeRooms(mapped);
         }
       } catch (error) {
@@ -757,6 +764,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       if (!exists) {
         const matchedRoom = roomsForType.find((room) => room.roomNumber === selectedBooking.roomNumber);
         available.push({
+          id: matchedRoom?.id || 0,
           roomTypeId: typeId,
           roomNumber: selectedBooking.roomNumber,
           roomName: matchedRoom?.roomName || ''
@@ -764,7 +772,9 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       }
     }
     return [...available].sort((a, b) =>
-      String(a.roomNumber).localeCompare(String(b.roomNumber), undefined, { numeric: true })
+      String(a.roomName || a.roomNumber).localeCompare(String(b.roomName || b.roomNumber), undefined, {
+        numeric: true
+      })
     );
   }, [
     bookings,
@@ -1064,9 +1074,17 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       }
     }
 
+    const roomsForType = getRoomsForSelectedType();
+    const resolvedRoom =
+      roomsForType.find((room) => room.roomNumber === formState.roomNumber.trim()) ||
+      resolveRoomByInput(formState.roomNumber, roomsForType);
+    const roomNumberToSave = (resolvedRoom?.roomNumber || formState.roomNumber).trim();
+
     const resolvedRoomId = formState.roomId.trim()
       ? Number(formState.roomId)
-      : parseInt(formState.roomNumber.trim(), 10);
+      : resolvedRoom?.id != null && Number.isFinite(resolvedRoom.id) && resolvedRoom.id > 0
+        ? Number(resolvedRoom.id)
+        : parseInt(roomNumberToSave, 10);
 
     if (!resolvedRoomId || Number.isNaN(resolvedRoomId)) {
       setError(t('roomBookingManagement.errors.invalidRoomId'));
@@ -1124,7 +1142,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
         const response = await roomBookingService.createRoomBooking({
           booking_id: bookingId,
           room_id: resolvedRoomId,
-          room_number: formState.roomNumber.trim(),
+          room_number: roomNumberToSave,
           room_type: trimmedRoomType,
           guest_name: formState.guestName.trim(),
           company_name: formState.companyName.trim() || null,
@@ -1389,6 +1407,36 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     page * itemsPerPage
   );
 
+  const getRoomOptionLabel = (room: Pick<RoomTypeRoom, 'roomNumber' | 'roomName'>) =>
+    (room.roomName || room.roomNumber || '').trim();
+
+  const resolveRoomByInput = (input: string, rooms: RoomTypeRoom[]) => {
+    const trimmed = String(input || '').trim();
+    if (!trimmed) return null;
+    const byName = rooms.find(
+      (room) => getRoomOptionLabel(room).toLowerCase() === trimmed.toLowerCase()
+    );
+    if (byName) return byName;
+    return rooms.find((room) => room.roomNumber === trimmed) || null;
+  };
+
+  const getRoomsForSelectedType = () => {
+    const typeInfo = roomTypeMaster.find((item) => item.name === formState.roomType.trim());
+    const typeId = typeInfo?.id;
+    if (!typeId) return [] as RoomTypeRoom[];
+    return roomTypeRooms.filter((room) => room.roomTypeId === typeId);
+  };
+
+  const selectedRoomAutocompleteValue = (() => {
+    if (!formState.roomNumber.trim()) return null;
+    const matched =
+      availableRoomOptions.find((room) => room.roomNumber === formState.roomNumber) ||
+      resolveRoomByInput(formState.roomNumber, getRoomsForSelectedType()) ||
+      getRoomsForSelectedType().find((room) => room.roomNumber === formState.roomNumber);
+    if (matched) return matched;
+    return formState.roomNumber;
+  })();
+
   const getRoomDisplayLabel = (booking: Booking) => {
     const typeInfo = roomTypeMaster.find((item) => item.name === booking.roomType);
     const typeId = typeInfo?.id;
@@ -1542,23 +1590,49 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
               <Autocomplete
                 freeSolo
                 options={availableRoomOptions}
-                value={formState.roomNumber}
-                isOptionEqualToValue={(option, value) =>
-                  typeof value === 'string'
-                    ? option.roomNumber === value
-                    : option.roomNumber === value.roomNumber
-                }
+                value={selectedRoomAutocompleteValue}
+                isOptionEqualToValue={(option, value) => {
+                  if (typeof value === 'string') {
+                    return (
+                      option.roomNumber === value ||
+                      getRoomOptionLabel(option).toLowerCase() === value.trim().toLowerCase()
+                    );
+                  }
+                  return option.roomNumber === value.roomNumber;
+                }}
                 getOptionLabel={(option) =>
-                  typeof option === 'string' ? option : option.roomName || option.roomNumber
+                  typeof option === 'string' ? option : getRoomOptionLabel(option)
                 }
                 onChange={(_, value) => {
-                  const roomNumber =
-                    typeof value === 'string' ? value : value?.roomNumber || '';
-                  setFormState((prev) => ({ ...prev, roomNumber }));
+                  if (!value) {
+                    setFormState((prev) => ({ ...prev, roomNumber: '', roomId: '' }));
+                    return;
+                  }
+                  if (typeof value === 'string') {
+                    const resolved = resolveRoomByInput(value, getRoomsForSelectedType());
+                    setFormState((prev) => ({
+                      ...prev,
+                      roomNumber: resolved?.roomNumber || value.trim(),
+                      roomId:
+                        resolved?.id != null && resolved.id > 0 ? String(resolved.id) : ''
+                    }));
+                    return;
+                  }
+                  setFormState((prev) => ({
+                    ...prev,
+                    roomNumber: value.roomNumber,
+                    roomId: value.id != null && value.id > 0 ? String(value.id) : ''
+                  }));
                 }}
                 onInputChange={(_, value, reason) => {
                   if (reason === 'input' || reason === 'clear') {
-                    setFormState((prev) => ({ ...prev, roomNumber: value }));
+                    const resolved = resolveRoomByInput(value, getRoomsForSelectedType());
+                    setFormState((prev) => ({
+                      ...prev,
+                      roomNumber: resolved?.roomNumber || value,
+                      roomId:
+                        resolved?.id != null && resolved.id > 0 ? String(resolved.id) : ''
+                    }));
                   }
                 }}
                 disabled={!!selectedBooking}
