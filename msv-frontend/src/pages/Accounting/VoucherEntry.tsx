@@ -350,8 +350,8 @@ const VoucherEntry: React.FC = () => {
 
   const typeCardSx = (selected: boolean) => ({
     ...mvsBodyCardSx,
-    borderColor: selected ? '#007A83' : '#C5CED9',
-    bgcolor: selected ? 'rgba(0, 122, 131, 0.06)' : '#FFFFFF',
+    borderColor: selected ? '#6A8F93' : '#C5CED9',
+    bgcolor: selected ? 'rgba(106, 143, 147, 0.08)' : '#FFFFFF',
     transition: 'border-color 0.2s, background-color 0.2s',
   });
 
@@ -449,7 +449,7 @@ const VoucherEntry: React.FC = () => {
                   <Card elevation={0} sx={typeCardSx(selectedVoucherType?.id === vt.id)}>
                     <CardActionArea onClick={() => handleSelectVoucherType(vt)} sx={{ borderRadius: 'inherit' }}>
                       <Box sx={{ textAlign: 'center', py: 2, px: 1 }}>
-                        <Box sx={{ color: '#007A83', mb: 0.5, display: 'flex', justifyContent: 'center' }}>
+                        <Box sx={{ color: '#6A8F93', mb: 0.5, display: 'flex', justifyContent: 'center' }}>
                           {CATEGORY_ICONS[vt.category] || <JournalIcon />}
                         </Box>
                         <Typography variant="body2" fontWeight={600}>{getBilingualName(vt, i18n.language)}</Typography>

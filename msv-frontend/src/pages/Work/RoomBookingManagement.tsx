@@ -12,7 +12,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  IconButton,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -178,8 +177,8 @@ const listStateBoxSx = {
 
 const bookingTableSx = {
   width: '100%',
+  maxWidth: '100%',
   tableLayout: 'fixed' as const,
-  minWidth: { xs: 720, sm: 960 },
   borderCollapse: 'collapse',
   bgcolor: 'transparent',
   '& .MuiTableCell-root': {
@@ -187,6 +186,15 @@ const bookingTableSx = {
     borderRight: 'none',
     borderTop: 'none',
   },
+} as const;
+
+const bookingChipCellSx = {
+  fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+  py: 0.75,
+  px: { xs: 0.5, sm: 0.75 },
+  verticalAlign: 'middle' as const,
+  whiteSpace: 'nowrap' as const,
+  overflow: 'hidden',
 } as const;
 
 const bookingCellBaseSx = {
@@ -288,6 +296,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
+  const [actionDialogOpen, setActionDialogOpen] = useState(false);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'view'>('list');
   const [searchTerm, setSearchTerm] = useState('');
@@ -296,7 +305,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   const [paymentFilter, setPaymentFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [page, setPage] = useState(1);
-  const [itemsPerPage] = useState(20);
+  const [itemsPerPage] = useState(15);
   const [saving, setSaving] = useState(false);
   const [sortKey, setSortKey] = useState<string>('guestName');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -951,7 +960,18 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     filterBookings();
   }, [filterBookings]);
 
-  const chipSx = { fontWeight: 500, borderRadius: '8px' } as const;
+  const chipSx = {
+    fontWeight: 500,
+    borderRadius: '8px',
+    height: 24,
+    maxWidth: '100%',
+    '& .MuiChip-label': {
+      px: 0.75,
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+    },
+  } as const;
 
   const getStatusChip = (status: string) => {
     switch (status) {
@@ -1021,7 +1041,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
 
   const handleViewBooking = (booking: Booking) => {
     setSelectedBooking(booking);
-    setViewMode('view');
+    setActionDialogOpen(true);
   };
 
   const handleOpenCreate = () => {
@@ -2682,33 +2702,39 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
             </Typography>
           </Box>
         ) : (
-          <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+          <TableContainer
+            sx={{
+              ...mvsBodyListTableSx,
+              ...mvsTableScrollSx,
+              overflowX: 'hidden',
+              overflowY: 'visible',
+            }}
+          >
             <Table size="small" sx={bookingTableSx}>
               <TableHead sx={mvsTableHeadHighlightSx}>
                 <TableRow>
                   {[
-                    { label: t('roomBookingManagement.columns.guestName'), key: 'guestName', width: '10%', ellipsis: true },
-                    { label: t('roomBookingManagement.columns.companyName'), key: 'companyName', width: '16%', ellipsis: true },
-                    { label: t('roomBookingManagement.columns.roomNo'), key: 'roomNumber', width: '6%' },
-                    { label: t('roomBookingManagement.columns.roomType'), key: 'roomType', width: '8%', ellipsis: true },
-                    { label: t('roomBookingManagement.columns.checkIn'), key: 'checkInDate', width: '8%' },
-                    { label: t('roomBookingManagement.columns.checkOut'), key: 'checkOutDate', width: '8%' },
-                    { label: t('roomBookingManagement.columns.nights'), key: 'totalNights', width: '5%' },
+                    { label: t('roomBookingManagement.columns.sequence'), width: '4%', align: 'center' as const },
+                    { label: t('roomBookingManagement.columns.guestName'), key: 'guestName', width: '11%', ellipsis: true },
+                    { label: t('roomBookingManagement.columns.companyName'), key: 'companyName', width: '13%', ellipsis: true },
+                    { label: t('roomBookingManagement.columns.roomNo'), key: 'roomNumber', width: '7%' },
+                    { label: t('roomBookingManagement.columns.checkIn'), key: 'checkInDate', width: '9%' },
+                    { label: t('roomBookingManagement.columns.checkOut'), key: 'checkOutDate', width: '9%' },
+                    { label: t('roomBookingManagement.columns.nights'), key: 'totalNights', width: '7%' },
                     { label: t('roomBookingManagement.columns.nightlyRate'), key: 'nightlyRate', width: '9%' },
                     { label: t('roomBookingManagement.columns.amount'), key: 'totalAmount', width: '9%' },
-                    { label: t('roomBookingManagement.columns.payment'), key: 'paymentStatus', width: '8%' },
-                    { label: t('roomBookingManagement.columns.status'), key: 'status', width: '8%' },
-                    { label: t('roomBookingManagement.columns.actions'), width: '10%' },
+                    { label: t('roomBookingManagement.columns.payment'), key: 'paymentStatus', width: '12%', align: 'center' as const },
+                    { label: t('roomBookingManagement.columns.status'), key: 'status', width: '10%' },
                   ].map((col) => (
                     <TableCell
                       key={col.label}
-                      align={col.key ? 'left' : 'center'}
+                      align={col.align ?? 'left'}
                       width={col.width}
                       sx={{
                         whiteSpace: 'nowrap',
                         cursor: col.key ? 'pointer' : 'default',
                         verticalAlign: 'middle',
-                        ...(col.ellipsis ? bookingCellEllipsisSx : {}),
+                        overflow: 'visible',
                       }}
                       onClick={() => handleSort(col.key)}
                     >
@@ -2718,7 +2744,8 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                           direction={sortKey === col.key ? sortDirection : 'asc'}
                           sx={{
                             color: 'inherit',
-                            '& .MuiTableSortLabel-icon': { color: 'inherit' },
+                            maxWidth: '100%',
+                            '& .MuiTableSortLabel-icon': { color: 'inherit', flexShrink: 0 },
                           }}
                         >
                           {col.label}
@@ -2731,18 +2758,28 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                 </TableRow>
               </TableHead>
               <TableBody sx={mvsTableBodyRowSx}>
-                {sortedPaginatedBookings.map((booking) => (
+                {sortedPaginatedBookings.map((booking, rowIndex) => (
                   <TableRow
                     key={booking.id}
                     hover
                     onClick={() => handleViewBooking(booking)}
                     sx={{ cursor: 'pointer', '&:active': { bgcolor: 'action.selected' } }}
                   >
+                    <TableCell
+                      align="center"
+                      sx={{
+                        ...bookingCellBaseSx,
+                        whiteSpace: 'nowrap',
+                        color: 'text.secondary',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {(page - 1) * itemsPerPage + rowIndex + 1}
+                    </TableCell>
                     {[
                       { value: booking.guestName, ellipsis: true },
                       { value: booking.companyName || '-', ellipsis: true },
                       { value: getRoomDisplayLabel(booking), ellipsis: false },
-                      { value: getRoomTypeLabel(booking.roomType), ellipsis: true },
                       { value: booking.checkInDate, ellipsis: false },
                       { value: booking.checkOutDate, ellipsis: false },
                       { value: `${booking.totalNights}${t('roomBookingManagement.units.night')}`, ellipsis: false },
@@ -2753,90 +2790,24 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                         key={`${booking.id}-${index}`}
                         sx={{
                           ...bookingCellBaseSx,
-                          ...(cell.ellipsis ? bookingCellEllipsisSx : { whiteSpace: 'nowrap' }),
+                          ...(cell.ellipsis
+                            ? bookingCellEllipsisSx
+                            : { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }),
                         }}
                       >
                         {cell.ellipsis ? renderEllipsisText(String(cell.value)) : cell.value}
                       </TableCell>
                     ))}
-                    <TableCell
-                      align="center"
-                      sx={{
-                        fontSize: { xs: '0.75rem', sm: '0.8125rem' },
-                        py: 0.75,
-                        px: { xs: 0.5, sm: 1 },
-                        verticalAlign: 'middle',
-                      }}
-                    >
-                      <Box sx={{ display: 'inline-flex', justifyContent: 'center' }}>
+                    <TableCell align="center" sx={bookingChipCellSx}>
+                      <Box sx={{ display: 'inline-flex', justifyContent: 'center', maxWidth: '100%' }}>
                         {getPaymentStatusChip(booking.paymentStatus)}
                       </Box>
                     </TableCell>
-                    <TableCell
-                      sx={{
-                        fontSize: { xs: '0.75rem', sm: '0.8125rem' },
-                        py: 0.75,
-                        px: { xs: 0.5, sm: 1 },
-                        verticalAlign: 'middle',
-                      }}
-                    >
-                      {getStatusChip(booking.status)}
+                    <TableCell sx={bookingChipCellSx}>
+                      <Box sx={{ display: 'inline-flex', maxWidth: '100%' }}>
+                        {getStatusChip(booking.status)}
+                      </Box>
                     </TableCell>
-                    <TableCell
-                      align="center"
-                      sx={{
-                        fontSize: { xs: '0.75rem', sm: '0.8125rem' },
-                        py: 0.5,
-                        px: { xs: 0.5, sm: 1 },
-                        whiteSpace: 'nowrap',
-                        verticalAlign: 'middle',
-                      }}
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center', flexWrap: 'wrap' }}>
-                      {booking.status === 'confirmed' && (
-                        <Tooltip title={t('roomBookingManagement.actions.checkin')}>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleCheckIn(booking.id)}
-                            color="info"
-                            sx={{ borderRadius: '10px' }}
-                          >
-                            <CheckCircleIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                      {booking.status === 'checked_in' && (
-                        <Tooltip title={t('roomBookingManagement.actions.checkout')}>
-                          <IconButton
-                            size="small"
-                            onClick={() => handleCheckOut(booking.id)}
-                            color="success"
-                            sx={{ borderRadius: '10px' }}
-                          >
-                            <CheckCircleIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                      {booking.status !== 'cancelled' && booking.status !== 'checked_out' && (
-                        <Tooltip title={t('roomBookingManagement.actions.cancel')}>
-                          <IconButton
-                            size="small"
-                            onClick={() => openCancelDialog(booking.id)}
-                            color="error"
-                            sx={{ borderRadius: '10px' }}
-                          >
-                            <CancelIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                      <Tooltip title={t('roomBookingManagement.actions.delete')}>
-                        <IconButton size="small" onClick={() => openDeleteDialog(booking.id)} sx={{ borderRadius: '10px' }}>
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -2855,6 +2826,82 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
           </Box>
         )}
       </Box>
+
+      <Dialog
+        open={actionDialogOpen}
+        onClose={() => setActionDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{t('roomBookingManagement.dialog.actionTitle')}</DialogTitle>
+        <DialogContent>
+          {selectedBooking && (
+            <>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {t('roomBookingManagement.dialog.actionDescription', {
+                  guest: selectedBooking.guestName,
+                  room: getRoomDisplayLabel(selectedBooking),
+                })}
+              </Typography>
+              <Stack spacing={1}>
+                <Button
+                  variant="outlined"
+                  startIcon={<EditIcon />}
+                  onClick={() => {
+                    setActionDialogOpen(false);
+                    openBookingEditForm(selectedBooking);
+                  }}
+                  sx={{ ...mvsBodyOutlinedBtnSx, justifyContent: 'flex-start' }}
+                >
+                  {t('roomBookingManagement.dialog.editBooking')}
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<PrintIcon />}
+                  onClick={() => {
+                    setActionDialogOpen(false);
+                    setViewMode('view');
+                  }}
+                  sx={{ ...mvsBodyOutlinedBtnSx, justifyContent: 'flex-start' }}
+                >
+                  {t('roomBookingManagement.actions.invoice')}
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<CancelIcon />}
+                  disabled={
+                    selectedBooking.status === 'cancelled' ||
+                    selectedBooking.status === 'checked_out'
+                  }
+                  onClick={() => {
+                    setActionDialogOpen(false);
+                    openCancelDialog(selectedBooking.id);
+                  }}
+                  sx={{ ...mvsBodyOutlinedBtnSx, justifyContent: 'flex-start' }}
+                >
+                  {t('roomBookingManagement.actions.cancel')}
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  onClick={() => {
+                    setActionDialogOpen(false);
+                    openDeleteDialog(selectedBooking.id);
+                  }}
+                  sx={{ ...mvsBodyOutlinedBtnSx, justifyContent: 'flex-start' }}
+                >
+                  {t('roomBookingManagement.actions.delete')}
+                </Button>
+              </Stack>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setActionDialogOpen(false)}>{t('common.close')}</Button>
+        </DialogActions>
+      </Dialog>
 
       {bookingDialog}
       {feedbackSnackbars}

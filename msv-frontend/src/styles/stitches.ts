@@ -3,16 +3,16 @@ import { createStitches } from '@stitches/react';
 const { globalCss } = createStitches({
   theme: {
     colors: {
-      bgCanvas: '#E8EDF3',
+      bgCanvas: '#EEF1F3',
       bgSurface: '#ffffff',
-      bgMuted: '#F0F4F8',
+      bgMuted: '#F3F5F7',
       textStrong: '#111827',
       textMuted: '#6B7280',
       borderSubtle: '#D8E0EA',
       borderStrong: '#B8C5D6',
-      primary: '#007A83',
-      primaryHover: '#00656D',
-      focusRing: 'rgba(0, 122, 131, 0.22)',
+      primary: '#6A8F93',
+      primaryHover: '#4C6A6E',
+      focusRing: 'rgba(106, 143, 147, 0.24)',
     },
     radii: {
       sm: '8px',
@@ -86,9 +86,9 @@ const applyGlobalStyles = globalCss({
     borderRadius: '$md',
   },
   '.MuiButton-contained': {
-    boxShadow: '0 4px 12px rgba(0, 122, 131, 0.2)',
+    boxShadow: '0 4px 12px rgba(106, 143, 147, 0.18)',
     '&:hover': {
-      boxShadow: '0 6px 16px rgba(0, 122, 131, 0.26)',
+      boxShadow: '0 6px 16px rgba(106, 143, 147, 0.24)',
       transform: 'translateY(-1px)',
     },
   },

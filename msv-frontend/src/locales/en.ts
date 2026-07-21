@@ -1868,6 +1868,7 @@ export default {
         pendingRequests: 'Pending Requests'
       },
       columns: {
+        sequence: 'No.',
         bookingNo: 'Booking No.',
         guestName: 'Guest Name',
         checkin: 'Check-in',
@@ -1887,6 +1888,7 @@ export default {
         checkin: 'Check-in',
         checkout: 'Check-out',
         noShow: 'No-show',
+        cancel: 'Cancel',
         cancelBooking: 'Cancel reservation',
         newCheckin: 'New Check-in',
         processCheckout: 'Process Check-out',
@@ -2110,6 +2112,7 @@ export default {
         settle: 'Settle',
         cancel: 'Cancel',
         delete: 'Delete',
+        invoice: 'Invoice',
         backToList: 'Back to List',
         printInvoice: 'Print Invoice',
         downloadPdf: 'Download PDF'
@@ -2139,6 +2142,7 @@ export default {
         specialRequests: 'Special Requests'
       },
       columns: {
+        sequence: 'No.',
         bookingId: 'Booking No.',
         guestName: 'Guest Name',
         companyName: 'Company Name',
@@ -2148,7 +2152,7 @@ export default {
         checkIn: 'Check-in',
         checkOut: 'Check-out',
         nights: 'Nights',
-        nightlyRate: 'Nightly Rate',
+        nightlyRate: 'Rate',
         amount: 'Amount',
         payment: 'Payment',
         status: 'Status',
@@ -2159,15 +2163,15 @@ export default {
         confirmed: 'Confirmed',
         pending: 'Pending',
         cancelled: 'Cancelled',
-        checkedIn: 'Checked-in',
-        checkedOut: 'Checked-out',
+        checkedIn: 'Checked in',
+        checkedOut: 'Checked out',
         noShow: 'No-show'
       },
       payment: {
         paid: 'Paid',
-        pending: 'Pending Payment',
+        pending: 'Pending',
         refunded: 'Refunded',
-        partial: 'Partial Payment'
+        partial: 'Partial'
       },
       roomStatus: {
         available: 'Available',
@@ -2183,7 +2187,7 @@ export default {
         presidential: 'Presidential'
       },
       units: {
-        night: ' night(s)'
+        night: ' nts'
       },
       fields: {
         bookingNo: 'Booking No.',
@@ -2209,6 +2213,8 @@ export default {
         noAvailableRoom: 'No rooms available for check-in.'
       },
       dialog: {
+        actionTitle: 'Select Booking Action',
+        actionDescription: 'Choose an action for {{guest}} · {{room}}.',
         editBooking: 'Edit Booking',
         bookRoom: 'Room Booking',
         cancelTitle: 'Cancel Booking',

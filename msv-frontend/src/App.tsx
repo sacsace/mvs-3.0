@@ -66,8 +66,6 @@ const ElectronicApproval = lazyPage(() => import('./pages/Work/ElectronicApprova
 const RoomBookingManagement = lazyPage(() => import('./pages/Work/RoomBookingManagement'));
 const WorkReport = lazyPage(() => import('./pages/Work/WorkReport'));
 const FrontDesk = lazyPage(() => import('./pages/Hotel/FrontDesk'));
-const Housekeeping = lazyPage(() => import('./pages/Hotel/Housekeeping'));
-const Fnb = lazyPage(() => import('./pages/Hotel/Fnb'));
 const ReservationStatus = lazyPage(() => import('./pages/Hotel/ReservationStatus'));
 const RoomTypeManagement = lazyPage(() => import('./pages/Hotel/RoomTypeManagement'));
 const EInvoiceCreate = lazyPage(() => import('./pages/Invoice/EInvoiceCreate'));
@@ -241,8 +239,6 @@ function App() {
             {/* 호텔 관리 */}
             <Route path="hotel" element={<Navigate to="/hotel/front-desk" replace />} />
             <Route path="hotel/front-desk" element={<FrontDesk />} />
-            <Route path="hotel/housekeeping" element={<Housekeeping />} />
-            <Route path="hotel/fnb" element={<Fnb />} />
             <Route path="hotel/reservations" element={<ReservationStatus />} />
             <Route path="hotel/room-types" element={<RoomTypeManagement />} />
             <Route path="hotel/room-reservation" element={<RoomBookingManagement />} />

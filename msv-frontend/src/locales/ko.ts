@@ -1936,6 +1936,7 @@ export default {
         pendingRequests: '대기 요청'
       },
       columns: {
+        sequence: '순번',
         bookingNo: '예약번호',
         guestName: '고객명',
         checkin: '체크인',
@@ -1955,6 +1956,7 @@ export default {
         checkin: '체크인',
         checkout: '체크아웃',
         noShow: '노쇼',
+        cancel: '취소',
         cancelBooking: '예약 취소',
         newCheckin: '신규 체크인',
         processCheckout: '체크아웃 처리',
@@ -2178,6 +2180,7 @@ export default {
         settle: '정산 완료',
         cancel: '취소',
         delete: '삭제',
+        invoice: '인보이스',
         backToList: '목록으로',
         printInvoice: 'Invoice 인쇄',
         downloadPdf: 'PDF 다운로드'
@@ -2207,6 +2210,7 @@ export default {
         specialRequests: '특별 요청사항'
       },
       columns: {
+        sequence: '순번',
         bookingId: '예약번호',
         guestName: '고객명',
         companyName: '회사명',
@@ -2277,6 +2281,8 @@ export default {
         noAvailableRoom: '체크인 가능한 객실이 없습니다.'
       },
       dialog: {
+        actionTitle: '예약 작업 선택',
+        actionDescription: '{{guest}} · {{room}} 예약에 수행할 작업을 선택하세요.',
         editBooking: '예약 수정',
         bookRoom: '객실 예약',
         cancelTitle: '예약 취소',

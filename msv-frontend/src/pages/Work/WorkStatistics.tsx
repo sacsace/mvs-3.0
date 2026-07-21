@@ -1219,7 +1219,7 @@ const WorkStatistics: React.FC = () => {
                 <YAxis />
                 <RechartsTooltip />
                 <Line type="monotone" dataKey="productivity" name={t('workStatistics.columns.completionRate')} stroke="#2563EB" strokeWidth={2} />
-                <Line type="monotone" dataKey="efficiency" name={t('workStatistics.columns.efficiency')} stroke="#007A83" strokeWidth={2} />
+                <Line type="monotone" dataKey="efficiency" name={t('workStatistics.columns.efficiency')} stroke="#6A8F93" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           </Box>
@@ -1271,7 +1271,7 @@ const WorkStatistics: React.FC = () => {
                   <Bar
                     dataKey="personalEfficiency"
                     name={t('workStatistics.columns.personalEfficiency')}
-                    fill="#007A83"
+                    fill="#6A8F93"
                     radius={[6, 6, 0, 0]}
                   />
                   <Bar
@@ -1450,12 +1450,12 @@ const WorkStatistics: React.FC = () => {
                     <Legend />
                     <ReferenceLine
                       y={teamCompletedMedianDays}
-                      stroke="#007A83"
+                      stroke="#6A8F93"
                       strokeDasharray="6 4"
                       label={{
                         value: t('workStatistics.processingTime.teamMedianLine'),
                         position: 'insideTopRight',
-                        fill: '#007A83',
+                        fill: '#6A8F93',
                         fontSize: 12
                       }}
                     />

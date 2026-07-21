@@ -51,10 +51,8 @@ async function addHotelMenus() {
 
     const hotelSubmenus = [
       { name_ko: '프론트데스크', name_en: 'Front Desk', route: '/hotel/front-desk', icon: 'desk', order: 1 },
-      { name_ko: '하우스키핑', name_en: 'Housekeeping', route: '/hotel/housekeeping', icon: 'cleaning_services', order: 2 },
-      { name_ko: 'F&B', name_en: 'F&B', route: '/hotel/fnb', icon: 'restaurant', order: 3 },
-      { name_ko: '예약 현황 관리', name_en: 'Reservation Status', route: '/hotel/reservations', icon: 'event_available', order: 4 },
-      { name_ko: '객실 유형 관리', name_en: 'Room Type Management', route: '/hotel/room-types', icon: 'category', order: 5 }
+      { name_ko: '예약 현황 관리', name_en: 'Reservation Status', route: '/hotel/reservations', icon: 'event_available', order: 3 },
+      { name_ko: '객실 유형 관리', name_en: 'Room Type Management', route: '/hotel/room-types', icon: 'category', order: 4 }
     ];
 
     for (const submenu of hotelSubmenus) {

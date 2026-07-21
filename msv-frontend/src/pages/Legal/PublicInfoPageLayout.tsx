@@ -45,7 +45,7 @@ const PublicInfoPageLayout: React.FC<PublicInfoPageLayoutProps> = ({
         background:
           theme.palette.mode === 'light'
             ? `
-              radial-gradient(ellipse 80% 55% at 12% 8%, rgba(0, 122, 131, 0.09) 0%, transparent 58%),
+              radial-gradient(ellipse 80% 55% at 12% 8%, rgba(106, 143, 147, 0.1) 0%, transparent 58%),
               radial-gradient(ellipse 70% 50% at 88% 92%, rgba(13, 43, 91, 0.07) 0%, transparent 52%),
               linear-gradient(168deg, #e4ebf3 0%, #f0f4f9 38%, #e8eef5 100%)
             `

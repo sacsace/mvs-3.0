@@ -90,8 +90,6 @@ export function getPageIconByRoute(route: string): React.ReactElement | null {
   if (normalized.includes('/work')) return <ViewKanban />;
 
   if (normalized.includes('/hotel/front-desk')) return <Dashboard />;
-  if (normalized.includes('/hotel/housekeeping')) return <Category />;
-  if (normalized.includes('/hotel/fnb')) return <Receipt />;
   if (normalized.includes('/hotel/reservations')) return <EventAvailable />;
   if (normalized.includes('/hotel/room-types')) return <Inventory />;
   if (normalized.includes('/hotel')) return <Dashboard />;

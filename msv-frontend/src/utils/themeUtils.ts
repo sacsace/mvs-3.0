@@ -97,22 +97,22 @@ const THEME_PRESETS: Record<
     textSecondary: string;
   }
 > = {
-  /** 모던 SaaS/ERP: 밝은 캔버스·얇은 보더·차분한 타이포 */
+  /** 모던 SaaS/ERP: 밝은 캔버스·낮은 채도 파스텔 포인트 */
   light: {
     mode: 'light',
-    primaryColor: '#007A83',
-    secondaryColor: '#0d9488',
-    backgroundDefault: '#E8EDF3',
+    primaryColor: '#6A8F93',
+    secondaryColor: '#9AAD9E',
+    backgroundDefault: '#EEF1F3',
     backgroundPaper: '#FFFFFF',
-    workArea: { main: '#FFFFFF', light: '#F4F7FA', dark: '#E8EDF3' },
-    bodyArea: { main: '#E8EDF3', light: '#F0F4F8', dark: '#DCE3ED' },
+    workArea: { main: '#FFFFFF', light: '#F5F7F8', dark: '#EEF1F3' },
+    bodyArea: { main: '#EEF1F3', light: '#F3F5F7', dark: '#E4E9ED' },
     textPrimary: '#111827',
     textSecondary: '#6B7280'
   },
   dark: {
     mode: 'dark',
-    primaryColor: '#3b82f6',
-    secondaryColor: '#22c55e',
+    primaryColor: '#8AABAF',
+    secondaryColor: '#A8B8A5',
     backgroundDefault: '#0f172a',
     backgroundPaper: '#1e293b',
     workArea: { main: '#1e293b', light: '#334155', dark: '#0f172a' },
@@ -122,8 +122,8 @@ const THEME_PRESETS: Record<
   },
   forest: {
     mode: 'dark',
-    primaryColor: '#16a34a',
-    secondaryColor: '#0ea5a4',
+    primaryColor: '#7FA88A',
+    secondaryColor: '#8AABAF',
     backgroundDefault: '#0a1f14',
     backgroundPaper: '#123122',
     workArea: { main: '#123122', light: '#18432f', dark: '#0a1f14' },
@@ -133,30 +133,30 @@ const THEME_PRESETS: Record<
   },
   sunset: {
     mode: 'light',
-    primaryColor: '#e76f51',
-    secondaryColor: '#2a9d8f',
-    backgroundDefault: '#fff7f2',
+    primaryColor: '#C4A574',
+    secondaryColor: '#9AAD9E',
+    backgroundDefault: '#F7F3EE',
     backgroundPaper: '#ffffff',
-    workArea: { main: '#ffffff', light: '#fff7f2', dark: '#ffe9de' },
-    bodyArea: { main: '#fff7f2', light: '#fff1e8', dark: '#ffe3d4' },
+    workArea: { main: '#ffffff', light: '#F7F3EE', dark: '#EFE8E0' },
+    bodyArea: { main: '#F7F3EE', light: '#F3EEE8', dark: '#E8E0D6' },
     textPrimary: '#2f1b14',
     textSecondary: '#7d5d50'
   },
   lavender: {
     mode: 'light',
-    primaryColor: '#8b5cf6',
-    secondaryColor: '#06b6d4',
-    backgroundDefault: '#f7f5ff',
+    primaryColor: '#A89BB8',
+    secondaryColor: '#8A9BB5',
+    backgroundDefault: '#F4F2F7',
     backgroundPaper: '#ffffff',
-    workArea: { main: '#ffffff', light: '#f7f5ff', dark: '#ede9fe' },
-    bodyArea: { main: '#f7f5ff', light: '#f1efff', dark: '#e8e3ff' },
+    workArea: { main: '#ffffff', light: '#F4F2F7', dark: '#EBE7F0' },
+    bodyArea: { main: '#F4F2F7', light: '#F0EEF4', dark: '#E6E2ED' },
     textPrimary: '#2e1f4f',
     textSecondary: '#6d5e95'
   },
   graphite: {
     mode: 'dark',
-    primaryColor: '#60a5fa',
-    secondaryColor: '#a3a3a3',
+    primaryColor: '#8A9BB5',
+    secondaryColor: '#A3A8B0',
     backgroundDefault: '#111214',
     backgroundPaper: '#1a1c1f',
     workArea: { main: '#1a1c1f', light: '#23262a', dark: '#111214' },
@@ -200,10 +200,10 @@ export const createDynamicTheme = (appearanceSettings: {
       ? 'rgba(148, 163, 184, 0.16)'
       : 'rgba(17, 24, 39, 0.04)';
   const actionSelectedColor = isForestTheme
-    ? 'rgba(34, 197, 94, 0.26)'
+    ? 'rgba(127, 168, 138, 0.26)'
     : mode === 'dark'
       ? 'rgba(148, 163, 184, 0.24)'
-      : 'rgba(37, 99, 235, 0.14)';
+      : 'rgba(106, 143, 147, 0.16)';
   const actionDisabledColor = isForestTheme
     ? 'rgba(147, 197, 163, 0.52)'
     : mode === 'dark'
@@ -215,10 +215,10 @@ export const createDynamicTheme = (appearanceSettings: {
       ? 'rgba(148, 163, 184, 0.12)'
       : 'rgba(100, 116, 139, 0.12)';
   const actionFocusColor = isForestTheme
-    ? 'rgba(34, 197, 94, 0.32)'
+    ? 'rgba(127, 168, 138, 0.32)'
     : mode === 'dark'
       ? 'rgba(148, 163, 184, 0.28)'
-      : 'rgba(13, 138, 255, 0.22)';
+      : 'rgba(106, 143, 147, 0.22)';
   const cardBorderColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#52647a' : '#E5E5E7';
   const cardHoverBorderColor = isForestTheme ? '#3b8f66' : mode === 'dark' ? '#64748b' : '#D2D2D7';
   const cardShadow =
@@ -228,17 +228,17 @@ export const createDynamicTheme = (appearanceSettings: {
   const appBarBackground = mode === 'dark' ? '#253345' : '#FFFFFF';
   const appBarTextColor = isForestTheme ? '#eafcf1' : mode === 'dark' ? '#f8fafc' : '#111827';
   const appBarBorderColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#52647a' : 'rgba(15, 23, 42, 0.04)';
-  const listHoverBg = isForestTheme ? 'rgba(34, 197, 94, 0.2)' : mode === 'dark' ? '#334155' : 'rgba(15, 23, 42, 0.04)';
+  const listHoverBg = isForestTheme ? 'rgba(127, 168, 138, 0.2)' : mode === 'dark' ? '#334155' : 'rgba(15, 23, 42, 0.04)';
   const listSelectedBg = isForestTheme
-    ? 'rgba(34, 197, 94, 0.34)'
+    ? 'rgba(127, 168, 138, 0.34)'
     : mode === 'dark'
       ? '#475569'
-      : '#EAF2FF';
+      : 'rgba(106, 143, 147, 0.14)';
   const listSelectedHoverBg = isForestTheme
-    ? 'rgba(74, 222, 128, 0.42)'
+    ? 'rgba(127, 168, 138, 0.42)'
     : mode === 'dark'
       ? '#64748b'
-      : '#E0EBFA';
+      : 'rgba(106, 143, 147, 0.2)';
 
   return createTheme({
     palette: {
@@ -719,7 +719,7 @@ export const createDynamicTheme = (appearanceSettings: {
               backgroundColor: listSelectedBg,
               ...(isLightMode
                 ? {
-                    color: '#007A83',
+                    color: '#4C6A6E',
                     fontWeight: 500,
                   }
                 : {}),

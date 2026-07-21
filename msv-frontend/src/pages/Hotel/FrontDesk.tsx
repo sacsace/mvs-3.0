@@ -31,6 +31,7 @@ import {
   Autocomplete,
   InputAdornment,
   Tooltip,
+  Pagination,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -43,6 +44,7 @@ import {
   mvsBodyFilterWrapSx,
   mvsBodyListZoneSx,
   mvsBodyListTableSx,
+  mvsBodyPaginationSx,
   mvsTableScrollSx,
   mvsTableHeadHighlightSx,
   mvsTableBodyRowSx,
@@ -139,8 +141,8 @@ const frontDeskSearchFieldSx = {
 
 const frontDeskTableSx = {
   width: '100%',
-  tableLayout: 'fixed' as const,
-  minWidth: 720,
+  maxWidth: '100%',
+  tableLayout: 'auto' as const,
   borderCollapse: 'collapse',
   bgcolor: 'transparent',
   '& .MuiTableCell-root': {
@@ -254,6 +256,8 @@ const FrontDesk: React.FC = () => {
   const [bookingSortBy, setBookingSortBy] = useState<FrontDeskBookingSortKey | null>(null);
   const [bookingSortDir, setBookingSortDir] = useState<'asc' | 'desc'>('asc');
   const [bookingListSearch, setBookingListSearch] = useState('');
+  const [bookingPage, setBookingPage] = useState(1);
+  const bookingsPerPage = 10;
 
   const today = new Date().toISOString().split('T')[0];
   const todayCheckins = bookings.filter((b) => b.check_in_date === today).length;
@@ -467,7 +471,16 @@ const FrontDesk: React.FC = () => {
     });
   }, [filteredBookings, bookingSortBy, bookingSortDir, i18n.language]);
 
+  const paginatedBookings = useMemo(
+    () => sortedBookings.slice(
+      (bookingPage - 1) * bookingsPerPage,
+      bookingPage * bookingsPerPage
+    ),
+    [bookingPage, sortedBookings]
+  );
+
   const handleBookingSort = (key: FrontDeskBookingSortKey) => {
+    setBookingPage(1);
     if (bookingSortBy === key) {
       setBookingSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     } else {
@@ -1056,10 +1069,11 @@ const FrontDesk: React.FC = () => {
   const rowActionBtnSx = {
     ...mvsBodyOutlinedBtnSx,
     flexShrink: 0,
-    minHeight: 32,
-    px: 1.25,
-    py: 0.5,
-    fontSize: '0.8125rem',
+    minHeight: 28,
+    minWidth: 0,
+    px: 1,
+    py: 0.25,
+    fontSize: '0.75rem',
     whiteSpace: 'nowrap' as const,
     '&.Mui-disabled': {
       opacity: 1,
@@ -1162,7 +1176,10 @@ const FrontDesk: React.FC = () => {
             label={t('frontDesk.searchLabel', { defaultValue: '검색' })}
             placeholder={t('frontDesk.searchPlaceholder')}
             value={bookingListSearch}
-            onChange={(e) => setBookingListSearch(e.target.value)}
+            onChange={(e) => {
+              setBookingListSearch(e.target.value);
+              setBookingPage(1);
+            }}
             fullWidth
             sx={frontDeskSearchFieldSx}
             {...mvsOutlinedLabelProps}
@@ -1187,17 +1204,25 @@ const FrontDesk: React.FC = () => {
             </Typography>
           </Box>
         ) : (
-          <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+          <TableContainer
+            sx={{
+              ...mvsBodyListTableSx,
+              ...mvsTableScrollSx,
+              overflowX: 'hidden',
+              overflowY: 'visible',
+            }}
+          >
             <Table size="small" sx={frontDeskTableSx}>
               <TableHead sx={mvsTableHeadHighlightSx}>
                 <TableRow>
                   {[
-                    { key: 'bookingNo' as const, label: t('frontDesk.columns.bookingNo'), width: '16%', ellipsis: true },
-                    { key: 'guestName' as const, label: t('frontDesk.columns.guestName'), width: '14%', ellipsis: true },
-                    { key: 'checkIn' as const, label: t('frontDesk.columns.checkin'), width: '12%' },
-                    { key: 'checkOut' as const, label: t('frontDesk.columns.checkout'), width: '12%' },
-                    { key: 'status' as const, label: t('frontDesk.columns.status'), width: '12%' },
-                    { key: null, label: t('frontDesk.columns.actions'), width: '34%', align: 'right' as const },
+                    { key: null, label: t('frontDesk.columns.sequence'), width: 48, align: 'center' as const },
+                    { key: 'bookingNo' as const, label: t('frontDesk.columns.bookingNo'), width: 130, ellipsis: true },
+                    { key: 'guestName' as const, label: t('frontDesk.columns.guestName'), width: 120, ellipsis: true },
+                    { key: 'checkIn' as const, label: t('frontDesk.columns.checkin'), width: 100 },
+                    { key: 'checkOut' as const, label: t('frontDesk.columns.checkout'), width: 100 },
+                    { key: 'status' as const, label: t('frontDesk.columns.status'), width: 110 },
+                    { key: null, label: t('frontDesk.columns.actions'), width: '1%', align: 'right' as const },
                   ].map((col) => (
                     <TableCell
                       key={col.label}
@@ -1230,12 +1255,22 @@ const FrontDesk: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody sx={mvsTableBodyRowSx}>
-                {sortedBookings.map((booking) => (
+                {paginatedBookings.map((booking, rowIndex) => (
                   <TableRow key={booking.id} hover>
-                    <TableCell sx={{ ...frontDeskCellBaseSx, ...frontDeskCellEllipsisSx }}>
+                    <TableCell
+                      align="center"
+                      sx={{ ...frontDeskCellBaseSx, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}
+                    >
+                      {(bookingPage - 1) * bookingsPerPage + rowIndex + 1}
+                    </TableCell>
+                    <TableCell
+                      sx={{ ...frontDeskCellBaseSx, ...frontDeskCellEllipsisSx, width: 130, maxWidth: 130 }}
+                    >
                       {renderEllipsisText(String(booking.booking_id || booking.id), 600)}
                     </TableCell>
-                    <TableCell sx={{ ...frontDeskCellBaseSx, ...frontDeskCellEllipsisSx }}>
+                    <TableCell
+                      sx={{ ...frontDeskCellBaseSx, ...frontDeskCellEllipsisSx, width: 120, maxWidth: 120 }}
+                    >
                       {renderEllipsisText(getBookingGuestSearchable(booking) || '-')}
                     </TableCell>
                     <TableCell sx={{ ...frontDeskCellBaseSx, whiteSpace: 'nowrap' }}>
@@ -1261,66 +1296,83 @@ const FrontDesk: React.FC = () => {
                         }}
                       />
                     </TableCell>
-                    <TableCell align="right" sx={{ ...frontDeskCellBaseSx, whiteSpace: 'nowrap' }}>
-                            <Box
-                              sx={{
-                                display: 'flex',
-                                flexWrap: 'wrap',
-                                gap: 1,
-                                justifyContent: 'flex-end',
-                                alignItems: 'center',
-                                width: '100%'
-                              }}
-                            >
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                disabled={!canCheckIn(booking.status)}
-                                onClick={() => void updateStatus(booking.id, 'checked_in')}
-                                sx={rowActionBtnSx}
-                              >
-                                {t('frontDesk.actions.checkin')}
-                              </Button>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                disabled={booking.status !== 'checked_in'}
-                                onClick={() => {
-                                  setCheckoutBooking(booking);
-                                  setPaymentMethod('card');
-                                  setInvoiceOpen(true);
-                                }}
-                                sx={rowActionBtnSx}
-                              >
-                                {t('frontDesk.actions.checkout')}
-                              </Button>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                color="warning"
-                                disabled={!canMarkNoShow(booking.status)}
-                                onClick={() => openNoShowConfirm(booking.id)}
-                                sx={rowActionBtnSx}
-                              >
-                                {t('frontDesk.actions.noShow')}
-                              </Button>
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                color="error"
-                                disabled={!canCancelBooking(booking.status)}
-                                onClick={() => openCancelConfirm(booking.id)}
-                                sx={rowActionBtnSx}
-                              >
-                                {t('frontDesk.actions.cancelBooking')}
-                              </Button>
-                            </Box>
+                    <TableCell
+                      align="right"
+                      sx={{
+                        ...frontDeskCellBaseSx,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'inline-flex',
+                          flexWrap: 'nowrap',
+                          gap: 0.5,
+                          justifyContent: 'flex-end',
+                          alignItems: 'center',
+                          maxWidth: '100%',
+                        }}
+                      >
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={!canCheckIn(booking.status)}
+                          onClick={() => void updateStatus(booking.id, 'checked_in')}
+                          sx={rowActionBtnSx}
+                        >
+                          {t('frontDesk.actions.checkin')}
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={booking.status !== 'checked_in'}
+                          onClick={() => {
+                            setCheckoutBooking(booking);
+                            setPaymentMethod('card');
+                            setInvoiceOpen(true);
+                          }}
+                          sx={rowActionBtnSx}
+                        >
+                          {t('frontDesk.actions.checkout')}
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="warning"
+                          disabled={!canMarkNoShow(booking.status)}
+                          onClick={() => openNoShowConfirm(booking.id)}
+                          sx={rowActionBtnSx}
+                        >
+                          {t('frontDesk.actions.noShow')}
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          disabled={!canCancelBooking(booking.status)}
+                          onClick={() => openCancelConfirm(booking.id)}
+                          sx={rowActionBtnSx}
+                        >
+                          {t('frontDesk.actions.cancel')}
+                        </Button>
+                      </Box>
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </TableContainer>
+        )}
+        {filteredBookings.length > 0 && (
+          <Box sx={mvsBodyPaginationSx}>
+            <Pagination
+              count={Math.ceil(filteredBookings.length / bookingsPerPage)}
+              page={bookingPage}
+              onChange={(_, value) => setBookingPage(value)}
+              color="primary"
+            />
+          </Box>
         )}
       </Box>
 

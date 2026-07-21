@@ -82,7 +82,7 @@ export const SIDEBAR_WIDTH_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const SIDEBAR_HOVER_CLOSE_DELAY_MS = 380;
 /** 선택 메뉴 — 브랜드 컬러 한 가지 + 연한 배경만 */
 const MENU_ITEM_RADIUS_PX = 10;
-const MENU_ACTIVE_COLOR = '#007A83';
+const MENU_ACTIVE_COLOR = '#6A8F93';
 const MENU_MAIN_TEXT_COLOR = '#374151';
 const MENU_SUB_TEXT_COLOR = '#4B5563';
 
@@ -457,8 +457,6 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (normalized.includes('/work/reports')) return <ReceiptLong />;
 
     if (normalized.includes('/hotel/front-desk')) return <Dashboard />;
-    if (normalized.includes('/hotel/housekeeping')) return <Category />;
-    if (normalized.includes('/hotel/fnb')) return <Receipt />;
     if (normalized.includes('/hotel/reservations')) return <EventAvailable />;
     if (normalized.includes('/hotel/room-types')) return <Inventory />;
 

@@ -280,14 +280,14 @@ export const mvsBodyPrimaryBtnSx: MvsStyleObject = {
 export const mvsBodyFilterWrapSx: MvsStyleObject = {
   px: { xs: 2, sm: 2.5 },
   py: 2,
-  bgcolor: '#F0F4F8',
+  bgcolor: '#F3F5F7',
 };
 
 /** Body 테이블 인셋 — 회색 배경, 좌우 대칭 패딩으로 리스트 중앙 정렬 */
 export const mvsBodyTableInsetSx: MvsStyleObject = {
   px: { xs: 2, sm: 2.5 },
   py: { xs: 2, sm: 2.5 },
-  bgcolor: '#E8EDF3',
+  bgcolor: '#EEF1F3',
 };
 
 /** Body 테이블 프레임 — 인셋 안 흰 테이블 카드 */

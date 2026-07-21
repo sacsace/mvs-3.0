@@ -117,8 +117,6 @@ const SUB_MENUS: Record<string, Array<{ name_ko: string; name_en: string; route:
     { name_ko: '투숙객 명단', name_en: 'Guest List', route: '/hotel/room-reservation', icon: 'hotel', order: 2 },
     { name_ko: '예약 현황 관리', name_en: 'Reservation Status', route: '/hotel/reservations', icon: 'event_available', order: 3 },
     { name_ko: '객실 유형 관리', name_en: 'Room Types', route: '/hotel/room-types', icon: 'meeting_room', order: 4 },
-    { name_ko: '하우스키핑', name_en: 'Housekeeping', route: '/hotel/housekeeping', icon: 'cleaning_services', order: 5 },
-    { name_ko: 'F&B', name_en: 'F&B', route: '/hotel/fnb', icon: 'restaurant', order: 6 },
   ],
 };
 
