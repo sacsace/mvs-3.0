@@ -33,4 +33,17 @@ i18n
     },
   });
 
+/** 활성 UI 언어에 맞춰 SEO 메타(title/description/html lang) 동기화 */
+const syncDocumentSeo = (lng: string) => {
+  if (typeof document === 'undefined') return;
+  const isEnglish = String(lng).toLowerCase().indexOf('en') === 0;
+  document.documentElement.lang = isEnglish ? 'en' : 'ko';
+  document.title = i18n.t('seo.title');
+  const descTag = document.querySelector('meta[name="description"]');
+  if (descTag) descTag.setAttribute('content', i18n.t('seo.description'));
+};
+
+i18n.on('languageChanged', syncDocumentSeo);
+syncDocumentSeo(i18n.language);
+
 export default i18n;

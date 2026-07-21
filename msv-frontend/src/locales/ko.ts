@@ -1,5 +1,9 @@
 export default {
   translation: {
+    seo: {
+      title: 'MVS - 통합 업무 관리 시스템',
+      description: 'MVS - 차세대 기업용 통합 업무 관리 시스템',
+    },
     common: {
       login: '로그인',
       logout: '로그아웃',
@@ -1928,6 +1932,8 @@ export default {
       bookingListTitle: '예약/체크인 목록',
       searchPlaceholder: '예약번호, 고객명, 호실, 유형, 상태, 날짜 검색…',
       searchNoResults: '검색 조건에 맞는 예약이 없습니다.',
+      viewAll: '전체보기',
+      viewByPage: '페이지로 보기',
       quickActionsTitle: '빠른 작업',
       summary: {
         todayCheckin: '오늘 체크인',
@@ -2181,6 +2187,8 @@ export default {
     roomBookingManagement: {
       title: '투숙객 명단',
       unknown: '알 수 없음',
+      viewAll: '전체보기',
+      viewByPage: '페이지로 보기',
       actions: {
         book: '예약하기',
         reset: '초기화',

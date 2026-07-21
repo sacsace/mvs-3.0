@@ -257,6 +257,7 @@ const FrontDesk: React.FC = () => {
   const [bookingSortDir, setBookingSortDir] = useState<'asc' | 'desc'>('asc');
   const [bookingListSearch, setBookingListSearch] = useState('');
   const [bookingPage, setBookingPage] = useState(1);
+  const [showAllBookings, setShowAllBookings] = useState(false);
   const bookingsPerPage = 10;
 
   const today = new Date().toISOString().split('T')[0];
@@ -478,6 +479,7 @@ const FrontDesk: React.FC = () => {
     ),
     [bookingPage, sortedBookings]
   );
+  const visibleBookings = showAllBookings ? sortedBookings : paginatedBookings;
 
   const handleBookingSort = (key: FrontDeskBookingSortKey) => {
     setBookingPage(1);
@@ -1195,6 +1197,34 @@ const FrontDesk: React.FC = () => {
       </Card>
 
       <Box sx={mvsBodyListZoneSx}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.75,
+            mb: 1.25,
+          }}
+        >
+          <Button
+            size="small"
+            variant={showAllBookings ? 'contained' : 'outlined'}
+            onClick={() => setShowAllBookings(true)}
+            sx={{ minWidth: 76, boxShadow: 'none' }}
+          >
+            {t('frontDesk.viewAll')}
+          </Button>
+          <Button
+            size="small"
+            variant={!showAllBookings ? 'contained' : 'outlined'}
+            onClick={() => {
+              setShowAllBookings(false);
+              setBookingPage(1);
+            }}
+            sx={{ minWidth: 96, boxShadow: 'none' }}
+          >
+            {t('frontDesk.viewByPage')}
+          </Button>
+        </Box>
         {bookings.length === 0 || filteredBookings.length === 0 ? (
           <Box sx={listStateBoxSx}>
             <Typography variant="body2" color="text.secondary">
@@ -1255,13 +1285,13 @@ const FrontDesk: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody sx={mvsTableBodyRowSx}>
-                {paginatedBookings.map((booking, rowIndex) => (
+                {visibleBookings.map((booking, rowIndex) => (
                   <TableRow key={booking.id} hover>
                     <TableCell
                       align="center"
                       sx={{ ...frontDeskCellBaseSx, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}
                     >
-                      {(bookingPage - 1) * bookingsPerPage + rowIndex + 1}
+                      {(showAllBookings ? 0 : (bookingPage - 1) * bookingsPerPage) + rowIndex + 1}
                     </TableCell>
                     <TableCell
                       sx={{ ...frontDeskCellBaseSx, ...frontDeskCellEllipsisSx, width: 130, maxWidth: 130 }}
@@ -1364,7 +1394,7 @@ const FrontDesk: React.FC = () => {
             </Table>
           </TableContainer>
         )}
-        {filteredBookings.length > 0 && (
+        {!showAllBookings && filteredBookings.length > 0 && (
           <Box sx={mvsBodyPaginationSx}>
             <Pagination
               count={Math.ceil(filteredBookings.length / bookingsPerPage)}

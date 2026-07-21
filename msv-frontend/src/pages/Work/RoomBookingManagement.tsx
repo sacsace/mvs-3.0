@@ -314,6 +314,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   const [paymentFilter, setPaymentFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [showAllBookings, setShowAllBookings] = useState(false);
   const [itemsPerPage] = useState(15);
   const [saving, setSaving] = useState(false);
   const [sortKey, setSortKey] = useState<string>('guestName');
@@ -1406,6 +1407,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     (page - 1) * itemsPerPage,
     page * itemsPerPage
   );
+  const visibleBookings = showAllBookings ? sortedBookings : sortedPaginatedBookings;
 
   const getRoomOptionLabel = (room: Pick<RoomTypeRoom, 'roomNumber' | 'roomName'>) =>
     (room.roomName || room.roomNumber || '').trim();
@@ -2713,7 +2715,35 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
 
       {/* 예약 목록 테이블 */}
       <Box sx={mvsBodyListZoneSx}>
-        {sortedPaginatedBookings.length === 0 ? (
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.75,
+            mb: 1.25,
+          }}
+        >
+          <Button
+            size="small"
+            variant={showAllBookings ? 'contained' : 'outlined'}
+            onClick={() => setShowAllBookings(true)}
+            sx={{ minWidth: 76, boxShadow: 'none' }}
+          >
+            {t('roomBookingManagement.viewAll')}
+          </Button>
+          <Button
+            size="small"
+            variant={!showAllBookings ? 'contained' : 'outlined'}
+            onClick={() => {
+              setShowAllBookings(false);
+              setPage(1);
+            }}
+            sx={{ minWidth: 96, boxShadow: 'none' }}
+          >
+            {t('roomBookingManagement.viewByPage')}
+          </Button>
+        </Box>
+        {visibleBookings.length === 0 ? (
           <Box sx={listStateBoxSx}>
             <Typography variant="body2" color="text.secondary">
               {filteredBookings.length === 0
@@ -2778,7 +2808,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                 </TableRow>
               </TableHead>
               <TableBody sx={mvsTableBodyRowSx}>
-                {sortedPaginatedBookings.map((booking, rowIndex) => (
+                {visibleBookings.map((booking, rowIndex) => (
                   <TableRow
                     key={booking.id}
                     hover
@@ -2794,7 +2824,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                         fontVariantNumeric: 'tabular-nums',
                       }}
                     >
-                      {(page - 1) * itemsPerPage + rowIndex + 1}
+                      {(showAllBookings ? 0 : (page - 1) * itemsPerPage) + rowIndex + 1}
                     </TableCell>
                     {[
                       { value: booking.guestName, ellipsis: true },
@@ -2835,7 +2865,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
         </TableContainer>
         )}
 
-        {filteredBookings.length > 0 && (
+        {!showAllBookings && filteredBookings.length > 0 && (
           <Box sx={mvsBodyPaginationSx}>
             <Pagination
               count={Math.ceil(filteredBookings.length / itemsPerPage)}

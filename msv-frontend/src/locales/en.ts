@@ -1,5 +1,9 @@
 export default {
   translation: {
+    seo: {
+      title: 'MVS - Integrated Business Management System',
+      description: 'MVS - Next-generation enterprise business management system',
+    },
     common: {
       login: 'Login',
       logout: 'Logout',
@@ -1860,6 +1864,8 @@ export default {
       bookingListTitle: 'Reservation / Check-in List',
       searchPlaceholder: 'Search by booking no., guest, room, type, status, dates…',
       searchNoResults: 'No reservations match your search.',
+      viewAll: 'View All',
+      viewByPage: 'Paginated View',
       quickActionsTitle: 'Quick Actions',
       summary: {
         todayCheckin: 'Today Check-ins',
@@ -2113,6 +2119,8 @@ export default {
     roomBookingManagement: {
       title: 'Guest List',
       unknown: 'Unknown',
+      viewAll: 'View All',
+      viewByPage: 'Paginated View',
       actions: {
         book: 'Book',
         reset: 'Reset',

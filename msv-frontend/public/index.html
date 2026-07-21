@@ -12,6 +12,32 @@
       name="description"
       content="MVS - 차세대 기업용 통합 업무 관리 시스템"
     />
+    <!-- OS(브라우저) 언어에 따라 SEO 메타(title/description/lang)를 한글·영어로 초기 설정 -->
+    <script>
+      (function () {
+        try {
+          var raw = (navigator.language || navigator.userLanguage || 'ko').toLowerCase();
+          var isKorean = raw.indexOf('ko') === 0;
+          var seo = isKorean
+            ? {
+                lang: 'ko',
+                title: 'MVS - 통합 업무 관리 시스템',
+                description: 'MVS - 차세대 기업용 통합 업무 관리 시스템'
+              }
+            : {
+                lang: 'en',
+                title: 'MVS - Integrated Business Management System',
+                description: 'MVS - Next-generation enterprise business management system'
+              };
+          document.documentElement.lang = seo.lang;
+          document.title = seo.title;
+          var descTag = document.querySelector('meta[name="description"]');
+          if (descTag) descTag.setAttribute('content', seo.description);
+        } catch (e) {
+          /* 언어 감지 실패 시 정적 한글 메타 유지 */
+        }
+      })();
+    </script>
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png?v=5" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <link
