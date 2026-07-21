@@ -1592,14 +1592,15 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                 options={availableRoomOptions}
                 value={selectedRoomAutocompleteValue}
                 isOptionEqualToValue={(option, value) => {
-                  if (typeof value === 'string') {
-                    const normalized = value.trim().toLowerCase();
+                  const compareValue = value as string | RoomTypeRoom;
+                  if (typeof compareValue === 'string') {
+                    const normalized = compareValue.trim().toLowerCase();
                     return (
-                      option.roomNumber === value ||
+                      option.roomNumber === compareValue ||
                       getRoomOptionLabel(option).toLowerCase() === normalized
                     );
                   }
-                  return option.roomNumber === value.roomNumber;
+                  return option.roomNumber === compareValue.roomNumber;
                 }}
                 getOptionLabel={(option) =>
                   typeof option === 'string' ? option : getRoomOptionLabel(option)
