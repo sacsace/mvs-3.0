@@ -26,10 +26,6 @@ import {
   InputAdornment,
   Divider,
   Avatar,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar,
   LinearProgress,
   Stepper,
   Step,
@@ -79,13 +75,16 @@ import {
   Print as PrintIcon,
   Download as DownloadIcon,
   Refresh as RefreshIcon,
-  QrCode2 as QrCodeIcon
+  QrCode2 as QrCodeIcon,
+  OpenInNew as OpenInNewIcon,
+  InsertDriveFile as FileIcon,
 } from '@mui/icons-material';
 import { useStore } from '../../store';
 import { useNavigate } from 'react-router-dom';
 import { accountingService, API_BASE_URL, partnerService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { getUploadUrl } from '../../utils/uploadUrl';
+import AuthMedia from '../../components/Common/AuthMedia';
 import QRCode from 'qrcode';
 import { useTranslation } from 'react-i18next';
 
@@ -93,6 +92,40 @@ const expenseApprovalFilterFieldSx = {
   ...(mvsSearchFieldSx as Record<string, unknown>),
   ...mvsFilterFieldHeightSx,
 } as const;
+
+/** expense-receipts/1784..._IMG.jpg → IMG.jpg */
+const getReceiptDisplayName = (filePath: string): string => {
+  const base = String(filePath || '').split(/[/\\]/).pop() || String(filePath || '');
+  return base.replace(/^\d{10,}_/, '') || base;
+};
+
+const isImageReceipt = (filePath: string): boolean =>
+  /\.(jpe?g|png|gif|webp|bmp|heic)$/i.test(String(filePath || ''));
+
+const normalizeAttachmentPaths = (value: unknown): string[] => {
+  if (!value) return [];
+  let parsed: unknown = value;
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return value.trim() ? [value.trim()] : [];
+    }
+  }
+  if (Array.isArray(parsed)) {
+    return parsed
+      .map((item) => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') {
+          const obj = item as { path?: string; url?: string; file?: string };
+          return obj.path || obj.url || obj.file || '';
+        }
+        return '';
+      })
+      .filter(Boolean);
+  }
+  return [];
+};
 
 interface ExpenseItem {
   id: string;
@@ -252,6 +285,7 @@ const ExpenseApproval: React.FC = () => {
   const [qrLoading, setQrLoading] = useState(false);
   const [qrImage, setQrImage] = useState('');
   const [qrImageError, setQrImageError] = useState('');
+  const [previewAttachment, setPreviewAttachment] = useState<string | null>(null);
   const [bankProvider, setBankProvider] = useState<'icici' | 'kotak'>('icici');
   const lastSavedPayloadRef = useRef<string>('');
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -304,7 +338,7 @@ const ExpenseApproval: React.FC = () => {
     submittedAt: expense.submitted_at || '',
     dueDate: expense.due_date || '',
     notes: expense.notes || '',
-    attachments: parseExpenseItems(expense.attachments).rows,
+    attachments: normalizeAttachmentPaths(expense.attachments),
     itemMeta: parsedItems.meta,
     approvalId: expense.approval_id || undefined,
     paymentRequestStatus: expense.payment_request_status || undefined,
@@ -473,7 +507,7 @@ const ExpenseApproval: React.FC = () => {
         throw new Error(response?.message || t('expenseApproval.errors.createDraftFailed'));
       }
       setDraftId(response.data?.id || null);
-      setCurrentAttachments(parseExpenseItems(response.data?.attachments).rows);
+      setCurrentAttachments(normalizeAttachmentPaths(response.data?.attachments));
       setHeaderStatusBanner('draftCreated');
     } catch (createError) {
       console.error('지출결의서 초안 생성 오류:', createError);
@@ -503,7 +537,7 @@ const ExpenseApproval: React.FC = () => {
         setSaving(true);
         const response = await accountingService.updateExpenseReport(activeExpenseId, payload);
         if (response?.success) {
-          setCurrentAttachments(parseExpenseItems(response.data?.attachments).rows);
+          setCurrentAttachments(normalizeAttachmentPaths(response.data?.attachments));
           setHeaderStatusBanner('autoSaved');
           lastSavedPayloadRef.current = payloadString;
         }
@@ -788,6 +822,148 @@ const ExpenseApproval: React.FC = () => {
     }
   };
 
+  /** QR 업로드 중 첨부 목록을 주기적으로 갱신해 화면에 바로 반영 */
+  useEffect(() => {
+    if (!qrOpen) return;
+    const activeExpenseId = viewMode === 'edit' ? selectedExpense?.id : draftId;
+    if (!activeExpenseId) return;
+
+    let cancelled = false;
+    let lastCount = -1;
+
+    const refreshAttachments = async () => {
+      try {
+        const response = await accountingService.getExpenseReport(activeExpenseId);
+        if (cancelled || !response?.success) return;
+        const next = normalizeAttachmentPaths(response.data?.attachments);
+        if (lastCount >= 0 && next.length > lastCount) {
+          setSuccess(t('expenseApproval.success.receiptAttached'));
+        }
+        lastCount = next.length;
+        setCurrentAttachments(next);
+        if (viewMode === 'edit') {
+          setSelectedExpense((prev) =>
+            prev && prev.id === activeExpenseId ? { ...prev, attachments: next } : prev
+          );
+        }
+      } catch (pollError) {
+        console.error('영수증 첨부 폴링 오류:', pollError);
+      }
+    };
+
+    refreshAttachments();
+    const timer = window.setInterval(refreshAttachments, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [qrOpen, viewMode, selectedExpense?.id, draftId, t]);
+
+  const openAttachment = (file: string) => {
+    if (isImageReceipt(file)) {
+      setPreviewAttachment(file);
+      return;
+    }
+    const url = getUploadUrl(file);
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const renderAttachmentList = (files: string[]) => (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: {
+          xs: 'repeat(2, minmax(0, 1fr))',
+          sm: 'repeat(3, minmax(0, 1fr))',
+          md: 'repeat(4, minmax(0, 1fr))',
+        },
+        gap: 1.5,
+      }}
+    >
+      {files.map((file, index) => {
+        const displayName = getReceiptDisplayName(file);
+        const image = isImageReceipt(file);
+        return (
+          <Box
+            key={`${file}-${index}`}
+            component="button"
+            type="button"
+            onClick={() => openAttachment(file)}
+            sx={{
+              all: 'unset',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0.75,
+              borderRadius: '12px',
+              transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+              '&:hover': {
+                transform: 'translateY(-1px)',
+                '& .receipt-thumb': {
+                  boxShadow: '0 4px 14px rgba(15, 23, 42, 0.12)',
+                  borderColor: 'primary.main',
+                },
+              },
+              '&:focus-visible': {
+                outline: '2px solid',
+                outlineColor: 'primary.main',
+                outlineOffset: 2,
+              },
+            }}
+          >
+            <Box
+              className="receipt-thumb"
+              sx={{
+                position: 'relative',
+                width: '100%',
+                aspectRatio: '1 / 1',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                border: '1px solid',
+                borderColor: '#C5CED9',
+                bgcolor: '#F1F5F9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {image ? (
+                <AuthMedia
+                  src={file}
+                  alt={displayName}
+                  sx={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    display: 'block',
+                  }}
+                />
+              ) : (
+                <FileIcon sx={{ fontSize: 36, color: 'text.secondary' }} />
+              )}
+            </Box>
+            <Typography
+              variant="caption"
+              title={displayName}
+              sx={{
+                px: 0.25,
+                fontWeight: 600,
+                color: 'text.primary',
+                textAlign: 'center',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                lineHeight: 1.35,
+              }}
+            >
+              {displayName}
+            </Typography>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+
   const handleUploadReceipts = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const activeExpenseId = viewMode === 'edit' ? selectedExpense?.id : draftId;
@@ -801,7 +977,7 @@ const ExpenseApproval: React.FC = () => {
       if (!response?.success) {
         throw new Error(response?.message || t('expenseApproval.errors.receiptUploadFailed'));
       }
-      setCurrentAttachments(parseExpenseItems(response.data?.attachments).rows);
+      setCurrentAttachments(normalizeAttachmentPaths(response.data?.attachments));
       setSuccess(t('expenseApproval.success.receiptAttached'));
     } catch (uploadError) {
       console.error('영수증 업로드 오류:', uploadError);
@@ -1035,6 +1211,62 @@ const ExpenseApproval: React.FC = () => {
     px: 3,
     gap: 1.5,
   } as const;
+
+  const attachmentPreviewDialog = (
+    <Dialog
+      open={Boolean(previewAttachment)}
+      onClose={() => setPreviewAttachment(null)}
+      maxWidth="md"
+      fullWidth
+    >
+      <DialogTitle sx={{ pr: 6 }}>
+        {previewAttachment ? getReceiptDisplayName(previewAttachment) : ''}
+      </DialogTitle>
+      <DialogContent dividers>
+        {previewAttachment && isImageReceipt(previewAttachment) ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', bgcolor: '#F1F5F9', borderRadius: 1, p: 1 }}>
+            <AuthMedia
+              src={previewAttachment}
+              alt={getReceiptDisplayName(previewAttachment)}
+              sx={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }}
+            />
+          </Box>
+        ) : null}
+      </DialogContent>
+      <DialogActions>
+        {previewAttachment ? (
+          <Button
+            variant="outlined"
+            startIcon={<OpenInNewIcon fontSize="small" />}
+            href={getUploadUrl(previewAttachment)}
+            target="_blank"
+            rel="noreferrer"
+            sx={mvsBodyOutlinedBtnSx}
+          >
+            {t('common.openInNew', { defaultValue: '새 탭에서 열기' })}
+          </Button>
+        ) : null}
+        <Button onClick={() => setPreviewAttachment(null)} sx={mvsBodyOutlinedBtnSx}>
+          {t('common.close')}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
+  const statusSnackbars = (
+    <>
+      <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError('')}>
+        <Alert onClose={() => setError('')} severity="error">
+          {error}
+        </Alert>
+      </Snackbar>
+      <Snackbar open={!!success} autoHideDuration={4000} onClose={() => setSuccess('')}>
+        <Alert onClose={() => setSuccess('')} severity="success">
+          {success}
+        </Alert>
+      </Snackbar>
+    </>
+  );
 
   if (viewMode === 'create' || viewMode === 'edit') {
     const isEdit = viewMode === 'edit';
@@ -1684,20 +1916,7 @@ const ExpenseApproval: React.FC = () => {
                 </Button>
               </Box>
               {currentAttachments.length ? (
-                <List>
-                  {currentAttachments.map((file, index) => (
-                    <ListItem key={`${file}-${index}`} divider>
-                      <ListItemText
-                        primary={file}
-                        secondary={
-                          <a href={getUploadUrl(file)} target="_blank" rel="noreferrer">
-                            {getUploadUrl(file)}
-                          </a>
-                        }
-                      />
-                    </ListItem>
-                  ))}
-                </List>
+                renderAttachmentList(currentAttachments)
               ) : (
                 <Typography variant="body2" color="text.secondary">
                   {t('expenseApproval.voucher.receiptNone')}
@@ -1740,15 +1959,25 @@ const ExpenseApproval: React.FC = () => {
               </Typography>
             )}
             {qrUrl && (
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5, wordBreak: 'break-all' }}>
                 {qrUrl}
               </Typography>
+            )}
+            {currentAttachments.length > 0 && (
+              <Box sx={{ mt: 1, pt: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
+                  {t('expenseApproval.detail.attachments')} ({currentAttachments.length})
+                </Typography>
+                {renderAttachmentList(currentAttachments)}
+              </Box>
             )}
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setQrOpen(false)} sx={mvsBodyOutlinedBtnSx}>{t('common.close')}</Button>
           </DialogActions>
         </Dialog>
+        {attachmentPreviewDialog}
+        {statusSnackbars}
       </Box>
     );
   }
@@ -1932,18 +2161,7 @@ const ExpenseApproval: React.FC = () => {
             {selectedExpense.attachments.length > 0 && (
               <Box sx={{ mb: 4 }}>
                 <Typography variant="h6" gutterBottom>{t('expenseApproval.detail.attachments')}</Typography>
-                <List>
-                  {selectedExpense.attachments.map((file, index) => (
-                    <ListItem key={index}>
-                      <ListItemAvatar>
-                        <Avatar sx={{ bgcolor: 'primary.main' }}>
-                          <ReceiptIcon />
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText primary={file} />
-                    </ListItem>
-                  ))}
-                </List>
+                {renderAttachmentList(selectedExpense.attachments)}
               </Box>
             )}
 
@@ -2128,6 +2346,8 @@ const ExpenseApproval: React.FC = () => {
             </Dialog>
           </CardContent>
         </Card>
+        {attachmentPreviewDialog}
+        {statusSnackbars}
       </Box>
     );
   }
@@ -2480,25 +2700,8 @@ const ExpenseApproval: React.FC = () => {
       </Box>
 
       {/* 스낵바 */}
-      <Snackbar
-        open={!!error}
-        autoHideDuration={6000}
-        onClose={() => setError('')}
-      >
-        <Alert onClose={() => setError('')} severity="error">
-          {error}
-        </Alert>
-      </Snackbar>
-
-      <Snackbar
-        open={!!success}
-        autoHideDuration={6000}
-        onClose={() => setSuccess('')}
-      >
-        <Alert onClose={() => setSuccess('')} severity="success">
-          {success}
-        </Alert>
-      </Snackbar>
+      {statusSnackbars}
+      {attachmentPreviewDialog}
 
       <Dialog open={deleteTargetId !== null} onClose={() => setDeleteTargetId(null)} maxWidth="xs" fullWidth>
         <DialogTitle>{t('expenseApproval.dialog.deleteTitle')}</DialogTitle>

@@ -103,7 +103,7 @@ export const env = {
   // 로깅
   LOG_LEVEL: process.env.LOG_LEVEL || envConfig.LOG_LEVEL,
   
-  // 파일 업로드
+  // 파일 업로드 (실제 해석은 getUploadRoot — Railway 볼륨/tmp 회피 포함)
   UPLOAD_PATH: process.env.UPLOAD_PATH || './uploads',
   MAX_FILE_SIZE: process.env.MAX_FILE_SIZE || SYSTEM_CONSTANTS.UPLOAD.MAX_FILE_SIZE,
   

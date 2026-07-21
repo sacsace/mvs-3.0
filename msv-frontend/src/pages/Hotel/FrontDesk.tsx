@@ -55,6 +55,7 @@ import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { roomBookingService, roomTypeRoomService, roomTypeService } from '../../services/api';
 import { generateWalkInBookingId } from '../../utils/bookingId';
+import { useStore } from '../../store';
 
 const formatDate = (value: string | undefined, locale: string) => {
   if (!value) return '-';
@@ -191,6 +192,8 @@ const renderEllipsisText = (text: string, fontWeight?: number) => (
 const FrontDesk: React.FC = () => {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
+  const { user } = useStore();
+  const canManagePastCheckIn = user?.role === 'root' || user?.role === 'admin';
 
   const statusLabel = useCallback((status: string) => {
     switch (status) {
@@ -828,7 +831,7 @@ const FrontDesk: React.FC = () => {
       setSnackbar({ open: true, message: t('frontDesk.walkIn.errors.dates'), severity: 'warning' });
       return;
     }
-    if (walkInForm.checkInDate < today) {
+    if (!canManagePastCheckIn && walkInForm.checkInDate < today) {
       setSnackbar({ open: true, message: t('frontDesk.walkIn.errors.pastCheckin'), severity: 'warning' });
       return;
     }
@@ -1419,7 +1422,7 @@ const FrontDesk: React.FC = () => {
                   fullWidth
                   size="small"
                   InputLabelProps={{ shrink: true }}
-                  inputProps={{ min: today }}
+                  inputProps={{ min: canManagePastCheckIn ? undefined : today }}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
@@ -1440,7 +1443,11 @@ const FrontDesk: React.FC = () => {
                   size="small"
                   InputLabelProps={{ shrink: true }}
                   inputProps={{
-                    min: walkInForm.checkInDate ? addOneDayIso(walkInForm.checkInDate) : today
+                    min: walkInForm.checkInDate
+                      ? addOneDayIso(walkInForm.checkInDate)
+                      : canManagePastCheckIn
+                        ? undefined
+                        : today
                   }}
                   helperText={t('frontDesk.walkIn.checkOutAutoHint')}
                 />

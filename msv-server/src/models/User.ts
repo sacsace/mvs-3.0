@@ -23,6 +23,7 @@ interface UserAttributes {
   address?: string;
   emergency_contact?: string;
   emergency_phone?: string;
+  avatar_url?: string;
   hire_date?: Date;
   employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern' | 'daily';
   salary?: number;
@@ -60,6 +61,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   public address?: string;
   public emergency_contact?: string;
   public emergency_phone?: string;
+  public avatar_url?: string;
   public hire_date?: Date;
   public employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern' | 'daily';
   public salary?: number;
@@ -162,6 +164,10 @@ User.init(
     },
     emergency_phone: {
       type: DataTypes.STRING(50),
+      allowNull: true
+    },
+    avatar_url: {
+      type: DataTypes.STRING(500),
       allowNull: true
     },
     hire_date: {

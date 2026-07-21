@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
-import fs from 'fs';
+import { ensureUploadSubdir } from '../utils/uploadPath';
 import {
   getInvoices,
   getNextInvoiceNumber,
@@ -122,11 +122,7 @@ const router = Router();
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
 // 영수증 업로드용 multer (인증 없이 토큰으로만 사용)
-const uploadPath = process.env.UPLOAD_PATH || './uploads';
-const expenseReceiptsPath = path.join(uploadPath, 'expense-receipts');
-if (!fs.existsSync(expenseReceiptsPath)) {
-  fs.mkdirSync(expenseReceiptsPath, { recursive: true });
-}
+const expenseReceiptsPath = ensureUploadSubdir('expense-receipts');
 const receiptStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, expenseReceiptsPath),
   filename: (_req, file, cb) => {
@@ -145,10 +141,7 @@ const receiptUpload = multer({
   }
 });
 
-const autoVoucherPath = path.join(uploadPath, 'auto-vouchers');
-if (!fs.existsSync(autoVoucherPath)) {
-  fs.mkdirSync(autoVoucherPath, { recursive: true });
-}
+const autoVoucherPath = ensureUploadSubdir('auto-vouchers');
 const autoVoucherStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, autoVoucherPath),
   filename: (_req, file, cb) => {
@@ -176,10 +169,7 @@ const autoVoucherUpload = multer({
   },
 });
 
-const tallyImportPath = path.join(uploadPath, 'tally-imports');
-if (!fs.existsSync(tallyImportPath)) {
-  fs.mkdirSync(tallyImportPath, { recursive: true });
-}
+const tallyImportPath = ensureUploadSubdir('tally-imports');
 const tallyImportStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, tallyImportPath),
   filename: (_req, file, cb) => {

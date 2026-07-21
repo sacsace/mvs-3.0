@@ -20,7 +20,31 @@ export const userService = {
       console.error('?�원번호 미리보기 ?�류:', error);
       throw error;
     }
-  }
+  },
+
+  getMyProfile: async () => {
+    const response = await api.get('/users/me/profile');
+    return response.data;
+  },
+
+  updateMyProfile: async (data: {
+    username?: string;
+    email?: string;
+    birth_date?: string | null;
+    gender?: 'male' | 'female' | 'other' | '';
+    phone?: string;
+    address?: string;
+    emergency_contact?: string;
+    emergency_phone?: string;
+  }) => {
+    const response = await api.patch('/users/me/profile', data);
+    return response.data;
+  },
+
+  changeMyPassword: async (data: { currentPassword: string; newPassword: string }) => {
+    const response = await api.post('/users/me/password', data);
+    return response.data;
+  },
 };
 
 // 로그???�보 관�?API ?�비??

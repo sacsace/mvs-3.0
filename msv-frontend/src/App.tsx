@@ -25,6 +25,7 @@ import { lazyPage } from './components/Common/LazyPage';
 // 무거운 페이지는 방문 시에만 로드 (초기 번들·파싱 시간 단축)
 const Dashboard = lazyPage(() => import('./pages/Dashboard/Dashboard'));
 const PersonalDashboard = lazyPage(() => import('./pages/Dashboard/PersonalDashboard'));
+const PersonalSettings = lazyPage(() => import('./pages/Account/PersonalSettings'));
 const TeamDashboard = lazyPage(() => import('./pages/Dashboard/TeamDashboard'));
 const AdminDashboard = lazyPage(() => import('./pages/Dashboard/AdminDashboard'));
 const InventoryManagement = lazyPage(() => import('./pages/Inventory/InventoryManagement'));
@@ -195,6 +196,7 @@ function App() {
                   <Route path="dashboard/personal" element={<PersonalDashboard />} />
                   <Route path="dashboard/team" element={<TeamDashboard />} />
                   <Route path="dashboard/admin" element={<AdminDashboard />} />
+                  <Route path="account/settings" element={<PersonalSettings />} />
                   <Route path="dashboard/stats" element={<UnderDevelopment pageName="통계 대시보드" description="시스템 전반의 통계를 보여주는 페이지입니다." estimatedCompletion="2024년 12월" features={["실시간 통계", "통계 차트", "통계 분석", "통계 내보내기", "통계 알림"]} status="development" />} />
                   <Route path="dashboard/charts" element={<UnderDevelopment pageName="차트 대시보드" description="다양한 차트로 데이터를 시각화하는 페이지입니다." estimatedCompletion="2024년 12월" features={["인터랙티브 차트", "차트 커스터마이징", "차트 내보내기", "차트 공유", "차트 분석"]} status="development" />} />
                   <Route path="dashboard/monitoring" element={<UnderDevelopment pageName="실시간 모니터링" description="시스템을 실시간으로 모니터링하는 페이지입니다." estimatedCompletion="2024년 12월" features={["실시간 모니터링", "알림 관리", "성능 지표", "모니터링 설정", "모니터링 보고서"]} status="development" />} />

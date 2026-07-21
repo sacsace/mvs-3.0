@@ -1,8 +1,8 @@
-import fs from 'fs';
 import { randomBytes } from 'crypto';
 import { Router } from 'express';
 import path from 'path';
 import multer from 'multer';
+import { ensureUploadSubdir } from '../utils/uploadPath';
 import {
   getProducts,
   getProduct,
@@ -75,11 +75,7 @@ const permTransactionsRead = requireAdminRootOrMenuPermissionAnyOf(INVENTORY_TRA
 const permStockIn = requireAdminRootOrMenuPermissionAnyOf(['/inventory/stock-in', '/inventory'], CREATE_OR_EDIT);
 const permStockOut = requireAdminRootOrMenuPermissionAnyOf(['/inventory/stock-out', '/inventory'], CREATE_OR_EDIT);
 
-const uploadRoot = process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads');
-const productImageDir = path.join(uploadRoot, 'product-images');
-if (!fs.existsSync(productImageDir)) {
-  fs.mkdirSync(productImageDir, { recursive: true });
-}
+const productImageDir = ensureUploadSubdir('product-images');
 
 const productImageUpload = multer({
   storage: multer.diskStorage({

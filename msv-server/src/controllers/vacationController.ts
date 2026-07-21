@@ -511,13 +511,13 @@ export const approveVacation = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const isAdmin = userRole === 'admin';
+    const isElevatedApprover = userRole === 'admin' || userRole === 'root';
     const approverId = vacation.approved_by != null ? Number(vacation.approved_by) : NaN;
     const isDesignatedApprover = Number.isFinite(approverId) && approverId === Number(userId);
-    if (!isAdmin && !isDesignatedApprover) {
+    if (!isElevatedApprover && !isDesignatedApprover) {
       return res.status(403).json({
         success: false,
-        message: '승인 권한이 없습니다. (관리자 또는 지정된 결재자만 승인할 수 있습니다.)'
+        message: '승인 권한이 없습니다. (관리자·루트 또는 지정된 결재자만 승인할 수 있습니다.)'
       });
     }
 
@@ -584,13 +584,13 @@ export const rejectVacation = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const isAdmin = userRole === 'admin';
+    const isElevatedApprover = userRole === 'admin' || userRole === 'root';
     const approverId = vacation.approved_by != null ? Number(vacation.approved_by) : NaN;
     const isDesignatedApprover = Number.isFinite(approverId) && approverId === Number(userId);
-    if (!isAdmin && !isDesignatedApprover) {
+    if (!isElevatedApprover && !isDesignatedApprover) {
       return res.status(403).json({
         success: false,
-        message: '거부 권한이 없습니다. (관리자 또는 지정된 결재자만 거부할 수 있습니다.)'
+        message: '거부 권한이 없습니다. (관리자·루트 또는 지정된 결재자만 거부할 수 있습니다.)'
       });
     }
 

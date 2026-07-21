@@ -1,0 +1,430 @@
+import React, { useEffect, useState } from 'react';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+  Divider,
+  MenuItem,
+  TextField,
+  Typography,
+} from '@mui/material';
+import {
+  LockOutlined as LockIcon,
+  PersonOutline as PersonIcon,
+  SaveOutlined as SaveIcon,
+} from '@mui/icons-material';
+import { useTranslation } from 'react-i18next';
+import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import {
+  mvsBodyCardSx,
+  mvsBodyPrimaryBtnSx,
+  mvsPageRootSx,
+  mvsSearchFieldSx,
+} from '../../theme/mvsLayout';
+import { userService } from '../../services/api';
+import { useStore } from '../../store';
+
+type PersonalProfile = {
+  userid: string;
+  username: string;
+  email: string;
+  role: string;
+  department?: string | null;
+  position?: string | null;
+  employee_number?: string | null;
+  birth_date?: string | null;
+  gender?: 'male' | 'female' | 'other' | null;
+  phone?: string | null;
+  address?: string | null;
+  emergency_contact?: string | null;
+  emergency_phone?: string | null;
+};
+
+const emptyProfile: PersonalProfile = {
+  userid: '',
+  username: '',
+  email: '',
+  role: '',
+  department: '',
+  position: '',
+  employee_number: '',
+  birth_date: '',
+  gender: null,
+  phone: '',
+  address: '',
+  emergency_contact: '',
+  emergency_phone: '',
+};
+
+const PersonalSettings: React.FC = () => {
+  const { t } = useTranslation();
+  const updateUser = useStore((state) => state.updateUser);
+  const [profile, setProfile] = useState<PersonalProfile>(emptyProfile);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [passwords, setPasswords] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+
+  useEffect(() => {
+    let active = true;
+    userService
+      .getMyProfile()
+      .then((response) => {
+        if (active && response?.success && response.data) {
+          setProfile({ ...emptyProfile, ...response.data });
+        }
+      })
+      .catch((loadError: any) => {
+        if (active) {
+          setError(
+            loadError?.response?.data?.message ||
+              t('personalSettings.errors.load')
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [t]);
+
+  const setField = (field: keyof PersonalProfile, value: string) => {
+    setProfile((previous) => ({ ...previous, [field]: value }));
+  };
+
+  const handleProfileSave = async () => {
+    if (!profile.username.trim() || !profile.email.trim()) {
+      setError(t('personalSettings.errors.required'));
+      return;
+    }
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await userService.updateMyProfile({
+        username: profile.username.trim(),
+        email: profile.email.trim(),
+        birth_date: profile.birth_date || null,
+        gender: profile.gender || '',
+        phone: profile.phone || '',
+        address: profile.address || '',
+        emergency_contact: profile.emergency_contact || '',
+        emergency_phone: profile.emergency_phone || '',
+      });
+      if (!response?.success) throw new Error(response?.message);
+      setProfile({ ...emptyProfile, ...response.data });
+      updateUser({
+        username: response.data.username,
+        email: response.data.email,
+      });
+      setMessage(response.message || t('personalSettings.success.profile'));
+    } catch (saveError: any) {
+      setError(
+        saveError?.response?.data?.message ||
+          saveError?.message ||
+          t('personalSettings.errors.save')
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    if (!passwords.currentPassword || !passwords.newPassword) {
+      setError(t('personalSettings.errors.passwordRequired'));
+      return;
+    }
+    if (passwords.newPassword !== passwords.confirmPassword) {
+      setError(t('personalSettings.errors.passwordMismatch'));
+      return;
+    }
+    setChangingPassword(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await userService.changeMyPassword({
+        currentPassword: passwords.currentPassword,
+        newPassword: passwords.newPassword,
+      });
+      if (!response?.success) throw new Error(response?.message);
+      setPasswords({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setMessage(response.message || t('personalSettings.success.password'));
+    } catch (passwordError: any) {
+      setError(
+        passwordError?.response?.data?.message ||
+          passwordError?.message ||
+          t('personalSettings.errors.password')
+      );
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Box sx={{ ...mvsPageRootSx, display: 'flex', justifyContent: 'center', py: 8 }}>
+        <CircularProgress size={32} />
+      </Box>
+    );
+  }
+
+  const fieldSx = {
+    ...(mvsSearchFieldSx as Record<string, unknown>),
+    '& .MuiOutlinedInput-root': { borderRadius: '12px' },
+  };
+
+  return (
+    <Box sx={mvsPageRootSx}>
+      <MvsPageHeader
+        title={t('personalSettings.title')}
+        description={t('personalSettings.description')}
+      />
+
+      {message ? (
+        <Alert severity="success" onClose={() => setMessage('')} sx={{ mb: 2 }}>
+          {message}
+        </Alert>
+      ) : null}
+      {error ? (
+        <Alert severity="error" onClose={() => setError('')} sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      ) : null}
+
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.5fr) minmax(320px, 1fr)' },
+          gap: 2.5,
+          alignItems: 'start',
+        }}
+      >
+        <Card elevation={0} sx={mvsBodyCardSx}>
+          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+              <PersonIcon color="primary" />
+              <Typography variant="h6" fontWeight={700}>
+                {t('personalSettings.personalInfo')}
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+              {t('personalSettings.personalInfoHint')}
+            </Typography>
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                gap: 2,
+              }}
+            >
+              <TextField
+                label={t('personalSettings.name')}
+                value={profile.username}
+                onChange={(event) => setField('username', event.target.value)}
+                required
+                size="small"
+                sx={fieldSx}
+              />
+              <TextField
+                label={t('personalSettings.email')}
+                type="email"
+                value={profile.email}
+                onChange={(event) => setField('email', event.target.value)}
+                required
+                size="small"
+                sx={fieldSx}
+              />
+              <TextField
+                label={t('personalSettings.birthDate')}
+                type="date"
+                value={profile.birth_date || ''}
+                onChange={(event) => setField('birth_date', event.target.value)}
+                InputLabelProps={{ shrink: true }}
+                size="small"
+                sx={fieldSx}
+              />
+              <TextField
+                select
+                label={t('personalSettings.gender')}
+                value={profile.gender || ''}
+                onChange={(event) => setField('gender', event.target.value)}
+                size="small"
+                sx={fieldSx}
+              >
+                <MenuItem value="">{t('personalSettings.notSet')}</MenuItem>
+                <MenuItem value="male">{t('personalSettings.genderMale')}</MenuItem>
+                <MenuItem value="female">{t('personalSettings.genderFemale')}</MenuItem>
+                <MenuItem value="other">{t('personalSettings.genderOther')}</MenuItem>
+              </TextField>
+              <TextField
+                label={t('personalSettings.phone')}
+                value={profile.phone || ''}
+                onChange={(event) => setField('phone', event.target.value)}
+                size="small"
+                sx={fieldSx}
+              />
+              <TextField
+                label={t('personalSettings.emergencyContact')}
+                value={profile.emergency_contact || ''}
+                onChange={(event) => setField('emergency_contact', event.target.value)}
+                size="small"
+                sx={fieldSx}
+              />
+              <TextField
+                label={t('personalSettings.emergencyPhone')}
+                value={profile.emergency_phone || ''}
+                onChange={(event) => setField('emergency_phone', event.target.value)}
+                size="small"
+                sx={fieldSx}
+              />
+              <TextField
+                label={t('personalSettings.address')}
+                value={profile.address || ''}
+                onChange={(event) => setField('address', event.target.value)}
+                multiline
+                minRows={2}
+                size="small"
+                sx={{ ...fieldSx, gridColumn: { xs: '1', sm: '1 / -1' } }}
+              />
+            </Box>
+
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2.5 }}>
+              <Button
+                variant="contained"
+                disableElevation
+                startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+                onClick={handleProfileSave}
+                disabled={saving}
+                sx={mvsBodyPrimaryBtnSx}
+              >
+                {t('personalSettings.save')}
+              </Button>
+            </Box>
+
+            <Divider sx={{ my: 3 }} />
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
+              {t('personalSettings.companyManaged')}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {t('personalSettings.companyManagedHint')}
+            </Typography>
+            <Box
+              sx={{
+                mt: 1.5,
+                p: 2,
+                bgcolor: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: '12px',
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                gap: 1.5,
+              }}
+            >
+              {[
+                [t('personalSettings.userId'), profile.userid],
+                [t('personalSettings.role'), profile.role],
+                [t('personalSettings.department'), profile.department || '-'],
+                [t('personalSettings.position'), profile.position || '-'],
+                [t('personalSettings.employeeNumber'), profile.employee_number || '-'],
+              ].map(([label, value]) => (
+                <Box key={label}>
+                  <Typography variant="caption" color="text.secondary">
+                    {label}
+                  </Typography>
+                  <Typography variant="body2" fontWeight={600}>
+                    {value}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          </CardContent>
+        </Card>
+
+        <Card elevation={0} sx={mvsBodyCardSx}>
+          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+              <LockIcon color="primary" />
+              <Typography variant="h6" fontWeight={700}>
+                {t('personalSettings.passwordTitle')}
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+              {t('personalSettings.passwordHint')}
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <TextField
+                label={t('personalSettings.currentPassword')}
+                type="password"
+                autoComplete="current-password"
+                value={passwords.currentPassword}
+                onChange={(event) =>
+                  setPasswords((previous) => ({
+                    ...previous,
+                    currentPassword: event.target.value,
+                  }))
+                }
+                size="small"
+                sx={fieldSx}
+              />
+              <TextField
+                label={t('personalSettings.newPassword')}
+                type="password"
+                autoComplete="new-password"
+                value={passwords.newPassword}
+                onChange={(event) =>
+                  setPasswords((previous) => ({
+                    ...previous,
+                    newPassword: event.target.value,
+                  }))
+                }
+                helperText={t('personalSettings.passwordRule')}
+                size="small"
+                sx={fieldSx}
+              />
+              <TextField
+                label={t('personalSettings.confirmPassword')}
+                type="password"
+                autoComplete="new-password"
+                value={passwords.confirmPassword}
+                onChange={(event) =>
+                  setPasswords((previous) => ({
+                    ...previous,
+                    confirmPassword: event.target.value,
+                  }))
+                }
+                size="small"
+                sx={fieldSx}
+              />
+              <Button
+                variant="contained"
+                disableElevation
+                startIcon={
+                  changingPassword ? <CircularProgress size={16} color="inherit" /> : <LockIcon />
+                }
+                onClick={handlePasswordChange}
+                disabled={changingPassword}
+                sx={{ ...mvsBodyPrimaryBtnSx, alignSelf: 'flex-end' }}
+              >
+                {t('personalSettings.changePassword')}
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+      </Box>
+    </Box>
+  );
+};
+
+export default PersonalSettings;

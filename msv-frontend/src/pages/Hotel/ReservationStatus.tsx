@@ -20,7 +20,6 @@ import {
   DialogContent,
   DialogActions,
   InputAdornment,
-  Tooltip,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -43,6 +42,7 @@ import { ChevronLeft, ChevronRight, Search as SearchIcon } from '@mui/icons-mate
 import { useNavigate } from 'react-router-dom';
 import { roomBookingService, roomTypeRoomService, roomTypeService } from '../../services/api';
 import RoomBookingManagement from '../Work/RoomBookingManagement';
+import { useStore } from '../../store';
 
 const reservationFilterFieldSx = {
   ...(mvsSearchFieldSx as Record<string, unknown>),
@@ -58,13 +58,6 @@ const reservationMonthNavSx = {
   borderRadius: '10px',
   bgcolor: '#F1F5F9',
   border: '1px solid #C5CED9',
-} as const;
-
-const reservationMemoEllipsisSx = {
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-  whiteSpace: 'nowrap',
-  maxWidth: 120,
 } as const;
 
 type BookingStatus = 'pending' | 'confirmed' | 'checked_in' | 'checked_out' | 'cancelled' | 'no_show';
@@ -91,7 +84,6 @@ interface RoomSummary {
   roomType?: string;
   roomTypeId?: number;
   roomName?: string;
-  note?: string;
 }
 
 const isActiveBooking = (status?: BookingStatus) =>
@@ -150,6 +142,8 @@ const getGuestColor = (guestName?: string) => {
 };
 
 const ReservationStatus: React.FC = () => {
+  const { user } = useStore();
+  const canManagePastCheckIn = user?.role === 'root' || user?.role === 'admin';
   const theme = useTheme();
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -170,6 +164,7 @@ const ReservationStatus: React.FC = () => {
   } | null>(null);
   const [bookingInfoOpen, setBookingInfoOpen] = useState(false);
   const [bookingInfo, setBookingInfo] = useState<RoomBooking | null>(null);
+  const [reservationMessageBooking, setReservationMessageBooking] = useState<RoomBooking | null>(null);
   const [bookingGateMessage, setBookingGateMessage] = useState('');
   const [roomTypes, setRoomTypes] = useState<Array<{ id: number; name: string; count: number }>>([]);
   const [roomNameMap, setRoomNameMap] = useState<Map<string, string>>(new Map());
@@ -292,8 +287,7 @@ const ReservationStatus: React.FC = () => {
             roomNumber,
             roomType: roomType.name,
             roomTypeId: roomType.id,
-            roomName: roomNameMap.get(nameKey),
-            note: ''
+            roomName: roomNameMap.get(nameKey)
           });
         }
       }
@@ -311,14 +305,8 @@ const ReservationStatus: React.FC = () => {
           roomNumber,
           roomType,
           roomTypeId,
-          roomName: nameKey ? roomNameMap.get(nameKey) : undefined,
-          note: booking.special_requests || ''
+          roomName: nameKey ? roomNameMap.get(nameKey) : undefined
         });
-      } else if (booking.special_requests) {
-        const existing = roomMap.get(key)!;
-        if (!existing.note) {
-          existing.note = booking.special_requests;
-        }
       }
     });
 
@@ -352,8 +340,7 @@ const ReservationStatus: React.FC = () => {
         !keyword ||
         (room.roomName || '').toLowerCase().includes(keyword) ||
         room.roomNumber.toLowerCase().includes(keyword) ||
-        (room.roomType || '').toLowerCase().includes(keyword) ||
-        (room.note || '').toLowerCase().includes(keyword);
+        (room.roomType || '').toLowerCase().includes(keyword);
       const matchesType = !roomTypeFilter || room.roomType === roomTypeFilter;
       return matchesSearch && matchesType;
     });
@@ -483,14 +470,14 @@ const ReservationStatus: React.FC = () => {
   };
 
   const handleCellClick = (room: RoomSummary, iso: string, isBooked: boolean, isCheckoutHalf: boolean) => {
-    if (iso < todayIso) {
-      return;
-    }
     if (isBooked) {
       const matched = findBookingForCell(room, iso);
-      setBookingGateMessage('');
-      setBookingInfo(matched);
-      setBookingInfoOpen(true);
+      if (matched) {
+        setReservationMessageBooking(matched);
+      }
+      return;
+    }
+    if (!canManagePastCheckIn && iso < todayIso) {
       return;
     }
     if (isCheckoutHalf) {
@@ -521,6 +508,17 @@ const ReservationStatus: React.FC = () => {
     setBookingDialogOpen(false);
     setBookingDialogSeed(null);
     loadBookings();
+  };
+
+  const handleEditBooking = (booking: RoomBooking | null) => {
+    if (!booking) return;
+    setReservationMessageBooking(null);
+    setBookingInfoOpen(false);
+    setBookingInfo(null);
+    setBookingGateMessage('');
+    navigate('/hotel/room-reservation', {
+      state: { editBookingId: booking.id }
+    });
   };
 
   const handleBookAfterCheckout = () => {
@@ -888,15 +886,12 @@ const ReservationStatus: React.FC = () => {
                   <TableCell align="center" sx={{ ...calendarSideHeadCellSx, width: 92 }}>
                     {t('reservationStatus.columns.remaining')}
                   </TableCell>
-                  <TableCell align="center" sx={{ ...calendarSideHeadCellSx, width: 120 }}>
-                    {t('reservationStatus.columns.memo')}
-                  </TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {loading && (
                   <TableRow sx={{ height: 'auto !important' }}>
-                    <TableCell colSpan={dateRange.length + 4} align="center">
+                    <TableCell colSpan={dateRange.length + 3} align="center">
                       <Box sx={{ py: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
                         <CircularProgress size={20} />
                         <Typography variant="body2" color="text.secondary">{t('common.loading')}</Typography>
@@ -906,7 +901,7 @@ const ReservationStatus: React.FC = () => {
                 )}
                 {!loading && filteredRooms.length === 0 && (
                   <TableRow sx={{ height: 'auto !important' }}>
-                    <TableCell colSpan={dateRange.length + 4} align="center">
+                    <TableCell colSpan={dateRange.length + 3} align="center">
                       <Typography variant="body2" color="text.secondary">
                         {t('reservationStatus.empty.noData')}
                       </Typography>
@@ -918,7 +913,7 @@ const ReservationStatus: React.FC = () => {
                     <TableRow>
                     <TableCell
                         align="center"
-                        colSpan={dateRange.length + 4}
+                        colSpan={dateRange.length + 3}
                         sx={{
                           ...calendarGroupCellSx,
                           position: 'sticky',
@@ -1016,8 +1011,10 @@ const ReservationStatus: React.FC = () => {
                                           : hasCheckoutHalf
                                             ? `linear-gradient(90deg, ${checkoutGuestColor} 0 50%, transparent 50% 100%)`
                                             : undefined,
-                                  cursor: iso < todayIso ? 'not-allowed' : 'pointer',
-                                  opacity: iso < todayIso ? 0.45 : 1,
+                                  cursor: isBooked || canManagePastCheckIn || iso >= todayIso
+                                    ? 'pointer'
+                                    : 'not-allowed',
+                                  opacity: iso < todayIso && !isBooked && !canManagePastCheckIn ? 0.45 : 1,
                                   color: hasReservationMark ? '#1f2a14' : undefined,
                                   ...calendarDateCellSx,
                                 }}
@@ -1068,32 +1065,6 @@ const ReservationStatus: React.FC = () => {
                             >
                               {availableCount}
                             </Box>
-                          </TableCell>
-                          <TableCell
-                            align="center"
-                            sx={{
-                              color: 'text.secondary',
-                              ...calendarRoomCellSx,
-                              ...reservationMemoEllipsisSx,
-                            }}
-                          >
-                            {room.note ? (
-                              <Tooltip title={room.note} placement="top-start" enterDelay={400}>
-                                <Box
-                                  component="span"
-                                  sx={{
-                                    ...reservationMemoEllipsisSx,
-                                    display: 'inline-block',
-                                    maxWidth: '100%',
-                                    textAlign: 'center',
-                                  }}
-                                >
-                                  {room.note}
-                                </Box>
-                              </Tooltip>
-                            ) : (
-                              '-'
-                            )}
                           </TableCell>
                         </TableRow>
                       );
@@ -1254,6 +1225,44 @@ const ReservationStatus: React.FC = () => {
       )}
 
       <Dialog
+        open={Boolean(reservationMessageBooking)}
+        onClose={() => setReservationMessageBooking(null)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{t('reservationStatus.dialog.reservationMessageTitle')}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              {(reservationMessageBooking?.room_number ||
+                reservationMessageBooking?.room_id ||
+                '-') +
+                ' · ' +
+                (reservationMessageBooking?.guest_name || '-')}
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{ mt: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+            >
+              {reservationMessageBooking?.special_requests?.trim() ||
+                t('reservationStatus.info.noReservationMessage')}
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            variant="outlined"
+            onClick={() => handleEditBooking(reservationMessageBooking)}
+          >
+            {t('reservationStatus.actions.editBooking')}
+          </Button>
+          <Button onClick={() => setReservationMessageBooking(null)}>
+            {t('common.close')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
         open={bookingInfoOpen}
         onClose={() => {
           setBookingInfoOpen(false);
@@ -1310,6 +1319,14 @@ const ReservationStatus: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions>
+          {bookingInfo && (
+            <Button
+              variant="outlined"
+              onClick={() => handleEditBooking(bookingInfo)}
+            >
+              {t('reservationStatus.actions.editBooking')}
+            </Button>
+          )}
           {bookingGateMessage && bookingInfo && (
             <Button
               variant="contained"

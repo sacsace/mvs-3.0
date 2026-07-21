@@ -7,7 +7,10 @@ healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
+# 업로드 영속화: Railway Volume mount path 와 일치해야 함 (CLI/대시보드에서 /app/uploads 로 연결)
+requiredMountPath = "/app/uploads"
 
 [env]
 NODE_ENV = "production"
 HOST = "0.0.0.0"
+UPLOAD_PATH = "/app/uploads"

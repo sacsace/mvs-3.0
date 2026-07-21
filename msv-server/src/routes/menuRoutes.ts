@@ -62,8 +62,23 @@ router.put(
 // 메뉴 삭제 (관리자용)
 router.delete('/:menuId', authenticateToken, deleteMenu);
 
-// 사용자 권한 설정 (관리자용)
-router.post('/permissions/user/:userId', authenticateToken, setUserPermissions);
+// 사용자 권한 설정 — root/admin만 (admin은 컨트롤러에서 본인 권한 범위로 재검증)
+router.post(
+  '/permissions/user/:userId',
+  authenticateToken,
+  (req, res, next) => {
+    const role = (req as any).user?.role;
+    if (role === 'root' || role === 'admin') {
+      next();
+      return;
+    }
+    res.status(403).json({
+      success: false,
+      message: '메뉴 권한을 설정할 수 있는 권한이 없습니다.'
+    });
+  },
+  setUserPermissions
+);
 
 // 사용자 권한 조회
 router.get('/permissions/user/:userId', authenticateToken, getUserPermissions);

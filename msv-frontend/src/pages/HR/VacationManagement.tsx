@@ -108,6 +108,8 @@ interface VacationRequest {
   status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   appliedDate: string;
   approvedBy?: string;
+  /** 지정 결재자 user id (API approved_by) */
+  approvedByUserId?: number | null;
   approvedDate?: string;
   rejectionReason?: string;
   attachments?: string[];
@@ -161,7 +163,11 @@ const VacationManagement: React.FC = () => {
 
   const hrElevated = user?.role === 'root' || user?.role === 'admin';
   const isRootUser = user?.role === 'root';
-  const canPerformVacationApproval = !isRootUser;
+  /** admin/root 또는 해당 건의 지정 결재자만 승인·반려 (서버와 동일) */
+  const canApproveVacationRequest = (request: VacationRequest) =>
+    hrElevated ||
+    (request.approvedByUserId != null &&
+      Number(request.approvedByUserId) === Number(user?.id));
   const vacationMenuFlags = useMemo(() => {
     const check = (action: 'view' | 'create' | 'edit' | 'delete') => {
       if (hrElevated) return true;
@@ -262,6 +268,7 @@ const VacationManagement: React.FC = () => {
           status: v.status,
           appliedDate: v.applied_date,
           approvedBy: v.approver?.username,
+          approvedByUserId: v.approved_by != null ? Number(v.approved_by) : null,
           approvedDate: v.approved_date,
           rejectionReason: v.rejection_reason,
           attachments: v.attachments ? JSON.parse(v.attachments) : []
@@ -311,7 +318,7 @@ const VacationManagement: React.FC = () => {
         // 내가 신청한 휴가
         params.user_id = user?.id;
       } else if (adjustedTab === 2) {
-        // 휴가 결재: root는 등록 회사 전체 조회(읽기 전용), 그 외는 본인 결재 대상만
+        // 휴가 결재: root는 등록 회사 전체 조회, 그 외는 본인 결재 대상만
         if (isRootUser) {
           if (user?.company_id) {
             params.company_id = user.company_id;
@@ -337,6 +344,7 @@ const VacationManagement: React.FC = () => {
           status: v.status,
           appliedDate: v.applied_date,
           approvedBy: v.approver?.username,
+          approvedByUserId: v.approved_by != null ? Number(v.approved_by) : null,
           approvedDate: v.approved_date,
           rejectionReason: v.rejection_reason,
           attachments: v.attachments ? JSON.parse(v.attachments) : []
@@ -1123,7 +1131,7 @@ const VacationManagement: React.FC = () => {
                         </span>
                       </Tooltip>
                     ) : null}
-                    {options.showApproveReject && canPerformVacationApproval ? (
+                    {options.showApproveReject && canApproveVacationRequest(request) ? (
                       <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'center' }}>
                         <Tooltip title={t('vacationManagement.approve')}>
                           <IconButton size="small" onClick={() => handleApprove(request.id)} sx={{ color: 'success.main' }}>
@@ -1350,7 +1358,7 @@ const VacationManagement: React.FC = () => {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
             <Box sx={mvsBodyListZoneSx}>
               {renderVacationTable(pendingRequests, {
-                showApproveReject: canPerformVacationApproval,
+                showApproveReject: true,
                 sectionTitle: `${t('vacationManagement.pending')} (${pendingRequests.length}${t('vacationManagement.casesUnit')})`,
                 pageNum: pendingPage,
                 onPageChange: setPendingPage,
@@ -1721,121 +1729,96 @@ const VacationManagement: React.FC = () => {
         <Box
           sx={{
             display: 'flex',
-            flexDirection: { xs: 'column', md: 'row' },
             flexWrap: 'wrap',
-            alignItems: { xs: 'stretch', md: 'center' },
-            justifyContent: { md: 'space-between' },
-            gap: { xs: 1.25, md: 1 },
-            px: { xs: 2, sm: 2.5 },
-            py: 1.5,
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1.5,
+            px: { xs: 1.5, sm: 2 },
+            py: 0.75,
             bgcolor: '#FFFFFF',
+            borderBottom: showListFilters ? '1px solid #C5CED9' : 'none',
           }}
         >
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
-            {showListFilters && canExportVacations ? (
-              isCompactToolbar ? (
-                <>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    startIcon={<MoreHorizIcon fontSize="small" />}
-                    onClick={(e) => setToolbarMenuAnchor(e.currentTarget)}
-                    sx={mvsBodyOutlinedBtnSx}
-                  >
-                    {t('vacationManagement.moreTools')}
-                  </Button>
-                  <Menu
-                    anchorEl={toolbarMenuAnchor}
-                    open={Boolean(toolbarMenuAnchor)}
-                    onClose={() => setToolbarMenuAnchor(null)}
-                    anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                    transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                    slotProps={{
-                      paper: {
-                        sx: {
-                          mt: 0.5,
-                          minWidth: 220,
-                          borderRadius: '12px',
-                          border: '1px solid #C5CED9',
-                          boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
-                        },
-                      },
-                    }}
-                  >
-                    <MenuItem
-                      onClick={() => {
-                        setToolbarMenuAnchor(null);
-                        handleExportExcel();
-                      }}
-                    >
-                      <ListItemIcon>
-                        <DownloadIcon fontSize="small" />
-                      </ListItemIcon>
-                      {t('vacationManagement.export')}
-                    </MenuItem>
-                  </Menu>
-                </>
-              ) : (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<DownloadIcon fontSize="small" />}
-                  onClick={handleExportExcel}
-                  sx={mvsBodyOutlinedBtnSx}
-                >
-                  {t('vacationManagement.export')}
-                </Button>
-              )
-            ) : null}
-          </Box>
-          <Box
-            sx={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: 1,
-              flexShrink: 0,
-              width: { xs: '100%', md: 'auto' },
-              ml: { md: 'auto' },
-            }}
-          >
-            <Tooltip
-              title={!hrElevated && !vacationMenuFlags.canCreate ? t('vacationManagement.noPermissionCreate') : ''}
-            >
-              <span style={{ display: 'inline-flex', flexShrink: 0 }}>
-                <Button
-                  variant="contained"
-                  disableElevation
-                  size="small"
-                  startIcon={<AddIcon fontSize="small" />}
-                  onClick={handleAdd}
-                  disabled={!menusLoading && !hrElevated && !vacationMenuFlags.canCreate}
-                  sx={mvsBodyPrimaryBtnSx}
-                >
-                  {t('vacationManagement.applyLeave')}
-                </Button>
-              </span>
-            </Tooltip>
-          </Box>
-        </Box>
-
-        <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: 0.5, pb: 0, bgcolor: '#FFFFFF' }}>
           <Tabs
             value={activeTab}
             onChange={(_, newValue) => setActiveTab(newValue)}
             variant="scrollable"
             scrollButtons="auto"
+            allowScrollButtonsMobile
+            sx={{
+              minHeight: 44,
+              flex: '1 1 auto',
+              minWidth: 0,
+              '& .MuiTabs-flexContainer': { gap: 0.25 },
+              '& .MuiTabs-indicator': {
+                height: 3,
+                borderRadius: '3px 3px 0 0',
+              },
+              '& .MuiTab-root': {
+                textTransform: 'none',
+                fontWeight: 500,
+                fontSize: '0.8125rem',
+                letterSpacing: '-0.01em',
+                minHeight: 44,
+                minWidth: 'auto',
+                px: { xs: 1.25, sm: 1.75 },
+                py: 0.75,
+                color: 'text.secondary',
+                '& .MuiTab-iconWrapper': {
+                  marginRight: '6px',
+                  marginBottom: '0 !important',
+                  fontSize: '1.125rem',
+                },
+              },
+              '& .MuiTab-root.Mui-selected': {
+                color: 'primary.main',
+                fontWeight: 700,
+              },
+            }}
           >
             {(user?.role === 'admin' || user?.role === 'root') && (
-              <Tab icon={<FilterIcon />} label={t('vacationManagement.leaveStatus')} iconPosition="start" />
+              <Tab
+                icon={<FilterIcon fontSize="small" />}
+                label={t('vacationManagement.leaveStatus')}
+                iconPosition="start"
+              />
             )}
-            <Tab icon={<ScheduleIcon />} label={t('vacationManagement.myRequestedLeave')} iconPosition="start" />
-            <Tab icon={<WorkIcon />} label={t('vacationManagement.leaveApproval')} iconPosition="start" />
+            <Tab
+              icon={<ScheduleIcon fontSize="small" />}
+              label={t('vacationManagement.myRequestedLeave')}
+              iconPosition="start"
+            />
+            <Tab
+              icon={<WorkIcon fontSize="small" />}
+              label={t('vacationManagement.leaveApproval')}
+              iconPosition="start"
+            />
             {(user?.role === 'admin' || user?.role === 'root') && (
-              <Tab icon={<EventIcon />} label={t('vacationManagement.leaveType')} iconPosition="start" />
+              <Tab
+                icon={<EventIcon fontSize="small" />}
+                label={t('vacationManagement.leaveType')}
+                iconPosition="start"
+              />
             )}
           </Tabs>
+
+          <Tooltip
+            title={!hrElevated && !vacationMenuFlags.canCreate ? t('vacationManagement.noPermissionCreate') : ''}
+          >
+            <span style={{ display: 'inline-flex', flexShrink: 0 }}>
+              <Button
+                variant="contained"
+                disableElevation
+                size="small"
+                startIcon={<AddIcon fontSize="small" />}
+                onClick={handleAdd}
+                disabled={!menusLoading && !hrElevated && !vacationMenuFlags.canCreate}
+                sx={mvsBodyPrimaryBtnSx}
+              >
+                {t('vacationManagement.applyLeave')}
+              </Button>
+            </span>
+          </Tooltip>
         </Box>
 
         {showListFilters ? (
@@ -1849,7 +1832,9 @@ const VacationManagement: React.FC = () => {
               gridTemplateColumns: {
                 xs: '1fr',
                 sm: 'repeat(2, minmax(0, 1fr))',
-                lg: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto',
+                lg: canExportVacations
+                  ? 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto auto'
+                  : 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto',
               },
               gap: 2,
               alignItems: 'flex-end',
@@ -1907,6 +1892,61 @@ const VacationManagement: React.FC = () => {
                 </MenuItem>
               ))}
             </TextField>
+            {canExportVacations ? (
+              isCompactToolbar ? (
+                <>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<MoreHorizIcon fontSize="small" />}
+                    onClick={(e) => setToolbarMenuAnchor(e.currentTarget)}
+                    sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
+                  >
+                    {t('vacationManagement.moreTools')}
+                  </Button>
+                  <Menu
+                    anchorEl={toolbarMenuAnchor}
+                    open={Boolean(toolbarMenuAnchor)}
+                    onClose={() => setToolbarMenuAnchor(null)}
+                    anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                    transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                    slotProps={{
+                      paper: {
+                        sx: {
+                          mt: 0.5,
+                          minWidth: 220,
+                          borderRadius: '12px',
+                          border: '1px solid #C5CED9',
+                          boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
+                        },
+                      },
+                    }}
+                  >
+                    <MenuItem
+                      onClick={() => {
+                        setToolbarMenuAnchor(null);
+                        handleExportExcel();
+                      }}
+                    >
+                      <ListItemIcon>
+                        <DownloadIcon fontSize="small" />
+                      </ListItemIcon>
+                      {t('vacationManagement.export')}
+                    </MenuItem>
+                  </Menu>
+                </>
+              ) : (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<DownloadIcon fontSize="small" />}
+                  onClick={handleExportExcel}
+                  sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
+                >
+                  {t('vacationManagement.export')}
+                </Button>
+              )
+            ) : null}
             <Button
               variant="outlined"
               size="small"
@@ -2057,7 +2097,7 @@ const VacationManagement: React.FC = () => {
           {selectedVacation && selectedVacation.status === 'pending' && (() => {
             // 탭 2(받은 휴가 승인)일 때만 승인/반려 버튼 표시
             const adjustedTab = (user?.role === 'admin' || user?.role === 'root') ? activeTab : activeTab + 1;
-            if (adjustedTab === 2 && canPerformVacationApproval) {
+            if (adjustedTab === 2 && canApproveVacationRequest(selectedVacation)) {
               return (
                 <>
                   <Button 

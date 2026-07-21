@@ -28,6 +28,7 @@ import {
   AutoAwesome as AutoAwesomeIcon,
   Menu as MenuIcon,
   OpenInNew as OpenInNewIcon,
+  AccessTime as AccessTimeIcon,
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
 import { api, userUiPreferencesService } from '../../services/api';
@@ -101,6 +102,23 @@ const Header: React.FC<HeaderProps> = ({
     name: string;
     logo: string;
   } | null>(null);
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const headerClockLabel = useMemo(() => {
+    const locale = language === 'en' ? 'en-IN' : 'ko-KR';
+    return now.toLocaleTimeString(locale, {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+      timeZone: 'Asia/Kolkata',
+    });
+  }, [now, language]);
 
   useEffect(() => {
     if (!user) {
@@ -138,7 +156,7 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   const handleOpenSettings = () => {
-    navigate('/basic-info/system-settings');
+    navigate('/account/settings');
     handleClose();
   };
 
@@ -460,6 +478,35 @@ const Header: React.FC<HeaderProps> = ({
         
         {/* 알림 및 사용자 메뉴 */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.75, sm: 2 } }}>
+          <Tooltip title={language === 'en' ? 'India Time (IST)' : '인도 시간 (IST)'}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                px: 0.75,
+                py: 0.5,
+                color: 'text.secondary',
+                userSelect: 'none',
+              }}
+              aria-label={language === 'en' ? 'Current time' : '현재 시각'}
+            >
+              <AccessTimeIcon sx={{ fontSize: '1.125rem' }} />
+              <Typography
+                component="span"
+                sx={{
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  fontVariantNumeric: 'tabular-nums',
+                  whiteSpace: 'nowrap',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {headerClockLabel}
+              </Typography>
+            </Box>
+          </Tooltip>
+
           <Tooltip title={language === 'en' ? 'Notices' : '공지사항'}>
             <Button
               variant="text"

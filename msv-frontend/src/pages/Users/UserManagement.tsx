@@ -33,7 +33,7 @@ import {
   Pagination,
   useMediaQuery,
   InputAdornment,
-  Tooltip,
+  Avatar,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -66,6 +66,7 @@ import {
   RestartAlt as ResetIcon,
   MoreHoriz as MoreHorizIcon,
   ArrowBack as ArrowBackIcon,
+  PhotoCamera as PhotoCameraIcon,
 } from '@mui/icons-material';
 import { useSearchParams } from 'react-router-dom';
 import { useStore, useMenuStore } from '../../store';
@@ -77,6 +78,7 @@ import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useTranslation } from 'react-i18next';
 import { alpha, useTheme, type SxProps, type Theme } from '@mui/material/styles';
 import { DepartmentManagementPanel } from '../HR/DepartmentManagement';
+import { getUploadUrl } from '../../utils/uploadUrl';
 
 const USER_MGMT_MENU_ROUTES = ['/hr/users', '/users'];
 const USERS_PER_PAGE = 10;
@@ -162,6 +164,7 @@ interface User {
   address?: string;
   emergency_contact?: string;
   emergency_phone?: string;
+  avatar_url?: string;
   hire_date?: string;
   employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern' | 'daily';
   salary?: number;
@@ -391,6 +394,9 @@ const UserManagement: React.FC = () => {
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('');
+  const [existingAvatarUrl, setExistingAvatarUrl] = useState('');
   /** 0: 사용자 목록, 1: 사용자 추가/수정 폼, 2: 부서 관리 */
   const [pageTab, setPageTab] = useState<0 | 1 | 2>(0);
   const [formData, setFormData] = useState({
@@ -454,6 +460,35 @@ const UserManagement: React.FC = () => {
   const [previewEmployeeNumberLoading, setPreviewEmployeeNumberLoading] = useState(false);
   const [toolbarMenuAnchor, setToolbarMenuAnchor] = useState<null | HTMLElement>(null);
   const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    return () => {
+      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+    };
+  }, [avatarPreviewUrl]);
+
+  const resetAvatarInput = (avatarUrl = '') => {
+    setAvatarFile(null);
+    setAvatarPreviewUrl('');
+    setExistingAvatarUrl(avatarUrl);
+  };
+
+  const handleAvatarSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      setError(t('userManagement.avatarInvalidType'));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError(t('userManagement.avatarTooLarge'));
+      return;
+    }
+    setError('');
+    setAvatarFile(file);
+    setAvatarPreviewUrl(URL.createObjectURL(file));
+  };
 
   const fetchNextEmployeeNumber = useCallback(async (companyId?: number) => {
     if (user?.role === 'root' && !companyId) {
@@ -601,6 +636,7 @@ const UserManagement: React.FC = () => {
     }
 
     setEditingUser(null);
+    resetAvatarInput();
     setFormData({
       employee_number: '',
       username: prefillEmail.split('@')[0] || '',
@@ -678,6 +714,7 @@ const UserManagement: React.FC = () => {
       return;
     }
     setEditingUser(null);
+    resetAvatarInput();
     setFormData({
       employee_number: '',
       username: '',
@@ -711,6 +748,7 @@ const UserManagement: React.FC = () => {
 
   const handleEditUser = (user: User) => {
     setEditingUser(user);
+    resetAvatarInput(user.avatar_url || '');
     setFormData({
       employee_number: (user as any).employee_number || '',
       username: user.username,
@@ -910,12 +948,14 @@ const UserManagement: React.FC = () => {
         return;
       }
 
+      let savedUserId: number;
       if (editingUser) {
         // 수정 시 비밀번호가 없으면 제외
         if (!submitData.password) {
           delete submitData.password;
         }
         await api.put(`/users/${editingUser.id}`, submitData);
+        savedUserId = editingUser.id;
         setSuccess(t('userManagement.userUpdated'));
       } else {
         // root가 다른 회사에 사용자를 등록하는 경우
@@ -923,9 +963,20 @@ const UserManagement: React.FC = () => {
           submitData.company_id = (formData as any).company_id;
         }
         submitData.employee_number = '';
-        await api.post('/users', submitData);
+        const createResponse = await api.post('/users', submitData);
+        savedUserId = Number(createResponse.data?.data?.id);
         setSuccess(t('userManagement.userCreated'));
       }
+
+      if (avatarFile && Number.isFinite(savedUserId)) {
+        const avatarForm = new FormData();
+        avatarForm.append('avatar', avatarFile);
+        await api.post(`/users/${savedUserId}/avatar`, avatarForm, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      }
+
+      resetAvatarInput();
       setPageTab(0);
       setViewMode('list');
       fetchUsers();
@@ -1844,6 +1895,53 @@ const UserManagement: React.FC = () => {
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
                     gap: 2.5,
                   }}>
+                    <Box
+                      sx={{
+                        gridColumn: '1 / -1',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 2,
+                        p: 1.5,
+                        border: `1px dashed ${theme.palette.divider}`,
+                        borderRadius: 2,
+                      }}
+                    >
+                      <Avatar
+                        src={
+                          avatarPreviewUrl ||
+                          (existingAvatarUrl ? getUploadUrl(existingAvatarUrl) : undefined)
+                        }
+                        alt={formData.username}
+                        sx={{ width: 88, height: 88, bgcolor: 'action.selected' }}
+                      >
+                        <PersonIcon sx={{ fontSize: 44 }} />
+                      </Avatar>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                        <Typography variant="subtitle2">
+                          {t('userManagement.profilePhoto')}
+                        </Typography>
+                        <Button
+                          component="label"
+                          variant="outlined"
+                          size="small"
+                          startIcon={<PhotoCameraIcon />}
+                          sx={{ alignSelf: 'flex-start' }}
+                        >
+                          {avatarFile
+                            ? t('userManagement.changePhoto')
+                            : t('userManagement.selectPhoto')}
+                          <input
+                            hidden
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            onChange={handleAvatarSelect}
+                          />
+                        </Button>
+                        <Typography variant="caption" color="text.secondary">
+                          {avatarFile?.name || t('userManagement.avatarHelper')}
+                        </Typography>
+                      </Box>
+                    </Box>
                     <TextField
                       fullWidth
                       size="small"

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Menu, UserPermission } from '../services/menuService';
 import i18n, { ensureI18nLanguage } from '../locales/i18n';
-import { useNotificationStore } from './notificationStore';
+import { useNotificationStore, bindNotificationPrefsUser } from './notificationStore';
 import { useErrorStore } from './errorStore';
 
 export interface User {
@@ -50,6 +50,7 @@ export const useStore = create<AuthState>()(
       token: null,
       user: null,
       login: (token: string, user: User) => {
+        bindNotificationPrefsUser(user.id);
         set({
           isAuthenticated: true,
           token,
@@ -57,8 +58,8 @@ export const useStore = create<AuthState>()(
         });
       },
       logout: () => {
-        useNotificationStore.getState().clearAll();
-        useNotificationStore.setState({ headerDismissedIds: [] });
+        useNotificationStore.getState().resetLocalPrefs();
+        bindNotificationPrefsUser(null);
         useErrorStore.getState().clearNotifications();
         useErrorStore.getState().clearErrors();
         set({
@@ -83,7 +84,13 @@ export const useStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated,
         token: state.token,
         user: state.user
-      })
+      }),
+      onRehydrateStorage: () => (state) => {
+        const userId = state?.user?.id;
+        if (userId != null) {
+          bindNotificationPrefsUser(userId);
+        }
+      },
     }
   )
 );

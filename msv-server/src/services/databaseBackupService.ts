@@ -2,6 +2,7 @@ import { spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { env } from '../config/env';
+import { getUploadRoot } from '../utils/uploadPath';
 
 export type DatabaseBackupFile = {
   filename: string;
@@ -45,7 +46,7 @@ function getDbConnection(): DbConnection {
 }
 
 export function getBackupRootDir(): string {
-  return process.env.BACKUP_PATH || path.join(path.resolve(env.UPLOAD_PATH), 'db-backups');
+  return process.env.BACKUP_PATH || path.join(getUploadRoot(), 'db-backups');
 }
 
 export function getTenantBackupDir(tenantId: number): string {

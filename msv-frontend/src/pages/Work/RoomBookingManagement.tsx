@@ -336,6 +336,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteTargetId, setDeleteTargetId] = useState<number | null>(null);
   const [invoiceDescription, setInvoiceDescription] = useState('');
+  const [invoiceUnitPrice, setInvoiceUnitPrice] = useState('');
   const [billTo, setBillTo] = useState({
     name: '',
     company: '',
@@ -504,6 +505,9 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       selectedBooking.totalNights && selectedBooking.totalNights > 0
         ? selectedBooking.totalAmount / selectedBooking.totalNights
         : selectedBooking.totalAmount;
+    setInvoiceUnitPrice(
+      Number.isFinite(Number(nightly)) ? String(Number(nightly.toFixed(2))) : ''
+    );
     const autoRate = getAutoGstRate(nightly);
     const storedRate = readStoredInvoiceTaxRates()[String(selectedBooking.id)];
     if (storedRate && Number.isFinite(storedRate.cgstRate) && Number.isFinite(storedRate.sgstRate)) {
@@ -559,19 +563,55 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     loadIssuerCompany();
   }, [user?.company_id]);
 
+  const openBookingEditForm = useCallback((booking: Booking) => {
+    setSelectedBooking(booking);
+    const nightlyRate =
+      booking.totalNights && booking.totalAmount
+        ? Math.round(booking.totalAmount / booking.totalNights)
+        : '';
+    setFormState({
+      bookingId: booking.bookingId,
+      roomId: String(booking.roomId),
+      roomNumber: booking.roomNumber,
+      roomType: booking.roomType,
+      guestName: booking.guestName,
+      companyName: booking.companyName,
+      guestEmail: booking.guestEmail,
+      guestPhone: booking.guestPhone,
+      checkInDate: booking.checkInDate,
+      checkInTime: booking.checkInTime || '',
+      checkOutDate: booking.checkOutDate,
+      checkOutTime: booking.checkOutTime || '',
+      numberOfGuests: booking.numberOfGuests,
+      nightlyRate: nightlyRate ? String(nightlyRate) : '',
+      totalAmount: String(booking.totalAmount),
+      specialRequests: booking.specialRequests || ''
+    });
+    setOpenDialog(true);
+  }, []);
+
   useEffect(() => {
-    const state = location.state as { viewBookingId?: number; autoPrint?: boolean } | null;
-    if (!state?.viewBookingId) return;
-    const found = bookings.find((booking) => booking.id === state.viewBookingId);
+    const state = location.state as {
+      viewBookingId?: number;
+      editBookingId?: number;
+      autoPrint?: boolean;
+    } | null;
+    const targetId = state?.editBookingId || state?.viewBookingId;
+    if (!targetId) return;
+    const found = bookings.find((booking) => booking.id === targetId);
     if (found) {
-      setSelectedBooking(found);
-      setViewMode('view');
-      if (state.autoPrint) {
-        setShouldAutoPrint(true);
+      if (state?.editBookingId) {
+        openBookingEditForm(found);
+      } else {
+        setSelectedBooking(found);
+        setViewMode('view');
+        if (state?.autoPrint) {
+          setShouldAutoPrint(true);
+        }
       }
       navigate(location.pathname, { replace: true, state: {} });
     }
-  }, [bookings, location.pathname, location.state, navigate]);
+  }, [bookings, location.pathname, location.state, navigate, openBookingEditForm]);
 
   useEffect(() => {
     const loadRoomTypes = async () => {
@@ -782,6 +822,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   };
 
   const todayIso = toIsoDate(new Date());
+  const canManagePastCheckIn = user?.role === 'root' || user?.role === 'admin';
 
   const guestOptions = useMemo(() => {
     const map = new Map<string, { name: string; email: string; phone: string; companyName: string }>();
@@ -983,33 +1024,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     setViewMode('view');
   };
 
-  const handleEditBooking = (booking: Booking) => {
-    setSelectedBooking(booking);
-    const nightlyRate =
-      booking.totalNights && booking.totalAmount
-        ? Math.round(booking.totalAmount / booking.totalNights)
-        : '';
-    setFormState({
-      bookingId: booking.bookingId,
-      roomId: String(booking.roomId),
-      roomNumber: booking.roomNumber,
-      roomType: booking.roomType,
-      guestName: booking.guestName,
-      companyName: booking.companyName,
-      guestEmail: booking.guestEmail,
-      guestPhone: booking.guestPhone,
-      checkInDate: booking.checkInDate,
-      checkInTime: booking.checkInTime || '',
-      checkOutDate: booking.checkOutDate,
-      checkOutTime: booking.checkOutTime || '',
-      numberOfGuests: booking.numberOfGuests,
-      nightlyRate: nightlyRate ? String(nightlyRate) : '',
-      totalAmount: String(booking.totalAmount),
-      specialRequests: booking.specialRequests || ''
-    });
-    setOpenDialog(true);
-  };
-
   const handleOpenCreate = () => {
     setSelectedBooking(null);
     setFormState({
@@ -1072,7 +1086,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       setError(t('roomBookingManagement.errors.enterRequired'));
       return;
     }
-    if (formState.checkInDate < todayIso) {
+    if (!canManagePastCheckIn && formState.checkInDate < todayIso) {
       setError(t('roomBookingManagement.errors.pastDateNotAllowed'));
       return;
     }
@@ -1213,8 +1227,13 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       return;
     }
 
-    const subtotal = Number(selectedBooking.totalAmount || 0);
     const nights = Number(selectedBooking.totalNights || 1) || 1;
+    const unitPrice = Number(parseCurrencyInput(invoiceUnitPrice));
+    if (!invoiceUnitPrice.trim() || !Number.isFinite(unitPrice) || unitPrice < 0) {
+      setError(t('roomBookingManagement.errors.invalidNightlyRate'));
+      return;
+    }
+    const subtotal = Number((unitPrice * nights).toFixed(2));
     const combinedTaxRate = Number(cgstRate) + Number(sgstRate);
     const taxAmount = Number((subtotal * (combinedTaxRate / 100)).toFixed(2));
     const finalTotal = Number((subtotal + taxAmount).toFixed(2));
@@ -1243,7 +1262,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
           item_name: description,
           description,
           quantity: nights,
-          unit_price: Number((subtotal / nights).toFixed(2)),
+          unit_price: Number(unitPrice.toFixed(2)),
           total_price: subtotal,
           tax_rate: combinedTaxRate,
           tax_amount: taxAmount
@@ -1260,7 +1279,8 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       }
 
       const bookingResponse = await roomBookingService.updateRoomBooking(selectedBooking.id, {
-        payment_status: 'paid'
+        payment_status: 'paid',
+        total_amount: subtotal
       });
       if (!bookingResponse?.success) {
         setError(bookingResponse?.message || t('roomBookingManagement.errors.settlementFailed'));
@@ -1490,7 +1510,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     updateTotalFromNightly(formState.nightlyRate, nextValue, formState.checkOutDate);
                   }
                 }}
-                inputProps={{ min: todayIso }}
+                inputProps={{ min: canManagePastCheckIn ? undefined : todayIso }}
                 fullWidth
                 required
                 size="small"
@@ -1513,7 +1533,9 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     updateTotalFromNightly(formState.nightlyRate, formState.checkInDate, nextValue);
                   }
                 }}
-                inputProps={{ min: formState.checkInDate || todayIso }}
+                inputProps={{
+                  min: formState.checkInDate || (canManagePastCheckIn ? undefined : todayIso)
+                }}
                 fullWidth
                 required
                 size="small"
@@ -1905,12 +1927,15 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   }
 
   if (viewMode === 'view' && selectedBooking) {
-    const nightlyRate = selectedBooking.totalNights
-      ? Math.round(selectedBooking.totalAmount / selectedBooking.totalNights)
-      : selectedBooking.totalAmount;
-    const cgstAmount = Number(selectedBooking.totalAmount || 0) * (cgstRate / 100);
-    const sgstAmount = Number(selectedBooking.totalAmount || 0) * (sgstRate / 100);
-    const invoiceTotal = Number(selectedBooking.totalAmount || 0) * (1 + (cgstRate + sgstRate) / 100);
+    const invoiceNights = Number(selectedBooking.totalNights || 1) || 1;
+    const parsedInvoiceUnitPrice = Number(parseCurrencyInput(invoiceUnitPrice));
+    const effectiveUnitPrice = Number.isFinite(parsedInvoiceUnitPrice)
+      ? parsedInvoiceUnitPrice
+      : 0;
+    const invoiceSubtotal = Number((effectiveUnitPrice * invoiceNights).toFixed(2));
+    const cgstAmount = invoiceSubtotal * (cgstRate / 100);
+    const sgstAmount = invoiceSubtotal * (sgstRate / 100);
+    const invoiceTotal = invoiceSubtotal * (1 + (cgstRate + sgstRate) / 100);
 
     return (
       <Box sx={{ ...mvsPageRootSx }} className="invoice-print-root">
@@ -1989,7 +2014,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                   Total Amount
                 </Typography>
                 <Typography variant="h5" fontWeight={700} color="primary.main" sx={{ mt: 0.25 }}>
-                  Rs. {formatCurrency(selectedBooking.totalAmount)}
+                  Rs. {formatCurrency(invoiceSubtotal)}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   {selectedBooking.totalNights}
@@ -2195,10 +2220,33 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                       {selectedBooking.totalNights}
                     </TableCell>
                     <TableCell align="right" sx={invoiceCellSx}>
-                      Rs. {formatCurrency(nightlyRate)}
+                      <InputBase
+                        value={formatCurrency(invoiceUnitPrice)}
+                        onChange={(event) =>
+                          setInvoiceUnitPrice(parseCurrencyInput(event.target.value))
+                        }
+                        inputProps={{
+                          inputMode: 'numeric',
+                          'aria-label': 'Unit Price'
+                        }}
+                        startAdornment={
+                          <Typography
+                            component="span"
+                            variant="body2"
+                            sx={{ mr: 0.5, whiteSpace: 'nowrap' }}
+                          >
+                            Rs.
+                          </Typography>
+                        }
+                        sx={{
+                          ...invoiceInputSx,
+                          width: '100%',
+                          '& input': { textAlign: 'right', minWidth: 72 }
+                        }}
+                      />
                     </TableCell>
                     <TableCell align="right" sx={{ ...invoiceCellSx, fontWeight: 600 }}>
-                      Rs. {formatCurrency(selectedBooking.totalAmount)}
+                      Rs. {formatCurrency(invoiceSubtotal)}
                     </TableCell>
                   </TableRow>
                 </TableBody>
@@ -2229,7 +2277,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     Subtotal
                   </Typography>
                   <Typography variant="body2" fontWeight={600}>
-                    Rs. {formatCurrency(selectedBooking.totalAmount)}
+                    Rs. {formatCurrency(invoiceSubtotal)}
                   </Typography>
                 </Box>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center', gap: 1 }}>

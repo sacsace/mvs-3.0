@@ -388,7 +388,10 @@ const WorkBoardsPage: React.FC = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await workBoardService.getBoards({ light: true });
+      const res = await workBoardService.getBoards({
+        light: true,
+        company_id: user?.company_id,
+      });
       if (res.success) {
         setBoards(res.data || []);
       } else {
@@ -399,7 +402,7 @@ const WorkBoardsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [t, user?.company_id]);
 
   useEffect(() => {
     load();

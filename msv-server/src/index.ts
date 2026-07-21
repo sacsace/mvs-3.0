@@ -34,10 +34,10 @@ import { authenticateToken } from './middleware/auth';
 import { startAttendanceAutoCheckoutScheduler } from './controllers/attendanceController';
 import SocketService from './services/socketService';
 import { createServer } from 'http';
-import path from 'path';
 import { authenticateUploadAccess } from './middleware/uploadAuth';
 import { isCorsAllowLanEnabled, isPrivateLanHttpOrigin } from './utils/corsPrivateLan';
 import { initRedisCache, isRedisCacheReady } from './utils/redisCache';
+import { ensureUploadRoot } from './utils/uploadPath';
 import { requestProfiler } from './middleware/requestProfiler';
 
 // 환경 변수 검증 및 출력
@@ -249,9 +249,15 @@ app.use((req: any, res, next) => {
   next();
 });
 
-// 업로드 파일 정적 제공 (JWT 인증 필수)
-const uploadPath = process.env.UPLOAD_PATH || './uploads';
-app.use('/uploads', authenticateUploadAccess, express.static(path.resolve(uploadPath), {
+// 업로드 파일 정적 제공 (JWT 인증 필수) — 공개 URL은 /uploads, 디스크는 영구 볼륨/로컬 루트
+const uploadPath = ensureUploadRoot();
+console.log(
+  `[uploads] serving /uploads from ${uploadPath}` +
+    (process.env.RAILWAY_VOLUME_MOUNT_PATH
+      ? ` (volume mount ${process.env.RAILWAY_VOLUME_MOUNT_PATH})`
+      : '')
+);
+app.use('/uploads', authenticateUploadAccess, express.static(uploadPath, {
   dotfiles: 'deny',
   index: false,
   redirect: false,

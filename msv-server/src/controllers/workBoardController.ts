@@ -293,7 +293,10 @@ async function userCanAccessBoard(
   forWrite = false
 ): Promise<boolean> {
   if (user.role === 'root') {
-    return board.tenant_id === user.tenant_id;
+    return (
+      board.tenant_id === user.tenant_id &&
+      board.company_id === user.company_id
+    );
   }
   if (user.role === 'audit') {
     if (board.tenant_id !== user.tenant_id) return false;
@@ -331,7 +334,6 @@ export const getWorkBoards = async (req: RequestWithUser, res: Response) => {
   try {
     await ensureWorkBoardSchema();
     const user = req.user!;
-    const { company_id } = req.query;
     const light = String(req.query.light || '') === '1';
     const memberUserAttributes = light
       ? ['id', 'username', 'userid']
@@ -351,10 +353,10 @@ export const getWorkBoards = async (req: RequestWithUser, res: Response) => {
     let boards: WorkBoard[];
 
     if (user.role === 'root' || user.role === 'audit') {
-      const where: any = { tenant_id: user.tenant_id };
-      if (user.role === 'root' && company_id) {
-        where.company_id = parseInt(company_id as string, 10);
-      }
+      const where: any =
+        user.role === 'root'
+          ? { tenant_id: user.tenant_id, company_id: user.company_id }
+          : { tenant_id: user.tenant_id };
       boards = await WorkBoard.findAll({
         where,
         attributes: boardAttributes as any,

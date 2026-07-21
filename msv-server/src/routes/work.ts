@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
+import { ensureUploadRoot } from '../utils/uploadPath';
 import {
   getWorkStatistics,
   getWorkStatistic,
@@ -201,7 +202,7 @@ router.delete(
 );
 
 // 첨부 파일 업로드 설정
-const uploadPath = process.env.UPLOAD_PATH || './uploads';
+const uploadPath = ensureUploadRoot();
 const allowedMimeTypes = [
   'image/jpeg',
   'image/png',
@@ -214,9 +215,7 @@ const allowedMimeTypes = [
 ];
 const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.pdf', '.doc', '.docx', '.xls', '.xlsx'];
 const ensureUploadDir = () => {
-  if (!fs.existsSync(uploadPath)) {
-    fs.mkdirSync(uploadPath, { recursive: true });
-  }
+  ensureUploadRoot();
 };
 
 const storage = multer.diskStorage({

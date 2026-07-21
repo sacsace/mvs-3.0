@@ -11,6 +11,9 @@ import multer from 'multer';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import path from 'path';
+import fs from 'fs';
+import { randomBytes } from 'crypto';
+import { ensureUploadSubdir } from '../utils/uploadPath';
 
 let userListHrFieldsAvailable: boolean | null = null;
 
@@ -66,6 +69,31 @@ const upload = multer({
     } else {
       cb(new Error('Excel 파일(.xlsx, .xls) 또는 CSV 파일만 업로드 가능합니다.'));
     }
+  }
+});
+
+const userAvatarDir = ensureUploadSubdir('user-avatars');
+const avatarUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, userAvatarDir),
+    filename: (req, file, cb) => {
+      const userId = String(req.params.id || 'user').replace(/\D/g, '') || 'user';
+      const originalExt = path.extname(file.originalname || '').toLowerCase();
+      const extByMime: Record<string, string> = {
+        'image/jpeg': '.jpg',
+        'image/png': '.png',
+        'image/webp': '.webp',
+        'image/gif': '.gif'
+      };
+      const ext = extByMime[file.mimetype] || originalExt || '.jpg';
+      cb(null, `user_${userId}_${Date.now()}_${randomBytes(6).toString('hex')}${ext}`);
+    }
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+    if (allowed.has(file.mimetype)) return cb(null, true);
+    cb(new Error('JPG, PNG, WEBP 또는 GIF 이미지 파일만 업로드할 수 있습니다.'));
   }
 });
 
@@ -166,6 +194,177 @@ const router = express.Router();
 // 모든 라우트에 인증 미들웨어 적용
 router.use(authenticateToken);
 
+const SELF_PROFILE_ATTRIBUTES = [
+  'id', 'userid', 'username', 'email', 'role', 'department', 'position',
+  'employee_number', 'birth_date', 'gender', 'phone', 'address',
+  'emergency_contact', 'emergency_phone', 'avatar_url', 'company_id'
+];
+
+const findCurrentUser = async (req: express.Request, includePassword = false) => {
+  const authUser = (req as any).user;
+  return await (User as any).findOne({
+    where: {
+      id: authUser.id,
+      tenant_id: authUser.tenant_id,
+      company_id: authUser.company_id
+    },
+    attributes: includePassword
+      ? [...SELF_PROFILE_ATTRIBUTES, 'password_hash', 'tenant_id']
+      : SELF_PROFILE_ATTRIBUTES
+  });
+};
+
+// 내 개인정보 조회 — 회사/인사 관리 필드는 읽기 전용으로만 반환
+router.get('/me/profile', async (req, res) => {
+  try {
+    const user = await findCurrentUser(req);
+    if (!user) {
+      return res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
+    }
+    return res.json({ success: true, data: user });
+  } catch (error: any) {
+    console.error('내 개인정보 조회 오류:', error);
+    return res.status(500).json({
+      success: false,
+      message: '개인정보를 불러오지 못했습니다.'
+    });
+  }
+});
+
+// 내 개인정보 수정 — 회사가 관리하는 소속/권한/인사 필드는 수정 대상에서 제외
+router.patch('/me/profile', async (req, res) => {
+  try {
+    const user = await findCurrentUser(req);
+    if (!user) {
+      return res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
+    }
+
+    const {
+      username,
+      email,
+      birth_date,
+      gender,
+      phone,
+      address,
+      emergency_contact,
+      emergency_phone
+    } = req.body || {};
+
+    const updateData: Record<string, unknown> = {};
+
+    if (username !== undefined) {
+      const value = String(username).trim();
+      if (!value || value.length > 100) {
+        return res.status(400).json({ success: false, message: '이름을 올바르게 입력해주세요.' });
+      }
+      updateData.username = value;
+    }
+
+    if (email !== undefined) {
+      const value = String(email).trim().toLowerCase();
+      if (!emailPattern.test(value) || value.length > 255) {
+        return res.status(400).json({ success: false, message: '이메일 형식이 올바르지 않습니다.' });
+      }
+      if (value !== user.email) {
+        const duplicate = await (User as any).findOne({
+          where: { email: value, id: { [Op.ne]: user.id } },
+          attributes: ['id']
+        });
+        if (duplicate) {
+          return res.status(409).json({ success: false, message: '이미 사용 중인 이메일입니다.' });
+        }
+      }
+      updateData.email = value;
+    }
+
+    if (birth_date !== undefined) updateData.birth_date = birth_date || null;
+    if (gender !== undefined) {
+      if (gender && !['male', 'female', 'other'].includes(String(gender))) {
+        return res.status(400).json({ success: false, message: '성별 값이 올바르지 않습니다.' });
+      }
+      updateData.gender = gender || null;
+    }
+    if (phone !== undefined) updateData.phone = String(phone || '').trim() || null;
+    if (address !== undefined) updateData.address = String(address || '').trim() || null;
+    if (emergency_contact !== undefined) {
+      updateData.emergency_contact = String(emergency_contact || '').trim() || null;
+    }
+    if (emergency_phone !== undefined) {
+      updateData.emergency_phone = String(emergency_phone || '').trim() || null;
+    }
+
+    await user.update(updateData);
+    const updated = await findCurrentUser(req);
+    return res.json({
+      success: true,
+      message: '개인정보가 저장되었습니다.',
+      data: updated
+    });
+  } catch (error: any) {
+    console.error('내 개인정보 수정 오류:', error);
+    return res.status(500).json({
+      success: false,
+      message: '개인정보 저장 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 내 비밀번호 변경 — 현재 비밀번호 확인 필수
+router.post('/me/password', async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: '현재 비밀번호와 새 비밀번호를 모두 입력해주세요.'
+      });
+    }
+    if (String(newPassword).length < 8 || String(newPassword).length > 128) {
+      return res.status(400).json({
+        success: false,
+        message: '새 비밀번호는 8자 이상 128자 이하여야 합니다.'
+      });
+    }
+    if (currentPassword === newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: '새 비밀번호는 현재 비밀번호와 달라야 합니다.'
+      });
+    }
+
+    const user = await findCurrentUser(req, true);
+    if (!user) {
+      return res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
+    }
+    const matches = await bcrypt.compare(String(currentPassword), user.password_hash);
+    if (!matches) {
+      return res.status(400).json({ success: false, message: '현재 비밀번호가 일치하지 않습니다.' });
+    }
+
+    const { validatePassword } = await import('../utils/passwordValidator');
+    const validation = await validatePassword(
+      String(newPassword),
+      user.tenant_id,
+      user.company_id
+    );
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: validation.message || '비밀번호가 정책에 맞지 않습니다.'
+      });
+    }
+
+    await user.update({ password_hash: await hashPassword(String(newPassword)) });
+    return res.json({ success: true, message: '비밀번호가 변경되었습니다.' });
+  } catch (error: any) {
+    console.error('내 비밀번호 변경 오류:', error);
+    return res.status(500).json({
+      success: false,
+      message: '비밀번호 변경 중 오류가 발생했습니다.'
+    });
+  }
+});
+
 // 사용자 목록 조회
 router.get('/', async (req, res) => {
   try {
@@ -204,24 +403,26 @@ router.get('/', async (req, res) => {
       return res.json({ success: true, data: count });
     }
 
-    // 검색 기능 (이름, 사용자 ID, 회사명으로 검색)
+    // 검색 기능 (이름, 이메일, 사용자 ID, 회사명 — 대소문자 무시)
     const includeOptions: any[] = [];
     let companyIdsForSearch: number[] = [];
     
-    if (search) {
+    if (typeof search === 'string' && search.trim()) {
+      const searchText = search.trim();
       // 회사명으로 검색하여 회사 ID 찾기
       const matchingCompanies = await (Company as any).findAll({
         where: {
-          name: { [Op.like]: `%${search}%` }
+          name: { [Op.iLike]: `%${searchText}%` }
         },
         attributes: ['id']
       });
       companyIdsForSearch = matchingCompanies.map((c: any) => c.id);
       
-      // 사용자 이름, 사용자 ID, 또는 회사 ID로 검색
+      // 사용자 이름·이메일·사용자 ID 또는 회사 ID로 검색
       const searchConditions: any[] = [
-        { username: { [Op.like]: `%${search}%` } },
-        { userid: { [Op.like]: `%${search}%` } }
+        { username: { [Op.iLike]: `%${searchText}%` } },
+        { email: { [Op.iLike]: `%${searchText}%` } },
+        { userid: { [Op.iLike]: `%${searchText}%` } }
       ];
       
       // 회사명으로 검색된 회사 ID가 있으면 추가
@@ -242,7 +443,7 @@ router.get('/', async (req, res) => {
 
     const baseAttributes = [
       'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'status', 'last_login', 'created_at',
-      'tenant_id', 'company_id', 'is_payment_officer'
+      'tenant_id', 'company_id', 'is_payment_officer', 'avatar_url'
     ];
     const hrAttributes = [
       ...baseAttributes,
@@ -364,6 +565,61 @@ router.get('/next-employee-number', async (req, res) => {
   }
 });
 
+// 사용자 프로필 사진 업로드 (admin/root 또는 사용자관리 메뉴 can_edit)
+router.post(
+  '/:id/avatar',
+  requireAdminRootOrUserMenuPermission('can_edit'),
+  avatarUpload.single('avatar'),
+  async (req, res) => {
+    const uploadedPath = req.file?.path;
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: '사진 파일을 선택해주세요.' });
+      }
+
+      const authUser = (req as any).user;
+      const whereClause: any = { id: req.params.id };
+      if (authUser.role !== 'root' && authUser.role !== 'audit') {
+        whereClause.tenant_id = authUser.tenant_id;
+        whereClause.company_id = authUser.company_id;
+      }
+
+      const targetUser = await (User as any).findOne({
+        where: whereClause,
+        attributes: ['id', 'avatar_url']
+      });
+      if (!targetUser) {
+        await fs.promises.unlink(req.file.path).catch(() => undefined);
+        return res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
+      }
+
+      const previousAvatar = String(targetUser.avatar_url || '');
+      const avatarUrl = `/uploads/user-avatars/${req.file.filename}`;
+      await targetUser.update({ avatar_url: avatarUrl });
+
+      if (previousAvatar.startsWith('/uploads/user-avatars/')) {
+        const previousFile = path.join(userAvatarDir, path.basename(previousAvatar));
+        if (path.resolve(previousFile) !== path.resolve(req.file.path)) {
+          await fs.promises.unlink(previousFile).catch(() => undefined);
+        }
+      }
+
+      return res.json({
+        success: true,
+        data: { avatar_url: avatarUrl },
+        message: '사용자 사진이 저장되었습니다.'
+      });
+    } catch (error: any) {
+      if (uploadedPath) await fs.promises.unlink(uploadedPath).catch(() => undefined);
+      console.error('사용자 사진 업로드 오류:', error);
+      return res.status(500).json({
+        success: false,
+        message: '사용자 사진 저장 중 오류가 발생했습니다.'
+      });
+    }
+  }
+);
+
 // 사용자 상세 조회
 router.get('/:id', async (req, res) => {
   try {
@@ -373,7 +629,7 @@ router.get('/:id', async (req, res) => {
     const companyId = (req as any).user.company_id;
     const baseAttributes = [
       'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'status', 'last_login', 'created_at',
-      'is_payment_officer'
+      'is_payment_officer', 'avatar_url'
     ];
     
     // root나 audit 권한이면 모든 사용자 조회 가능, 아니면 자신의 회사 사용자만
@@ -709,7 +965,7 @@ router.put(
     // 사용자 존재 확인 - 기본 필드만 먼저 조회
     const baseAttributes = [
       'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'status', 'last_login', 'created_at',
-      'tenant_id', 'company_id'
+      'tenant_id', 'company_id', 'avatar_url'
     ];
     
     let user: any;
@@ -901,7 +1157,7 @@ router.put(
     // 업데이트된 사용자 정보 조회 - 기본 필드만 먼저 조회
     const responseBaseAttributes = [
       'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'status', 'last_login', 'created_at',
-      'is_payment_officer'
+      'is_payment_officer', 'avatar_url'
     ];
     
     let updatedUser: any;
@@ -1146,11 +1402,12 @@ router.get('/excel/export', authenticateToken, async (req, res) => {
       whereClause.company_id = parseInt(company_id as string);
     }
 
-    if (search) {
+    if (typeof search === 'string' && search.trim()) {
+      const searchText = search.trim();
       whereClause[Op.or] = [
-        { username: { [Op.like]: `%${search}%` } },
-        { email: { [Op.like]: `%${search}%` } },
-        { userid: { [Op.like]: `%${search}%` } }
+        { username: { [Op.iLike]: `%${searchText}%` } },
+        { email: { [Op.iLike]: `%${searchText}%` } },
+        { userid: { [Op.iLike]: `%${searchText}%` } }
       ];
     }
 

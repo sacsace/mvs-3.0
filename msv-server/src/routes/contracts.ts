@@ -1,7 +1,6 @@
 import express from 'express';
 import { Response } from 'express';
 import multer from 'multer';
-import fs from 'fs';
 import path from 'path';
 import { DataTypes } from 'sequelize';
 import { Contract, Customer } from '../models';
@@ -10,11 +9,11 @@ import sequelize from '../config/database';
 import { authenticateToken } from '../middleware/auth';
 import { requireAdminRootOrMenuPermissionAnyOf } from '../middleware/menuPermission';
 import { AuthRequest } from '../types';
+import { ensureUploadSubdir } from '../utils/uploadPath';
 
 const router = express.Router();
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-const uploadRoot = process.env.UPLOAD_PATH || './uploads';
-const contractUploadDir = path.resolve(uploadRoot, 'contracts');
+const contractUploadDir = ensureUploadSubdir('contracts');
 
 /** 프론트 `/customers/contracts` 및 상위 메뉴 `route` 후보 */
 const CONTRACT_MENU_ROUTES = ['/customers/contracts', '/customers'];
@@ -27,9 +26,7 @@ const permDelete = requireAdminRootOrMenuPermissionAnyOf(CONTRACT_MENU_ROUTES, [
 let contractSchemaEnsured = false;
 
 const ensureContractUploadDir = () => {
-  if (!fs.existsSync(contractUploadDir)) {
-    fs.mkdirSync(contractUploadDir, { recursive: true });
-  }
+  ensureUploadSubdir('contracts');
 };
 
 const storage = multer.diskStorage({

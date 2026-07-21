@@ -104,7 +104,14 @@ const NotificationManagement: React.FC = () => {
   const { language } = useMenuStore();
   const { user } = useStore();
   const { errors, notifications, clearErrors, clearNotifications } = useErrorStore();
-  const { items, mergeFromSources, markRead, markAllRead, clearAll } = useNotificationStore();
+  const {
+    items,
+    headerDismissedIds,
+    mergeFromSources,
+    markRead,
+    markAllRead,
+    clearAll,
+  } = useNotificationStore();
 
   const canSend = user?.role === 'admin' || user?.role === 'root';
 
@@ -191,12 +198,20 @@ const NotificationManagement: React.FC = () => {
     mergeFromSources(merged);
   }, [serverNotifications, notifications, errors, inboxActions, t, mergeFromSources]);
 
-  const filteredItems = useMemo(() => {
-    const list = filter === 'unread' ? items.filter((item) => !item.read) : items;
-    return list;
-  }, [items, filter]);
+  const visibleItems = useMemo(() => {
+    const dismissed = new Set(headerDismissedIds);
+    return items.filter((item) => !dismissed.has(item.id));
+  }, [items, headerDismissedIds]);
 
-  const unreadCount = useMemo(() => items.filter((item) => !item.read).length, [items]);
+  const filteredItems = useMemo(() => {
+    const list = filter === 'unread' ? visibleItems.filter((item) => !item.read) : visibleItems;
+    return list;
+  }, [visibleItems, filter]);
+
+  const unreadCount = useMemo(
+    () => visibleItems.filter((item) => !item.read).length,
+    [visibleItems]
+  );
   const locale = language === 'en' ? 'en-US' : 'ko-KR';
 
   const handleTabChange = (_: React.SyntheticEvent, value: number) => {
@@ -337,7 +352,7 @@ const NotificationManagement: React.FC = () => {
           </IconButton>
         </Tooltip>
         <Tooltip title={t('notifications.markAllAsRead')}>
-          <IconButton size="small" onClick={markAllRead} disabled={items.length === 0}>
+          <IconButton size="small" onClick={markAllRead} disabled={visibleItems.length === 0}>
             <CheckIcon fontSize="small" />
           </IconButton>
         </Tooltip>
@@ -346,7 +361,7 @@ const NotificationManagement: React.FC = () => {
           variant="outlined"
           startIcon={<DeleteSweepIcon />}
           onClick={handleClearAll}
-          disabled={items.length === 0}
+          disabled={visibleItems.length === 0}
           sx={mvsBodyOutlinedBtnSx}
         >
           {t('notifications.clearAll')}

@@ -283,23 +283,129 @@ export const setUserPermissions = async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const { permissions } = req.body;
+    const granter = (req as any).user;
 
-    // 기존 권한 삭제
-    await (UserPermission as any).destroy({
-      where: { user_id: userId }
+    if (!granter) {
+      return res.status(401).json({ success: false, message: '인증이 필요합니다.' });
+    }
+    if (granter.role !== 'root' && granter.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: '메뉴 권한을 설정할 수 있는 권한이 없습니다.'
+      });
+    }
+
+    const targetUserId = parseInt(String(userId), 10);
+    if (!Number.isFinite(targetUserId)) {
+      return res.status(400).json({ success: false, message: '잘못된 사용자 ID입니다.' });
+    }
+
+    const targetUser = await (User as any).findByPk(targetUserId, {
+      attributes: ['id', 'tenant_id', 'company_id', 'role', 'status']
     });
+    if (!targetUser) {
+      return res.status(404).json({ success: false, message: '대상 사용자를 찾을 수 없습니다.' });
+    }
 
-    // 새 권한 생성
-    const permissionData = permissions.map((perm: any) => ({
-      user_id: userId,
-      menu_id: perm.menu_id,
-      can_view: perm.can_view || false,
-      can_create: perm.can_create || false,
-      can_edit: perm.can_edit || false,
-      can_delete: perm.can_delete || false
-    }));
+    if (!Array.isArray(permissions)) {
+      return res.status(400).json({ success: false, message: '권한 데이터 형식이 올바르지 않습니다.' });
+    }
 
-    await (UserPermission as any).bulkCreate(permissionData);
+    // admin: root가 부여한 본인 권한 범위 안에서만 부여/회수. 범위 밖 메뉴는 유지.
+    if (granter.role === 'admin') {
+      if (Number(targetUser.company_id) !== Number(granter.company_id)) {
+        return res.status(403).json({
+          success: false,
+          message: '같은 회사 사용자의 권한만 설정할 수 있습니다.'
+        });
+      }
+
+      const granterRows = await (UserPermission as any).findAll({
+        where: { user_id: granter.id },
+        attributes: ['menu_id', 'can_view', 'can_create', 'can_edit', 'can_delete']
+      });
+      const granterMap = new Map<number, any>();
+      granterRows.forEach((row: any) => {
+        granterMap.set(Number(row.menu_id), row);
+      });
+
+      const managedMenuIds = Array.from(granterMap.keys());
+      const permissionData: any[] = [];
+
+      for (const perm of permissions) {
+        const menuId = Number(perm.menu_id);
+        if (!Number.isFinite(menuId)) {
+          return res.status(400).json({ success: false, message: '잘못된 메뉴 ID가 포함되어 있습니다.' });
+        }
+        const granterPerm = granterMap.get(menuId);
+        if (!granterPerm) {
+          return res.status(403).json({
+            success: false,
+            message: 'root가 부여하지 않은 메뉴 권한은 admin이 추가할 수 없습니다.'
+          });
+        }
+
+        if (
+          (Boolean(perm.can_view) && !granterPerm.can_view) ||
+          (Boolean(perm.can_create) && !granterPerm.can_create) ||
+          (Boolean(perm.can_edit) && !granterPerm.can_edit) ||
+          (Boolean(perm.can_delete) && !granterPerm.can_delete)
+        ) {
+          return res.status(403).json({
+            success: false,
+            message: '자신이 가진 권한 범위 내에서만 권한을 부여할 수 있습니다.'
+          });
+        }
+
+        permissionData.push({
+          user_id: targetUserId,
+          menu_id: menuId,
+          can_view: Boolean(perm.can_view) && Boolean(granterPerm.can_view),
+          can_create: Boolean(perm.can_create) && Boolean(granterPerm.can_create),
+          can_edit: Boolean(perm.can_edit) && Boolean(granterPerm.can_edit),
+          can_delete: Boolean(perm.can_delete) && Boolean(granterPerm.can_delete)
+        });
+      }
+
+      if (managedMenuIds.length > 0) {
+        await (UserPermission as any).destroy({
+          where: {
+            user_id: targetUserId,
+            menu_id: { [Op.in]: managedMenuIds }
+          }
+        });
+      }
+
+      const toCreate = permissionData.filter(
+        (p) => p.can_view || p.can_create || p.can_edit || p.can_delete
+      );
+      if (toCreate.length > 0) {
+        await (UserPermission as any).bulkCreate(toCreate);
+      }
+    } else {
+      await (UserPermission as any).destroy({
+        where: { user_id: targetUserId }
+      });
+
+      const permissionData = permissions
+        .map((perm: any) => ({
+          user_id: targetUserId,
+          menu_id: Number(perm.menu_id),
+          can_view: Boolean(perm.can_view),
+          can_create: Boolean(perm.can_create),
+          can_edit: Boolean(perm.can_edit),
+          can_delete: Boolean(perm.can_delete)
+        }))
+        .filter(
+          (p: any) =>
+            Number.isFinite(p.menu_id) &&
+            (p.can_view || p.can_create || p.can_edit || p.can_delete)
+        );
+
+      if (permissionData.length > 0) {
+        await (UserPermission as any).bulkCreate(permissionData);
+      }
+    }
 
     res.json({
       success: true,

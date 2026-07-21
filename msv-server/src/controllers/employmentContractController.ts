@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { RequestWithUser } from '../types';
+import { ensureUploadSubdir } from '../utils/uploadPath';
 import {
   Company,
   EmploymentContract,
@@ -147,8 +148,7 @@ const createEmploymentContractPdf = async (
   signerType: 'company' | 'employee',
   signerId: number
 ): Promise<{ pdfUrl: string; hashSha256: string }> => {
-  const uploadRoot = path.resolve(process.env.UPLOAD_PATH || './uploads');
-  const targetDir = path.join(uploadRoot, 'contracts', 'employment');
+  const targetDir = ensureUploadSubdir('contracts', 'employment');
   await fs.promises.mkdir(targetDir, { recursive: true });
 
   const fileName = `employment-contract-${contract.id}-${Date.now()}.pdf`;

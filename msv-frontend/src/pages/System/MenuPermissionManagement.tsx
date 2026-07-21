@@ -87,6 +87,14 @@ interface MenuPermissionItemProps {
   menuKey: string;
   language: string;
   expandedMenus: Set<number>;
+  /** admin이 해당 메뉴/플래그를 부여할 수 있는지 */
+  canGrant: {
+    all: boolean;
+    can_view: boolean;
+    can_create: boolean;
+    can_edit: boolean;
+    can_delete: boolean;
+  };
   onToggleExpand: (menuId: number) => void;
   onPermissionChange: (menuKey: string, permissionType: keyof MenuPermission | 'all', value: boolean) => void;
   onToggleChildren: (menuId: number) => void;
@@ -108,6 +116,7 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
   menuKey,
   language,
   expandedMenus,
+  canGrant,
   onToggleExpand,
   onPermissionChange,
   onToggleChildren,
@@ -326,10 +335,18 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
                 minWidth: 'min-content',
               }}
             >
-              <Tooltip title="모든 권한 선택/해제" arrow>
+              <Tooltip
+                title={
+                  canGrant.all
+                    ? t('menuPermissionManagement.toggleAll')
+                    : t('menuPermissionManagement.adminScopeBlocked')
+                }
+                arrow
+              >
                 <Box
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (!canGrant.all) return;
                     const allChecked = permission.can_view && permission.can_create && permission.can_edit && permission.can_delete;
                     onPermissionChange(menuKey, 'all', !allChecked);
                   }}
@@ -342,21 +359,24 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
                     border: '1px solid',
                     borderColor: (permission.can_view && permission.can_create && permission.can_edit && permission.can_delete) ? 'primary.main' : 'divider',
                     backgroundColor: (permission.can_view && permission.can_create && permission.can_edit && permission.can_delete) ? 'primary.50' : 'transparent',
-                    cursor: 'pointer',
+                    cursor: canGrant.all ? 'pointer' : 'not-allowed',
+                    opacity: canGrant.all ? 1 : 0.45,
                     transition: 'all 0.15s ease',
-                    '&:hover': {
+                    '&:hover': canGrant.all ? {
                       borderColor: 'primary.main',
                       backgroundColor: 'primary.50'
-                    }
+                    } : undefined
                   }}
                 >
                   <Checkbox
                     checked={permission.can_view && permission.can_create && permission.can_edit && permission.can_delete}
                     indeterminate={hasAnyPermission && !(permission.can_view && permission.can_create && permission.can_edit && permission.can_delete)}
+                    disabled={!canGrant.all}
                     size="small"
                     sx={{ p: 0, '& .MuiSvgIcon-root': { fontSize: 15.4 } }}
                     onChange={(e) => {
                       e.stopPropagation();
+                      if (!canGrant.all) return;
                       onPermissionChange(menuKey, 'all', e.target.checked);
                     }}
                     onClick={(e) => e.stopPropagation()}
@@ -370,6 +390,7 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
                 control={
                   <Checkbox
                     checked={permission.can_view}
+                    disabled={!canGrant.can_view}
                     onChange={(e) => {
                       e.stopPropagation();
                       onPermissionChange(menuKey, 'can_view', e.target.checked);
@@ -379,13 +400,18 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
                   />
                 }
                 label={t('menuPermissionManagement.view')}
-                sx={{ m: 0, '& .MuiFormControlLabel-label': { fontSize: '0.6875rem' } }}
+                sx={{
+                  m: 0,
+                  opacity: canGrant.can_view ? 1 : 0.45,
+                  '& .MuiFormControlLabel-label': { fontSize: '0.6875rem' }
+                }}
                 onClick={(e) => e.stopPropagation()}
               />
               <FormControlLabel
                 control={
                   <Checkbox
                     checked={permission.can_create}
+                    disabled={!canGrant.can_create}
                     onChange={(e) => {
                       e.stopPropagation();
                       onPermissionChange(menuKey, 'can_create', e.target.checked);
@@ -395,13 +421,18 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
                   />
                 }
                 label={t('menuPermissionManagement.create')}
-                sx={{ m: 0, '& .MuiFormControlLabel-label': { fontSize: '0.6875rem' } }}
+                sx={{
+                  m: 0,
+                  opacity: canGrant.can_create ? 1 : 0.45,
+                  '& .MuiFormControlLabel-label': { fontSize: '0.6875rem' }
+                }}
                 onClick={(e) => e.stopPropagation()}
               />
               <FormControlLabel
                 control={
                   <Checkbox
                     checked={permission.can_edit}
+                    disabled={!canGrant.can_edit}
                     onChange={(e) => {
                       e.stopPropagation();
                       onPermissionChange(menuKey, 'can_edit', e.target.checked);
@@ -411,13 +442,18 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
                   />
                 }
                 label={t('menuPermissionManagement.edit')}
-                sx={{ m: 0, '& .MuiFormControlLabel-label': { fontSize: '0.6875rem' } }}
+                sx={{
+                  m: 0,
+                  opacity: canGrant.can_edit ? 1 : 0.45,
+                  '& .MuiFormControlLabel-label': { fontSize: '0.6875rem' }
+                }}
                 onClick={(e) => e.stopPropagation()}
               />
               <FormControlLabel
                 control={
                   <Checkbox
                     checked={permission.can_delete}
+                    disabled={!canGrant.can_delete}
                     onChange={(e) => {
                       e.stopPropagation();
                       onPermissionChange(menuKey, 'can_delete', e.target.checked);
@@ -427,7 +463,11 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
                   />
                 }
                 label={t('menuPermissionManagement.delete')}
-                sx={{ m: 0, '& .MuiFormControlLabel-label': { fontSize: '0.6875rem' } }}
+                sx={{
+                  m: 0,
+                  opacity: canGrant.can_delete ? 1 : 0.45,
+                  '& .MuiFormControlLabel-label': { fontSize: '0.6875rem' }
+                }}
                 onClick={(e) => e.stopPropagation()}
               />
             </Box>
@@ -965,6 +1005,7 @@ const MenuPermissionManagement: React.FC = () => {
           const isLastItem = index === sortedMenuList.length - 1;
           const canMoveUp = index > 0;
           const canMoveDown = index < sortedMenuList.length - 1;
+          const canGrant = getCanGrantFlags(menuKey);
 
           return (
             <MenuPermissionItem
@@ -979,6 +1020,7 @@ const MenuPermissionManagement: React.FC = () => {
               menuKey={menuKey}
               language={language}
               expandedMenus={expandedMenus}
+              canGrant={canGrant}
               onToggleExpand={(menuId) => {
                 const newExpanded = new Set(expandedMenus);
                 if (expandedMenus.has(menuId)) {
@@ -1039,34 +1081,82 @@ const MenuPermissionManagement: React.FC = () => {
   };
 
   // Admin의 권한 범위 내에서만 권한을 설정할 수 있는지 체크
-  const canSetPermission = (menuKey: string, permissionType: keyof MenuPermission | 'all', value: boolean): boolean => {
-    // root는 제한 없음
+  const canSetPermission = (menuKey: string, permissionType: keyof MenuPermission | 'all', _value: boolean): boolean => {
     if (user?.role === 'root') return true;
-    
-    // admin인 경우 자신의 권한 범위 내에서만 가능
+
     if (user?.role === 'admin') {
       const adminPerm = adminPermissions[menuKey];
       if (!adminPerm) {
-        // admin이 해당 메뉴에 대한 권한이 없으면 설정 불가
         return false;
       }
-      
+
       if (permissionType === 'all') {
-        // admin이 모든 권한을 가지고 있어야 함
         return adminPerm.can_view && adminPerm.can_create && adminPerm.can_edit && adminPerm.can_delete;
-      } else {
-        // admin이 해당 권한을 가지고 있어야 함
-        return adminPerm[permissionType] === true;
       }
+      return adminPerm[permissionType] === true;
     }
-    
+
     return true;
   };
 
+  const getCanGrantFlags = (menuKey: string) => {
+    if (user?.role !== 'admin') {
+      return {
+        all: true,
+        can_view: true,
+        can_create: true,
+        can_edit: true,
+        can_delete: true
+      };
+    }
+    const adminPerm = adminPermissions[menuKey];
+    return {
+      all: Boolean(
+        adminPerm?.can_view && adminPerm?.can_create && adminPerm?.can_edit && adminPerm?.can_delete
+      ),
+      can_view: Boolean(adminPerm?.can_view),
+      can_create: Boolean(adminPerm?.can_create),
+      can_edit: Boolean(adminPerm?.can_edit),
+      can_delete: Boolean(adminPerm?.can_delete)
+    };
+  };
+
+  /** admin은 root가 부여한 메뉴만 전송 (범위 밖 메뉴는 서버에서 유지) */
+  const buildPermissionPayload = (targetUserId: number) => {
+    return Object.keys(permissions)
+      .filter((menuId) => {
+        if (user?.role !== 'admin') return true;
+        return Boolean(adminPermissions[menuId]);
+      })
+      .map((menuId) => {
+        const current = permissions[menuId] || {
+          can_view: false,
+          can_create: false,
+          can_edit: false,
+          can_delete: false
+        };
+        if (user?.role === 'admin') {
+          const adminPerm = adminPermissions[menuId];
+          return {
+            user_id: targetUserId,
+            menu_id: parseInt(menuId, 10),
+            can_view: Boolean(current.can_view && adminPerm?.can_view),
+            can_create: Boolean(current.can_create && adminPerm?.can_create),
+            can_edit: Boolean(current.can_edit && adminPerm?.can_edit),
+            can_delete: Boolean(current.can_delete && adminPerm?.can_delete)
+          };
+        }
+        return {
+          user_id: targetUserId,
+          menu_id: parseInt(menuId, 10),
+          ...current
+        };
+      });
+  };
+
   const handlePermissionChange = (menuKey: string, permissionType: keyof MenuPermission | 'all', value: boolean) => {
-    // Admin의 권한 범위 체크
     if (!canSetPermission(menuKey, permissionType, value)) {
-      showErrorPopup('자신이 가진 권한 범위 내에서만 권한을 부여할 수 있습니다.', '권한 제한');
+      showErrorPopup(t('menuPermissionManagement.adminScopeBlocked'), t('menuPermissionManagement.scopeTitle'));
       return;
     }
     
@@ -1140,31 +1230,23 @@ const MenuPermissionManagement: React.FC = () => {
     try {
       setSaving(true);
       if (selectedUserId) {
-        // 사용자별 권한 저장
-        const permissionData = Object.keys(permissions).map(menuId => ({
-          user_id: selectedUserId,
-          menu_id: parseInt(menuId),
-          ...permissions[menuId]
-        }));
+        const permissionData = buildPermissionPayload(selectedUserId);
         await menuService.setUserPermissions(selectedUserId, permissionData);
-        showSuccessPopup('사용자 권한이 저장되었습니다.');
+        showSuccessPopup(t('menuPermissionManagement.permissionsSaved'));
       } else if (selectedCompanyId) {
-        // 회사별 권한 저장 - 회사 내 모든 사용자에게 적용
         const companyUsers = users.filter(u => u.company_id === selectedCompanyId);
         
         for (const companyUser of companyUsers) {
-          const permissionData = Object.keys(permissions).map(menuId => ({
-            user_id: companyUser.id,
-            menu_id: parseInt(menuId),
-            ...permissions[menuId]
-          }));
+          const permissionData = buildPermissionPayload(companyUser.id);
           await menuService.setUserPermissions(companyUser.id, permissionData);
         }
-        showSuccessPopup(`${companyUsers.length}명의 사용자 권한이 저장되었습니다.`);
+        showSuccessPopup(
+          t('menuPermissionManagement.companyPermissionsSaved', { count: companyUsers.length })
+        );
       }
     } catch (error: any) {
       console.error('권한 저장 오류:', error);
-      showErrorPopup(error, '권한 저장 오류');
+      showErrorPopup(error, t('menuPermissionManagement.permissionsSaveFailed'));
     } finally {
       setSaving(false);
     }
@@ -1175,19 +1257,14 @@ const MenuPermissionManagement: React.FC = () => {
 
     try {
       setSaving(true);
-      // 현재 선택된 사용자의 권한을 위임 대상에게 복사
-      const permissionData = Object.keys(permissions).map(menuId => ({
-        user_id: delegationTargetId,
-        menu_id: parseInt(menuId),
-        ...permissions[menuId]
-      }));
+      const permissionData = buildPermissionPayload(delegationTargetId);
       await menuService.setUserPermissions(delegationTargetId, permissionData);
-      showSuccessPopup('권한이 위임되었습니다.');
+      showSuccessPopup(t('menuPermissionManagement.delegated'));
       setDelegationDialogOpen(false);
       setDelegationTargetId(null);
     } catch (error: any) {
       console.error('권한 위임 오류:', error);
-      showErrorPopup(error, '권한 위임 오류');
+      showErrorPopup(error, t('menuPermissionManagement.delegationFailed'));
     } finally {
       setSaving(false);
     }

@@ -29,7 +29,8 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  Autocomplete,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -47,7 +48,6 @@ import {
   mvsTableHeadHighlightSx,
   mvsTableBodyRowSx,
 } from '../../theme/mvsLayout';
-import type { SelectChangeEvent } from '@mui/material/Select';
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
@@ -1501,6 +1501,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
     discount: quotation?.discount || 0,
     approverUserId: quotation?.approverUserId != null ? quotation.approverUserId : ('' as const)
   });
+  const [approverSubmitAttempted, setApproverSubmitAttempted] = useState(false);
 
   const [items, setItems] = useState<QuotationItem[]>(
     quotation?.items || [
@@ -1614,6 +1615,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
     e.preventDefault();
     if (readOnly) return;
     if (formData.approverUserId === '') {
+      setApproverSubmitAttempted(true);
       onValidationMessage?.(t('quotationManagement.selectApprover'));
       return;
     }
@@ -1835,35 +1837,61 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
             {!hideApproverForCustomerView && (
               <Box sx={{ gridColumn: { xs: '1', md: '1 / -1' } }}>
                 <Typography variant="caption" color="text.secondary">{t('quotationManagement.approver')} *</Typography>
-                <FormControl fullWidth size="small" required>
-                  <Select<number | ''>
-                    displayEmpty
-                    value={formData.approverUserId === '' ? '' : formData.approverUserId}
-                    onChange={(e: SelectChangeEvent<number | ''>) => {
-                      const raw = e.target.value as string | number | '';
-                      setFormData({
-                        ...formData,
-                        approverUserId: raw === '' ? '' : Number(raw)
-                      });
-                    }}
-                    renderValue={(selected: number | '' | undefined) => {
-                      if (selected === '' || selected === undefined) {
-                        return <Typography color="text.secondary">{t('quotationManagement.selectApprover')}</Typography>;
-                      }
-                      const u = companyUsers.find((x) => x.id === selected);
-                      return u ? `${u.username} (${u.email})` : String(selected);
-                    }}
-                  >
-                    <MenuItem value="">
-                      <Typography color="text.secondary">{t('quotationManagement.selectApprover')}</Typography>
-                    </MenuItem>
-                    {companyUsers.map((u) => (
-                      <MenuItem key={u.id} value={u.id}>
-                        {u.username} ({u.email})
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <Autocomplete
+                  options={companyUsers}
+                  size="small"
+                  fullWidth
+                  autoHighlight
+                  clearOnBlur={false}
+                  isOptionEqualToValue={(option, value) => option.id === value.id}
+                  getOptionLabel={(option) =>
+                    option.email ? `${option.username} (${option.email})` : option.username
+                  }
+                  filterOptions={(options, { inputValue }) => {
+                    const q = inputValue.trim().toLowerCase();
+                    if (!q) return options;
+                    return options.filter((u) => {
+                      const name = String(u.username || '').toLowerCase();
+                      const email = String(u.email || '').toLowerCase();
+                      return name.includes(q) || email.includes(q);
+                    });
+                  }}
+                  value={
+                    formData.approverUserId === ''
+                      ? null
+                      : companyUsers.find((u) => u.id === formData.approverUserId) || null
+                  }
+                  onChange={(_event, newValue) => {
+                    setApproverSubmitAttempted(false);
+                    setFormData({
+                      ...formData,
+                      approverUserId: newValue?.id ?? '',
+                    });
+                  }}
+                  renderOption={(props, option) => (
+                    <Box component="li" {...props} key={option.id}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', py: 0.25 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {option.username}
+                        </Typography>
+                        {option.email ? (
+                          <Typography variant="caption" color="text.secondary">
+                            {option.email}
+                          </Typography>
+                        ) : null}
+                      </Box>
+                    </Box>
+                  )}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      required
+                      placeholder={t('quotationManagement.selectApprover')}
+                      error={approverSubmitAttempted && formData.approverUserId === ''}
+                    />
+                  )}
+                  noOptionsText={t('common.noResults', { defaultValue: '검색 결과가 없습니다.' })}
+                />
               </Box>
             )}
           </Box>
