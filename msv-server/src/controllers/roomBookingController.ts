@@ -1,6 +1,6 @@
 import { Response } from 'express';
 import { RequestWithUser } from '../types';
-import { RoomBooking, User } from '../models';
+import { RoomBooking, RoomType, RoomTypeRoom, User } from '../models';
 import { Op } from 'sequelize';
 
 const CHECKOUT_BUFFER_HOURS = 2;
@@ -62,6 +62,70 @@ const ensureRoomBookingTimeColumns = async () => {
   }
 };
 
+/** room_number / room_name / room_id 혼용 저장을 같은 물리 객실로 정규화 */
+const resolveRoomIdentity = async (params: {
+  tenantId?: number;
+  companyId?: number;
+  roomId: number | string;
+  roomNumber?: string | null;
+  roomType?: string | null;
+}) => {
+  const roomType = String(params.roomType || '').trim();
+  const roomNumber = String(params.roomNumber || '').trim();
+  const roomId = Number(params.roomId);
+  const identity = {
+    roomId: Number.isFinite(roomId) ? roomId : null,
+    roomType,
+    roomNumbers: new Set<string>()
+  };
+  if (roomNumber) identity.roomNumbers.add(roomNumber);
+
+  if (!params.tenantId || !params.companyId || !roomType) {
+    return identity;
+  }
+
+  try {
+    const roomTypeRow = await (RoomType as any).findOne({
+      where: {
+        tenant_id: params.tenantId,
+        company_id: params.companyId,
+        name: roomType
+      },
+      attributes: ['id']
+    });
+    if (!roomTypeRow?.id) return identity;
+
+    const roomMatchers: any[] = [];
+    if (roomNumber) {
+      roomMatchers.push({ room_number: roomNumber }, { room_name: roomNumber });
+    }
+    if (identity.roomId != null) {
+      roomMatchers.push({ id: identity.roomId });
+    }
+    if (roomMatchers.length === 0) return identity;
+
+    const roomRow = await (RoomTypeRoom as any).findOne({
+      where: {
+        tenant_id: params.tenantId,
+        company_id: params.companyId,
+        room_type_id: roomTypeRow.id,
+        [Op.or]: roomMatchers
+      },
+      attributes: ['id', 'room_number', 'room_name']
+    });
+
+    if (roomRow) {
+      identity.roomId = Number(roomRow.id);
+      if (roomRow.room_number) identity.roomNumbers.add(String(roomRow.room_number).trim());
+      if (roomRow.room_name) identity.roomNumbers.add(String(roomRow.room_name).trim());
+    }
+  } catch (error) {
+    console.warn('객실 식별 정규화 실패:', error);
+  }
+
+  return identity;
+};
+
 /** 활성 예약만, 실제 기간 겹침(체크인 < 상대 체크아웃 && 체크아웃 > 상대 체크인)으로 충돌 검사 */
 const findOverlappingRoomBookings = async (params: {
   tenantId?: number;
@@ -75,12 +139,25 @@ const findOverlappingRoomBookings = async (params: {
 }) => {
   const checkIn = normalizeDateString(params.checkInDate);
   const checkOut = normalizeDateString(params.checkOutDate);
-  const roomNumber = String(params.roomNumber || '').trim();
-  const roomType = String(params.roomType || '').trim();
+  const identity = await resolveRoomIdentity(params);
+  const roomType = identity.roomType;
+  const roomNumbers = [...identity.roomNumbers].filter(Boolean);
 
-  const roomMatchers: any[] = [{ room_id: params.roomId }];
-  if (roomNumber && roomType) {
-    roomMatchers.push({ room_number: roomNumber, room_type: roomType });
+  // room_id만으로 매칭하면 유형이 다른 동일 순번(구 room_id=순번) 예약과 오탐이 난다.
+  // 반드시 room_type과 함께 묶고, room_number/room_name 변형도 OR로 포함한다.
+  const roomMatchers: any[] = [];
+  if (roomType && identity.roomId != null) {
+    roomMatchers.push({ room_id: identity.roomId, room_type: roomType });
+  }
+  if (roomType && roomNumbers.length > 0) {
+    roomMatchers.push({
+      room_type: roomType,
+      room_number: { [Op.in]: roomNumbers }
+    });
+  }
+  if (roomMatchers.length === 0) {
+    // 최소 안전장치: 유형 없이 room_id만 있는 레거시 호출
+    roomMatchers.push({ room_id: params.roomId });
   }
 
   const whereClause: any = {
@@ -331,9 +408,21 @@ export const createRoomBooking = async (req: RequestWithUser, res: Response) => 
     });
 
     if (hasBlockingRoomConflict(conflictingBookings, check_in_date, check_in_time)) {
+      const conflict = conflictingBookings[0];
       return res.status(400).json({ 
         success: false, 
-        message: '해당 날짜에 이미 예약이 있습니다.' 
+        message: '해당 날짜에 이미 예약이 있습니다.',
+        conflict: conflict
+          ? {
+              booking_id: conflict.booking_id,
+              room_id: conflict.room_id,
+              room_number: conflict.room_number,
+              room_type: conflict.room_type,
+              check_in_date: conflict.check_in_date,
+              check_out_date: conflict.check_out_date,
+              guest_name: conflict.guest_name
+            }
+          : undefined
       });
     }
 
@@ -473,9 +562,21 @@ export const updateRoomBooking = async (req: RequestWithUser, res: Response) => 
       });
 
       if (hasBlockingRoomConflict(conflictingBookings, effCheckIn, effCheckInTime)) {
+        const conflict = conflictingBookings[0];
         return res.status(400).json({
           success: false,
-          message: '해당 날짜에 이미 예약이 있습니다.'
+          message: '해당 날짜에 이미 예약이 있습니다.',
+          conflict: conflict
+            ? {
+                booking_id: conflict.booking_id,
+                room_id: conflict.room_id,
+                room_number: conflict.room_number,
+                room_type: conflict.room_type,
+                check_in_date: conflict.check_in_date,
+                check_out_date: conflict.check_out_date,
+                guest_name: conflict.guest_name
+              }
+            : undefined
         });
       }
     }
