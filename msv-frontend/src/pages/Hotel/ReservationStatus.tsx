@@ -33,7 +33,6 @@ import {
   mvsSearchFieldSx,
   mvsFilterFieldHeightSx,
   mvsOutlinedLabelProps,
-  mvsTableHeadHighlightSx,
   mvsTableScrollSx,
 } from '../../theme/mvsLayout';
 import { alpha, useTheme } from '@mui/material/styles';
@@ -131,14 +130,26 @@ const normalizeTimeValue = (value?: string) => {
   return CHECKOUT_TIME_FALLBACK;
 };
 
+const GUEST_PALETTE = [
+  '#A9C4B5', // sage
+  '#9EB4C7', // slate blue
+  '#C3B5A4', // warm taupe
+  '#B4A8C2', // muted lilac
+  '#A8B69E', // soft olive
+  '#C5A9AB', // dusty rose
+  '#A3B7C4', // steel
+  '#C2B79A', // sand
+  '#A7C0BE', // teal mist
+  '#B9AFA4', // stone
+] as const;
+
 const getGuestColor = (guestName?: string) => {
   const key = String(guestName || '').trim() || 'default-guest';
   let hash = 0;
   for (let idx = 0; idx < key.length; idx += 1) {
     hash = (hash * 31 + key.charCodeAt(idx)) >>> 0;
   }
-  const hue = hash % 360;
-  return `hsl(${hue} 52% 72%)`;
+  return GUEST_PALETTE[hash % GUEST_PALETTE.length];
 };
 
 const ReservationStatus: React.FC = () => {
@@ -625,23 +636,25 @@ const ReservationStatus: React.FC = () => {
     }
   };
 
-  const gridBorder = theme.palette.mode === 'light' ? '#D1DAE4' : theme.palette.divider;
-  const stickyRoomBg = theme.palette.mode === 'light' ? '#F1F5F9' : theme.palette.grey[900];
-  const pastCellBg = alpha(theme.palette.grey[500], 0.14);
-  const groupRowBg = theme.palette.mode === 'light' ? '#F4F7FB' : alpha(theme.palette.common.white, 0.04);
+  const gridBorder = theme.palette.mode === 'light' ? '#E2E8F0' : theme.palette.divider;
+  const calendarOuterBorder = theme.palette.mode === 'light' ? '#94A3B8' : theme.palette.grey[500];
+  const calendarHeaderBg = theme.palette.mode === 'light' ? '#E8EEF5' : theme.palette.grey[800];
+  const pastCellBg = theme.palette.mode === 'light' ? '#F1F3F6' : alpha(theme.palette.grey[500], 0.22);
+  const calendarSurfaceBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
+  const groupRowBg = theme.palette.mode === 'light' ? '#D8E1EC' : alpha(theme.palette.primary.main, 0.22);
 
   const calendarCellBorderSx = {
     borderRight: `1px solid ${gridBorder}`,
     borderBottom: `1px solid ${gridBorder}`,
   } as const;
 
-  const calendarRoomRowHeight = 34;
-  const calendarRoomFontSize = '0.68rem';
+  const calendarRoomRowHeight = 28;
+  const calendarRoomFontSize = '0.65rem';
 
   const calendarHeadCellSx = {
-    py: '2px !important',
+    py: '1px !important',
     px: 0.25,
-    lineHeight: 1.1,
+    lineHeight: 1.05,
     textAlign: 'center' as const,
   } as const;
 
@@ -652,17 +665,17 @@ const ReservationStatus: React.FC = () => {
   } as const;
 
   const calendarGroupCellSx = {
-    py: '2px !important',
-    height: 36,
-    minHeight: 36,
-    maxHeight: 36,
-    lineHeight: '36px',
+    py: '1px !important',
+    height: 30,
+    minHeight: 30,
+    maxHeight: 30,
+    lineHeight: '30px',
     textAlign: 'center' as const,
   } as const;
 
   const calendarRoomCellSx = {
-    py: '1px !important',
-    px: '0.35rem !important',
+    py: '0 !important',
+    px: '0.3rem !important',
     height: calendarRoomRowHeight,
     minHeight: calendarRoomRowHeight,
     maxHeight: calendarRoomRowHeight,
@@ -676,10 +689,10 @@ const ReservationStatus: React.FC = () => {
     height: calendarRoomRowHeight,
     minHeight: calendarRoomRowHeight,
     maxHeight: calendarRoomRowHeight,
-    py: '1px !important',
+    py: '0 !important',
     px: 0,
     lineHeight: `${calendarRoomRowHeight}px`,
-    fontSize: '0.62rem',
+    fontSize: '0.58rem',
   } as const;
 
   return (
@@ -789,21 +802,36 @@ const ReservationStatus: React.FC = () => {
       )}
 
       <Box sx={mvsBodyListZoneSx}>
-        <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+        <TableContainer
+          sx={{
+            ...mvsBodyListTableSx,
+            ...mvsTableScrollSx,
+            width: '100%',
+            maxWidth: '100%',
+            bgcolor: calendarSurfaceBg,
+            border: `1.5px solid ${calendarOuterBorder}`,
+            borderRadius: { xs: '10px', sm: '12px' },
+            boxShadow: 'none',
+          }}
+        >
           <Table
             size="small"
             stickyHeader
             sx={{
               width: '100%',
-              minWidth: { xs: 640, sm: 800 },
+              minWidth: { xs: 760, md: '100%' },
               tableLayout: 'fixed',
               borderCollapse: 'separate',
               borderSpacing: 0,
-              bgcolor: 'transparent',
+              bgcolor: calendarSurfaceBg,
               '& .MuiTableCell-root': {
                 borderLeft: 'none',
                 borderTop: 'none',
                 ...calendarCellBorderSx,
+              },
+              '& .MuiTableHead-root .MuiTableCell-head': {
+                bgcolor: `${calendarHeaderBg} !important`,
+                color: 'text.primary',
               },
               '& .MuiTableCell-sizeSmall': {
                 paddingTop: '1px',
@@ -819,21 +847,22 @@ const ReservationStatus: React.FC = () => {
             }}
           >
               <colgroup>
-                <col style={{ width: 104 }} />
+                <col style={{ width: 'clamp(72px, 8vw, 104px)' }} />
                 {dateRange.map((date) => (
                   <col key={toIsoDate(date)} />
                 ))}
-                <col style={{ width: 76 }} />
-                <col style={{ width: 92 }} />
-                <col style={{ width: 120 }} />
+                <col style={{ width: 'clamp(56px, 6vw, 76px)' }} />
+                <col style={{ width: 'clamp(64px, 7vw, 92px)' }} />
               </colgroup>
               <TableHead
                 sx={{
-                  ...mvsTableHeadHighlightSx,
                   '& .MuiTableCell-head': {
                     py: '2px !important',
                     px: 0.25,
                     lineHeight: 1.1,
+                    bgcolor: `${calendarHeaderBg} !important`,
+                    color: 'text.primary',
+                    fontWeight: 700,
                   },
                 }}
               >
@@ -845,7 +874,7 @@ const ReservationStatus: React.FC = () => {
                       position: 'sticky',
                       left: 0,
                       zIndex: 3,
-                      bgcolor: `${stickyRoomBg} !important`,
+                      bgcolor: `${calendarHeaderBg} !important`,
                       borderRight: `2px solid ${gridBorder}`,
                       color: 'text.primary',
                       width: 104,
@@ -861,12 +890,13 @@ const ReservationStatus: React.FC = () => {
                         align="center"
                         sx={{
                           fontWeight: 700,
-                      fontSize: '0.7rem',
-                      lineHeight: 1.1,
-                      overflow: 'hidden',
+                          fontSize: '0.7rem',
+                          lineHeight: 1.1,
+                          overflow: 'hidden',
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
-                          px: 0.25
+                          px: 0.25,
+                          bgcolor: `${calendarHeaderBg} !important`,
                         }}
                       >
                         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
@@ -880,10 +910,24 @@ const ReservationStatus: React.FC = () => {
                       </TableCell>
                     );
                   })}
-                  <TableCell align="center" sx={{ ...calendarSideHeadCellSx, width: 76 }}>
+                  <TableCell
+                    align="center"
+                    sx={{
+                      ...calendarSideHeadCellSx,
+                      width: 76,
+                      bgcolor: `${calendarHeaderBg} !important`,
+                    }}
+                  >
                     {t('reservationStatus.columns.booked')}
                   </TableCell>
-                  <TableCell align="center" sx={{ ...calendarSideHeadCellSx, width: 92 }}>
+                  <TableCell
+                    align="center"
+                    sx={{
+                      ...calendarSideHeadCellSx,
+                      width: 92,
+                      bgcolor: `${calendarHeaderBg} !important`,
+                    }}
+                  >
                     {t('reservationStatus.columns.remaining')}
                   </TableCell>
                 </TableRow>
@@ -918,7 +962,8 @@ const ReservationStatus: React.FC = () => {
                           ...calendarGroupCellSx,
                           position: 'sticky',
                           left: 0,
-                          backgroundColor: groupRowBg,
+                          bgcolor: `${groupRowBg} !important`,
+                          backgroundColor: `${groupRowBg} !important`,
                           fontWeight: 700,
                           color: 'text.primary',
                           borderRight: `2px solid ${gridBorder}`,
@@ -954,7 +999,7 @@ const ReservationStatus: React.FC = () => {
                               ...calendarRoomCellSx,
                               position: 'sticky',
                               left: 0,
-                              backgroundColor: `${theme.palette.background.paper} !important`,
+                              backgroundColor: `${calendarSurfaceBg} !important`,
                               borderRight: `2px solid ${gridBorder}`,
                               fontWeight: 600,
                               zIndex: 2,
@@ -991,31 +1036,35 @@ const ReservationStatus: React.FC = () => {
                             const matchedCheckoutBooking = hasCheckoutHalf
                                 ? findCheckoutBookingForCell(room, iso)
                                 : null;
-                            const bookedGuestColor = matchedBooking ? getGuestColor(matchedBooking.guest_name) : '#b7d574';
+                            const bookedGuestColor = matchedBooking ? getGuestColor(matchedBooking.guest_name) : GUEST_PALETTE[0];
                             const checkoutGuestColor = matchedCheckoutBooking
                               ? getGuestColor(matchedCheckoutBooking.guest_name)
-                              : '#b7d574';
+                              : GUEST_PALETTE[0];
+                            const isElapsedDay = iso <= todayIso;
+                            const reservationFill =
+                              isBooked && hasCheckoutHalf
+                                ? `linear-gradient(90deg, ${checkoutGuestColor} 0 50%, ${bookedGuestColor} 50% 100%)`
+                                : isBooked
+                                  ? bookedGuestColor
+                                  : hasCheckoutHalf
+                                    ? `linear-gradient(90deg, ${checkoutGuestColor} 0 50%, ${isElapsedDay ? pastCellBg : calendarSurfaceBg} 50% 100%)`
+                                    : undefined;
                             return (
                               <TableCell
                                 key={`${room.key}-${iso}`}
                                 align="center"
                                 sx={{
-                                  bgcolor: iso < todayIso ? pastCellBg : undefined,
-                                  background:
-                                    iso < todayIso
-                                      ? undefined
-                                      : isBooked && hasCheckoutHalf
-                                        ? `linear-gradient(90deg, ${checkoutGuestColor} 0 50%, ${bookedGuestColor} 50% 100%)`
-                                        : isBooked
-                                          ? bookedGuestColor
-                                          : hasCheckoutHalf
-                                            ? `linear-gradient(90deg, ${checkoutGuestColor} 0 50%, transparent 50% 100%)`
-                                            : undefined,
+                                  bgcolor: reservationFill
+                                    ? 'transparent'
+                                    : isElapsedDay
+                                      ? `${pastCellBg} !important`
+                                      : `${calendarSurfaceBg} !important`,
+                                  background: reservationFill
+                                    || (isElapsedDay ? pastCellBg : calendarSurfaceBg),
                                   cursor: isBooked || canManagePastCheckIn || iso >= todayIso
                                     ? 'pointer'
                                     : 'not-allowed',
-                                  opacity: iso < todayIso && !isBooked && !canManagePastCheckIn ? 0.45 : 1,
-                                  color: hasReservationMark ? '#1f2a14' : undefined,
+                                  color: hasReservationMark ? '#334155' : 'text.secondary',
                                   ...calendarDateCellSx,
                                 }}
                                 onClick={() => handleCellClick(room, iso, isBooked, isCheckoutHalf)}
