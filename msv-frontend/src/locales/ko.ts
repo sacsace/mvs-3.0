@@ -2070,7 +2070,9 @@ export default {
         bookAfterCheckout: '체크아웃 이후 예약하기',
         roomTypeInput: '객실 타입 입력',
         apply: '적용',
-        invoice: '인보이스'
+        invoice: '인보이스',
+        cancel: '예약 취소',
+        delete: '예약 삭제'
       },
       filters: {
         search: '검색',
@@ -2094,6 +2096,11 @@ export default {
         checkout: '체크아웃'
       },
       dialog: {
+        bookingActionTitle: '예약 작업',
+        cancelTitle: '예약 취소',
+        cancelMessage: '선택한 예약을 취소하시겠습니까?',
+        deleteTitle: '예약 삭제',
+        deleteMessage: '선택한 예약을 삭제하시겠습니까?',
         roomTypeTitle: '객실 타입 입력',
         roomName: '객실명',
         roomCount: '객실 수',
@@ -2117,7 +2124,9 @@ export default {
         bookingNotFound: '예약 정보를 찾을 수 없습니다.'
       },
       errors: {
-        loadFailed: '예약 데이터를 불러오는데 실패했습니다.'
+        loadFailed: '예약 데이터를 불러오는데 실패했습니다.',
+        cancelFailed: '예약 취소에 실패했습니다.',
+        deleteFailed: '예약 삭제에 실패했습니다.'
       },
       misc: {
         other: '기타'
@@ -2278,7 +2287,9 @@ export default {
         bookingNoAuto: '예약 번호는 자동 생성됩니다.',
         selectRoomTypeFirst: '객실 유형을 먼저 선택하세요.',
         selectDatesFirst: '체크인/체크아웃 날짜를 선택하세요.',
-        noAvailableRoom: '체크인 가능한 객실이 없습니다.'
+        noAvailableRoom: '체크인 가능한 객실이 없습니다.',
+        roomNoManual: '객실 번호를 직접 입력하거나 목록에서 선택하세요.',
+        noAvailableRoomManual: '예약 가능한 객실이 없습니다. 객실 번호를 직접 입력할 수 있습니다.'
       },
       dialog: {
         actionTitle: '예약 작업 선택',

@@ -2002,7 +2002,9 @@ export default {
         bookAfterCheckout: 'Book After Checkout',
         roomTypeInput: 'Room Type Input',
         apply: 'Apply',
-        invoice: 'Invoice'
+        invoice: 'Invoice',
+        cancel: 'Cancel Booking',
+        delete: 'Delete Booking'
       },
       filters: {
         search: 'Search',
@@ -2026,6 +2028,11 @@ export default {
         checkout: 'Check-out'
       },
       dialog: {
+        bookingActionTitle: 'Booking Actions',
+        cancelTitle: 'Cancel Booking',
+        cancelMessage: 'Do you want to cancel the selected booking?',
+        deleteTitle: 'Delete Booking',
+        deleteMessage: 'Do you want to delete the selected booking?',
         roomTypeTitle: 'Room Type Input',
         roomName: 'Room Name',
         roomCount: 'Room Count',
@@ -2049,7 +2056,9 @@ export default {
         bookingNotFound: 'Booking information not found.'
       },
       errors: {
-        loadFailed: 'Failed to load reservation data.'
+        loadFailed: 'Failed to load reservation data.',
+        cancelFailed: 'Failed to cancel the booking.',
+        deleteFailed: 'Failed to delete the booking.'
       },
       misc: {
         other: 'Other'
@@ -2210,7 +2219,9 @@ export default {
         bookingNoAuto: 'Booking number is auto-generated.',
         selectRoomTypeFirst: 'Please select room type first.',
         selectDatesFirst: 'Please select check-in/check-out dates first.',
-        noAvailableRoom: 'No rooms available for check-in.'
+        noAvailableRoom: 'No rooms available for check-in.',
+        roomNoManual: 'Enter a room number or select one from the list.',
+        noAvailableRoomManual: 'No available rooms found. You can enter a room number manually.'
       },
       dialog: {
         actionTitle: 'Select Booking Action',

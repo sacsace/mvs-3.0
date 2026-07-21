@@ -770,16 +770,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   ]);
   const canSearchRooms = Boolean(formState.roomType && formState.checkInDate && formState.checkOutDate);
 
-  useEffect(() => {
-    if (!formState.roomNumber) return;
-    if (!canSearchRooms) return;
-    if (roomTypeRooms.length === 0) return;
-    const exists = availableRoomOptions.some((room) => room.roomNumber === formState.roomNumber);
-    if (!exists) {
-      setFormState((prev) => ({ ...prev, roomNumber: '' }));
-    }
-  }, [availableRoomOptions, formState.roomNumber, canSearchRooms, roomTypeRooms.length]);
-
   const calculateTotalNights = (checkInDate: string, checkOutDate: string) => {
     if (!checkInDate || !checkOutDate) return 1;
     const start = new Date(checkInDate);
@@ -1569,17 +1559,28 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                 {!selectedBooking && <Box component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Box>}
               </Typography>
               <Autocomplete
+                freeSolo
                 options={availableRoomOptions}
-                value={
-                  availableRoomOptions.find((room) => room.roomNumber === formState.roomNumber)
-                  || (formState.roomNumber ? { roomTypeId: 0, roomNumber: formState.roomNumber, roomName: '' } : null)
+                value={formState.roomNumber}
+                isOptionEqualToValue={(option, value) =>
+                  typeof value === 'string'
+                    ? option.roomNumber === value
+                    : option.roomNumber === value.roomNumber
                 }
-                isOptionEqualToValue={(option, value) => option.roomNumber === value.roomNumber}
-                getOptionLabel={(option) => option.roomName || option.roomNumber}
-                onChange={(_, value) =>
-                  setFormState((prev) => ({ ...prev, roomNumber: value ? value.roomNumber : '' }))
+                getOptionLabel={(option) =>
+                  typeof option === 'string' ? option : option.roomName || option.roomNumber
                 }
-                disabled={!!selectedBooking || !canSearchRooms}
+                onChange={(_, value) => {
+                  const roomNumber =
+                    typeof value === 'string' ? value : value?.roomNumber || '';
+                  setFormState((prev) => ({ ...prev, roomNumber }));
+                }}
+                onInputChange={(_, value, reason) => {
+                  if (reason === 'input' || reason === 'clear') {
+                    setFormState((prev) => ({ ...prev, roomNumber: value }));
+                  }
+                }}
+                disabled={!!selectedBooking}
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -1589,12 +1590,12 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     placeholder={t('roomBookingManagement.placeholders.roomNo')}
                     helperText={
                       !formState.roomType
-                        ? t('roomBookingManagement.help.selectRoomTypeFirst')
+                        ? t('roomBookingManagement.help.roomNoManual')
                         : !formState.checkInDate || !formState.checkOutDate
-                          ? t('roomBookingManagement.help.selectDatesFirst')
+                          ? t('roomBookingManagement.help.roomNoManual')
                           : canSearchRooms && availableRoomOptions.length === 0
-                            ? t('roomBookingManagement.help.noAvailableRoom')
-                            : ''
+                            ? t('roomBookingManagement.help.noAvailableRoomManual')
+                            : t('roomBookingManagement.help.roomNoManual')
                     }
                   />
                 )}

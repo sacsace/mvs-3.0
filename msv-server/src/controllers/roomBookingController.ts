@@ -62,6 +62,71 @@ const ensureRoomBookingTimeColumns = async () => {
   }
 };
 
+/** 활성 예약만, 실제 기간 겹침(체크인 < 상대 체크아웃 && 체크아웃 > 상대 체크인)으로 충돌 검사 */
+const findOverlappingRoomBookings = async (params: {
+  tenantId?: number;
+  companyId?: number;
+  roomId: number | string;
+  roomNumber?: string | null;
+  roomType?: string | null;
+  checkInDate: string | Date;
+  checkOutDate: string | Date;
+  excludeBookingId?: number | string;
+}) => {
+  const checkIn = normalizeDateString(params.checkInDate);
+  const checkOut = normalizeDateString(params.checkOutDate);
+  const roomNumber = String(params.roomNumber || '').trim();
+  const roomType = String(params.roomType || '').trim();
+
+  const roomMatchers: any[] = [{ room_id: params.roomId }];
+  if (roomNumber && roomType) {
+    roomMatchers.push({ room_number: roomNumber, room_type: roomType });
+  }
+
+  const whereClause: any = {
+    is_active: true,
+    tenant_id: params.tenantId,
+    company_id: params.companyId,
+    status: { [Op.notIn]: ['cancelled', 'no_show'] },
+    [Op.and]: [
+      { check_in_date: { [Op.lt]: checkOut } },
+      { check_out_date: { [Op.gt]: checkIn } }
+    ],
+    [Op.or]: roomMatchers
+  };
+
+  if (params.excludeBookingId !== undefined && params.excludeBookingId !== null && params.excludeBookingId !== '') {
+    whereClause.id = { [Op.ne]: params.excludeBookingId };
+  }
+
+  return (RoomBooking as any).findAll({ where: whereClause });
+};
+
+const hasBlockingRoomConflict = (
+  conflictingBookings: any[],
+  checkInDate: string | Date,
+  checkInTime?: string | null
+) => {
+  const normalizedNewCheckInDate = normalizeDateString(checkInDate);
+  const requestedCheckInAt = buildDateTime(checkInDate, checkInTime || DEFAULT_CHECKIN_TIME);
+
+  return (conflictingBookings || []).some((existingBooking: any) => {
+    const existingCheckoutDate = normalizeDateString(existingBooking?.check_out_date);
+
+    // 체크아웃일 동일 + 체크아웃 2시간 경과 시에는 신규 예약 허용
+    if (existingCheckoutDate === normalizedNewCheckInDate) {
+      const checkoutAt = buildDateTime(existingBooking?.check_out_date, existingBooking?.check_out_time);
+      if (checkoutAt && requestedCheckInAt) {
+        const availableAt = new Date(checkoutAt.getTime() + CHECKOUT_BUFFER_HOURS * 60 * 60 * 1000);
+        if (requestedCheckInAt >= availableAt) {
+          return false;
+        }
+      }
+    }
+    return true;
+  });
+};
+
 // 회의실 예약 목록 조회
 export const getRoomBookings = async (req: RequestWithUser, res: Response) => {
   try {
@@ -254,47 +319,18 @@ export const createRoomBooking = async (req: RequestWithUser, res: Response) => 
     const checkOut = new Date(check_out_date);
     const totalNights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
 
-    // 중복 예약 확인 (같은 방, 같은 날짜)
-    const conflictingBookings = await (RoomBooking as any).findAll({
-      where: {
-        room_id,
-        tenant_id: tenantId,
-        company_id: companyId,
-        status: { [Op.notIn]: ['cancelled', 'no_show'] },
-        [Op.or]: [
-          {
-            check_in_date: {
-              [Op.between]: [check_in_date, check_out_date]
-            }
-          },
-          {
-            check_out_date: {
-              [Op.between]: [check_in_date, check_out_date]
-            }
-          }
-        ]
-      }
+    // 중복 예약 확인 (활성 예약만, 실제 기간 겹침)
+    const conflictingBookings = await findOverlappingRoomBookings({
+      tenantId,
+      companyId,
+      roomId: room_id,
+      roomNumber: room_number,
+      roomType: room_type,
+      checkInDate: check_in_date,
+      checkOutDate: check_out_date
     });
 
-    const normalizedNewCheckInDate = String(check_in_date).slice(0, 10);
-    const requestedCheckInAt = buildDateTime(check_in_date, check_in_time || DEFAULT_CHECKIN_TIME);
-    const hasConflict = (conflictingBookings || []).some((existingBooking: any) => {
-      const existingCheckoutDate = String(existingBooking?.check_out_date || '').slice(0, 10);
-
-      // 체크아웃일 동일 + 체크아웃 2시간 경과 시에는 신규 예약 허용
-      if (existingCheckoutDate === normalizedNewCheckInDate) {
-        const checkoutAt = buildDateTime(existingBooking?.check_out_date, existingBooking?.check_out_time);
-        if (checkoutAt && requestedCheckInAt) {
-          const availableAt = new Date(checkoutAt.getTime() + CHECKOUT_BUFFER_HOURS * 60 * 60 * 1000);
-          if (requestedCheckInAt >= availableAt) {
-            return false;
-          }
-        }
-      }
-      return true;
-    });
-
-    if (hasConflict) {
+    if (hasBlockingRoomConflict(conflictingBookings, check_in_date, check_in_time)) {
       return res.status(400).json({ 
         success: false, 
         message: '해당 날짜에 이미 예약이 있습니다.' 
@@ -425,45 +461,18 @@ export const updateRoomBooking = async (req: RequestWithUser, res: Response) => 
       const effCheckOut = check_out_date !== undefined ? check_out_date : booking.check_out_date;
       const effCheckInTime = check_in_time !== undefined ? check_in_time : booking.check_in_time;
 
-      const conflictingBookings = await (RoomBooking as any).findAll({
-        where: {
-          room_id: nextRoomId,
-          tenant_id: tenantId,
-          company_id: companyId,
-          id: { [Op.ne]: booking.id },
-          status: { [Op.notIn]: ['cancelled', 'no_show'] },
-          [Op.or]: [
-            {
-              check_in_date: {
-                [Op.between]: [effCheckIn, effCheckOut]
-              }
-            },
-            {
-              check_out_date: {
-                [Op.between]: [effCheckIn, effCheckOut]
-              }
-            }
-          ]
-        }
+      const conflictingBookings = await findOverlappingRoomBookings({
+        tenantId,
+        companyId,
+        roomId: nextRoomId,
+        roomNumber: nextRoomNumber,
+        roomType: nextRoomType,
+        checkInDate: effCheckIn,
+        checkOutDate: effCheckOut,
+        excludeBookingId: booking.id
       });
 
-      const normalizedNewCheckInDate = String(effCheckIn).slice(0, 10);
-      const requestedCheckInAt = buildDateTime(effCheckIn as string, effCheckInTime || DEFAULT_CHECKIN_TIME);
-      const hasConflict = (conflictingBookings || []).some((existingBooking: any) => {
-        const existingCheckoutDate = String(existingBooking?.check_out_date || '').slice(0, 10);
-        if (existingCheckoutDate === normalizedNewCheckInDate) {
-          const checkoutAt = buildDateTime(existingBooking?.check_out_date, existingBooking?.check_out_time);
-          if (checkoutAt && requestedCheckInAt) {
-            const availableAt = new Date(checkoutAt.getTime() + CHECKOUT_BUFFER_HOURS * 60 * 60 * 1000);
-            if (requestedCheckInAt >= availableAt) {
-              return false;
-            }
-          }
-        }
-        return true;
-      });
-
-      if (hasConflict) {
+      if (hasBlockingRoomConflict(conflictingBookings, effCheckIn, effCheckInTime)) {
         return res.status(400).json({
           success: false,
           message: '해당 날짜에 이미 예약이 있습니다.'

@@ -176,6 +176,8 @@ const ReservationStatus: React.FC = () => {
   const [bookingInfoOpen, setBookingInfoOpen] = useState(false);
   const [bookingInfo, setBookingInfo] = useState<RoomBooking | null>(null);
   const [reservationMessageBooking, setReservationMessageBooking] = useState<RoomBooking | null>(null);
+  const [reservationActionConfirm, setReservationActionConfirm] = useState<'cancel' | 'delete' | null>(null);
+  const [reservationActionLoading, setReservationActionLoading] = useState(false);
   const [bookingGateMessage, setBookingGateMessage] = useState('');
   const [roomTypes, setRoomTypes] = useState<Array<{ id: number; name: string; count: number }>>([]);
   const [roomNameMap, setRoomNameMap] = useState<Map<string, string>>(new Map());
@@ -530,6 +532,33 @@ const ReservationStatus: React.FC = () => {
     navigate('/hotel/room-reservation', {
       state: { editBookingId: booking.id }
     });
+  };
+
+  const handleReservationAction = async () => {
+    if (!reservationMessageBooking || !reservationActionConfirm) return;
+    try {
+      setReservationActionLoading(true);
+      const response = reservationActionConfirm === 'cancel'
+        ? await roomBookingService.cancelRoomBooking(reservationMessageBooking.id)
+        : await roomBookingService.deleteRoomBooking(reservationMessageBooking.id);
+      if (!response.success) {
+        setError(
+          response.message ||
+          t(`reservationStatus.errors.${reservationActionConfirm}Failed`)
+        );
+        return;
+      }
+      setReservationActionConfirm(null);
+      setReservationMessageBooking(null);
+      await loadBookings();
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.message ||
+        t(`reservationStatus.errors.${reservationActionConfirm}Failed`)
+      );
+    } finally {
+      setReservationActionLoading(false);
+    }
   };
 
   const handleBookAfterCheckout = () => {
@@ -1275,13 +1304,15 @@ const ReservationStatus: React.FC = () => {
 
       <Dialog
         open={Boolean(reservationMessageBooking)}
-        onClose={() => setReservationMessageBooking(null)}
+        onClose={() => {
+          if (!reservationActionLoading) setReservationMessageBooking(null);
+        }}
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>{t('reservationStatus.dialog.reservationMessageTitle')}</DialogTitle>
+        <DialogTitle>{t('reservationStatus.dialog.bookingActionTitle')}</DialogTitle>
         <DialogContent>
-          <Box sx={{ mt: 0.5 }}>
+          <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
             <Typography variant="caption" color="text.secondary">
               {(reservationMessageBooking?.room_number ||
                 reservationMessageBooking?.room_id ||
@@ -1289,24 +1320,108 @@ const ReservationStatus: React.FC = () => {
                 ' · ' +
                 (reservationMessageBooking?.guest_name || '-')}
             </Typography>
-            <Typography
-              variant="body2"
-              sx={{ mt: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+            <Box
+              sx={{
+                p: 1.5,
+                borderRadius: '10px',
+                border: '1px solid',
+                borderColor: 'divider',
+                bgcolor: 'action.hover',
+              }}
             >
-              {reservationMessageBooking?.special_requests?.trim() ||
-                t('reservationStatus.info.noReservationMessage')}
-            </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                {t('reservationStatus.columns.memo')}
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{ mt: 0.75, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+              >
+                {reservationMessageBooking?.special_requests?.trim() ||
+                  t('reservationStatus.info.noReservationMessage')}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
+              <Button
+                variant="outlined"
+                onClick={() => handleEditBooking(reservationMessageBooking)}
+                sx={mvsBodyOutlinedBtnSx}
+              >
+                {t('reservationStatus.actions.editBooking')}
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  if (reservationMessageBooking) {
+                    navigate('/hotel/room-reservation', {
+                      state: { viewBookingId: reservationMessageBooking.id }
+                    });
+                  }
+                  setReservationMessageBooking(null);
+                }}
+                sx={mvsBodyOutlinedBtnSx}
+              >
+                {t('reservationStatus.actions.invoice')}
+              </Button>
+              <Button
+                variant="outlined"
+                color="error"
+                disabled={
+                  reservationMessageBooking?.status === 'cancelled' ||
+                  reservationMessageBooking?.status === 'checked_out'
+                }
+                onClick={() => setReservationActionConfirm('cancel')}
+                sx={mvsBodyOutlinedBtnSx}
+              >
+                {t('reservationStatus.actions.cancel')}
+              </Button>
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={() => setReservationActionConfirm('delete')}
+                sx={mvsBodyOutlinedBtnSx}
+              >
+                {t('reservationStatus.actions.delete')}
+              </Button>
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button
-            variant="outlined"
-            onClick={() => handleEditBooking(reservationMessageBooking)}
-          >
-            {t('reservationStatus.actions.editBooking')}
-          </Button>
           <Button onClick={() => setReservationMessageBooking(null)}>
             {t('common.close')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(reservationActionConfirm)}
+        onClose={() => {
+          if (!reservationActionLoading) setReservationActionConfirm(null);
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          {t(`reservationStatus.dialog.${reservationActionConfirm}Title`)}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            {t(`reservationStatus.dialog.${reservationActionConfirm}Message`)}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            disabled={reservationActionLoading}
+            onClick={() => setReservationActionConfirm(null)}
+          >
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={reservationActionLoading}
+            onClick={handleReservationAction}
+          >
+            {t('common.confirm')}
           </Button>
         </DialogActions>
       </Dialog>
