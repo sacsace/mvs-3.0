@@ -1360,7 +1360,7 @@ const AttendanceStatistics: React.FC = () => {
                               variant="body2"
                               onClick={() => {
                                 if (!u.prefillEmail) return;
-                                navigate(`/users?prefill_email=${encodeURIComponent(u.prefillEmail)}`);
+                                navigate(`/hr/users?prefill_email=${encodeURIComponent(u.prefillEmail)}`);
                               }}
                               sx={{
                                 fontWeight: 600,
