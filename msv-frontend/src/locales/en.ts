@@ -2156,7 +2156,8 @@ export default {
         guestCount: 'Guest Count',
         nightlyFee: 'Nightly Fee',
         totalAmount: 'Total Amount',
-        specialRequests: 'Special Requests'
+        specialRequests: 'Special Requests',
+        flightNumber: 'Flight (e.g. KE123)'
       },
       columns: {
         sequence: 'No.',
@@ -2169,6 +2170,9 @@ export default {
         checkIn: 'Check-in',
         checkOut: 'Check-out',
         nights: 'Nights',
+        airportPickup: 'Pickup',
+        airportArrivalTime: 'Arrival',
+        flightNumber: 'Flight',
         nightlyRate: 'Rate',
         amount: 'Amount',
         payment: 'Payment',
@@ -2189,6 +2193,10 @@ export default {
         pending: 'Pending',
         refunded: 'Refunded',
         partial: 'Partial'
+      },
+      airportPickup: {
+        yes: 'Needed',
+        no: 'No'
       },
       roomStatus: {
         available: 'Available',
@@ -2221,6 +2229,9 @@ export default {
         guestCount: 'Guest Count',
         nightlyFee: 'Nightly Fee',
         totalAmount: 'Total Amount',
+        airportPickup: 'Airport Pickup',
+        airportArrivalTime: 'Airport Arrival Time',
+        flightNumber: 'Flight Number',
         specialRequests: 'Special Requests'
       },
       help: {
@@ -2260,6 +2271,7 @@ export default {
         enterRoomNumber: 'Please enter room name.',
         invalidRoomId: 'Could not resolve room ID from room name.',
         enterRequired: 'Please fill in required information.',
+        airportPickupRequired: 'Please enter arrival time and flight number for airport pickup.',
         pastDateNotAllowed: 'Cannot book a date before today.',
         checkoutAfterCheckin: 'Check-out date must be after check-in date.',
         createFailed: 'Failed to create booking.',

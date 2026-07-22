@@ -31,6 +31,8 @@ import {
   Pagination,
   Autocomplete,
   TableSortLabel,
+  FormControlLabel,
+  Switch,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -106,6 +108,9 @@ interface Booking {
   status: 'confirmed' | 'pending' | 'cancelled' | 'checked_in' | 'checked_out' | 'no_show';
   paymentStatus: 'pending' | 'paid' | 'refunded' | 'partial';
   specialRequests?: string;
+  airportPickup?: boolean;
+  airportArrivalTime?: string;
+  flightNumber?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -149,6 +154,9 @@ interface RoomBookingManagementProps {
     nightlyRate: string;
     totalAmount: string;
     specialRequests: string;
+    airportPickup: boolean;
+    airportArrivalTime: string;
+    flightNumber: string;
   }>;
   onCloseDialog?: () => void;
 }
@@ -167,6 +175,17 @@ const listStateBoxSx = {
   py: 6,
   px: 2,
 } as const;
+
+const toTimeInputValue = (value?: string | null) => {
+  if (!value) return '';
+  const match = String(value).trim().match(/^(\d{2}):(\d{2})/);
+  return match ? `${match[1]}:${match[2]}` : '';
+};
+
+const formatTimeDisplay = (value?: string | null) => {
+  const normalized = toTimeInputValue(value);
+  return normalized || '—';
+};
 
 const bookingTableSx = {
   width: '100%',
@@ -462,7 +481,10 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     numberOfGuests: 1,
     nightlyRate: '',
     totalAmount: '',
-    specialRequests: ''
+    specialRequests: '',
+    airportPickup: false,
+    airportArrivalTime: '',
+    flightNumber: ''
   });
 
   useEffect(() => {
@@ -603,7 +625,10 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       numberOfGuests: booking.numberOfGuests,
       nightlyRate: nightlyRate ? String(nightlyRate) : '',
       totalAmount: String(booking.totalAmount),
-      specialRequests: booking.specialRequests || ''
+      specialRequests: booking.specialRequests || '',
+      airportPickup: Boolean(booking.airportPickup),
+      airportArrivalTime: toTimeInputValue(booking.airportArrivalTime),
+      flightNumber: booking.flightNumber || ''
     });
     setOpenDialog(true);
   }, []);
@@ -903,6 +928,9 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
           paymentStatus: b.payment_status || 'pending',
           paymentMethod: b.payment_method || '',
           specialRequests: b.special_requests || '',
+          airportPickup: Boolean(b.airport_pickup),
+          airportArrivalTime: toTimeInputValue(b.airport_arrival_time),
+          flightNumber: b.flight_number || '',
           createdAt: b.created_at || new Date().toISOString(),
           updatedAt: b.updated_at || new Date().toISOString(),
           createdBy: b.creator?.username || t('roomBookingManagement.unknown')
@@ -1028,6 +1056,16 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     }
   };
 
+  const getAirportPickupChip = (needed?: boolean) => (
+    <Chip
+      label={needed ? t('roomBookingManagement.airportPickup.yes') : t('roomBookingManagement.airportPickup.no')}
+      color={needed ? 'info' : 'default'}
+      size="small"
+      variant="outlined"
+      sx={chipSx}
+    />
+  );
+
   const handleViewBooking = (booking: Booking) => {
     setSelectedBooking(booking);
     setActionDialogOpen(true);
@@ -1051,7 +1089,10 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       numberOfGuests: 1,
       nightlyRate: '',
       totalAmount: '',
-      specialRequests: ''
+      specialRequests: '',
+      airportPickup: false,
+      airportArrivalTime: '',
+      flightNumber: ''
     });
     setOpenDialog(true);
   };
@@ -1103,6 +1144,12 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       setError(t('roomBookingManagement.errors.enterRequired'));
       return;
     }
+    if (formState.airportPickup) {
+      if (!formState.airportArrivalTime.trim() || !formState.flightNumber.trim()) {
+        setError(t('roomBookingManagement.errors.airportPickupRequired'));
+        return;
+      }
+    }
     if (!canManagePastCheckIn && formState.checkInDate < todayIso) {
       setError(t('roomBookingManagement.errors.pastDateNotAllowed'));
       return;
@@ -1126,7 +1173,10 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
           check_out_time: formState.checkOutTime || null,
           number_of_guests: Number(formState.numberOfGuests) || 1,
           total_amount: computedTotalAmount,
-          special_requests: formState.specialRequests.trim() || null
+          special_requests: formState.specialRequests.trim() || null,
+          airport_pickup: formState.airportPickup,
+          airport_arrival_time: formState.airportPickup ? formState.airportArrivalTime || null : null,
+          flight_number: formState.airportPickup ? formState.flightNumber.trim() || null : null
         });
         if (response.success) {
           setSuccess(t('roomBookingManagement.success.updated'));
@@ -1155,7 +1205,10 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
           check_out_time: formState.checkOutTime || null,
           number_of_guests: Number(formState.numberOfGuests) || 1,
           total_amount: computedTotalAmount,
-          special_requests: formState.specialRequests.trim() || null
+          special_requests: formState.specialRequests.trim() || null,
+          airport_pickup: formState.airportPickup,
+          airport_arrival_time: formState.airportPickup ? formState.airportArrivalTime || null : null,
+          flight_number: formState.airportPickup ? formState.flightNumber.trim() || null : null
         });
         if (response.success) {
           setSuccess(t('roomBookingManagement.success.created'));
@@ -1385,6 +1438,12 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
         return booking.status || '';
       case 'specialRequests':
         return booking.specialRequests || '';
+      case 'airportPickup':
+        return booking.airportPickup ? 1 : 0;
+      case 'airportArrivalTime':
+        return booking.airportArrivalTime || '';
+      case 'flightNumber':
+        return booking.flightNumber || '';
       default:
         return '';
     }
@@ -1818,6 +1877,78 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                 InputProps={{ readOnly: true }}
                 placeholder={t('roomBookingManagement.placeholders.totalAmount')}
               />
+            </Box>
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 1.25,
+                p: 1.25,
+                borderRadius: '10px',
+                border: '1px solid',
+                borderColor: 'divider',
+                bgcolor: 'action.hover',
+              }}
+            >
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formState.airportPickup}
+                    onChange={(e) =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        airportPickup: e.target.checked,
+                        ...(e.target.checked
+                          ? {}
+                          : { airportArrivalTime: '', flightNumber: '' }),
+                      }))
+                    }
+                    color="primary"
+                  />
+                }
+                label={t('roomBookingManagement.fields.airportPickup')}
+                sx={{ m: 0, '& .MuiFormControlLabel-label': { fontWeight: 600, fontSize: '0.875rem' } }}
+              />
+              {formState.airportPickup && (
+                <Grid container spacing={1.5}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5 }}>
+                        {t('roomBookingManagement.fields.airportArrivalTime')}
+                      </Typography>
+                      <TextField
+                        type="time"
+                        value={formState.airportArrivalTime}
+                        onChange={(e) =>
+                          setFormState((prev) => ({ ...prev, airportArrivalTime: e.target.value }))
+                        }
+                        fullWidth
+                        required
+                        size="small"
+                      />
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5 }}>
+                        {t('roomBookingManagement.fields.flightNumber')}
+                      </Typography>
+                      <TextField
+                        value={formState.flightNumber}
+                        onChange={(e) =>
+                          setFormState((prev) => ({ ...prev, flightNumber: e.target.value }))
+                        }
+                        fullWidth
+                        required
+                        size="small"
+                        placeholder={t('roomBookingManagement.placeholders.flightNumber')}
+                      />
+                    </Box>
+                  </Grid>
+                </Grid>
+              )}
             </Box>
           </Grid>
           <Grid size={{ xs: 12 }}>
@@ -2756,7 +2887,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
             sx={{
               ...mvsBodyListTableSx,
               ...mvsTableScrollSx,
-              overflowX: 'hidden',
+              overflowX: 'auto',
               overflowY: 'visible',
             }}
           >
@@ -2767,14 +2898,17 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     { label: t('roomBookingManagement.columns.sequence'), width: '4%', align: 'center' as const },
                     { label: t('roomBookingManagement.columns.guestName'), key: 'guestName', width: '11%', ellipsis: true },
                     { label: t('roomBookingManagement.columns.companyName'), key: 'companyName', width: '13%', ellipsis: true },
-                    { label: t('roomBookingManagement.columns.roomNo'), key: 'roomNumber', width: '7%' },
-                    { label: t('roomBookingManagement.columns.checkIn'), key: 'checkInDate', width: '9%' },
-                    { label: t('roomBookingManagement.columns.checkOut'), key: 'checkOutDate', width: '9%' },
-                    { label: t('roomBookingManagement.columns.nights'), key: 'totalNights', width: '7%' },
-                    { label: t('roomBookingManagement.columns.nightlyRate'), key: 'nightlyRate', width: '9%' },
-                    { label: t('roomBookingManagement.columns.amount'), key: 'totalAmount', width: '9%' },
-                    { label: t('roomBookingManagement.columns.payment'), key: 'paymentStatus', width: '12%', align: 'center' as const },
-                    { label: t('roomBookingManagement.columns.status'), key: 'status', width: '10%' },
+                    { label: t('roomBookingManagement.columns.roomNo'), key: 'roomNumber', width: '6%' },
+                    { label: t('roomBookingManagement.columns.checkIn'), key: 'checkInDate', width: '8%' },
+                    { label: t('roomBookingManagement.columns.checkOut'), key: 'checkOutDate', width: '8%' },
+                    { label: t('roomBookingManagement.columns.nights'), key: 'totalNights', width: '5%' },
+                    { label: t('roomBookingManagement.columns.airportPickup'), key: 'airportPickup', width: '7%', align: 'center' as const },
+                    { label: t('roomBookingManagement.columns.airportArrivalTime'), key: 'airportArrivalTime', width: '7%' },
+                    { label: t('roomBookingManagement.columns.flightNumber'), key: 'flightNumber', width: '7%' },
+                    { label: t('roomBookingManagement.columns.nightlyRate'), key: 'nightlyRate', width: '8%' },
+                    { label: t('roomBookingManagement.columns.amount'), key: 'totalAmount', width: '8%' },
+                    { label: t('roomBookingManagement.columns.payment'), key: 'paymentStatus', width: '9%', align: 'center' as const },
+                    { label: t('roomBookingManagement.columns.status'), key: 'status', width: '8%' },
                   ].map((col) => (
                     <TableCell
                       key={col.label}
@@ -2833,8 +2967,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                       { value: booking.checkInDate, ellipsis: false },
                       { value: booking.checkOutDate, ellipsis: false },
                       { value: `${booking.totalNights}${t('roomBookingManagement.units.night')}`, ellipsis: false },
-                      { value: `Rs. ${booking.totalNights ? Math.round(booking.totalAmount / booking.totalNights).toLocaleString() : '-'}`, ellipsis: false },
-                      { value: `Rs. ${booking.totalAmount.toLocaleString()}`, ellipsis: false },
                     ].map((cell, index) => (
                       <TableCell
                         key={`${booking.id}-${index}`}
@@ -2846,6 +2978,47 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                         }}
                       >
                         {cell.ellipsis ? renderEllipsisText(String(cell.value)) : cell.value}
+                      </TableCell>
+                    ))}
+                    <TableCell align="center" sx={bookingChipCellSx}>
+                      <Box sx={{ display: 'inline-flex', justifyContent: 'center', maxWidth: '100%' }}>
+                        {getAirportPickupChip(booking.airportPickup)}
+                      </Box>
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        ...bookingCellBaseSx,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
+                      {booking.airportPickup ? formatTimeDisplay(booking.airportArrivalTime) : '—'}
+                    </TableCell>
+                    <TableCell
+                      sx={{
+                        ...bookingCellBaseSx,
+                        ...bookingCellEllipsisSx,
+                      }}
+                    >
+                      {booking.airportPickup
+                        ? renderEllipsisText(booking.flightNumber || '—')
+                        : '—'}
+                    </TableCell>
+                    {[
+                      { value: `Rs. ${booking.totalNights ? Math.round(booking.totalAmount / booking.totalNights).toLocaleString() : '-'}`, ellipsis: false },
+                      { value: `Rs. ${booking.totalAmount.toLocaleString()}`, ellipsis: false },
+                    ].map((cell, index) => (
+                      <TableCell
+                        key={`${booking.id}-amt-${index}`}
+                        sx={{
+                          ...bookingCellBaseSx,
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {cell.value}
                       </TableCell>
                     ))}
                     <TableCell align="center" sx={bookingChipCellSx}>

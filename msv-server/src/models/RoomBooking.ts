@@ -25,6 +25,9 @@ interface RoomBookingAttributes {
   payment_status: 'pending' | 'paid' | 'refunded' | 'partial';
   payment_method?: string;
   special_requests?: string;
+  airport_pickup?: boolean;
+  airport_arrival_time?: string;
+  flight_number?: string;
   created_by: number;
   is_active?: boolean;
   created_at?: Date;
@@ -57,6 +60,9 @@ class RoomBooking extends Model<RoomBookingAttributes, RoomBookingCreationAttrib
   public payment_status!: 'pending' | 'paid' | 'refunded' | 'partial';
   public payment_method?: string;
   public special_requests?: string;
+  public airport_pickup?: boolean;
+  public airport_arrival_time?: string;
+  public flight_number?: string;
   public created_by!: number;
   public is_active?: boolean;
   public readonly created_at!: Date;
@@ -162,6 +168,19 @@ RoomBooking.init(
     },
     special_requests: {
       type: DataTypes.TEXT,
+      allowNull: true
+    },
+    airport_pickup: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
+    },
+    airport_arrival_time: {
+      type: DataTypes.TIME,
+      allowNull: true
+    },
+    flight_number: {
+      type: DataTypes.STRING(50),
       allowNull: true
     },
     created_by: {

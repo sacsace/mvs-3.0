@@ -2224,7 +2224,8 @@ export default {
         guestCount: '투숙객 수',
         nightlyFee: '1박 숙박비',
         totalAmount: '총 금액',
-        specialRequests: '특별 요청사항'
+        specialRequests: '특별 요청사항',
+        flightNumber: '항공편 (예: KE123)'
       },
       columns: {
         sequence: '순번',
@@ -2237,6 +2238,9 @@ export default {
         checkIn: '체크인',
         checkOut: '체크아웃',
         nights: '숙박수',
+        airportPickup: '픽업',
+        airportArrivalTime: '도착시간',
+        flightNumber: '항공편',
         nightlyRate: '1박 숙박비',
         amount: '금액',
         payment: '결제',
@@ -2257,6 +2261,10 @@ export default {
         pending: '결제대기',
         refunded: '환불완료',
         partial: '부분결제'
+      },
+      airportPickup: {
+        yes: '필요',
+        no: '불필요'
       },
       roomStatus: {
         available: '사용가능',
@@ -2289,6 +2297,9 @@ export default {
         guestCount: '투숙객 수',
         nightlyFee: '1박 숙박비',
         totalAmount: '총 금액',
+        airportPickup: '공항 픽업',
+        airportArrivalTime: '공항 도착시간',
+        flightNumber: '항공편',
         specialRequests: '특별 요청사항'
       },
       help: {
@@ -2328,6 +2339,7 @@ export default {
         enterRoomNumber: '호실명을 입력해주세요.',
         invalidRoomId: '호실명에서 객실 ID를 확인할 수 없습니다.',
         enterRequired: '필수 정보를 입력해주세요.',
+        airportPickupRequired: '공항 픽업 시 도착시간과 항공편을 입력해주세요.',
         pastDateNotAllowed: '오늘 이전 날짜는 예약할 수 없습니다.',
         checkoutAfterCheckin: '체크아웃 날짜는 체크인 이후여야 합니다.',
         createFailed: '예약 등록에 실패했습니다.',

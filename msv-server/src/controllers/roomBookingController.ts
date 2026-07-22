@@ -60,6 +60,45 @@ const ensureRoomBookingTimeColumns = async () => {
   } catch (error) {
     console.warn('room_bookings.check_in_time 컬럼 확인 실패:', error);
   }
+  try {
+    await (RoomBooking as any).sequelize?.query(`
+      ALTER TABLE room_bookings
+      ADD COLUMN IF NOT EXISTS airport_pickup BOOLEAN NOT NULL DEFAULT false;
+    `);
+  } catch (error) {
+    console.warn('room_bookings.airport_pickup 컬럼 확인 실패:', error);
+  }
+  try {
+    await (RoomBooking as any).sequelize?.query(`
+      ALTER TABLE room_bookings
+      ADD COLUMN IF NOT EXISTS airport_arrival_time TIME;
+    `);
+  } catch (error) {
+    console.warn('room_bookings.airport_arrival_time 컬럼 확인 실패:', error);
+  }
+  try {
+    await (RoomBooking as any).sequelize?.query(`
+      ALTER TABLE room_bookings
+      ADD COLUMN IF NOT EXISTS flight_number VARCHAR(50);
+    `);
+  } catch (error) {
+    console.warn('room_bookings.flight_number 컬럼 확인 실패:', error);
+  }
+};
+
+const normalizeTimeToHHMMSSOrNull = (value?: string | null) => {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  if (/^\d{2}:\d{2}$/.test(raw)) return `${raw}:00`;
+  if (/^\d{2}:\d{2}:\d{2}$/.test(raw)) return raw;
+  return null;
+};
+
+const parseAirportPickupFlag = (value: unknown) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  const raw = String(value ?? '').trim().toLowerCase();
+  return raw === 'true' || raw === '1' || raw === 'yes' || raw === 'y';
 };
 
 /** room_number / room_name / room_id 혼용 저장을 같은 물리 객실로 정규화 */
@@ -361,7 +400,7 @@ export const createRoomBooking = async (req: RequestWithUser, res: Response) => 
     const userRole = req.user?.role;
     const { booking_id, room_id, room_number, room_type, guest_name, company_name, guest_email, guest_phone,
             check_in_date, check_in_time, check_out_date, check_out_time, number_of_guests, total_amount, payment_method,
-            special_requests } = req.body;
+            special_requests, airport_pickup, airport_arrival_time, flight_number } = req.body;
 
     if (!booking_id || !room_id || !room_number || !room_type || !guest_name || 
         !check_in_date || !check_out_date || !total_amount) {
@@ -426,6 +465,21 @@ export const createRoomBooking = async (req: RequestWithUser, res: Response) => 
       });
     }
 
+    const wantsAirportPickup = parseAirportPickupFlag(airport_pickup);
+    const normalizedArrivalTime = wantsAirportPickup
+      ? normalizeTimeToHHMMSSOrNull(airport_arrival_time)
+      : null;
+    const normalizedFlightNumber = wantsAirportPickup
+      ? (String(flight_number || '').trim() || null)
+      : null;
+
+    if (wantsAirportPickup && (!normalizedArrivalTime || !normalizedFlightNumber)) {
+      return res.status(400).json({
+        success: false,
+        message: '공항 픽업 시 도착시간과 항공편을 입력해주세요.'
+      });
+    }
+
     const booking = await (RoomBooking as any).create({
       tenant_id: tenantId,
       company_id: companyId,
@@ -450,6 +504,9 @@ export const createRoomBooking = async (req: RequestWithUser, res: Response) => 
       payment_status: 'pending',
       payment_method: payment_method || null,
       special_requests: special_requests || null,
+      airport_pickup: wantsAirportPickup,
+      airport_arrival_time: normalizedArrivalTime,
+      flight_number: normalizedFlightNumber,
       created_by: userId
     });
 
@@ -494,7 +551,8 @@ export const updateRoomBooking = async (req: RequestWithUser, res: Response) => 
     const userRole = req.user?.role;
     const { guest_name, company_name, guest_email, guest_phone, check_in_date, check_in_time, check_out_date, check_out_time,
             number_of_guests, total_amount, status, payment_status, payment_method,
-            special_requests, room_id, room_number, room_type } = req.body;
+            special_requests, airport_pickup, airport_arrival_time, flight_number,
+            room_id, room_number, room_type } = req.body;
 
     const whereClause: any = { id, is_active: true };
     
@@ -589,6 +647,35 @@ export const updateRoomBooking = async (req: RequestWithUser, res: Response) => 
       totalNights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
     }
 
+    const nextAirportPickup = airport_pickup !== undefined
+      ? parseAirportPickupFlag(airport_pickup)
+      : Boolean(booking.airport_pickup);
+    const nextArrivalTime = airport_arrival_time !== undefined || airport_pickup !== undefined
+      ? (nextAirportPickup
+        ? normalizeTimeToHHMMSSOrNull(
+            airport_arrival_time !== undefined ? airport_arrival_time : booking.airport_arrival_time
+          )
+        : null)
+      : booking.airport_arrival_time;
+    const nextFlightNumber = flight_number !== undefined || airport_pickup !== undefined
+      ? (nextAirportPickup
+        ? (String(
+            flight_number !== undefined ? flight_number : booking.flight_number || ''
+          ).trim() || null)
+        : null)
+      : booking.flight_number;
+
+    if (
+      (airport_pickup !== undefined || airport_arrival_time !== undefined || flight_number !== undefined)
+      && nextAirportPickup
+      && (!nextArrivalTime || !nextFlightNumber)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: '공항 픽업 시 도착시간과 항공편을 입력해주세요.'
+      });
+    }
+
     await booking.update({
       guest_name: guest_name !== undefined ? guest_name : booking.guest_name,
       company_name: company_name !== undefined ? company_name : booking.company_name,
@@ -605,6 +692,9 @@ export const updateRoomBooking = async (req: RequestWithUser, res: Response) => 
       payment_status: payment_status !== undefined ? payment_status : booking.payment_status,
       payment_method: payment_method !== undefined ? payment_method : booking.payment_method,
       special_requests: special_requests !== undefined ? special_requests : booking.special_requests,
+      airport_pickup: nextAirportPickup,
+      airport_arrival_time: nextArrivalTime,
+      flight_number: nextFlightNumber,
       ...(wantsRoomChange
         ? {
             room_id: Number(room_id),
