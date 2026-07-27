@@ -20,6 +20,7 @@ export interface RequestWithUser extends Request {
     status: 'active' | 'inactive' | 'suspended';
     is_payment_officer?: boolean;
     last_login?: Date;
+    session_version?: number;
     created_at?: Date;
     updated_at?: Date;
   };

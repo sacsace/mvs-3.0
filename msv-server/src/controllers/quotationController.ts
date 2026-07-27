@@ -6,6 +6,12 @@ import { Op, QueryTypes } from 'sequelize';
 import sequelize from '../config/database';
 import { buildNodemailerTransportOptions, getResolvedMailTransportOptions } from '../utils/mailConfig';
 import {
+  bilingualSubject,
+  buildBilingualHtml,
+  buildBilingualText,
+  escapeHtml
+} from '../utils/mailBilingual';
+import {
   buildQuotationPdfBuffer,
   getCompanyAbbreviationForMail,
   stripLegalEntitySuffixesForSubject,
@@ -14,14 +20,6 @@ import {
 import { isParseEmailRecipientsFailure, parseEmailRecipientsList } from '../utils/emailRecipients';
 import { pushNotification } from './notificationController';
 import SocketService from '../services/socketService';
-
-function escapeHtml(s: string): string {
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 /**
  * DB 전역 유니크(quotation_number) 기준 다음 번호 — 비활성(목록 숨김) 건 포함해 중복 방지
@@ -469,7 +467,9 @@ export const createQuotation = async (req: RequestWithUser, res: Response) => {
             feature: 'quotation',
             quotation_id: quotation.id,
             quotation_number: qn,
-            href: '/work/quotation'
+            href: '/work/quotation',
+            title_en: 'Quotation Approval Request',
+            message_en: `${creatorName} requested approval for quotation ${qn}.`
           }
         },
         socketService
@@ -763,23 +763,65 @@ export const sendQuotation = async (req: RequestWithUser, res: Response) => {
     const customerShort = stripLegalEntitySuffixesForSubject(String(quotation.customer_name || ''));
     const customerInSubject = toTitleCaseWords(customerShort) || 'Customer';
 
-    const subject = `[${abbrev}] Quotation attached (${customerInSubject})`;
+    const subject = bilingualSubject(
+      `[${abbrev}] 견적서 첨부 (${customerInSubject})`,
+      `[${abbrev}] Quotation attached (${customerInSubject})`
+    );
 
-    const html = `
-      <p>Dear Customer,</p>
-      <p>Please find <strong>our quotation in PDF</strong> attached for your review.</p>
-      <p>We are pleased to submit the following summary for your consideration:</p>
-      <table cellpadding="8" style="border-collapse:collapse;border:1px solid #ccc;">
-        <tr><td style="border:1px solid #ccc;"><b>Customer</b></td><td style="border:1px solid #ccc;">${cnameFull}</td></tr>
-        <tr><td style="border:1px solid #ccc;"><b>Quotation no.</b></td><td style="border:1px solid #ccc;">${qn}</td></tr>
-        <tr><td style="border:1px solid #ccc;"><b>Total amount</b></td><td style="border:1px solid #ccc;">${cur} ${total.toLocaleString('en-IN')}</td></tr>
-        <tr><td style="border:1px solid #ccc;"><b>Valid until</b></td><td style="border:1px solid #ccc;">${escapeHtml(validUntil)}</td></tr>
+    const bodyKo = [
+      '고객님께,',
+      '',
+      '검토용 견적서 PDF를 첨부하오니 확인해 주시기 바랍니다.',
+      '',
+      `고객명: ${quotation.customer_name}`,
+      `견적번호: ${quotation.quotation_number}`,
+      `총액: ${cur} ${total.toLocaleString('en-IN')}`,
+      `유효기간: ${validUntil}`,
+      '',
+      '문의 사항이 있으시면 이 메일로 회신해 주세요.'
+    ].join('\n');
+
+    const bodyEn = [
+      'Dear Customer,',
+      '',
+      'Please find our quotation in PDF attached for your review.',
+      '',
+      `Customer: ${quotation.customer_name}`,
+      `Quotation no.: ${quotation.quotation_number}`,
+      `Total amount: ${cur} ${total.toLocaleString('en-IN')}`,
+      `Valid until: ${validUntil}`,
+      '',
+      'If you have any questions or need a revised offer, please reply to this email.'
+    ].join('\n');
+
+    const summaryTable = `
+      <table cellpadding="8" style="border-collapse:collapse;border:1px solid #ccc;margin:12px 0;">
+        <tr><td style="border:1px solid #ccc;"><b>고객 / Customer</b></td><td style="border:1px solid #ccc;">${cnameFull}</td></tr>
+        <tr><td style="border:1px solid #ccc;"><b>견적번호 / Quotation no.</b></td><td style="border:1px solid #ccc;">${qn}</td></tr>
+        <tr><td style="border:1px solid #ccc;"><b>총액 / Total amount</b></td><td style="border:1px solid #ccc;">${cur} ${total.toLocaleString('en-IN')}</td></tr>
+        <tr><td style="border:1px solid #ccc;"><b>유효기간 / Valid until</b></td><td style="border:1px solid #ccc;">${escapeHtml(validUntil)}</td></tr>
       </table>
-      <p>If you have any questions or need a revised offer, please reply to this email.</p>
-      <p style="margin-top:16px;color:#666;font-size:12px;">This message was sent automatically from the MSV system.</p>
     `;
 
-    const text = `Dear Customer,\n\nPlease find the quotation PDF attached.\n\nQuotation no.: ${quotation.quotation_number}\nCustomer: ${quotation.customer_name}\nTotal: ${cur} ${total}\nValid until: ${validUntil}\n\nThis message was sent from the MSV system.`;
+    const html = buildBilingualHtml({
+      titleKo: '견적서 발송',
+      titleEn: 'Quotation Sent',
+      bodyKo,
+      bodyEn,
+      bodyHtmlKo: `<p style="margin:0 0 8px;">고객님께,</p><p style="margin:0 0 8px;">검토용 견적서 PDF를 첨부하오니 확인해 주시기 바랍니다.</p>${summaryTable}<p>문의 사항이 있으시면 이 메일로 회신해 주세요.</p>`,
+      bodyHtmlEn: `<p style="margin:0 0 8px;">Dear Customer,</p><p style="margin:0 0 8px;">Please find our quotation in PDF attached for your review.</p>${summaryTable}<p>If you have any questions or need a revised offer, please reply to this email.</p>`,
+      footerKo: '본 메일은 MSV 시스템에서 자동 발송되었습니다.',
+      footerEn: 'This message was sent automatically from the MSV system.'
+    });
+
+    const text = buildBilingualText({
+      titleKo: '견적서 발송',
+      titleEn: 'Quotation Sent',
+      bodyKo,
+      bodyEn,
+      footerKo: '본 메일은 MSV 시스템에서 자동 발송되었습니다.',
+      footerEn: 'This message was sent automatically from the MSV system.'
+    });
 
     /** Gmail 등은 전체 메시지 약 25MB 제한 — 첨부 PDF는 여유 있게 18MB 이하 권장 */
     const MAX_CLIENT_PDF_BYTES = 18 * 1024 * 1024;

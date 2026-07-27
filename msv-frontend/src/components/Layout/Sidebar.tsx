@@ -9,7 +9,6 @@ import {
   Collapse,
   Box,
   Typography,
-  IconButton,
   Tooltip,
   Link
 } from '@mui/material';
@@ -46,8 +45,8 @@ import {
   Hotel,
   UploadFile,
 } from '@mui/icons-material';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { alpha } from '@mui/material/styles';
+import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useStore, useMenuStore } from '../../store';
 import menuService, { type Menu } from '../../services/menuService';
 import { isRemovedNavMenuRoute } from '../../utils/isRemovedNavMenuRoute';
@@ -69,9 +68,11 @@ interface SidebarProps {
 
 /** AppBar Toolbar 높이와 동일 */
 const HEADER_HEIGHT_PX = 60;
+/** 헤더 상단 inset — Header.tsx AppBar top 과 동일(화면 상단 밀착) */
+const HEADER_TOP_INSET_PX = 0;
 /** 헤더 하단과 좌측 메뉴 패널 사이 여백 */
 const HEADER_MENU_GAP_PX = 8;
-const SIDEBAR_TOP_PX = HEADER_HEIGHT_PX + HEADER_MENU_GAP_PX;
+const SIDEBAR_TOP_PX = HEADER_TOP_INSET_PX + HEADER_HEIGHT_PX + HEADER_MENU_GAP_PX;
 /** 메뉴 패널 하단과 화면 맨 아래 사이 여백 */
 const SIDEBAR_BOTTOM_GAP_PX = 12;
 const SIDEBAR_HEIGHT_CALC = `calc(100vh - ${SIDEBAR_TOP_PX + SIDEBAR_BOTTOM_GAP_PX}px)`;
@@ -80,31 +81,64 @@ export const SIDEBAR_WIDTH_TRANSITION_MS = 300;
 export const SIDEBAR_WIDTH_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 /** 마우스 이탈 후 접기 — 살짝 여유를 두어 자연스럽게 */
 const SIDEBAR_HOVER_CLOSE_DELAY_MS = 380;
-/** 선택 메뉴 — 브랜드 컬러 한 가지 + 연한 배경만 */
+/** 좌측 메뉴 — 본문과 구분되는 카드형 패널 */
 const MENU_ITEM_RADIUS_PX = 10;
-const MENU_ACTIVE_COLOR = '#6A8F93';
-const MENU_MAIN_TEXT_COLOR = '#374151';
-const MENU_SUB_TEXT_COLOR = '#4B5563';
+const MENU_PANEL_INSET_PX = 8;
+/** 패널 모서리 — px 단위(숫자만 쓰면 MUI spacing×8로 과도하게 둥글어짐) */
+const MENU_PANEL_RADIUS_PX = 10;
+const MENU_PANEL_BG = '#FFFFFF';
+const MENU_PANEL_BORDER = '#A8BDD0';
+const MENU_PANEL_SHADOW =
+  '0 4px 20px rgba(36, 52, 71, 0.1), 0 0 0 1px rgba(74, 127, 168, 0.16)';
+const MENU_ACTIVE_COLOR = '#4A7FA8';
+const MENU_ACTIVE_BG = 'rgba(74, 127, 168, 0.12)';
+const MENU_HOVER_BG = 'rgba(74, 127, 168, 0.07)';
+const MENU_MAIN_TEXT_COLOR = '#1E2F42';
+const MENU_SUB_TEXT_COLOR = '#526578';
+const MENU_SECTION_MUTED = '#6E8092';
+const MENU_NEST_BORDER = '#B7C9DB';
 
 const menuItemButtonSx = (
-  theme: { palette: { action: { hover: string } } },
+  _theme: { palette: { action: { hover: string } } },
   isActive: boolean,
   extra: Record<string, unknown>,
-  level: number = 0
+  level: number = 0,
+  _isSection: boolean = false
 ) => ({
   ...extra,
-  borderLeft: 'none',
-  backgroundColor: isActive ? alpha(MENU_ACTIVE_COLOR, 0.12) : 'transparent',
-  color: isActive ? MENU_ACTIVE_COLOR : level === 0 ? MENU_MAIN_TEXT_COLOR : MENU_SUB_TEXT_COLOR,
-  transition: 'background-color 0.2s ease, color 0.2s ease',
+  position: 'relative' as const,
+  border: 'none',
+  boxShadow: 'none',
+  backgroundColor: isActive && level > 0 ? MENU_ACTIVE_BG : 'transparent',
+  color: isActive
+    ? MENU_ACTIVE_COLOR
+    : level === 0
+      ? MENU_MAIN_TEXT_COLOR
+      : MENU_SUB_TEXT_COLOR,
+  transition: 'background-color 0.14s ease, color 0.14s ease',
+  '&::before':
+    isActive && level > 0
+      ? {
+          content: '""',
+          position: 'absolute',
+          left: 6,
+          top: 7,
+          bottom: 7,
+          width: 3,
+          borderRadius: 3,
+          backgroundColor: MENU_ACTIVE_COLOR,
+        }
+      : {},
   '&:hover': {
-    backgroundColor: isActive ? alpha(MENU_ACTIVE_COLOR, 0.18) : theme.palette.action.hover,
+    backgroundColor:
+      isActive && level > 0 ? 'rgba(74, 127, 168, 0.2)' : MENU_HOVER_BG,
   },
 });
 
 const menuItemIconSx = (extra: Record<string, unknown>) => ({
   ...extra,
   color: 'inherit',
+  justifyContent: 'center',
 });
 
 const normalizeMenuPath = (path: string) => {
@@ -295,6 +329,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   }, [autoCollapseEnabled, iconOnly, onCollapseChange, schedulePeekClose]);
   const navigate = useNavigate();
   const location = useLocation();
+  const { t } = useTranslation();
   const { user } = useStore();
   const {
     menus,
@@ -346,6 +381,11 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     return filterRec(menus || []);
   }, [menus]);
+
+  const topLevelMenuIds = useMemo(
+    () => new Set((menusWithoutNotice || []).map((m) => m.id)),
+    [menusWithoutNotice]
+  );
 
   const allMenuRoutes = useMemo(() => {
     const out: string[] = [];
@@ -403,6 +443,20 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     return new Set(chain.slice(0, -1).map((m) => m.id));
   }, [location.pathname, menusWithoutNotice, allMenuRoutes]);
+
+  // 페이지 이동 시 현재 섹션만 남기고 다른 최상위 그룹은 접기
+  useEffect(() => {
+    setExpandedMenus((prev) => {
+      const next = new Set<number>();
+      ancestorIdsToKeepOpen.forEach((id) => next.add(id));
+      prev.forEach((id) => {
+        if (!topLevelMenuIds.has(id)) next.add(id);
+      });
+      const same =
+        next.size === prev.size && Array.from(next).every((id) => prev.has(id));
+      return same ? prev : next;
+    });
+  }, [ancestorIdsToKeepOpen, topLevelMenuIds]);
 
   // 아이콘 매핑
   const getIcon = (iconName: string) => {
@@ -584,18 +638,28 @@ const Sidebar: React.FC<SidebarProps> = ({
     loadMenus();
   }, [user, language, setMenus, setUserPermissions, setLoading, setError]);
 
-  // 메뉴 확장/축소 토글 (현재 페이지가 속한 섹션은 접지 않음)
+  // 메뉴 확장/축소 — 최상위는 아코디언(현재 경로 섹션 제외 한 개만 펼침)
   const handleMenuToggle = (menuId: number) => {
     if (ancestorIdsToKeepOpen.has(menuId)) {
       return;
     }
-    const newExpanded = new Set(expandedMenus);
-    if (newExpanded.has(menuId)) {
-      newExpanded.delete(menuId);
-    } else {
-      newExpanded.add(menuId);
-    }
-    setExpandedMenus(newExpanded);
+    setExpandedMenus((prev) => {
+      const isTopLevel = topLevelMenuIds.has(menuId);
+      if (isTopLevel) {
+        const opening = !prev.has(menuId);
+        const next = new Set<number>();
+        ancestorIdsToKeepOpen.forEach((id) => next.add(id));
+        prev.forEach((id) => {
+          if (!topLevelMenuIds.has(id)) next.add(id);
+        });
+        if (opening) next.add(menuId);
+        return next;
+      }
+      const next = new Set(prev);
+      if (next.has(menuId)) next.delete(menuId);
+      else next.add(menuId);
+      return next;
+    });
   };
 
   // 메뉴 클릭 처리
@@ -621,7 +685,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   const renderMenuItem = (menu: any, level: number = 0) => {
     const hasChildren = menu.children && menu.children.length > 0;
     const isExpanded = ancestorIdsToKeepOpen.has(menu.id) || expandedMenus.has(menu.id);
-    // 하위 메뉴 선택 시 상위 메뉴가 함께 활성화되지 않도록 분리 처리
     const isActive = hasChildren
       ? isRouteExactMatch(location.pathname, menu.route)
       : (() => {
@@ -629,47 +692,55 @@ const Sidebar: React.FC<SidebarProps> = ({
           const nr = normalizeMenuPath(menu.route || '');
           return !!nr && best === nr;
         })();
+    const isSection = level === 0 && hasChildren;
+    const sectionHasActiveChild =
+      isSection &&
+      Array.from(ancestorIdsToKeepOpen).some((id) => id === menu.id);
+    const highlight = isActive || (isCompact && sectionHasActiveChild);
     const isCompactItem = isCompact;
-    const isEnglish = language === 'en';
-    const itemPaddingY = level === 0 ? (isEnglish ? 0.5 : 0.4) : (isEnglish ? 0.72 : 0.58);
-    const activePaddingBoost = level === 0 ? 0.06 : 0.1;
-    const activePaddingY = itemPaddingY + activePaddingBoost;
-    const topLevelMinHeight = isEnglish ? 42 : 41;
     const labelText =
       language === 'ko' && menu.name_ko === '지출보고서'
         ? '지출결의서'
         : language === 'ko'
           ? menu.name_ko
           : String(menu.name_en ?? '').trim() || menu.name_ko;
-    const hideSecondaryDescription =
-      menu.route === '/hotel' ||
-      String(menu.route || '').startsWith('/ai') ||
-      String(menu.route || '').startsWith('/communication/notice') ||
-      menu.name_ko === '공지사항';
-    
+
     return (
       <React.Fragment key={menu.id}>
-        <ListItem disablePadding>
+        <ListItem
+          disablePadding
+          sx={{
+            mb: level === 0 ? 0.15 : 0.05,
+            mt: level === 0 ? 0.35 : 0,
+          }}
+        >
           {isCompactItem ? (
             <Tooltip title={labelText} placement="right">
               <ListItemButton
                 onClick={() => handleMenuClick(menu)}
                 sx={(theme) =>
-                  menuItemButtonSx(theme, isActive, {
-                    pl: 1,
-                    py: isActive ? activePaddingY : itemPaddingY,
-                    justifyContent: 'center',
-                    borderRadius: MENU_ITEM_RADIUS_PX,
-                  }, level)
+                  menuItemButtonSx(
+                    theme,
+                    highlight,
+                    {
+                      mx: 0.75,
+                      px: 1,
+                      py: 0.9,
+                      minHeight: 40,
+                      justifyContent: 'center',
+                      borderRadius: MENU_ITEM_RADIUS_PX,
+                      backgroundColor: highlight ? MENU_ACTIVE_BG : 'transparent',
+                    },
+                    level,
+                    isSection
+                  )
                 }
               >
                 <ListItemIcon
                   sx={menuItemIconSx({
-                    minWidth: '24px',
-                    opacity: isActive ? 1 : 0.55,
-                    '& .MuiSvgIcon-root': {
-                      fontSize: '1rem',
-                    },
+                    minWidth: 0,
+                    color: highlight ? MENU_ACTIVE_COLOR : MENU_SECTION_MUTED,
+                    '& .MuiSvgIcon-root': { fontSize: '1.2rem' },
                   })}
                 >
                   {getContextualMenuIcon(menu, level)}
@@ -680,64 +751,104 @@ const Sidebar: React.FC<SidebarProps> = ({
             <ListItemButton
               onClick={() => handleMenuClick(menu)}
               sx={(theme) =>
-                menuItemButtonSx(theme, isActive, {
-                  pl: 2 + level * 2,
-                  py: isActive ? activePaddingY : itemPaddingY,
-                  minHeight: level === 0 ? topLevelMinHeight : 'auto',
-                  borderRadius: MENU_ITEM_RADIUS_PX,
-                }, level)
+                menuItemButtonSx(
+                  theme,
+                  isActive,
+                  {
+                    mx: 1,
+                    pl: level === 0 ? 1.35 : 2.25,
+                    pr: 1,
+                    py: level === 0 ? 0.8 : 0.55,
+                    minHeight: level === 0 ? 40 : 32,
+                    borderRadius: MENU_ITEM_RADIUS_PX,
+                    alignItems: 'center',
+                    ...(level === 0 && isActive
+                      ? { backgroundColor: MENU_ACTIVE_BG }
+                      : {}),
+                  },
+                  level,
+                  isSection
+                )
               }
             >
               <ListItemIcon
                 sx={menuItemIconSx({
-                  minWidth: '36px',
-                  opacity: isActive ? 1 : level === 0 ? 0.72 : 0.55,
+                  minWidth: level === 0 ? 28 : 24,
+                  color:
+                    isActive || sectionHasActiveChild
+                      ? MENU_ACTIVE_COLOR
+                      : level === 0
+                        ? MENU_SECTION_MUTED
+                        : 'inherit',
+                  opacity: isActive || sectionHasActiveChild ? 1 : level === 0 ? 0.85 : 0.7,
                   '& .MuiSvgIcon-root': {
-                    fontSize: '1rem',
+                    fontSize: level === 0 ? '1.05rem' : '0.95rem',
                   },
                 })}
               >
                 {getContextualMenuIcon(menu, level)}
               </ListItemIcon>
-              <ListItemText 
+              <ListItemText
                 primary={labelText}
-                secondary={level === 0 && !hideSecondaryDescription ? menu.description : null}
-                sx={{ 
-                  my: level === 0 ? (isEnglish ? 0.08 : 0) : (isEnglish ? 0.14 : 0.08),
+                primaryTypographyProps={{ component: 'span' }}
+                sx={{
+                  my: 0,
+                  minWidth: 0,
                   opacity: isExpandedVisual ? 1 : 0,
                   transform: isExpandedVisual ? 'translateX(0)' : 'translateX(-6px)',
                   transition: `opacity ${SIDEBAR_WIDTH_TRANSITION_MS - 80}ms ${SIDEBAR_WIDTH_EASING} 70ms, transform ${SIDEBAR_WIDTH_TRANSITION_MS - 80}ms ${SIDEBAR_WIDTH_EASING} 70ms`,
-                  overflow: 'hidden',
-                  whiteSpace: 'nowrap',
                   '& .MuiListItemText-primary': {
-                    fontSize: '13px',
-                    fontWeight: isActive ? 600 : level === 0 ? 500 : 400,
+                    fontSize: level === 0 ? '13.5px' : '13px',
+                    fontWeight: isActive ? 500 : level === 0 ? 500 : 400,
+                    letterSpacing: '-0.01em',
                     color: 'inherit',
-                    lineHeight: level === 0 ? (isEnglish ? 1.2 : 0.94) : (isEnglish ? 1.28 : 1.12)
+                    lineHeight: 1.3,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
                   },
-                  '& .MuiListItemText-secondary': {
-                    fontSize: '0.7rem',
-                    lineHeight: isEnglish ? 1.26 : 1.105,
-                    color: 'text.secondary',
-                    mt: isEnglish ? 0.45 : 0.34
-                  }
                 }}
               />
               {hasChildren && (
-                <IconButton size="small" onClick={(e) => {
-                  e.stopPropagation();
-                  handleMenuToggle(menu.id);
-                }}>
-                  {isExpanded ? <ExpandLess /> : <ExpandMore />}
-                </IconButton>
+                <Box
+                  component="span"
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 20,
+                    height: 20,
+                    ml: 0.25,
+                    color: isExpanded || sectionHasActiveChild ? MENU_ACTIVE_COLOR : '#A0AEBC',
+                    flexShrink: 0,
+                    transition: 'transform 0.18s ease, color 0.14s ease',
+                    transform: isExpanded ? 'rotate(0deg)' : 'rotate(0deg)',
+                    '& .MuiSvgIcon-root': { fontSize: '1.05rem' },
+                  }}
+                >
+                  {isExpanded ? <ExpandLess fontSize="inherit" /> : <ExpandMore fontSize="inherit" />}
+                </Box>
               )}
             </ListItemButton>
           )}
         </ListItem>
-        
+
         {hasChildren && !isCompactItem && (
-          <Collapse in={isExpanded} timeout="auto" unmountOnExit>
-            <List component="div" disablePadding>
+          <Collapse in={isExpanded} timeout={160} unmountOnExit>
+            <List
+              component="div"
+              disablePadding
+              sx={{
+                mb: 0.4,
+                ml: 1.75,
+                pl: 1.1,
+                borderLeft: `2px solid ${MENU_NEST_BORDER}`,
+                bgcolor: 'rgba(74, 127, 168, 0.035)',
+                borderRadius: '0 10px 10px 0',
+                py: 0.25,
+                mr: 0.75,
+              }}
+            >
               {menu.children.map((child: any) => renderMenuItem(child, level + 1))}
             </List>
           </Collapse>
@@ -747,24 +858,25 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const drawerPaperSx = {
-    width: effectiveWidth,
+    width: Math.max(effectiveWidth - MENU_PANEL_INSET_PX, 56),
     boxSizing: 'border-box' as const,
     display: 'flex',
     flexDirection: 'column' as const,
     position: 'fixed' as const,
     top: `${SIDEBAR_TOP_PX}px`,
-    left: 0,
+    left: `${MENU_PANEL_INSET_PX}px`,
     height: SIDEBAR_HEIGHT_CALC,
     minHeight: SIDEBAR_HEIGHT_CALC,
-    backgroundColor: '#F7F8FA',
-    borderRight: '1px solid #C5CED9',
+    backgroundColor: MENU_PANEL_BG,
+    border: `1px solid ${MENU_PANEL_BORDER}`,
+    borderRadius: `${MENU_PANEL_RADIUS_PX}px`,
     zIndex: (iconOnly || autoCollapseEnabled) && peekOpen && (iconOnly || isCollapsed) ? 1300 : 1200,
     willChange: 'width, box-shadow',
     overflowX: 'hidden' as const,
     boxShadow:
       (iconOnly || autoCollapseEnabled) && peekOpen
-        ? '8px 0 28px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.04)'
-        : 'none',
+        ? '0 10px 32px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(74, 127, 168, 0.22)'
+        : MENU_PANEL_SHADOW,
     transition: isResizing
       ? 'none'
       : `width ${SIDEBAR_WIDTH_TRANSITION_MS}ms ${SIDEBAR_WIDTH_EASING}, box-shadow ${SIDEBAR_WIDTH_TRANSITION_MS}ms ${SIDEBAR_WIDTH_EASING}`,
@@ -779,8 +891,10 @@ const Sidebar: React.FC<SidebarProps> = ({
     top: `${SIDEBAR_TOP_PX}px`,
     height: SIDEBAR_HEIGHT_CALC,
     minHeight: SIDEBAR_HEIGHT_CALC,
-    backgroundColor: '#F7F8FA',
-    borderRight: '1px solid #C5CED9',
+    backgroundColor: MENU_PANEL_BG,
+    border: `1px solid ${MENU_PANEL_BORDER}`,
+    borderRadius: `${MENU_PANEL_RADIUS_PX}px`,
+    boxShadow: MENU_PANEL_SHADOW,
     overflowX: 'hidden' as const,
   };
 
@@ -789,11 +903,19 @@ const Sidebar: React.FC<SidebarProps> = ({
       sx={{
         flexGrow: 1,
         overflow: 'auto',
-        backgroundColor: '#F7F8FA',
-        p: 1.5,
+        backgroundColor: MENU_PANEL_BG,
+        px: 0.25,
+        pt: 0.75,
+        pb: 1,
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
+        '&::-webkit-scrollbar': { width: 5 },
+        '&::-webkit-scrollbar-thumb': {
+          backgroundColor: 'rgba(74, 127, 168, 0.28)',
+          borderRadius: 8,
+        },
+        '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
       }}
     >
       <List sx={{ flexGrow: 1, p: 0 }}>
@@ -808,19 +930,74 @@ const Sidebar: React.FC<SidebarProps> = ({
       <Box
         sx={{
           mt: 'auto',
-          p: 2,
+          px: 1.5,
+          py: 1.25,
           textAlign: 'center',
-          backgroundColor: '#F7F8FA',
           flexShrink: 0,
-          position: 'relative',
+          borderTop: `1px solid ${MENU_PANEL_BORDER}`,
+          bgcolor: '#FFFFFF',
         }}
       >
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+            gap: 0.5,
+            mb: 0.35,
+            opacity: isExpandedVisual ? 1 : 0,
+            pointerEvents: isExpandedVisual ? 'auto' : 'none',
+            transition: `opacity ${SIDEBAR_WIDTH_TRANSITION_MS - 60}ms ${SIDEBAR_WIDTH_EASING} 90ms`,
+          }}
+        >
+          {[
+            { to: '/legal/terms', label: t('login.footerTerms') },
+            { to: '/legal/privacy', label: t('login.footerPrivacy') },
+            { to: '/legal/support', label: t('login.footerSupport') },
+          ].map((item, index) => (
+            <React.Fragment key={item.to}>
+              {index > 0 && (
+                <Typography
+                  component="span"
+                  sx={{
+                    fontSize: '0.625rem',
+                    color: 'text.secondary',
+                    opacity: 0.55,
+                    lineHeight: 1,
+                  }}
+                >
+                  ·
+                </Typography>
+              )}
+              <Typography
+                component={RouterLink}
+                to={item.to}
+                sx={{
+                  fontSize: '0.625rem',
+                  fontWeight: 500,
+                  color: 'text.secondary',
+                  textDecoration: 'none',
+                  whiteSpace: 'nowrap',
+                  lineHeight: 1.4,
+                  '&:hover': {
+                    color: MENU_ACTIVE_COLOR,
+                    textDecoration: 'underline',
+                  },
+                }}
+              >
+                {item.label}
+              </Typography>
+            </React.Fragment>
+          ))}
+        </Box>
         <Typography
           variant="caption"
           color="text.secondary"
           sx={{
-            fontSize: '0.75rem',
-            opacity: isExpandedVisual ? 0.7 : 0,
+            fontSize: '0.6875rem',
+            letterSpacing: '0.02em',
+            opacity: isExpandedVisual ? 0.5 : 0,
             display: 'block',
             transition: `opacity ${SIDEBAR_WIDTH_TRANSITION_MS - 60}ms ${SIDEBAR_WIDTH_EASING} 90ms`,
           }}
@@ -836,7 +1013,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               fontSize: 'inherit',
               cursor: 'pointer',
               '&:hover': {
-                color: 'inherit',
+                color: MENU_ACTIVE_COLOR,
                 textDecoration: 'none',
               },
               '&:visited': {

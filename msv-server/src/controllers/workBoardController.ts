@@ -281,7 +281,10 @@ const sendCardAssignmentNotification = (
         board_id: payload.boardId,
         board_name: payload.boardName,
         card_id: payload.cardId,
-        card_title: payload.cardTitle
+        card_title: payload.cardTitle,
+        actor_name: payload.actorName,
+        title_en: 'Work Assignee Assignment',
+        message_en: `${payload.actorName} assigned you as the assignee of the "${payload.cardTitle}" card.`
       },
       tenant_id: req.user?.tenant_id,
       company_id: req.user?.company_id,
@@ -1348,7 +1351,10 @@ export const createWorkBoardCardComment = async (req: RequestWithUser, res: Resp
               board_name: board.name,
               card_id: card.id,
               card_title: card.title,
-              comment_id: comment.id
+              comment_id: comment.id,
+              actor_name: actorName,
+              title_en: 'Comment Mention',
+              message_en: `${actorName} mentioned you in a comment on the "${card.title}" card.`
             },
             tenant_id: user.tenant_id,
             company_id: user.company_id,

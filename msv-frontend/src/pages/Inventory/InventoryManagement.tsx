@@ -2740,6 +2740,16 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
     });
   }, [item]);
 
+  // 신규 등록: 창고 목록 로드 후 첫 번째 창고를 기본 선택
+  useEffect(() => {
+    if (item) return;
+    if (!inventoryLocations.length) return;
+    setFormData((prev) => {
+      if (prev.location?.trim()) return prev;
+      return { ...prev, location: inventoryLocations[0].name };
+    });
+  }, [inventoryLocations, item]);
+
   const categoryOptions = useMemo(() => {
     const names = new Set(productCategories.map((c) => c.name));
     const opts = [...productCategories];

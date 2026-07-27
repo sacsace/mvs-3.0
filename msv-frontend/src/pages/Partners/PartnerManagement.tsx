@@ -41,7 +41,6 @@ import {
   Delete as DeleteIcon,
   Add as AddIcon,
   Search as SearchIcon,
-  Person as PersonIcon,
   Email as EmailIcon,
   Download as DownloadIcon,
   Upload as UploadIcon,
@@ -83,7 +82,6 @@ const PARTNERS_PER_PAGE = 10;
 type ListViewMode = 'page' | 'all';
 type PartnerSortKey =
   | 'company'
-  | 'representative'
   | 'type'
   | 'industry'
   | 'contact'
@@ -117,7 +115,6 @@ const partnerFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } 
 const PART_COL_DEFAULTS: Record<string, number> = {
   select: 48,
   company: 240,
-  representative: 120,
   type: 120,
   industry: 120,
   contact: 160,
@@ -131,7 +128,6 @@ const PART_COL_TOTAL = Object.values(PART_COL_DEFAULTS).reduce((s, n) => s + n, 
 const PART_COL_ALIGN: Record<string, 'left' | 'right' | 'center'> = {
   select: 'center',
   company: 'left',
-  representative: 'left',
   type: 'left',
   industry: 'left',
   contact: 'left',
@@ -143,7 +139,6 @@ const PART_COL_ALIGN: Record<string, 'left' | 'right' | 'center'> = {
 const PART_COL_MIN_WIDTH: Record<string, number> = {
   select: 48,
   company: 120,
-  representative: 88,
   type: 88,
   industry: 72,
   contact: 100,
@@ -730,8 +725,6 @@ const PartnerManagement: React.FC = () => {
     switch (key) {
       case 'company':
         return String(partner.companyName || '').toLowerCase();
-      case 'representative':
-        return String(partner.representative || '').toLowerCase();
       case 'type':
         return String(partner.businessType || '').toLowerCase();
       case 'industry':
@@ -915,7 +908,6 @@ const PartnerManagement: React.FC = () => {
     ...partnerColBaseSx(key),
     textOverflow:
       key === 'company' ||
-      key === 'representative' ||
       key === 'industry' ||
       key === 'contact' ||
       key === 'contract'
@@ -1394,7 +1386,6 @@ const PartnerManagement: React.FC = () => {
                     />
                   </TableCell>
                   {renderHeadCell('company', t('partnerManagement.companyInfo'), 'company')}
-                  {renderHeadCell('representative', t('partnerManagement.representative'), 'representative')}
                   {renderHeadCell('type', t('partnerManagement.companyType'), 'type')}
                   {renderHeadCell('industry', t('partnerManagement.industry'), 'industry')}
                   {renderHeadCell('contact', t('partnerManagement.contact'), 'contact')}
@@ -1453,7 +1444,7 @@ const PartnerManagement: React.FC = () => {
                         </Avatar>
                         <Typography
                           component="span"
-                          fontWeight={600}
+                          fontWeight={400}
                           noWrap
                           title={partner.companyName}
                           sx={{
@@ -1466,14 +1457,6 @@ const PartnerManagement: React.FC = () => {
                           }}
                         >
                           {partner.companyName}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell align={partColTableAlign('representative')} sx={tdSx('representative')}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'hidden' }}>
-                        <PersonIcon sx={{ mr: 0.5, fontSize: '0.875rem', color: 'text.secondary', flexShrink: 0 }} />
-                        <Typography component="span" noWrap title={partner.representative} sx={{ ...partnerListTextSx, display: 'block' }}>
-                          {partner.representative}
                         </Typography>
                       </Box>
                     </TableCell>

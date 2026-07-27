@@ -150,9 +150,19 @@ const Header: React.FC<HeaderProps> = ({
     setAnchorEl(null);
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
     handleClose();
+    try {
+      await api.post(
+        '/auth/logout',
+        {},
+        { headers: { 'x-skip-error-popup': 'true', 'x-skip-session-refresh': 'true' } }
+      );
+    } catch {
+      /* 서버 무효화 실패해도 클라이언트 로그아웃은 진행 */
+    }
+    logout();
+    window.location.href = '/login';
   };
 
   const handleOpenSettings = () => {
@@ -319,12 +329,23 @@ const Header: React.FC<HeaderProps> = ({
       position="fixed" 
       elevation={0}
       sx={{ 
-        backgroundColor: 'background.paper',
+        top: 0,
+        left: 8,
+        right: 8,
+        width: 'auto',
+        backgroundColor: '#FFFFFF',
         backgroundImage: 'none',
         backdropFilter: 'blur(12px)',
-        borderBottom: '1px solid',
-        borderColor: '#E5E7EB',
-        boxShadow: 'none',
+        border: '1px solid rgba(143, 168, 190, 0.45)',
+        borderTop: 'none',
+        borderLeft: '1px solid rgba(143, 168, 190, 0.45)',
+        borderRight: '1px solid rgba(143, 168, 190, 0.45)',
+        borderBottom: '1px solid rgba(143, 168, 190, 0.45)',
+        borderRadius: '0 0 10px 10px',
+        // 연한 외각선 + 소프트 그림자
+        boxShadow:
+          '0 4px 14px rgba(36, 52, 71, 0.08), 0 1px 3px rgba(36, 52, 71, 0.04)',
+        outline: 'none',
         zIndex: (theme) => theme.zIndex.drawer + 1,
         '&::after': {
           display: 'none'
@@ -617,47 +638,61 @@ const Header: React.FC<HeaderProps> = ({
             </Badge>
           </IconButton>
           
-          {/* 사용자명 표시 */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mr: 1 }}>
-            <Typography 
-              variant="body2" 
-              sx={{ 
-                fontWeight: 500, 
+          {/* 이름 + 아바타 — 클릭 시 설정/로그아웃 메뉴 */}
+          <Box
+            component="button"
+            type="button"
+            aria-label={language === 'en' ? 'Account menu' : '계정 메뉴'}
+            aria-controls={Boolean(anchorEl) ? 'menu-appbar' : undefined}
+            aria-haspopup="true"
+            aria-expanded={Boolean(anchorEl) ? 'true' : undefined}
+            onClick={handleMenu}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              mr: 0.5,
+              ml: 0.25,
+              py: 0.35,
+              pl: 1,
+              pr: 0.5,
+              border: 'none',
+              borderRadius: '999px',
+              bgcolor: 'transparent',
+              cursor: 'pointer',
+              font: 'inherit',
+              color: 'inherit',
+              transition: 'background-color 0.2s ease, transform 0.2s ease',
+              '&:hover': {
+                bgcolor: 'action.hover',
+                transform: 'translateY(-1px)',
+              },
+            }}
+          >
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 500,
                 color: 'text.primary',
                 fontSize: '0.875rem',
-                whiteSpace: 'nowrap'
+                whiteSpace: 'nowrap',
               }}
             >
               {user?.username || '사용자'}
             </Typography>
-          </Box>
-          
-          <IconButton
-            size="small"
-            aria-label="account of current user"
-            aria-controls="menu-appbar"
-            aria-haspopup="true"
-            onClick={handleMenu}
-            sx={{ 
-              color: 'text.secondary',
-              transition: 'all 0.2s ease',
-              '&:hover': {
-                bgcolor: 'action.hover',
-                transform: 'translateY(-1px)',
-              }
-            }}
-          >
-            <Avatar sx={{ 
-              width: 28, 
-              height: 28, 
-              bgcolor: 'rgba(102, 126, 234, 0.88)',
-              color: 'white',
-              fontWeight: 500,
-              fontSize: '0.7rem'
-            }}>
+            <Avatar
+              sx={{
+                width: 28,
+                height: 28,
+                bgcolor: 'rgba(102, 126, 234, 0.88)',
+                color: 'white',
+                fontWeight: 500,
+                fontSize: '0.7rem',
+              }}
+            >
               {user?.username?.charAt(0).toUpperCase() || 'U'}
             </Avatar>
-          </IconButton>
+          </Box>
 
           {!showMobileNav ? (
           <Tooltip title={language === 'en' ? 'All menus' : '전체 메뉴'}>
@@ -864,7 +899,7 @@ const Header: React.FC<HeaderProps> = ({
             </MenuItem>
             <MenuItem onClick={handleLogout} sx={{ fontSize: '0.75rem' }}>
               <LogoutIcon sx={{ mr: 1, fontSize: '0.875rem' }} />
-              로그아웃
+              {t('common.logout')}
             </MenuItem>
           </Menu>
 

@@ -32,7 +32,11 @@ const ErrorDialog: React.FC = () => {
   const currentError = errors[errors.length - 1];
 
   const handleClose = () => {
+    const redirectTo = currentError.redirectTo;
     clearErrors();
+    if (redirectTo && typeof window !== 'undefined') {
+      window.location.href = redirectTo;
+    }
   };
 
   const toggleExpand = (errorId: string) => {

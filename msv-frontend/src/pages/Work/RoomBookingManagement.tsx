@@ -1007,25 +1007,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     },
   } as const;
 
-  const getStatusChip = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return <Chip label={t('roomBookingManagement.status.confirmed')} color="success" size="small" variant="outlined" sx={chipSx} />;
-      case 'pending':
-        return <Chip label={t('roomBookingManagement.status.pending')} color="warning" size="small" variant="outlined" sx={chipSx} />;
-      case 'cancelled':
-        return <Chip label={t('roomBookingManagement.status.cancelled')} color="error" size="small" variant="outlined" sx={chipSx} />;
-      case 'checked_in':
-        return <Chip label={t('roomBookingManagement.status.checkedIn')} color="info" size="small" variant="outlined" sx={chipSx} />;
-      case 'checked_out':
-        return <Chip label={t('roomBookingManagement.status.checkedOut')} color="default" size="small" variant="outlined" sx={chipSx} />;
-      case 'no_show':
-        return <Chip label={t('roomBookingManagement.status.noShow')} color="error" size="small" variant="outlined" sx={chipSx} />;
-      default:
-        return <Chip label={t('roomBookingManagement.unknown')} color="default" size="small" variant="outlined" sx={chipSx} />;
-    }
-  };
-
   const getRoomTypeLabel = (type: string) => {
     switch (type) {
       case 'standard':
@@ -1109,11 +1090,9 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       return;
     }
 
-    if (!selectedBooking) {
-      if (!formState.roomNumber.trim()) {
-        setError(t('roomBookingManagement.errors.enterRoomNumber'));
-        return;
-      }
+    if (!formState.roomNumber.trim()) {
+      setError(t('roomBookingManagement.errors.enterRoomNumber'));
+      return;
     }
 
     const roomsForType = getRoomsForSelectedType();
@@ -1163,6 +1142,9 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       setSaving(true);
       if (selectedBooking) {
         const response = await roomBookingService.updateRoomBooking(selectedBooking.id, {
+          room_id: resolvedRoomId,
+          room_number: roomNumberToSave,
+          room_type: trimmedRoomType,
           guest_name: formState.guestName.trim(),
           company_name: formState.companyName.trim() || null,
           guest_email: formState.guestEmail.trim() || null,
@@ -1576,6 +1558,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     ...prev,
                     roomType: nextRoomType,
                     roomNumber: '',
+                    roomId: '',
                     nightlyRate: nextNightlyRate,
                     totalAmount: nextNightlyRate
                       ? String(Math.round(Number(nextNightlyRate) * calculateTotalNights(prev.checkInDate, prev.checkOutDate)))
@@ -1646,7 +1629,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
             <Box sx={{ display: 'flex', flexDirection: 'column' }}>
               <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, mb: 0.5 }}>
                 {t('roomBookingManagement.fields.roomNo')}
-                {!selectedBooking && <Box component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Box>}
+                <Box component="span" sx={{ color: 'error.main', ml: 0.5 }}>*</Box>
               </Typography>
               <Autocomplete<RoomTypeRoom, false, false, true>
                 freeSolo
@@ -1698,12 +1681,11 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     }));
                   }
                 }}
-                disabled={!!selectedBooking}
                 renderInput={(params) => (
                   <TextField
                     {...params}
                     fullWidth
-                    required={!selectedBooking}
+                    required
                     size="small"
                     placeholder={t('roomBookingManagement.placeholders.roomNo')}
                     helperText={
@@ -2908,7 +2890,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     { label: t('roomBookingManagement.columns.nightlyRate'), key: 'nightlyRate', width: '8%' },
                     { label: t('roomBookingManagement.columns.amount'), key: 'totalAmount', width: '8%' },
                     { label: t('roomBookingManagement.columns.payment'), key: 'paymentStatus', width: '9%', align: 'center' as const },
-                    { label: t('roomBookingManagement.columns.status'), key: 'status', width: '8%' },
                   ].map((col) => (
                     <TableCell
                       key={col.label}
@@ -3024,11 +3005,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     <TableCell align="center" sx={bookingChipCellSx}>
                       <Box sx={{ display: 'inline-flex', justifyContent: 'center', maxWidth: '100%' }}>
                         {getPaymentStatusChip(booking.paymentStatus)}
-                      </Box>
-                    </TableCell>
-                    <TableCell sx={bookingChipCellSx}>
-                      <Box sx={{ display: 'inline-flex', maxWidth: '100%' }}>
-                        {getStatusChip(booking.status)}
                       </Box>
                     </TableCell>
                 </TableRow>

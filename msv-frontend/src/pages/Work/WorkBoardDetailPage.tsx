@@ -367,7 +367,7 @@ const cardDetailInputSx = {
   '& .MuiOutlinedInput-root': {
     borderRadius: KANBAN_CONTROL_RADIUS,
     bgcolor: '#FFFFFF',
-    '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+    '& .MuiOutlinedInput-notchedOutline': { borderColor: '#D0DBE8' },
     '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
     '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'primary.main' },
   },
@@ -420,11 +420,11 @@ function renderCommentWithMentions(text: string): React.ReactNode {
         sx={{
           color: '#4C6A6E',
           fontWeight: 700,
-          bgcolor: alpha('#6A8F93', 0.14),
+          bgcolor: alpha('#7BA3C4', 0.14),
           px: 0.45,
           py: 0.1,
           borderRadius: 0.75,
-          border: `1px solid ${alpha('#6A8F93', 0.28)}`,
+          border: `1px solid ${alpha('#7BA3C4', 0.28)}`,
         }}
       >
         {token}
@@ -1068,13 +1068,13 @@ const ListColumn = memo(function ListColumn({
           gap: 1,
           pr: suppressColumnScroll ? 0 : 0.25,
           scrollbarWidth: suppressColumnScroll ? 'none' : 'thin',
-          scrollbarColor: '#C5CED9 transparent',
+          scrollbarColor: '#D0DBE8 transparent',
           msOverflowStyle: suppressColumnScroll ? 'none' : undefined,
           '&::-webkit-scrollbar': {
             width: suppressColumnScroll ? 0 : 5,
           },
           '&::-webkit-scrollbar-thumb': {
-            backgroundColor: '#C5CED9',
+            backgroundColor: '#D0DBE8',
             borderRadius: 0,
           },
         }}
@@ -2587,7 +2587,7 @@ const WorkBoardDetailPage: React.FC = () => {
               borderRadius: '12px',
               minWidth: 240,
               mt: 1,
-              border: '1px solid #C5CED9',
+              border: '1px solid #D0DBE8',
               boxShadow: '0 8px 24px rgba(9, 30, 66, 0.14)',
             },
           },
@@ -2855,9 +2855,9 @@ const WorkBoardDetailPage: React.FC = () => {
               mb: 2,
               height: 'auto',
               borderRadius: KANBAN_DETAIL_SHELL_RADIUS,
-              boxShadow: '0 1px 0 #C5CED9, 0 4px 14px rgba(15, 23, 42, 0.07)',
+              boxShadow: '0 1px 0 #D0DBE8, 0 4px 14px rgba(15, 23, 42, 0.07)',
               overflow: 'hidden',
-              border: '1px solid #C5CED9',
+              border: '1px solid #D0DBE8',
               borderLeft: `4px solid ${accent}`,
               bgcolor: '#FFFFFF',
               display: 'flex',
@@ -2870,7 +2870,7 @@ const WorkBoardDetailPage: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             gap: 1,
-            borderBottom: '1px solid #C5CED9',
+            borderBottom: '1px solid #D0DBE8',
             bgcolor: '#FFFFFF',
             py: 1,
             px: 1.5,
@@ -3027,10 +3027,10 @@ const WorkBoardDetailPage: React.FC = () => {
                   ...(isCardDetailCompleted
                     ? {
                         borderWidth: 1.5,
-                        bgcolor: alpha('#6A8F93', 0.06),
+                        bgcolor: alpha('#7BA3C4', 0.06),
                         '&:hover': {
                           borderWidth: 1.5,
-                          bgcolor: alpha('#6A8F93', 0.12),
+                          bgcolor: alpha('#7BA3C4', 0.12),
                         },
                       }
                     : {
@@ -3222,7 +3222,7 @@ const WorkBoardDetailPage: React.FC = () => {
                   borderRadius: KANBAN_CONTROL_RADIUS,
                   bgcolor: '#FFFFFF',
                   p: 0.25,
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#D0DBE8' },
                   '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
                 },
                 '& input[type="color"]': {
@@ -3321,7 +3321,7 @@ const WorkBoardDetailPage: React.FC = () => {
               flexShrink: 0,
               p: 1.5,
               borderRadius: KANBAN_SURFACE_RADIUS,
-              border: '1px solid #C5CED9',
+              border: '1px solid #D0DBE8',
               bgcolor: '#FFFFFF',
               boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)',
             }}
@@ -3357,7 +3357,7 @@ const WorkBoardDetailPage: React.FC = () => {
                 py: 0.5,
                 px: 1,
                 borderRadius: KANBAN_CONTROL_RADIUS,
-                border: '1px solid #C5CED9',
+                border: '1px solid #D0DBE8',
                 bgcolor: '#F0F4F8',
               }}
             >
@@ -3382,7 +3382,7 @@ const WorkBoardDetailPage: React.FC = () => {
             sx={{
               display: 'flex',
               mb: 0.75,
-              border: '1px solid #C5CED9',
+              border: '1px solid #D0DBE8',
               borderRadius: KANBAN_CONTROL_RADIUS,
               overflow: 'hidden',
               bgcolor: '#FFFFFF',
@@ -3490,7 +3490,7 @@ const WorkBoardDetailPage: React.FC = () => {
                 fontWeight: 700,
                 fontSize: '0.8125rem',
                 textTransform: 'none',
-                borderLeft: '1px solid #C5CED9',
+                borderLeft: '1px solid #D0DBE8',
                 bgcolor: 'primary.main',
                 color: '#FFFFFF',
                 '&:hover': {
@@ -3549,7 +3549,7 @@ const WorkBoardDetailPage: React.FC = () => {
                       pl: isReply ? 2 : 1.1,
                       borderRadius: KANBAN_CONTROL_RADIUS,
                       border: '1px solid #E2E8F0',
-                      borderLeft: isReply ? '3px solid #6A8F93' : '1px solid #E2E8F0',
+                      borderLeft: isReply ? '3px solid #7BA3C4' : '1px solid #E2E8F0',
                       bgcolor: '#FFFFFF',
                       boxShadow: '0 1px 2px rgba(15, 23, 42, 0.03)',
                     }}

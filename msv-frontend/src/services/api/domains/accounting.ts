@@ -379,9 +379,14 @@ export const accountingService = {
       const response = await api.delete(`/accounting/assets/${id}`);
       return response.data;
     } catch (error) {
-      console.error('?�산 ??�� ?�류:', error);
+      console.error('asset delete error:', error);
       throw error;
     }
+  },
+
+  getAssetDepreciationSchedule: async (id: number) => {
+    const response = await api.get(`/accounting/assets/${id}/depreciation-schedule`);
+    return response.data;
   },
 
   // AI 자동 전표 목록

@@ -2,7 +2,12 @@ import { Response } from 'express';
 import { AuthRequest } from '../types';
 import { Vacation, User, Company } from '../models';
 import { Op } from 'sequelize';
-import { calculateAnnualLeave, validateVacationLeaveRequest, DEFAULT_LEAVE_TYPE_DAYS } from '../utils/vacationCalculator';
+import {
+  calculateAnnualLeave,
+  validateVacationLeaveRequest,
+  DEFAULT_LEAVE_TYPE_DAYS,
+  getCompanyLeaveBalances,
+} from '../utils/vacationCalculator';
 import * as XLSX from 'xlsx';
 import { pushNotification } from './notificationController';
 import SocketService from '../services/socketService';
@@ -290,7 +295,9 @@ export const createVacation = async (req: AuthRequest, res: Response) => {
           data: {
             feature: 'vacation',
             vacation_id: vacation.id,
-            href: '/hr/leave'
+            href: '/hr/leave',
+            title_en: 'Leave Approval Request',
+            message_en: `${applicantName} submitted a leave request. (${start_date} ~ ${end_date})`
           }
         },
         socketService
@@ -780,6 +787,58 @@ export const updateVacationPolicy = async (req: AuthRequest, res: Response) => {
       success: false,
       message: '휴가 정책 저장 중 오류가 발생했습니다.',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// 회사별 직원 휴가 잔여 일수 목록
+export const getLeaveBalances = async (req: AuthRequest, res: Response) => {
+  try {
+    const userRole = req.user?.role;
+    const companyId = req.user?.company_id;
+    const { company_id } = req.query;
+
+    if (userRole !== 'admin' && userRole !== 'root' && userRole !== 'audit') {
+      return res.status(403).json({
+        success: false,
+        message: '권한이 없습니다.',
+      });
+    }
+
+    let targetCompanyId: number | undefined;
+    if (userRole === 'root') {
+      if (company_id) {
+        targetCompanyId = parseInt(String(company_id), 10);
+      } else if (companyId) {
+        targetCompanyId = companyId;
+      }
+    } else {
+      targetCompanyId = companyId;
+    }
+
+    if (!targetCompanyId || !Number.isFinite(targetCompanyId)) {
+      return res.status(400).json({
+        success: false,
+        message: '회사 정보가 없습니다.',
+      });
+    }
+
+    const result = await getCompanyLeaveBalances(targetCompanyId);
+
+    res.json({
+      success: true,
+      data: result.rows,
+      meta: {
+        availableTypes: result.availableTypes,
+        fiscalYearLabel: result.fiscalYearLabel,
+      },
+    });
+  } catch (error: any) {
+    console.error('휴가 잔여 일수 목록 조회 오류:', error);
+    res.status(500).json({
+      success: false,
+      message: '휴가 잔여 일수 목록 조회 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };

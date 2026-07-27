@@ -8,7 +8,7 @@ import {
 } from '../services/deleteCompanyCascade';
 import { validateBody } from '../middleware/validate';
 import sequelize from '../config/database';
-import { enrichCompanyList } from '../utils/companySerializer';
+import { enrichCompanyList, serializeCompanyBase, batchGstNumbersByCompany } from '../utils/companySerializer';
 import {
   buildReferenceCacheKey,
   referenceCacheGet,
@@ -18,6 +18,33 @@ import {
 
 const router = express.Router();
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** QueryTypes.SELECT 결과는 row 배열 — destructure 여부와 무관하게 EXISTS 판정 */
+const rowExistsFlag = (rowOrRows: any): boolean => {
+  if (Array.isArray(rowOrRows)) {
+    return Boolean(rowOrRows[0]?.exists);
+  }
+  return Boolean(rowOrRows?.exists ?? rowOrRows?.[0]?.exists);
+};
+
+const companyGstTableExists = async (): Promise<boolean> => {
+  try {
+    const rows = await (sequelize as any).query(
+      `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'company_gst_numbers'
+      ) as exists;
+      `,
+      { type: QueryTypes.SELECT }
+    );
+    return rowExistsFlag(rows);
+  } catch {
+    return false;
+  }
+};
 
 const invalidateCompaniesCache = async () => {
   await referenceCacheDel('ref:companies:*');
@@ -157,214 +184,77 @@ router.get('/:id', authenticateToken, async (req, res) => {
     if (cached) {
       return res.json(JSON.parse(cached));
     }
-    
-    const userId = (req as any).user.id;
-    const userCompanyId = (req as any).user.company_id;
-    
-        
+
     let company: any = null;
-    
+
     try {
-      // company_gst_numbers 테이블 존재 여부 확인
-      const [tableCheck] = await (sequelize as any).query(`
-        SELECT EXISTS (
-          SELECT 1 
-          FROM information_schema.tables 
-          WHERE table_schema = 'public' 
-          AND table_name = 'company_gst_numbers'
-        ) as exists;
-      `, { type: QueryTypes.SELECT }) as any[];
-      
-            
-      // 먼저 회사 정보만 조회
       company = await (Company as any).findOne({
         where: whereClause
       });
-      
+
       if (company) {
-        const companyData: any = company.toJSON();
-        
-                
-        // 이미지 필드 변환
-        if (companyData.company_logo) {
-          companyData.company_logo = `data:image/jpeg;base64,${companyData.company_logo.toString('base64')}`;
-        }
-        if (companyData.company_seal) {
-          companyData.company_seal = `data:image/jpeg;base64,${companyData.company_seal.toString('base64')}`;
-        }
-        if (companyData.ceo_signature) {
-          companyData.ceo_signature = `data:image/jpeg;base64,${companyData.ceo_signature.toString('base64')}`;
-        }
-        
-        // login_period_start, login_period_end를 mvs_start_date, mvs_end_date로 변환
-        if (companyData.login_period_start) {
-          if (companyData.login_period_start instanceof Date) {
-            companyData.mvs_start_date = companyData.login_period_start.toISOString().split('T')[0];
-          } else if (typeof companyData.login_period_start === 'string') {
-            companyData.mvs_start_date = companyData.login_period_start.split('T')[0];
+        const companyData: any = serializeCompanyBase(company.toJSON());
+
+        try {
+          if (await companyGstTableExists()) {
+            const gstMap = await batchGstNumbersByCompany([Number(companyData.id)]);
+            companyData.gst_numbers = gstMap.get(Number(companyData.id)) || [];
           } else {
-            companyData.mvs_start_date = '';
-          }
-        } else {
-          companyData.mvs_start_date = '';
-        }
-        
-        if (companyData.login_period_end) {
-          if (companyData.login_period_end instanceof Date) {
-            companyData.mvs_end_date = companyData.login_period_end.toISOString().split('T')[0];
-          } else if (typeof companyData.login_period_end === 'string') {
-            companyData.mvs_end_date = companyData.login_period_end.split('T')[0];
-          } else {
-            companyData.mvs_end_date = '';
-          }
-        } else {
-          companyData.mvs_end_date = '';
-        }
-        
-                
-        // GST 번호 직접 조회 (Raw SQL 사용)
-        if (tableCheck && tableCheck[0] && tableCheck[0].exists) {
-                              
-          try {
-            // Raw SQL 쿼리로 직접 조회
-            const gstQuery = `
-              SELECT gst_number, state_code, status 
-              FROM company_gst_numbers 
-              WHERE company_id = $1
-              ORDER BY id ASC
-            `;
-            
-                        
-            const gstResults = await (sequelize as any).query(gstQuery, {
-              bind: [companyData.id],
-              type: QueryTypes.SELECT
-            }) as any[];
-            
-                        
-            companyData.gst_numbers = gstResults.map((row: any) => row.gst_number).filter((gst: string) => gst);
-            
-                                                                        if (companyData.gst_numbers && companyData.gst_numbers.length > 0) {
-              companyData.gst_numbers.forEach((gst: string, idx: number) => {
-                              });
-            } else {
-                          }
-                      } catch (gstError: any) {
-            console.error('❌ GST 번호 직접 조회 실패:', gstError.message);
-            console.error('에러 스택:', gstError.stack);
             companyData.gst_numbers = [];
           }
-        } else {
-                    companyData.gst_numbers = [];
+        } catch (gstError: any) {
+          console.error('GST 번호 조회 실패:', gstError.message);
+          companyData.gst_numbers = [];
         }
-        
-        // 로그인한 사용자의 회사 정보인 경우 GST 번호 로그 출력
-                
-        if (companyData.id === userCompanyId) {
-                                                                                          if (companyData.gst_numbers && companyData.gst_numbers.length > 0) {
-            companyData.gst_numbers.forEach((gst: string, idx: number) => {
-                          });
-          } else {
-                      }
-                  }
-        
-          // 각 회사별 실제 직원 수 계산
-          try {
-            // 모든 상태의 직원 수 계산 (active, inactive, suspended 모두 포함)
-            const employeeCount = await (User as any).count({
-              where: {
-                company_id: companyData.id
-              }
-            });
-            companyData.employee_count = employeeCount || 0;
-                        
-            // 디버깅: 실제 사용자 목록 확인
-            const users = await (User as any).findAll({
-              where: {
-                company_id: companyData.id
-              },
-              attributes: ['id', 'username', 'status', 'company_id']
-            });
-                      } catch (employeeCountError: any) {
-            console.error(`직원 수 계산 오류 (회사 ID: ${companyData.id}):`, employeeCountError);
-            companyData.employee_count = 0;
-          }
-        
-                
+
+        try {
+          const employeeCount = await (User as any).count({
+            where: { company_id: companyData.id }
+          });
+          companyData.employee_count = employeeCount || 0;
+        } catch (employeeCountError: any) {
+          console.error(`직원 수 계산 오류 (회사 ID: ${companyData.id}):`, employeeCountError);
+          companyData.employee_count = 0;
+        }
+
         company = companyData;
       }
     } catch (error: any) {
-      console.error('❌ 회사 조회 중 오류:', error.message);
+      console.error('회사 조회 중 오류:', error.message);
       console.error('에러 스택:', error.stack);
-      
-      // 오류 발생 시 기본 회사 정보만 반환
+
       if (!company) {
         company = await (Company as any).findOne({
           where: whereClause
         });
       }
-      
+
       if (company) {
-        const companyData: any = company.toJSON();
-        
-        // 이미지 필드 변환
-        if (companyData.company_logo) {
-          companyData.company_logo = `data:image/jpeg;base64,${companyData.company_logo.toString('base64')}`;
-        }
-        if (companyData.company_seal) {
-          companyData.company_seal = `data:image/jpeg;base64,${companyData.company_seal.toString('base64')}`;
-        }
-        if (companyData.ceo_signature) {
-          companyData.ceo_signature = `data:image/jpeg;base64,${companyData.ceo_signature.toString('base64')}`;
-        }
-        
-        // login_period_start, login_period_end를 mvs_start_date, mvs_end_date로 변환
-        if (companyData.login_period_start) {
-          if (companyData.login_period_start instanceof Date) {
-            companyData.mvs_start_date = companyData.login_period_start.toISOString().split('T')[0];
-          } else if (typeof companyData.login_period_start === 'string') {
-            companyData.mvs_start_date = companyData.login_period_start.split('T')[0];
-          } else {
-            companyData.mvs_start_date = '';
-          }
-        } else {
-          companyData.mvs_start_date = '';
-        }
-        
-        if (companyData.login_period_end) {
-          if (companyData.login_period_end instanceof Date) {
-            companyData.mvs_end_date = companyData.login_period_end.toISOString().split('T')[0];
-          } else if (typeof companyData.login_period_end === 'string') {
-            companyData.mvs_end_date = companyData.login_period_end.split('T')[0];
-          } else {
-            companyData.mvs_end_date = '';
-          }
-        } else {
-          companyData.mvs_end_date = '';
-        }
-        
-        // 각 회사별 실제 직원 수 계산
+        const companyData: any = serializeCompanyBase(
+          company.toJSON ? company.toJSON() : company
+        );
+
         try {
-          // 모든 상태의 직원 수 계산 (active, inactive, suspended 모두 포함)
           const employeeCount = await (User as any).count({
-            where: {
-              company_id: companyData.id
-            }
+            where: { company_id: companyData.id }
           });
           companyData.employee_count = employeeCount || 0;
-                    
-          // 디버깅: 실제 사용자 목록 확인
-          const users = await (User as any).findAll({
-            where: {
-              company_id: companyData.id
-            },
-            attributes: ['id', 'username', 'status', 'company_id']
-          });
-                  } catch (employeeCountError: any) {
+        } catch (employeeCountError: any) {
           console.error(`직원 수 계산 오류 (회사 ID: ${companyData.id}):`, employeeCountError);
           companyData.employee_count = 0;
         }
-        
-        companyData.gst_numbers = [];
+
+        try {
+          if (await companyGstTableExists()) {
+            const gstMap = await batchGstNumbersByCompany([Number(companyData.id)]);
+            companyData.gst_numbers = gstMap.get(Number(companyData.id)) || [];
+          } else {
+            companyData.gst_numbers = [];
+          }
+        } catch {
+          companyData.gst_numbers = [];
+        }
+
         company = companyData;
       }
     }

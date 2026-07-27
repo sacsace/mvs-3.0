@@ -742,6 +742,7 @@ export default {
       invalidEmailInList: '유효하지 않은 이메일이 포함되어 있습니다: {{part}}',
       quotationNumber: '견적서 번호',
       customerName: '고객명',
+      description: '항목',
       issueDate: '발행일',
       validUntil: '유효기간',
       status: '상태',
@@ -890,7 +891,7 @@ export default {
       contact: '연락처',
       contractExpiryDate: '계약 만료일',
       actions: '작업',
-      businessNumberLabel: '사업자번호',
+      businessNumberLabel: 'CIN',
       noPartnersMatch: '검색 조건에 맞는 파트너가 없습니다.',
       noPartners: '등록된 파트너가 없습니다.',
       firstPartnerAdd: '첫 파트너 등록하기',
@@ -898,7 +899,7 @@ export default {
       editPartner: '파트너 정보 수정',
       addNewPartner: '새 파트너 추가',
       companyName: '회사명',
-      businessNumber: '사업자번호',
+      businessNumber: 'CIN',
       panNumber: 'PAN 번호',
       gstNumber: 'GST 번호',
       gstNumberMinMax: '(최소 1개, 최대 10개)',
@@ -935,7 +936,7 @@ export default {
       importResultSummary: '총 {{total}}건 중 {{success}}건 성공',
       confirmDelete: '정말로 이 파트너를 삭제하시겠습니까?',
       placeholderCompanyName: '회사명을 입력하세요',
-      placeholderBusinessNumber: '사업자번호를 입력하세요',
+      placeholderBusinessNumber: 'CIN을 입력하세요',
       placeholderPan: 'PAN 번호를 입력하세요',
       placeholderGst: 'GST 번호 {{index}}을 입력하세요',
       placeholderGstRequired: 'GST 번호를 입력해주세요',
@@ -1090,6 +1091,10 @@ export default {
       },
       filters: {
         all: '전체'
+      },
+      listView: {
+        viewAll: '전체 보기',
+        viewPages: '페이지로 보기'
       },
       status: {
         success: '성공',
@@ -1967,7 +1972,7 @@ export default {
         newCheckin: '신규 체크인',
         processCheckout: '체크아웃 처리',
         processNoShow: '노쇼 처리',
-        assignRoom: '객실 배정',
+        assignRoom: '객실 변경',
         process: '처리'
       },
       confirmNoShow: '이 예약을 노쇼로 처리하시겠습니까?',
@@ -2059,7 +2064,8 @@ export default {
         checkoutDone: '체크아웃이 완료되었습니다.',
         noShowDone: '노쇼로 처리되었습니다.',
         cancelDone: '예약이 취소되었습니다.',
-        noEligibleBookings: '선택할 수 있는 예약이 없습니다. 목록 상태를 확인해 주세요.'
+        noEligibleBookings: '선택할 수 있는 예약이 없습니다. 목록 상태를 확인해 주세요.',
+        noActionsForStatus: '「{{status}}」 상태에서는 사용할 수 있는 작업이 없습니다.'
       },
       errors: {
         loadBookingsFailed: '예약 목록을 불러오는데 실패했습니다.',
@@ -3922,7 +3928,17 @@ export default {
       leaveStatus: '휴가 현황',
       myRequestedLeave: '내가 신청한 휴가',
       leaveApproval: '휴가 결재',
+      leaveBalances: '직원별 휴가 잔여일',
       leaveType: '휴가 형태',
+      remainingDays: '잔여',
+      quotaDays: '부여',
+      leaveYear: '회계연도',
+      noLeaveBalances: '표시할 직원 휴가 잔여일이 없습니다.',
+      leaveBalancesHint: '회계연도 기준 유형별 잔여 일수입니다. 「휴가 형태」에서 선택한 유형만 표시되며, 미사용 일수는 이월되지 않습니다.',
+      leaveBalancesSearchPlaceholder: '직원명, 부서, 직책 검색...',
+      sickOptional: '비의무',
+      sickOptionalHint: '병가는 의무 휴가가 아닙니다.',
+      department: '부서',
       pending: '미결제',
       completed: '결제 완료/거부',
       searchPlaceholder: '직원명, 부서, 사유로 검색...',
@@ -3994,6 +4010,7 @@ export default {
       noPermissionEditRequest: '휴가 메뉴에「수정」권한이 없어 신청 내용을 수정할 수 없습니다.',
       enterRejectionReasonPrompt: '거부 사유를 입력하세요:',
       annual: '연차',
+      annualRemainingDays: '연차 잔여일',
       sick: '병가',
       personal: '개인사유',
       study: '교육',

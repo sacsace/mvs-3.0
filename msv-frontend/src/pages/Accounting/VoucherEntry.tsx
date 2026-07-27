@@ -350,7 +350,7 @@ const VoucherEntry: React.FC = () => {
 
   const typeCardSx = (selected: boolean) => ({
     ...mvsBodyCardSx,
-    borderColor: selected ? '#6A8F93' : '#C5CED9',
+    borderColor: selected ? '#7BA3C4' : '#D0DBE8',
     bgcolor: selected ? 'rgba(106, 143, 147, 0.08)' : '#FFFFFF',
     transition: 'border-color 0.2s, background-color 0.2s',
   });
@@ -449,7 +449,7 @@ const VoucherEntry: React.FC = () => {
                   <Card elevation={0} sx={typeCardSx(selectedVoucherType?.id === vt.id)}>
                     <CardActionArea onClick={() => handleSelectVoucherType(vt)} sx={{ borderRadius: 'inherit' }}>
                       <Box sx={{ textAlign: 'center', py: 2, px: 1 }}>
-                        <Box sx={{ color: '#6A8F93', mb: 0.5, display: 'flex', justifyContent: 'center' }}>
+                        <Box sx={{ color: '#7BA3C4', mb: 0.5, display: 'flex', justifyContent: 'center' }}>
                           {CATEGORY_ICONS[vt.category] || <JournalIcon />}
                         </Box>
                         <Typography variant="body2" fontWeight={600}>{getBilingualName(vt, i18n.language)}</Typography>
@@ -597,7 +597,7 @@ const VoucherEntry: React.FC = () => {
                 </Grid>
 
                 {amountRows.length > 0 ? (
-                  <Box sx={{ ...mvsBodyToolbarSx, mt: 2, borderRadius: '12px', border: '1px solid #C5CED9' }}>
+                  <Box sx={{ ...mvsBodyToolbarSx, mt: 2, borderRadius: '12px', border: '1px solid #D0DBE8' }}>
                     <Box sx={{ width: '100%' }}>
                       <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>{t('voucherEntry.amountBreakdown')}</Typography>
                       {amountRows.map((row) => (
@@ -671,7 +671,7 @@ const VoucherEntry: React.FC = () => {
           </Box>
         </Card>
 
-        <Box sx={{ ...mvsBodySectionHeaderSx, borderRadius: '20px', border: '1px solid #C5CED9', boxShadow: '0 4px 14px rgba(15, 23, 42, 0.07)', justifyContent: 'flex-end' }}>
+        <Box sx={{ ...mvsBodySectionHeaderSx, borderRadius: '20px', border: '1px solid #D0DBE8', boxShadow: '0 4px 14px rgba(15, 23, 42, 0.07)', justifyContent: 'flex-end' }}>
           <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
             <Tooltip title={!balanced ? t('voucherEntry.errors.notBalanced') : ''}>
               <span>

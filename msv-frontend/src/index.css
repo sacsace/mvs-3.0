@@ -1,26 +1,25 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
 
 :root {
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
-  --primary-500: #6a8f93;
-  --primary-600: #4c6a6e;
-  --accent-500: #9aad9e;
+  --font-sans: 'Outfit', 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --primary-500: #7ba3c4;
+  --primary-600: #5a849e;
+  --accent-500: #b5c9b8;
 
   --bg-primary: #ffffff;
-  --bg-secondary: #f5f5f7;
-  --bg-tertiary: #f5f5f7;
-  --bg-quaternary: #ebebed;
+  --bg-secondary: #f0f4f9;
+  --bg-tertiary: #f5f8fc;
+  --bg-quaternary: #e2eaf3;
 
-  --text-primary: #111111;
-  --text-secondary: #6e6e73;
-  --text-tertiary: #86868b;
-  --text-quaternary: #aeaeb2;
+  --text-primary: #243447;
+  --text-secondary: #6b7c8f;
+  --text-tertiary: #8494a6;
+  --text-quaternary: #a3b0bf;
 
-  --border-primary: #e5e5e7;
-  --border-secondary: #d2d2d7;
+  --border-primary: #d0dbe8;
+  --border-secondary: #bcc9da;
 
-  --table-row-hover: #f5f5f7;
+  --table-row-hover: #eef3f8;
 
   --radius-sm: 6px;
   --radius-md: 12px;

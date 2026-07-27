@@ -819,12 +819,26 @@ export const sendPayrollPayslip = async (req: RequestWithUser, res: Response) =>
 
     const period = String((payroll as any).payroll_period || '');
     const uname = String(emp?.username || 'employee');
+    const subjectKo = `[급여 명세서] ${period} ${uname}`;
+    const subjectEn = `[Payslip] ${period} ${uname}`;
+    const bodyKo = `${period} 급여 명세서 PDF를 첨부합니다.`;
+    const bodyEn = `Please find the attached payslip PDF for ${period}.`;
 
     await transporter.sendMail({
       from: mailOpts.from,
       to,
-      subject: `[급여 명세서] ${period} ${uname}`,
-      text: `${period} 급여 명세서 PDF를 첨부합니다.`,
+      subject: `${subjectKo} / ${subjectEn}`,
+      text: `[KO]\n${bodyKo}\n\n[EN]\n${bodyEn}\n\n본 메일은 MVS 알림입니다. / This is an MVS notification.`,
+      html: `
+        <div style="font-family:Segoe UI,Malgun Gothic,sans-serif;font-size:14px;color:#111827;line-height:1.55;max-width:640px;">
+          <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#6b7280;">한국어</p>
+          <p style="margin:0 0 16px;">${bodyKo}</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
+          <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#6b7280;">English</p>
+          <p style="margin:0 0 16px;">${bodyEn}</p>
+          <p style="margin-top:20px;font-size:12px;color:#9ca3af;">본 메일은 MVS 알림입니다. / This is an MVS notification.</p>
+        </div>
+      `,
       attachments: [
         {
           filename: `payslip_${period}_${id}.pdf`,

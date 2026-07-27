@@ -355,6 +355,8 @@ const LoginInfoExcelGrid = forwardRef<LoginInfoExcelGridHandle, Props>(function 
 
   const [addColumnDialogOpen, setAddColumnDialogOpen] = useState(false);
   const [newColumnLabel, setNewColumnLabel] = useState('');
+  const [listViewMode, setListViewMode] = useState<'page' | 'all'>('page');
+  const [paginationModel, setPaginationModel] = useState({ page: 0, pageSize: 10 });
 
   const handleRemoveColumnEntry = useCallback(
     async (entry: LoginInfoColumnSchema['columns'][0]) => {
@@ -482,6 +484,14 @@ const LoginInfoExcelGrid = forwardRef<LoginInfoExcelGridHandle, Props>(function 
   useEffect(() => {
     setRows(buildRows(loginInfos));
   }, [loginInfos, buildRows]);
+
+  useEffect(() => {
+    if (listViewMode === 'all') {
+      setPaginationModel({ page: 0, pageSize: Math.max(rows.length, 1) });
+    } else {
+      setPaginationModel({ page: 0, pageSize: 10 });
+    }
+  }, [listViewMode, rows.length]);
 
   const rowIsBlank = useCallback((row: LoginInfoGridRow) => {
     const ex = row.extra_fields || {};
@@ -1006,6 +1016,61 @@ const LoginInfoExcelGrid = forwardRef<LoginInfoExcelGridHandle, Props>(function 
 
   return (
     <Box onPaste={handlePaste} sx={{ width: '100%' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          gap: 0.75,
+          mb: 1,
+        }}
+      >
+        <Button
+          size="small"
+          disableElevation
+          variant={listViewMode === 'all' ? 'contained' : 'outlined'}
+          onClick={() => setListViewMode('all')}
+          sx={{
+            height: 32,
+            minWidth: 0,
+            px: 1.5,
+            textTransform: 'none',
+            fontWeight: 600,
+            fontSize: '0.75rem',
+            borderRadius: '10px',
+            boxShadow: 'none',
+            whiteSpace: 'nowrap',
+            ...(listViewMode === 'all'
+              ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+              : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+          }}
+        >
+          {t('loginInfoManagement.listView.viewAll')}
+        </Button>
+        <Button
+          size="small"
+          disableElevation
+          variant={listViewMode === 'page' ? 'contained' : 'outlined'}
+          onClick={() => setListViewMode('page')}
+          sx={{
+            height: 32,
+            minWidth: 0,
+            px: 1.5,
+            textTransform: 'none',
+            fontWeight: 600,
+            fontSize: '0.75rem',
+            borderRadius: '10px',
+            boxShadow: 'none',
+            whiteSpace: 'nowrap',
+            ...(listViewMode === 'page'
+              ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+              : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+          }}
+        >
+          {t('loginInfoManagement.listView.viewPages')}
+        </Button>
+      </Box>
       <DataGrid
         apiRef={apiRef}
         rows={rows}
@@ -1017,8 +1082,14 @@ const LoginInfoExcelGrid = forwardRef<LoginInfoExcelGridHandle, Props>(function 
         disableColumnMenu
         disableRowSelectionOnClick
         pagination
-        pageSizeOptions={[10]}
-        initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
+        pageSizeOptions={listViewMode === 'page' ? [10] : [Math.max(rows.length, 1)]}
+        paginationModel={paginationModel}
+        onPaginationModelChange={(model) => {
+          if (listViewMode === 'page') {
+            setPaginationModel(model);
+          }
+        }}
+        hideFooter={listViewMode === 'all'}
         rowHeight={40}
         columnHeaderHeight={40}
         onCellClick={(params: GridCellParams<LoginInfoGridRow>) => {

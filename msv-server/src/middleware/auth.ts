@@ -2,22 +2,62 @@ import { Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { User, Company } from '../models';
 import { AuthRequest } from '../types';
-import { getCachedAuthUser, setCachedAuthUser, getCachedAuthCompany, setCachedAuthCompany } from '../utils/authCache';
+import { getCachedAuthUser, setCachedAuthUser, getCachedAuthCompany, setCachedAuthCompany, invalidateAuthUser } from '../utils/authCache';
 
-const maskToken = (tokenValue?: string) => {
-  if (!tokenValue) return '없음';
-  return `${tokenValue.substring(0, 6)}...${tokenValue.slice(-4)}`;
+const AUTH_USER_ATTRIBUTES = [
+  'id',
+  'userid',
+  'username',
+  'email',
+  'role',
+  'tenant_id',
+  'company_id',
+  'department',
+  'position',
+  'status',
+  'last_login',
+  'is_payment_officer',
+  'session_version',
+] as const;
+
+/** JWT sv와 DB session_version 불일치 — 다른 기기 로그인 */
+export const SESSION_SUPERSEDED_CODE = 'SESSION_SUPERSEDED';
+
+type JwtAuthClaims = {
+  userId: number;
+  userid?: string;
+  role?: string;
+  tenantId?: number;
+  companyId?: number;
+  sv?: number;
 };
 
+const getTokenSessionVersion = (decoded: JwtAuthClaims): number => {
+  const raw = decoded?.sv;
+  const num = Number(raw);
+  return Number.isFinite(num) ? Math.floor(num) : 0;
+};
+
+const respondSessionSuperseded = (res: Response) =>
+  res.status(401).json({
+    success: false,
+    message: '다른 곳에서 동일한 계정으로 로그인되어 현재 세션이 종료되었습니다.',
+    code: SESSION_SUPERSEDED_CODE,
+  });
+
+/**
+ * 세션 버전은 매 요청 DB(PK)에서 확인 — 멀티 인스턴스 캐시 불일치 방지.
+ * 프로필 필드는 단기 캐시 사용.
+ */
 export const authenticateToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-  
+
   try {
     if (!token) {
-      return res.status(401).json({ 
-        success: false, 
-        message: '액세스 토큰이 필요합니다.' 
+      return res.status(401).json({
+        success: false,
+        message: '액세스 토큰이 필요합니다.',
       });
     }
 
@@ -25,47 +65,77 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     if (!jwtSecret) {
       return res.status(500).json({
         success: false,
-        message: '서버 JWT 설정이 누락되었습니다.'
+        message: '서버 JWT 설정이 누락되었습니다.',
       });
     }
 
-    const decoded = jwt.verify(token, jwtSecret) as any;
-    
+    const decoded = jwt.verify(token, jwtSecret) as JwtAuthClaims;
+    if (!decoded?.userId) {
+      return res.status(403).json({
+        success: false,
+        message: '유효하지 않은 토큰입니다.',
+      });
+    }
+
+    const tokenSv = getTokenSessionVersion(decoded);
+
+    const sessionRow = await (User as any).findByPk(decoded.userId, {
+      attributes: ['id', 'status', 'session_version'],
+    });
+
+    if (!sessionRow || sessionRow.status !== 'active') {
+      invalidateAuthUser(decoded.userId);
+      return res.status(401).json({
+        success: false,
+        message: '유효하지 않은 사용자입니다.',
+      });
+    }
+
+    const dbSv = Number(sessionRow.session_version ?? 0);
+    if (dbSv !== tokenSv) {
+      invalidateAuthUser(decoded.userId);
+      return respondSessionSuperseded(res);
+    }
+
     const cached = getCachedAuthUser(decoded.userId);
-    if (cached && cached.status === 'active') {
+    if (
+      cached &&
+      cached.status === 'active' &&
+      Number(cached.session_version ?? 0) === tokenSv
+    ) {
       req.user = cached as any;
       return next();
     }
 
-    // 사용자 정보 조회 - 존재하는 컬럼만 명시적으로 지정
     const user = await (User as any).findByPk(decoded.userId, {
-      attributes: [
-        'id', 'userid', 'username', 'email', 'role',
-        'tenant_id', 'company_id', 'department', 'position', 'status', 'last_login', 'is_payment_officer'
-      ]
+      attributes: [...AUTH_USER_ATTRIBUTES],
     });
-    
+
     if (!user || user.status !== 'active') {
-      return res.status(401).json({ 
-        success: false, 
-        message: '유효하지 않은 사용자입니다.' 
+      invalidateAuthUser(decoded.userId);
+      return res.status(401).json({
+        success: false,
+        message: '유효하지 않은 사용자입니다.',
       });
     }
 
-    req.user = user;
-    setCachedAuthUser(decoded.userId, user.toJSON ? user.toJSON() : user);
+    if (Number(user.session_version ?? 0) !== tokenSv) {
+      invalidateAuthUser(decoded.userId);
+      return respondSessionSuperseded(res);
+    }
+
+    const plain = user.toJSON ? user.toJSON() : user;
+    req.user = plain;
+    setCachedAuthUser(decoded.userId, plain);
     next();
   } catch (error: any) {
-    console.error('❌ 토큰 검증 오류:', {
-      message: error.message,
-      name: error.name,
-      token: maskToken(token),
-      authHeader: req.headers['authorization'] ? '있음' : '없음'
-    });
-    return res.status(403).json({ 
-      success: false, 
+    if (process.env.NODE_ENV === 'development') {
+      console.error('토큰 검증 오류:', error?.name, error?.message);
+    }
+    return res.status(403).json({
+      success: false,
       message: '유효하지 않은 토큰입니다.',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };
@@ -73,16 +143,16 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
 export const requireRole = (roles: string[]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
-      return res.status(401).json({ 
-        success: false, 
-        message: '인증이 필요합니다.' 
+      return res.status(401).json({
+        success: false,
+        message: '인증이 필요합니다.',
       });
     }
 
     if (!roles.includes(req.user.role)) {
-      return res.status(403).json({ 
-        success: false, 
-        message: '권한이 부족합니다.' 
+      return res.status(403).json({
+        success: false,
+        message: '권한이 부족합니다.',
       });
     }
 
@@ -111,9 +181,9 @@ const parseCompanyIdFromRequest = (req: AuthRequest): number | null => {
 // audit: 소속 회사는 일반 사용자와 동일하게 변경 가능, 다른 회사는 조회(GET)만 허용
 export const restrictAuditToReadOnly = (req: AuthRequest, res: Response, next: NextFunction) => {
   if (!req.user) {
-    return res.status(401).json({ 
-      success: false, 
-      message: '인증이 필요합니다.' 
+    return res.status(401).json({
+      success: false,
+      message: '인증이 필요합니다.',
     });
   }
 
@@ -152,7 +222,7 @@ export const requireRootOrMinsubEmployee = async (req: AuthRequest, res: Respons
   if (!req.user) {
     return res.status(401).json({
       success: false,
-      message: '인증이 필요합니다.'
+      message: '인증이 필요합니다.',
     });
   }
 
@@ -166,20 +236,20 @@ export const requireRootOrMinsubEmployee = async (req: AuthRequest, res: Respons
       if (!isMinsubCompanyName(cached.name as string)) {
         return res.status(403).json({
           success: false,
-          message: '접근 권한이 없습니다.'
+          message: '접근 권한이 없습니다.',
         });
       }
       return next();
     }
 
     const company = await (Company as any).findByPk(req.user.company_id, {
-      attributes: ['id', 'name', 'tenant_id']
+      attributes: ['id', 'name', 'tenant_id'],
     });
 
     if (!company || !isMinsubCompanyName(company.name)) {
       return res.status(403).json({
         success: false,
-        message: '접근 권한이 없습니다.'
+        message: '접근 권한이 없습니다.',
       });
     }
 
@@ -189,7 +259,7 @@ export const requireRootOrMinsubEmployee = async (req: AuthRequest, res: Respons
     console.error('Minsub 권한 확인 오류:', error);
     return res.status(500).json({
       success: false,
-      message: '권한 확인 중 오류가 발생했습니다.'
+      message: '권한 확인 중 오류가 발생했습니다.',
     });
   }
 };

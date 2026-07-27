@@ -11,6 +11,7 @@ interface AssetAttributes {
   subcategory?: string;
   purchase_date?: string;
   purchase_price?: number;
+  salvage_value?: number;
   current_value?: number;
   depreciation_rate?: number;
   accumulated_depreciation?: number;
@@ -37,6 +38,7 @@ interface AssetCreationAttributes extends Optional<
   | 'subcategory'
   | 'purchase_date'
   | 'purchase_price'
+  | 'salvage_value'
   | 'current_value'
   | 'depreciation_rate'
   | 'accumulated_depreciation'
@@ -66,6 +68,7 @@ class Asset extends Model<AssetAttributes, AssetCreationAttributes> implements A
   public subcategory?: string;
   public purchase_date?: string;
   public purchase_price?: number;
+  public salvage_value?: number;
   public current_value?: number;
   public depreciation_rate?: number;
   public accumulated_depreciation?: number;
@@ -97,6 +100,7 @@ Asset.init(
     subcategory: { type: DataTypes.STRING(100), allowNull: true },
     purchase_date: { type: DataTypes.DATEONLY, allowNull: true },
     purchase_price: { type: DataTypes.DECIMAL(15, 2), allowNull: true },
+    salvage_value: { type: DataTypes.DECIMAL(15, 2), allowNull: true, defaultValue: 0 },
     current_value: { type: DataTypes.DECIMAL(15, 2), allowNull: true },
     depreciation_rate: { type: DataTypes.FLOAT, allowNull: true },
     accumulated_depreciation: { type: DataTypes.DECIMAL(15, 2), allowNull: true },

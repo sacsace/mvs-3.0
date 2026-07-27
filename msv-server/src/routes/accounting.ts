@@ -43,6 +43,7 @@ import {
   createAsset,
   updateAsset,
   deleteAsset,
+  getAssetDepreciationSchedule,
   approveInvoice,
   rejectInvoice,
 } from '../controllers/accountingController';
@@ -617,6 +618,7 @@ router.delete('/budgets/:id', restrictAuditToReadOnly, deleteBudget);
 
 // 자산 라우트
 router.get('/assets', getAssets);
+router.get('/assets/:id/depreciation-schedule', getAssetDepreciationSchedule);
 router.post(
   '/assets',
   restrictAuditToReadOnly,
@@ -627,6 +629,7 @@ router.post(
     subcategory: { type: 'string', maxLength: 100 },
     purchase_date: { type: 'string', pattern: datePattern },
     purchase_price: { type: 'number' },
+    salvage_value: { type: 'number' },
     current_value: { type: 'number' },
     depreciation_rate: { type: 'number' },
     accumulated_depreciation: { type: 'number' },
@@ -655,6 +658,7 @@ router.put(
     subcategory: { type: 'string', maxLength: 100 },
     purchase_date: { type: 'string', pattern: datePattern },
     purchase_price: { type: 'number' },
+    salvage_value: { type: 'number' },
     current_value: { type: 'number' },
     depreciation_rate: { type: 'number' },
     accumulated_depreciation: { type: 'number' },

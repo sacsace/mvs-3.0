@@ -1507,7 +1507,7 @@ const Dashboard: React.FC = () => {
           <Typography
             variant="subtitle1"
             sx={{
-              fontSize: '0.9375rem',
+              fontSize: '0.8125rem',
               fontWeight: 600,
               lineHeight: 1.35,
               letterSpacing: '-0.015em',

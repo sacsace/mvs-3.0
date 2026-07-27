@@ -8,75 +8,75 @@ injectStitchesGlobalStyles();
 const theme = createTheme({
   palette: {
     primary: {
-      50: '#F2F6F6',
-      100: '#E4EDED',
-      200: '#C9DADC',
-      300: '#A9C2C5',
-      400: '#8AABAF',
-      500: '#6A8F93',
-      600: '#5A7D81',
-      700: '#4C6A6E',
-      800: '#3D5558',
-      900: '#2E4043',
-      main: '#6A8F93',
-      light: '#8AABAF',
-      dark: '#4C6A6E',
+      50: '#F3F7FB',
+      100: '#E4EEF6',
+      200: '#C5D9E8',
+      300: '#A3C2D8',
+      400: '#8FB4CE',
+      500: '#7BA3C4',
+      600: '#6A92B0',
+      700: '#5A849E',
+      800: '#476C86',
+      900: '#355468',
+      main: '#7BA3C4',
+      light: '#8FB4CE',
+      dark: '#5A849E',
       contrastText: '#ffffff',
     },
     secondary: {
-      50: '#F4F7F3',
-      100: '#E6EDE5',
-      200: '#CDDACB',
-      300: '#B2C4AF',
-      400: '#9AAD9E',
-      500: '#8A9F8E',
-      600: '#758A79',
-      700: '#5F7263',
-      800: '#4A594D',
-      900: '#36413A',
-      main: '#9AAD9E',
-      light: '#B2C4AF',
-      dark: '#758A79',
+      50: '#F4F8F5',
+      100: '#E6F0E8',
+      200: '#CDDDCF',
+      300: '#B5C9B8',
+      400: '#A3BBA8',
+      500: '#8FA994',
+      600: '#76907C',
+      700: '#5F7566',
+      800: '#4A5C50',
+      900: '#36453C',
+      main: '#A3BBA8',
+      light: '#B5C9B8',
+      dark: '#76907C',
       contrastText: '#ffffff',
     },
     error: {
-      main: '#C48989',
-      light: '#D6A8A8',
-      dark: '#A86F6F',
+      main: '#D4A0A0',
+      light: '#E0BABA',
+      dark: '#B87F7F',
     },
     warning: {
-      main: '#C4A574',
-      light: '#D6BC94',
-      dark: '#A88A58',
+      main: '#D4B888',
+      light: '#E0CBA8',
+      dark: '#B89A68',
     },
     info: {
-      main: '#8A9BB5',
-      light: '#A8B5C9',
-      dark: '#6F8199',
+      main: '#9AABC5',
+      light: '#B8C5D9',
+      dark: '#7F91A9',
     },
     success: {
-      main: '#7FA88A',
-      light: '#A0C0A8',
-      dark: '#668A70',
+      main: '#8FB89A',
+      light: '#B0D0B8',
+      dark: '#769A80',
     },
-    divider: '#D5DCE3',
+    divider: '#D0DBE8',
     background: {
-      default: '#EEF1F3',
+      default: '#F0F4F9',
       paper: '#FFFFFF',
     },
     workArea: {
       main: '#FFFFFF',
-      light: '#F5F7F8',
-      dark: '#EEF1F3',
+      light: '#F5F8FC',
+      dark: '#F0F4F9',
     },
     bodyArea: {
-      main: '#EEF1F3',
-      light: '#F3F5F7',
-      dark: '#E4E9ED',
+      main: '#F0F4F9',
+      light: '#F3F7FB',
+      dark: '#E2EAF3',
     },
     text: {
-      primary: '#111827',
-      secondary: '#6B7280',
+      primary: '#243447',
+      secondary: '#6B7C8F',
     },
     grey: {
       50: '#F9FAFB',
@@ -84,30 +84,30 @@ const theme = createTheme({
       200: '#E5E7EB',
       300: '#D1D5DB',
       400: '#9CA3AF',
-      500: '#6B7280',
+      500: '#6B7C8F',
       600: '#4B5563',
       700: '#374151',
       800: '#1F2937',
-      900: '#111827',
+      900: '#243447',
     },
   },
   typography: {
     fontFamily:
-      'Pretendard, "Pretendard Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif',
+      '"Outfit", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
     /** 페이지 메인 타이틀 — 전 화면 동일 */
     h1: {
       fontSize: '22px',
       fontWeight: 700,
       lineHeight: 1.3,
       letterSpacing: '-0.02em',
-      color: '#111827',
+      color: '#243447',
     },
     pageTitle: {
       fontSize: '22px',
       fontWeight: 700,
       lineHeight: 1.3,
       letterSpacing: '-0.02em',
-      color: '#111827',
+      color: '#243447',
       marginBottom: '6px',
     },
     /** 섹션 제목 */
@@ -116,7 +116,7 @@ const theme = createTheme({
       fontWeight: 600,
       lineHeight: 1.4,
       letterSpacing: '-0.015em',
-      color: '#111827',
+      color: '#243447',
     },
     /** 카드·위젯 헤더 타이틀 */
     cardTitle: {
@@ -124,13 +124,13 @@ const theme = createTheme({
       fontWeight: 600,
       lineHeight: 1.4,
       letterSpacing: '-0.01em',
-      color: '#111827',
+      color: '#243447',
     },
     /** 페이지 설명 문단 */
     pageDescription: {
       fontSize: '13px',
       lineHeight: 1.6,
-      color: '#6B7280',
+      color: '#6B7C8F',
     },
     /** KPI 숫자 */
     kpiNumber: {
@@ -138,7 +138,7 @@ const theme = createTheme({
       fontWeight: 700,
       lineHeight: 1.3,
       letterSpacing: '-0.02em',
-      color: '#111827',
+      color: '#243447',
     },
     h2: {
       fontSize: '16px',
@@ -146,7 +146,7 @@ const theme = createTheme({
       lineHeight: 1.4,
       letterSpacing: '-0.015em',
       marginBottom: '12px',
-      color: '#111827',
+      color: '#243447',
     },
     h3: {
       fontSize: '1.0625rem',
@@ -177,7 +177,7 @@ const theme = createTheme({
       fontWeight: 400,
       lineHeight: 1.6,
       letterSpacing: '0',
-      color: '#111827',
+      color: '#243447',
     },
     body2: {
       fontSize: '0.8125rem',
@@ -189,14 +189,14 @@ const theme = createTheme({
       fontWeight: 400,
       lineHeight: 1.5,
       letterSpacing: '0',
-      color: '#6B7280',
+      color: '#6B7C8F',
     },
     subtitle1: {
       fontSize: '14px',
       fontWeight: 600,
       lineHeight: 1.4,
       letterSpacing: '-0.01em',
-      color: '#111827',
+      color: '#243447',
     },
     subtitle2: {
       fontSize: '0.875rem',
@@ -242,8 +242,8 @@ const theme = createTheme({
         body: {
           WebkitFontSmoothing: 'antialiased',
           MozOsxFontSmoothing: 'grayscale',
-          backgroundColor: '#EEF1F3',
-          color: '#111827',
+          backgroundColor: '#F0F4F9',
+          color: '#243447',
           fontSize: '13.5px',
         },
       },
@@ -282,12 +282,12 @@ const theme = createTheme({
           },
         },
         contained: {
-          backgroundColor: '#6A8F93',
+          backgroundColor: '#7BA3C4',
           color: '#FFFFFF',
-          boxShadow: '0 4px 12px rgba(106, 143, 147, 0.18)',
+          boxShadow: '0 4px 12px rgba(123, 163, 196, 0.18)',
           '&:hover': {
-            backgroundColor: '#4C6A6E',
-            boxShadow: '0 6px 16px rgba(106, 143, 147, 0.24)',
+            backgroundColor: '#5A849E',
+            boxShadow: '0 6px 16px rgba(123, 163, 196, 0.24)',
           },
         },
         sizeSmall: {
@@ -313,14 +313,14 @@ const theme = createTheme({
               ? {
                   borderRadius: '16px',
                   boxShadow: '0 2px 8px rgba(15, 23, 42, 0.06)',
-                  border: '1px solid #C5CED9',
+                  border: '1px solid #D0DBE8',
                   '&:hover': {
                     boxShadow: '0 6px 18px rgba(15, 23, 42, 0.08)',
                   },
                 }
               : {
                   borderRadius: '18px',
-                  border: '1px solid #C5CED9',
+                  border: '1px solid #D0DBE8',
                   boxShadow: '0 4px 14px rgba(15, 23, 42, 0.08)',
                   '&:hover': {
                     boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
@@ -358,12 +358,12 @@ const theme = createTheme({
               ? {
                   borderRadius: '16px',
                   boxShadow: '0 2px 8px rgba(15, 23, 42, 0.06)',
-                  border: '1px solid #C5CED9',
+                  border: '1px solid #D0DBE8',
                 }
               : {
                   borderRadius: '18px',
                   boxShadow: '0 4px 14px rgba(15, 23, 42, 0.08)',
-                  border: '1px solid #C5CED9',
+                  border: '1px solid #D0DBE8',
                 }),
           };
         },
@@ -397,13 +397,13 @@ const theme = createTheme({
               paddingBottom: '12px',
             },
             '& .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#C5CED9',
+              borderColor: '#D0DBE8',
             },
             '&:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#B8C4D0',
+              borderColor: '#BCC9DA',
             },
             '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-              borderColor: '#6A8F93',
+              borderColor: '#7BA3C4',
               borderWidth: 2,
             },
           },
@@ -421,13 +421,13 @@ const theme = createTheme({
           backgroundColor: '#FFFFFF',
           minHeight: 44,
           '& .MuiOutlinedInput-notchedOutline': {
-            borderColor: '#C5CED9',
+            borderColor: '#D0DBE8',
           },
           '&:hover .MuiOutlinedInput-notchedOutline': {
-            borderColor: '#B8C4D0',
+            borderColor: '#BCC9DA',
           },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-            borderColor: '#6A8F93',
+            borderColor: '#7BA3C4',
             borderWidth: 2,
           },
         },
@@ -456,9 +456,9 @@ const theme = createTheme({
     MuiDrawer: {
       styleOverrides: {
         paper: {
-          borderRight: '1px solid rgba(15, 23, 42, 0.04)',
+          borderRight: '1px solid #D5E0EB',
           boxShadow: 'none',
-          backgroundColor: '#F7F8FA',
+          backgroundColor: '#F6F9FC',
         },
       },
     },
@@ -466,9 +466,9 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundColor: 'rgba(255, 255, 255, 0.88)',
-          color: '#111827',
+          color: '#243447',
           boxShadow: 'none',
-          borderBottom: '1px solid rgba(15, 23, 42, 0.04)',
+          borderBottom: 'none',
           backdropFilter: 'blur(14px)',
         },
       },
@@ -480,7 +480,7 @@ const theme = createTheme({
           margin: '4px 8px',
           padding: '10px 12px',
           borderLeft: 'none',
-          fontSize: '13px',
+          fontSize: '13.5px',
           color: '#4B5563',
           transition: 'all 0.2s ease',
           '&:hover': {
@@ -488,12 +488,12 @@ const theme = createTheme({
             transform: 'translateY(-1px)',
           },
           '&.Mui-selected': {
-            backgroundColor: 'rgba(106, 143, 147, 0.14)',
-            color: '#4C6A6E',
+            backgroundColor: 'rgba(123, 163, 196, 0.14)',
+            color: '#5A849E',
             fontWeight: 600,
             borderLeft: 'none',
             '&:hover': {
-              backgroundColor: 'rgba(106, 143, 147, 0.2)',
+              backgroundColor: 'rgba(123, 163, 196, 0.2)',
             },
           },
         },
@@ -521,7 +521,7 @@ const theme = createTheme({
             borderBottom: '1px solid #EEF2F7',
             fontSize: '13.5px',
             lineHeight: 1.5,
-            color: '#111827',
+            color: '#243447',
           },
         },
       },
@@ -547,7 +547,7 @@ const theme = createTheme({
           fontSize: '13.5px',
           borderBottom: '1px solid #EEF2F7',
           padding: '14px 16px',
-          color: '#111827',
+          color: '#243447',
           lineHeight: 1.5,
         },
         head: {
@@ -595,12 +595,12 @@ const theme = createTheme({
           color: '#5F708A',
         },
         colorDefault: {
-          backgroundColor: '#F0F2F4',
-          color: '#5B6570',
+          backgroundColor: '#EEF3F8',
+          color: '#5B6B7A',
         },
         colorPrimary: {
-          backgroundColor: 'rgba(106, 143, 147, 0.16)',
-          color: '#4C6A6E',
+          backgroundColor: 'rgba(123, 163, 196, 0.16)',
+          color: '#5A849E',
         },
       },
     },
@@ -613,28 +613,28 @@ const theme = createTheme({
           color: '#64748B',
           '&:hover': {
             backgroundColor: 'rgba(15, 23, 42, 0.05)',
-            color: '#6A8F93',
+            color: '#7BA3C4',
             transform: 'translateY(-1px)',
           },
         },
         colorPrimary: {
           color: '#64748B',
           '&:hover': {
-            color: '#6A8F93',
-            backgroundColor: 'rgba(106, 143, 147, 0.1)',
+            color: '#7BA3C4',
+            backgroundColor: 'rgba(123, 163, 196, 0.1)',
           },
         },
         colorSuccess: {
           color: '#64748B',
           '&:hover': {
-            color: '#7FA88A',
+            color: '#8FB89A',
             backgroundColor: 'rgba(127, 168, 138, 0.14)',
           },
         },
         colorError: {
           color: '#94A3B8',
           '&:hover': {
-            color: '#C48989',
+            color: '#D4A0A0',
             backgroundColor: 'rgba(196, 137, 137, 0.14)',
           },
         },

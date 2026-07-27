@@ -1,6 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import jwt from 'jsonwebtoken';
+import { User } from '../models';
 import { isCorsAllowLanEnabled, isPrivateLanHttpOrigin } from '../utils/corsPrivateLan';
 
 interface AuthenticatedSocket extends Socket {
@@ -17,6 +18,7 @@ interface JwtSocketPayload {
   userid?: string;
   tenantId?: number;
   companyId?: number;
+  sv?: number;
 }
 
 class SocketService {
@@ -61,7 +63,7 @@ class SocketService {
   }
 
   private setupSocketHandlers() {
-    this.io.use((socket: AuthenticatedSocket, next) => {
+    this.io.use(async (socket: AuthenticatedSocket, next) => {
       const authToken = socket.handshake.auth?.token;
       const bearerHeader = socket.handshake.headers?.authorization;
       const bearerToken =
@@ -83,6 +85,16 @@ class SocketService {
         const decoded = jwt.verify(token, secret) as JwtSocketPayload;
         if (!decoded?.userId || typeof decoded.userId !== 'number') {
           return next(new Error('유효하지 않은 토큰 payload입니다.'));
+        }
+
+        const user = await (User as any).findByPk(decoded.userId, {
+          attributes: ['id', 'status', 'session_version'],
+        });
+        if (!user || user.status !== 'active') {
+          return next(new Error('유효하지 않은 사용자입니다.'));
+        }
+        if (Number(user.session_version ?? 0) !== Number(decoded.sv ?? 0)) {
+          return next(new Error('SESSION_SUPERSEDED'));
         }
 
         socket.user = {

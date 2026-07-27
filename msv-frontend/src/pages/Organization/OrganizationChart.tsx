@@ -39,13 +39,23 @@ import ReactFlow, {
   MiniMap,
   NodeTypes,
   MarkerType,
-  BackgroundVariant
+  BackgroundVariant,
+  Handle,
+  Position,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useStore } from '../../store';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { filterActiveCompanyUsers, useReferenceDataStore } from '../../store/referenceDataStore';
+
+const orgHandleStyle: React.CSSProperties = {
+  width: 8,
+  height: 8,
+  border: '2px solid #94a3b8',
+  background: '#fff',
+  opacity: 0,
+};
 
 // 조직도 노드 타입 정의
 interface OrganizationNode {
@@ -69,18 +79,19 @@ interface OrganizationNode {
 // 커스텀 노드 컴포넌트들
 const PersonNode = ({ data }: { data: any }) => (
   <Card sx={{ 
-    minWidth: 200, 
-    maxWidth: 250,
+    width: 230,
     boxShadow: 3,
     borderRadius: 2,
     border: '2px solid',
     borderColor: 'primary.main',
+    position: 'relative',
     '&:hover': {
       boxShadow: 6,
       transform: 'scale(1.02)',
       transition: 'all 0.2s ease-in-out'
     }
   }}>
+    <Handle type="target" position={Position.Top} style={orgHandleStyle} />
     <CardContent sx={{ p: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
         <Avatar sx={{ mr: 1, bgcolor: 'primary.main' }}>
@@ -110,18 +121,20 @@ const PersonNode = ({ data }: { data: any }) => (
 
 const DepartmentNode = ({ data }: { data: any }) => (
   <Card sx={{ 
-    minWidth: 200, 
-    maxWidth: 250,
+    width: 230,
     boxShadow: 3,
     borderRadius: 2,
     border: '2px solid',
     borderColor: 'secondary.main',
+    position: 'relative',
     '&:hover': {
       boxShadow: 6,
       transform: 'scale(1.02)',
       transition: 'all 0.2s ease-in-out'
     }
   }}>
+    <Handle type="target" position={Position.Top} style={orgHandleStyle} />
+    <Handle type="source" position={Position.Bottom} style={orgHandleStyle} />
     <CardContent sx={{ p: 2 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
         <Avatar sx={{ mr: 1, bgcolor: 'secondary.main' }}>
@@ -153,18 +166,19 @@ const DepartmentNode = ({ data }: { data: any }) => (
 
 const CompanyNode = ({ data }: { data: any }) => (
   <Card sx={{ 
-    minWidth: 250, 
-    maxWidth: 300,
+    width: 280,
     boxShadow: 4,
     borderRadius: 3,
     border: '3px solid',
     borderColor: 'success.main',
+    position: 'relative',
     '&:hover': {
       boxShadow: 8,
       transform: 'scale(1.02)',
       transition: 'all 0.2s ease-in-out'
     }
   }}>
+    <Handle type="source" position={Position.Bottom} style={orgHandleStyle} />
     <CardContent sx={{ p: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
         <Avatar sx={{ mr: 2, bgcolor: 'success.main', width: 48, height: 48 }}>
@@ -248,64 +262,83 @@ const OrganizationChart: React.FC = () => {
       
       const orgNodes: OrganizationNode[] = [];
       const orgEdges: Edge[] = [];
-      
-      // 회사 노드 생성
+
+      // 피라미드 레이아웃: 하위(직원) 폭을 기준으로 부서·회사 위치 계산
+      const PERSON_W = 230;
+      const PERSON_GAP = 32;
+      const DEPT_W = 230;
+      const DEPT_GAP = 72;
+      const COMPANY_W = 280;
+      const COMPANY_Y = 24;
+      const DEPT_Y = 250;
+      const PERSON_Y = 470;
+
+      const departments = Array.from(departmentMap.keys());
+      const deptLayouts = departments.map((deptName) => {
+        const deptUsers = departmentMap.get(deptName)!;
+        const peopleRowWidth =
+          deptUsers.length === 0
+            ? DEPT_W
+            : deptUsers.length * PERSON_W + Math.max(0, deptUsers.length - 1) * PERSON_GAP;
+        const subtreeWidth = Math.max(DEPT_W, peopleRowWidth);
+        return { deptName, deptUsers, subtreeWidth, peopleRowWidth };
+      });
+
+      const totalTreeWidth =
+        deptLayouts.reduce((sum, d) => sum + d.subtreeWidth, 0) +
+        Math.max(0, deptLayouts.length - 1) * DEPT_GAP;
+      const treeCenterX = totalTreeWidth / 2;
+
+      // 회사 노드 (트리 중앙)
       if (company) {
-        const companyNode: OrganizationNode = {
+        orgNodes.push({
           id: `company-${company.id}`,
           type: 'company',
           data: {
             label: company.name,
             name: company.name,
             level: 0,
-            employeeCount: activeUsers.length
+            employeeCount: activeUsers.length,
           },
-          position: { x: 400, y: 50 }
-        };
-        orgNodes.push(companyNode);
+          position: { x: treeCenterX - COMPANY_W / 2, y: COMPANY_Y },
+        });
       }
-      
-      // 부서 노드 및 사용자 노드 생성
-      const departments = Array.from(departmentMap.keys());
-      const deptNodeWidth = 300;
-      const startX = 400 - ((departments.length - 1) * deptNodeWidth) / 2;
-      
-      departments.forEach((deptName, deptIndex) => {
-        const deptUsers = departmentMap.get(deptName)!;
+
+      let cursorX = 0;
+      deptLayouts.forEach(({ deptName, deptUsers, subtreeWidth, peopleRowWidth }) => {
         const deptNodeId = `dept-${deptName}`;
-        
-        // 부서 노드 생성
-        const deptNode: OrganizationNode = {
+        const subtreeCenterX = cursorX + subtreeWidth / 2;
+        const deptX = subtreeCenterX - DEPT_W / 2;
+
+        orgNodes.push({
           id: deptNodeId,
           type: 'department',
           data: {
             label: deptName,
             name: deptName,
             level: 1,
-            employeeCount: deptUsers.length
+            employeeCount: deptUsers.length,
           },
-          position: { x: startX + deptIndex * deptNodeWidth, y: 200 }
-        };
-        orgNodes.push(deptNode);
-        
-        // 회사 -> 부서 엣지
+          position: { x: deptX, y: DEPT_Y },
+        });
+
         if (company) {
           orgEdges.push({
             id: `edge-company-${deptNodeId}`,
             source: `company-${company.id}`,
             target: deptNodeId,
             type: 'smoothstep',
-            markerEnd: { type: MarkerType.ArrowClosed }
+            animated: false,
+            style: { stroke: '#94a3b8', strokeWidth: 2 },
+            markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#94a3b8' },
           });
         }
-        
-        // 사용자 노드 생성
-        const userNodeWidth = 200;
-        const userStartX = deptNode.position.x - ((deptUsers.length - 1) * userNodeWidth) / 2;
-        
+
+        const personStartX = subtreeCenterX - peopleRowWidth / 2;
         deptUsers.forEach((userData, userIndex) => {
-          const userNode: OrganizationNode = {
-            id: `user-${userData.id}`,
+          const userId = `user-${userData.id}`;
+          orgNodes.push({
+            id: userId,
             type: 'person',
             data: {
               label: userData.username,
@@ -313,29 +346,30 @@ const OrganizationChart: React.FC = () => {
               position: userData.position || '',
               department: userData.department || '',
               email: userData.email || '',
-              phone: userData.phone || '', // 사용자 테이블의 phone 필드 사용
+              phone: userData.phone || '',
               level: 2,
-              managerId: deptNodeId
+              managerId: deptNodeId,
             },
-            position: { 
-              x: userStartX + userIndex * userNodeWidth, 
-              y: 350 
-            }
-          };
-          orgNodes.push(userNode);
-          
-          // 부서 -> 사용자 엣지
+            position: {
+              x: personStartX + userIndex * (PERSON_W + PERSON_GAP),
+              y: PERSON_Y,
+            },
+          });
+
           orgEdges.push({
-            id: `edge-${deptNodeId}-user-${userData.id}`,
+            id: `edge-${deptNodeId}-${userId}`,
             source: deptNodeId,
-            target: `user-${userData.id}`,
+            target: userId,
             type: 'smoothstep',
-            markerEnd: { type: MarkerType.ArrowClosed }
+            animated: false,
+            style: { stroke: '#94a3b8', strokeWidth: 2 },
+            markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#94a3b8' },
           });
         });
+
+        cursorX += subtreeWidth + DEPT_GAP;
       });
-      
-            
+
       setNodes(orgNodes);
       setEdges(orgEdges);
     } catch (error: any) {
@@ -548,7 +582,13 @@ const OrganizationChart: React.FC = () => {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             nodeTypes={nodeTypes}
+            defaultEdgeOptions={{
+              type: 'smoothstep',
+              style: { stroke: '#94a3b8', strokeWidth: 2 },
+              markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#94a3b8' },
+            }}
             fitView
+            fitViewOptions={{ padding: 0.2 }}
             attributionPosition="bottom-left"
           >
             <Controls />

@@ -1,5 +1,5 @@
 import express from 'express';
-import { login, getProfile, register, refreshToken } from '../controllers/authController';
+import { login, getProfile, register, refreshToken, checkSession, logout } from '../controllers/authController';
 import { authenticateToken } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
 
@@ -28,6 +28,8 @@ router.post('/register', validateBody({
 
 // 프로필 조회 (인증 필요)
 router.get('/profile', authenticateToken, getProfile);
+router.get('/session', authenticateToken, checkSession);
 router.post('/refresh', authenticateToken, refreshToken);
+router.post('/logout', authenticateToken, logout);
 
 export default router;

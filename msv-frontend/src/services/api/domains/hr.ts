@@ -114,25 +114,36 @@ export const vacationService = {
     }
   },
 
-  // ?�차 ?�보 조회
+  // 연차 정보 조회
   getAnnualLeaveInfo: async (userId?: number) => {
     try {
       const params = userId ? { user_id: userId } : {};
       const response = await api.get('/hr/vacations/annual-leave', { params });
       return response.data;
     } catch (error) {
-      console.error('?�차 ?�보 조회 ?�류:', error);
+      console.error('연차 정보 조회 오류:', error);
       throw error;
     }
   },
 
-  // ?��? ?�책 조회
+  // 직원별 휴가 잔여일
+  getLeaveBalances: async (params?: { company_id?: number }) => {
+    try {
+      const response = await api.get('/hr/vacations/leave-balances', { params });
+      return response.data;
+    } catch (error) {
+      console.error('휴가 잔여일 조회 오류:', error);
+      throw error;
+    }
+  },
+
+  // 휴가 정책 조회
   getVacationPolicy: async () => {
     try {
       const response = await api.get('/hr/vacations/policy');
       return response.data;
     } catch (error) {
-      console.error('?��? ?�책 조회 ?�류:', error);
+      console.error('휴가 정책 조회 오류:', error);
       throw error;
     }
   },

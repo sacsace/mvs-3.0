@@ -154,7 +154,7 @@ const SystemSettings: React.FC = () => {
     },
     appearance: {
       theme: 'light',
-      primaryColor: '#6A8F93',
+      primaryColor: '#7BA3C4',
       fontSize: 'medium',
       sidebarCollapsed: false,
       showNotifications: true

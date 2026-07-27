@@ -40,6 +40,7 @@ import {
   approveVacation,
   rejectVacation,
   getAnnualLeaveInfo,
+  getLeaveBalances,
   getVacationPolicy,
   updateVacationPolicy,
   exportVacationsToExcel,
@@ -223,6 +224,7 @@ const vacationMenuPerm = (flags: ('can_view' | 'can_create' | 'can_edit' | 'can_
 router.get('/vacations', vacationMenuPerm(['can_view', 'can_create']), getVacations);
 router.get('/vacations/excel/export', vacationMenuPerm(['can_view', 'can_edit']), exportVacationsToExcel);
 router.get('/vacations/annual-leave', vacationMenuPerm(['can_view', 'can_create']), getAnnualLeaveInfo);
+router.get('/vacations/leave-balances', vacationMenuPerm(['can_view', 'can_create']), getLeaveBalances);
 router.get('/vacations/policy', vacationMenuPerm(['can_view', 'can_create']), getVacationPolicy);
 router.put(
   '/vacations/policy',

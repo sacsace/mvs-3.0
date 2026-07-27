@@ -89,6 +89,8 @@ const authStorage = {
 };
 const SESSION_WARNING_MS = 30 * 1000; // 30초
 const SESSION_CHECK_INTERVAL_MS = 5 * 1000; // 5초
+const SESSION_VALIDITY_POLL_MS = 30 * 1000; // 중복 로그인 감지 폴링
+const SESSION_SUPERSEDED_CODE = 'SESSION_SUPERSEDED';
 
 /** 동일 429 안내가 errorStore에 반복 적재되지 않도록 */
 let lastRateLimitNoticeAt = 0;
@@ -114,6 +116,7 @@ let expiryWarningShownForToken: string | null = null;
 let refreshPromise: Promise<string | null> | null = null;
 let lastRefreshAt = 0;
 let lastUserActivityAt = Date.now();
+let sessionSupersededHandled = false;
 const isUserRecentlyActive = () => Date.now() - lastUserActivityAt <= ACTIVITY_RECENT_WINDOW_MS;
 
 const readStoredAuthToken = (): { raw: string; parsed: any; token: string } | null => {
@@ -124,8 +127,7 @@ const readStoredAuthToken = (): { raw: string; parsed: any; token: string } | nu
     const token = parsed?.state?.token;
     if (!token || typeof token !== 'string') return null;
     return { raw, parsed, token };
-  } catch (error) {
-    console.error('저장된 인증 정보 파싱 오류:', error);
+  } catch {
     return null;
   }
 };
@@ -140,8 +142,8 @@ const updateStoredAuthToken = (token: string) => {
     if (!parsed?.state) return;
     parsed.state.token = token;
     authStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(parsed));
-  } catch (error) {
-    console.error('저장된 인증 정보 갱신 오류:', error);
+  } catch {
+    /* ignore */
   }
 };
 
@@ -152,12 +154,28 @@ const clearAuthAndRedirectLogin = () => {
   }
 };
 
+const handleSessionSuperseded = () => {
+  if (sessionSupersededHandled) return;
+  if (window.location.pathname === '/login' || window.location.pathname === '/') return;
+  sessionSupersededHandled = true;
+  authStorage.removeItem(AUTH_STORAGE_KEY);
+  useErrorStore.getState().showError(
+    '중복 로그인',
+    '다른 곳에서 동일한 계정으로 로그인되어 현재 세션이 종료됩니다.',
+    undefined,
+    'warning',
+    '/login'
+  );
+};
+
 const isAuthBypassEndpoint = (url?: string) => {
   if (!url) return false;
   return (
     url.includes('/auth/login') ||
     url.includes('/auth/register') ||
-    url.includes('/auth/refresh')
+    url.includes('/auth/refresh') ||
+    url.includes('/auth/session') ||
+    url.includes('/auth/logout')
   );
 };
 
@@ -172,6 +190,9 @@ const showSessionExpiryWarning = (token: string) => {
 
 const shouldSkipSessionRefresh = (config: any) =>
   config?.headers?.['x-skip-session-refresh'] === 'true';
+
+const isSessionSupersededError = (error: any) =>
+  error?.response?.data?.code === SESSION_SUPERSEDED_CODE;
 
 const requestSessionRefresh = async (currentToken: string): Promise<string | null> => {
   if (refreshPromise) return refreshPromise;
@@ -197,7 +218,9 @@ const requestSessionRefresh = async (currentToken: string): Promise<string | nul
       }
       return null;
     } catch (error) {
-      console.warn('세션 자동 연장 실패:', error);
+      if (isSessionSupersededError(error)) {
+        handleSessionSuperseded();
+      }
       return null;
     } finally {
       lastRefreshAt = Date.now();
@@ -305,8 +328,6 @@ api.interceptors.request.use(
       }
 
       config.headers.Authorization = `Bearer ${activeToken}`;
-    } else {
-      console.warn('⚠️ [API 요청] sessionStorage에 토큰 없음:', config.url);
     }
     return config;
   },
@@ -324,8 +345,7 @@ const decodeJwtPayload = (token: string): any | null => {
     const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
     const decoded = atob(padded);
     return JSON.parse(decoded);
-  } catch (error) {
-    console.error('토큰 파싱 오류:', error);
+  } catch {
     return null;
   }
 };
@@ -349,7 +369,6 @@ const checkSessionTimeout = () => {
     const timeUntilExpiry = expirationTime - Date.now();
 
     if (timeUntilExpiry <= 0) {
-      console.warn('⚠️ 세션이 만료되었습니다. 자동 로그아웃합니다.');
       clearAuthAndRedirectLogin();
       return;
     }
@@ -367,13 +386,37 @@ const checkSessionTimeout = () => {
     } else {
       expiryWarningShownForToken = null;
     }
+  } catch {
+    /* ignore */
+  }
+};
+
+/** 서버에 현재 세션이 유효한지 확인 (다른 기기 로그인 감지) */
+const pollSessionValidity = async () => {
+  try {
+    const storedAuth = readStoredAuthToken();
+    if (!storedAuth?.token) return;
+    if (window.location.pathname === '/login' || window.location.pathname === '/') return;
+
+    await api.get('/auth/session', {
+      headers: {
+        Authorization: `Bearer ${storedAuth.token}`,
+        'x-skip-session-refresh': 'true',
+        'x-skip-error-popup': 'true',
+      },
+    });
   } catch (error) {
-    console.error('세션 타임아웃 체크 오류:', error);
+    if (isSessionSupersededError(error)) {
+      handleSessionSuperseded();
+    }
   }
 };
 
 // 주기적으로 세션 타임아웃 체크 (5초마다)
 setInterval(checkSessionTimeout, SESSION_CHECK_INTERVAL_MS);
+setInterval(() => {
+  void pollSessionValidity();
+}, SESSION_VALIDITY_POLL_MS);
 
 if (typeof window !== 'undefined') {
   const activityEvents: Array<keyof WindowEventMap> = [
@@ -397,6 +440,7 @@ if (typeof window !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       onActivity();
+      void pollSessionValidity();
     }
   });
 }
@@ -407,14 +451,6 @@ api.interceptors.response.use(
     return response;
   },
   async (error) => {
-    // 에러 로깅 (개발용)
-    console.error('❌ [API 응답] 오류:', {
-      status: error.response?.status,
-      message: error.response?.data?.message || error.message,
-      url: error.config?.url,
-      method: error.config?.method
-    });
-
     const skipErrorPopup =
       error.config?.headers?.['x-skip-error-popup'] === 'true' ||
       isNotificationFeedGet(error.config) ||
@@ -423,6 +459,11 @@ api.interceptors.response.use(
     // 인증 오류 처리 (401, 403)
     // 로그인 API 호출 시에는 리다이렉트하지 않음 (로그인 페이지에서 오류 메시지 표시)
     const isLoginEndpoint = error.config?.url?.includes('/auth/login');
+
+    if (isSessionSupersededError(error)) {
+      handleSessionSuperseded();
+      return Promise.reject(error);
+    }
     
     if (error.response?.status === 401 || error.response?.status === 403) {
       // 로그인 API가 아닌 경우에만 리다이렉트 처리
@@ -465,13 +506,11 @@ api.interceptors.response.use(
 
     // 알림 폴링 GET 실패(네트워크·서버 오류 포함) — 팝업 없이 빈 목록
     if (isNotificationFeedGet(error.config)) {
-      console.warn('알림 조회 실패 → 빈 목록으로 처리:', error.config?.method, error.config?.url);
       return Promise.resolve(createEmptyListAxiosResponse(error.config));
     }
 
     // GET + 서버 무응답(네트워크 단절) — Header 회사정보·폴링 등, 모달·errorStore 적재 생략
     if (!skipErrorPopup && isGetWithoutResponse(error)) {
-      console.warn('GET 네트워크 오류 (팝업 생략):', error.config?.url, error.message);
       return Promise.reject(error);
     }
 
@@ -483,11 +522,6 @@ api.interceptors.response.use(
         listFetchStatus === 429 ||
         (listFetchStatus != null && listFetchStatus >= 500))
     ) {
-      if (listFetchStatus === 429) {
-        console.warn('목록 조회 한도 초과 → 빈 목록으로 처리:', error.config?.method, error.config?.url);
-      } else {
-        console.warn('목록 조회 실패 → 빈 목록으로 처리:', error.config?.method, error.config?.url);
-      }
       return Promise.resolve(createEmptyListAxiosResponse(error.config));
     }
 

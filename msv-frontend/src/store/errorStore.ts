@@ -7,6 +7,8 @@ export interface ErrorInfo {
   details?: string;
   timestamp: Date;
   type?: 'error' | 'warning' | 'info';
+  /** 닫을 때 이동할 경로 (예: 중복 로그인 강제 로그아웃) */
+  redirectTo?: string;
 }
 
 export interface NotificationInfo {
@@ -19,7 +21,13 @@ export interface NotificationInfo {
 interface ErrorState {
   errors: ErrorInfo[];
   notifications: NotificationInfo[];
-  showError: (title: string, message: string, details?: string, type?: 'error' | 'warning' | 'info') => void;
+  showError: (
+    title: string,
+    message: string,
+    details?: string,
+    type?: 'error' | 'warning' | 'info',
+    redirectTo?: string
+  ) => void;
   showNotification: (message: string, severity?: 'info' | 'warning' | 'success') => void;
   removeError: (id: string) => void;
   removeNotification: (id: string) => void;
@@ -44,14 +52,21 @@ export const useErrorStore = create<ErrorState>((set) => ({
     }));
   },
 
-  showError: (title: string, message: string, details?: string, type: 'error' | 'warning' | 'info' = 'error') => {
+  showError: (
+    title: string,
+    message: string,
+    details?: string,
+    type: 'error' | 'warning' | 'info' = 'error',
+    redirectTo?: string
+  ) => {
     const error: ErrorInfo = {
       id: `error-${Date.now()}-${Math.random()}`,
       title,
       message,
       details,
       timestamp: new Date(),
-      type
+      type,
+      redirectTo
     };
     
     set((state) => {
@@ -73,8 +88,8 @@ export const useErrorStore = create<ErrorState>((set) => ({
       
       // 최대 개수를 초과하면 오래된 에러부터 삭제
       if (newErrors.length > maxErrors) {
-        newErrors.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-        return { errors: newErrors.slice(0, maxErrors) };
+        newErrors.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+        return { errors: newErrors.slice(-maxErrors) };
       }
       
       return { errors: newErrors };

@@ -25,7 +25,11 @@ import {
   FormHelperText,
   InputLabel,
   Select,
+  Menu,
   MenuItem,
+  ListItemIcon,
+  ListItemText,
+  IconButton,
   TextField,
   Stack,
   Autocomplete,
@@ -52,8 +56,16 @@ import {
   mvsFilterFieldHeightSx,
   mvsOutlinedLabelProps,
 } from '../../theme/mvsLayout';
-import { Search as SearchIcon } from '@mui/icons-material';
-import { alpha, useTheme } from '@mui/material/styles';
+import {
+  Search as SearchIcon,
+  MoreHoriz as MoreHorizIcon,
+  Login as CheckInIcon,
+  Logout as CheckOutIcon,
+  EventBusy as NoShowIcon,
+  Cancel as CancelIcon,
+  MeetingRoom as AssignRoomIcon,
+} from '@mui/icons-material';
+import { alpha } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { roomBookingService, roomTypeRoomService, roomTypeService } from '../../services/api';
 import { generateWalkInBookingId } from '../../utils/bookingId';
@@ -192,7 +204,6 @@ const renderEllipsisText = (text: string, fontWeight?: number) => (
 );
 
 const FrontDesk: React.FC = () => {
-  const theme = useTheme();
   const { t, i18n } = useTranslation();
   const { user } = useStore();
   const canManagePastCheckIn = user?.role === 'root' || user?.role === 'admin';
@@ -258,6 +269,11 @@ const FrontDesk: React.FC = () => {
   const [bookingListSearch, setBookingListSearch] = useState('');
   const [bookingPage, setBookingPage] = useState(1);
   const [showAllBookings, setShowAllBookings] = useState(false);
+  const [rowActionMenu, setRowActionMenu] = useState<{
+    mouseX: number;
+    mouseY: number;
+    booking: any;
+  } | null>(null);
   const bookingsPerPage = 10;
 
   const today = new Date().toISOString().split('T')[0];
@@ -576,7 +592,7 @@ const FrontDesk: React.FC = () => {
   }, [walkInOpen]);
 
   useEffect(() => {
-    if (!assignRoomOpen) return;
+    if (assignRoomOpen) return;
     setAssignBookingId('');
     setAssignNewRoom(null);
   }, [assignRoomOpen]);
@@ -681,11 +697,39 @@ const FrontDesk: React.FC = () => {
     }
   }, [availableWalkInRooms, walkInForm.roomNumber, walkInForm.checkInDate, walkInForm.checkOutDate, roomTypeRooms.length]);
 
-  const canCheckIn = (status: string) => status === 'pending' || status === 'confirmed';
+  const normalizeBookingStatus = (status: unknown) => String(status ?? '').trim().toLowerCase();
 
-  const canMarkNoShow = (status: string) => status === 'pending' || status === 'confirmed';
+  const canCheckIn = (status: string) => {
+    const s = normalizeBookingStatus(status);
+    return s === 'pending' || s === 'confirmed';
+  };
 
-  const canCancelBooking = (status: string) => status === 'pending' || status === 'confirmed';
+  const canMarkNoShow = (status: string) => {
+    const s = normalizeBookingStatus(status);
+    return s === 'pending' || s === 'confirmed';
+  };
+
+  const canCancelBooking = (status: string) => {
+    const s = normalizeBookingStatus(status);
+    return s === 'pending' || s === 'confirmed';
+  };
+
+  const canAssignRoom = (status: string) =>
+    ['pending', 'confirmed', 'checked_in'].includes(normalizeBookingStatus(status));
+
+  const canCheckout = (status: string) => normalizeBookingStatus(status) === 'checked_in';
+
+  const closeRowActionMenu = () => setRowActionMenu(null);
+
+  const openRowActionMenu = (event: React.MouseEvent, booking: any) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setRowActionMenu({
+      mouseX: event.clientX + 2,
+      mouseY: event.clientY - 6,
+      booking,
+    });
+  };
 
   /** 빠른 작업: 예약 선택 다이얼로그 — 대상 없으면 안내만 */
   const openQuickActionDialog = (mode: 'checkin' | 'checkout' | 'no_show' | 'cancel') => {
@@ -709,7 +753,7 @@ const FrontDesk: React.FC = () => {
     setDialog({ open: true, mode });
   };
 
-  const openAssignRoomDialog = () => {
+  const openAssignRoomDialog = (preselectBookingId?: number) => {
     if (eligibleForAssignRoom.length === 0) {
       setSnackbar({
         open: true,
@@ -718,6 +762,13 @@ const FrontDesk: React.FC = () => {
       });
       return;
     }
+    setAssignNewRoom(null);
+    setAssignBookingId(
+      preselectBookingId != null &&
+        eligibleForAssignRoom.some((b) => b.id === preselectBookingId)
+        ? preselectBookingId
+        : ''
+    );
     setAssignRoomOpen(true);
   };
 
@@ -1068,23 +1119,6 @@ const FrontDesk: React.FC = () => {
     lineHeight: 1.25,
   };
 
-  const rowActionBtnSx = {
-    ...mvsBodyOutlinedBtnSx,
-    flexShrink: 0,
-    minHeight: 28,
-    minWidth: 0,
-    px: 1,
-    py: 0.25,
-    fontSize: '0.75rem',
-    whiteSpace: 'nowrap' as const,
-    '&.Mui-disabled': {
-      opacity: 1,
-      color: alpha(theme.palette.text.primary, 0.42),
-      borderColor: alpha(theme.palette.divider, 0.75),
-      WebkitTextFillColor: alpha(theme.palette.text.primary, 0.42),
-    },
-  };
-
   const listStateBoxSx = {
     ...mvsBodyListTableSx,
     display: 'flex',
@@ -1144,7 +1178,7 @@ const FrontDesk: React.FC = () => {
             >
               {t('frontDesk.actions.cancelBooking')}
             </Button>
-            <Button variant="outlined" onClick={openAssignRoomDialog} sx={quickActionBtnSx}>
+            <Button variant="outlined" onClick={() => openAssignRoomDialog()} sx={quickActionBtnSx}>
               {t('frontDesk.actions.assignRoom')}
             </Button>
           </Box>
@@ -1286,7 +1320,17 @@ const FrontDesk: React.FC = () => {
               </TableHead>
               <TableBody sx={mvsTableBodyRowSx}>
                 {visibleBookings.map((booking, rowIndex) => (
-                  <TableRow key={booking.id} hover>
+                  <TableRow
+                    key={booking.id}
+                    hover
+                    onClick={(e) => openRowActionMenu(e, booking)}
+                    sx={{
+                      cursor: 'pointer',
+                      ...(rowActionMenu?.booking?.id === booking.id
+                        ? { bgcolor: (theme) => alpha(theme.palette.primary.main, 0.06) }
+                        : {}),
+                    }}
+                  >
                     <TableCell
                       align="center"
                       sx={{ ...frontDeskCellBaseSx, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}
@@ -1331,62 +1375,21 @@ const FrontDesk: React.FC = () => {
                       sx={{
                         ...frontDeskCellBaseSx,
                         whiteSpace: 'nowrap',
-                        overflow: 'hidden',
+                        width: 56,
                       }}
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <Box
+                      <IconButton
+                        size="small"
+                        aria-label={t('frontDesk.columns.actions')}
+                        onClick={(e) => openRowActionMenu(e, booking)}
                         sx={{
-                          display: 'inline-flex',
-                          flexWrap: 'nowrap',
-                          gap: 0.5,
-                          justifyContent: 'flex-end',
-                          alignItems: 'center',
-                          maxWidth: '100%',
+                          color: 'text.secondary',
+                          '&:hover': { color: 'primary.main', bgcolor: alpha('#4A7FA8', 0.08) },
                         }}
                       >
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          disabled={!canCheckIn(booking.status)}
-                          onClick={() => void updateStatus(booking.id, 'checked_in')}
-                          sx={rowActionBtnSx}
-                        >
-                          {t('frontDesk.actions.checkin')}
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          disabled={booking.status !== 'checked_in'}
-                          onClick={() => {
-                            setCheckoutBooking(booking);
-                            setPaymentMethod('card');
-                            setInvoiceOpen(true);
-                          }}
-                          sx={rowActionBtnSx}
-                        >
-                          {t('frontDesk.actions.checkout')}
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="warning"
-                          disabled={!canMarkNoShow(booking.status)}
-                          onClick={() => openNoShowConfirm(booking.id)}
-                          sx={rowActionBtnSx}
-                        >
-                          {t('frontDesk.actions.noShow')}
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="error"
-                          disabled={!canCancelBooking(booking.status)}
-                          onClick={() => openCancelConfirm(booking.id)}
-                          sx={rowActionBtnSx}
-                        >
-                          {t('frontDesk.actions.cancel')}
-                        </Button>
-                      </Box>
+                        <MoreHorizIcon fontSize="small" />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -2045,6 +2048,117 @@ const FrontDesk: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Menu
+        open={rowActionMenu !== null}
+        onClose={closeRowActionMenu}
+        anchorReference="anchorPosition"
+        anchorPosition={
+          rowActionMenu !== null
+            ? { top: rowActionMenu.mouseY, left: rowActionMenu.mouseX }
+            : undefined
+        }
+        slotProps={{
+          paper: {
+            sx: {
+              minWidth: 180,
+              borderRadius: 2,
+              boxShadow: '0 8px 24px rgba(45, 70, 95, 0.12)',
+            },
+          },
+        }}
+      >
+        {rowActionMenu?.booking && (
+          <>
+            {(() => {
+              const status = rowActionMenu.booking.status;
+              const hasAnyAction =
+                canCheckIn(status) ||
+                canCheckout(status) ||
+                canMarkNoShow(status) ||
+                canAssignRoom(status) ||
+                canCancelBooking(status);
+              if (hasAnyAction) return null;
+              return (
+                <Box sx={{ px: 2, py: 1.25, maxWidth: 240 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.4, display: 'block' }}>
+                    {t('frontDesk.messages.noActionsForStatus', {
+                      status: statusLabel(normalizeBookingStatus(status)),
+                    })}
+                  </Typography>
+                </Box>
+              );
+            })()}
+            <MenuItem
+              disabled={!canCheckIn(rowActionMenu.booking.status)}
+              onClick={() => {
+                const id = rowActionMenu.booking.id;
+                closeRowActionMenu();
+                void updateStatus(id, 'checked_in');
+              }}
+            >
+              <ListItemIcon>
+                <CheckInIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>{t('frontDesk.actions.checkin')}</ListItemText>
+            </MenuItem>
+            <MenuItem
+              disabled={!canCheckout(rowActionMenu.booking.status)}
+              onClick={() => {
+                const booking = rowActionMenu.booking;
+                closeRowActionMenu();
+                setCheckoutBooking(booking);
+                setPaymentMethod('card');
+                setInvoiceOpen(true);
+              }}
+            >
+              <ListItemIcon>
+                <CheckOutIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>{t('frontDesk.actions.checkout')}</ListItemText>
+            </MenuItem>
+            <MenuItem
+              disabled={!canMarkNoShow(rowActionMenu.booking.status)}
+              onClick={() => {
+                const id = rowActionMenu.booking.id;
+                closeRowActionMenu();
+                openNoShowConfirm(id);
+              }}
+            >
+              <ListItemIcon>
+                <NoShowIcon fontSize="small" color="warning" />
+              </ListItemIcon>
+              <ListItemText>{t('frontDesk.actions.noShow')}</ListItemText>
+            </MenuItem>
+            <MenuItem
+              disabled={!canAssignRoom(rowActionMenu.booking.status)}
+              onClick={() => {
+                const id = rowActionMenu.booking.id;
+                closeRowActionMenu();
+                openAssignRoomDialog(id);
+              }}
+            >
+              <ListItemIcon>
+                <AssignRoomIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText>{t('frontDesk.actions.assignRoom')}</ListItemText>
+            </MenuItem>
+            <MenuItem
+              disabled={!canCancelBooking(rowActionMenu.booking.status)}
+              onClick={() => {
+                const id = rowActionMenu.booking.id;
+                closeRowActionMenu();
+                openCancelConfirm(id);
+              }}
+            >
+              <ListItemIcon>
+                <CancelIcon fontSize="small" color="error" />
+              </ListItemIcon>
+              <ListItemText>{t('frontDesk.actions.cancel')}</ListItemText>
+            </MenuItem>
+          </>
+        )}
+      </Menu>
 
       <Snackbar
         open={snackbar.open}

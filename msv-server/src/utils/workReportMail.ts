@@ -1,6 +1,12 @@
 import nodemailer from 'nodemailer';
 import { Company, User } from '../models';
 import { buildNodemailerTransportOptions, getSystemMailTransportOptions } from './mailConfig';
+import {
+  bilingualSubject,
+  buildBilingualHtml,
+  buildBilingualText,
+  escapeHtml
+} from './mailBilingual';
 
 export type WorkReportMailResult =
   | { sent: true; to: string; ccCount: number }
@@ -19,14 +25,6 @@ function stripHtml(html: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .replace(/[ \t]+/g, ' ')
     .trim();
-}
-
-function escapeHtml(text: string): string {
-  return String(text || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 function resolveAppBaseUrl(): string {
@@ -79,21 +77,22 @@ export async function sendWorkReportSubmittedEmail(params: {
   }
 
   const companyRow = await Company.findOne({ where: { id: companyId, tenant_id: tenantId } });
-
   const mailOpts = getSystemMailTransportOptions(companyRow);
   if (!mailOpts) {
-    return {
-      sent: false,
-      reason:
-        '메일 서버가 설정되지 않았습니다. 시스템 설정 > 보내는 메일 서버(SMTP)를 확인하세요.'
-    };
+    return { sent: false, reason: '메일 서버가 설정되지 않았습니다.' };
   }
 
-  const ccIds = [...new Set(ccUserIds.filter((id) => Number.isInteger(id) && id > 0 && id !== recipientUserId))];
   let ccAddresses: string[] = [];
-  if (ccIds.length > 0) {
+  const uniqueCcIds = [
+    ...new Set(
+      ccUserIds
+        .map(Number)
+        .filter((id) => Number.isFinite(id) && id > 0 && id !== recipientUserId && id !== senderUserId)
+    )
+  ];
+  if (uniqueCcIds.length > 0) {
     const ccUsers = await User.findAll({
-      where: { id: ccIds, tenant_id: tenantId, company_id: companyId, status: 'active' },
+      where: { id: uniqueCcIds, tenant_id: tenantId, company_id: companyId },
       attributes: ['id', 'email']
     });
     ccAddresses = ccUsers
@@ -112,43 +111,56 @@ export async function sendWorkReportSubmittedEmail(params: {
   const baseUrl = resolveAppBaseUrl();
   const viewUrl = baseUrl ? `${baseUrl}/work/reports` : '';
 
-  const subject = `[업무 보고서] ${title}`;
-  const textLines = [
-    `${authorName}님이 업무 보고서를 제출했습니다.`,
-    '',
+  const metaLinesKo = [
     `보고서 ID: ${reportId}`,
     reportDate ? `작성일: ${reportDate}` : '',
     `제목: ${title}`,
     summaryPlain ? `\n요약:\n${summaryPlain}` : '',
-    contentExcerpt ? `\n내용:\n${contentExcerpt}` : '',
-    viewUrl ? `\n시스템에서 확인: ${viewUrl}` : '',
-    '',
-    '본 메일은 MVS 업무 보고서 알림입니다.'
-  ].filter((line, i, arr) => line !== '' || (i > 0 && arr[i - 1] !== ''));
+    contentExcerpt ? `\n내용:\n${contentExcerpt}` : ''
+  ]
+    .filter(Boolean)
+    .join('\n');
 
-  const html = `
-    <div style="font-family:Segoe UI,Malgun Gothic,sans-serif;font-size:14px;color:#111827;line-height:1.55;max-width:640px;">
-      <p><strong>${escapeHtml(authorName)}</strong>님이 업무 보고서를 제출했습니다.</p>
+  const metaLinesEn = [
+    `Report ID: ${reportId}`,
+    reportDate ? `Date: ${reportDate}` : '',
+    `Title: ${title}`,
+    summaryPlain ? `\nSummary:\n${summaryPlain}` : '',
+    contentExcerpt ? `\nContent:\n${contentExcerpt}` : ''
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const sharedTable = `
       <table style="border-collapse:collapse;margin:12px 0 16px;width:100%;">
-        <tr><td style="padding:4px 12px 4px 0;color:#6b7280;vertical-align:top;">보고서 ID</td><td>${escapeHtml(reportId)}</td></tr>
-        ${reportDate ? `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;vertical-align:top;">작성일</td><td>${escapeHtml(reportDate)}</td></tr>` : ''}
-        <tr><td style="padding:4px 12px 4px 0;color:#6b7280;vertical-align:top;">제목</td><td><strong>${escapeHtml(title)}</strong></td></tr>
+        <tr><td style="padding:4px 12px 4px 0;color:#6b7280;vertical-align:top;">보고서 ID / Report ID</td><td>${escapeHtml(reportId)}</td></tr>
+        ${reportDate ? `<tr><td style="padding:4px 12px 4px 0;color:#6b7280;vertical-align:top;">작성일 / Date</td><td>${escapeHtml(reportDate)}</td></tr>` : ''}
+        <tr><td style="padding:4px 12px 4px 0;color:#6b7280;vertical-align:top;">제목 / Title</td><td><strong>${escapeHtml(title)}</strong></td></tr>
       </table>
-      ${summaryPlain ? `<p style="margin:0 0 8px;"><span style="color:#6b7280;">요약</span><br/>${escapeHtml(summaryPlain).replace(/\n/g, '<br/>')}</p>` : ''}
-      ${contentExcerpt ? `<p style="margin:0 0 12px;"><span style="color:#6b7280;">내용</span><br/>${escapeHtml(contentExcerpt).replace(/\n/g, '<br/>')}</p>` : ''}
-      ${viewUrl ? `<p><a href="${escapeHtml(viewUrl)}" style="color:#007a83;">시스템에서 보고서 확인</a></p>` : ''}
-      <p style="margin-top:20px;font-size:12px;color:#9ca3af;">본 메일은 MVS 업무 보고서 알림입니다.</p>
-    </div>
-  `.trim();
+      ${summaryPlain ? `<p style="margin:0 0 8px;"><span style="color:#6b7280;">요약 / Summary</span><br/>${escapeHtml(summaryPlain).replace(/\n/g, '<br/>')}</p>` : ''}
+      ${contentExcerpt ? `<p style="margin:0 0 12px;"><span style="color:#6b7280;">내용 / Content</span><br/>${escapeHtml(contentExcerpt).replace(/\n/g, '<br/>')}</p>` : ''}
+  `;
+
+  const content = {
+    titleKo: '업무 보고서 제출',
+    titleEn: 'Work Report Submitted',
+    bodyKo: `${authorName}님이 업무 보고서를 제출했습니다.\n\n${metaLinesKo}`,
+    bodyEn: `${authorName} submitted a work report.\n\n${metaLinesEn}`,
+    bodyHtmlKo: `<p style="margin:0 0 12px;"><strong>${escapeHtml(authorName)}</strong>님이 업무 보고서를 제출했습니다.</p>${sharedTable}`,
+    bodyHtmlEn: `<p style="margin:0 0 12px;"><strong>${escapeHtml(authorName)}</strong> submitted a work report.</p>${sharedTable}`,
+    linkUrl: viewUrl || undefined,
+    footerKo: '본 메일은 MVS 업무 보고서 알림입니다.',
+    footerEn: 'This is an MVS work report notification.'
+  };
 
   const transporter = nodemailer.createTransport(buildNodemailerTransportOptions(mailOpts));
   await transporter.sendMail({
     from: mailOpts.from,
     to,
     cc: ccAddresses.length > 0 ? ccAddresses : undefined,
-    subject,
-    text: textLines.join('\n'),
-    html
+    subject: bilingualSubject(`[업무 보고서] ${title}`, `[Work Report] ${title}`),
+    text: buildBilingualText(content),
+    html: buildBilingualHtml(content)
   });
 
   return { sent: true, to, ccCount: ccAddresses.length };

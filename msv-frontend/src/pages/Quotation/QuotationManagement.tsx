@@ -53,12 +53,10 @@ import {
   Delete as DeleteIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
-  Description as QuotationIcon,
   Print as PrintIcon,
   PictureAsPdf as PictureAsPdfIcon,
   Email as EmailIcon,
   CheckCircle as ApprovedIcon,
-  Pending as PendingIcon,
   Cancel as RejectedIcon
 } from '@mui/icons-material';
 import { useStore } from '../../store';
@@ -410,18 +408,13 @@ const QuotationManagement: React.FC = () => {
   };
 
   const chipCompactSx = {
-    maxWidth: '100%',
-    height: 'auto',
-    minHeight: 24,
+    height: 24,
     '& .MuiChip-label': {
-      whiteSpace: 'normal',
-      textAlign: 'center',
-      display: 'block',
-      py: 0.25,
-      px: 0.5,
-      fontSize: { xs: '0.65rem', sm: '0.75rem' },
-      lineHeight: 1.2
-    }
+      whiteSpace: 'nowrap',
+      px: 0.75,
+      fontSize: { xs: '0.7rem', sm: '0.75rem' },
+      lineHeight: 1.2,
+    },
   } as const;
 
   const getStatusChip = (status: string) => {
@@ -446,25 +439,6 @@ const QuotationManagement: React.FC = () => {
         return <Chip label={t('quotationManagement.statusExpired')} color="warning" size="small" sx={chipCompactSx} />;
       default:
         return <Chip label={t('quotationManagement.statusUnknown')} color="default" size="small" sx={chipCompactSx} />;
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'draft':
-        return <PendingIcon color="action" />;
-      case 'sent':
-        return <EmailIcon color="info" />;
-      case 'pending_approval':
-        return <PendingIcon color="warning" />;
-      case 'approved':
-        return <ApprovedIcon color="success" />;
-      case 'rejected':
-        return <RejectedIcon color="error" />;
-      case 'expired':
-        return <PendingIcon color="warning" />;
-      default:
-        return <QuotationIcon />;
     }
   };
 
@@ -1109,7 +1083,7 @@ const QuotationManagement: React.FC = () => {
               <Table
                 size="small"
                 sx={{
-                  tableLayout: 'fixed',
+                  tableLayout: 'auto',
                   width: '100%',
                   borderCollapse: 'collapse',
                   bgcolor: 'transparent',
@@ -1122,14 +1096,14 @@ const QuotationManagement: React.FC = () => {
               >
                 <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
-                    <TableCell sx={{ width: '9%' }}>{t('quotationManagement.status')}</TableCell>
-                    <TableCell sx={{ width: '10%' }}>{t('quotationManagement.quotationNumber')}</TableCell>
-                    <TableCell sx={{ width: '26%' }}>{t('quotationManagement.customerName')}</TableCell>
-                    <TableCell sx={{ width: '9%' }}>{t('quotationManagement.issueDate')}</TableCell>
-                    <TableCell sx={{ width: '9%' }}>{t('quotationManagement.validUntil')}</TableCell>
-                    <TableCell sx={{ width: '11%' }}>{t('quotationManagement.totalAmount')}</TableCell>
-                    <TableCell sx={{ width: '10%' }}>{t('common.create')}</TableCell>
-                    <TableCell align="center" sx={{ width: '16%', py: 0.5 }}>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('quotationManagement.status')}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('quotationManagement.quotationNumber')}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap', minWidth: 140 }}>{t('quotationManagement.customerName')}</TableCell>
+                    <TableCell sx={{ width: '100%', minWidth: 160 }}>{t('quotationManagement.description')}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('quotationManagement.issueDate')}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('quotationManagement.totalAmount')}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{t('common.create')}</TableCell>
+                    <TableCell align="center" sx={{ width: 56, px: 0.5, whiteSpace: 'nowrap' }}>
                       {t('quotationManagement.actions')}
                     </TableCell>
                   </TableRow>
@@ -1141,29 +1115,15 @@ const QuotationManagement: React.FC = () => {
                       onClick={() => handleOpenQuotationDetail(quotation)}
                       sx={{ cursor: 'pointer', '&:active': { bgcolor: 'action.selected' } }}
                     >
-                      <TableCell sx={{ py: 0.75, px: { xs: 0.5, sm: 1 }, verticalAlign: 'middle', minWidth: 0 }}>
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 0.35,
-                            flexWrap: 'wrap',
-                            minWidth: 0,
-                            '& svg': { fontSize: { xs: 18, sm: 20 } }
-                          }}
-                        >
-                          {getStatusIcon(quotation.status)}
-                          {getStatusChip(quotation.status)}
-                        </Box>
+                      <TableCell sx={{ py: 0.75, px: { xs: 0.5, sm: 1 }, verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        {getStatusChip(quotation.status)}
                       </TableCell>
                       <TableCell
                         sx={{
                           py: 0.75,
                           px: { xs: 0.5, sm: 1 },
                           verticalAlign: 'middle',
-                          minWidth: 0,
-                          overflow: 'hidden',
-                          wordBreak: 'break-word'
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         <Typography variant="body2" sx={{ fontWeight: 500, fontSize: { xs: '0.75rem', sm: '0.8125rem' } }}>
@@ -1175,43 +1135,50 @@ const QuotationManagement: React.FC = () => {
                           py: 0.75,
                           px: { xs: 0.5, sm: 1 },
                           verticalAlign: 'middle',
-                          minWidth: 0,
+                          minWidth: 140,
+                          maxWidth: 280,
                           overflow: 'hidden'
                         }}
                       >
-                        <Box sx={{ minWidth: 0, maxWidth: '100%' }}>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              fontWeight: 400,
-                              fontSize: { xs: '0.75rem', sm: '0.8125rem' },
-                              lineHeight: 1.35,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              display: '-webkit-box',
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical',
-                              wordBreak: 'break-word'
-                            }}
-                          >
-                            {quotation.customerName}
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            sx={{
-                              display: 'block',
-                              mt: 0.25,
-                              fontSize: { xs: '0.65rem', sm: '0.75rem' },
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              maxWidth: '100%'
-                            }}
-                          >
-                            {quotation.customerEmail}
-                          </Typography>
-                        </Box>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 400,
+                            fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                            lineHeight: 1.35,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {quotation.customerName}
+                        </Typography>
+                      </TableCell>
+                      <TableCell
+                        sx={{
+                          py: 0.75,
+                          px: { xs: 0.5, sm: 1 },
+                          verticalAlign: 'middle',
+                          minWidth: 160,
+                          maxWidth: 360,
+                          overflow: 'hidden'
+                        }}
+                      >
+                        <Typography
+                          variant="body2"
+                          color={quotation.notes?.trim() ? 'text.primary' : 'text.secondary'}
+                          sx={{
+                            fontWeight: 400,
+                            fontSize: { xs: '0.75rem', sm: '0.8125rem' },
+                            lineHeight: 1.35,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={quotation.notes?.trim() || undefined}
+                        >
+                          {quotation.notes?.trim() || '—'}
+                        </Typography>
                       </TableCell>
                       <TableCell
                         sx={{
@@ -1219,31 +1186,17 @@ const QuotationManagement: React.FC = () => {
                           px: { xs: 0.5, sm: 1 },
                           fontSize: { xs: '0.7rem', sm: '0.8125rem' },
                           verticalAlign: 'middle',
-                          minWidth: 0,
-                          wordBreak: 'break-all'
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         {quotation.issueDate}
                       </TableCell>
-                      <TableCell
-                        sx={{
-                          py: 0.75,
-                          px: { xs: 0.5, sm: 1 },
-                          fontSize: { xs: '0.7rem', sm: '0.8125rem' },
-                          verticalAlign: 'middle',
-                          minWidth: 0,
-                          wordBreak: 'break-all'
-                        }}
-                      >
-                        {quotation.validUntil}
-                      </TableCell>
-                      <TableCell sx={{ py: 0.75, px: { xs: 0.5, sm: 1 }, verticalAlign: 'middle', minWidth: 0 }}>
+                      <TableCell sx={{ py: 0.75, px: { xs: 0.5, sm: 1 }, verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
                         <Typography
                           variant="body2"
                           sx={{
                             fontWeight: 500,
                             fontSize: { xs: '0.7rem', sm: '0.8125rem' },
-                            wordBreak: 'break-word'
                           }}
                         >
                           Rs. {quotation.totalAmount.toLocaleString()}
@@ -1255,9 +1208,7 @@ const QuotationManagement: React.FC = () => {
                           px: { xs: 0.5, sm: 1 },
                           fontSize: { xs: '0.7rem', sm: '0.8125rem' },
                           verticalAlign: 'middle',
-                          minWidth: 0,
-                          overflow: 'hidden',
-                          wordBreak: 'break-word'
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         {quotation.createdBy}
@@ -1267,21 +1218,19 @@ const QuotationManagement: React.FC = () => {
                         align="center"
                         sx={{
                           py: 0.5,
-                          px: { xs: 0.25, sm: 0.5 },
+                          px: 0.25,
                           verticalAlign: 'middle',
-                          minWidth: 0,
-                          overflow: 'hidden'
+                          width: 56,
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         <Box
                           sx={{
-                            display: 'flex',
-                            flexDirection: 'row',
+                            display: 'inline-flex',
                             flexWrap: 'nowrap',
                             gap: 0.25,
                             justifyContent: 'center',
                             alignItems: 'center',
-                            maxWidth: '100%'
                           }}
                         >
                           {listTab === 'pending' && quotation.status === 'pending_approval' && (

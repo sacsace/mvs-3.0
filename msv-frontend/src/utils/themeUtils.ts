@@ -100,14 +100,14 @@ const THEME_PRESETS: Record<
   /** 모던 SaaS/ERP: 밝은 캔버스·낮은 채도 파스텔 포인트 */
   light: {
     mode: 'light',
-    primaryColor: '#6A8F93',
-    secondaryColor: '#9AAD9E',
-    backgroundDefault: '#EEF1F3',
+    primaryColor: '#7BA3C4',
+    secondaryColor: '#B5C9B8',
+    backgroundDefault: '#F0F4F9',
     backgroundPaper: '#FFFFFF',
-    workArea: { main: '#FFFFFF', light: '#F5F7F8', dark: '#EEF1F3' },
-    bodyArea: { main: '#EEF1F3', light: '#F3F5F7', dark: '#E4E9ED' },
-    textPrimary: '#111827',
-    textSecondary: '#6B7280'
+    workArea: { main: '#FFFFFF', light: '#F5F8FC', dark: '#E8EEF6' },
+    bodyArea: { main: '#F0F4F9', light: '#F5F8FC', dark: '#E2EAF3' },
+    textPrimary: '#243447',
+    textSecondary: '#6B7C8F'
   },
   dark: {
     mode: 'dark',
@@ -203,7 +203,7 @@ export const createDynamicTheme = (appearanceSettings: {
     ? 'rgba(127, 168, 138, 0.26)'
     : mode === 'dark'
       ? 'rgba(148, 163, 184, 0.24)'
-      : 'rgba(106, 143, 147, 0.16)';
+      : alpha(resolvedPrimaryColor, 0.16);
   const actionDisabledColor = isForestTheme
     ? 'rgba(147, 197, 163, 0.52)'
     : mode === 'dark'
@@ -218,27 +218,27 @@ export const createDynamicTheme = (appearanceSettings: {
     ? 'rgba(127, 168, 138, 0.32)'
     : mode === 'dark'
       ? 'rgba(148, 163, 184, 0.28)'
-      : 'rgba(106, 143, 147, 0.22)';
-  const cardBorderColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#52647a' : '#E5E5E7';
-  const cardHoverBorderColor = isForestTheme ? '#3b8f66' : mode === 'dark' ? '#64748b' : '#D2D2D7';
+      : alpha(resolvedPrimaryColor, 0.22);
+  const cardBorderColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#52647a' : '#D0DBE8';
+  const cardHoverBorderColor = isForestTheme ? '#3b8f66' : mode === 'dark' ? '#64748b' : '#BCC9DA';
   const cardShadow =
-    mode === 'dark' ? '0 1px 0 rgba(0, 0, 0, 0.2)' : '0 4px 18px rgba(15, 23, 42, 0.045)';
+    mode === 'dark' ? '0 1px 0 rgba(0, 0, 0, 0.2)' : '0 4px 18px rgba(36, 52, 71, 0.045)';
   const cardHoverShadow =
-    mode === 'dark' ? '0 2px 6px rgba(0, 0, 0, 0.24)' : '0 6px 22px rgba(15, 23, 42, 0.06)';
+    mode === 'dark' ? '0 2px 6px rgba(0, 0, 0, 0.24)' : '0 6px 22px rgba(36, 52, 71, 0.06)';
   const appBarBackground = mode === 'dark' ? '#253345' : '#FFFFFF';
-  const appBarTextColor = isForestTheme ? '#eafcf1' : mode === 'dark' ? '#f8fafc' : '#111827';
-  const appBarBorderColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#52647a' : 'rgba(15, 23, 42, 0.04)';
-  const listHoverBg = isForestTheme ? 'rgba(127, 168, 138, 0.2)' : mode === 'dark' ? '#334155' : 'rgba(15, 23, 42, 0.04)';
+  const appBarTextColor = isForestTheme ? '#eafcf1' : mode === 'dark' ? '#f8fafc' : '#243447';
+  const appBarBorderColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#52647a' : 'rgba(36, 52, 71, 0.06)';
+  const listHoverBg = isForestTheme ? 'rgba(127, 168, 138, 0.2)' : mode === 'dark' ? '#334155' : 'rgba(36, 52, 71, 0.04)';
   const listSelectedBg = isForestTheme
     ? 'rgba(127, 168, 138, 0.34)'
     : mode === 'dark'
       ? '#475569'
-      : 'rgba(106, 143, 147, 0.14)';
+      : alpha(resolvedPrimaryColor, 0.14);
   const listSelectedHoverBg = isForestTheme
     ? 'rgba(127, 168, 138, 0.42)'
     : mode === 'dark'
       ? '#64748b'
-      : 'rgba(106, 143, 147, 0.2)';
+      : alpha(resolvedPrimaryColor, 0.2);
 
   return createTheme({
     palette: {
@@ -313,7 +313,7 @@ export const createDynamicTheme = (appearanceSettings: {
     },
     typography: {
       fontFamily:
-        'Pretendard, "Pretendard Variable", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif',
+        '"Outfit", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
       h1: {
         fontSize: `${22 * fontSizeMultiplier}px`,
         fontWeight: 700,

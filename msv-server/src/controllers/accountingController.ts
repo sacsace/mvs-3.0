@@ -22,6 +22,10 @@ import {
 } from '../services/gstEInvoiceService';
 import { pushNotification } from './notificationController';
 import { buildRegularInvoicePdfBuffer } from '../utils/regularInvoiceMailPdf';
+import {
+  applyDepreciationToAssetPayload,
+  calculateDepreciation,
+} from '../utils/assetDepreciation';
 
 const ensureInvoiceColumns = async () => {
   try {
@@ -545,11 +549,35 @@ export const sendInvoiceEmail = async (req: RequestWithUser, res: Response) => {
       socketTimeout: 120000
     });
 
+    const invoiceNo = String(invPlain.invoice_number || '');
+    const subjectKo = subject?.trim()
+      ? String(subject).trim()
+      : `[인보이스] ${invoiceNo}`;
+    const subjectEn = subject?.trim()
+      ? String(subject).trim()
+      : `[Invoice] ${invoiceNo}`;
+    const bodyKo = message?.trim()
+      ? String(message).trim()
+      : `인보이스 ${invoiceNo} PDF를 첨부합니다.`;
+    const bodyEn = message?.trim()
+      ? String(message).trim()
+      : `Please find the attached invoice PDF for ${invoiceNo}.`;
+
     await transporter.sendMail({
       from: mailOpts.from,
       to,
-      subject: subject || `Invoice ${invPlain.invoice_number}`,
-      text: message || `Invoice ${invPlain.invoice_number} PDF를 첨부합니다.`,
+      subject: subjectKo === subjectEn ? subjectKo : `${subjectKo} / ${subjectEn}`,
+      text: `[KO]\n${bodyKo}\n\n[EN]\n${bodyEn}\n\n본 메일은 MVS 알림입니다. / This is an MVS notification.`,
+      html: `
+        <div style="font-family:Segoe UI,Malgun Gothic,sans-serif;font-size:14px;color:#111827;line-height:1.55;max-width:640px;">
+          <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#6b7280;">한국어</p>
+          <p style="margin:0 0 16px;">${String(bodyKo).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>')}</p>
+          <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
+          <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#6b7280;">English</p>
+          <p style="margin:0 0 16px;">${String(bodyEn).replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>')}</p>
+          <p style="margin-top:20px;font-size:12px;color:#9ca3af;">본 메일은 MVS 알림입니다. / This is an MVS notification.</p>
+        </div>
+      `,
       attachments: [
         {
           filename: (filename || `${invPlain.invoice_number}.pdf`).replace(/[^\w.\-]+/g, '_'),
@@ -2953,10 +2981,11 @@ export const createAsset = async (req: RequestWithUser, res: Response) => {
       return res.status(400).json({ success: false, message: '필수 항목이 누락되었습니다.' });
     }
 
+    const payload = applyDepreciationToAssetPayload({ ...req.body });
     const asset = await (Asset as any).create({
       tenant_id,
       company_id,
-      ...req.body,
+      ...payload,
       is_active: true
     });
 
@@ -2980,7 +3009,17 @@ export const updateAsset = async (req: RequestWithUser, res: Response) => {
       return res.status(404).json({ success: false, message: '자산을 찾을 수 없습니다.' });
     }
 
-    await asset.update({ ...req.body });
+    const merged = {
+      purchase_price: asset.purchase_price,
+      salvage_value: asset.salvage_value,
+      useful_life: asset.useful_life,
+      depreciation_rate: asset.depreciation_rate,
+      purchase_date: asset.purchase_date,
+      depreciation_method: asset.depreciation_method,
+      ...req.body,
+    };
+    const payload = applyDepreciationToAssetPayload(merged);
+    await asset.update(payload);
     res.json({ success: true, data: asset });
   } catch (error: any) {
     console.error('자산 수정 오류:', error);
@@ -3006,6 +3045,54 @@ export const deleteAsset = async (req: RequestWithUser, res: Response) => {
   } catch (error: any) {
     console.error('자산 삭제 오류:', error);
     res.status(500).json({ success: false, message: '자산 삭제에 실패했습니다.' });
+  }
+};
+
+// 자산 감가상각표 조회
+export const getAssetDepreciationSchedule = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { tenant_id, company_id } = req.user;
+    const asset = await (Asset as any).findOne({
+      where: { id, tenant_id, company_id, is_active: true }
+    });
+
+    if (!asset) {
+      return res.status(404).json({ success: false, message: '자산을 찾을 수 없습니다.' });
+    }
+
+    const summary = calculateDepreciation({
+      purchasePrice: Number(asset.purchase_price || 0),
+      salvageValue: Number(asset.salvage_value || 0),
+      usefulLife: Number(asset.useful_life || 0),
+      depreciationRate: Number(asset.depreciation_rate || 0),
+      purchaseDate: asset.purchase_date,
+      depreciationMethod: asset.depreciation_method || 'straight_line',
+    });
+
+    res.json({
+      success: true,
+      data: {
+        asset: {
+          id: asset.id,
+          asset_code: asset.asset_code,
+          name: asset.name,
+          category: asset.category,
+          purchase_date: asset.purchase_date,
+          purchase_price: asset.purchase_price,
+          salvage_value: asset.salvage_value,
+          useful_life: asset.useful_life,
+          depreciation_method: asset.depreciation_method,
+          depreciation_rate: asset.depreciation_rate,
+          current_value: asset.current_value,
+          accumulated_depreciation: asset.accumulated_depreciation,
+        },
+        summary,
+      },
+    });
+  } catch (error: any) {
+    console.error('감가상각표 조회 오류:', error);
+    res.status(500).json({ success: false, message: '감가상각표를 불러오는데 실패했습니다.' });
   }
 };
 

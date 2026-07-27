@@ -82,6 +82,7 @@ import {
   Event as EventIcon,
   Schedule as ScheduleIcon,
   MoreHoriz as MoreHorizIcon,
+  Groups as GroupsIcon,
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
@@ -114,6 +115,28 @@ interface VacationRequest {
   rejectionReason?: string;
   attachments?: string[];
 }
+
+type LeaveBalanceTypeKey = 'annual' | 'sick' | 'personal' | 'study' | 'maternity' | 'paternity';
+
+interface LeaveBalanceRow {
+  userId: number;
+  username: string;
+  department: string;
+  position: string;
+  hireDate: string | null;
+  leaveYearLabel: string | null;
+  canUseAnnualLeave: boolean;
+  balances: Record<string, { quota: number; used: number; remaining: number }>;
+}
+
+const LEAVE_BALANCE_TYPE_KEYS: LeaveBalanceTypeKey[] = [
+  'annual',
+  'sick',
+  'personal',
+  'study',
+  'maternity',
+  'paternity',
+];
 
 const VACATION_MENU_ROUTES = ['/hr/leave'];
 const VACATIONS_PER_PAGE = 10;
@@ -213,6 +236,10 @@ const VacationManagement: React.FC = () => {
   const [success, setSuccess] = useState<string | null>(null);
 
   const [vacationRequests, setVacationRequests] = useState<VacationRequest[]>([]);
+  const [leaveBalances, setLeaveBalances] = useState<LeaveBalanceRow[]>([]);
+  const [leaveBalanceTypes, setLeaveBalanceTypes] = useState<LeaveBalanceTypeKey[]>([...LEAVE_BALANCE_TYPE_KEYS]);
+  const [leaveBalancesLoading, setLeaveBalancesLoading] = useState(false);
+  const [leaveBalanceSearch, setLeaveBalanceSearch] = useState('');
   const [vacationPolicy, setVacationPolicy] = useState<VacationPolicyState | null>(null);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [selectedVacation, setSelectedVacation] = useState<VacationRequest | null>(null);
@@ -233,16 +260,47 @@ const VacationManagement: React.FC = () => {
     // 회사 휴가 현황 탭(0번)은 모든 휴가를 조회해야 함
     if ((user?.role === 'admin' || user?.role === 'root') && activeTab === 0) {
       loadAllVacations();
-    } else {
+    } else if (!((user?.role === 'admin' || user?.role === 'root') && (activeTab === 3 || activeTab === 4))) {
       loadVacations();
     }
     
-    // admin 이상이고 휴가 형태 탭이면 정책 로드
+    // admin: 3=잔여일, 4=휴가 형태
     if ((user?.role === 'admin' || user?.role === 'root') && activeTab === 3) {
+      void loadLeaveBalances();
+    }
+    if ((user?.role === 'admin' || user?.role === 'root') && activeTab === 4) {
       loadVacationPolicy();
     }
   }, [activeTab, user?.role]);
 
+  const loadLeaveBalances = async () => {
+    setLeaveBalancesLoading(true);
+    setError(null);
+    try {
+      const params: { company_id?: number } = {};
+      if (user?.company_id) params.company_id = user.company_id;
+      const response = await vacationService.getLeaveBalances(params);
+      if (response.success) {
+        setLeaveBalances(Array.isArray(response.data) ? response.data : []);
+        const metaTypes = Array.isArray(response.meta?.availableTypes)
+          ? (response.meta.availableTypes as string[])
+          : [];
+        const filtered = LEAVE_BALANCE_TYPE_KEYS.filter((key) =>
+          metaTypes.length === 0 ? true : metaTypes.includes(key)
+        );
+        setLeaveBalanceTypes(filtered.length > 0 ? filtered : [...LEAVE_BALANCE_TYPE_KEYS]);
+      } else {
+        setLeaveBalances([]);
+        setError(response.message || t('vacationManagement.noLeaveBalances'));
+      }
+    } catch (e: any) {
+      console.error('휴가 잔여일 로드 오류:', e);
+      setLeaveBalances([]);
+      setError(e?.response?.data?.message || t('vacationManagement.noLeaveBalances'));
+    } finally {
+      setLeaveBalancesLoading(false);
+    }
+  };
   const loadAllVacations = async () => {
     setLoading(true);
     setError(null);
@@ -821,12 +879,26 @@ const VacationManagement: React.FC = () => {
   };
 
   const adjustedTab = (user?.role === 'admin' || user?.role === 'root') ? activeTab : activeTab + 1;
-  const vacationPolicyTab = (user?.role === 'admin' || user?.role === 'root') ? 3 : 2;
+  const vacationPolicyTab = (user?.role === 'admin' || user?.role === 'root') ? 4 : 2;
+  const leaveBalanceTab = (user?.role === 'admin' || user?.role === 'root') ? 3 : -1;
   const showStatusKpi = (user?.role === 'admin' || user?.role === 'root') && activeTab === 0;
   const showMyRequestKpi = adjustedTab === 1;
   const showApprovalKpi = adjustedTab === 2;
   const showPolicyKpi = adjustedTab === vacationPolicyTab && canEditPolicy;
-  const showListFilters = adjustedTab !== vacationPolicyTab && adjustedTab !== 0;
+  const showListFilters =
+    adjustedTab !== vacationPolicyTab && adjustedTab !== 0 && adjustedTab !== leaveBalanceTab;
+
+  const filteredLeaveBalances = useMemo(() => {
+    const q = leaveBalanceSearch.trim().toLowerCase();
+    if (!q) return leaveBalances;
+    return leaveBalances.filter((row) => {
+      const blob = [row.username, row.department, row.position, row.leaveYearLabel]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return blob.includes(q);
+    });
+  }, [leaveBalances, leaveBalanceSearch]);
 
   const hasActiveFilters = Boolean(
     searchTerm.trim() || statusFilter !== 'all' || typeFilter !== 'all'
@@ -1378,6 +1450,194 @@ const VacationManagement: React.FC = () => {
         );
       }
       case 3:
+        if (user?.role === 'admin' || user?.role === 'root') {
+          const typeLabel = (key: LeaveBalanceTypeKey) => {
+            switch (key) {
+              case 'annual':
+                return t('vacationManagement.annualRemainingDays');
+              case 'sick':
+                return t('vacationManagement.sick');
+              case 'personal':
+                return t('vacationManagement.personal');
+              case 'study':
+                return t('vacationManagement.study');
+              case 'maternity':
+                return t('vacationManagement.maternity');
+              case 'paternity':
+                return t('vacationManagement.paternity');
+              default:
+                return key;
+            }
+          };
+
+          return (
+            <Box sx={mvsBodyListZoneSx}>
+              <Alert severity="info" variant="outlined" sx={{ mb: 2, borderRadius: 2 }}>
+                {t('vacationManagement.leaveBalancesHint')}
+              </Alert>
+              <Box
+                sx={{
+                  mb: 1.5,
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  alignItems: 'center',
+                  gap: 1,
+                }}
+              >
+                <TextField
+                  size="small"
+                  value={leaveBalanceSearch}
+                  onChange={(e) => setLeaveBalanceSearch(e.target.value)}
+                  placeholder={t('vacationManagement.leaveBalancesSearchPlaceholder')}
+                  sx={{ ...vacationFilterFieldSx, minWidth: { xs: '100%', sm: 280 }, maxWidth: 420 }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+              </Box>
+              <Box sx={{ ...mvsBodyCardSx, overflow: 'hidden' }}>
+                {leaveBalancesLoading ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+                    <CircularProgress size={32} />
+                  </Box>
+                ) : filteredLeaveBalances.length === 0 ? (
+                  <Box sx={listStateBoxSx}>
+                    <GroupsIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.3 }} />
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+                      {leaveBalances.length === 0
+                        ? t('vacationManagement.noLeaveBalances')
+                        : t('vacationManagement.noSearchResults')}
+                    </Typography>
+                  </Box>
+                ) : (
+                  <TableContainer sx={{ width: '100%', overflow: 'auto', boxShadow: 'none', border: 'none' }}>
+                    <Table
+                      size="small"
+                      sx={{
+                        tableLayout: 'auto',
+                        width: '100%',
+                        '& .MuiTableCell-root': {
+                          borderLeft: 'none',
+                          borderRight: 'none',
+                          borderTop: 'none',
+                          whiteSpace: 'nowrap',
+                        },
+                      }}
+                    >
+                      <TableHead sx={mvsTableHeadHighlightSx}>
+                        <TableRow>
+                          <TableCell>{t('vacationManagement.employee')}</TableCell>
+                          <TableCell>{t('vacationManagement.department')}</TableCell>
+                          <TableCell>{t('vacationManagement.leaveYear')}</TableCell>
+                          {leaveBalanceTypes.map((key) => (
+                            <TableCell key={key} align="right">
+                              {key === 'sick' ? (
+                                <Tooltip title={t('vacationManagement.sickOptionalHint')}>
+                                  <Box
+                                    component="span"
+                                    sx={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'flex-end',
+                                      gap: 0.5,
+                                    }}
+                                  >
+                                    <span>{typeLabel(key)}</span>
+                                    <Chip
+                                      size="small"
+                                      label={t('vacationManagement.sickOptional')}
+                                      variant="outlined"
+                                      color="default"
+                                      sx={{
+                                        height: 20,
+                                        fontSize: '0.65rem',
+                                        fontWeight: 600,
+                                        '& .MuiChip-label': { px: 0.75 },
+                                      }}
+                                    />
+                                  </Box>
+                                </Tooltip>
+                              ) : (
+                                typeLabel(key)
+                              )}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      </TableHead>
+                      <TableBody sx={vacationTableBodyRowSx}>
+                        {filteredLeaveBalances.map((row) => (
+                          <TableRow key={row.userId} hover>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                                <Avatar sx={{ width: 28, height: 28, fontSize: '0.75rem' }}>
+                                  {(row.username || '?').charAt(0)}
+                                </Avatar>
+                                <Box sx={{ minWidth: 0 }}>
+                                  <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+                                    {row.username}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary" noWrap>
+                                    {row.position || '—'}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                            </TableCell>
+                            <TableCell>{row.department || '—'}</TableCell>
+                            <TableCell>
+                              <Typography variant="caption" color="text.secondary">
+                                {row.leaveYearLabel || '—'}
+                              </Typography>
+                            </TableCell>
+                            {leaveBalanceTypes.map((key) => {
+                              const bal = row.balances?.[key] || { quota: 0, used: 0, remaining: 0 };
+                              const annualLocked = key === 'annual' && !row.canUseAnnualLeave;
+                              return (
+                                <TableCell key={key} align="right">
+                                  <Tooltip
+                                    title={`${t('vacationManagement.quotaDays')}: ${bal.quota} / ${t('vacationManagement.usedDays', { days: bal.used })}`}
+                                  >
+                                    <Typography
+                                      variant="body2"
+                                      sx={{
+                                        fontWeight: 600,
+                                        color: annualLocked
+                                          ? 'text.disabled'
+                                          : bal.remaining <= 0
+                                            ? 'text.secondary'
+                                            : 'text.primary',
+                                      }}
+                                    >
+                                      {annualLocked ? '—' : bal.remaining}
+                                    </Typography>
+                                  </Tooltip>
+                                </TableCell>
+                              );
+                            })}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </Box>
+            </Box>
+          );
+        }
+        return (
+          <Box sx={mvsBodyListZoneSx}>
+            <Box sx={listStateBoxSx}>
+              <EventIcon sx={{ fontSize: 48, color: 'text.secondary', opacity: 0.3 }} />
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+                {t('vacationManagement.adminOnlyLeaveType')}
+              </Typography>
+            </Box>
+          </Box>
+        );
+      case 4:
         if (!canEditPolicy) {
           return (
             <Box sx={mvsBodyListZoneSx}>
@@ -1793,6 +2053,13 @@ const VacationManagement: React.FC = () => {
               label={t('vacationManagement.leaveApproval')}
               iconPosition="start"
             />
+            {(user?.role === 'admin' || user?.role === 'root') && (
+              <Tab
+                icon={<GroupsIcon fontSize="small" />}
+                label={t('vacationManagement.leaveBalances')}
+                iconPosition="start"
+              />
+            )}
             {(user?.role === 'admin' || user?.role === 'root') && (
               <Tab
                 icon={<EventIcon fontSize="small" />}

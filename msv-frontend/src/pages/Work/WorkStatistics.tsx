@@ -1004,7 +1004,7 @@ const WorkStatistics: React.FC = () => {
       </Card>
 
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
-        <Box sx={{ borderBottom: 1, borderColor: '#C5CED9' }}>
+        <Box sx={{ borderBottom: 1, borderColor: '#D0DBE8' }}>
           <Tabs
             value={tabValue}
             onChange={(_e, newValue) => setTabValue(newValue)}
@@ -1224,7 +1224,7 @@ const WorkStatistics: React.FC = () => {
                 <YAxis />
                 <RechartsTooltip />
                 <Line type="monotone" dataKey="productivity" name={t('workStatistics.columns.completionRate')} stroke="#2563EB" strokeWidth={2} />
-                <Line type="monotone" dataKey="efficiency" name={t('workStatistics.columns.efficiency')} stroke="#6A8F93" strokeWidth={2} />
+                <Line type="monotone" dataKey="efficiency" name={t('workStatistics.columns.efficiency')} stroke="#7BA3C4" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           </Box>
@@ -1276,7 +1276,7 @@ const WorkStatistics: React.FC = () => {
                   <Bar
                     dataKey="personalEfficiency"
                     name={t('workStatistics.columns.personalEfficiency')}
-                    fill="#6A8F93"
+                    fill="#7BA3C4"
                     radius={[6, 6, 0, 0]}
                   />
                   <Bar
@@ -1455,12 +1455,12 @@ const WorkStatistics: React.FC = () => {
                     <Legend />
                     <ReferenceLine
                       y={teamCompletedMedianDays}
-                      stroke="#6A8F93"
+                      stroke="#7BA3C4"
                       strokeDasharray="6 4"
                       label={{
                         value: t('workStatistics.processingTime.teamMedianLine'),
                         position: 'insideTopRight',
-                        fill: '#6A8F93',
+                        fill: '#7BA3C4',
                         fontSize: 12
                       }}
                     />

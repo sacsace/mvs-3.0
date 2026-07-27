@@ -13,6 +13,7 @@ import Login from './pages/Auth/Login';
 import TermsOfService from './pages/Legal/TermsOfService';
 import PrivacyPolicy from './pages/Legal/PrivacyPolicy';
 import CustomerCenter from './pages/Legal/CustomerCenter';
+import LegalRouteGate from './pages/Legal/LegalRouteGate';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
 import ErrorDialog from './components/Common/ErrorDialog';
 import NotificationSnackbar from './components/Common/NotificationSnackbar';
@@ -177,9 +178,9 @@ function App() {
           <Routes>
           {/* 인증 관련 라우트 */}
           <Route path="/login" element={<Login />} />
-          <Route path="/legal/terms" element={<TermsOfService />} />
-          <Route path="/legal/privacy" element={<PrivacyPolicy />} />
-          <Route path="/legal/support" element={<CustomerCenter />} />
+          <Route path="/legal/terms" element={<LegalRouteGate><TermsOfService /></LegalRouteGate>} />
+          <Route path="/legal/privacy" element={<LegalRouteGate><PrivacyPolicy /></LegalRouteGate>} />
+          <Route path="/legal/support" element={<LegalRouteGate><CustomerCenter /></LegalRouteGate>} />
           <Route path="/expense-receipt-upload" element={<ExpenseReceiptUpload />} />
           
           {/* 메인 애플리케이션 라우트 (인증 필요) */}

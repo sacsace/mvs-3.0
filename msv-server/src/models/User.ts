@@ -15,6 +15,8 @@ interface UserAttributes {
   position?: string;
   status: 'active' | 'inactive' | 'suspended';
   last_login?: Date;
+  /** 단일 동시 로그인 — 로그인마다 증가, JWT `sv`와 일치해야 유효 */
+  session_version?: number;
   // 인사관리 필드
   employee_number?: string;
   birth_date?: Date;
@@ -53,6 +55,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   public position?: string;
   public status!: 'active' | 'inactive' | 'suspended';
   public last_login?: Date;
+  public session_version?: number;
   // 인사관리 필드
   public employee_number?: string;
   public birth_date?: Date;
@@ -136,6 +139,11 @@ User.init(
     last_login: {
       type: DataTypes.DATE,
       allowNull: true
+    },
+    session_version: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0
     },
     // 인사관리 필드
     employee_number: {
@@ -224,6 +232,10 @@ User.init(
       },
       {
         fields: ['employee_number']
+      },
+      {
+        name: 'users_status_userid_idx',
+        fields: ['status', 'userid']
       }
     ]
   }

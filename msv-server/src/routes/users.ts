@@ -7,6 +7,7 @@ import { authenticateToken } from '../middleware/auth';
 import { requireAdminRootOrUserMenuPermission } from '../middleware/menuPermission';
 import { getUserUiPreferences, patchUserUiPreferences } from '../controllers/userUiPreferencesController';
 import { validateBody } from '../middleware/validate';
+import { invalidateAuthUser } from '../utils/authCache';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
@@ -197,7 +198,7 @@ router.use(authenticateToken);
 const SELF_PROFILE_ATTRIBUTES = [
   'id', 'userid', 'username', 'email', 'role', 'department', 'position',
   'employee_number', 'birth_date', 'gender', 'phone', 'address',
-  'emergency_contact', 'emergency_phone', 'avatar_url', 'company_id'
+  'emergency_contact', 'emergency_phone', 'avatar_url', 'company_id', 'session_version'
 ];
 
 const findCurrentUser = async (req: express.Request, includePassword = false) => {
@@ -354,7 +355,11 @@ router.post('/me/password', async (req, res) => {
       });
     }
 
-    await user.update({ password_hash: await hashPassword(String(newPassword)) });
+    await user.update({
+      password_hash: await hashPassword(String(newPassword)),
+      session_version: Number(user.session_version ?? 0) + 1
+    });
+    invalidateAuthUser(user.id);
     return res.json({ success: true, message: '비밀번호가 변경되었습니다.' });
   } catch (error: any) {
     console.error('내 비밀번호 변경 오류:', error);
@@ -1150,9 +1155,13 @@ router.put(
         });
       }
       updateData.password_hash = await hashPassword(password);
+      updateData.session_version = Number(user.session_version ?? 0) + 1;
     }
 
     await user.update(updateData);
+    if (updateData.password_hash) {
+      invalidateAuthUser(Number(id));
+    }
 
     // 업데이트된 사용자 정보 조회 - 기본 필드만 먼저 조회
     const responseBaseAttributes = [

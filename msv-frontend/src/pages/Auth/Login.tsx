@@ -137,15 +137,6 @@ const Login: React.FC = () => {
         showError(response.data.message || t('login.loginFailed'));
       }
     } catch (err: any) {
-      console.error('로그인 오류:', err);
-      console.error('에러 상세:', {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-        config: err.config
-      });
-      
-      // 네트워크 오류인 경우 더 자세한 메시지 표시
       let errorMessage = '';
       
       if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error') || err.message?.includes('network')) {

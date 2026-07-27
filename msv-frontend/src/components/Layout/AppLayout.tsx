@@ -23,9 +23,22 @@ interface AppLayoutProps {
 const WORK_AREA_OUTSET = 16;
 /** Sidebar.tsx `HEADER_MENU_GAP_PX` 와 동일 — 헤더~좌측메뉴 / 헤더~본문 상단 회색 띠 */
 const HEADER_MENU_GAP_PX = 8;
-/** Toolbar와 동일 — 고정 헤더용 레이아웃 스페이서 높이 */
-const HEADER_LAYOUT_HEIGHT = 60;
+/** Header.tsx AppBar top inset 과 동일 — 화면 상단에 밀착 */
+const HEADER_TOP_INSET_PX = 0;
+/** Toolbar와 동일 — 고정 헤더용 레이아웃 스페이서 높이(상단 inset 포함) */
+const HEADER_LAYOUT_HEIGHT = HEADER_TOP_INSET_PX + 60;
 const SIDEBAR_ICON_ONLY_STORAGE_KEY = 'mvs.sidebarIconOnly';
+
+/** 로그인한 사용자 본인의 계정 설정은 메뉴 권한과 무관한 셀프서비스 경로 */
+const isPersonalAccountRoute = (pathname: string): boolean =>
+  pathname === '/account/settings' || pathname.startsWith('/account/settings/');
+
+/** 이용약관·개인정보·고객센터 — 메뉴 권한 없이 본문 표시 */
+const isLegalPublicRoute = (pathname: string): boolean =>
+  pathname === '/legal/terms' ||
+  pathname === '/legal/privacy' ||
+  pathname === '/legal/support' ||
+  pathname.startsWith('/legal/');
 
 const readSidebarIconOnlyPref = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -184,6 +197,18 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         return;
       }
 
+      // 개인정보·개인 비밀번호 설정은 모든 로그인 사용자에게 허용
+      if (user?.id && isPersonalAccountRoute(location.pathname)) {
+        setHasAccess(true);
+        return;
+      }
+
+      // 이용약관·개인정보 처리방침·고객센터
+      if (user?.id && isLegalPublicRoute(location.pathname)) {
+        setHasAccess(true);
+        return;
+      }
+
       // root만 모든 메뉴 접근 가능 (admin도 권한 체크 필요)
       if (user?.role === 'root') {
         setHasAccess(true);
@@ -226,7 +251,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         checkMenuPermission();
       }
     }
-  }, [location.pathname, menus, menusLoading, hasMenuPermission, user?.role, findMenuByRoute]);
+  }, [location.pathname, menus, menusLoading, hasMenuPermission, user?.id, user?.role, findMenuByRoute]);
 
   const contentInsetLeft = isMobileNav
     ? WORK_AREA_OUTSET

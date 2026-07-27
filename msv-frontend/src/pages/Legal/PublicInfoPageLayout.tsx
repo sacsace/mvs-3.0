@@ -13,7 +13,8 @@ import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { ensureI18nLanguage } from '../../locales/i18n';
 import { Link as RouterLink } from 'react-router-dom';
-import { useMenuStore } from '../../store';
+import { useStore, useMenuStore } from '../../store';
+import { mvsMainSurfaceSx } from '../../theme/mvsLayout';
 
 interface PublicInfoPageLayoutProps {
   title: string;
@@ -30,6 +31,7 @@ const PublicInfoPageLayout: React.FC<PublicInfoPageLayoutProps> = ({
 }) => {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
+  const isAuthenticated = useStore((s) => s.isAuthenticated);
   const setMenuLanguage = useMenuStore((s) => s.setLanguage);
 
   const handleLanguageChange = (_event: React.MouseEvent<HTMLElement>, newLang: 'ko' | 'en' | null) => {
@@ -37,6 +39,60 @@ const PublicInfoPageLayout: React.FC<PublicInfoPageLayoutProps> = ({
     void ensureI18nLanguage(newLang);
     setMenuLanguage(newLang);
   };
+
+  const titleBlock = (
+    <>
+      <Typography
+        component="h1"
+        sx={{
+          fontWeight: 700,
+          fontSize: { xs: '1.35rem', sm: '1.5rem' },
+          letterSpacing: '-0.03em',
+          mb: subtitle ? 0.75 : 1.5,
+        }}
+      >
+        {title}
+      </Typography>
+      {subtitle && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, lineHeight: 1.65 }}>
+          {subtitle}
+        </Typography>
+      )}
+      {lastUpdated && (
+        <Typography
+          variant="caption"
+          sx={{
+            display: 'block',
+            mb: 3,
+            color: alpha(theme.palette.text.secondary, 0.85),
+            fontWeight: 500,
+          }}
+        >
+          {t('legalPages.lastUpdated', { date: lastUpdated })}
+        </Typography>
+      )}
+    </>
+  );
+
+  // 로그인 후 사이드바에서 열면 AppLayout body 영역에 표시
+  if (isAuthenticated) {
+    return (
+      <Box
+        sx={{
+          ...mvsMainSurfaceSx,
+          width: '100%',
+          borderRadius: '12px',
+          border: '1px solid #A8BDD0',
+          boxShadow: '0 2px 10px rgba(36, 52, 71, 0.06)',
+          px: { xs: 2, sm: 3 },
+          py: { xs: 2.5, sm: 3 },
+        }}
+      >
+        {titleBlock}
+        {children}
+      </Box>
+    );
+  }
 
   return (
     <Box
@@ -136,35 +192,7 @@ const PublicInfoPageLayout: React.FC<PublicInfoPageLayoutProps> = ({
             },
           }}
         >
-          <Typography
-            component="h1"
-            sx={{
-              fontWeight: 700,
-              fontSize: { xs: '1.5rem', sm: '1.75rem' },
-              letterSpacing: '-0.03em',
-              mb: subtitle ? 0.75 : 1.5,
-            }}
-          >
-            {title}
-          </Typography>
-          {subtitle && (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, lineHeight: 1.65 }}>
-              {subtitle}
-            </Typography>
-          )}
-          {lastUpdated && (
-            <Typography
-              variant="caption"
-              sx={{
-                display: 'block',
-                mb: 3,
-                color: alpha(theme.palette.text.secondary, 0.85),
-                fontWeight: 500,
-              }}
-            >
-              {t('legalPages.lastUpdated', { date: lastUpdated })}
-            </Typography>
-          )}
+          {titleBlock}
           {children}
         </Paper>
       </Container>

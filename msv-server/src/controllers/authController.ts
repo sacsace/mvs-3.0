@@ -5,6 +5,7 @@ import { DataTypes, Op } from 'sequelize';
 import { User, Company, LoginLog, Tenant, Menu, UserPermission, CompanyGstNumber } from '../models';
 import { AuthRequest } from '../types';
 import sequelize from '../config/database';
+import { invalidateAuthUser } from '../utils/authCache';
 
 const comparePassword = async (password: string, hash: string): Promise<boolean> => {
   return await bcrypt.compare(password, hash);
@@ -503,8 +504,9 @@ export const login = async (req: Request, res: Response) => {
     const user = await (User as any).findOne({
       where: { userid: normalizedUserId, status: 'active' },
       attributes: [
-        'id', 'tenant_id', 'company_id', 'userid', 'username', 'email', 
-        'password_hash', 'role', 'department', 'position', 'status', 'last_login', 'is_payment_officer'
+        'id', 'tenant_id', 'company_id', 'userid', 'username', 'email',
+        'password_hash', 'role', 'department', 'position', 'status', 'last_login',
+        'is_payment_officer', 'session_version'
       ]
     });
 
@@ -630,27 +632,35 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
+    // 단일 동시 로그인: session_version 증가 → 기존 JWT 즉시 무효화
+    const prevSv = Number(user.session_version ?? 0);
+    const nextSv = prevSv + 1;
+    await user.update({
+      last_login: new Date(),
+      session_version: nextSv
+    });
+    invalidateAuthUser(user.id);
+
     const token = jwt.sign(
-      { 
-        userId: user.id, 
-        userid: user.userid, 
+      {
+        userId: user.id,
+        userid: user.userid,
         role: user.role,
         tenantId: user.tenant_id,
-        companyId: user.company_id
+        companyId: user.company_id,
+        sv: nextSv
       },
       jwtSecret,
       signOptions
     );
 
-    // 마지막 로그인 시간 업데이트
-    await user.update({ last_login: new Date() });
     await writeLoginLog({
       tenant_id: user.tenant_id,
       company_id: user.company_id,
       user_id: user.id,
       userid: user.userid,
       status: 'success',
-      reason: null,
+      reason: prevSv > 0 ? 'login_replaced_previous_session' : null,
       ip_address: clientIp,
       user_agent: userAgent
     });
@@ -670,7 +680,8 @@ export const login = async (req: Request, res: Response) => {
           tenant_id: user.tenant_id,
           company_id: user.company_id,
           is_payment_officer: user.is_payment_officer
-        }
+        },
+        sessionReplaced: prevSv > 0
       },
       message: '로그인 성공'
     });
@@ -749,13 +760,16 @@ export const refreshToken = async (req: AuthRequest, res: Response) => {
       expiresIn: expiresInSeconds
     };
 
+    const sessionVersion = Number((user as any).session_version ?? 0);
+
     const token = jwt.sign(
       {
         userId: user.id,
         userid: user.userid,
         role: user.role,
         tenantId: user.tenant_id,
-        companyId: user.company_id
+        companyId: user.company_id,
+        sv: sessionVersion
       },
       jwtSecret,
       signOptions
@@ -774,6 +788,56 @@ export const refreshToken = async (req: AuthRequest, res: Response) => {
     return res.status(500).json({
       success: false,
       message: '토큰 갱신 중 오류가 발생했습니다.'
+    });
+  }
+};
+
+/** 현재 세션 유효성 — 프론트 폴링/포커스 복귀 시 중복 로그인 감지 */
+export const checkSession = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: '인증이 필요합니다.',
+        code: 'UNAUTHORIZED'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        valid: true,
+        userId: req.user.id,
+        sessionVersion: Number((req.user as any).session_version ?? 0)
+      }
+    });
+  } catch (error) {
+    console.error('세션 확인 오류:', error);
+    return res.status(500).json({
+      success: false,
+      message: '세션 확인 중 오류가 발생했습니다.'
+    });
+  }
+};
+
+/** 명시적 로그아웃 — session_version 증가로 현재 JWT 무효화 */
+export const logout = async (req: AuthRequest, res: Response) => {
+  try {
+    const user = req.user;
+    if (user?.id) {
+      const current = Number((user as any).session_version ?? 0);
+      await (User as any).update(
+        { session_version: current + 1 },
+        { where: { id: user.id } }
+      );
+      invalidateAuthUser(user.id);
+    }
+    return res.json({ success: true, message: '로그아웃되었습니다.' });
+  } catch (error) {
+    console.error('로그아웃 오류:', error);
+    return res.status(500).json({
+      success: false,
+      message: '로그아웃 처리 중 오류가 발생했습니다.'
     });
   }
 };

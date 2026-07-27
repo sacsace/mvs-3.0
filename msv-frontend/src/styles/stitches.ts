@@ -3,16 +3,16 @@ import { createStitches } from '@stitches/react';
 const { globalCss } = createStitches({
   theme: {
     colors: {
-      bgCanvas: '#EEF1F3',
+      bgCanvas: '#F0F4F9',
       bgSurface: '#ffffff',
-      bgMuted: '#F3F5F7',
-      textStrong: '#111827',
-      textMuted: '#6B7280',
-      borderSubtle: '#D8E0EA',
-      borderStrong: '#B8C5D6',
-      primary: '#6A8F93',
-      primaryHover: '#4C6A6E',
-      focusRing: 'rgba(106, 143, 147, 0.24)',
+      bgMuted: '#F3F7FB',
+      textStrong: '#243447',
+      textMuted: '#6B7C8F',
+      borderSubtle: '#D0DBE8',
+      borderStrong: '#BCC9DA',
+      primary: '#7BA3C4',
+      primaryHover: '#5A849E',
+      focusRing: 'rgba(123, 163, 196, 0.24)',
     },
     radii: {
       sm: '8px',
@@ -22,12 +22,12 @@ const { globalCss } = createStitches({
       full: '9999px',
     },
     shadows: {
-      card: '0 4px 14px rgba(15, 23, 42, 0.07)',
-      cardHover: '0 8px 24px rgba(15, 23, 42, 0.1)',
+      card: '0 4px 14px rgba(36, 52, 71, 0.07)',
+      cardHover: '0 8px 24px rgba(36, 52, 71, 0.1)',
     },
     fonts: {
       body:
-        '"Pretendard Variable", Pretendard, Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        '"Outfit", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
       mono: '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace',
     },
   },
@@ -48,14 +48,14 @@ const applyGlobalStyles = globalCss({
     MozOsxFontSmoothing: 'grayscale',
   },
   '.MuiPaper-root': {
-    border: '1px solid #C5CED9',
+    border: '1px solid #D0DBE8',
     backgroundImage: 'none',
     boxShadow: '$card',
   },
   '.MuiCard-root': {
     borderRadius: '20px',
     boxShadow: '$card',
-    border: '1px solid #C5CED9',
+    border: '1px solid #D0DBE8',
     transition: 'all 0.2s ease',
     '&:hover': {
       boxShadow: '$cardHover',
@@ -63,7 +63,7 @@ const applyGlobalStyles = globalCss({
     },
   },
   '.MuiCard-root:has([data-testid="SearchIcon"])': {
-    border: '1px solid #C5CED9 !important',
+    border: '1px solid #D0DBE8 !important',
     backgroundColor: '#F0F4F8',
     boxShadow: 'none !important',
     '&:hover': {
@@ -71,7 +71,7 @@ const applyGlobalStyles = globalCss({
     },
   },
   '.MuiOutlinedInput-root:not(.Mui-disabled) .MuiOutlinedInput-notchedOutline': {
-    borderColor: '#C5CED9',
+    borderColor: '#D0DBE8',
   },
   '.MuiOutlinedInput-root:not(.Mui-disabled):hover .MuiOutlinedInput-notchedOutline': {
     borderColor: '#B8C4D0',

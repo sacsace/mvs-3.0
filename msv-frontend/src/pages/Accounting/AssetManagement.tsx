@@ -29,12 +29,14 @@ import {
   Tooltip,
   IconButton,
 } from '@mui/material';
+import ExcelJS from 'exceljs';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
   mvsPageRootSx,
   mvsKpiCardSx,
   mvsBodyCardSx,
   mvsBodyPrimaryBtnSx,
+  mvsBodyOutlinedBtnSx,
   mvsBodyListZoneSx,
   mvsBodyPaginationSx,
   mvsSearchFieldSx,
@@ -48,11 +50,22 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Search as SearchIcon,
+  RestartAlt as ResetIcon,
+  FileDownload as FileDownloadIcon,
+  TableChart as TableChartIcon,
 } from '@mui/icons-material';
 import { accountingService } from '../../services/api';
 import { UTILS } from '../../constants';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+import {
+  calculateDepreciation,
+  type DepreciationMethod,
+  type DepreciationScheduleRow,
+  type DepreciationSummary,
+} from '../../utils/assetDepreciation';
+import { addSheetFromAoA, downloadExcelWorkbook } from '../../utils/excelExportStyle';
 
 type AssetStatus = 'active' | 'maintenance' | 'disposed' | 'lost' | 'transferred';
 
@@ -64,6 +77,7 @@ interface Asset {
   subcategory: string;
   purchase_date: string;
   purchase_price: number;
+  salvage_value: number;
   current_value: number;
   depreciation_rate: number;
   accumulated_depreciation: number;
@@ -78,8 +92,10 @@ interface Asset {
   assigned_to?: string;
   department?: string;
   useful_life?: number;
-  depreciation_method?: 'straight_line' | 'declining_balance' | 'units_of_production';
+  depreciation_method?: DepreciationMethod;
 }
+
+const ASSET_MENU_ROUTES = ['/accounting/assets', '/accounting'] as const;
 
 const assetCategories = [
   { value: 'IT Equipment', subCategories: ['Computer', 'Server', 'Network', 'Printer', 'Monitor', 'Other IT'] },
@@ -97,7 +113,8 @@ const emptyForm = {
   subcategory: '',
   purchase_date: new Date().toISOString().split('T')[0],
   purchase_price: 0,
-  depreciation_rate: 10,
+  salvage_value: 0,
+  depreciation_rate: 0,
   location: '',
   status: 'active' as AssetStatus,
   maintenance_date: '',
@@ -109,36 +126,93 @@ const emptyForm = {
   assigned_to: '',
   department: '',
   useful_life: 5,
-  depreciation_method: 'straight_line' as 'straight_line' | 'declining_balance' | 'units_of_production',
+  depreciation_method: 'straight_line' as DepreciationMethod,
 };
 
 const formatCurrency = (value: number) => UTILS.formatCurrency(value);
 
-const calculateDepreciationValues = (
-  purchasePrice: number,
-  depreciationRate: number,
-  purchaseDate: string
-) => {
-  const basePrice = Number(purchasePrice || 0);
-  const rate = Number(depreciationRate || 0);
-  if (basePrice <= 0 || rate <= 0 || !purchaseDate) {
-    return { currentValue: basePrice, accumulatedDepreciation: 0 };
+const methodLabel = (method?: DepreciationMethod) => {
+  switch (method) {
+    case 'declining_balance':
+      return '정률법';
+    case 'units_of_production':
+      return '생산량비례법(정액 처리)';
+    default:
+      return '정액법';
   }
+};
 
-  const start = new Date(`${purchaseDate}T00:00:00`);
-  if (Number.isNaN(start.getTime())) {
-    return { currentValue: basePrice, accumulatedDepreciation: 0 };
-  }
+const mapAsset = (asset: any): Asset => ({
+  id: asset.id,
+  asset_code: asset.asset_code || '',
+  name: asset.name || '',
+  category: asset.category || '',
+  subcategory: asset.subcategory || '',
+  purchase_date: asset.purchase_date || '',
+  purchase_price: Number(asset.purchase_price) || 0,
+  salvage_value: Number(asset.salvage_value) || 0,
+  current_value: Number(asset.current_value) || 0,
+  depreciation_rate: Number(asset.depreciation_rate) || 0,
+  accumulated_depreciation: Number(asset.accumulated_depreciation) || 0,
+  location: asset.location || '',
+  status: (asset.status || 'active') as AssetStatus,
+  maintenance_date: asset.maintenance_date || '',
+  next_maintenance: asset.next_maintenance || '',
+  warranty_expiry: asset.warranty_expiry || '',
+  description: asset.description || '',
+  vendor: asset.vendor || '',
+  serial_number: asset.serial_number || '',
+  assigned_to: asset.assigned_to || '',
+  department: asset.department || '',
+  useful_life: Number(asset.useful_life) || 5,
+  depreciation_method: (asset.depreciation_method || 'straight_line') as DepreciationMethod,
+});
 
-  const now = new Date();
-  const years = Math.max(0, (now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
-  const accumulated = Math.min(basePrice, basePrice * (rate / 100) * years);
-  const current = Math.max(0, basePrice - accumulated);
+const depreciationInputFromAsset = (asset: Pick<
+  Asset,
+  | 'purchase_price'
+  | 'salvage_value'
+  | 'useful_life'
+  | 'depreciation_rate'
+  | 'purchase_date'
+  | 'depreciation_method'
+>) => ({
+  purchasePrice: Number(asset.purchase_price) || 0,
+  salvageValue: Number(asset.salvage_value) || 0,
+  usefulLife: Number(asset.useful_life) || 0,
+  depreciationRate: Number(asset.depreciation_rate) || 0,
+  purchaseDate: asset.purchase_date,
+  depreciationMethod: asset.depreciation_method || 'straight_line',
+});
 
-  return {
-    currentValue: Number(current.toFixed(2)),
-    accumulatedDepreciation: Number(accumulated.toFixed(2))
-  };
+const scheduleSheetRows = (
+  asset: Pick<Asset, 'asset_code' | 'name' | 'purchase_date' | 'purchase_price' | 'salvage_value' | 'useful_life' | 'depreciation_method' | 'depreciation_rate'>,
+  summary: DepreciationSummary
+): Array<Array<string | number>> => {
+  const headerMeta: Array<Array<string | number>> = [
+    ['자산코드', asset.asset_code],
+    ['자산명', asset.name],
+    ['취득일', asset.purchase_date || ''],
+    ['취득가', asset.purchase_price],
+    ['잔존가치', asset.salvage_value],
+    ['내용연수(년)', asset.useful_life || 0],
+    ['상각방법', methodLabel(asset.depreciation_method)],
+    ['상각률(%)', summary.depreciationRate],
+    ['경과년수', summary.yearsElapsed],
+    ['현재장부가', summary.currentValue],
+    ['누적상각', summary.accumulatedDepreciation],
+    [],
+    ['연차', '연도', '기초장부가', '당기상각', '누적상각', '기말장부가'],
+  ];
+  const rows = summary.schedule.map((row: DepreciationScheduleRow) => [
+    row.year,
+    row.yearLabel,
+    row.openingBookValue,
+    row.depreciation,
+    row.accumulatedDepreciation,
+    row.closingBookValue,
+  ]);
+  return [...headerMeta, ...rows];
 };
 
 const assetFilterFieldSx = {
@@ -163,6 +237,7 @@ const listStateInlineSx = {
 
 const AssetManagement: React.FC = () => {
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
+  const { canCreate, canEdit, canDelete } = useMenuRoutePermissionFlags(ASSET_MENU_ROUTES);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -172,28 +247,45 @@ const AssetManagement: React.FC = () => {
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [formData, setFormData] = useState({ ...emptyForm });
+  const [scheduleAsset, setScheduleAsset] = useState<Asset | null>(null);
+  const [scheduleSummary, setScheduleSummary] = useState<DepreciationSummary | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const itemsPerPage = 10;
+
+  const formPreview = useMemo(
+    () =>
+      calculateDepreciation({
+        purchasePrice: Number(formData.purchase_price) || 0,
+        salvageValue: Number(formData.salvage_value) || 0,
+        usefulLife: Number(formData.useful_life) || 0,
+        depreciationRate: Number(formData.depreciation_rate) || 0,
+        purchaseDate: formData.purchase_date,
+        depreciationMethod: formData.depreciation_method,
+      }),
+    [formData]
+  );
 
   const filteredAssets = useMemo(() => {
     let list = [...assets];
 
     if (filters.search) {
       const q = filters.search.toLowerCase();
-      list = list.filter(asset =>
-        asset.asset_code.toLowerCase().includes(q) ||
-        asset.name.toLowerCase().includes(q) ||
-        asset.serial_number?.toLowerCase().includes(q) ||
-        asset.location.toLowerCase().includes(q)
+      list = list.filter(
+        (asset) =>
+          asset.asset_code.toLowerCase().includes(q) ||
+          asset.name.toLowerCase().includes(q) ||
+          asset.serial_number?.toLowerCase().includes(q) ||
+          asset.location.toLowerCase().includes(q)
       );
     }
 
     if (filters.category !== 'all') {
-      list = list.filter(asset => asset.category === filters.category);
+      list = list.filter((asset) => asset.category === filters.category);
     }
 
     if (filters.status !== 'all') {
-      list = list.filter(asset => asset.status === filters.status);
+      list = list.filter((asset) => asset.status === filters.status);
     }
 
     return list;
@@ -209,7 +301,11 @@ const AssetManagement: React.FC = () => {
     const activeCount = filteredAssets.filter((asset) => asset.status === 'active').length;
     const totalPurchase = filteredAssets.reduce((sum, asset) => sum + Number(asset.purchase_price || 0), 0);
     const totalCurrent = filteredAssets.reduce((sum, asset) => sum + Number(asset.current_value || 0), 0);
-    return { totalCount, activeCount, totalPurchase, totalCurrent };
+    const totalAccum = filteredAssets.reduce(
+      (sum, asset) => sum + Number(asset.accumulated_depreciation || 0),
+      0
+    );
+    return { totalCount, activeCount, totalPurchase, totalCurrent, totalAccum };
   }, [filteredAssets]);
 
   const loadAssets = async () => {
@@ -218,37 +314,14 @@ const AssetManagement: React.FC = () => {
       const response = await accountingService.getAssets();
       if (response.success) {
         const list = Array.isArray(response.data) ? response.data : [];
-        setAssets(list.map((asset: any) => ({
-          id: asset.id,
-          asset_code: asset.asset_code || '',
-          name: asset.name || '',
-          category: asset.category || '',
-          subcategory: asset.subcategory || '',
-          purchase_date: asset.purchase_date || '',
-          purchase_price: Number(asset.purchase_price) || 0,
-          current_value: Number(asset.current_value) || 0,
-          depreciation_rate: Number(asset.depreciation_rate) || 0,
-          accumulated_depreciation: Number(asset.accumulated_depreciation) || 0,
-          location: asset.location || '',
-          status: (asset.status || 'active') as AssetStatus,
-          maintenance_date: asset.maintenance_date || '',
-          next_maintenance: asset.next_maintenance || '',
-          warranty_expiry: asset.warranty_expiry || '',
-          description: asset.description || '',
-          vendor: asset.vendor || '',
-          serial_number: asset.serial_number || '',
-          assigned_to: asset.assigned_to || '',
-          department: asset.department || '',
-          useful_life: Number(asset.useful_life) || 5,
-          depreciation_method: (asset.depreciation_method || 'straight_line') as 'straight_line' | 'declining_balance' | 'units_of_production',
-        })));
+        setAssets(list.map(mapAsset));
       } else {
         setAssets([]);
-        setError(response.message || 'Failed to load assets.');
+        setError(response.message || '자산 목록을 불러오지 못했습니다.');
       }
     } catch (err) {
       console.error('asset load error:', err);
-      setError('Failed to load assets.');
+      setError('자산 목록을 불러오지 못했습니다.');
     } finally {
       setLoading(false);
     }
@@ -277,6 +350,7 @@ const AssetManagement: React.FC = () => {
       subcategory: asset.subcategory,
       purchase_date: asset.purchase_date,
       purchase_price: asset.purchase_price,
+      salvage_value: asset.salvage_value,
       depreciation_rate: asset.depreciation_rate,
       location: asset.location,
       status: asset.status,
@@ -289,9 +363,15 @@ const AssetManagement: React.FC = () => {
       assigned_to: asset.assigned_to || '',
       department: asset.department || '',
       useful_life: Number(asset.useful_life) || 5,
-      depreciation_method: (asset.depreciation_method || 'straight_line') as 'straight_line' | 'declining_balance' | 'units_of_production',
+      depreciation_method: (asset.depreciation_method || 'straight_line') as DepreciationMethod,
     });
     setOpenDialog(true);
+  };
+
+  const openSchedule = (asset: Asset) => {
+    const summaryData = calculateDepreciation(depreciationInputFromAsset(asset));
+    setScheduleAsset(asset);
+    setScheduleSummary(summaryData);
   };
 
   const handleSave = async () => {
@@ -300,19 +380,22 @@ const AssetManagement: React.FC = () => {
       return;
     }
 
-    const resolvedAssetCode =
-      formData.asset_code.trim() || `AST-${Date.now().toString().slice(-6)}`;
-    const depreciation = calculateDepreciationValues(
-      Number(formData.purchase_price) || 0,
-      Number(formData.depreciation_rate) || 0,
-      formData.purchase_date
-    );
+    const resolvedAssetCode = formData.asset_code.trim() || `AST-${Date.now().toString().slice(-6)}`;
+    const depreciation = calculateDepreciation({
+      purchasePrice: Number(formData.purchase_price) || 0,
+      salvageValue: Number(formData.salvage_value) || 0,
+      usefulLife: Number(formData.useful_life) || 0,
+      depreciationRate: Number(formData.depreciation_rate) || 0,
+      purchaseDate: formData.purchase_date,
+      depreciationMethod: formData.depreciation_method,
+    });
 
     const payload = {
       ...formData,
       asset_code: resolvedAssetCode,
       purchase_price: Number(formData.purchase_price) || 0,
-      depreciation_rate: Number(formData.depreciation_rate) || 0,
+      salvage_value: Number(formData.salvage_value) || 0,
+      depreciation_rate: depreciation.depreciationRate,
       useful_life: Number(formData.useful_life) || 0,
       current_value: depreciation.currentValue,
       accumulated_depreciation: depreciation.accumulatedDepreciation,
@@ -321,15 +404,11 @@ const AssetManagement: React.FC = () => {
     try {
       if (selectedAsset) {
         const response = await accountingService.updateAsset(selectedAsset.id, payload);
-        if (!response.success) {
-          throw new Error(response.message || 'Update failed');
-        }
+        if (!response.success) throw new Error(response.message || 'Update failed');
         setSuccess('자산 정보를 수정했습니다.');
       } else {
         const response = await accountingService.createAsset(payload);
-        if (!response.success) {
-          throw new Error(response.message || 'Create failed');
-        }
+        if (!response.success) throw new Error(response.message || 'Create failed');
         setSuccess('자산을 등록했습니다.');
       }
       setOpenDialog(false);
@@ -348,9 +427,7 @@ const AssetManagement: React.FC = () => {
         void (async () => {
           try {
             const response = await accountingService.deleteAsset(id);
-            if (!response.success) {
-              throw new Error(response.message || 'Delete failed');
-            }
+            if (!response.success) throw new Error(response.message || 'Delete failed');
             setSuccess('자산을 삭제했습니다.');
             await loadAssets();
           } catch (err) {
@@ -361,6 +438,60 @@ const AssetManagement: React.FC = () => {
       },
       { title: '삭제 확인', confirmColor: 'error', confirmText: '삭제', cancelText: '취소' }
     );
+  };
+
+  const downloadSingleSchedule = async (asset: Asset, summaryData?: DepreciationSummary) => {
+    const data = summaryData || calculateDepreciation(depreciationInputFromAsset(asset));
+    const workbook = new ExcelJS.Workbook();
+    addSheetFromAoA(workbook, '감가상각표', scheduleSheetRows(asset, data));
+    await downloadExcelWorkbook(workbook, `감가상각표_${asset.asset_code || asset.id}.xlsx`);
+  };
+
+  const downloadAllSchedules = async () => {
+    if (!filteredAssets.length) {
+      setError('다운로드할 자산이 없습니다.');
+      return;
+    }
+    setExporting(true);
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const indexRows: Array<Array<string | number>> = [
+        ['자산코드', '자산명', '분류', '취득일', '취득가', '잔존가치', '내용연수', '상각방법', '상각률(%)', '누적상각', '현재장부가'],
+      ];
+
+      filteredAssets.forEach((asset) => {
+        const data = calculateDepreciation(depreciationInputFromAsset(asset));
+        indexRows.push([
+          asset.asset_code,
+          asset.name,
+          asset.category,
+          asset.purchase_date || '',
+          asset.purchase_price,
+          asset.salvage_value,
+          asset.useful_life || 0,
+          methodLabel(asset.depreciation_method),
+          data.depreciationRate,
+          data.accumulatedDepreciation,
+          data.currentValue,
+        ]);
+      });
+      addSheetFromAoA(workbook, '자산요약', indexRows);
+
+      filteredAssets.forEach((asset, idx) => {
+        const data = calculateDepreciation(depreciationInputFromAsset(asset));
+        const sheetName = `${idx + 1}_${(asset.asset_code || `A${asset.id}`).slice(0, 20)}`;
+        addSheetFromAoA(workbook, sheetName, scheduleSheetRows(asset, data));
+      });
+
+      const today = new Date().toISOString().slice(0, 10);
+      await downloadExcelWorkbook(workbook, `자산_감가상각표_${today}.xlsx`);
+      setSuccess('감가상각표를 다운로드했습니다.');
+    } catch (err) {
+      console.error('depreciation export error:', err);
+      setError('감가상각표 다운로드에 실패했습니다.');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const getStatusLabel = (status: AssetStatus) => {
@@ -401,18 +532,7 @@ const AssetManagement: React.FC = () => {
     <Box sx={{ ...mvsPageRootSx }}>
       <MvsPageHeader
         title="자산 관리"
-        description="자산 등록, 감가상각, 상태 관리를 한 번에 처리합니다."
-        actions={
-          <Button
-            variant="contained"
-            disableElevation
-            startIcon={<AddIcon fontSize="small" />}
-            onClick={handleCreate}
-            sx={mvsBodyPrimaryBtnSx}
-          >
-            자산 등록
-          </Button>
-        }
+        description="회사 자산을 등록·수정·삭제하고, 감가상각을 계산하며 상각표를 다운로드합니다."
       />
 
       {error && (
@@ -427,63 +547,81 @@ const AssetManagement: React.FC = () => {
       )}
 
       <Grid container spacing={2.5} sx={{ mb: 3 }} alignItems="stretch">
-        <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-          <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
-            <CardContent sx={{ py: 2.25, px: 2.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-                자산 수
-              </Typography>
-              <Typography variant="h6" sx={{ mt: 0.75, fontWeight: 700, letterSpacing: '-0.02em' }}>
-                {summary.totalCount}건
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-          <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
-            <CardContent sx={{ py: 2.25, px: 2.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-                사용중 자산
-              </Typography>
-              <Typography variant="h6" sx={{ mt: 0.75, fontWeight: 700, letterSpacing: '-0.02em' }} color="success.main">
-                {summary.activeCount}건
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-          <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
-            <CardContent sx={{ py: 2.25, px: 2.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-                총 취득가
-              </Typography>
-              <Typography variant="h6" sx={{ mt: 0.75, fontWeight: 700, letterSpacing: '-0.02em' }}>
-                {formatCurrency(summary.totalPurchase)}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 3 }} sx={{ display: 'flex' }}>
-          <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
-            <CardContent sx={{ py: 2.25, px: 2.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-                총 현재가
-              </Typography>
-              <Typography variant="h6" sx={{ mt: 0.75, fontWeight: 700, letterSpacing: '-0.02em' }}>
-                {formatCurrency(summary.totalCurrent)}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
+        {[
+          { label: '자산 수', value: `${summary.totalCount}건` },
+          { label: '사용중', value: `${summary.activeCount}건`, color: 'success.main' },
+          { label: '총 취득가', value: formatCurrency(summary.totalPurchase) },
+          { label: '누적상각', value: formatCurrency(summary.totalAccum) },
+          { label: '총 장부가', value: formatCurrency(summary.totalCurrent) },
+        ].map((kpi) => (
+          <Grid key={kpi.label} size={{ xs: 12, sm: 6, md: 4, lg: 'grow' }} sx={{ display: 'flex' }}>
+            <Card elevation={0} sx={{ ...mvsKpiCardSx, width: '100%', height: '100%' }}>
+              <CardContent sx={{ py: 2.25, px: 2.5 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                  {kpi.label}
+                </Typography>
+                <Typography
+                  variant="h6"
+                  sx={{ mt: 0.75, fontWeight: 700, color: kpi.color || 'inherit' }}
+                >
+                  {kpi.value}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
       </Grid>
 
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
         <Box
           sx={{
             px: { xs: 2, sm: 2.5 },
+            pt: 2,
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 1,
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            <Button
+              variant="outlined"
+              disableElevation
+              startIcon={exporting ? <CircularProgress size={14} color="inherit" /> : <FileDownloadIcon fontSize="small" />}
+              onClick={() => void downloadAllSchedules()}
+              disabled={exporting || filteredAssets.length === 0}
+              sx={mvsBodyOutlinedBtnSx}
+            >
+              감가상각표 다운로드
+            </Button>
+            <Button
+              variant="outlined"
+              disableElevation
+              startIcon={<ResetIcon fontSize="small" />}
+              onClick={() => setFilters({ search: '', category: 'all', status: 'all' })}
+              sx={mvsBodyOutlinedBtnSx}
+            >
+              초기화
+            </Button>
+          </Box>
+          {canCreate && (
+            <Button
+              variant="contained"
+              disableElevation
+              startIcon={<AddIcon fontSize="small" />}
+              onClick={handleCreate}
+              sx={mvsBodyPrimaryBtnSx}
+            >
+              자산 등록
+            </Button>
+          )}
+        </Box>
+        <Box
+          sx={{
+            px: { xs: 2, sm: 2.5 },
             py: 2,
             bgcolor: '#FFFFFF',
-            ...assetFilterFieldSx,
             display: 'grid',
             gridTemplateColumns: { xs: '1fr', md: '2fr 1fr 1fr' },
             gap: 2,
@@ -520,7 +658,9 @@ const AssetManagement: React.FC = () => {
           >
             <MenuItem value="all">전체 분류</MenuItem>
             {assetCategories.map((cat) => (
-              <MenuItem key={cat.value} value={cat.value}>{cat.value}</MenuItem>
+              <MenuItem key={cat.value} value={cat.value}>
+                {cat.value}
+              </MenuItem>
             ))}
           </TextField>
           <TextField
@@ -562,25 +702,32 @@ const AssetManagement: React.FC = () => {
                 <Table
                   size="small"
                   sx={{
+                    tableLayout: 'fixed',
+                    width: '100%',
                     borderCollapse: 'collapse',
                     bgcolor: 'transparent',
                     '& .MuiTableCell-root': {
                       borderLeft: 'none',
                       borderRight: 'none',
                       borderTop: 'none',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
                     },
                   }}
                 >
                   <TableHead sx={mvsTableHeadHighlightSx}>
                     <TableRow>
-                      <TableCell>코드</TableCell>
-                      <TableCell>자산명</TableCell>
-                      <TableCell>분류</TableCell>
-                      <TableCell>취득일</TableCell>
-                      <TableCell>취득가</TableCell>
-                      <TableCell>현재가</TableCell>
-                      <TableCell>상태</TableCell>
-                      <TableCell align="center">관리</TableCell>
+                      <TableCell sx={{ width: '12%' }}>코드</TableCell>
+                      <TableCell sx={{ width: '18%' }}>자산명</TableCell>
+                      <TableCell sx={{ width: '12%' }}>분류</TableCell>
+                      <TableCell sx={{ width: '10%' }}>취득일</TableCell>
+                      <TableCell sx={{ width: '12%' }}>취득가</TableCell>
+                      <TableCell sx={{ width: '12%' }}>장부가</TableCell>
+                      <TableCell sx={{ width: '10%' }}>상태</TableCell>
+                      <TableCell align="center" sx={{ width: '14%' }}>
+                        관리
+                      </TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody sx={mvsTableBodyRowSx}>
@@ -593,20 +740,49 @@ const AssetManagement: React.FC = () => {
                         <TableCell>{formatCurrency(asset.purchase_price)}</TableCell>
                         <TableCell>{formatCurrency(asset.current_value)}</TableCell>
                         <TableCell>
-                          <Chip size="small" label={getStatusLabel(asset.status)} color={getStatusColor(asset.status) as 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'} />
+                          <Chip
+                            size="small"
+                            label={getStatusLabel(asset.status)}
+                            color={
+                              getStatusColor(asset.status) as
+                                | 'default'
+                                | 'primary'
+                                | 'secondary'
+                                | 'error'
+                                | 'info'
+                                | 'success'
+                                | 'warning'
+                            }
+                          />
                         </TableCell>
                         <TableCell align="center">
-                          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5 }}>
-                            <Tooltip title="수정">
-                              <IconButton size="small" onClick={() => handleEdit(asset)}>
-                                <EditIcon fontSize="small" />
+                          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.25 }}>
+                            <Tooltip title="감가상각표">
+                              <IconButton size="small" onClick={() => openSchedule(asset)}>
+                                <TableChartIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
-                            <Tooltip title="삭제">
-                              <IconButton size="small" onClick={() => handleDelete(asset.id)} color="error">
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
+                            {canEdit && (
+                              <Tooltip title="수정">
+                                <IconButton size="small" onClick={() => handleEdit(asset)}>
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            {canDelete && (
+                              <Tooltip title="삭제">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleDelete(asset.id)}
+                                  sx={{
+                                    color: 'text.secondary',
+                                    '&:hover': { color: 'error.main', bgcolor: 'error.50' },
+                                  }}
+                                >
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            )}
                           </Box>
                         </TableCell>
                       </TableRow>
@@ -635,85 +811,169 @@ const AssetManagement: React.FC = () => {
           <Box sx={{ mt: 2 }}>
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>코드</Typography>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  코드
+                </Typography>
                 <TextField
                   fullWidth
+                  size="small"
                   value={formData.asset_code}
-                  onChange={e => setFormData({ ...formData, asset_code: e.target.value })}
-                  required
+                  onChange={(e) => setFormData({ ...formData, asset_code: e.target.value })}
+                  placeholder="비우면 자동 생성"
                 />
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>자산명 *</Typography>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  자산명 *
+                </Typography>
                 <TextField
                   fullWidth
+                  size="small"
                   value={formData.name}
-                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
                 />
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>분류 *</Typography>
-                <FormControl fullWidth>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  분류 *
+                </Typography>
+                <FormControl fullWidth size="small">
                   <Select
                     value={formData.category}
-                    onChange={e => setFormData({ ...formData, category: e.target.value, subcategory: '' })}
+                    onChange={(e) => setFormData({ ...formData, category: e.target.value, subcategory: '' })}
                   >
                     <MenuItem value="">선택</MenuItem>
-                    {assetCategories.map(cat => (
-                      <MenuItem key={cat.value} value={cat.value}>{cat.value}</MenuItem>
+                    {assetCategories.map((cat) => (
+                      <MenuItem key={cat.value} value={cat.value}>
+                        {cat.value}
+                      </MenuItem>
                     ))}
                   </Select>
                 </FormControl>
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>하위 분류</Typography>
-                <FormControl fullWidth>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  하위 분류
+                </Typography>
+                <FormControl fullWidth size="small">
                   <Select
                     value={formData.subcategory}
-                    onChange={e => setFormData({ ...formData, subcategory: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, subcategory: e.target.value })}
                     disabled={!formData.category}
                   >
                     <MenuItem value="">선택</MenuItem>
-                    {assetCategories.find(cat => cat.value === formData.category)?.subCategories.map(sub => (
-                      <MenuItem key={sub} value={sub}>{sub}</MenuItem>
-                    ))}
+                    {assetCategories
+                      .find((cat) => cat.value === formData.category)
+                      ?.subCategories.map((sub) => (
+                        <MenuItem key={sub} value={sub}>
+                          {sub}
+                        </MenuItem>
+                      ))}
                   </Select>
                 </FormControl>
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>취득일 *</Typography>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  취득일 *
+                </Typography>
                 <TextField
                   fullWidth
+                  size="small"
                   type="date"
                   value={formData.purchase_date}
-                  onChange={e => setFormData({ ...formData, purchase_date: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, purchase_date: e.target.value })}
                   required
                 />
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>취득가</Typography>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  취득가
+                </Typography>
                 <TextField
                   fullWidth
+                  size="small"
                   type="number"
                   value={formData.purchase_price}
-                  onChange={e => setFormData({ ...formData, purchase_price: Number(e.target.value) || 0 })}
+                  onChange={(e) => setFormData({ ...formData, purchase_price: Number(e.target.value) || 0 })}
                 />
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>위치</Typography>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  잔존가치
+                </Typography>
                 <TextField
                   fullWidth
-                  value={formData.location}
-                  onChange={e => setFormData({ ...formData, location: e.target.value })}
+                  size="small"
+                  type="number"
+                  value={formData.salvage_value}
+                  onChange={(e) => setFormData({ ...formData, salvage_value: Number(e.target.value) || 0 })}
                 />
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>상태</Typography>
-                <FormControl fullWidth>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  내용연수(년)
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  value={formData.useful_life}
+                  onChange={(e) => setFormData({ ...formData, useful_life: Number(e.target.value) || 0 })}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  감가상각 방식
+                </Typography>
+                <FormControl fullWidth size="small">
+                  <Select
+                    value={formData.depreciation_method}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        depreciation_method: e.target.value as DepreciationMethod,
+                      })
+                    }
+                  >
+                    <MenuItem value="straight_line">정액법</MenuItem>
+                    <MenuItem value="declining_balance">정률법</MenuItem>
+                    <MenuItem value="units_of_production">생산량비례법(정액 처리)</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  상각률(% · 비우면 자동)
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  type="number"
+                  value={formData.depreciation_rate}
+                  onChange={(e) => setFormData({ ...formData, depreciation_rate: Number(e.target.value) || 0 })}
+                  helperText={`적용 상각률 ${formPreview.depreciationRate}% · 연간 ${formatCurrency(formPreview.annualDepreciation)}`}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  위치
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  상태
+                </Typography>
+                <FormControl fullWidth size="small">
                   <Select
                     value={formData.status}
-                    onChange={e => setFormData({ ...formData, status: e.target.value as AssetStatus })}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value as AssetStatus })}
                   >
                     <MenuItem value="active">사용중</MenuItem>
                     <MenuItem value="maintenance">점검중</MenuItem>
@@ -724,67 +984,209 @@ const AssetManagement: React.FC = () => {
                 </FormControl>
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>담당자</Typography>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  담당자
+                </Typography>
                 <TextField
                   fullWidth
+                  size="small"
                   value={formData.assigned_to}
-                  onChange={e => setFormData({ ...formData, assigned_to: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
                 />
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>부서</Typography>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  부서
+                </Typography>
                 <TextField
                   fullWidth
+                  size="small"
                   value={formData.department}
-                  onChange={e => setFormData({ ...formData, department: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                 />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>내용연수(년)</Typography>
-                <TextField
-                  fullWidth
-                  type="number"
-                  value={formData.useful_life}
-                  onChange={e => setFormData({ ...formData, useful_life: Number(e.target.value) || 0 })}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>감가상각 방식</Typography>
-                <FormControl fullWidth>
-                  <Select
-                    value={formData.depreciation_method}
-                    onChange={e => setFormData({ ...formData, depreciation_method: e.target.value as 'straight_line' | 'declining_balance' | 'units_of_production' })}
-                  >
-                    <MenuItem value="straight_line">정액법</MenuItem>
-                    <MenuItem value="declining_balance">정률법</MenuItem>
-                    <MenuItem value="units_of_production">생산량비례법</MenuItem>
-                  </Select>
-                </FormControl>
               </Grid>
               <Grid size={{ xs: 12 }}>
-                <Typography variant="body2" sx={{ mb: 0.5 }}>설명</Typography>
+                <Typography variant="body2" sx={{ mb: 0.5 }}>
+                  설명
+                </Typography>
                 <TextField
                   fullWidth
+                  size="small"
                   multiline
-                  rows={3}
+                  rows={2}
                   value={formData.description}
-                  onChange={e => setFormData({ ...formData, description: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 />
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                <Box
+                  sx={{
+                    p: 2,
+                    borderRadius: '12px',
+                    border: '1px solid #E2E8F0',
+                    bgcolor: '#F8FAFC',
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
+                    gap: 1.5,
+                  }}
+                >
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      현재 장부가
+                    </Typography>
+                    <Typography variant="body1" fontWeight={700}>
+                      {formatCurrency(formPreview.currentValue)}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      누적 상각
+                    </Typography>
+                    <Typography variant="body1" fontWeight={700}>
+                      {formatCurrency(formPreview.accumulatedDepreciation)}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">
+                      경과 년수
+                    </Typography>
+                    <Typography variant="body1" fontWeight={700}>
+                      {formPreview.yearsElapsed}년
+                    </Typography>
+                  </Box>
+                </Box>
               </Grid>
             </Grid>
           </Box>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDialog(false)}>취소</Button>
-          <Button variant="contained" onClick={handleSave}>저장</Button>
+          <Button variant="contained" onClick={handleSave} sx={mvsBodyPrimaryBtnSx}>
+            저장
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(scheduleAsset && scheduleSummary)}
+        onClose={() => {
+          setScheduleAsset(null);
+          setScheduleSummary(null);
+        }}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          감가상각표 {scheduleAsset ? `· ${scheduleAsset.asset_code} ${scheduleAsset.name}` : ''}
+        </DialogTitle>
+        <DialogContent dividers>
+          {scheduleAsset && scheduleSummary && (
+            <Box>
+              <Box
+                sx={{
+                  mb: 2,
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: 'repeat(4, 1fr)' },
+                  gap: 1.5,
+                }}
+              >
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    상각방법
+                  </Typography>
+                  <Typography variant="body2" fontWeight={600}>
+                    {methodLabel(scheduleAsset.depreciation_method)}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    상각률
+                  </Typography>
+                  <Typography variant="body2" fontWeight={600}>
+                    {scheduleSummary.depreciationRate}%
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    현재 장부가
+                  </Typography>
+                  <Typography variant="body2" fontWeight={600}>
+                    {formatCurrency(scheduleSummary.currentValue)}
+                  </Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">
+                    누적 상각
+                  </Typography>
+                  <Typography variant="body2" fontWeight={600}>
+                    {formatCurrency(scheduleSummary.accumulatedDepreciation)}
+                  </Typography>
+                </Box>
+              </Box>
+              {scheduleSummary.schedule.length === 0 ? (
+                <Alert severity="info">취득가·내용연수를 입력하면 감가상각표가 생성됩니다.</Alert>
+              ) : (
+                <TableContainer sx={{ maxHeight: 420 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>연차</TableCell>
+                        <TableCell>연도</TableCell>
+                        <TableCell align="right">기초장부가</TableCell>
+                        <TableCell align="right">당기상각</TableCell>
+                        <TableCell align="right">누적상각</TableCell>
+                        <TableCell align="right">기말장부가</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {scheduleSummary.schedule.map((row) => (
+                        <TableRow key={row.year}>
+                          <TableCell>{row.year}</TableCell>
+                          <TableCell>{row.yearLabel}</TableCell>
+                          <TableCell align="right">{formatCurrency(row.openingBookValue)}</TableCell>
+                          <TableCell align="right">{formatCurrency(row.depreciation)}</TableCell>
+                          <TableCell align="right">{formatCurrency(row.accumulatedDepreciation)}</TableCell>
+                          <TableCell align="right">{formatCurrency(row.closingBookValue)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setScheduleAsset(null);
+              setScheduleSummary(null);
+            }}
+          >
+            닫기
+          </Button>
+          {scheduleAsset && scheduleSummary && (
+            <Button
+              variant="contained"
+              startIcon={<FileDownloadIcon />}
+              onClick={() => void downloadSingleSchedule(scheduleAsset, scheduleSummary)}
+              sx={mvsBodyPrimaryBtnSx}
+            >
+              Excel 다운로드
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 
       <Snackbar open={!!error} autoHideDuration={4000} onClose={() => setError('')}>
-        <Alert onClose={() => setError('')} severity="error">{error}</Alert>
+        <Alert onClose={() => setError('')} severity="error">
+          {error}
+        </Alert>
       </Snackbar>
       <Snackbar open={!!success} autoHideDuration={3000} onClose={() => setSuccess('')}>
-        <Alert onClose={() => setSuccess('')} severity="success">{success}</Alert>
+        <Alert onClose={() => setSuccess('')} severity="success">
+          {success}
+        </Alert>
       </Snackbar>
 
       <ConfirmDialog

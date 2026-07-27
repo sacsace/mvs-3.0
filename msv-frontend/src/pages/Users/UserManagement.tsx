@@ -381,6 +381,7 @@ const UserManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'create' | 'edit' | 'view'>('list');
   const [openViewDialog, setOpenViewDialog] = useState(false);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
@@ -2470,6 +2471,44 @@ const UserManagement: React.FC = () => {
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
                     gap: 2.25,
                   }}>
+                    <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                      <Typography variant="body2" sx={userDetailLabelSx}>
+                        {t('userManagement.profilePhoto')}
+                      </Typography>
+                      {(() => {
+                        const photoUrl = selectedUser.avatar_url
+                          ? getUploadUrl(selectedUser.avatar_url)
+                          : '';
+                        return (
+                          <Avatar
+                            src={photoUrl || undefined}
+                            alt={selectedUser.username}
+                            onClick={() => {
+                              if (photoUrl) setPhotoPreviewUrl(photoUrl);
+                            }}
+                            sx={{
+                              width: 96,
+                              height: 96,
+                              mt: 1,
+                              bgcolor: 'action.selected',
+                              fontSize: '2rem',
+                              cursor: photoUrl ? 'zoom-in' : 'default',
+                              transition: 'box-shadow 0.2s ease, transform 0.2s ease',
+                              ...(photoUrl
+                                ? {
+                                    '&:hover': {
+                                      boxShadow: 4,
+                                      transform: 'scale(1.03)',
+                                    },
+                                  }
+                                : {}),
+                            }}
+                          >
+                            {selectedUser.username?.trim().charAt(0).toUpperCase()}
+                          </Avatar>
+                        );
+                      })()}
+                    </Box>
                     <Box>
                       <Typography variant="body2" sx={userDetailLabelSx}>
                         {t('userManagement.employeeNumber')}
@@ -2751,6 +2790,59 @@ const UserManagement: React.FC = () => {
               {t('userManagement.edit')}
             </Button>
           )}
+        </DialogActions>
+      </Dialog>
+
+      {/* 프로필 사진 확대 보기 */}
+      <Dialog
+        open={!!photoPreviewUrl}
+        onClose={() => setPhotoPreviewUrl(null)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            bgcolor: 'transparent',
+            boxShadow: 'none',
+            overflow: 'visible',
+          },
+        }}
+      >
+        <DialogContent
+          sx={{
+            p: 0,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            bgcolor: 'transparent',
+          }}
+          onClick={() => setPhotoPreviewUrl(null)}
+        >
+          {photoPreviewUrl ? (
+            <Box
+              component="img"
+              src={photoPreviewUrl}
+              alt={selectedUser?.username || t('userManagement.profilePhoto')}
+              onClick={(e) => e.stopPropagation()}
+              sx={{
+                maxWidth: '100%',
+                maxHeight: '85vh',
+                objectFit: 'contain',
+                borderRadius: 2,
+                boxShadow: '0 12px 40px rgba(15, 23, 42, 0.35)',
+                bgcolor: '#fff',
+              }}
+            />
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: 'center', pt: 1.5, pb: 0 }}>
+          <Button
+            variant="contained"
+            onClick={() => setPhotoPreviewUrl(null)}
+            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
+          >
+            {t('common.close')}
+          </Button>
         </DialogActions>
       </Dialog>
 

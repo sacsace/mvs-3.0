@@ -822,7 +822,7 @@ export default {
       contact: 'Contact',
       contractExpiryDate: 'Contract Expiry Date',
       actions: 'Actions',
-      businessNumberLabel: 'Business Number',
+      businessNumberLabel: 'CIN',
       noPartnersMatch: 'No partners match the search criteria.',
       noPartners: 'No partners registered.',
       firstPartnerAdd: 'Register First Partner',
@@ -830,7 +830,7 @@ export default {
       editPartner: 'Edit Partner Information',
       addNewPartner: 'Add New Partner',
       companyName: 'Company Name',
-      businessNumber: 'Business Number',
+      businessNumber: 'CIN',
       panNumber: 'PAN Number',
       gstNumber: 'GST Number',
       gstNumberMinMax: '(Min 1, Max 10)',
@@ -867,7 +867,7 @@ export default {
       importResultSummary: '{{success}} of {{total}} succeeded',
       confirmDelete: 'Are you sure you want to delete this partner?',
       placeholderCompanyName: 'Enter company name',
-      placeholderBusinessNumber: 'Enter business number',
+      placeholderBusinessNumber: 'Enter CIN',
       placeholderPan: 'Enter PAN number',
       placeholderGst: 'Enter GST number {{index}}',
       placeholderGstRequired: 'Please enter GST number',
@@ -1023,6 +1023,10 @@ export default {
       },
       filters: {
         all: 'All'
+      },
+      listView: {
+        viewAll: 'View all',
+        viewPages: 'View by page'
       },
       status: {
         success: 'Success',
@@ -1899,7 +1903,7 @@ export default {
         newCheckin: 'New Check-in',
         processCheckout: 'Process Check-out',
         processNoShow: 'Mark no-show',
-        assignRoom: 'Assign Room',
+        assignRoom: 'Change Room',
         process: 'Process'
       },
       confirmNoShow: 'Mark this reservation as no-show?',
@@ -1991,7 +1995,8 @@ export default {
         checkoutDone: 'Check-out completed.',
         noShowDone: 'Marked as no-show.',
         cancelDone: 'Reservation cancelled.',
-        noEligibleBookings: 'No reservations available for this action. Check the list status.'
+        noEligibleBookings: 'No reservations available for this action. Check the list status.',
+        noActionsForStatus: 'No actions available for status "{{status}}".'
       },
       errors: {
         loadBookingsFailed: 'Failed to load reservation list.',
@@ -3878,6 +3883,7 @@ export default {
       invalidEmailInList: 'Invalid email in the list: {{part}}',
       quotationNumber: 'Quotation Number',
       customerName: 'Customer Name',
+      description: 'Item',
       issueDate: 'Issue Date',
       validUntil: 'Valid Until',
       status: 'Status',
@@ -3923,7 +3929,18 @@ export default {
       leaveStatus: 'Leave Status',
       myRequestedLeave: 'My Requested Leave',
       leaveApproval: 'Leave Approval',
+      leaveBalances: 'Remaining Leave by Employee',
       leaveType: 'Leave Type',
+      remainingDays: 'Remaining',
+      quotaDays: 'Quota',
+      leaveYear: 'Fiscal year',
+      noLeaveBalances: 'No employee leave balances to display.',
+      leaveBalancesHint:
+        'Remaining days by leave type for the company fiscal year. Only leave types enabled in Leave Type are shown. Unused days do not carry over.',
+      leaveBalancesSearchPlaceholder: 'Search by employee, department, position…',
+      sickOptional: 'Optional',
+      sickOptionalHint: 'Sick leave is not mandatory.',
+      department: 'Department',
       pending: 'Pending',
       completed: 'Completed/Rejected',
       searchPlaceholder: 'Search by employee name, department, reason...',
@@ -3995,6 +4012,7 @@ export default {
       noPermissionEditRequest: 'You do not have leave menu “Edit” permission to modify this request.',
       enterRejectionReasonPrompt: 'Enter rejection reason:',
       annual: 'Annual Leave',
+      annualRemainingDays: 'Annual Leave Remaining',
       sick: 'Sick Leave',
       personal: 'Casual Leave',
       study: 'Study Leave',
