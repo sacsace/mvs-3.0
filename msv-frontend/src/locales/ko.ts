@@ -4064,6 +4064,10 @@ export default {
       paternityLeaveDesc3: '관련 서류 제출이 필요할 수 있습니다.',
       excelDownloadSuccess: 'Excel 파일이 다운로드되었습니다.',
       excelExportError: 'Excel 파일 내보내기 중 오류가 발생했습니다.',
+      changeApprover: '승인자 변경',
+      changeApproverHint: '승인자를 선택하면 바로 반영됩니다.',
+      changeApproverSuccess: '승인자가 변경되었습니다.',
+      changeApproverFailed: '승인자 변경에 실패했습니다.',
       request: {
         backToList: '목록으로',
         newLeaveRequest: '새 휴가 신청',

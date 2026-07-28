@@ -1512,7 +1512,15 @@ export const removeWorkBoardMember = async (req: RequestWithUser, res: Response)
       return res.status(404).json({ success: false, message: '멤버를 찾을 수 없습니다.' });
     }
     if (target.role === 'owner') {
-      return res.status(400).json({ success: false, message: '보드 소유자는 제거할 수 없습니다.' });
+      const ownerCount = await WorkBoardMember.count({
+        where: { board_id: board.id, role: 'owner' }
+      });
+      if (ownerCount <= 1) {
+        return res.status(400).json({
+          success: false,
+          message: '마지막 보드 소유자는 제거할 수 없습니다.'
+        });
+      }
     }
     if (member.role !== 'owner' && user.role !== 'root' && memberUserId !== user.id) {
       return res.status(403).json({ success: false, message: '멤버를 내보낼 권한이 없습니다.' });

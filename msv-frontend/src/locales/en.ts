@@ -4066,6 +4066,10 @@ export default {
       paternityLeaveDesc3: 'Relevant documents may need to be submitted.',
       excelDownloadSuccess: 'Excel file has been downloaded.',
       excelExportError: 'An error occurred while exporting to Excel.',
+      changeApprover: 'Change approver',
+      changeApproverHint: 'Selecting an approver saves immediately.',
+      changeApproverSuccess: 'Approver has been updated.',
+      changeApproverFailed: 'Failed to change approver.',
       request: {
         backToList: 'Back to list',
         newLeaveRequest: 'New Leave Request',

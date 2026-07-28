@@ -93,7 +93,7 @@ const theme = createTheme({
   },
   typography: {
     fontFamily:
-      '"Outfit", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+      '"Plus Jakarta Sans", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
     /** 페이지 메인 타이틀 — 전 화면 동일 */
     h1: {
       fontSize: '22px',

@@ -12,6 +12,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   IconButton,
   Menu,
   MenuItem,
@@ -2073,26 +2074,31 @@ const WorkBoardDetailPage: React.FC = () => {
   const handleRemoveMember = (memberUserId: number, memberName: string) => {
     if (!menuCanEdit) return;
     showConfirm(
-      `"${memberName}" 사용자를 보드에서 제거하시겠습니까?`,
+      `"${memberName}" 님을 이 보드 멤버에서 삭제하시겠습니까?`,
       () => {
         void (async () => {
           setMemberRemovingId(memberUserId);
           try {
             const res = await workBoardService.removeMember(boardId, memberUserId);
             if (res.success) {
-              showSuccessToast('멤버가 제거되었습니다.');
+              showSuccessToast(txt('멤버가 삭제되었습니다.', 'Member removed.'));
+              closeMemberMenu();
               await loadBoard();
             } else {
-              showErrorPopup(res.message || '멤버 제거 실패', '작업 보드');
+              showErrorPopup(res.message || txt('멤버 삭제 실패', 'Failed to remove member'), txt('작업 보드', 'Work board'));
             }
           } catch (e: any) {
-            showErrorPopup(e, '작업 보드');
+            showErrorPopup(e, txt('작업 보드', 'Work board'));
           } finally {
             setMemberRemovingId(null);
           }
         })();
       },
-      { title: '멤버 제거', confirmText: '제거', confirmColor: 'error' }
+      {
+        title: txt('멤버 삭제', 'Delete member'),
+        confirmText: txt('삭제', 'Delete'),
+        confirmColor: 'error',
+      }
     );
   };
 
@@ -2598,10 +2604,13 @@ const WorkBoardDetailPage: React.FC = () => {
           const name = m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`;
           const initial = name.trim().charAt(0).toUpperCase() || '?';
           const isOwnerMember = m.role === 'owner';
+          const ownerCount = members.filter((x: any) => x.role === 'owner').length;
+          const isLastOwner = isOwnerMember && ownerCount <= 1;
+          const isSelf = Number(m.user_id) === Number(user?.id || 0);
           const canRemoveMember =
             menuCanEdit &&
-            (canManageMembers || Number(m.user_id) === Number(user?.id || 0)) &&
-            !isOwnerMember;
+            (canManageMembers || isSelf) &&
+            !isLastOwner;
           return (
             <Box sx={{ px: 2, py: 1.5, minWidth: 220 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1.5 }}>
@@ -2642,7 +2651,7 @@ const WorkBoardDetailPage: React.FC = () => {
                     }
                   }}
                   sx={{
-                    mb: canRemoveMember ? 1 : 0,
+                    mb: 0,
                     '& .MuiOutlinedInput-root': {
                       borderRadius: KANBAN_CHIP_RADIUS,
                       fontSize: '0.75rem',
@@ -2659,25 +2668,50 @@ const WorkBoardDetailPage: React.FC = () => {
                   </MenuItem>
                 </TextField>
               ) : null}
-              {canRemoveMember ? (
-                <Button
-                  fullWidth
-                  variant="text"
-                  size="small"
-                  color="error"
-                  disabled={memberRemovingId === Number(m.user_id)}
-                  onClick={() => {
-                    closeMemberMenu();
-                    handleRemoveMember(Number(m.user_id), name);
-                  }}
-                  sx={{ mt: 1, textTransform: 'none', fontWeight: 600, borderRadius: KANBAN_CHIP_RADIUS }}
-                >
-                  {memberRemovingId === Number(m.user_id) ? (
-                    <CircularProgress size={14} color="inherit" />
+              {canRemoveMember || isLastOwner ? (
+                <>
+                  <Divider sx={{ my: 1.25 }} />
+                  {canRemoveMember ? (
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      color="error"
+                      startIcon={
+                        memberRemovingId === Number(m.user_id) ? (
+                          <CircularProgress size={14} color="inherit" />
+                        ) : (
+                          <DeleteIcon fontSize="small" />
+                        )
+                      }
+                      disabled={memberRemovingId === Number(m.user_id)}
+                      onClick={() => {
+                        handleRemoveMember(Number(m.user_id), name);
+                      }}
+                      sx={{
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        borderRadius: KANBAN_CHIP_RADIUS,
+                        borderColor: alpha(theme.palette.error.main, 0.45),
+                      }}
+                    >
+                      {isSelf && !canManageMembers
+                        ? txt('보드 나가기', 'Leave board')
+                        : txt('멤버 삭제', 'Delete member')}
+                    </Button>
                   ) : (
-                    txt('보드에서 제거', 'Remove from board')
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', textAlign: 'center', lineHeight: 1.4 }}
+                    >
+                      {txt(
+                        '마지막 소유자는 삭제할 수 없습니다.',
+                        'The last owner cannot be removed.'
+                      )}
+                    </Typography>
                   )}
-                </Button>
+                </>
               ) : null}
             </Box>
           );

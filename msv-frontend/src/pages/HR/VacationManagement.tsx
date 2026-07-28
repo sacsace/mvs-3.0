@@ -39,6 +39,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Autocomplete,
   TableSortLabel,
   Pagination,
   useMediaQuery,
@@ -85,8 +86,10 @@ import {
   Groups as GroupsIcon,
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
 import { vacationService } from '../../services/api';
+import { getUploadUrl } from '../../utils/uploadUrl';
 import { useTranslation } from 'react-i18next';
 import DepartmentLeaveCalendar, { CALENDAR_DEPARTMENT_ALL_VALUE } from './DepartmentLeaveCalendar';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
@@ -245,6 +248,10 @@ const VacationManagement: React.FC = () => {
   const [selectedVacation, setSelectedVacation] = useState<VacationRequest | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [approverOptions, setApproverOptions] = useState<
+    Array<{ id: number; username: string; department?: string; company_id?: number }>
+  >([]);
+  const [approverSaving, setApproverSaving] = useState(false);
   const [orderBy, setOrderBy] = useState<string>('');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
   const [calendarMonth, setCalendarMonth] = useState(() => new Date());
@@ -318,6 +325,7 @@ const VacationManagement: React.FC = () => {
           employeeName: v.user?.username || '알 수 없음',
           department: v.user?.department || '-',
           position: v.user?.position || '-',
+          avatar: v.user?.avatar_url || undefined,
           vacationType: v.vacation_type,
           startDate: v.start_date,
           endDate: v.end_date,
@@ -394,6 +402,7 @@ const VacationManagement: React.FC = () => {
           employeeName: v.user?.username || '알 수 없음',
           department: v.user?.department || '-',
           position: v.user?.position || '-',
+          avatar: v.user?.avatar_url || undefined,
           vacationType: v.vacation_type,
           startDate: v.start_date,
           endDate: v.end_date,
@@ -756,10 +765,85 @@ const VacationManagement: React.FC = () => {
     setRejectReason('');
   };
 
+  const canChangeApprover = (request: VacationRequest | null) => {
+    if (!request || request.status !== 'pending') return false;
+    return (
+      hrElevated ||
+      Number(request.employeeId) === Number(user?.id) ||
+      canApproveVacationRequest(request)
+    );
+  };
+
+  useEffect(() => {
+    if (!detailDialogOpen || !selectedVacation || !canChangeApprover(selectedVacation)) {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const allUsers = await useReferenceDataStore.getState().fetchUsers({
+          company_id: user?.company_id,
+        });
+        if (cancelled) return;
+        const options = allUsers.filter(
+          (u: any) =>
+            u.status === 'active' &&
+            Number(u.company_id) === Number(user?.company_id) &&
+            Number(u.id) !== Number(selectedVacation.employeeId)
+        );
+        setApproverOptions(options);
+      } catch {
+        if (!cancelled) setApproverOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [detailDialogOpen, selectedVacation?.id, selectedVacation?.employeeId, user?.company_id, user?.id]);
+
+  const handleChangeApprover = async (
+    nextApprover: { id: number; username: string; department?: string } | null
+  ) => {
+    if (!selectedVacation || !canChangeApprover(selectedVacation)) return;
+    if (!nextApprover?.id) return;
+    if (Number(nextApprover.id) === Number(selectedVacation.approvedByUserId)) return;
+
+    setApproverSaving(true);
+    try {
+      const response = await vacationService.updateVacation(selectedVacation.id, {
+        approved_by: nextApprover.id,
+      });
+      if (response.success) {
+        const updated: VacationRequest = {
+          ...selectedVacation,
+          approvedBy: response.data?.approver?.username || nextApprover.username,
+          approvedByUserId:
+            response.data?.approved_by != null
+              ? Number(response.data.approved_by)
+              : nextApprover.id,
+        };
+        setSelectedVacation(updated);
+        setVacationRequests((prev) =>
+          prev.map((v) => (v.id === updated.id ? updated : v))
+        );
+        setSuccess(t('vacationManagement.changeApproverSuccess'));
+      } else {
+        setError(response.message || t('vacationManagement.changeApproverFailed'));
+      }
+    } catch (error: any) {
+      setError(
+        error?.response?.data?.message || t('vacationManagement.changeApproverFailed')
+      );
+    } finally {
+      setApproverSaving(false);
+    }
+  };
+
   const handleCloseDetailDialog = () => {
     setDetailDialogOpen(false);
     setSelectedVacation(null);
     setRejectReason('');
+    setApproverOptions([]);
   };
 
   const handleApproveFromDialog = async () => {
@@ -1144,7 +1228,10 @@ const VacationManagement: React.FC = () => {
                 >
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
-                      <Avatar sx={{ mr: 1.5, bgcolor: 'primary.main', width: 32, height: 32, flexShrink: 0 }}>
+                      <Avatar
+                        src={request.avatar ? getUploadUrl(request.avatar) : undefined}
+                        sx={{ mr: 1.5, bgcolor: 'primary.main', width: 32, height: 32, flexShrink: 0 }}
+                      >
                         {request.employeeName.charAt(0)}
                       </Avatar>
                       <Box sx={{ minWidth: 0, overflow: 'hidden' }}>
@@ -2251,7 +2338,10 @@ const VacationManagement: React.FC = () => {
                     {t('vacationManagement.employeeInfo')}
                   </Typography>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <Avatar sx={{ mr: 2, bgcolor: 'primary.main', width: 48, height: 48 }}>
+                    <Avatar
+                      src={selectedVacation.avatar ? getUploadUrl(selectedVacation.avatar) : undefined}
+                      sx={{ mr: 2, bgcolor: 'primary.main', width: 48, height: 48 }}
+                    >
                       {selectedVacation.employeeName.charAt(0)}
                     </Avatar>
                     <Box>
@@ -2307,16 +2397,49 @@ const VacationManagement: React.FC = () => {
                     {selectedVacation.appliedDate}
                   </Typography>
                 </Grid>
-                {selectedVacation.approvedBy && (
-                  <Grid size={{ xs: 12, md: 6 }}>
-                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                      {t('vacationManagement.approver')}
-                    </Typography>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                    {t('vacationManagement.approver')}
+                  </Typography>
+                  {canChangeApprover(selectedVacation) ? (
+                    <Autocomplete
+                      size="small"
+                      options={approverOptions}
+                      loading={approverSaving}
+                      disabled={approverSaving}
+                      getOptionLabel={(option) =>
+                        `${option.username}${option.department ? ` (${option.department})` : ''}`
+                      }
+                      isOptionEqualToValue={(a, b) => Number(a.id) === Number(b.id)}
+                      value={
+                        approverOptions.find(
+                          (u) => Number(u.id) === Number(selectedVacation.approvedByUserId)
+                        ) ||
+                        (selectedVacation.approvedByUserId
+                          ? {
+                              id: Number(selectedVacation.approvedByUserId),
+                              username: selectedVacation.approvedBy || String(selectedVacation.approvedByUserId),
+                            }
+                          : null)
+                      }
+                      onChange={(_event, newValue) => {
+                        void handleChangeApprover(newValue);
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          placeholder={t('vacationManagement.request.approverPlaceholder')}
+                          helperText={t('vacationManagement.changeApproverHint')}
+                          sx={{ mb: 2 }}
+                        />
+                      )}
+                    />
+                  ) : (
                     <Typography variant="body1" sx={{ mb: 2 }}>
-                      {selectedVacation.approvedBy}
+                      {selectedVacation.approvedBy || '—'}
                     </Typography>
-                  </Grid>
-                )}
+                  )}
+                </Grid>
                 {selectedVacation.approvedDate && (
                   <Grid size={{ xs: 12, md: 6 }}>
                     <Typography variant="subtitle2" color="text.secondary" gutterBottom>

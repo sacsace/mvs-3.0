@@ -104,12 +104,19 @@ export const vacationService = {
   },
 
   // ?��? ?�정
-  updateVacation: async (id: number, data: { vacation_type?: string; start_date?: string; end_date?: string; reason?: string; attachments?: string[] }) => {
+  updateVacation: async (id: number, data: {
+    vacation_type?: string;
+    start_date?: string;
+    end_date?: string;
+    reason?: string;
+    attachments?: string[];
+    approved_by?: number | null;
+  }) => {
     try {
       const response = await api.put(`/hr/vacations/${id}`, data);
       return response.data;
     } catch (error) {
-      console.error('?��? ?�정 ?�류:', error);
+      console.error('휴가 수정 오류:', error);
       throw error;
     }
   },

@@ -313,7 +313,7 @@ export const createDynamicTheme = (appearanceSettings: {
     },
     typography: {
       fontFamily:
-        '"Outfit", "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+        '"Plus Jakarta Sans", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
       h1: {
         fontSize: `${22 * fontSizeMultiplier}px`,
         fontWeight: 700,

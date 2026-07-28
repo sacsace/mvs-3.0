@@ -91,7 +91,7 @@ export const getVacations = async (req: AuthRequest, res: Response) => {
     const userInclude: any = {
       model: User,
       as: 'user',
-      attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number'],
+      attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number', 'avatar_url'],
       required: true,
     };
 
@@ -162,7 +162,7 @@ export const getVacation = async (req: AuthRequest, res: Response) => {
         {
           model: User,
           as: 'user',
-          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number', 'avatar_url']
         },
         {
           model: User,
@@ -273,7 +273,7 @@ export const createVacation = async (req: AuthRequest, res: Response) => {
         {
           model: User,
           as: 'user',
-          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number', 'avatar_url']
         }
       ]
     });
@@ -329,16 +329,10 @@ export const updateVacation = async (req: AuthRequest, res: Response) => {
     const { vacation_type, start_date, end_date, reason, attachments, approved_by } = req.body;
 
     const whereClause: any = { id, is_active: true };
-    
+
     if (userRole !== 'root' && userRole !== 'audit') {
       whereClause.tenant_id = tenantId;
       whereClause.company_id = companyId;
-      
-      // 일반 사용자는 자신의 휴가만 수정 가능
-      if (userRole === 'user') {
-        whereClause.user_id = userId;
-        whereClause.status = 'pending'; // 승인 전 상태만 수정 가능
-      }
     }
 
     const vacation = await (Vacation as any).findOne({
@@ -346,11 +340,51 @@ export const updateVacation = async (req: AuthRequest, res: Response) => {
     });
 
     if (!vacation) {
-      return res.status(404).json({ 
-        success: false, 
-        message: '휴가 정보를 찾을 수 없습니다.' 
+      return res.status(404).json({
+        success: false,
+        message: '휴가 정보를 찾을 수 없습니다.'
       });
     }
+
+    const isElevated = userRole === 'root' || userRole === 'admin' || userRole === 'audit';
+    const isApplicant = Number(vacation.user_id) === Number(userId);
+    const isCurrentApprover =
+      vacation.approved_by != null && Number(vacation.approved_by) === Number(userId);
+    const isApproverOnlyUpdate =
+      approved_by !== undefined &&
+      vacation_type === undefined &&
+      start_date === undefined &&
+      end_date === undefined &&
+      reason === undefined &&
+      attachments === undefined;
+
+    if (!isElevated) {
+      if (isApproverOnlyUpdate) {
+        if (vacation.status !== 'pending') {
+          return res.status(400).json({
+            success: false,
+            message: '대기 중인 휴가만 승인자를 변경할 수 있습니다.'
+          });
+        }
+        if (!isApplicant && !isCurrentApprover) {
+          return res.status(403).json({
+            success: false,
+            message: '승인자를 변경할 권한이 없습니다.'
+          });
+        }
+      } else {
+        // 일반 사용자는 자신의 대기 중 휴가만 수정 가능
+        if (!isApplicant || vacation.status !== 'pending') {
+          return res.status(403).json({
+            success: false,
+            message: '휴가를 수정할 권한이 없습니다.'
+          });
+        }
+      }
+    }
+
+    const previousApproverId =
+      vacation.approved_by != null ? Number(vacation.approved_by) : null;
 
     // 날짜 재계산
     let days = vacation.days;
@@ -396,18 +430,30 @@ export const updateVacation = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const updateData: any = {
-      vacation_type: finalVacationType,
-      start_date: finalStartDate,
-      end_date: finalEndDate,
-      days: finalDays,
-      reason: reason !== undefined ? reason : vacation.reason,
-      attachments: attachments !== undefined ? JSON.stringify(attachments) : vacation.attachments
-    };
+    const updateData: any = isApproverOnlyUpdate
+      ? {}
+      : {
+          vacation_type: finalVacationType,
+          start_date: finalStartDate,
+          end_date: finalEndDate,
+          days: finalDays,
+          reason: reason !== undefined ? reason : vacation.reason,
+          attachments: attachments !== undefined ? JSON.stringify(attachments) : vacation.attachments
+        };
 
     // 승인자 업데이트 (제공된 경우)
     if (approved_by !== undefined) {
-      updateData.approved_by = approved_by;
+      const nextApproverId =
+        approved_by === null || approved_by === ''
+          ? null
+          : Number(approved_by);
+      if (nextApproverId != null && (!Number.isFinite(nextApproverId) || nextApproverId < 1)) {
+        return res.status(400).json({
+          success: false,
+          message: '승인자 정보가 올바르지 않습니다.'
+        });
+      }
+      updateData.approved_by = nextApproverId;
     }
 
     await vacation.update(updateData);
@@ -418,7 +464,7 @@ export const updateVacation = async (req: AuthRequest, res: Response) => {
         {
           model: User,
           as: 'user',
-          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number', 'avatar_url']
         },
         {
           model: User,
@@ -429,13 +475,46 @@ export const updateVacation = async (req: AuthRequest, res: Response) => {
       ]
     });
 
-    res.json({ 
-      success: true, 
-      data: vacationWithUser 
+    const nextApproverId =
+      (vacationWithUser as any)?.approved_by != null
+        ? Number((vacationWithUser as any).approved_by)
+        : null;
+    if (
+      nextApproverId != null &&
+      nextApproverId !== previousApproverId &&
+      nextApproverId !== Number(userId)
+    ) {
+      const applicantName =
+        (vacationWithUser as any)?.user?.username || req.user?.username || '신청자';
+      pushNotification(
+        {
+          title: '휴가 승인 요청',
+          message: `${applicantName}님의 휴가 승인 요청이 지정되었습니다. (${vacation.start_date} ~ ${vacation.end_date})`,
+          type: 'info',
+          target_type: 'user',
+          target_id: nextApproverId,
+          tenant_id: tenantId,
+          company_id: companyId,
+          sender_user_id: userId,
+          data: {
+            feature: 'vacation',
+            vacation_id: vacation.id,
+            href: '/hr/leave',
+            title_en: 'Leave Approval Request',
+            message_en: `You were assigned to approve leave for ${applicantName}. (${vacation.start_date} ~ ${vacation.end_date})`
+          }
+        },
+        (req as any).socketService
+      );
+    }
+
+    res.json({
+      success: true,
+      data: vacationWithUser
     });
   } catch (error: any) {
     console.error('휴가 수정 오류:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false, 
       message: '휴가 수정 중 오류가 발생했습니다.',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
@@ -540,7 +619,7 @@ export const approveVacation = async (req: AuthRequest, res: Response) => {
         {
           model: User,
           as: 'user',
-          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number', 'avatar_url']
         },
         {
           model: User,
@@ -614,7 +693,7 @@ export const rejectVacation = async (req: AuthRequest, res: Response) => {
         {
           model: User,
           as: 'user',
-          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number', 'avatar_url']
         },
         {
           model: User,
@@ -950,7 +1029,7 @@ export const exportVacationsToExcel = async (req: AuthRequest, res: Response) =>
         {
           model: User,
           as: 'user',
-          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number']
+          attributes: ['id', 'username', 'email', 'department', 'position', 'employee_number', 'avatar_url']
         },
         {
           model: User,

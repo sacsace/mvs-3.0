@@ -674,15 +674,9 @@ const CompanyManagement: React.FC = () => {
     setSuccess('');
 
     // 필수 항목 검증 (NOT NULL 제약조건이 있는 필드)
-    // address와 phone은 DB에서 NOT NULL이므로 추가/수정 모두에서 필수
+    // address는 DB에서 NOT NULL이므로 추가/수정 모두에서 필수 (phone은 선택)
     if (!formData.address || formData.address.trim() === '') {
             setError('주소는 필수 입력 항목입니다.');
-      setLoading(false);
-      return;
-    }
-
-    if (!formData.phone || formData.phone.trim() === '') {
-            setError('전화번호는 필수 입력 항목입니다.');
       setLoading(false);
       return;
     }
@@ -707,13 +701,6 @@ const CompanyManagement: React.FC = () => {
       const validGstNumbers = (formData.gst_numbers || []).filter((gst: string) => gst && gst.trim() !== '');
       if (validGstNumbers.length === 0) {
                 setError('GST 번호는 필수 입력 항목입니다. 최소 1개 이상 입력해주세요.');
-        setLoading(false);
-        return;
-      }
-
-      // PAN 번호 필수 검증
-      if (!formData.pan_number || formData.pan_number.trim() === '') {
-                setError('PAN 번호는 필수 입력 항목입니다.');
         setLoading(false);
         return;
       }
@@ -1329,17 +1316,14 @@ const CompanyManagement: React.FC = () => {
                 <Box sx={{ display: 'flex', gap: 1.5 }}>
                   <Box sx={{ flex: 1 }}>
                     <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
-                      전화번호 <span style={{ color: 'red' }}>*</span>
+                      전화번호
                     </Typography>
                     <TextField
                       fullWidth
-                      required
                       value={formData.phone}
                       onChange={(e) => setFormData({...formData, phone: e.target.value})}
                       disabled={dialogMode === 'view'}
                       placeholder="전화번호를 입력하세요"
-                      error={!formData.phone || formData.phone.trim() === ''}
-                      helperText={(!formData.phone || formData.phone.trim() === '') ? '전화번호는 필수 입력 항목입니다.' : ''}
                       {...textFieldStyles}
                     />
                   </Box>
@@ -1539,7 +1523,7 @@ const CompanyManagement: React.FC = () => {
               </Box>
               <Box>
                 <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
-                  <span style={{ color: 'red' }}>*</span> PAN 번호
+                  PAN 번호
                 </Typography>
                 <TextField
                   fullWidth
@@ -1547,7 +1531,6 @@ const CompanyManagement: React.FC = () => {
                   onChange={(e) => setFormData({...formData, pan_number: e.target.value})}
                   disabled={dialogMode === 'view'}
                   placeholder="PAN 번호를 입력하세요"
-                  required
                   {...textFieldStyles}
                 />
               </Box>
