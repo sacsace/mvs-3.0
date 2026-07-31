@@ -1614,6 +1614,10 @@ export default {
         noResults: 'No items match your filters.',
         noResultsHint: 'Change search or filters, or reset them.',
       },
+      listView: {
+        viewAll: 'View all',
+        viewPages: 'View as pages',
+      },
       columns: {
         status: 'Status',
         productName: 'Product name',
@@ -1637,6 +1641,7 @@ export default {
         editTitle: 'Edit item',
         addTitle: 'Add item',
         viewTitle: 'Inventory detail',
+        imagePreview: 'Product image',
         registerCategoryTitle: 'Register category',
         registerLocationTitle: 'Register storage location',
         registerWarehouseTitle: 'Register warehouse',
@@ -2069,7 +2074,14 @@ export default {
       errors: {
         loadFailed: 'Failed to load reservation data.',
         cancelFailed: 'Failed to cancel the booking.',
-        deleteFailed: 'Failed to delete the booking.'
+        deleteFailed: 'Failed to delete the booking.',
+        moveFailed: 'Failed to move the booking.',
+        moveConflict: 'Another booking already occupies that room and dates.',
+        movePastNotAllowed: 'You cannot move a booking to a past date.',
+        moveInvalidRoom: 'The target room information is invalid.'
+      },
+      toast: {
+        moveSuccess: 'Booking moved successfully.'
       },
       misc: {
         other: 'Other'
@@ -3452,7 +3464,7 @@ export default {
         all: 'All'
       },
       placeholders: {
-        search: 'Search title, expense ID, requester',
+        search: 'Search title, requester',
         searchSimple: 'Search',
         searchCompany: 'Search company'
       },
@@ -4332,6 +4344,8 @@ export default {
       detail: {
         documentContent: 'Document content',
         attachmentsLabel: 'Attachments:',
+        imagePreview: 'Image preview',
+        downloadFile: 'Download',
         approvalFlow: 'Approval flow',
         flowPath: 'Request path',
         flowSubmittedAt: 'Submitted',

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Card,
@@ -120,6 +120,20 @@ const addDaysToIso = (iso: string, days: number) => {
   return toIsoDate(base);
 };
 
+const diffCalendarDays = (fromIso: string, toIso: string) => {
+  const from = new Date(`${fromIso}T00:00:00`);
+  const to = new Date(`${toIso}T00:00:00`);
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return 0;
+  return Math.round((to.getTime() - from.getTime()) / 86400000);
+};
+
+const datesOverlapExclusive = (
+  startA: string,
+  endA: string,
+  startB: string,
+  endB: string
+) => startA < endB && endA > startB;
+
 const CHECKOUT_TIME_FALLBACK = '11:00:00';
 
 const normalizeTimeValue = (value?: string) => {
@@ -161,6 +175,7 @@ const ReservationStatus: React.FC = () => {
   const [bookings, setBookings] = useState<RoomBooking[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState('');
   const [roomTypeFilter, setRoomTypeFilter] = useState('');
@@ -181,6 +196,11 @@ const ReservationStatus: React.FC = () => {
   const [bookingGateMessage, setBookingGateMessage] = useState('');
   const [roomTypes, setRoomTypes] = useState<Array<{ id: number; name: string; count: number }>>([]);
   const [roomNameMap, setRoomNameMap] = useState<Map<string, string>>(new Map());
+  const [roomIdMap, setRoomIdMap] = useState<Map<string, number>>(new Map());
+  const [dragOverCellKey, setDragOverCellKey] = useState<string | null>(null);
+  const [dragMoving, setDragMoving] = useState(false);
+  const dragPayloadRef = useRef<{ bookingId: number; offsetDays: number; nights: number } | null>(null);
+  const suppressCellClickRef = useRef(false);
   const [roomNameDialogOpen, setRoomNameDialogOpen] = useState(false);
   const [roomNameForm, setRoomNameForm] = useState({
     roomTypeId: 0,
@@ -267,12 +287,21 @@ const ReservationStatus: React.FC = () => {
       try {
         const response = await roomTypeRoomService.getRoomTypeRooms();
         if (response.success) {
-          const map = new Map<string, string>();
+          const nameMap = new Map<string, string>();
+          const idMap = new Map<string, number>();
           (response.data || []).forEach((item: any) => {
-            const key = `${item.room_type_id}|${String(item.room_number)}`;
-            map.set(key, String(item.room_name || '').trim());
+            const roomTypeId = Number(item.room_type_id);
+            const roomNumber = String(item.room_number ?? '').trim();
+            if (!Number.isFinite(roomTypeId) || !roomNumber) return;
+            const key = `${roomTypeId}|${roomNumber}`;
+            nameMap.set(key, String(item.room_name || '').trim());
+            const roomId = Number(item.id);
+            if (Number.isFinite(roomId) && roomId > 0) {
+              idMap.set(key, roomId);
+            }
           });
-          setRoomNameMap(map);
+          setRoomNameMap(nameMap);
+          setRoomIdMap(idMap);
         }
       } catch (err) {
         console.warn('객실 호실명 목록 조회 실패:', err);
@@ -483,6 +512,10 @@ const ReservationStatus: React.FC = () => {
   };
 
   const handleCellClick = (room: RoomSummary, iso: string, isBooked: boolean, isCheckoutHalf: boolean) => {
+    if (suppressCellClickRef.current) {
+      suppressCellClickRef.current = false;
+      return;
+    }
     if (isBooked) {
       const matched = findBookingForCell(room, iso);
       if (matched) {
@@ -515,6 +548,172 @@ const ReservationStatus: React.FC = () => {
       checkOutDate: nextIsoDate(iso)
     });
     setBookingDialogOpen(true);
+  };
+
+  const resolveTargetRoomId = (
+    room: RoomSummary,
+    options?: { sameRoomFallbackId?: number }
+  ) => {
+    if (room.roomTypeId) {
+      const mapped = roomIdMap.get(`${room.roomTypeId}|${room.roomNumber}`);
+      if (mapped) return mapped;
+    }
+    const sibling = bookings.find((booking) => {
+      if (!isActiveBooking(booking.status) || !booking.room_id) return false;
+      const bookingRoomNumber =
+        booking.room_number || (booking.room_id ? String(booking.room_id) : '');
+      return makeRoomKey(booking.room_type || 'Unknown', bookingRoomNumber) === room.key;
+    });
+    if (sibling?.room_id) return Number(sibling.room_id);
+    const parsed = Number.parseInt(room.roomNumber, 10);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    const fallback = options?.sameRoomFallbackId;
+    if (fallback != null && Number.isFinite(fallback) && fallback > 0) {
+      return Number(fallback);
+    }
+    return 0;
+  };
+
+  const hasLocalRoomConflict = (
+    bookingId: number,
+    room: RoomSummary,
+    checkInDate: string,
+    checkOutDate: string
+  ) => {
+    const roomTypeKey = room.roomType || 'Unknown';
+    const normalizeStay = (start: string, end: string): [string, string] =>
+      start === end ? [start, addDaysToIso(start, 1)] : [start, end];
+    const [moveStart, moveEnd] = normalizeStay(checkInDate, checkOutDate);
+    return bookings.some((booking) => {
+      if (booking.id === bookingId || !isActiveBooking(booking.status)) return false;
+      const bookingRoomType = booking.room_type || 'Unknown';
+      const bookingRoomNumber =
+        booking.room_number || (booking.room_id ? String(booking.room_id) : 'Unknown');
+      if (bookingRoomType !== roomTypeKey || bookingRoomNumber !== room.roomNumber) {
+        return false;
+      }
+      const otherIn = String(booking.check_in_date || '').slice(0, 10);
+      const otherOut = String(booking.check_out_date || '').slice(0, 10);
+      if (!otherIn || !otherOut) return false;
+      const [otherStart, otherEnd] = normalizeStay(otherIn, otherOut);
+      return datesOverlapExclusive(moveStart, moveEnd, otherStart, otherEnd);
+    });
+  };
+
+  const handleBookingDragStart = (
+    event: React.DragEvent,
+    booking: RoomBooking,
+    grabbedIso: string
+  ) => {
+    if (
+      booking.status === 'checked_out' ||
+      booking.status === 'cancelled' ||
+      booking.status === 'no_show'
+    ) {
+      event.preventDefault();
+      return;
+    }
+    const checkIn = String(booking.check_in_date || '').slice(0, 10);
+    const checkOut = String(booking.check_out_date || '').slice(0, 10);
+    if (!checkIn || !checkOut) {
+      event.preventDefault();
+      return;
+    }
+    const offsetDays = Math.max(0, diffCalendarDays(checkIn, grabbedIso));
+    const nights = Math.max(0, diffCalendarDays(checkIn, checkOut));
+    const payload = { bookingId: booking.id, offsetDays, nights };
+    dragPayloadRef.current = payload;
+    suppressCellClickRef.current = true;
+    try {
+      event.dataTransfer.setData('application/json', JSON.stringify(payload));
+      event.dataTransfer.setData('text/plain', String(booking.id));
+    } catch {
+      // ignore transfer encoding errors
+    }
+    event.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleBookingDragEnd = () => {
+    dragPayloadRef.current = null;
+    setDragOverCellKey(null);
+  };
+
+  const handleBookingDrop = async (room: RoomSummary, dropIso: string) => {
+    const payload = dragPayloadRef.current;
+    setDragOverCellKey(null);
+    dragPayloadRef.current = null;
+    if (!payload || dragMoving) return;
+
+    const booking = bookings.find((item) => item.id === payload.bookingId);
+    if (!booking || !isActiveBooking(booking.status)) return;
+
+    const newCheckIn = addDaysToIso(dropIso, -payload.offsetDays);
+    const newCheckOut = addDaysToIso(newCheckIn, payload.nights);
+    const targetRoomType = (room.roomType || '').trim();
+    const targetRoomNumber = room.roomNumber.trim();
+    if (!targetRoomType || !targetRoomNumber) {
+      setError(t('reservationStatus.errors.moveInvalidRoom'));
+      return;
+    }
+
+    const prevCheckIn = String(booking.check_in_date || '').slice(0, 10);
+    const prevCheckOut = String(booking.check_out_date || '').slice(0, 10);
+    const prevRoomNumber =
+      booking.room_number || (booking.room_id ? String(booking.room_id) : '');
+    const prevRoomType = booking.room_type || '';
+    const unchanged =
+      prevCheckIn === newCheckIn &&
+      prevCheckOut === newCheckOut &&
+      prevRoomNumber === targetRoomNumber &&
+      prevRoomType === targetRoomType;
+    if (unchanged) return;
+
+    suppressCellClickRef.current = true;
+
+    if (!canManagePastCheckIn && newCheckIn < todayIso) {
+      setError(t('reservationStatus.errors.movePastNotAllowed'));
+      return;
+    }
+
+    if (hasLocalRoomConflict(booking.id, room, newCheckIn, newCheckOut)) {
+      setError(t('reservationStatus.errors.moveConflict'));
+      return;
+    }
+
+    const roomChanged =
+      prevRoomNumber !== targetRoomNumber || prevRoomType !== targetRoomType;
+    const roomId = resolveTargetRoomId(room, {
+      sameRoomFallbackId: roomChanged ? undefined : booking.room_id,
+    });
+    if (!roomId) {
+      setError(t('reservationStatus.errors.moveInvalidRoom'));
+      return;
+    }
+
+    try {
+      setDragMoving(true);
+      setError('');
+      setSuccess('');
+      const response = await roomBookingService.updateRoomBooking(booking.id, {
+        room_id: roomId,
+        room_number: targetRoomNumber,
+        room_type: targetRoomType,
+        check_in_date: newCheckIn,
+        check_out_date: newCheckOut,
+      });
+      if (!response?.success) {
+        setError(response?.message || t('reservationStatus.errors.moveFailed'));
+        return;
+      }
+      setSuccess(t('reservationStatus.toast.moveSuccess'));
+      await loadBookings();
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.message || t('reservationStatus.errors.moveFailed')
+      );
+    } finally {
+      setDragMoving(false);
+    }
   };
 
   const handleCloseBookingDialog = () => {
@@ -825,8 +1024,13 @@ const ReservationStatus: React.FC = () => {
       </Card>
 
       {error && (
-        <Alert severity="error" sx={{ mb: 2, borderRadius: '12px' }}>
+        <Alert severity="error" sx={{ mb: 2, borderRadius: '12px' }} onClose={() => setError('')}>
           {error}
+        </Alert>
+      )}
+      {success && (
+        <Alert severity="success" sx={{ mb: 2, borderRadius: '12px' }} onClose={() => setSuccess('')}>
+          {success}
         </Alert>
       )}
 
@@ -1078,10 +1282,43 @@ const ReservationStatus: React.FC = () => {
                                   : hasCheckoutHalf
                                     ? `linear-gradient(90deg, ${checkoutGuestColor} 0 50%, ${isElapsedDay ? pastCellBg : calendarSurfaceBg} 50% 100%)`
                                     : undefined;
+                            const cellKey = `${room.key}|${iso}`;
+                            const isDragOver = dragOverCellKey === cellKey;
+                            const canDragBooking = Boolean(
+                              isBooked &&
+                              matchedBooking &&
+                              !dragMoving &&
+                              matchedBooking.status !== 'checked_out' &&
+                              matchedBooking.status !== 'cancelled' &&
+                              matchedBooking.status !== 'no_show'
+                            );
                             return (
                               <TableCell
-                                key={`${room.key}-${iso}`}
+                                key={cellKey}
                                 align="center"
+                                draggable={canDragBooking}
+                                onDragStart={(event) => {
+                                  if (!matchedBooking) return;
+                                  handleBookingDragStart(event, matchedBooking, iso);
+                                }}
+                                onDragEnd={handleBookingDragEnd}
+                                onDragOver={(event) => {
+                                  if (!dragPayloadRef.current || dragMoving) return;
+                                  event.preventDefault();
+                                  event.dataTransfer.dropEffect = 'move';
+                                  if (dragOverCellKey !== cellKey) {
+                                    setDragOverCellKey(cellKey);
+                                  }
+                                }}
+                                onDragLeave={() => {
+                                  if (dragOverCellKey === cellKey) {
+                                    setDragOverCellKey(null);
+                                  }
+                                }}
+                                onDrop={(event) => {
+                                  event.preventDefault();
+                                  void handleBookingDrop(room, iso);
+                                }}
                                 sx={{
                                   bgcolor: reservationFill
                                     ? 'transparent'
@@ -1090,11 +1327,19 @@ const ReservationStatus: React.FC = () => {
                                       : `${calendarSurfaceBg} !important`,
                                   background: reservationFill
                                     || (isElapsedDay ? pastCellBg : calendarSurfaceBg),
-                                  cursor: isBooked || canManagePastCheckIn || iso >= todayIso
-                                    ? 'pointer'
-                                    : 'not-allowed',
+                                  cursor: canDragBooking
+                                    ? 'grab'
+                                    : isBooked || canManagePastCheckIn || iso >= todayIso
+                                      ? 'pointer'
+                                      : 'not-allowed',
                                   color: hasReservationMark ? '#334155' : 'text.secondary',
+                                  outline: isDragOver ? `2px solid ${theme.palette.primary.main}` : 'none',
+                                  outlineOffset: -2,
+                                  opacity: dragMoving && matchedBooking && dragPayloadRef.current?.bookingId === matchedBooking.id
+                                    ? 0.55
+                                    : 1,
                                   ...calendarDateCellSx,
+                                  '&:active': canDragBooking ? { cursor: 'grabbing' } : undefined,
                                 }}
                                 onClick={() => handleCellClick(room, iso, isBooked, isCheckoutHalf)}
                               >

@@ -67,6 +67,7 @@ import {
   Person as PersonIcon,
   Print as PrintIcon,
   Download as DownloadIcon,
+  Visibility as VisibilityIcon,
   Comment as CommentIcon,
   AttachFile as AttachFileIcon,
   Close as CloseIcon,
@@ -289,6 +290,7 @@ const ElectronicApproval: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [existingAttachments, setExistingAttachments] = useState<any[]>([]);
+  const [attachmentPreview, setAttachmentPreview] = useState<{ url: string; label: string } | null>(null);
   const [fileInputRef, setFileInputRef] = useState<HTMLInputElement | null>(null);
   const [tableDialogOpen, setTableDialogOpen] = useState(false);
   const [tableRows, setTableRows] = useState(3);
@@ -1275,6 +1277,11 @@ const ElectronicApproval: React.FC = () => {
     }
   };
 
+  const IMAGE_ATTACHMENT_EXT = /\.(jpe?g|png|gif|webp|bmp|svg)(\?.*)?$/i;
+
+  const getAttachmentLabel = (file: string | { name?: string; storedName?: string }) =>
+    typeof file === 'string' ? file : (file.name || file.storedName || 'attachment');
+
   const getAttachmentUrl = (file: string | { name?: string; storedName?: string }) => {
     const fileName = typeof file === 'string' ? file : (file.storedName || file.name || '');
     if (fileName.startsWith('http://') || fileName.startsWith('https://')) {
@@ -1283,9 +1290,15 @@ const ElectronicApproval: React.FC = () => {
     return getUploadUrl(fileName.includes('/') ? fileName : `approvals/${fileName}`);
   };
 
+  const isImageAttachment = (file: string | { name?: string; storedName?: string }) => {
+    const label = getAttachmentLabel(file);
+    const stored = typeof file === 'string' ? file : (file.storedName || file.name || '');
+    return IMAGE_ATTACHMENT_EXT.test(label) || IMAGE_ATTACHMENT_EXT.test(stored);
+  };
+
   const handleDownloadAttachment = (file: string | { name?: string; storedName?: string }) => {
     const url = getAttachmentUrl(file);
-    const downloadName = typeof file === 'string' ? file : (file.name || file.storedName || 'attachment');
+    const downloadName = getAttachmentLabel(file);
     const link = document.createElement('a');
     link.href = url;
     link.download = downloadName;
@@ -1294,6 +1307,21 @@ const ElectronicApproval: React.FC = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handlePreviewAttachment = (file: string | { name?: string; storedName?: string }) => {
+    setAttachmentPreview({
+      url: getAttachmentUrl(file),
+      label: getAttachmentLabel(file),
+    });
+  };
+
+  const handleOpenAttachment = (file: string | { name?: string; storedName?: string }) => {
+    if (isImageAttachment(file)) {
+      handlePreviewAttachment(file);
+      return;
+    }
+    handleDownloadAttachment(file);
   };
 
   const formatDateTime = (value?: string) => {
@@ -1965,6 +1993,73 @@ const ElectronicApproval: React.FC = () => {
     page * itemsPerPage
   );
 
+  const renderAttachmentPreviewDialog = () => (
+    <Dialog
+      open={!!attachmentPreview}
+      onClose={() => setAttachmentPreview(null)}
+      maxWidth="lg"
+      fullWidth
+      sx={{ zIndex: (theme) => theme.zIndex.modal + 2 }}
+    >
+      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {attachmentPreview?.label || t('approval.detail.imagePreview')}
+        </Typography>
+        <IconButton aria-label={t('common.close')} onClick={() => setAttachmentPreview(null)}>
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <DialogContent
+        dividers
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          bgcolor: 'grey.100',
+          minHeight: 280,
+          p: 2,
+        }}
+      >
+        {attachmentPreview?.url ? (
+          <Box
+            component="img"
+            src={attachmentPreview.url}
+            alt={attachmentPreview.label}
+            sx={{
+              maxWidth: '100%',
+              maxHeight: '75vh',
+              objectFit: 'contain',
+              borderRadius: 1,
+            }}
+          />
+        ) : null}
+      </DialogContent>
+      <DialogActions sx={{ px: 2, py: 1.5 }}>
+        <Button onClick={() => setAttachmentPreview(null)} variant="outlined">
+          {t('common.close')}
+        </Button>
+        {attachmentPreview ? (
+          <Button
+            variant="contained"
+            startIcon={<DownloadIcon />}
+            onClick={() => {
+              const link = document.createElement('a');
+              link.href = attachmentPreview.url;
+              link.download = attachmentPreview.label;
+              link.target = '_blank';
+              link.rel = 'noopener';
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
+          >
+            {t('approval.detail.downloadFile')}
+          </Button>
+        ) : null}
+      </DialogActions>
+    </Dialog>
+  );
+
   if (viewMode === 'view' && selectedDocument) {
     const isCurrentApprover = selectedDocument.currentApproverId === user?.id;
 
@@ -2085,17 +2180,43 @@ const ElectronicApproval: React.FC = () => {
                       <Typography variant="subtitle2" gutterBottom>{t('approval.detail.attachmentsLabel')}</Typography>
                       <List dense>
                         {attachmentList.map((file: any, index: number) => {
-                          const label = typeof file === 'string' ? file : (file.name || file.storedName || 'attachment');
+                          const label = getAttachmentLabel(file);
+                          const isImage = isImageAttachment(file);
                           return (
                             <ListItem
                               key={`${label}-${index}`}
                               secondaryAction={
-                                <IconButton size="small" onClick={() => handleDownloadAttachment(file)}>
-                                  <DownloadIcon />
-                                </IconButton>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+                                  {isImage ? (
+                                    <IconButton
+                                      size="small"
+                                      aria-label={t('approval.detail.imagePreview')}
+                                      onClick={() => handlePreviewAttachment(file)}
+                                    >
+                                      <VisibilityIcon fontSize="small" />
+                                    </IconButton>
+                                  ) : null}
+                                  <IconButton size="small" onClick={() => handleDownloadAttachment(file)}>
+                                    <DownloadIcon />
+                                  </IconButton>
+                                </Box>
                               }
                             >
-                              <ListItemText primary={label} />
+                              <ListItemText
+                                primary={
+                                  <Typography
+                                    variant="body2"
+                                    sx={{
+                                      cursor: 'pointer',
+                                      color: isImage ? 'primary.main' : 'inherit',
+                                      '&:hover': { textDecoration: 'underline' },
+                                    }}
+                                    onClick={() => handleOpenAttachment(file)}
+                                  >
+                                    {label}
+                                  </Typography>
+                                }
+                              />
                             </ListItem>
                           );
                         })}
@@ -2461,6 +2582,7 @@ const ElectronicApproval: React.FC = () => {
             </Button>
           </DialogActions>
         </Dialog>
+        {renderAttachmentPreviewDialog()}
       </Box>
     );
   }
@@ -3456,7 +3578,8 @@ const ElectronicApproval: React.FC = () => {
                 {existingAttachments.length > 0 && (
                   <Box sx={{ mt: 2 }}>
                     {existingAttachments.map((file, index) => {
-                      const label = typeof file === 'string' ? file : (file.name || file.storedName || 'attachment');
+                      const label = getAttachmentLabel(file);
+                      const isImage = isImageAttachment(file);
                       return (
                         <Box
                           key={`${label}-${index}`}
@@ -3474,17 +3597,34 @@ const ElectronicApproval: React.FC = () => {
                             },
                           }}
                         >
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0 }}>
                             <AttachFileIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
                             <Typography
                               variant="body2"
-                              sx={{ flex: 1, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
-                              onClick={() => handleDownloadAttachment(file)}
+                              sx={{
+                                flex: 1,
+                                cursor: 'pointer',
+                                color: isImage ? 'primary.main' : 'inherit',
+                                '&:hover': { textDecoration: 'underline' },
+                              }}
+                              onClick={() => handleOpenAttachment(file)}
                             >
                               {label}
                             </Typography>
                           </Box>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {isImage ? (
+                              <IconButton
+                                size="small"
+                                aria-label={t('approval.detail.imagePreview')}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePreviewAttachment(file);
+                                }}
+                              >
+                                <VisibilityIcon fontSize="small" />
+                              </IconButton>
+                            ) : null}
                             <IconButton
                               size="small"
                               onClick={(e) => {
@@ -4061,20 +4201,34 @@ const ElectronicApproval: React.FC = () => {
                   <Typography variant="caption" color="text.secondary">첨부파일</Typography>
                   <List dense>
                     {attachmentList.map((file: any, index: number) => {
-                      const label = typeof file === 'string' ? file : (file.name || file.storedName || 'attachment');
+                      const label = getAttachmentLabel(file);
+                      const isImage = isImageAttachment(file);
                       return (
                         <ListItem key={`${label}-${index}`}>
                           <ListItemText
                             primary={
                               <Typography
                                 variant="body2"
-                                sx={{ cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
-                                onClick={() => handleDownloadAttachment(file)}
+                                sx={{
+                                  cursor: 'pointer',
+                                  color: isImage ? 'primary.main' : 'inherit',
+                                  '&:hover': { textDecoration: 'underline' },
+                                }}
+                                onClick={() => handleOpenAttachment(file)}
                               >
                                 {label}
                               </Typography>
                             }
                           />
+                          {isImage ? (
+                            <IconButton
+                              size="small"
+                              aria-label={t('approval.detail.imagePreview')}
+                              onClick={() => handlePreviewAttachment(file)}
+                            >
+                              <VisibilityIcon fontSize="small" />
+                            </IconButton>
+                          ) : null}
                           <IconButton size="small" onClick={() => handleDownloadAttachment(file)}>
                             <DownloadIcon />
                           </IconButton>
@@ -4174,7 +4328,9 @@ const ElectronicApproval: React.FC = () => {
         onCancel={handlePromptCancel}
       />
 
-      {/* 스낵바 */}
+      {/* 첨부 이미지 미리보기 */}
+      {renderAttachmentPreviewDialog()}
+
       <Snackbar
         open={!!error}
         autoHideDuration={6000}

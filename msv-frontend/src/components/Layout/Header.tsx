@@ -330,19 +330,15 @@ const Header: React.FC<HeaderProps> = ({
       elevation={0}
       sx={{ 
         top: 0,
-        left: 8,
-        right: 8,
-        width: 'auto',
+        left: 0,
+        right: 0,
+        width: '100%',
         backgroundColor: '#FFFFFF',
         backgroundImage: 'none',
         backdropFilter: 'blur(12px)',
-        border: '1px solid rgba(143, 168, 190, 0.45)',
-        borderTop: 'none',
-        borderLeft: '1px solid rgba(143, 168, 190, 0.45)',
-        borderRight: '1px solid rgba(143, 168, 190, 0.45)',
+        border: 'none',
         borderBottom: '1px solid rgba(143, 168, 190, 0.45)',
-        borderRadius: '0 0 10px 10px',
-        // 연한 외각선 + 소프트 그림자
+        borderRadius: 0,
         boxShadow:
           '0 4px 14px rgba(36, 52, 71, 0.08), 0 1px 3px rgba(36, 52, 71, 0.04)',
         outline: 'none',

@@ -587,6 +587,7 @@ export const updateRoomBooking = async (req: RequestWithUser, res: Response) => 
     }
 
     const wantsRoomChange = [room_id, room_number, room_type].some((x) => x !== undefined);
+    const wantsDateChange = check_in_date !== undefined || check_out_date !== undefined;
     if (wantsRoomChange) {
       if (room_id === undefined || room_number === undefined || room_type === undefined) {
         return res.status(400).json({
@@ -619,6 +620,38 @@ export const updateRoomBooking = async (req: RequestWithUser, res: Response) => 
         excludeBookingId: booking.id
       });
 
+      if (hasBlockingRoomConflict(conflictingBookings, effCheckIn, effCheckInTime)) {
+        const conflict = conflictingBookings[0];
+        return res.status(400).json({
+          success: false,
+          message: '해당 날짜에 이미 예약이 있습니다.',
+          conflict: conflict
+            ? {
+                booking_id: conflict.booking_id,
+                room_id: conflict.room_id,
+                room_number: conflict.room_number,
+                room_type: conflict.room_type,
+                check_in_date: conflict.check_in_date,
+                check_out_date: conflict.check_out_date,
+                guest_name: conflict.guest_name
+              }
+            : undefined
+        });
+      }
+    } else if (wantsDateChange) {
+      const effCheckIn = check_in_date !== undefined ? check_in_date : booking.check_in_date;
+      const effCheckOut = check_out_date !== undefined ? check_out_date : booking.check_out_date;
+      const effCheckInTime = check_in_time !== undefined ? check_in_time : booking.check_in_time;
+      const conflictingBookings = await findOverlappingRoomBookings({
+        tenantId,
+        companyId,
+        roomId: booking.room_id,
+        roomNumber: booking.room_number,
+        roomType: booking.room_type,
+        checkInDate: effCheckIn,
+        checkOutDate: effCheckOut,
+        excludeBookingId: booking.id
+      });
       if (hasBlockingRoomConflict(conflictingBookings, effCheckIn, effCheckInTime)) {
         const conflict = conflictingBookings[0];
         return res.status(400).json({

@@ -2029,9 +2029,6 @@ const ExpenseApproval: React.FC = () => {
                 <Typography variant="h5" fontWeight="bold" gutterBottom>
                   {selectedExpense.title}
                 </Typography>
-                <Typography variant="body1" color="text.secondary" gutterBottom>
-                  {t('expenseApproval.detail.expenseNo')}: {selectedExpense.expenseId}
-                </Typography>
                 <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
                   {getStatusChip(selectedExpense.status)}
                   {getPriorityChip(selectedExpense.priority)}
@@ -2601,9 +2598,6 @@ const ExpenseApproval: React.FC = () => {
                     <Box>
                       <Typography variant="subtitle2" fontWeight="bold">
                         {expense.title}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {expense.expenseId}
                       </Typography>
                     </Box>
                   </TableCell>

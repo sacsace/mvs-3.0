@@ -47,6 +47,7 @@ import { useTheme, alpha } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { workBoardService } from '../../services/api';
+import { getUploadUrl } from '../../utils/uploadUrl';
 import { showErrorPopup } from '../../utils/errorHandler';
 import { useMenuStore, useStore } from '../../store';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
@@ -93,6 +94,11 @@ const getMemberInitial = (member: any) => {
   const trimmed = String(label).trim();
   if (!trimmed) return '?';
   return trimmed.charAt(0).toUpperCase();
+};
+
+const getMemberAvatarSrc = (member: any) => {
+  const resolved = getUploadUrl(member?.user?.avatar_url);
+  return resolved || undefined;
 };
 
 const getMemberLabel = (member: any) =>
@@ -320,7 +326,16 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
               >
                 {previewMembers.map((member: any) => (
                   <Tooltip title={getMemberLabel(member)} key={member.id ?? member.user_id}>
-                    <Avatar sx={{ bgcolor: alpha(accent, 0.88), color: getContrastText(accent) }}>
+                    <Avatar
+                      src={getMemberAvatarSrc(member)}
+                      alt={getMemberLabel(member) || getMemberInitial(member)}
+                      sx={{
+                        bgcolor: getMemberAvatarSrc(member)
+                          ? 'transparent'
+                          : alpha(accent, 0.88),
+                        color: getContrastText(accent),
+                      }}
+                    >
                       {getMemberInitial(member)}
                     </Avatar>
                   </Tooltip>

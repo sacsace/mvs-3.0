@@ -143,8 +143,8 @@ const isMissingCommentsTableError = (error: unknown): boolean => {
 
 const buildCardNestedInclude = (light: boolean) => {
   const includes: any[] = [
-    { model: User, as: 'assignee', attributes: ['id', 'username', 'userid', 'email'] },
-    { model: User, as: 'cardCreator', attributes: ['id', 'username'] }
+    { model: User, as: 'assignee', attributes: ['id', 'username', 'userid', 'email', 'avatar_url'] },
+    { model: User, as: 'cardCreator', attributes: ['id', 'username', 'avatar_url'] }
   ];
   if (light) {
     includes.push({
@@ -157,7 +157,7 @@ const buildCardNestedInclude = (light: boolean) => {
     includes.push({
       model: WorkBoardCardComment,
       as: 'comments',
-      include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email'] }],
+      include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email', 'avatar_url'] }],
       separate: true,
       order: [['created_at', 'ASC']]
     });
@@ -189,9 +189,9 @@ const buildBoardDetailInclude = (light: boolean): any[] => [
   {
     model: WorkBoardMember,
     as: 'members',
-    include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email', 'department', 'position'] }]
+    include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email', 'department', 'position', 'avatar_url'] }]
   },
-  { model: User, as: 'creator', attributes: ['id', 'username', 'userid'] }
+  { model: User, as: 'creator', attributes: ['id', 'username', 'userid', 'avatar_url'] }
 ];
 
 const normalizeCardColor = (
@@ -344,8 +344,8 @@ export const getWorkBoards = async (req: RequestWithUser, res: Response) => {
     const user = req.user!;
     const light = String(req.query.light || '') === '1';
     const memberUserAttributes = light
-      ? ['id', 'username', 'userid']
-      : ['id', 'username', 'userid', 'email'];
+      ? ['id', 'username', 'userid', 'avatar_url']
+      : ['id', 'username', 'userid', 'email', 'avatar_url'];
     const boardAttributes = light
       ? ['id', 'tenant_id', 'company_id', 'name', 'description', 'board_color', 'position', 'created_by', 'created_at', 'updated_at']
       : undefined;
@@ -369,7 +369,7 @@ export const getWorkBoards = async (req: RequestWithUser, res: Response) => {
         where,
         attributes: boardAttributes as any,
         include: [
-          { model: User, as: 'creator', attributes: ['id', 'username', 'userid'] },
+          { model: User, as: 'creator', attributes: ['id', 'username', 'userid', 'avatar_url'] },
           memberInclude
         ],
         order: [
@@ -394,7 +394,7 @@ export const getWorkBoards = async (req: RequestWithUser, res: Response) => {
           },
           attributes: boardAttributes as any,
           include: [
-            { model: User, as: 'creator', attributes: ['id', 'username', 'userid'] },
+            { model: User, as: 'creator', attributes: ['id', 'username', 'userid', 'avatar_url'] },
             memberInclude
           ],
           order: [
@@ -476,7 +476,7 @@ export const createWorkBoard = async (req: RequestWithUser, res: Response) => {
         {
           model: WorkBoardMember,
           as: 'members',
-          include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email'] }]
+          include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email', 'avatar_url'] }]
         }
       ]
     });
@@ -916,7 +916,7 @@ export const createWorkBoardCard = async (req: RequestWithUser, res: Response) =
     });
 
     const withUser = await WorkBoardCard.findByPk(card.id, {
-      include: [{ model: User, as: 'assignee', attributes: ['id', 'username', 'userid', 'email'] }]
+      include: [{ model: User, as: 'assignee', attributes: ['id', 'username', 'userid', 'email', 'avatar_url'] }]
     });
 
     if (assignee_user_id && Number(assignee_user_id) !== Number(user.id)) {
@@ -1000,7 +1000,7 @@ export const updateWorkBoardCard = async (req: RequestWithUser, res: Response) =
 
     await card.update(patch);
     const withUser = await WorkBoardCard.findByPk(card.id, {
-      include: [{ model: User, as: 'assignee', attributes: ['id', 'username', 'userid', 'email'] }]
+      include: [{ model: User, as: 'assignee', attributes: ['id', 'username', 'userid', 'email', 'avatar_url'] }]
     });
 
     const nextAssigneeUserId = patch.assignee_user_id === undefined
@@ -1222,7 +1222,7 @@ export const getWorkBoardCardComments = async (req: RequestWithUser, res: Respon
 
     const comments = await WorkBoardCardComment.findAll({
       where: { card_id: card.id },
-      include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email'] }],
+      include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email', 'avatar_url'] }],
       order: [['created_at', 'ASC']]
     });
     return res.json({ success: true, data: comments });
@@ -1279,7 +1279,7 @@ export const createWorkBoardCardComment = async (req: RequestWithUser, res: Resp
 
     const boardMembers = await WorkBoardMember.findAll({
       where: { board_id: board.id },
-      include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid'] }]
+      include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'avatar_url'] }]
     });
     const boardMemberIdSet = new Set(boardMembers.map((m) => Number(m.user_id)));
     const mentionIds = new Set<number>();
@@ -1331,7 +1331,7 @@ export const createWorkBoardCardComment = async (req: RequestWithUser, res: Resp
       content: String(content).trim().slice(0, 5000)
     });
     const full = await WorkBoardCardComment.findByPk(comment.id, {
-      include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email'] }]
+      include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email', 'avatar_url'] }]
     });
 
     if (mentionIds.size > 0) {
@@ -1434,7 +1434,7 @@ export const getWorkBoardMembers = async (req: RequestWithUser, res: Response) =
 
     const members = await WorkBoardMember.findAll({
       where: { board_id: board.id },
-      include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email', 'department'] }]
+      include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email', 'department', 'avatar_url'] }]
     });
     res.json({ success: true, data: members });
   } catch (error: any) {
@@ -1484,7 +1484,7 @@ export const inviteWorkBoardMember = async (req: RequestWithUser, res: Response)
     }
 
     const withUser = await WorkBoardMember.findByPk(row.id, {
-      include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email'] }]
+      include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email', 'avatar_url'] }]
     });
 
     res.status(201).json({ success: true, data: withUser });
@@ -1562,7 +1562,7 @@ export const updateWorkBoardMember = async (req: RequestWithUser, res: Response)
 
     if (target.role === role) {
       const same = await WorkBoardMember.findByPk(target.id, {
-        include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email', 'department'] }]
+        include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email', 'department', 'avatar_url'] }]
       });
       return res.json({ success: true, data: same || target });
     }
@@ -1578,7 +1578,7 @@ export const updateWorkBoardMember = async (req: RequestWithUser, res: Response)
 
     await target.update({ role });
     const updated = await WorkBoardMember.findByPk(target.id, {
-      include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email', 'department'] }]
+      include: [{ model: User, as: 'user', attributes: ['id', 'username', 'userid', 'email', 'department', 'avatar_url'] }]
     });
     return res.json({ success: true, data: updated || target });
   } catch (error: any) {

@@ -1683,6 +1683,10 @@ export default {
         noResults: '조건에 맞는 재고가 없습니다.',
         noResultsHint: '검색어나 필터를 변경하거나 초기화해 보세요.',
       },
+      listView: {
+        viewAll: '전체보기',
+        viewPages: '페이지로 보기',
+      },
       columns: {
         status: '상태',
         productName: '제품명',
@@ -1706,6 +1710,7 @@ export default {
         editTitle: '재고 수정',
         addTitle: '재고 추가',
         viewTitle: '재고 상세',
+        imagePreview: '제품 이미지',
         registerCategoryTitle: '카테고리 등록',
         registerLocationTitle: '보관 위치 등록',
         registerWarehouseTitle: '창고 등록',
@@ -2138,7 +2143,14 @@ export default {
       errors: {
         loadFailed: '예약 데이터를 불러오는데 실패했습니다.',
         cancelFailed: '예약 취소에 실패했습니다.',
-        deleteFailed: '예약 삭제에 실패했습니다.'
+        deleteFailed: '예약 삭제에 실패했습니다.',
+        moveFailed: '예약 이동에 실패했습니다.',
+        moveConflict: '해당 객실·날짜에 이미 다른 예약이 있습니다.',
+        movePastNotAllowed: '과거 날짜로는 예약을 이동할 수 없습니다.',
+        moveInvalidRoom: '이동할 객실 정보가 올바르지 않습니다.'
+      },
+      toast: {
+        moveSuccess: '예약이 이동되었습니다.'
       },
       misc: {
         other: '기타'
@@ -3520,7 +3532,7 @@ export default {
         all: '전체'
       },
       placeholders: {
-        search: '제목, 지출번호, 신청자 검색',
+        search: '제목, 신청자 검색',
         searchSimple: '검색',
         searchCompany: '회사 검색'
       },
@@ -4330,6 +4342,8 @@ export default {
       detail: {
         documentContent: '문서 내용',
         attachmentsLabel: '첨부파일:',
+        imagePreview: '이미지 미리보기',
+        downloadFile: '다운로드',
         approvalFlow: '결재 흐름',
         flowPath: '요청 경로',
         flowSubmittedAt: '제출',

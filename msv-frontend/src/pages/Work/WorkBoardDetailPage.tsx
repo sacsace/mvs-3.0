@@ -61,6 +61,7 @@ import { useMenuStore, useStore } from '../../store';
 import { filterActiveCompanyUsers, useReferenceDataStore } from '../../store/referenceDataStore';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
 import { showErrorPopup, showSuccessPopup, showSuccessToast } from '../../utils/errorHandler';
+import { getUploadUrl } from '../../utils/uploadUrl';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import RichTextEditor from '../../components/RichTextEditor/RichTextEditor';
@@ -89,7 +90,7 @@ type BoardCard = {
   list_id?: number;
   created_by?: number | null;
   completed_at?: string | null;
-  assignee?: { id: number; username: string };
+  assignee?: { id: number; username: string; avatar_url?: string | null };
   comments?: BoardCardComment[];
 };
 
@@ -603,21 +604,33 @@ function KanbanInlineTitle({
 
 const getAvatarColor = (userId: number) => AVATAR_PALETTE[Math.abs(userId) % AVATAR_PALETTE.length];
 
-type BoardMemberLite = { user_id: number; user?: { id?: number; username?: string } };
+const resolveUserAvatarSrc = (avatarUrl?: string | null) => {
+  const resolved = getUploadUrl(avatarUrl);
+  return resolved || undefined;
+};
+
+type BoardMemberLite = {
+  user_id: number;
+  user?: { id?: number; username?: string; avatar_url?: string | null };
+};
 
 function resolveCardFaceAvatars(card: BoardCard, members: BoardMemberLite[]) {
   const seen = new Set<number>();
-  const avatars: { id: number; label: string }[] = [];
-  const push = (id?: number | null, label?: string) => {
+  const avatars: { id: number; label: string; src?: string }[] = [];
+  const push = (id?: number | null, label?: string, avatarUrl?: string | null) => {
     const uid = id != null ? Number(id) : 0;
     if (!uid || seen.has(uid)) return;
     seen.add(uid);
-    avatars.push({ id: uid, label: (label || '?').trim().charAt(0).toUpperCase() || '?' });
+    avatars.push({
+      id: uid,
+      label: (label || '?').trim().charAt(0).toUpperCase() || '?',
+      src: resolveUserAvatarSrc(avatarUrl),
+    });
   };
-  push(card.assignee?.id, card.assignee?.username);
+  push(card.assignee?.id, card.assignee?.username, card.assignee?.avatar_url);
   (card.reference_user_ids || []).forEach((rid) => {
     const m = members.find((x) => Number(x.user_id) === Number(rid));
-    push(rid, m?.user?.username);
+    push(rid, m?.user?.username, m?.user?.avatar_url);
   });
   return avatars.slice(0, 4);
 }
@@ -813,7 +826,12 @@ const DraggableCard = memo(function DraggableCard({
                 }}
               >
                 {faceAvatars.map((a) => (
-                  <Avatar key={a.id} sx={{ bgcolor: getAvatarColor(a.id) }}>
+                  <Avatar
+                    key={a.id}
+                    src={a.src}
+                    alt={a.label}
+                    sx={{ bgcolor: a.src ? 'transparent' : getAvatarColor(a.id) }}
+                  >
                     {a.label}
                   </Avatar>
                 ))}
@@ -2496,6 +2514,7 @@ const WorkBoardDetailPage: React.FC = () => {
             {members.slice(0, BOARD_MEMBER_AVATAR_MAX).map((m: any, index: number) => {
               const name = m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`;
               const initial = name.trim().charAt(0).toUpperCase() || '?';
+              const avatarSrc = resolveUserAvatarSrc(m.user?.avatar_url);
               const isOwnerMember = m.role === 'owner';
               const roleLabel = isOwnerMember ? txt('소유자', 'Owner') : txt('멤버', 'Member');
               const userid = m.user?.userid ? String(m.user.userid) : '';
@@ -2519,6 +2538,8 @@ const WorkBoardDetailPage: React.FC = () => {
                   <Avatar
                     component="button"
                     type="button"
+                    src={avatarSrc}
+                    alt={name}
                     aria-label={`${name}, ${roleLabel}`}
                     onClick={(e) => openMemberMenu(e, m)}
                     sx={{
@@ -2532,7 +2553,11 @@ const WorkBoardDetailPage: React.FC = () => {
                       zIndex: index + 1,
                       cursor: 'pointer',
                       p: 0,
-                      bgcolor: isOwnerMember ? 'primary.main' : getAvatarColor(Number(m.user_id)),
+                      bgcolor: avatarSrc
+                        ? 'transparent'
+                        : isOwnerMember
+                          ? 'primary.main'
+                          : getAvatarColor(Number(m.user_id)),
                       color: '#FFFFFF',
                       transition: 'transform 0.15s ease, box-shadow 0.15s ease',
                       ...(isOwnerMember
@@ -2603,6 +2628,7 @@ const WorkBoardDetailPage: React.FC = () => {
           const m = memberMenuTarget;
           const name = m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`;
           const initial = name.trim().charAt(0).toUpperCase() || '?';
+          const avatarSrc = resolveUserAvatarSrc(m.user?.avatar_url);
           const isOwnerMember = m.role === 'owner';
           const ownerCount = members.filter((x: any) => x.role === 'owner').length;
           const isLastOwner = isOwnerMember && ownerCount <= 1;
@@ -2615,12 +2641,18 @@ const WorkBoardDetailPage: React.FC = () => {
             <Box sx={{ px: 2, py: 1.5, minWidth: 220 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1.5 }}>
                 <Avatar
+                  src={avatarSrc}
+                  alt={name}
                   sx={{
                     width: 36,
                     height: 36,
                     fontSize: '0.8rem',
                     fontWeight: 700,
-                    bgcolor: isOwnerMember ? 'primary.main' : getAvatarColor(Number(m.user_id)),
+                    bgcolor: avatarSrc
+                      ? 'transparent'
+                      : isOwnerMember
+                        ? 'primary.main'
+                        : getAvatarColor(Number(m.user_id)),
                     color: '#FFFFFF',
                   }}
                 >

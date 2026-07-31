@@ -66,7 +66,8 @@ import {
   Category as CategoryIcon,
   Print as PrintIcon,
   Scale as ScaleIcon,
-  MoreHoriz as MoreHorizIcon
+  MoreHoriz as MoreHorizIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { alpha, useTheme } from '@mui/material/styles';
@@ -112,6 +113,29 @@ const FILTER_OUTLINED = mvsOutlinedLabelProps;
 const FORM_OUTLINED = mvsOutlinedLabelProps;
 
 const inventoryFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
+
+const listViewModeBarSx = {
+  mb: 1.25,
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: 0.75,
+} as const;
+
+const listViewModeBtnSx = {
+  height: 32,
+  minWidth: 0,
+  px: 1.5,
+  textTransform: 'none' as const,
+  fontWeight: 600,
+  fontSize: '0.75rem',
+  borderRadius: '10px',
+  boxShadow: 'none',
+  whiteSpace: 'nowrap' as const,
+};
+
+type ListViewMode = 'page' | 'all';
+const INVENTORY_VIEW_ALL_LIMIT = 10000;
 
 function invColWidthPct(key: string): string {
   const w = INV_COL_DEFAULTS[key] ?? 80;
@@ -207,12 +231,14 @@ const InventoryManagement: React.FC = () => {
   /** 목록 행 클릭 시 보기 → 하단 수정으로 편집 / 재고 추가는 바로 편집 */
   const [inventoryDialogMode, setInventoryDialogMode] = useState<'view' | 'edit'>('edit');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [imagePreview, setImagePreview] = useState<{ url: string; label: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [warehouseFilter, setWarehouseFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [listViewMode, setListViewMode] = useState<ListViewMode>('page');
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const [orderBy, setOrderBy] = useState<keyof InventoryItem | ''>('');
@@ -261,7 +287,7 @@ const InventoryManagement: React.FC = () => {
   useEffect(() => {
     if (menusLoading || !basicMenuFlags.canRead) return;
     loadInventoryData();
-  }, [page, searchTerm, categoryFilter, warehouseFilter, menusLoading, basicMenuFlags.canRead]);
+  }, [page, searchTerm, categoryFilter, warehouseFilter, listViewMode, menusLoading, basicMenuFlags.canRead]);
 
   useEffect(() => {
     if (menusLoading || !basicMenuFlags.canRead) return;
@@ -273,8 +299,8 @@ const InventoryManagement: React.FC = () => {
     try {
       const [productsResponse, reportResponse] = await Promise.all([
         inventoryService.getProducts({
-          page,
-          limit: itemsPerPage,
+          page: listViewMode === 'all' ? 1 : page,
+          limit: listViewMode === 'all' ? INVENTORY_VIEW_ALL_LIMIT : itemsPerPage,
           search: searchTerm,
           category: categoryFilter,
           ...(warehouseFilter.trim() ? { location: warehouseFilter.trim() } : {})
@@ -386,6 +412,15 @@ const InventoryManagement: React.FC = () => {
     setOpenDialog(false);
     setInventoryDialogMode('edit');
   };
+
+  const openProductImagePreview = useCallback((imageUrl?: string | null, label?: string) => {
+    const url = resolveProductImageUrl(imageUrl);
+    if (!url) return;
+    setImagePreview({
+      url,
+      label: (label || '').trim() || t('inventoryManagement.dialog.imagePreview'),
+    });
+  }, [t]);
 
   const handleAddItem = () => {
     if (!basicMenuFlags.canCreate) {
@@ -859,7 +894,13 @@ const InventoryManagement: React.FC = () => {
 
   useEffect(() => {
     setSelectedItemIds([]);
-  }, [page, searchTerm, categoryFilter, warehouseFilter, statusFilter]);
+  }, [page, searchTerm, categoryFilter, warehouseFilter, statusFilter, listViewMode]);
+
+  const handleListViewModeChange = (mode: ListViewMode) => {
+    if (mode === listViewMode) return;
+    setListViewMode(mode);
+    setPage(1);
+  };
 
   const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!basicMenuFlags.canDelete) return;
@@ -1549,6 +1590,36 @@ const InventoryManagement: React.FC = () => {
           </Box>
         ) : (
           <>
+            <Box sx={listViewModeBarSx}>
+              <Button
+                size="small"
+                disableElevation
+                variant={listViewMode === 'all' ? 'contained' : 'outlined'}
+                onClick={() => handleListViewModeChange('all')}
+                sx={{
+                  ...listViewModeBtnSx,
+                  ...(listViewMode === 'all'
+                    ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                    : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                }}
+              >
+                {t('inventoryManagement.listView.viewAll')}
+              </Button>
+              <Button
+                size="small"
+                disableElevation
+                variant={listViewMode === 'page' ? 'contained' : 'outlined'}
+                onClick={() => handleListViewModeChange('page')}
+                sx={{
+                  ...listViewModeBtnSx,
+                  ...(listViewMode === 'page'
+                    ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                    : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                }}
+              >
+                {t('inventoryManagement.listView.viewPages')}
+              </Button>
+            </Box>
         <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
           <Table
             size="small"
@@ -1643,7 +1714,11 @@ const InventoryManagement: React.FC = () => {
                         <Box
                           component="img"
                           src={resolveProductImageUrl(item.imageUrl)}
-                          alt=""
+                          alt={item.name}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openProductImagePreview(item.imageUrl, item.name);
+                          }}
                           sx={{
                             width: 36,
                             height: 36,
@@ -1652,6 +1727,9 @@ const InventoryManagement: React.FC = () => {
                             flexShrink: 0,
                             border: '1px solid',
                             borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+                            cursor: 'zoom-in',
+                            transition: 'opacity 0.15s ease',
+                            '&:hover': { opacity: 0.85 },
                           }}
                         />
                       ) : null}
@@ -1746,21 +1824,23 @@ const InventoryManagement: React.FC = () => {
           </Table>
         </TableContainer>
 
-        <Box sx={mvsBodyPaginationSx}>
-          <Pagination
-            count={Math.max(1, totalPages)}
-            page={page}
-            onChange={(_, value) => setPage(value)}
-            color="primary"
-            shape="rounded"
-            sx={{
-              '& .MuiPaginationItem-root': {
-                borderRadius: '10px',
-                fontWeight: 500,
-              },
-            }}
-          />
-        </Box>
+        {listViewMode === 'page' ? (
+          <Box sx={mvsBodyPaginationSx}>
+            <Pagination
+              count={Math.max(1, totalPages)}
+              page={page}
+              onChange={(_, value) => setPage(value)}
+              color="primary"
+              shape="rounded"
+              sx={{
+                '& .MuiPaginationItem-root': {
+                  borderRadius: '10px',
+                  fontWeight: 500,
+                },
+              }}
+            />
+          </Box>
+        ) : null}
           </>
         )}
       </Box>
@@ -1794,7 +1874,11 @@ const InventoryManagement: React.FC = () => {
         </DialogTitle>
         <DialogContent sx={{ px: 3, pt: 2.5, pb: 1 }}>
           {inventoryDialogMode === 'view' && selectedItem ? (
-            <InventoryDetailView item={selectedItem} getStatusChip={getStatusChip} />
+            <InventoryDetailView
+              item={selectedItem}
+              getStatusChip={getStatusChip}
+              onPreviewImage={openProductImagePreview}
+            />
           ) : (
             <InventoryForm
               key={selectedItem ? `edit-${selectedItem.id}` : 'add-new'}
@@ -1803,6 +1887,7 @@ const InventoryManagement: React.FC = () => {
               canCreate={basicMenuFlags.canCreate}
               canEdit={basicMenuFlags.canEdit}
               canMutate={basicMenuFlags.canMutate}
+              onPreviewImage={openProductImagePreview}
               onCancel={() => {
                 if (selectedItem) {
                   setInventoryDialogMode('view');
@@ -1845,6 +1930,54 @@ const InventoryManagement: React.FC = () => {
             </Tooltip>
           </DialogActions>
         ) : null}
+      </Dialog>
+
+      <Dialog
+        open={!!imagePreview}
+        onClose={() => setImagePreview(null)}
+        maxWidth="md"
+        fullWidth
+        sx={{ zIndex: (theme) => theme.zIndex.modal + 2 }}
+        PaperProps={{ sx: { borderRadius: '16px' } }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {imagePreview?.label || t('inventoryManagement.dialog.imagePreview')}
+          </Typography>
+          <IconButton aria-label={t('inventoryManagement.actions.close')} onClick={() => setImagePreview(null)}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent
+          dividers
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            bgcolor: 'grey.100',
+            minHeight: 280,
+            p: 2,
+          }}
+        >
+          {imagePreview?.url ? (
+            <Box
+              component="img"
+              src={imagePreview.url}
+              alt={imagePreview.label}
+              sx={{
+                maxWidth: '100%',
+                maxHeight: '75vh',
+                objectFit: 'contain',
+                borderRadius: 1,
+              }}
+            />
+          ) : null}
+        </DialogContent>
+        <DialogActions sx={{ px: 2, py: 1.5 }}>
+          <Button onClick={() => setImagePreview(null)} variant="outlined" sx={{ borderRadius: '12px', textTransform: 'none' }}>
+            {t('inventoryManagement.actions.close')}
+          </Button>
+        </DialogActions>
       </Dialog>
 
       <Dialog
@@ -2314,9 +2447,10 @@ const InventoryManagement: React.FC = () => {
 interface InventoryDetailViewProps {
   item: InventoryItem;
   getStatusChip: (status: string) => React.ReactNode;
+  onPreviewImage?: (imageUrl?: string | null, label?: string) => void;
 }
 
-const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStatusChip }) => {
+const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStatusChip, onPreviewImage }) => {
   const { t } = useTranslation();
   const detailBarcodeRef = useRef<SVGSVGElement | null>(null);
 
@@ -2394,6 +2528,11 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
           >
             <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
               <Box
+                onClick={() => {
+                  if (item.imageUrl && onPreviewImage) {
+                    onPreviewImage(item.imageUrl, item.name);
+                  }
+                }}
                 sx={{
                   width: 104,
                   height: 104,
@@ -2406,13 +2545,18 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
+                  cursor: item.imageUrl && onPreviewImage ? 'zoom-in' : 'default',
+                  transition: 'opacity 0.15s ease',
+                  ...(item.imageUrl && onPreviewImage
+                    ? { '&:hover': { opacity: 0.9 } }
+                    : {}),
                 }}
               >
                 {item.imageUrl ? (
                   <Box
                     component="img"
                     src={resolveProductImageUrl(item.imageUrl)}
-                    alt=""
+                    alt={item.name}
                     sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 ) : (
@@ -2644,11 +2788,20 @@ interface InventoryFormProps {
   canCreate: boolean;
   canEdit: boolean;
   canMutate: boolean;
+  onPreviewImage?: (imageUrl?: string | null, label?: string) => void;
 }
 
 type MasterRow = { id: number; name: string };
 
-const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, canCreate, canEdit, canMutate }) => {
+const InventoryForm: React.FC<InventoryFormProps> = ({
+  item,
+  onSave,
+  onCancel,
+  canCreate,
+  canEdit,
+  canMutate,
+  onPreviewImage,
+}) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const formFieldsDisabled = item ? !canEdit : !canCreate;
@@ -3009,6 +3162,11 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
             </Box>
             <Stack direction="row" spacing={1.75} alignItems="center" flexWrap="wrap">
             <Box
+              onClick={() => {
+                if (formData.imageUrl && onPreviewImage) {
+                  onPreviewImage(formData.imageUrl, formData.name || t('inventoryManagement.form.productImage'));
+                }
+              }}
               sx={{
                 width: 104,
                 height: 104,
@@ -3020,13 +3178,18 @@ const InventoryForm: React.FC<InventoryFormProps> = ({ item, onSave, onCancel, c
                 overflow: 'hidden',
                 bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.06),
                 flexShrink: 0,
+                cursor: formData.imageUrl && onPreviewImage ? 'zoom-in' : 'default',
+                transition: 'opacity 0.15s ease',
+                ...(formData.imageUrl && onPreviewImage
+                  ? { '&:hover': { opacity: 0.9 } }
+                  : {}),
               }}
             >
               {formData.imageUrl ? (
                 <Box
                   component="img"
                   src={resolveProductImageUrl(formData.imageUrl)}
-                  alt=""
+                  alt={formData.name || ''}
                   sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
               ) : (
