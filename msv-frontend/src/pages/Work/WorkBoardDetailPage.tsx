@@ -39,7 +39,7 @@ import {
   LibraryAddOutlined as LibraryAddOutlinedIcon,
   VisibilityOutlined as VisibilityOutlinedIcon
 } from '@mui/icons-material';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   closestCenter,
   closestCorners,
@@ -296,6 +296,23 @@ const formatDateTime = (value?: string): string => {
 
 const DRAG_TRANSITION = 'transform 40ms ease-out';
 const DRAG_LAYOUT_TRANSITION = 'none';
+
+const BOARD_PAN_IGNORE_SELECTOR = [
+  '[data-kanban-column]',
+  '[data-kanban-card]',
+  'button',
+  'a',
+  'input',
+  'textarea',
+  'select',
+  '[role="button"]',
+  '[role="menuitem"]',
+  '[contenteditable="true"]',
+  '.MuiButtonBase-root',
+  '.MuiChip-root',
+  '.MuiInputBase-root',
+  '.MuiAutocomplete-root',
+].join(',');
 
 /** 칸반 — 트렐로형 라운드·라벤더 보드 */
 const KANBAN_DETAIL_SHELL_RADIUS = '12px';
@@ -715,6 +732,7 @@ const DraggableCard = memo(function DraggableCard({
     <Card
       ref={setCardNodeRef}
       elevation={0}
+      data-kanban-card=""
       sx={{
         width: '100%',
         height: 'auto',
@@ -869,7 +887,6 @@ const ListColumn = memo(function ListColumn({
   allowListTitleEdit,
   allowListDelete,
   allowAddCard,
-  suppressColumnScroll,
   members,
   isCompletedList,
 }: {
@@ -897,7 +914,6 @@ const ListColumn = memo(function ListColumn({
   allowListTitleEdit: boolean;
   allowListDelete: boolean;
   allowAddCard: boolean;
-  suppressColumnScroll?: boolean;
   members: BoardMemberLite[];
   isCompletedList?: boolean;
 }) {
@@ -941,6 +957,7 @@ const ListColumn = memo(function ListColumn({
     <Paper
       ref={setColumnRef}
       elevation={0}
+      data-kanban-column=""
       sx={{
         boxSizing: 'border-box',
         flex: { xs: '1 1 100%', sm: `0 0 ${WORK_BOARD_COLUMN_WIDTH_PX}px` },
@@ -948,8 +965,8 @@ const ListColumn = memo(function ListColumn({
         minWidth: { xs: 0, sm: WORK_BOARD_COLUMN_WIDTH_PX },
         maxWidth: { xs: '100%', sm: `${WORK_BOARD_COLUMN_WIDTH_PX}px` },
         bgcolor: theme.palette.mode === 'light' ? KANBAN_COLUMN_BG : alpha(theme.palette.common.black, 0.22),
-        backdropFilter: theme.palette.mode === 'light' ? 'blur(10px)' : 'none',
-        WebkitBackdropFilter: theme.palette.mode === 'light' ? 'blur(10px)' : 'none',
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
         outline: isOver ? '2px solid' : 'none',
         outlineColor: alpha(theme.palette.primary.main, 0.45),
         outlineOffset: 0,
@@ -961,8 +978,7 @@ const ListColumn = memo(function ListColumn({
         minHeight: 120,
         display: 'flex',
         flexDirection: 'column',
-        maxHeight: 'calc(100vh - 240px)',
-        overflow: suppressColumnScroll ? 'hidden' : 'visible',
+        overflow: 'visible',
         transition: isListDragging ? 'none' : DRAG_TRANSITION,
         willChange: isListDragging ? 'transform' : 'auto',
         zIndex: isListDragging ? 10 : 1,
@@ -1078,24 +1094,10 @@ const ListColumn = memo(function ListColumn({
       </Box>
       <Box
         sx={{
-          overflowY: suppressColumnScroll ? 'hidden' : 'auto',
-          overflowX: 'hidden',
-          flex: 1,
-          minHeight: 0,
+          overflow: 'visible',
           display: 'flex',
           flexDirection: 'column',
           gap: 1,
-          pr: suppressColumnScroll ? 0 : 0.25,
-          scrollbarWidth: suppressColumnScroll ? 'none' : 'thin',
-          scrollbarColor: '#D0DBE8 transparent',
-          msOverflowStyle: suppressColumnScroll ? 'none' : undefined,
-          '&::-webkit-scrollbar': {
-            width: suppressColumnScroll ? 0 : 5,
-          },
-          '&::-webkit-scrollbar-thumb': {
-            backgroundColor: '#D0DBE8',
-            borderRadius: 0,
-          },
         }}
       >
         {cards.map((c) => (
@@ -1197,6 +1199,8 @@ const WorkBoardDetailPage: React.FC = () => {
   const boardId = Number(boardIdParam);
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkCardHandledRef = useRef<number | null>(null);
   const { user } = useStore();
   const { language, menus, hasMenuPermission } = useMenuStore();
   const txt = useCallback((ko: string, en: string) => (language === 'en' ? en : ko), [language]);
@@ -1348,6 +1352,74 @@ const WorkBoardDetailPage: React.FC = () => {
   };
 
   const isKanbanDragging = Boolean(activeCard || activeList);
+  const boardPanRef = useRef<{
+    active: boolean;
+    pointerId: number | null;
+    lastX: number;
+    lastY: number;
+    moved: boolean;
+  }>({ active: false, pointerId: null, lastX: 0, lastY: 0, moved: false });
+  const [boardPanning, setBoardPanning] = useState(false);
+
+  const canStartBoardPan = useCallback((target: EventTarget | null) => {
+    if (!(target instanceof Element)) return false;
+    if (target.closest(BOARD_PAN_IGNORE_SELECTOR)) {
+      return false;
+    }
+    return true;
+  }, []);
+
+  const endBoardPan = useCallback((pointerId?: number) => {
+    if (pointerId != null && boardPanRef.current.pointerId !== pointerId) return;
+    boardPanRef.current.active = false;
+    boardPanRef.current.pointerId = null;
+    boardPanRef.current.moved = false;
+    setBoardPanning(false);
+    document.body.style.removeProperty('user-select');
+    document.body.style.removeProperty('cursor');
+  }, []);
+
+  const handleBoardPanPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLElement>) => {
+      if (e.button !== 0 || isKanbanDragging) return;
+      if (!canStartBoardPan(e.target)) return;
+      boardPanRef.current = {
+        active: true,
+        pointerId: e.pointerId,
+        lastX: e.clientX,
+        lastY: e.clientY,
+        moved: false,
+      };
+      setBoardPanning(true);
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'grabbing';
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    },
+    [canStartBoardPan, isKanbanDragging]
+  );
+
+  const handleBoardPanPointerMove = useCallback((e: React.PointerEvent<HTMLElement>) => {
+    if (!boardPanRef.current.active || boardPanRef.current.pointerId !== e.pointerId) return;
+    const dx = e.clientX - boardPanRef.current.lastX;
+    const dy = e.clientY - boardPanRef.current.lastY;
+    if (!boardPanRef.current.moved && Math.abs(dx) + Math.abs(dy) < 2) return;
+    boardPanRef.current.moved = true;
+    boardPanRef.current.lastX = e.clientX;
+    boardPanRef.current.lastY = e.clientY;
+    window.scrollBy(-dx, -dy);
+  }, []);
+
+  const handleBoardPanPointerUp = useCallback(
+    (e: React.PointerEvent<HTMLElement>) => {
+      endBoardPan(e.pointerId);
+    },
+    [endBoardPan]
+  );
+
+  useEffect(() => {
+    if (!isKanbanDragging) return;
+    endBoardPan();
+  }, [isKanbanDragging, endBoardPan]);
 
   useEffect(() => {
     if (!isKanbanDragging) return;
@@ -1648,6 +1720,35 @@ const WorkBoardDetailPage: React.FC = () => {
     setMentionQuery('');
     setMentionHighlightIndex(0);
   }, []);
+
+  /** 알림 딥링크(?card=)로 진입 시 해당 카드 상세를 자동으로 연다 */
+  useEffect(() => {
+    if (!board?.lists || loading) return;
+    const rawCardId = searchParams.get('card');
+    if (!rawCardId) {
+      deepLinkCardHandledRef.current = null;
+      return;
+    }
+    const cardId = Number(rawCardId);
+    if (!Number.isInteger(cardId) || cardId <= 0) return;
+    if (deepLinkCardHandledRef.current === cardId) return;
+    if (cardDetail?.cardId === cardId) {
+      deepLinkCardHandledRef.current = cardId;
+      return;
+    }
+
+    for (const list of board.lists as BoardList[]) {
+      const card = (list.cards || []).find((c) => Number(c.id) === cardId);
+      if (card) {
+        deepLinkCardHandledRef.current = cardId;
+        openCardDetail(card, list.title, list.id);
+        const next = new URLSearchParams(searchParams);
+        next.delete('card');
+        setSearchParams(next, { replace: true });
+        return;
+      }
+    }
+  }, [board, loading, searchParams, cardDetail?.cardId, openCardDetail, setSearchParams]);
 
   const submitCard = useCallback(async () => {
     if (!composerListId || !composerTitle.trim()) return;
@@ -2336,6 +2437,11 @@ const WorkBoardDetailPage: React.FC = () => {
 
   return (
     <Box
+      data-board-pan-surface=""
+      onPointerDown={handleBoardPanPointerDown}
+      onPointerMove={handleBoardPanPointerMove}
+      onPointerUp={handleBoardPanPointerUp}
+      onPointerCancel={handleBoardPanPointerUp}
       sx={{
         p: 0,
         pb: 2,
@@ -2345,9 +2451,11 @@ const WorkBoardDetailPage: React.FC = () => {
         minHeight: '100%',
         display: 'flex',
         flexDirection: 'column',
-        overflowX: 'hidden',
+        overflow: 'visible',
         boxSizing: 'border-box',
         background: 'transparent',
+        cursor: boardPanning ? 'grabbing' : 'default',
+        touchAction: boardPanning ? 'none' : 'auto',
         '& .MuiOutlinedInput-root': {
           borderRadius: 2,
           backgroundColor: 'background.paper',
@@ -2481,9 +2589,9 @@ const WorkBoardDetailPage: React.FC = () => {
           borderRadius: '12px',
           bgcolor: KANBAN_MEMBER_PANEL_BG,
           border: KANBAN_MEMBER_PANEL_BORDER,
-          boxShadow: '0 2px 10px rgba(9, 30, 66, 0.06)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
+          boxShadow: 'none',
+          backdropFilter: 'none',
+          WebkitBackdropFilter: 'none',
           width: '100%',
           maxWidth: '100%',
           boxSizing: 'border-box',
@@ -2564,9 +2672,8 @@ const WorkBoardDetailPage: React.FC = () => {
                         ? { boxShadow: `0 0 0 1px ${alpha(theme.palette.primary.main, 0.45)}` }
                         : {}),
                       '&:hover': {
-                        transform: 'translateY(-2px)',
                         zIndex: BOARD_MEMBER_AVATAR_MAX + 2,
-                        boxShadow: '0 2px 8px rgba(9, 30, 66, 0.18)',
+                        boxShadow: `0 0 0 2px ${alpha(theme.palette.primary.main, 0.45)}`,
                       },
                     }}
                   >
@@ -2766,25 +2873,24 @@ const WorkBoardDetailPage: React.FC = () => {
         >
           <Box
             sx={{
-              flex: 1,
-              minHeight: 0,
-              minWidth: 0,
               display: 'flex',
-              overflow: isKanbanDragging ? 'hidden' : 'auto',
               width: '100%',
+              maxWidth: '100%',
+              minWidth: 0,
               boxSizing: 'border-box',
-              scrollbarWidth: 'thin',
-              scrollbarColor: '#C1C7D0 transparent',
+              overflow: 'visible',
             }}
           >
             <Box
               sx={{
                 display: 'flex',
-                flexWrap: { xs: 'wrap', md: 'nowrap' },
+                flexWrap: 'wrap',
                 alignItems: 'flex-start',
                 gap: 1.5,
                 pb: 0.5,
-                minWidth: 'min-content',
+                width: '100%',
+                maxWidth: '100%',
+                minWidth: 0,
                 boxSizing: 'border-box',
               }}
             >
@@ -2817,7 +2923,6 @@ const WorkBoardDetailPage: React.FC = () => {
                 allowListTitleEdit={menuCanEdit}
                 allowListDelete={menuCanDelete}
                 allowAddCard={menuCanCreate}
-                suppressColumnScroll={isKanbanDragging}
               />
             ))}
             </Box>
@@ -2887,8 +2992,8 @@ const WorkBoardDetailPage: React.FC = () => {
                   borderRadius: KANBAN_COLUMN_RADIUS,
                   border: KANBAN_COLUMN_BORDER,
                   bgcolor: KANBAN_COLUMN_BG,
-                  backdropFilter: 'blur(10px)',
-                  WebkitBackdropFilter: 'blur(10px)',
+                  backdropFilter: 'none',
+                  WebkitBackdropFilter: 'none',
                   boxShadow: KANBAN_CARD_HOVER_SHADOW,
                   cursor: 'grabbing',
                   touchAction: 'none',

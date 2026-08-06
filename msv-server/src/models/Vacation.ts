@@ -6,7 +6,15 @@ interface VacationAttributes {
   tenant_id: number;
   company_id: number;
   user_id: number;
-  vacation_type: 'annual' | 'sick' | 'personal' | 'study' | 'maternity' | 'paternity';
+  vacation_type:
+    | 'annual'
+    | 'sick'
+    | 'personal'
+    | 'study'
+    | 'maternity'
+    | 'paternity'
+    | 'marriage'
+    | 'bereavement';
   start_date: Date;
   end_date: Date;
   days: number;
@@ -29,7 +37,15 @@ class Vacation extends Model<VacationAttributes, VacationCreationAttributes> imp
   public tenant_id!: number;
   public company_id!: number;
   public user_id!: number;
-  public vacation_type!: 'annual' | 'sick' | 'personal' | 'study' | 'maternity' | 'paternity';
+  public vacation_type!:
+    | 'annual'
+    | 'sick'
+    | 'personal'
+    | 'study'
+    | 'maternity'
+    | 'paternity'
+    | 'marriage'
+    | 'bereavement';
   public start_date!: Date;
   public end_date!: Date;
   public days!: number;
@@ -65,7 +81,16 @@ Vacation.init(
       allowNull: false
     },
     vacation_type: {
-      type: DataTypes.ENUM('annual', 'sick', 'personal', 'study', 'maternity', 'paternity'),
+      type: DataTypes.ENUM(
+        'annual',
+        'sick',
+        'personal',
+        'study',
+        'maternity',
+        'paternity',
+        'marriage',
+        'bereavement'
+      ),
       allowNull: false
     },
     start_date: {

@@ -896,11 +896,9 @@ const ExpenseApproval: React.FC = () => {
               flexDirection: 'column',
               gap: 0.75,
               borderRadius: '12px',
-              transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+              transition: 'border-color 0.15s ease',
               '&:hover': {
-                transform: 'translateY(-1px)',
                 '& .receipt-thumb': {
-                  boxShadow: '0 4px 14px rgba(15, 23, 42, 0.12)',
                   borderColor: 'primary.main',
                 },
               },

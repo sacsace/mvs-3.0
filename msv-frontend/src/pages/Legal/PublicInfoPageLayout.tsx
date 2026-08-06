@@ -98,14 +98,8 @@ const PublicInfoPageLayout: React.FC<PublicInfoPageLayoutProps> = ({
     <Box
       sx={{
         minHeight: '100vh',
-        background:
-          theme.palette.mode === 'light'
-            ? `
-              radial-gradient(ellipse 80% 55% at 12% 8%, rgba(106, 143, 147, 0.1) 0%, transparent 58%),
-              radial-gradient(ellipse 70% 50% at 88% 92%, rgba(13, 43, 91, 0.07) 0%, transparent 52%),
-              linear-gradient(168deg, #e4ebf3 0%, #f0f4f9 38%, #e8eef5 100%)
-            `
-            : `linear-gradient(180deg, ${theme.palette.grey[900]} 0%, ${alpha(theme.palette.common.black, 0.92)} 100%)`,
+        backgroundColor:
+          theme.palette.mode === 'light' ? '#F0F4F9' : theme.palette.grey[900],
         py: { xs: 2.5, sm: 4 },
         px: { xs: 2, sm: 3 },
       }}
@@ -172,24 +166,12 @@ const PublicInfoPageLayout: React.FC<PublicInfoPageLayoutProps> = ({
           sx={{
             position: 'relative',
             overflow: 'hidden',
-            borderRadius: '24px',
+            borderRadius: '12px',
             px: { xs: 2.5, sm: 4 },
             py: { xs: 3, sm: 4 },
-            bgcolor: alpha(theme.palette.background.paper, theme.palette.mode === 'light' ? 0.96 : 1),
-            border: `1px solid ${theme.palette.mode === 'light' ? alpha('#ffffff', 0.85) : alpha(theme.palette.divider, 0.5)}`,
-            boxShadow:
-              theme.palette.mode === 'light'
-                ? '0 8px 24px rgba(15, 23, 42, 0.08), 0 24px 48px rgba(15, 23, 42, 0.06)'
-                : '0 20px 50px rgba(0,0,0,0.45)',
-            '&::before': {
-              content: '""',
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              height: '3px',
-              background: `linear-gradient(90deg, #0D2B5B 0%, ${theme.palette.primary.main} 55%, ${alpha(theme.palette.primary.light, 0.85)} 100%)`,
-            },
+            bgcolor: 'background.paper',
+            border: `1px solid ${theme.palette.divider}`,
+            boxShadow: 'none',
           }}
         >
           {titleBlock}

@@ -19,7 +19,17 @@ export function resolveNotificationLink(data?: Record<string, unknown>): string 
       return `${base}/work/reports`;
     case 'work_board':
     case 'work_board_comment':
-      return data.board_id != null ? `${base}/work/boards/${data.board_id}` : `${base}/work/boards`;
+    case 'work_board_comment_reply': {
+      if (typeof data.href === 'string' && data.href.startsWith('/') && !data.href.startsWith('//')) {
+        return `${base}${data.href}`;
+      }
+      if (data.board_id != null) {
+        const cardQs =
+          data.card_id != null && Number(data.card_id) > 0 ? `?card=${data.card_id}` : '';
+        return `${base}/work/projects/${data.board_id}${cardQs}`;
+      }
+      return `${base}/work/projects`;
+    }
     case 'expense_report':
       return `${base}/accounting/expense`;
     case 'approval':
@@ -31,7 +41,8 @@ export function resolveNotificationLink(data?: Record<string, unknown>): string 
     default:
       if (data.href) {
         const href = String(data.href);
-        return href.startsWith('http') ? href : `${base}${href.startsWith('/') ? href : `/${href}`}`;
+        if (href.startsWith('http://') || href.startsWith('https://')) return href;
+        if (href.startsWith('/') && !href.startsWith('//')) return `${base}${href}`;
       }
       return base;
   }

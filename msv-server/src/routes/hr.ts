@@ -244,7 +244,11 @@ router.post(
   vacationMenuPerm(['can_create']),
   validateBody({
     user_id: { required: false, type: 'number' }, // 미제공 시 본인(req.user.id)으로 처리
-    vacation_type: { required: true, type: 'string', oneOf: ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'] },
+    vacation_type: {
+      required: true,
+      type: 'string',
+      oneOf: ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity', 'marriage', 'bereavement'],
+    },
     start_date: { required: true, type: 'string', pattern: datePattern },
     end_date: { required: true, type: 'string', pattern: datePattern },
     days: { required: true, type: 'number' },
@@ -261,7 +265,10 @@ router.put(
   vacationMenuPerm(['can_edit']),
   validateBody({
     user_id: { type: 'number' },
-    vacation_type: { type: 'string', oneOf: ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'] },
+    vacation_type: {
+      type: 'string',
+      oneOf: ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity', 'marriage', 'bereavement'],
+    },
     start_date: { type: 'string', pattern: datePattern },
     end_date: { type: 'string', pattern: datePattern },
     days: { type: 'number' },

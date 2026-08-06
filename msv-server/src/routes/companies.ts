@@ -51,6 +51,91 @@ const invalidateCompaniesCache = async () => {
   await referenceCacheDel('ref:company:*');
 };
 
+const COMPANY_FIELD_LABELS: Record<string, string> = {
+  name: '회사명',
+  business_number: '사업자등록번호',
+  email: '이메일',
+  phone: '전화번호',
+  address: '주소',
+  website: '웹사이트',
+  industry: '업종',
+  ceo_name: '대표자명',
+  gst_number: 'GST 번호',
+  msme_number: 'MSME 번호',
+  iec_number: 'IEC 번호',
+  pan_number: 'PAN 번호',
+  account_number: '계좌번호',
+  bank_name: '은행명',
+  status: '상태',
+};
+
+const companyFieldLabel = (field?: string | null): string => {
+  if (!field) return '입력값';
+  return COMPANY_FIELD_LABELS[field] || field;
+};
+
+/** PostgreSQL 오류 상세("Key (business_number)=(...)")에서 컬럼명을 추출 */
+const columnFromPgDetail = (error: any): string | undefined => {
+  const source = error?.parent || error?.original || error;
+  const direct = source?.column;
+  if (direct) return String(direct);
+  const detail: string = source?.detail || '';
+  const matched = detail.match(/Key \((.+?)\)=/);
+  return matched ? matched[1] : undefined;
+};
+
+/** DB/유효성 오류를 사용자가 이해할 수 있는 실패 사유로 변환 */
+const describeCompanySaveError = (
+  error: any,
+  fallback: string
+): { status: number; message: string } => {
+  const source = error?.parent || error?.original || error;
+  const pgCode: string | undefined = source?.code;
+
+  if (error?.name === 'SequelizeUniqueConstraintError' || pgCode === '23505') {
+    const field = error?.errors?.[0]?.path || columnFromPgDetail(error);
+    return {
+      status: 409,
+      message: `이미 등록된 ${companyFieldLabel(field)}입니다. 다른 값을 입력해 주세요.`,
+    };
+  }
+
+  if (error?.name === 'SequelizeValidationError') {
+    const detail = (error.errors || [])
+      .map((e: any) => `${companyFieldLabel(e?.path)}: ${e?.message}`)
+      .join(' / ');
+    return { status: 400, message: detail || fallback };
+  }
+
+  if (pgCode === '23502') {
+    return {
+      status: 400,
+      message: `${companyFieldLabel(columnFromPgDetail(error))}은(는) 필수 입력 항목입니다.`,
+    };
+  }
+
+  if (pgCode === '22001') {
+    return {
+      status: 400,
+      message: `${companyFieldLabel(columnFromPgDetail(error))} 입력값이 허용된 길이를 초과했습니다.`,
+    };
+  }
+
+  if (pgCode === '23503') {
+    return { status: 400, message: '연결된 데이터가 존재하지 않아 저장할 수 없습니다.' };
+  }
+
+  if (pgCode === '42703' || pgCode === '42P01') {
+    return {
+      status: 500,
+      message: '데이터베이스 구조가 최신이 아닙니다. 관리자에게 문의해 주세요.',
+    };
+  }
+
+  // production에서는 DB 상세(테이블/제약조건)를 노출하지 않음
+  return { status: 500, message: fallback };
+};
+
 // 모든 회사 조회 (테넌트별)
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -375,9 +460,24 @@ router.post(
       }
     });
 
+    // 사업자등록번호는 유일해야 하므로 사전 확인해 사유를 명확히 전달
+    if (nonImageData.business_number) {
+      const duplicated = await (Company as any).findOne({
+        where: { business_number: String(nonImageData.business_number).trim() }
+      });
+      if (duplicated) {
+        return res.status(409).json({
+          success: false,
+          message: `이미 등록된 사업자등록번호입니다. (${String(nonImageData.business_number).trim()})`
+        });
+      }
+    }
+
             // 일반 필드로 회사 생성
         const company = await (Company as any).create(nonImageData);
     const companyId = company.id;
+    // GST 저장은 회사 생성 후 단계라 실패해도 롤백하지 않고 사유만 알린다
+    let gstWarning = '';
         // GST 번호 저장
     if (gstNumbers !== undefined && gstNumbers.length > 0) {
             try {
@@ -409,15 +509,17 @@ router.post(
                     
           const createdGst = await (CompanyGstNumber as any).bulkCreate(gstEntries);
                             } else {
+          gstWarning = 'GST 번호 저장소가 준비되지 않아 GST 번호는 저장되지 않았습니다.';
                   }
       } catch (gstError: any) {
-        // 테이블이 없는 경우 등 에러는 무시하고 계속 진행
+        // 회사는 이미 생성되었으므로 진행하되, 사유는 응답에 포함한다
         console.error('❌ GST 번호 저장 오류:', gstError.message);
         console.error('에러 스택:', gstError.stack);
-        if (gstError.code === '42P01') {
-                  } else {
-          console.error('❌ GST 번호 저장 오류 (계속 진행):', gstError.message);
-        }
+        const { message: gstReason } = describeCompanySaveError(
+          gstError,
+          'GST 번호 저장에 실패했습니다.'
+        );
+        gstWarning = `회사는 생성되었지만 GST 번호 저장에 실패했습니다. ${gstReason}`;
       }
     } else {
           }
@@ -501,7 +603,8 @@ router.post(
         res.status(201).json({
       success: true,
       data: finalCompany,
-      message: '회사가 성공적으로 생성되었습니다.'
+      message: '회사가 성공적으로 생성되었습니다.',
+      warning: gstWarning || undefined
     });
   } catch (error: any) {
     console.error('❌ 회사 생성 오류:', error);
@@ -511,9 +614,10 @@ router.post(
       name: error.name,
       code: error.code
     });
-    res.status(500).json({
+    const { status, message } = describeCompanySaveError(error, '회사 생성에 실패했습니다.');
+    res.status(status).json({
       success: false,
-      message: '회사 생성에 실패했습니다.',
+      message,
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -1006,9 +1110,10 @@ router.put(
   } catch (error: any) {
     console.error('회사 수정 오류:', error);
     console.error('에러 스택:', error.stack);
-    res.status(500).json({
+    const { status, message } = describeCompanySaveError(error, '회사 수정에 실패했습니다.');
+    res.status(status).json({
       success: false,
-      message: '회사 수정에 실패했습니다.',
+      message,
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

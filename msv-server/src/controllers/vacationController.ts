@@ -750,7 +750,16 @@ export const getVacationPolicy = async (req: AuthRequest, res: Response) => {
     const defaultPolicy = {
       annualLeaveStartDays: 240,
       annualLeaveEarnDays: 20,
-      availableTypes: ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'],
+      availableTypes: [
+        'annual',
+        'sick',
+        'personal',
+        'study',
+        'maternity',
+        'paternity',
+        'marriage',
+        'bereavement',
+      ],
       leaveTypeDays: { ...DEFAULT_LEAVE_TYPE_DAYS },
     };
 
@@ -842,7 +851,18 @@ export const updateVacationPolicy = async (req: AuthRequest, res: Response) => {
             ? parseInt(String(annualLeaveStartDays), 10)
             : currentPolicy.annualLeaveStartDays ?? 240,
         annualLeaveEarnDays: annualLeaveEarnDays || currentPolicy.annualLeaveEarnDays || 20,
-        availableTypes: availableTypes || currentPolicy.availableTypes || ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'],
+        availableTypes:
+          availableTypes ||
+          currentPolicy.availableTypes || [
+            'annual',
+            'sick',
+            'personal',
+            'study',
+            'maternity',
+            'paternity',
+            'marriage',
+            'bereavement',
+          ],
         leaveTypeDays: {
           ...DEFAULT_LEAVE_TYPE_DAYS,
           ...(currentPolicy.leaveTypeDays || {}),
@@ -1048,7 +1068,9 @@ export const exportVacationsToExcel = async (req: AuthRequest, res: Response) =>
       'personal': '개인사유',
       'study': '교육',
       'maternity': '출산',
-      'paternity': '육아'
+      'paternity': '남편 출산 휴가',
+      'marriage': '결혼휴가',
+      'bereavement': '조사 휴가'
     };
 
     const statusMap: { [key: string]: string } = {

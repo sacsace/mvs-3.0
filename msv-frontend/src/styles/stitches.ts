@@ -15,19 +15,19 @@ const { globalCss } = createStitches({
       focusRing: 'rgba(123, 163, 196, 0.24)',
     },
     radii: {
-      sm: '8px',
-      md: '12px',
-      lg: '16px',
-      xl: '16px',
+      sm: '6px',
+      md: '8px',
+      lg: '8px',
+      xl: '10px',
       full: '9999px',
     },
     shadows: {
-      card: '0 4px 14px rgba(36, 52, 71, 0.07)',
-      cardHover: '0 8px 24px rgba(36, 52, 71, 0.1)',
+      card: '0 1px 2px rgba(36, 52, 71, 0.05)',
+      cardHover: '0 1px 2px rgba(36, 52, 71, 0.05)',
     },
     fonts: {
       body:
-        '"Plus Jakarta Sans", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+        '"NanumSquare", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
       mono: '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace',
     },
   },
@@ -53,13 +53,12 @@ const applyGlobalStyles = globalCss({
     boxShadow: '$card',
   },
   '.MuiCard-root': {
-    borderRadius: '20px',
+    borderRadius: '8px',
     boxShadow: '$card',
     border: '1px solid #D0DBE8',
-    transition: 'all 0.2s ease',
+    transition: 'border-color 0.15s ease',
     '&:hover': {
-      boxShadow: '$cardHover',
-      transform: 'translateY(-1px)',
+      borderColor: '#BCC9DA',
     },
   },
   '.MuiCard-root:has([data-testid="SearchIcon"])': {
@@ -77,8 +76,8 @@ const applyGlobalStyles = globalCss({
     borderColor: '#B8C4D0',
   },
   '.MuiCard-root.MuiPaper-outlined': {
-    borderRadius: '14px',
-    boxShadow: '0 4px 12px rgba(15, 23, 42, 0.03)',
+    borderRadius: '8px',
+    boxShadow: '$card',
   },
   '.MuiButton-root': {
     textTransform: 'none',
@@ -86,10 +85,9 @@ const applyGlobalStyles = globalCss({
     borderRadius: '$md',
   },
   '.MuiButton-contained': {
-    boxShadow: '0 4px 12px rgba(106, 143, 147, 0.18)',
+    boxShadow: 'none',
     '&:hover': {
-      boxShadow: '0 6px 16px rgba(106, 143, 147, 0.24)',
-      transform: 'translateY(-1px)',
+      boxShadow: 'none',
     },
   },
   '.MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {

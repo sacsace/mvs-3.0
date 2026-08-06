@@ -17,9 +17,20 @@ const DEFAULT_LEAVE_TYPE_DAYS: LeaveTypeDays = {
   study: 0,
   maternity: 182,
   paternity: 15,
+  marriage: 5,
+  bereavement: 3,
 };
 
-const DEFAULT_AVAILABLE_TYPES = ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'];
+const DEFAULT_AVAILABLE_TYPES = [
+  'annual',
+  'sick',
+  'personal',
+  'study',
+  'maternity',
+  'paternity',
+  'marriage',
+  'bereavement',
+];
 
 function toDateOnlyString(date: Date): string {
   const yyyy = date.getFullYear();
@@ -315,7 +326,9 @@ const TYPE_LABELS: Record<string, string> = {
   personal: '개인사유',
   study: '교육',
   maternity: '출산',
-  paternity: '육아휴가',
+  paternity: '남편 출산 휴가',
+  marriage: '결혼휴가',
+  bereavement: '조사 휴가',
 };
 
 /**
@@ -393,7 +406,16 @@ export type LeaveBalanceRow = {
   balances: Record<string, { quota: number; used: number; remaining: number }>;
 };
 
-const BALANCE_TYPES = ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'] as const;
+const BALANCE_TYPES = [
+  'annual',
+  'sick',
+  'personal',
+  'study',
+  'maternity',
+  'paternity',
+  'marriage',
+  'bereavement',
+] as const;
 
 function buildZeroBalances(): Record<string, { quota: number; used: number; remaining: number }> {
   const balances: Record<string, { quota: number; used: number; remaining: number }> = {};

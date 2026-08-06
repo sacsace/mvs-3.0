@@ -154,19 +154,11 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
         border: '1px solid',
         borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.1),
         backgroundColor: cardBg,
-        boxShadow:
-          theme.palette.mode === 'light'
-            ? '0 2px 8px rgba(15, 23, 42, 0.05), 0 12px 28px rgba(15, 23, 42, 0.04)'
-            : '0 8px 24px rgba(0,0,0,0.35)',
+        boxShadow: 'none',
         overflow: 'hidden',
-        transition: 'box-shadow 0.22s ease, transform 0.22s ease, border-color 0.22s ease',
+        transition: 'border-color 0.15s ease, background-color 0.15s ease',
         '&:hover': {
-          boxShadow:
-            theme.palette.mode === 'light'
-              ? '0 4px 14px rgba(15, 23, 42, 0.08), 0 18px 36px rgba(15, 23, 42, 0.07)'
-              : '0 12px 32px rgba(0,0,0,0.45)',
-          transform: 'translateY(-3px)',
-          borderColor: alpha(accent, 0.35),
+          borderColor: alpha(accent, 0.5),
           '& .board-card-actions': { opacity: 1 },
         },
       }}
@@ -188,7 +180,6 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
             py: 1.35,
             minHeight: 50,
             bgcolor: accent,
-            backgroundImage: `linear-gradient(135deg, ${alpha('#FFFFFF', 0.14)} 0%, transparent 55%)`,
             display: 'flex',
             alignItems: 'flex-start',
             gap: 1,
@@ -597,11 +588,10 @@ const WorkBoardsPage: React.FC = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      transition: 'border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease',
+                      transition: 'border-color 0.15s ease, background-color 0.15s ease',
                       '&:hover': {
                         borderColor: 'primary.main',
                         bgcolor: alpha(theme.palette.common.white, 0.45),
-                        transform: 'translateY(-2px)',
                       },
                     }}
                   >

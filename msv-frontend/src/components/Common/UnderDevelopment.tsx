@@ -74,34 +74,26 @@ const UnderDevelopment: React.FC<UnderDevelopmentProps> = ({
       width: '100%',
       p: 0
     }}>
-      <Card sx={{ 
-        background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
-        borderRadius: 3,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
-        border: '1px solid rgba(255,255,255,0.2)'
-      }}>
+      <Card variant="outlined">
         <CardContent sx={{ p: 4 }}>
           <Box sx={{ textAlign: 'center', mb: 4 }}>
             <Box sx={{ 
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: 120,
-              height: 120,
+              width: 88,
+              height: 88,
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              mb: 3,
-              boxShadow: '0 8px 32px rgba(102, 126, 234, 0.3)'
+              bgcolor: 'action.hover',
+              color: 'text.secondary',
+              mb: 3
             }}>
-              <ConstructionIcon sx={{ fontSize: 60, color: 'white' }} />
+              <ConstructionIcon sx={{ fontSize: 44 }} />
             </Box>
             
             <Typography variant="h4" gutterBottom sx={{ 
-              fontWeight: 'bold',
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
+              fontWeight: 700,
+              color: 'text.primary',
               mb: 2
             }}>
               {pageName}
@@ -132,11 +124,7 @@ const UnderDevelopment: React.FC<UnderDevelopmentProps> = ({
 
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 3, mb: 4 }}>
             {/* 개발 현황 */}
-            <Card sx={{
-              background: 'rgba(255,255,255,0.7)',
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255,255,255,0.2)'
-            }}>
+            <Card variant="outlined">
               <CardContent>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <RocketIcon color="primary" />
@@ -169,11 +157,7 @@ const UnderDevelopment: React.FC<UnderDevelopmentProps> = ({
 
             {/* 예상 기능 */}
             {features.length > 0 && (
-              <Card sx={{
-                background: 'rgba(255,255,255,0.7)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255,255,255,0.2)'
-              }}>
+              <Card variant="outlined">
                 <CardContent>
                   <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <CodeIcon color="primary" />
@@ -199,17 +183,13 @@ const UnderDevelopment: React.FC<UnderDevelopmentProps> = ({
 
             {/* 예상 완료일 */}
             {estimatedCompletion && (
-              <Card sx={{
-                background: 'rgba(255,255,255,0.7)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255,255,255,0.2)'
-              }}>
+              <Card variant="outlined">
                 <CardContent>
                   <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <ScheduleIcon color="primary" />
                     {t('common.expectedCompletion')}
                   </Typography>
-                  <Typography variant="h5" color="primary.main" sx={{ fontWeight: 'bold' }}>
+                  <Typography variant="h5" color="text.primary" sx={{ fontWeight: 700 }}>
                     {estimatedCompletion}
                   </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
@@ -221,23 +201,7 @@ const UnderDevelopment: React.FC<UnderDevelopmentProps> = ({
           </Box>
 
           <Box sx={{ textAlign: 'center' }}>
-            <Button
-              variant="contained"
-              size="large"
-              startIcon={<RocketIcon />}
-              sx={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                px: 4,
-                py: 1.5,
-                fontSize: '1.1rem',
-                borderRadius: 2,
-                boxShadow: '0 4px 15px rgba(102, 126, 234, 0.4)',
-                '&:hover': {
-                  background: 'linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%)',
-                  boxShadow: '0 6px 20px rgba(102, 126, 234, 0.6)',
-                }
-              }}
-            >
+            <Button variant="contained" size="large" startIcon={<RocketIcon />}>
               {t('common.checkProgress')}
             </Button>
           </Box>

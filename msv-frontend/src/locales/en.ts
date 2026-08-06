@@ -1571,6 +1571,10 @@ export default {
         noProcessingTimeData: 'No processing time data to display.',
         noPersonalEfficiencyData: 'No personal efficiency data to display.'
       },
+      listView: {
+        viewAll: 'View all',
+        viewPages: 'View by page'
+      },
       errors: {
         loadBoardsFailed: 'Failed to load work board list.',
         loadStatsFailed: 'Failed to load work card statistics.'
@@ -1709,7 +1713,8 @@ export default {
         categoryRequired: 'Please select a category.',
         partnerRequired: 'Please select a supplier (partner).',
         locationRequired: 'Please select a storage location.',
-        unitRequired: 'Please select a unit.'
+        unitRequired: 'Please select a unit.',
+        numberRequired: 'Stock quantities and unit price must be numbers.'
       },
       actions: {
         cancel: 'Cancel',
@@ -3946,10 +3951,11 @@ export default {
       remainingDays: 'Remaining',
       quotaDays: 'Quota',
       leaveYear: 'Fiscal year',
+      hireDate: 'Join date',
       noLeaveBalances: 'No employee leave balances to display.',
       leaveBalancesHint:
         'Remaining days by leave type for the company fiscal year. Only leave types enabled in Leave Type are shown. Unused days do not carry over.',
-      leaveBalancesSearchPlaceholder: 'Search by employee, department, position…',
+      leaveBalancesSearchPlaceholder: 'Search by employee, department, position, join date…',
       sickOptional: 'Optional',
       sickOptionalHint: 'Sick leave is not mandatory.',
       department: 'Department',
@@ -4029,7 +4035,9 @@ export default {
       personal: 'Casual Leave',
       study: 'Study Leave',
       maternity: 'Maternity Leave',
-      paternity: 'Paternity Leave',
+      paternity: "Husband's Childbirth Leave",
+      marriage: 'Marriage Leave',
+      bereavement: 'Bereavement Leave',
       statusPending: 'Pending',
       statusApproved: 'Approved',
       statusRejected: 'Rejected',
@@ -4041,7 +4049,9 @@ export default {
       casualLeave: 'Casual Leave',
       studyLeave: 'Study Leave',
       maternityLeave: 'Maternity Leave',
-      paternityLeave: 'Paternity Leave',
+      paternityLeave: "Husband's Childbirth Leave",
+      marriageLeave: 'Marriage Leave',
+      bereavementLeave: 'Bereavement Leave',
       adminOnlyLeaveType: 'Only administrators can view and edit leave types.',
       earnedLeaveDesc1: 'According to Indian labour law, employees are entitled to a minimum of 12 days of paid annual leave per year.',
       annualLeaveStartPolicy: 'Select annual leave start date policy:',
@@ -4073,9 +4083,15 @@ export default {
       maternityLeaveDesc1: 'Paid leave for female employees for childbirth and childcare. Annual days follow company policy.',
       maternityLeaveDesc2: 'May be used before and after childbirth as needed.',
       maternityLeaveDesc3: 'Relevant documents must be submitted.',
-      paternityLeaveDesc1: 'Paid leave for male employees for childbirth and childcare. Annual days follow company policy.',
-      paternityLeaveDesc2: 'Leave for childcare.',
+      paternityLeaveDesc1: 'Leave for husbands when their spouse gives birth. Annual days follow company policy.',
+      paternityLeaveDesc2: 'May be used before and after the spouse\'s childbirth.',
       paternityLeaveDesc3: 'Relevant documents may need to be submitted.',
+      marriageLeaveDesc1: 'Leave for the employee\'s own marriage. Annual days follow company policy.',
+      marriageLeaveDesc2: 'Only for the employee\'s own marriage.',
+      marriageLeaveDesc3: 'Marriage-related documents may be required.',
+      bereavementLeaveDesc1: 'Bereavement leave for the death of an immediate family member. Annual days follow company policy.',
+      bereavementLeaveDesc2: 'Eligible only for parents, children, or spouse (wife).',
+      bereavementLeaveDesc3: 'Relevant documents may need to be submitted.',
       excelDownloadSuccess: 'Excel file has been downloaded.',
       excelExportError: 'An error occurred while exporting to Excel.',
       changeApprover: 'Change approver',

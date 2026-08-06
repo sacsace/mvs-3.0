@@ -1640,6 +1640,10 @@ export default {
         noProcessingTimeData: '표시할 처리 시간 데이터가 없습니다.',
         noPersonalEfficiencyData: '표시할 개인 효율 데이터가 없습니다.'
       },
+      listView: {
+        viewAll: '전체보기',
+        viewPages: '페이지로 보기'
+      },
       errors: {
         loadBoardsFailed: '작업 보드 목록을 불러오지 못했습니다.',
         loadStatsFailed: '업무 관리 카드 통계를 불러오는데 실패했습니다.'
@@ -1778,7 +1782,8 @@ export default {
         categoryRequired: '카테고리를 선택하세요.',
         partnerRequired: '공급업체(협력업체)를 선택하세요.',
         locationRequired: '보관 위치를 선택하세요.',
-        unitRequired: '단위를 선택하세요.'
+        unitRequired: '단위를 선택하세요.',
+        numberRequired: '재고 수량과 단가는 숫자로 입력하세요.'
       },
       actions: {
         cancel: '취소',
@@ -3945,9 +3950,10 @@ export default {
       remainingDays: '잔여',
       quotaDays: '부여',
       leaveYear: '회계연도',
+      hireDate: '입사일',
       noLeaveBalances: '표시할 직원 휴가 잔여일이 없습니다.',
       leaveBalancesHint: '회계연도 기준 유형별 잔여 일수입니다. 「휴가 형태」에서 선택한 유형만 표시되며, 미사용 일수는 이월되지 않습니다.',
-      leaveBalancesSearchPlaceholder: '직원명, 부서, 직책 검색...',
+      leaveBalancesSearchPlaceholder: '직원명, 부서, 직책, 입사일 검색...',
       sickOptional: '비의무',
       sickOptionalHint: '병가는 의무 휴가가 아닙니다.',
       department: '부서',
@@ -4027,7 +4033,9 @@ export default {
       personal: '개인사유',
       study: '교육',
       maternity: '출산',
-      paternity: '육아',
+      paternity: '남편 출산 휴가',
+      marriage: '결혼휴가',
+      bereavement: '조사 휴가',
       statusPending: '대기',
       statusApproved: '승인',
       statusRejected: '거부',
@@ -4039,7 +4047,9 @@ export default {
       casualLeave: '개인사유 (Casual Leave)',
       studyLeave: '교육 (Study Leave)',
       maternityLeave: '출산 (Maternity Leave)',
-      paternityLeave: '육아 (Paternity Leave)',
+      paternityLeave: '남편 출산 휴가 (Paternity Leave)',
+      marriageLeave: '결혼휴가 (Marriage Leave)',
+      bereavementLeave: '조사 휴가 (Bereavement Leave)',
       adminOnlyLeaveType: '관리자만 휴가 형태를 확인 및 수정할 수 있습니다.',
       earnedLeaveDesc1: '인도 노동법에 따라 근로자는 연간 최소 12일의 유급 연차를 받을 수 있습니다.',
       annualLeaveStartPolicy: '연차 시작일 정책 선택:',
@@ -4071,9 +4081,15 @@ export default {
       maternityLeaveDesc1: '여성 근로자의 출산·육아를 위한 휴가이며, 휴가 연간 일수는 회사 정책에 따라 적용됩니다.',
       maternityLeaveDesc2: '출산 전·후 필요한 기간에 사용할 수 있습니다.',
       maternityLeaveDesc3: '관련 서류 제출이 필요합니다.',
-      paternityLeaveDesc1: '남성 근로자의 자녀 출산·육아를 위한 휴가이며, 휴가 연간 일수는 회사 정책에 따라 적용됩니다.',
-      paternityLeaveDesc2: '자녀 양육을 위한 휴가',
+      paternityLeaveDesc1: '배우자가 출산한 경우 남편이 사용할 수 있는 휴가이며, 휴가 연간 일수는 회사 정책에 따라 적용됩니다.',
+      paternityLeaveDesc2: '배우자 출산 전·후에 사용할 수 있습니다.',
       paternityLeaveDesc3: '관련 서류 제출이 필요할 수 있습니다.',
+      marriageLeaveDesc1: '본인 결혼을 위한 휴가이며, 휴가 연간 일수는 회사 정책에 따라 적용됩니다.',
+      marriageLeaveDesc2: '본인 결혼 시에만 신청할 수 있습니다.',
+      marriageLeaveDesc3: '혼인 관련 서류 제출이 필요할 수 있습니다.',
+      bereavementLeaveDesc1: '직계가족 사망 시 사용할 수 있는 조사 휴가이며, 휴가 연간 일수는 회사 정책에 따라 적용됩니다.',
+      bereavementLeaveDesc2: '대상: 부모, 자녀, 배우자(아내)만 해당됩니다.',
+      bereavementLeaveDesc3: '관련 서류 제출이 필요할 수 있습니다.',
       excelDownloadSuccess: 'Excel 파일이 다운로드되었습니다.',
       excelExportError: 'Excel 파일 내보내기 중 오류가 발생했습니다.',
       changeApprover: '승인자 변경',

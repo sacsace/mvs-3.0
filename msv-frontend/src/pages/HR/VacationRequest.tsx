@@ -27,7 +27,9 @@ import {
   Person as PersonIcon,
   School as StudyIcon,
   Event as EventIcon,
-  Work as WorkIcon
+  Work as WorkIcon,
+  Favorite as FavoriteIcon,
+  Groups as GroupsIcon,
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
 import { vacationService } from '../../services/api';
@@ -37,7 +39,16 @@ import { useTranslation } from 'react-i18next';
 
 const VACATION_MENU_ROUTES = ['/hr/leave'];
 
-const VACATION_TYPE_KEYS = ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'] as const;
+const VACATION_TYPE_KEYS = [
+  'annual',
+  'sick',
+  'personal',
+  'study',
+  'maternity',
+  'paternity',
+  'marriage',
+  'bereavement',
+] as const;
 type VacationTypeKey = (typeof VACATION_TYPE_KEYS)[number];
 
 const VACATION_TYPE_ICONS: Record<VacationTypeKey, React.ReactNode> = {
@@ -46,7 +57,9 @@ const VACATION_TYPE_ICONS: Record<VacationTypeKey, React.ReactNode> = {
   personal: <PersonIcon />,
   study: <StudyIcon />,
   maternity: <EventIcon />,
-  paternity: <WorkIcon />
+  paternity: <WorkIcon />,
+  marriage: <FavoriteIcon />,
+  bereavement: <GroupsIcon />,
 };
 
 interface User {
@@ -773,17 +786,7 @@ const VacationRequest: React.FC = () => {
                         py: 1.25,
                         borderRadius: 1.5,
                         textTransform: 'none',
-                        fontWeight: 600,
-                        background: 'linear-gradient(45deg, #2196F3 30%, #21CBF3 90%)',
-                        boxShadow: '0 3px 5px 2px rgba(33, 203, 243, .3)',
-                        '&:hover': {
-                          background: 'linear-gradient(45deg, #1976D2 30%, #1CB5E0 90%)',
-                          boxShadow: '0 4px 8px 2px rgba(33, 203, 243, .4)'
-                        },
-                        '&:disabled': {
-                          background: '#cbd5e0',
-                          boxShadow: 'none'
-                        }
+                        fontWeight: 600
                       }}
                     >
                       {saving ? t('vacationManagement.request.saving') : t('vacationManagement.request.save')}

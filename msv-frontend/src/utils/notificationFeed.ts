@@ -35,6 +35,32 @@ export interface ServerNotificationItem {
 export function hrefFromServerNotificationData(data: unknown): string | undefined {
   if (data == null || typeof data !== 'object') return undefined;
   const d = data as Record<string, unknown>;
+
+  // `//evil.example` 같은 프로토콜-상대 URL은 외부 이동이 되므로 거부
+  if (
+    typeof d.href === 'string' &&
+    d.href.startsWith('/') &&
+    !d.href.startsWith('//') &&
+    !d.href.includes('://')
+  ) {
+    return d.href;
+  }
+
+  if (
+    d.feature === 'work_board' ||
+    d.feature === 'work_board_comment' ||
+    d.feature === 'work_board_comment_reply'
+  ) {
+    const boardId = Number(d.board_id);
+    const cardId = Number(d.card_id);
+    if (Number.isInteger(boardId) && boardId > 0) {
+      if (Number.isInteger(cardId) && cardId > 0) {
+        return `/work/projects/${boardId}?card=${cardId}`;
+      }
+      return `/work/projects/${boardId}`;
+    }
+  }
+
   if (d.feature !== 'work_report') return undefined;
   const rawId = d.id;
   const reportId =

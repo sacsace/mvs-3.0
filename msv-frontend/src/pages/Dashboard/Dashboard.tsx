@@ -1861,10 +1861,9 @@ const Dashboard: React.FC = () => {
                                 ? 'rgba(10, 110, 125, 0.14)'
                                 : 'grey.50',
                           cursor: 'pointer',
-                          transition: 'box-shadow 0.2s ease, transform 0.15s ease',
+                          transition: 'background-color 0.15s ease',
                           '&:hover': {
-                            boxShadow: '0 8px 20px rgba(15, 23, 42, 0.08)',
-                            transform: 'translateY(-1px)',
+                            bgcolor: 'action.hover',
                           },
                         }}
                       >

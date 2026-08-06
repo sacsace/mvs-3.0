@@ -16,16 +16,16 @@ export const mvsPageShellSx: SxProps<Theme> = {
 
 export const mvsMainSurfaceSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',
-  borderRadius: { xs: '12px', sm: '18px', md: '24px' },
+  borderRadius: '10px',
   padding: { xs: '16px', sm: '24px', md: '32px' },
-  boxShadow: '0 4px 16px rgba(15, 23, 42, 0.09)',
-  border: '1px solid #B8C4D0',
+  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
+  border: '1px solid #D0DBE8',
   boxSizing: 'border-box',
 };
 
 export const mvsSectionGroupSx: SxProps<Theme> = {
   backgroundColor: '#F0F4F8',
-  borderRadius: '20px',
+  borderRadius: '10px',
   padding: '20px',
   marginBottom: '24px',
   border: '1px solid #D0DBE8',
@@ -34,15 +34,15 @@ export const mvsSectionGroupSx: SxProps<Theme> = {
 
 export const mvsInnerCardSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',
-  borderRadius: '16px',
+  borderRadius: '8px',
   padding: '18px',
   border: '1px solid #D0DBE8',
-  boxShadow: '0 2px 8px rgba(15, 23, 42, 0.06)',
+  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
 };
 
 export const mvsFilterToolbarSx: MvsStyleObject = {
   backgroundColor: '#F0F4F8',
-  borderRadius: { xs: '12px', sm: '18px' },
+  borderRadius: '8px',
   padding: { xs: '12px', sm: '16px' },
   marginBottom: { xs: '16px', sm: '24px' },
   border: '1px solid #D0DBE8',
@@ -52,7 +52,7 @@ export const mvsFilterToolbarSx: MvsStyleObject = {
 /** 검색·필터 입력(TextField·Select·Autocomplete) 테두리 — 페이지 sx에 spread */
 export const mvsSearchFieldSx: MvsStyleObject = {
   '& .MuiOutlinedInput-root': {
-    borderRadius: '12px',
+    borderRadius: '8px',
     bgcolor: 'background.paper',
     '& .MuiOutlinedInput-notchedOutline': {
       borderColor: '#D0DBE8',
@@ -79,19 +79,19 @@ export const mvsSearchZoneSx: MvsStyleObject = mvsFilterToolbarSx;
 
 export const mvsTableZoneSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',
-  borderRadius: { xs: '14px', sm: '20px' },
+  borderRadius: '10px',
   padding: { xs: '12px', sm: '18px' },
-  boxShadow: '0 4px 14px rgba(15, 23, 42, 0.07)',
+  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
   border: '1px solid #D0DBE8',
 };
 
 /** KPI·요약 카드 — 재고·회계 등 목록 상단 통계 */
 export const mvsKpiCardSx: SxProps<Theme> = (theme) => ({
-  borderRadius: '16px',
+  borderRadius: '8px',
   border: '1px solid',
-  borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
+  borderColor: theme.palette.mode === 'light' ? '#D0DBE8' : 'divider',
   boxShadow:
-    theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.04)' : '0 2px 12px rgba(0,0,0,0.25)',
+    theme.palette.mode === 'light' ? '0 1px 2px rgba(15, 23, 42, 0.05)' : '0 1px 2px rgba(0,0,0,0.25)',
   bgcolor: 'background.paper',
 });
 
@@ -122,7 +122,7 @@ export const mvsTableWellSx: SxProps<Theme> = (theme) => ({
 });
 
 export const mvsTableInsetWrapSx: SxProps<Theme> = (theme) => ({
-  borderRadius: '18px',
+  borderRadius: '10px',
   p: { xs: 1, sm: 1.25 },
   bgcolor:
     theme.palette.mode === 'dark'
@@ -247,7 +247,7 @@ export const mvsBodyToolbarSx: MvsStyleObject = {
 /** Body 보조 outlined 버튼 — primary(추가)와 구분되는 연한 슬레이트 톤 */
 export const mvsBodyOutlinedBtnSx: MvsStyleObject = {
   textTransform: 'none',
-  borderRadius: '10px',
+  borderRadius: '8px',
   fontWeight: 600,
   fontSize: '0.8125rem',
   minHeight: 36,
@@ -268,7 +268,7 @@ export const mvsBodyOutlinedBtnSx: MvsStyleObject = {
 /** Body 통일 primary 버튼 */
 export const mvsBodyPrimaryBtnSx: MvsStyleObject = {
   textTransform: 'none',
-  borderRadius: '10px',
+  borderRadius: '8px',
   fontWeight: 600,
   fontSize: '0.8125rem',
   minHeight: 36,
@@ -295,11 +295,11 @@ export const mvsBodyTableFrameSx: MvsStyleObject = {
   width: '100%',
   maxWidth: '100%',
   mx: 'auto',
-  borderRadius: '14px',
+  borderRadius: '8px',
   border: '1px solid #D0DBE8',
   overflow: 'hidden',
   bgcolor: '#FFFFFF',
-  boxShadow: '0 2px 8px rgba(15, 23, 42, 0.06)',
+  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
 };
 
 /** Body 테이블 바디 — 줄무늬 없음(전 행 흰색), hover만 구분 */
@@ -355,14 +355,13 @@ export const mvsTitleBlockSx: SxProps<Theme> = {
   marginBottom: '24px',
 };
 
-/** 업무 관리(보드 목록·상세) 페이지 배경 그라데이션 */
-export const mvsWorkBoardPageBg =
-  'linear-gradient(145deg, #F0F5FB 0%, #E8F0F8 42%, #F5F8FC 100%)';
+/** 업무 관리(보드 목록·상세) 페이지 배경 */
+export const mvsWorkBoardPageBg = '#F0F4F9';
 
 /** 대시보드 하단 위젯 그룹 배경 */
 export const mvsDashboardWidgetGroupSx: SxProps<Theme> = {
   backgroundColor: '#EEF3F8',
-  borderRadius: '22px',
+  borderRadius: '10px',
   padding: '20px',
   gap: '20px',
   border: '1px solid #D0DBE8',
@@ -372,7 +371,7 @@ export const mvsDashboardWidgetGroupSx: SxProps<Theme> = {
 /** 대시보드 개별 위젯 카드(내부 패딩은 CardContent 유지) */
 export const mvsDashboardWidgetCardSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',
-  borderRadius: '18px',
-  boxShadow: '0 4px 14px rgba(15, 23, 42, 0.07)',
+  borderRadius: '8px',
+  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
   border: '1px solid #D0DBE8',
 };

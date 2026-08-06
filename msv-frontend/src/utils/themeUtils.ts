@@ -186,8 +186,8 @@ export const createDynamicTheme = (appearanceSettings: {
   const primaryColors = generateColorVariants(resolvedPrimaryColor);
   const secondaryColors = generateColorVariants(preset.secondaryColor);
   const isLightMode = mode === 'light';
-  const containedButtonShadow = `0 4px 12px ${alpha(resolvedPrimaryColor, 0.18)}`;
-  const containedButtonShadowHover = `0 6px 16px ${alpha(resolvedPrimaryColor, 0.22)}`;
+  const containedButtonShadow = 'none';
+  const containedButtonShadowHover = 'none';
   const dividerColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#475569' : '#EEF2F7';
   const actionActiveColor = isForestTheme
     ? 'rgba(218, 248, 230, 0.78)'
@@ -222,9 +222,7 @@ export const createDynamicTheme = (appearanceSettings: {
   const cardBorderColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#52647a' : '#D0DBE8';
   const cardHoverBorderColor = isForestTheme ? '#3b8f66' : mode === 'dark' ? '#64748b' : '#BCC9DA';
   const cardShadow =
-    mode === 'dark' ? '0 1px 0 rgba(0, 0, 0, 0.2)' : '0 4px 18px rgba(36, 52, 71, 0.045)';
-  const cardHoverShadow =
-    mode === 'dark' ? '0 2px 6px rgba(0, 0, 0, 0.24)' : '0 6px 22px rgba(36, 52, 71, 0.06)';
+    mode === 'dark' ? '0 1px 0 rgba(0, 0, 0, 0.2)' : '0 1px 2px rgba(36, 52, 71, 0.05)';
   const appBarBackground = mode === 'dark' ? '#253345' : '#FFFFFF';
   const appBarTextColor = isForestTheme ? '#eafcf1' : mode === 'dark' ? '#f8fafc' : '#243447';
   const appBarBorderColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#52647a' : 'rgba(36, 52, 71, 0.06)';
@@ -313,7 +311,7 @@ export const createDynamicTheme = (appearanceSettings: {
     },
     typography: {
       fontFamily:
-        '"Plus Jakarta Sans", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+        '"NanumSquare", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
       h1: {
         fontSize: `${22 * fontSizeMultiplier}px`,
         fontWeight: 700,
@@ -419,7 +417,7 @@ export const createDynamicTheme = (appearanceSettings: {
       },
     },
     shape: {
-      borderRadius: isLightMode ? 16 : 12,
+      borderRadius: 8,
     },
     spacing: 8,
     components: {
@@ -452,14 +450,14 @@ export const createDynamicTheme = (appearanceSettings: {
       MuiButton: {
         styleOverrides: {
           root: {
-            borderRadius: isLightMode ? 12 : 8,
+            borderRadius: 8,
             textTransform: 'none',
             fontWeight: 600,
             fontSize: `${13.5 * fontSizeMultiplier}px`,
             minHeight: isLightMode ? 40 : 36,
             padding: isLightMode ? '8px 16px' : '8px 16px',
             boxShadow: 'none',
-            transition: 'all 0.2s ease',
+            transition: 'background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease',
             ...(isLightMode && {
               '&.Mui-disabled': { opacity: 0.5 },
             })
@@ -485,38 +483,26 @@ export const createDynamicTheme = (appearanceSettings: {
       },
       MuiCard: {
         styleOverrides: {
-          root: ({ ownerState }: { ownerState: { variant?: string } }) => {
+          root: () => {
             if (!isLightMode) {
               return {
-                borderRadius: 12,
+                borderRadius: 8,
                 boxShadow: cardShadow,
                 border: `1px solid ${cardBorderColor}`,
                 backgroundColor: preset.backgroundPaper,
-                transition: 'all 0.2s ease',
-                '&:hover': { boxShadow: cardHoverShadow, borderColor: cardHoverBorderColor },
+                transition: 'border-color 0.15s ease',
+                '&:hover': { borderColor: cardHoverBorderColor },
               };
             }
-            const outlined = ownerState.variant === 'outlined';
             return {
               backgroundColor: '#FFFFFF',
-              transition: 'box-shadow 0.2s ease, background-color 0.2s ease',
-              ...(outlined
-                ? {
-                    borderRadius: '16px',
-                    boxShadow: '0 2px 10px rgba(15, 23, 42, 0.035)',
-                    border: '1px solid rgba(15, 23, 42, 0.04)',
-                    '&:hover': {
-                      boxShadow: '0 4px 16px rgba(15, 23, 42, 0.05)',
-                    },
-                  }
-                : {
-                    borderRadius: '18px',
-                    border: 'none',
-                    boxShadow: cardShadow,
-                    '&:hover': {
-                      boxShadow: cardHoverShadow,
-                    },
-                  }),
+              borderRadius: '8px',
+              border: `1px solid ${cardBorderColor}`,
+              boxShadow: cardShadow,
+              transition: 'border-color 0.15s ease',
+              '&:hover': {
+                borderColor: cardHoverBorderColor,
+              },
             };
           },
         },
@@ -546,7 +532,6 @@ export const createDynamicTheme = (appearanceSettings: {
                 backgroundImage: 'none',
               };
             }
-            const outlined = ownerState.variant === 'outlined';
             const elev =
               ownerState.variant === 'elevation' && typeof ownerState.elevation === 'number'
                 ? ownerState.elevation
@@ -557,17 +542,9 @@ export const createDynamicTheme = (appearanceSettings: {
             return {
               backgroundImage: 'none',
               backgroundColor: '#ffffff',
-              ...(outlined
-                ? {
-                    borderRadius: '16px',
-                    boxShadow: '0 2px 10px rgba(15, 23, 42, 0.035)',
-                    border: '1px solid rgba(15, 23, 42, 0.04)',
-                  }
-                : {
-                    borderRadius: '18px',
-                    boxShadow: cardShadow,
-                    border: 'none',
-                  }),
+              borderRadius: '8px',
+              boxShadow: cardShadow,
+              border: `1px solid ${cardBorderColor}`,
             };
           },
         },
@@ -586,7 +563,7 @@ export const createDynamicTheme = (appearanceSettings: {
             backgroundColor: isLightMode ? '#ffffff' : preset.backgroundPaper,
             ...(isLightMode
               ? {
-                  borderRadius: 14,
+                  borderRadius: 8,
                   minHeight: 44,
                 }
               : {}),
@@ -635,7 +612,7 @@ export const createDynamicTheme = (appearanceSettings: {
           root: isLightMode
             ? {
                 height: 56,
-                transition: 'all 0.2s ease',
+                transition: 'background-color 0.15s ease',
                 '&:hover': { backgroundColor: '#F8FAFC' },
               }
             : {},
@@ -668,7 +645,7 @@ export const createDynamicTheme = (appearanceSettings: {
         styleOverrides: {
           root: isLightMode
             ? {
-                borderRadius: 9999,
+                borderRadius: 6,
                 height: 26,
                 fontWeight: 600,
                 fontSize: '0.75rem',
@@ -689,18 +666,18 @@ export const createDynamicTheme = (appearanceSettings: {
       MuiAppBar: {
         styleOverrides: {
           root: {
-            background: isLightMode ? 'rgba(255, 255, 255, 0.88)' : appBarBackground,
+            background: appBarBackground,
             color: appBarTextColor,
             boxShadow: 'none',
             borderBottom: isLightMode ? '1px solid #E5E7EB' : `1px solid ${appBarBorderColor}`,
-            ...(isLightMode ? { backdropFilter: 'blur(14px)' } : {}),
+            backdropFilter: 'none',
           },
         },
       },
       MuiListItemButton: {
         styleOverrides: {
           root: {
-            borderRadius: isLightMode ? '10px' : 8,
+            borderRadius: 8,
             margin: isLightMode ? '4px 8px' : '2px 8px',
             padding: isLightMode ? '10px 12px' : undefined,
             borderLeft: 'none',
@@ -710,10 +687,9 @@ export const createDynamicTheme = (appearanceSettings: {
                   color: '#4B5563',
                 }
               : {}),
-            transition: 'all 0.2s ease',
+            transition: 'background-color 0.15s ease, color 0.15s ease',
             '&:hover': {
               backgroundColor: listHoverBg,
-              ...(isLightMode ? { transform: 'translateY(-1px)' } : {}),
             },
             '&.Mui-selected': {
               backgroundColor: listSelectedBg,

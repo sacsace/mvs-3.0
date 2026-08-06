@@ -335,12 +335,11 @@ const Header: React.FC<HeaderProps> = ({
         width: '100%',
         backgroundColor: '#FFFFFF',
         backgroundImage: 'none',
-        backdropFilter: 'blur(12px)',
+        backdropFilter: 'none',
         border: 'none',
-        borderBottom: '1px solid rgba(143, 168, 190, 0.45)',
+        borderBottom: '1px solid #D0DBE8',
         borderRadius: 0,
-        boxShadow:
-          '0 4px 14px rgba(36, 52, 71, 0.08), 0 1px 3px rgba(36, 52, 71, 0.04)',
+        boxShadow: 'none',
         outline: 'none',
         zIndex: (theme) => theme.zIndex.drawer + 1,
         '&::after': {
@@ -464,8 +463,7 @@ const Header: React.FC<HeaderProps> = ({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                  background: 'linear-gradient(135deg, var(--primary-500) 0%, var(--accent-500) 100%)'
+                  bgcolor: 'primary.main'
                 }}
               >
                 <BusinessIcon sx={{ color: 'white', fontSize: '1.5rem' }} />

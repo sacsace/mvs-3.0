@@ -68,6 +68,28 @@ import {
 import { workBoardService } from '../../services/api';
 import { useStore } from '../../store';
 
+const listViewModeBarSx = {
+  mb: 1.25,
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: 0.75,
+} as const;
+
+const listViewModeBtnSx = {
+  height: 32,
+  minWidth: 0,
+  px: 1.5,
+  textTransform: 'none' as const,
+  fontWeight: 600,
+  fontSize: '0.75rem',
+  borderRadius: '8px',
+  boxShadow: 'none',
+  whiteSpace: 'nowrap' as const,
+};
+
+type ListViewMode = 'page' | 'all';
+
 const TEAM_STATS_ROLES = new Set(['root', 'audit', 'admin', 'manager']);
 
 const resolveCardCreatorId = (card: Record<string, unknown>): number | null => {
@@ -410,6 +432,7 @@ const WorkStatistics: React.FC = () => {
   const [periodFilter, setPeriodFilter] = useState('');
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(10);
+  const [listViewMode, setListViewMode] = useState<ListViewMode>('page');
   const [tabValue, setTabValue] = useState(0);
   const [processingTimeMetric, setProcessingTimeMetric] = useState<ProcessingTimeMetric>('median');
   const [completedDurationSamples, setCompletedDurationSamples] = useState<number[]>([]);
@@ -647,7 +670,14 @@ const WorkStatistics: React.FC = () => {
     }
 
     setFilteredStatistics(filtered);
+    setPage(1);
   }, [statistics, searchTerm, departmentFilter, periodFilter]);
+
+  const handleListViewModeChange = (mode: ListViewMode) => {
+    if (mode === listViewMode) return;
+    setListViewMode(mode);
+    setPage(1);
+  };
 
   useEffect(() => {
     loadStatisticsData();
@@ -731,7 +761,10 @@ const WorkStatistics: React.FC = () => {
     totalTasksCompleted > 0 ? totalCompletedProcessingHours / totalTasksCompleted : 0;
   const completionRate = totalAssigned > 0 ? (totalTasksCompleted / totalAssigned) * 100 : 0;
 
-  const paginatedStatistics = filteredStatistics.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+  const displayedStatistics =
+    listViewMode === 'all'
+      ? filteredStatistics
+      : filteredStatistics.slice((page - 1) * itemsPerPage, page * itemsPerPage);
   const departments = Array.from(new Set(statistics.map((stat) => stat.department))).filter(Boolean);
   const periods = Array.from(new Set(statistics.map((stat) => stat.period))).filter(Boolean);
 
@@ -1040,6 +1073,36 @@ const WorkStatistics: React.FC = () => {
         </Box>
 
         <TabPanel value={tabValue} index={0}>
+          <Box sx={listViewModeBarSx}>
+            <Button
+              size="small"
+              disableElevation
+              variant={listViewMode === 'all' ? 'contained' : 'outlined'}
+              onClick={() => handleListViewModeChange('all')}
+              sx={{
+                ...listViewModeBtnSx,
+                ...(listViewMode === 'all'
+                  ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                  : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+              }}
+            >
+              {t('workStatistics.listView.viewAll')}
+            </Button>
+            <Button
+              size="small"
+              disableElevation
+              variant={listViewMode === 'page' ? 'contained' : 'outlined'}
+              onClick={() => handleListViewModeChange('page')}
+              sx={{
+                ...listViewModeBtnSx,
+                ...(listViewMode === 'page'
+                  ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                  : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+              }}
+            >
+              {t('workStatistics.listView.viewPages')}
+            </Button>
+          </Box>
           <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
             <Table
               size="small"
@@ -1070,7 +1133,7 @@ const WorkStatistics: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody sx={mvsTableBodyRowSx}>
-                {paginatedStatistics.map((stat) => (
+                {displayedStatistics.map((stat) => (
                   <TableRow key={stat.id}>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -1188,7 +1251,7 @@ const WorkStatistics: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ))}
-                {paginatedStatistics.length === 0 && (
+                {displayedStatistics.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={12}>
                       <Typography sx={{ py: 2, textAlign: 'center', color: 'text.primary', opacity: 0.65 }}>
@@ -1201,15 +1264,17 @@ const WorkStatistics: React.FC = () => {
             </Table>
           </TableContainer>
 
-          <Box sx={mvsBodyPaginationSx}>
-            <Pagination
-              count={Math.max(1, Math.ceil(filteredStatistics.length / itemsPerPage))}
-              page={page}
-              onChange={(_, value) => setPage(value)}
-              shape="rounded"
-              siblingCount={1}
-            />
-          </Box>
+          {listViewMode === 'page' && (
+            <Box sx={mvsBodyPaginationSx}>
+              <Pagination
+                count={Math.max(1, Math.ceil(filteredStatistics.length / itemsPerPage))}
+                page={page}
+                onChange={(_, value) => setPage(value)}
+                shape="rounded"
+                siblingCount={1}
+              />
+            </Box>
+          )}
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>

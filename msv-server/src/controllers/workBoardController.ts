@@ -283,8 +283,47 @@ const sendCardAssignmentNotification = (
         card_id: payload.cardId,
         card_title: payload.cardTitle,
         actor_name: payload.actorName,
+        href: `/work/projects/${payload.boardId}?card=${payload.cardId}`,
         title_en: 'Work Assignee Assignment',
         message_en: `${payload.actorName} assigned you as the assignee of the "${payload.cardTitle}" card.`
+      },
+      tenant_id: req.user?.tenant_id,
+      company_id: req.user?.company_id,
+      sender_user_id: req.user?.id
+    },
+    socketService
+  );
+};
+
+const sendCardReferenceNotification = (
+  req: RequestWithUser,
+  payload: {
+    targetUserId: number;
+    boardId: number;
+    boardName: string;
+    cardId: number;
+    cardTitle: string;
+    actorName: string;
+  }
+) => {
+  const socketService = (req as any).socketService as SocketService | undefined;
+  pushNotification(
+    {
+      title: '업무 참조 지정',
+      message: `${payload.actorName}님이 "${payload.cardTitle}" 카드의 참조자로 지정했습니다.`,
+      type: 'info',
+      target_type: 'user',
+      target_id: payload.targetUserId,
+      data: {
+        feature: 'work_board',
+        board_id: payload.boardId,
+        board_name: payload.boardName,
+        card_id: payload.cardId,
+        card_title: payload.cardTitle,
+        actor_name: payload.actorName,
+        href: `/work/projects/${payload.boardId}?card=${payload.cardId}`,
+        title_en: 'Work Card Reference',
+        message_en: `${payload.actorName} added you as a reference on the "${payload.cardTitle}" card.`
       },
       tenant_id: req.user?.tenant_id,
       company_id: req.user?.company_id,
@@ -930,6 +969,23 @@ export const createWorkBoardCard = async (req: RequestWithUser, res: Response) =
       });
     }
 
+    const createdReferenceIds = Array.isArray(parsedReferenceUserIds.value)
+      ? parsedReferenceUserIds.value
+      : [];
+    const actorNameForRef = user.username || user.userid || '사용자';
+    for (const refUserId of createdReferenceIds) {
+      if (Number(refUserId) === Number(user.id)) continue;
+      if (assignee_user_id && Number(refUserId) === Number(assignee_user_id)) continue;
+      sendCardReferenceNotification(req, {
+        targetUserId: Number(refUserId),
+        boardId: board.id,
+        boardName: board.name,
+        cardId: card.id,
+        cardTitle: card.title,
+        actorName: actorNameForRef
+      });
+    }
+
     res.status(201).json({ success: true, data: withUser });
   } catch (error: any) {
     console.error('createWorkBoardCard:', error);
@@ -958,6 +1014,11 @@ export const updateWorkBoardCard = async (req: RequestWithUser, res: Response) =
     const { title, description, assignee_user_id, reference_user_ids, due_date, color } = req.body;
     const patch: any = {};
     const previousAssigneeUserId = (card as any).assignee_user_id ? Number((card as any).assignee_user_id) : null;
+    const previousReferenceIds = Array.isArray((card as any).reference_user_ids)
+      ? ((card as any).reference_user_ids as unknown[])
+          .map((id) => Number(id))
+          .filter((id) => Number.isInteger(id) && id > 0)
+      : [];
     if (title !== undefined) patch.title = String(title).trim().slice(0, 300);
     if (description !== undefined) patch.description = normalizeCardDescription(description);
     if (due_date !== undefined) patch.due_date = due_date || null;
@@ -1019,6 +1080,27 @@ export const updateWorkBoardCard = async (req: RequestWithUser, res: Response) =
         cardTitle: patch.title || card.title,
         actorName: user.username || user.userid || '사용자'
       });
+    }
+
+    if (parsedReferenceUserIds.value !== undefined) {
+      const previousSet = new Set(previousReferenceIds);
+      const actorName = user.username || user.userid || '사용자';
+      const cardTitle = patch.title || card.title;
+      for (const refUserId of parsedReferenceUserIds.value) {
+        const uid = Number(refUserId);
+        if (!Number.isInteger(uid) || uid <= 0) continue;
+        if (previousSet.has(uid)) continue;
+        if (uid === Number(user.id)) continue;
+        if (nextAssigneeUserId && uid === nextAssigneeUserId) continue;
+        sendCardReferenceNotification(req, {
+          targetUserId: uid,
+          boardId: board.id,
+          boardName: board.name,
+          cardId: card.id,
+          cardTitle,
+          actorName
+        });
+      }
     }
     res.json({ success: true, data: withUser });
   } catch (error: any) {
@@ -1257,6 +1339,7 @@ export const createWorkBoardCardComment = async (req: RequestWithUser, res: Resp
     }
 
     let parentId: number | null = null;
+    let parentAuthorId: number | null = null;
     if (parentIdBody !== undefined && parentIdBody !== null && parentIdBody !== '') {
       const parsed = parseInt(String(parentIdBody), 10);
       if (!Number.isInteger(parsed) || parsed <= 0) {
@@ -1275,6 +1358,7 @@ export const createWorkBoardCardComment = async (req: RequestWithUser, res: Resp
         });
       }
       parentId = parsed;
+      parentAuthorId = Number((parentComment as any).user_id) || null;
     }
 
     const boardMembers = await WorkBoardMember.findAll({
@@ -1337,6 +1421,7 @@ export const createWorkBoardCardComment = async (req: RequestWithUser, res: Resp
     if (mentionIds.size > 0) {
       const actorName = user.username || user.userid || '사용자';
       const socketService = (req as any).socketService as SocketService | undefined;
+      const cardHref = `/work/projects/${board.id}?card=${card.id}`;
       for (const mentionUserId of mentionIds) {
         pushNotification(
           {
@@ -1353,6 +1438,7 @@ export const createWorkBoardCardComment = async (req: RequestWithUser, res: Resp
               card_title: card.title,
               comment_id: comment.id,
               actor_name: actorName,
+              href: cardHref,
               title_en: 'Comment Mention',
               message_en: `${actorName} mentioned you in a comment on the "${card.title}" card.`
             },
@@ -1363,6 +1449,41 @@ export const createWorkBoardCardComment = async (req: RequestWithUser, res: Resp
           socketService
         );
       }
+    }
+
+    if (
+      parentAuthorId &&
+      parentAuthorId !== Number(user.id) &&
+      !mentionIds.has(parentAuthorId)
+    ) {
+      const actorName = user.username || user.userid || '사용자';
+      const socketService = (req as any).socketService as SocketService | undefined;
+      pushNotification(
+        {
+          title: '댓글 답글',
+          message: `${actorName}님이 "${card.title}" 카드 댓글에 답글을 남겼습니다.`,
+          type: 'info',
+          target_type: 'user',
+          target_id: parentAuthorId,
+          data: {
+            feature: 'work_board_comment_reply',
+            board_id: board.id,
+            board_name: board.name,
+            card_id: card.id,
+            card_title: card.title,
+            comment_id: comment.id,
+            parent_comment_id: parentId,
+            actor_name: actorName,
+            href: `/work/projects/${board.id}?card=${card.id}`,
+            title_en: 'Comment Reply',
+            message_en: `${actorName} replied to your comment on the "${card.title}" card.`
+          },
+          tenant_id: user.tenant_id,
+          company_id: user.company_id,
+          sender_user_id: user.id
+        },
+        socketService
+      );
     }
 
     return res.status(201).json({ success: true, data: full });

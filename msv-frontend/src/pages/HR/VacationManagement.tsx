@@ -84,6 +84,7 @@ import {
   Schedule as ScheduleIcon,
   MoreHoriz as MoreHorizIcon,
   Groups as GroupsIcon,
+  Favorite as FavoriteIcon,
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
@@ -104,7 +105,15 @@ interface VacationRequest {
   department: string;
   position: string;
   avatar?: string;
-  vacationType: 'annual' | 'sick' | 'personal' | 'study' | 'maternity' | 'paternity';
+  vacationType:
+    | 'annual'
+    | 'sick'
+    | 'personal'
+    | 'study'
+    | 'maternity'
+    | 'paternity'
+    | 'marriage'
+    | 'bereavement';
   startDate: string;
   endDate: string;
   days: number;
@@ -119,7 +128,15 @@ interface VacationRequest {
   attachments?: string[];
 }
 
-type LeaveBalanceTypeKey = 'annual' | 'sick' | 'personal' | 'study' | 'maternity' | 'paternity';
+type LeaveBalanceTypeKey =
+  | 'annual'
+  | 'sick'
+  | 'personal'
+  | 'study'
+  | 'maternity'
+  | 'paternity'
+  | 'marriage'
+  | 'bereavement';
 
 interface LeaveBalanceRow {
   userId: number;
@@ -139,6 +156,8 @@ const LEAVE_BALANCE_TYPE_KEYS: LeaveBalanceTypeKey[] = [
   'study',
   'maternity',
   'paternity',
+  'marriage',
+  'bereavement',
 ];
 
 const VACATION_MENU_ROUTES = ['/hr/leave'];
@@ -152,7 +171,20 @@ const DEFAULT_LEAVE_TYPE_DAYS: Record<string, number> = {
   study: 0,
   maternity: 182,
   paternity: 15,
+  marriage: 5,
+  bereavement: 3,
 };
+
+const DEFAULT_AVAILABLE_TYPES = [
+  'annual',
+  'sick',
+  'personal',
+  'study',
+  'maternity',
+  'paternity',
+  'marriage',
+  'bereavement',
+];
 
 type VacationPolicyState = {
   annualLeaveStartDays: number;
@@ -466,7 +498,7 @@ const VacationManagement: React.FC = () => {
       const response = await vacationService.updateVacationPolicy({
         annualLeaveStartDays: startDays,
         annualLeaveEarnDays: vacationPolicy?.annualLeaveEarnDays || 20,
-        availableTypes: vacationPolicy?.availableTypes || ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'],
+        availableTypes: vacationPolicy?.availableTypes || DEFAULT_AVAILABLE_TYPES,
         leaveTypeDays: vacationPolicy?.leaveTypeDays || DEFAULT_LEAVE_TYPE_DAYS,
       });
       if (response.success) {
@@ -489,7 +521,7 @@ const VacationManagement: React.FC = () => {
       return;
     }
 
-    const currentTypes = vacationPolicy?.availableTypes || ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'];
+    const currentTypes = vacationPolicy?.availableTypes || DEFAULT_AVAILABLE_TYPES;
     const newTypes = currentTypes.includes(vacationType)
       ? currentTypes.filter(type => type !== vacationType)
       : [...currentTypes, vacationType];
@@ -529,7 +561,7 @@ const VacationManagement: React.FC = () => {
       const response = await vacationService.updateVacationPolicy({
         annualLeaveStartDays: vacationPolicy?.annualLeaveStartDays ?? 240,
         annualLeaveEarnDays: vacationPolicy?.annualLeaveEarnDays ?? 20,
-        availableTypes: vacationPolicy?.availableTypes || ['annual', 'sick', 'personal', 'study', 'maternity', 'paternity'],
+        availableTypes: vacationPolicy?.availableTypes || DEFAULT_AVAILABLE_TYPES,
         leaveTypeDays: {
           ...DEFAULT_LEAVE_TYPE_DAYS,
           ...(vacationPolicy?.leaveTypeDays || {}),
@@ -727,7 +759,9 @@ const VacationManagement: React.FC = () => {
     { key: 'personal', name: t('vacationManagement.personal'), icon: <PersonIcon />, color: 'default' },
     { key: 'study', name: t('vacationManagement.study'), icon: <StudyIcon />, color: 'info' },
     { key: 'maternity', name: t('vacationManagement.maternity'), icon: <EventIcon />, color: 'success' },
-    { key: 'paternity', name: t('vacationManagement.paternity'), icon: <WorkIcon />, color: 'warning' }
+    { key: 'paternity', name: t('vacationManagement.paternity'), icon: <WorkIcon />, color: 'warning' },
+    { key: 'marriage', name: t('vacationManagement.marriage'), icon: <FavoriteIcon />, color: 'secondary' },
+    { key: 'bereavement', name: t('vacationManagement.bereavement'), icon: <GroupsIcon />, color: 'default' },
   ];
 
   const getStatusChip = (status: string) => {
@@ -976,7 +1010,7 @@ const VacationManagement: React.FC = () => {
     const q = leaveBalanceSearch.trim().toLowerCase();
     if (!q) return leaveBalances;
     return leaveBalances.filter((row) => {
-      const blob = [row.username, row.department, row.position, row.leaveYearLabel]
+      const blob = [row.username, row.department, row.position, row.hireDate, row.leaveYearLabel]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
@@ -1552,6 +1586,10 @@ const VacationManagement: React.FC = () => {
                 return t('vacationManagement.maternity');
               case 'paternity':
                 return t('vacationManagement.paternity');
+              case 'marriage':
+                return t('vacationManagement.marriage');
+              case 'bereavement':
+                return t('vacationManagement.bereavement');
               default:
                 return key;
             }
@@ -1619,6 +1657,7 @@ const VacationManagement: React.FC = () => {
                         <TableRow>
                           <TableCell>{t('vacationManagement.employee')}</TableCell>
                           <TableCell>{t('vacationManagement.department')}</TableCell>
+                          <TableCell>{t('vacationManagement.hireDate')}</TableCell>
                           <TableCell>{t('vacationManagement.leaveYear')}</TableCell>
                           {leaveBalanceTypes.map((key) => (
                             <TableCell key={key} align="right">
@@ -1674,6 +1713,11 @@ const VacationManagement: React.FC = () => {
                               </Box>
                             </TableCell>
                             <TableCell>{row.department || '—'}</TableCell>
+                            <TableCell>
+                              <Typography variant="body2" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {row.hireDate || '—'}
+                              </Typography>
+                            </TableCell>
                             <TableCell>
                               <Typography variant="caption" color="text.secondary">
                                 {row.leaveYearLabel || '—'}
@@ -1976,7 +2020,7 @@ const VacationManagement: React.FC = () => {
                   </Card>
                 </Grid>
 
-                {/* 육아 (Paternity Leave) */}
+                {/* 남편 출산 휴가 (Paternity Leave) */}
                 <Grid size={{ xs: 12, md: 6 }}>
                   <Card variant="outlined" sx={{ mb: 3, height: '100%' }}>
                 <CardContent>
@@ -2011,6 +2055,88 @@ const VacationManagement: React.FC = () => {
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       • {t('vacationManagement.paternityLeaveDesc3')}
+                    </Typography>
+                  </Box>
+                </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* 결혼휴가 (Marriage Leave) */}
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Card variant="outlined" sx={{ mb: 3, height: '100%' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <FavoriteIcon sx={{ mr: 2, color: 'secondary.main', fontSize: '2rem' }} />
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        {t('vacationManagement.marriageLeave')}
+                      </Typography>
+                    </Box>
+                    {(user?.role === 'admin' || user?.role === 'root') && (
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={vacationPolicy?.availableTypes?.includes('marriage') ?? true}
+                            onChange={() => handleToggleVacationType('marriage')}
+                            disabled={savingPolicy || !canEditPolicy}
+                          />
+                        }
+                        label={t('vacationManagement.provide')}
+                        sx={{ ml: 'auto' }}
+                      />
+                    )}
+                  </Box>
+                  <Box sx={{ pl: 6 }}>
+                    <Typography variant="body2" color="text.secondary" paragraph>
+                      • {t('vacationManagement.marriageLeaveDesc1')}
+                    </Typography>
+                    {renderLeaveDaysInput('marriage')}
+                    <Typography variant="body2" color="text.secondary" paragraph>
+                      • {t('vacationManagement.marriageLeaveDesc2')}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      • {t('vacationManagement.marriageLeaveDesc3')}
+                    </Typography>
+                  </Box>
+                </CardContent>
+                  </Card>
+                </Grid>
+
+                {/* 조사 휴가 (Bereavement Leave) */}
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <Card variant="outlined" sx={{ mb: 3, height: '100%' }}>
+                <CardContent>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <GroupsIcon sx={{ mr: 2, color: 'text.secondary', fontSize: '2rem' }} />
+                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                        {t('vacationManagement.bereavementLeave')}
+                      </Typography>
+                    </Box>
+                    {(user?.role === 'admin' || user?.role === 'root') && (
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={vacationPolicy?.availableTypes?.includes('bereavement') ?? true}
+                            onChange={() => handleToggleVacationType('bereavement')}
+                            disabled={savingPolicy || !canEditPolicy}
+                          />
+                        }
+                        label={t('vacationManagement.provide')}
+                        sx={{ ml: 'auto' }}
+                      />
+                    )}
+                  </Box>
+                  <Box sx={{ pl: 6 }}>
+                    <Typography variant="body2" color="text.secondary" paragraph>
+                      • {t('vacationManagement.bereavementLeaveDesc1')}
+                    </Typography>
+                    {renderLeaveDaysInput('bereavement')}
+                    <Typography variant="body2" color="text.secondary" paragraph>
+                      • {t('vacationManagement.bereavementLeaveDesc2')}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      • {t('vacationManagement.bereavementLeaveDesc3')}
                     </Typography>
                   </Box>
                 </CardContent>

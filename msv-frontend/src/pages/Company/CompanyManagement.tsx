@@ -309,6 +309,16 @@ interface ImagePreview {
   ceo_signature: string;
 }
 
+/** 서버 응답에서 실패 사유를 최대한 구체적으로 뽑아낸다 */
+const describeSaveFailure = (responseData: any, fallback: string): string => {
+  const message = responseData?.message || fallback;
+  const detail = responseData?.error;
+  if (detail && typeof detail === 'string' && !message.includes(detail)) {
+    return `${message} (${detail})`;
+  }
+  return message;
+};
+
 const CompanyManagement: React.FC = () => {
   const { t } = useTranslation();
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
@@ -717,10 +727,13 @@ const CompanyManagement: React.FC = () => {
                 
         const response = await api.post('/company', companyData);
                 if (response.data.success) {
-                    setSuccess('회사가 성공적으로 등록되었습니다. MVS 시스템을 사용할 수 있습니다.');
+          const baseMsg = '회사가 성공적으로 등록되었습니다. MVS 시스템을 사용할 수 있습니다.';
+          setSuccess(
+            response.data.warning ? `${baseMsg} (주의: ${response.data.warning})` : baseMsg
+          );
         } else {
           console.error('❌ 회사 등록 실패:', response.data.message);
-          setError(response.data.message || '회사 등록에 실패했습니다.');
+          setError(describeSaveFailure(response.data, '회사 등록에 실패했습니다.'));
           setLoading(false);
           return;
         }
@@ -762,7 +775,7 @@ const CompanyManagement: React.FC = () => {
         } else {
           console.error('❌ 회사 정보 수정 실패:', response.data.message);
           // 오류 메시지는 메인 페이지에 표시되도록 유지 (다이얼로그는 닫지 않음)
-          setError(response.data.message || '회사 정보 수정에 실패했습니다.');
+          setError(describeSaveFailure(response.data, '회사 정보 수정에 실패했습니다.'));
           setLoading(false);
           return;
         }
@@ -798,7 +811,10 @@ const CompanyManagement: React.FC = () => {
       }
     } catch (error: any) {
       console.error('회사 저장 오류:', error);
-      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || '회사 저장 중 오류가 발생했습니다.';
+      const errorMessage = describeSaveFailure(
+        error.response?.data,
+        error.message || '회사 저장 중 오류가 발생했습니다.'
+      );
       setError(errorMessage);
       console.error('에러 상세:', {
         message: errorMessage,

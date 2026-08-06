@@ -181,6 +181,21 @@ function invColSortLabelJustify(key: string): 'flex-start' | 'flex-end' | 'cente
 
 const INV_TD_ELLIPSIS_KEYS = new Set(['name', 'category', 'supplier', 'location']);
 
+/** DECIMAL 컬럼은 API에서 "1.00" 같은 문자열로 오므로 숫자로 정규화 */
+const toNumericValue = (value: unknown): number => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (value === null || value === undefined || value === '') return 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+/** 소수 입력 중(예: "1.")에도 값이 잘리지 않도록 입력값은 문자열로 보관 */
+const toNumericInput = (value: unknown): string => {
+  if (value === null || value === undefined || value === '') return '0';
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? String(parsed) : '0';
+};
+
 interface InventoryItem {
   id: number;
   name: string;
@@ -312,9 +327,9 @@ const InventoryManagement: React.FC = () => {
         // 백엔드 데이터를 프론트엔드 형식으로 변환
         const transformedData = productsResponse.data.map((product: any) => {
           // 재고 상태 계산
-          const currentStock = product.stock_quantity || product.current_stock || 0;
-          const minStock = product.min_stock_level || product.min_stock || 0;
-          const maxStock = product.max_stock_level || product.max_stock || 0;
+          const currentStock = toNumericValue(product.stock_quantity ?? product.current_stock);
+          const minStock = toNumericValue(product.min_stock_level ?? product.min_stock);
+          const maxStock = toNumericValue(product.max_stock_level ?? product.max_stock);
           
           let status = 'in_stock';
           if (currentStock === 0) {
@@ -331,8 +346,8 @@ const InventoryManagement: React.FC = () => {
             currentStock: currentStock,
             minStock: minStock,
             maxStock: maxStock,
-            unitPrice: parseFloat(product.unit_price || 0),
-            totalValue: currentStock * parseFloat(product.unit_price || 0),
+            unitPrice: toNumericValue(product.unit_price),
+            totalValue: currentStock * toNumericValue(product.unit_price),
             status: status,
             lastUpdated: product.updated_at ? new Date(product.updated_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
             supplier: product.supplier || '',
@@ -815,10 +830,10 @@ const InventoryManagement: React.FC = () => {
         name: itemData.name,
         product_code: itemData.sku,
         category: itemData.category,
-        stock_quantity: itemData.currentStock,
-        min_stock_level: itemData.minStock,
-        max_stock_level: itemData.maxStock,
-        unit_price: itemData.unitPrice,
+        stock_quantity: toNumericValue(itemData.currentStock),
+        min_stock_level: toNumericValue(itemData.minStock),
+        max_stock_level: toNumericValue(itemData.maxStock),
+        unit_price: toNumericValue(itemData.unitPrice),
         supplier: itemData.supplier,
         location: itemData.location,
         image_url: itemData.imageUrl || undefined,
@@ -2831,10 +2846,10 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
     sku: item?.sku || '',
     category: item?.category || '',
     unit: item?.unit || 'Piece',
-    currentStock: item?.currentStock || 0,
-    minStock: item?.minStock || 0,
-    maxStock: item?.maxStock || 0,
-    unitPrice: item?.unitPrice || 0,
+    currentStock: toNumericInput(item?.currentStock),
+    minStock: toNumericInput(item?.minStock),
+    maxStock: toNumericInput(item?.maxStock),
+    unitPrice: toNumericInput(item?.unitPrice),
     supplier: item?.supplier || '',
     partnerId: initialPartnerId as number | '',
     location: item?.location || '',
@@ -2882,10 +2897,10 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
       sku: item?.sku || '',
       category: item?.category || '',
       unit: item?.unit || 'Piece',
-      currentStock: item?.currentStock || 0,
-      minStock: item?.minStock || 0,
-      maxStock: item?.maxStock || 0,
-      unitPrice: item?.unitPrice || 0,
+      currentStock: toNumericInput(item?.currentStock),
+      minStock: toNumericInput(item?.minStock),
+      maxStock: toNumericInput(item?.maxStock),
+      unitPrice: toNumericInput(item?.unitPrice),
       supplier: item?.supplier || '',
       partnerId: pid as number | '',
       location: item?.location || '',
@@ -3095,8 +3110,19 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
       setFormError(t('inventoryManagement.validation.locationRequired'));
       return;
     }
+    const numericFields = [formData.currentStock, formData.minStock, formData.maxStock, formData.unitPrice];
+    if (numericFields.some((value) => String(value).trim() === '' || !Number.isFinite(Number(value)))) {
+      setFormError(t('inventoryManagement.validation.numberRequired'));
+      return;
+    }
     setFormError('');
-    onSave(formData);
+    onSave({
+      ...formData,
+      currentStock: toNumericValue(formData.currentStock),
+      minStock: toNumericValue(formData.minStock),
+      maxStock: toNumericValue(formData.maxStock),
+      unitPrice: toNumericValue(formData.unitPrice)
+    });
   };
 
   const outlinedControlSx = {
@@ -3428,7 +3454,8 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
             {...FORM_OUTLINED}
             type="number"
             value={formData.currentStock}
-            onChange={(e) => setFormData({ ...formData, currentStock: parseInt(e.target.value) || 0 })}
+            onChange={(e) => setFormData({ ...formData, currentStock: e.target.value })}
+            inputProps={{ min: 0, step: 'any', inputMode: 'decimal' }}
             required
             disabled={formFieldsDisabled}
             sx={outlinedControlSx}
@@ -3442,7 +3469,8 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
             {...FORM_OUTLINED}
             type="number"
             value={formData.minStock}
-            onChange={(e) => setFormData({ ...formData, minStock: parseInt(e.target.value) || 0 })}
+            onChange={(e) => setFormData({ ...formData, minStock: e.target.value })}
+            inputProps={{ min: 0, step: 'any', inputMode: 'decimal' }}
             required
             disabled={formFieldsDisabled}
             sx={outlinedControlSx}
@@ -3456,7 +3484,8 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
             {...FORM_OUTLINED}
             type="number"
             value={formData.maxStock}
-            onChange={(e) => setFormData({ ...formData, maxStock: parseInt(e.target.value) || 0 })}
+            onChange={(e) => setFormData({ ...formData, maxStock: e.target.value })}
+            inputProps={{ min: 0, step: 'any', inputMode: 'decimal' }}
             required
             disabled={formFieldsDisabled}
             sx={outlinedControlSx}
@@ -3521,7 +3550,8 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
             {...FORM_OUTLINED}
             type="number"
             value={formData.unitPrice}
-            onChange={(e) => setFormData({ ...formData, unitPrice: parseInt(e.target.value) || 0 })}
+            onChange={(e) => setFormData({ ...formData, unitPrice: e.target.value })}
+            inputProps={{ min: 0, step: 'any', inputMode: 'decimal' }}
             required
             disabled={formFieldsDisabled}
             sx={outlinedControlSx}

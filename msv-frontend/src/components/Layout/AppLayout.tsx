@@ -300,7 +300,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         sx={{
           position: 'relative',
           flex: 1,
-          minHeight: 0,
+          minHeight: 'min-content',
           display: 'flex',
           flexDirection: 'column',
           backgroundColor: useChromelessWorkArea ? 'transparent' : 'bodyArea.main',
@@ -329,7 +329,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           sx={{
             width: '100%',
             flex: 1,
-            minHeight: 0,
+            minHeight: 'min-content',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'flex-start',
@@ -371,10 +371,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 ? { background: mvsWorkBoardPageBg, backgroundColor: 'transparent' }
                 : {}),
               outline: 'none',
-              overflow: 'hidden',
+              overflow: 'visible',
               position: 'relative',
               flex: 1,
-              minHeight: 0,
+              minHeight: 'min-content',
               display: 'flex',
               flexDirection: 'column',
               backgroundImage: 'none',
@@ -391,12 +391,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             <Box
               sx={{
                 flex: 1,
-                minHeight: 0,
+                minHeight: 'min-content',
                 width: '100%',
-                overflowX: 'hidden',
-                overflowY: 'auto',
-                WebkitOverflowScrolling: 'touch',
-                overscrollBehaviorY: 'auto',
+                overflow: 'visible',
                 color: 'text.primary',
                 fontSize: '13.5px',
                 lineHeight: 1.6,
@@ -408,7 +405,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 ...(useChromelessWorkArea
                   ? {
                       flex: 1,
-                      minHeight: '100%',
+                      minHeight: 'min-content',
                       background: mvsWorkBoardPageBg,
                       backgroundColor: 'transparent',
                     }

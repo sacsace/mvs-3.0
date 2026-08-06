@@ -22,11 +22,23 @@ const isTypeValid = (value: unknown, type?: FieldType) => {
   return true;
 };
 
+/** DECIMAL 값이 "1.00" 처럼 문자열로 오가는 경우가 있어 숫자 필드는 정규화 후 검증한다. */
+const coerceNumericField = (payload: Record<string, unknown>, field: string, rule: FieldRule) => {
+  if (rule.type !== 'number') return;
+  const value = payload[field];
+  if (typeof value !== 'string') return;
+  const trimmed = value.trim();
+  if (trimmed === '') return;
+  const parsed = Number(trimmed);
+  if (Number.isFinite(parsed)) payload[field] = parsed;
+};
+
 export const validateBody = (schema: Schema) => (req: Request, res: Response, next: NextFunction) => {
   const errors: string[] = [];
   const payload = req.body || {};
 
   for (const [field, rule] of Object.entries(schema)) {
+    coerceNumericField(payload, field, rule);
     const value = payload[field];
 
     if (rule.required && (value === undefined || value === null || value === '')) {
