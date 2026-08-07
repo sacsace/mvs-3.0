@@ -521,7 +521,7 @@ const ContractManagement: React.FC = () => {
   const contractDialogFormSx = {
     color: 'text.primary',
     '& .MuiOutlinedInput-root': {
-      borderRadius: '12px',
+      borderRadius: '8px',
       bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.05),
       transition: theme.transitions.create(['background-color', 'box-shadow'], { duration: 150 }),
       '&:hover': {
@@ -912,7 +912,7 @@ const ContractManagement: React.FC = () => {
         onClose={() => setDialogOpen(false)}
         maxWidth="md"
         fullWidth
-        PaperProps={{ sx: { borderRadius: '20px' } }}
+        PaperProps={{ sx: { borderRadius: '8px' } }}
       >
         <DialogTitle
           sx={{
@@ -1060,7 +1060,7 @@ const ContractManagement: React.FC = () => {
                   (dialogMode === 'edit' && !contractMenuFlags.canEdit)
                 }
                 sx={{
-                  borderRadius: '12px',
+                  borderRadius: '8px',
                   textTransform: 'none',
                   fontWeight: 600,
                   borderStyle: 'dashed',
@@ -1097,7 +1097,7 @@ const ContractManagement: React.FC = () => {
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 0.75,
-                    borderRadius: '12px',
+                    borderRadius: '8px',
                     border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
                     bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
                   }}

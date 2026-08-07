@@ -158,7 +158,7 @@ const EInvoiceCreate: React.FC = () => {
   ];
 
   const sectionCardSx = {
-    borderRadius: '16px',
+    borderRadius: '8px',
     border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
     bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.03) : '#FFFFFF',
     boxShadow: '0 2px 12px rgba(15, 23, 42, 0.05)',
@@ -319,7 +319,7 @@ const EInvoiceCreate: React.FC = () => {
           component={Paper}
           elevation={0}
           sx={{
-            borderRadius: '12px',
+            borderRadius: '8px',
             border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
             overflow: 'hidden',
           }}
@@ -440,7 +440,7 @@ const EInvoiceCreate: React.FC = () => {
             variant="outlined"
             startIcon={<PrintIcon />}
             disabled={activeStep < 3}
-            sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 600 }}
+            sx={{ textTransform: 'none', borderRadius: '8px', fontWeight: 600 }}
           >
             {txt('미리보기', 'Preview')}
           </Button>
@@ -448,7 +448,7 @@ const EInvoiceCreate: React.FC = () => {
             variant="outlined"
             startIcon={<DownloadIcon />}
             disabled={activeStep < 3}
-            sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 600 }}
+            sx={{ textTransform: 'none', borderRadius: '8px', fontWeight: 600 }}
           >
             {txt('PDF 다운로드', 'Download PDF')}
           </Button>
@@ -479,7 +479,7 @@ const EInvoiceCreate: React.FC = () => {
         <Button
           disabled={activeStep === 0}
           onClick={handleBack}
-          sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 600 }}
+          sx={{ textTransform: 'none', borderRadius: '8px', fontWeight: 600 }}
         >
           {txt('이전', 'Back')}
         </Button>
@@ -490,7 +490,7 @@ const EInvoiceCreate: React.FC = () => {
               onClick={handleGenerateInvoice}
               disabled={loading}
               startIcon={<SendIcon />}
-              sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 700, boxShadow: 'none' }}
+              sx={{ textTransform: 'none', borderRadius: '8px', fontWeight: 700, boxShadow: 'none' }}
             >
               {txt('E-Invoice 생성', 'Generate E-Invoice')}
             </Button>
@@ -498,7 +498,7 @@ const EInvoiceCreate: React.FC = () => {
             <Button
               variant="contained"
               onClick={handleNext}
-              sx={{ textTransform: 'none', borderRadius: '12px', fontWeight: 700, boxShadow: 'none' }}
+              sx={{ textTransform: 'none', borderRadius: '8px', fontWeight: 700, boxShadow: 'none' }}
             >
               {txt('다음', 'Next')}
             </Button>

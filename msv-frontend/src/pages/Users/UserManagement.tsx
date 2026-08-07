@@ -246,7 +246,7 @@ function getAccordionFormSx(_theme: Theme) {
     '&:before': { display: 'none' },
     boxShadow: 'none',
     border: '1px solid #E8EDF3',
-    borderRadius: '12px',
+    borderRadius: '8px',
     mb: 2,
     bgcolor: '#FFFFFF',
     overflow: 'visible' as const,
@@ -257,7 +257,7 @@ function getAccordionFormSx(_theme: Theme) {
       px: 2,
       bgcolor: '#F8FAFC',
       borderBottom: '1px solid #E8EDF3',
-      borderRadius: '12px 12px 0 0',
+      borderRadius: '8px 8px 0 0',
       '&.Mui-expanded': {
         minHeight: 44,
         borderBottom: '1px solid #E8EDF3',
@@ -270,7 +270,7 @@ function getAccordionFormSx(_theme: Theme) {
       px: 2,
     },
     '&.MuiAccordion-root.Mui-expanded': {
-      borderRadius: '12px',
+      borderRadius: '8px',
     },
     '&.MuiAccordion-root:not(:first-of-type)': {
       mt: 0,
@@ -1332,7 +1332,7 @@ const UserManagement: React.FC = () => {
                           sx: {
                             mt: 0.5,
                             minWidth: 220,
-                            borderRadius: '12px',
+                            borderRadius: '8px',
                             border: '1px solid #C5CED9',
                             boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
                           },
@@ -2436,7 +2436,7 @@ const UserManagement: React.FC = () => {
         maxWidth="md" 
         fullWidth
         PaperProps={{
-          sx: { maxHeight: '90vh', borderRadius: '20px' }
+          sx: { maxHeight: '90vh', borderRadius: '8px' }
         }}
       >
         <DialogTitle sx={{ pt: 2.5, px: 3, pb: 1.5 }}>
@@ -2773,7 +2773,7 @@ const UserManagement: React.FC = () => {
           )}
         </DialogContent>
         <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button onClick={() => setOpenViewDialog(false)} sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}>
+          <Button onClick={() => setOpenViewDialog(false)} sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}>
             {t('common.close')}
           </Button>
           {selectedUser && (
@@ -2785,7 +2785,7 @@ const UserManagement: React.FC = () => {
                 setOpenViewDialog(false);
                 handleEditUser(selectedUser);
               }}
-              sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
+              sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
             >
               {t('userManagement.edit')}
             </Button>
@@ -2839,7 +2839,7 @@ const UserManagement: React.FC = () => {
           <Button
             variant="contained"
             onClick={() => setPhotoPreviewUrl(null)}
-            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
+            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
           >
             {t('common.close')}
           </Button>

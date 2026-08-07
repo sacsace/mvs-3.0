@@ -55,7 +55,7 @@ import { usePromptDialog } from '../../hooks/usePromptDialog';
 
 
 const eWayBillFilterSelectSx = {
-  borderRadius: '12px',
+  borderRadius: '8px',
   bgcolor: '#FFFFFF',
   height: 40,
   '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
@@ -323,7 +323,7 @@ const EWayBillComponent: React.FC = () => {
 
   const statCardSx = useMemo(
     () => ({
-      borderRadius: '16px',
+      borderRadius: '8px',
       border: `1px solid ${alpha(theme.palette.text.primary, 0.06)}`,
       boxShadow: '0 2px 16px rgba(0,0,0,0.05)',
       bgcolor: theme.palette.background.paper,
@@ -333,7 +333,7 @@ const EWayBillComponent: React.FC = () => {
   const shellCardSx = useMemo(
     () => ({
       mb: 3,
-      borderRadius: '18px',
+      borderRadius: '8px',
       border: `1px solid ${alpha(theme.palette.text.primary, 0.06)}`,
       boxShadow: '0 2px 20px rgba(0,0,0,0.05)',
       overflow: 'hidden',
@@ -720,7 +720,7 @@ const EWayBillComponent: React.FC = () => {
             <Button
               variant="outlined"
               onClick={() => setViewMode('list')}
-              sx={{ textTransform: 'none', borderRadius: '12px' }}
+              sx={{ textTransform: 'none', borderRadius: '8px' }}
             >
               {t('eWayBillManagement.detail.backToList')}
             </Button>
@@ -1015,7 +1015,7 @@ const EWayBillComponent: React.FC = () => {
             disableElevation
             startIcon={<AddIcon />}
             onClick={handleOpenCreate}
-            sx={{ textTransform: 'none', borderRadius: '12px', px: 2 }}
+            sx={{ textTransform: 'none', borderRadius: '8px', px: 2 }}
           >
             {t('eWayBillManagement.actions.createEWayBill')}
           </Button>
@@ -1176,7 +1176,7 @@ const EWayBillComponent: React.FC = () => {
                 whiteSpace: 'nowrap',
                 minWidth: 'fit-content',
                 px: 2,
-                borderRadius: '12px',
+                borderRadius: '8px',
                 textTransform: 'none',
               }}
             >

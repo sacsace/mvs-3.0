@@ -85,7 +85,7 @@ import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 function getReportDialogFieldSx(theme: Theme) {
   return {
     '& .MuiOutlinedInput-root': {
-      borderRadius: '12px',
+      borderRadius: '8px',
       bgcolor: 'background.paper',
       transition: theme.transitions.create(['border-color', 'box-shadow'], { duration: 150 }),
       '&:not(.MuiInputBase-multiline)': { minHeight: 40 },
@@ -1686,7 +1686,7 @@ const WorkReport: React.FC = () => {
         onClose={() => setOpenDialog(false)}
         maxWidth="md"
         fullWidth
-        PaperProps={{ sx: { borderRadius: '20px', overflow: 'hidden' } }}
+        PaperProps={{ sx: { borderRadius: '8px', overflow: 'hidden' } }}
       >
         <DialogTitle
           sx={{
@@ -1892,7 +1892,7 @@ const WorkReport: React.FC = () => {
                 p: 0,
                 minWidth: 0,
                 border: '1px solid #C5CED9',
-                borderRadius: '14px',
+                borderRadius: '8px',
                 bgcolor: 'background.paper',
               }}
             >
@@ -1916,7 +1916,7 @@ const WorkReport: React.FC = () => {
                 minHeight={240}
                 sx={{
                   border: 'none',
-                  borderRadius: '14px',
+                  borderRadius: '8px',
                   boxShadow: `inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.04 : 0.5)}`,
                 }}
               />
@@ -1957,7 +1957,7 @@ const WorkReport: React.FC = () => {
                 p: 1.5,
                 minWidth: 0,
                 border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
-                borderRadius: '14px',
+                borderRadius: '8px',
                 bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
               }}
             >
@@ -1988,7 +1988,7 @@ const WorkReport: React.FC = () => {
                 size="small"
                 startIcon={<AttachFileIcon sx={{ fontSize: 18 }} />}
                 sx={{
-                  borderRadius: '12px',
+                  borderRadius: '8px',
                   textTransform: 'none',
                   fontWeight: 600,
                   borderStyle: 'dashed',
@@ -2010,7 +2010,7 @@ const WorkReport: React.FC = () => {
                   sx={{
                     mt: 1.25,
                     border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
-                    borderRadius: '12px',
+                    borderRadius: '8px',
                     overflow: 'hidden',
                     bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
                   }}
@@ -2100,7 +2100,7 @@ const WorkReport: React.FC = () => {
           <Box sx={{ flex: 1 }} />
           <Button
             onClick={() => setOpenDialog(false)}
-            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '12px', px: 2 }}
+            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '8px', px: 2 }}
           >
             {tr('취소', 'Cancel')}
           </Button>
@@ -2110,7 +2110,7 @@ const WorkReport: React.FC = () => {
             onClick={handleSaveReport}
             disabled={saving}
             startIcon={selectedReport ? <EditIcon sx={{ fontSize: 20 }} /> : <SendIcon sx={{ fontSize: 20 }} />}
-            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
           >
             {selectedReport ? tr('수정', 'Update') : tr('제출', 'Submit')}
           </Button>

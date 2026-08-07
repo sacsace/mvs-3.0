@@ -315,23 +315,23 @@ const BOARD_PAN_IGNORE_SELECTOR = [
 ].join(',');
 
 /** 칸반 — 트렐로형 라운드·라벤더 보드 */
-const KANBAN_DETAIL_SHELL_RADIUS = '12px';
-const KANBAN_SURFACE_RADIUS = '12px';
+const KANBAN_DETAIL_SHELL_RADIUS = '8px';
+const KANBAN_SURFACE_RADIUS = '8px';
 const KANBAN_CHIP_RADIUS = '6px';
 const KANBAN_CONTROL_RADIUS = '8px';
-const KANBAN_COLUMN_RADIUS = '12px';
-const KANBAN_CARD_RADIUS = '8px';
+const KANBAN_COLUMN_RADIUS = '8px';
+const KANBAN_CARD_RADIUS = '6px';
 
-/** 소분류(칸반 열) — 그라데이션 위 반투명 화이트 패널 */
-const KANBAN_COLUMN_BG = 'rgba(255, 255, 255, 0.62)';
-const KANBAN_COLUMN_BORDER = '1px solid rgba(255, 255, 255, 0.92)';
-const KANBAN_COLUMN_SHADOW = '0 4px 14px rgba(9, 30, 66, 0.09)';
-const KANBAN_MEMBER_PANEL_BG = 'rgba(255, 255, 255, 0.48)';
-const KANBAN_MEMBER_PANEL_BORDER = '1px solid rgba(255, 255, 255, 0.82)';
+/** 소분류(칸반 열) — 불투명 패널 + 얇은 보더 */
+const KANBAN_COLUMN_BG = '#F1F5F9';
+const KANBAN_COLUMN_BORDER = '1px solid #D0DBE8';
+const KANBAN_COLUMN_SHADOW = 'none';
+const KANBAN_MEMBER_PANEL_BG = '#F8FAFC';
+const KANBAN_MEMBER_PANEL_BORDER = '1px solid #D0DBE8';
 const KANBAN_CARD_BG = '#FFFFFF';
-const KANBAN_CARD_BORDER = 'none';
-const KANBAN_CARD_SHADOW = '0 1px 3px rgba(9, 30, 66, 0.15)';
-const KANBAN_CARD_HOVER_SHADOW = '0 2px 6px rgba(9, 30, 66, 0.2)';
+const KANBAN_CARD_BORDER = '1px solid #D8E1EC';
+const KANBAN_CARD_SHADOW = 'none';
+const KANBAN_CARD_HOVER_SHADOW = '0 1px 2px rgba(15, 23, 42, 0.08)';
 const KANBAN_TITLE_DESC_GAP = 0.75;
 const KANBAN_META_ICON_COLOR = '#6B778C';
 
@@ -1183,7 +1183,7 @@ const ListColumn = memo(function ListColumn({
             px: 1,
             borderRadius: KANBAN_CONTROL_RADIUS,
             bgcolor: 'transparent',
-            '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.72)', color: '#172B4D' },
+            '&:hover': { bgcolor: '#E6EDF5', color: '#172B4D' },
           }}
         >
           {txt('카드 추가', 'Add a card')}
@@ -2495,7 +2495,7 @@ const WorkBoardDetailPage: React.FC = () => {
           sx={{
             textTransform: 'none',
             fontWeight: 700,
-            borderRadius: '12px',
+            borderRadius: '8px',
             px: 2,
             bgcolor: 'success.main',
             color: '#FFFFFF',
@@ -2519,7 +2519,7 @@ const WorkBoardDetailPage: React.FC = () => {
             sx={{
               textTransform: 'none',
               fontWeight: 700,
-              borderRadius: '12px',
+              borderRadius: '8px',
               px: 2,
               borderWidth: 1.5,
               borderColor: alpha(theme.palette.primary.main, 0.55),
@@ -2549,7 +2549,7 @@ const WorkBoardDetailPage: React.FC = () => {
             sx={{
               textTransform: 'none',
               fontWeight: 700,
-              borderRadius: '12px',
+              borderRadius: '8px',
               px: 2,
               color: '#FFFFFF',
               '&:hover': {
@@ -2569,7 +2569,7 @@ const WorkBoardDetailPage: React.FC = () => {
             sx={{
               textTransform: 'none',
               fontWeight: 600,
-              borderRadius: '12px',
+              borderRadius: '8px',
               px: 2,
               borderColor: alpha(theme.palette.error.main, 0.4),
             }}
@@ -2586,7 +2586,7 @@ const WorkBoardDetailPage: React.FC = () => {
           mb: 2.5,
           px: { xs: 1.25, sm: 1.5 },
           py: { xs: 1, sm: 1.15 },
-          borderRadius: '12px',
+          borderRadius: '8px',
           bgcolor: KANBAN_MEMBER_PANEL_BG,
           border: KANBAN_MEMBER_PANEL_BORDER,
           boxShadow: 'none',
@@ -2722,7 +2722,7 @@ const WorkBoardDetailPage: React.FC = () => {
         slotProps={{
           paper: {
             sx: {
-              borderRadius: '12px',
+              borderRadius: '8px',
               minWidth: 240,
               mt: 1,
               border: '1px solid #D0DBE8',
@@ -3026,7 +3026,7 @@ const WorkBoardDetailPage: React.FC = () => {
               mb: 2,
               height: 'auto',
               borderRadius: KANBAN_DETAIL_SHELL_RADIUS,
-              boxShadow: '0 1px 0 #D0DBE8, 0 4px 14px rgba(15, 23, 42, 0.07)',
+              boxShadow: '0 1px 0 #D0DBE8, 0 1px 2px rgba(15, 23, 42, 0.05)',
               overflow: 'hidden',
               border: '1px solid #D0DBE8',
               borderLeft: `4px solid ${accent}`,
@@ -3899,7 +3899,7 @@ const WorkBoardDetailPage: React.FC = () => {
             sx={{
               mb: 2,
               '& .MuiOutlinedInput-root': {
-                borderRadius: '12px',
+                borderRadius: '8px',
                 bgcolor: '#FFFFFF',
               },
             }}
@@ -3946,7 +3946,7 @@ const WorkBoardDetailPage: React.FC = () => {
                       p: 1.5,
                       border: '1px solid',
                       borderColor: 'divider',
-                      borderRadius: '12px',
+                      borderRadius: '8px',
                       bgcolor: '#FAFBFC',
                       cursor: 'pointer',
                       transition: 'border-color 0.15s ease, background-color 0.15s ease',

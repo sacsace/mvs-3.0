@@ -150,7 +150,7 @@ const SortableBoardCard: React.FC<SortableBoardCardProps> = ({
       sx={{
         width: '100%',
         minHeight: 158,
-        borderRadius: '16px',
+        borderRadius: '8px',
         border: '1px solid',
         borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.1),
         backgroundColor: cardBg,
@@ -527,7 +527,7 @@ const WorkBoardsPage: React.FC = () => {
               onClick={openCreateDialog}
               sx={{
                 flexShrink: 0,
-                borderRadius: '12px',
+                borderRadius: '8px',
                 px: 2.5,
                 textTransform: 'none',
                 fontWeight: 600,
@@ -580,8 +580,8 @@ const WorkBoardsPage: React.FC = () => {
                     onClick={openCreateDialog}
                     sx={{
                       minHeight: 158,
-                      borderRadius: '16px',
-                      border: '2px dashed',
+                      borderRadius: '8px',
+                      border: '1px dashed',
                       borderColor: theme.palette.mode === 'light' ? '#CBD5E1' : alpha(theme.palette.common.white, 0.22),
                       bgcolor: 'transparent',
                       cursor: 'pointer',
@@ -598,14 +598,14 @@ const WorkBoardsPage: React.FC = () => {
                     <Stack alignItems="center" spacing={0.85} sx={{ px: 1.75, py: 2.25, textAlign: 'center' }}>
                       <Box
                         sx={{
-                          width: 38,
-                          height: 38,
-                          borderRadius: '12px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          bgcolor: alpha(theme.palette.primary.main, 0.1),
-                          color: 'primary.main',
+                        width: 34,
+                        height: 34,
+                        borderRadius: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        bgcolor: alpha(theme.palette.primary.main, 0.1),
+                        color: 'primary.main',
                         }}
                       >
                         <AddIcon sx={{ fontSize: '1.25rem' }} />
@@ -626,18 +626,18 @@ const WorkBoardsPage: React.FC = () => {
                       py: 6,
                       px: 3,
                       textAlign: 'center',
-                      borderRadius: '20px',
+                      borderRadius: '8px',
                       border: `1px dashed ${theme.palette.mode === 'light' ? '#CBD5E1' : alpha(theme.palette.common.white, 0.2)}`,
                       bgcolor: 'transparent',
                     }}
                   >
                     <Box
                       sx={{
-                        width: 56,
-                        height: 56,
+                        width: 44,
+                        height: 44,
                         mx: 'auto',
                         mb: 2,
-                        borderRadius: '16px',
+                        borderRadius: '6px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -656,7 +656,7 @@ const WorkBoardsPage: React.FC = () => {
                         disableElevation
                         startIcon={<AddIcon />}
                         onClick={openCreateDialog}
-                        sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+                        sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
                       >
                         {t('workBoards.actions.newBoard')}
                       </Button>
@@ -677,7 +677,7 @@ const WorkBoardsPage: React.FC = () => {
         }}
         maxWidth="sm"
         fullWidth
-        PaperProps={{ sx: { borderRadius: '20px' } }}
+        PaperProps={{ sx: { borderRadius: '8px' } }}
       >
         <DialogTitle sx={{ pt: 2.5, px: 3, pb: 1, fontSize: '1.125rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
           {editingBoardId ? (isEn ? 'Edit Board' : '보드 수정') : t('workBoards.dialog.newBoardTitle')}
@@ -737,7 +737,7 @@ const WorkBoardsPage: React.FC = () => {
               setEditingBoardId(null);
             }}
             disabled={saving}
-            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
+            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
           >
             {t('common.cancel')}
           </Button>
@@ -746,7 +746,7 @@ const WorkBoardsPage: React.FC = () => {
             variant="contained"
             disableElevation
             disabled={saving || !name.trim()}
-            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
           >
             {saving ? <CircularProgress size={22} /> : editingBoardId ? (isEn ? 'Save' : '저장') : t('workBoards.actions.create')}
           </Button>

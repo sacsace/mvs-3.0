@@ -1420,14 +1420,14 @@ const ElectronicApproval: React.FC = () => {
       gap: 1.25,
       alignItems: 'center',
       border: `1px solid ${APPROVAL_FORM_BORDER.flowOuter}`,
-      borderRadius: '14px',
+      borderRadius: '8px',
       p: 1.5,
       bgcolor: 'background.paper',
       boxShadow: '0 1px 4px rgba(15, 23, 42, 0.06)',
     }}>
       <Box sx={{
         border: `1.5px dashed ${APPROVAL_FORM_BORDER.flowStep}`,
-        borderRadius: '12px',
+        borderRadius: '8px',
         minHeight: 62,
         display: 'flex',
         alignItems: 'center',
@@ -1446,7 +1446,7 @@ const ElectronicApproval: React.FC = () => {
       <ArrowForwardIcon sx={{ color: APPROVAL_FORM_BORDER.flowArrow, fontSize: 22 }} />
       <Box sx={{
         border: `1.5px dashed ${APPROVAL_FORM_BORDER.flowStep}`,
-        borderRadius: '12px',
+        borderRadius: '8px',
         minHeight: 62,
         display: 'flex',
         alignItems: 'center',
@@ -1882,7 +1882,7 @@ const ElectronicApproval: React.FC = () => {
                     size="small"
                     sx={{
                       '& .MuiOutlinedInput-root': {
-                        borderRadius: '12px',
+                        borderRadius: '8px',
                         bgcolor: 'background.paper',
                       },
                     }}
@@ -1909,7 +1909,7 @@ const ElectronicApproval: React.FC = () => {
                 startIcon={escalating ? <CircularProgress size={18} color="inherit" /> : <ReplyIcon />}
                 onClick={handleEscalateDocument}
                 disabled={!canEscalate || !escalateTo || escalating}
-                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
+                sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
               >
                 {escalating ? t('approval.saving') : t('approval.escalate')}
               </Button>
@@ -2067,7 +2067,7 @@ const ElectronicApproval: React.FC = () => {
       <Box sx={{
         ...mvsPageRootSx,
         '& .MuiOutlinedInput-root': {
-          borderRadius: '12px',
+          borderRadius: '8px',
           backgroundColor: 'background.paper',
           '& .MuiOutlinedInput-notchedOutline': {
             borderColor: alpha(theme.palette.divider, 0.9),
@@ -2235,7 +2235,7 @@ const ElectronicApproval: React.FC = () => {
                 gridTemplateColumns: 'repeat(2, 1fr)',
                 gap: 1.25,
                 border: `1px solid ${APPROVAL_FORM_BORDER.flowOuter}`,
-                borderRadius: '14px',
+                borderRadius: '8px',
                 p: 1.5,
                 bgcolor: 'background.paper',
                 boxShadow: '0 1px 4px rgba(15, 23, 42, 0.06)',
@@ -2244,7 +2244,7 @@ const ElectronicApproval: React.FC = () => {
                 {approvalFlowLabels.map((label, flowIdx) => (
                   <Box key={label} sx={{
                     border: `1.5px dashed ${APPROVAL_FORM_BORDER.flowStep}`,
-                    borderRadius: '12px',
+                    borderRadius: '8px',
                     minHeight: 62,
                     display: 'flex',
                     alignItems: 'center',
@@ -2593,7 +2593,7 @@ const ElectronicApproval: React.FC = () => {
     <Box sx={{
       ...mvsPageRootSx,
       '& .MuiOutlinedInput-root': {
-        borderRadius: '12px',
+        borderRadius: '8px',
         backgroundColor: 'background.paper',
         '& .MuiOutlinedInput-notchedOutline': {
           borderColor: alpha(theme.palette.divider, 0.9),
@@ -2706,7 +2706,7 @@ const ElectronicApproval: React.FC = () => {
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                 <Box sx={{ 
                   border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
-                  borderRadius: '14px',
+                  borderRadius: '8px',
                   p: 1.5,
                   bgcolor: 'background.paper',
                   boxShadow: '0 1px 6px rgba(15, 23, 42, 0.04)',
@@ -2731,7 +2731,7 @@ const ElectronicApproval: React.FC = () => {
                   gridTemplateColumns: 'repeat(2, 1fr)',
                   gap: 1.25,
                   border: `1px solid ${APPROVAL_FORM_BORDER.flowOuter}`,
-                  borderRadius: '14px',
+                  borderRadius: '8px',
                   p: 1.5,
                   bgcolor: 'background.paper',
                   boxShadow: '0 1px 4px rgba(15, 23, 42, 0.06)',
@@ -2744,7 +2744,7 @@ const ElectronicApproval: React.FC = () => {
                     return (
                       <Box key={label} sx={{ 
                         border: `1.5px dashed ${APPROVAL_FORM_BORDER.flowStep}`,
-                        borderRadius: '12px',
+                        borderRadius: '8px',
                         minHeight: 62,
                         display: 'flex',
                         alignItems: 'center',
@@ -2810,7 +2810,7 @@ const ElectronicApproval: React.FC = () => {
               {/* 다음 결재 대상 */}
               <Box sx={{ 
                 p: 2, 
-                borderRadius: '14px', 
+                borderRadius: '8px', 
                 bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.12 : 0.06), 
                 border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
               }}>
@@ -2847,7 +2847,7 @@ const ElectronicApproval: React.FC = () => {
                           ...approvalWriteFieldSx,
                           '& .MuiOutlinedInput-root': {
                             ...(approvalWriteFieldSx['& .MuiOutlinedInput-root'] as Record<string, unknown>),
-                            borderRadius: '12px',
+                            borderRadius: '8px',
                             bgcolor: 'background.paper',
                           },
                         }}
@@ -2979,7 +2979,7 @@ const ElectronicApproval: React.FC = () => {
                   sx={{
                     mt: 3.5,
                     border: `1px solid ${APPROVAL_FORM_BORDER.section}`,
-                    borderRadius: '14px',
+                    borderRadius: '8px',
                     overflow: 'hidden',
                     bgcolor: 'background.paper',
                     display: 'flex',
@@ -3555,7 +3555,7 @@ const ElectronicApproval: React.FC = () => {
                       component="span"
                       startIcon={<AttachFileIcon />}
                       sx={{
-                        borderRadius: '12px',
+                        borderRadius: '8px',
                         textTransform: 'none',
                         fontWeight: 600,
                         borderStyle: 'dashed',
@@ -3589,7 +3589,7 @@ const ElectronicApproval: React.FC = () => {
                             justifyContent: 'space-between',
                             p: 1.5,
                             mb: 1,
-                            borderRadius: '12px',
+                            borderRadius: '8px',
                             bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.05),
                             border: `1px solid ${APPROVAL_FORM_BORDER.section}`,
                             '&:hover': {
@@ -3666,7 +3666,7 @@ const ElectronicApproval: React.FC = () => {
                           justifyContent: 'space-between',
                           p: 1.5,
                           mb: 1,
-                          borderRadius: '12px',
+                          borderRadius: '8px',
                           border: `1px solid ${APPROVAL_FORM_BORDER.section}`,
                           bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
                         }}
@@ -4251,7 +4251,7 @@ const ElectronicApproval: React.FC = () => {
               setEscalationComment('');
             }}
             variant="outlined"
-            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
+            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
           >
             {t('common.close')}
           </Button>
@@ -4264,7 +4264,7 @@ const ElectronicApproval: React.FC = () => {
                   color="error"
                   startIcon={<CheckCircleIcon />}
                   onClick={() => handleApproveDocument(selectedDocument.id)}
-                  sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
+                  sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
                 >
                   {t('approval.approve')}
                 </Button>
@@ -4273,7 +4273,7 @@ const ElectronicApproval: React.FC = () => {
                   color="primary"
                   startIcon={<CancelIcon />}
                   onClick={() => handleRejectDocument(selectedDocument.id)}
-                  sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
+                  sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
                 >
                   {t('approval.reject')}
                 </Button>
@@ -4287,7 +4287,7 @@ const ElectronicApproval: React.FC = () => {
                 setDetailDialogOpen(false);
                 handleEditDocument(selectedDocument);
               }}
-              sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
+              sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
             >
               {t('approval.update')}
             </Button>

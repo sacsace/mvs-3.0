@@ -312,7 +312,7 @@ const StockInSimple: React.FC = () => {
   const appleInputSx = {
     ...(mvsSearchFieldSx as Record<string, unknown>),
     '& .MuiOutlinedInput-root': {
-      borderRadius: '12px',
+      borderRadius: '8px',
       bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.05),
       minHeight: 48,
       transition: theme.transitions.create(['background-color', 'box-shadow', 'border-color'], { duration: 180 }),
@@ -367,7 +367,7 @@ const StockInSimple: React.FC = () => {
   const appleReadOnlySx = {
     ...(mvsSearchFieldSx as Record<string, unknown>),
     '& .MuiOutlinedInput-root': {
-      borderRadius: '12px',
+      borderRadius: '8px',
       minHeight: 48,
       bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
       '& .MuiOutlinedInput-notchedOutline': {
@@ -442,7 +442,7 @@ const StockInSimple: React.FC = () => {
                     elevation: 0,
                     sx: {
                       mt: 1,
-                      borderRadius: '14px',
+                      borderRadius: '8px',
                       border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
                       boxShadow:
                         theme.palette.mode === 'light'
@@ -535,7 +535,7 @@ const StockInSimple: React.FC = () => {
             </Stack>
 
             {lookupNotFound && (
-              <Alert severity="warning" variant="outlined" sx={{ borderRadius: '12px' }}>
+              <Alert severity="warning" variant="outlined" sx={{ borderRadius: '8px' }}>
                 {txt(
                   '이 품목코드로 등록된 제품이 없습니다. 재고(제품) 관리에서 제품을 먼저 등록한 뒤 입고하세요.',
                   'No product is registered for this code. Add the product in Inventory (Products), then receive stock here.'
@@ -565,7 +565,7 @@ const StockInSimple: React.FC = () => {
                         maxWidth: '100%',
                         width: 'auto',
                         objectFit: 'contain',
-                        borderRadius: '12px',
+                        borderRadius: '8px',
                         bgcolor: 'background.paper',
                       }}
                     />

@@ -1465,7 +1465,7 @@ const MenuPermissionManagement: React.FC = () => {
   });
 
   const cardShellSx = {
-    borderRadius: '20px',
+    borderRadius: '8px',
     border: '1px solid',
     borderColor: theme.palette.mode === 'light' ? '#C5CED9' : alpha(theme.palette.divider, 0.35),
     boxShadow:
@@ -1476,7 +1476,7 @@ const MenuPermissionManagement: React.FC = () => {
 
   const selectionInputSx = {
     '& .MuiOutlinedInput-root': {
-      borderRadius: '12px',
+      borderRadius: '8px',
       bgcolor: 'background.paper',
       '& fieldset': {
         borderColor: theme.palette.mode === 'light' ? '#C5CED9' : undefined,
@@ -1509,7 +1509,7 @@ const MenuPermissionManagement: React.FC = () => {
   if (!canManagePermissionPage) {
     return (
       <Box sx={{ p: 0, width: '100%' }}>
-        <Alert severity="error" sx={{ borderRadius: '14px' }}>
+        <Alert severity="error" sx={{ borderRadius: '8px' }}>
           이 페이지는 메뉴 권한 관리 권한이 필요합니다.
         </Alert>
       </Box>
@@ -1546,7 +1546,7 @@ const MenuPermissionManagement: React.FC = () => {
                     onClick={() => setDefaultPermissionDialogOpen(true)}
                     size="small"
                     sx={{
-                      borderRadius: '12px',
+                      borderRadius: '8px',
                       textTransform: 'none',
                       fontWeight: 600,
                       px: 2,
@@ -1561,7 +1561,7 @@ const MenuPermissionManagement: React.FC = () => {
                     onClick={() => setDelegationDialogOpen(true)}
                     size="small"
                     sx={{
-                      borderRadius: '12px',
+                      borderRadius: '8px',
                       textTransform: 'none',
                       fontWeight: 600,
                       px: 2,
@@ -1579,7 +1579,7 @@ const MenuPermissionManagement: React.FC = () => {
                 onClick={handleSave}
                 disabled={saving}
                 size="small"
-                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.25 }}
+                sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600, px: 2.25 }}
               >
                 {saving ? t('menuPermissionManagement.saving') : t('menuPermissionManagement.save')}
               </Button>
@@ -1668,7 +1668,7 @@ const MenuPermissionManagement: React.FC = () => {
                         }}
                         sx={{
                           mb: 0.5,
-                          borderRadius: '12px',
+                          borderRadius: '8px',
                           py: 1,
                           ...listItemSelectedSx,
                         }}
@@ -1780,7 +1780,7 @@ const MenuPermissionManagement: React.FC = () => {
                         }}
                         sx={{
                           mb: 0.5,
-                          borderRadius: '12px',
+                          borderRadius: '8px',
                           py: 1,
                           ...listItemSelectedSx,
                         }}
@@ -1957,7 +1957,7 @@ const MenuPermissionManagement: React.FC = () => {
                     textAlign: 'center',
                     py: 6,
                     px: 3,
-                    borderRadius: '16px',
+                    borderRadius: '8px',
                     border: `1px dashed ${alpha(theme.palette.divider, 0.9)}`,
                     bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
                   }}
@@ -1982,7 +1982,7 @@ const MenuPermissionManagement: React.FC = () => {
         onClose={() => setDefaultPermissionDialogOpen(false)} 
         maxWidth="sm" 
         fullWidth
-        PaperProps={{ sx: { borderRadius: '20px' } }}
+        PaperProps={{ sx: { borderRadius: '8px' } }}
       >
         <DialogTitle sx={{ fontSize: '1.125rem', fontWeight: 700, letterSpacing: '-0.02em', pt: 2.5, px: 3 }}>
           기본 권한 설정
@@ -2008,7 +2008,7 @@ const MenuPermissionManagement: React.FC = () => {
                   justifyContent: 'flex-start',
                   textTransform: 'none',
                   py: 1.5,
-                  borderRadius: '12px',
+                  borderRadius: '8px',
                   borderColor: alpha(theme.palette.divider, 0.95),
                 }}
               >
@@ -2043,7 +2043,7 @@ const MenuPermissionManagement: React.FC = () => {
                 justifyContent: 'flex-start',
                 textTransform: 'none',
                 py: 1.5,
-                borderRadius: '12px',
+                borderRadius: '8px',
                 borderColor: 'success.main',
                 color: 'success.main',
                 '&:hover': {
@@ -2071,7 +2071,7 @@ const MenuPermissionManagement: React.FC = () => {
                 justifyContent: 'flex-start',
                 textTransform: 'none',
                 py: 1.5,
-                borderRadius: '12px',
+                borderRadius: '8px',
                 borderColor: 'info.main',
                 color: 'info.main',
                 '&:hover': {
@@ -2099,7 +2099,7 @@ const MenuPermissionManagement: React.FC = () => {
                 justifyContent: 'flex-start',
                 textTransform: 'none',
                 py: 1.5,
-                borderRadius: '12px',
+                borderRadius: '8px',
                 borderColor: 'primary.main',
                 color: 'primary.main',
                 '&:hover': {
@@ -2120,7 +2120,7 @@ const MenuPermissionManagement: React.FC = () => {
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setDefaultPermissionDialogOpen(false)} sx={{ borderRadius: '12px', textTransform: 'none' }}>
+          <Button onClick={() => setDefaultPermissionDialogOpen(false)} sx={{ borderRadius: '8px', textTransform: 'none' }}>
             닫기
           </Button>
         </DialogActions>
@@ -2132,7 +2132,7 @@ const MenuPermissionManagement: React.FC = () => {
         onClose={() => setDelegationDialogOpen(false)}
         maxWidth="sm"
         fullWidth
-        PaperProps={{ sx: { borderRadius: '20px' } }}
+        PaperProps={{ sx: { borderRadius: '8px' } }}
       >
         <DialogTitle sx={{ fontSize: '1.125rem', fontWeight: 700, letterSpacing: '-0.02em', pt: 2.5, px: 3 }}>
           권한 위임
@@ -2149,7 +2149,7 @@ const MenuPermissionManagement: React.FC = () => {
               value={delegationTargetId || ''}
               onChange={(e) => setDelegationTargetId(e.target.value as number)}
               displayEmpty
-              sx={{ borderRadius: '12px' }}
+              sx={{ borderRadius: '8px' }}
             >
               <MenuItem value="">선택하세요</MenuItem>
               {users.filter(u => u.id !== selectedUserId && u.status === 'active').map((u) => (
@@ -2161,7 +2161,7 @@ const MenuPermissionManagement: React.FC = () => {
           </FormControl>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-          <Button onClick={() => setDelegationDialogOpen(false)} sx={{ borderRadius: '12px', textTransform: 'none' }}>
+          <Button onClick={() => setDelegationDialogOpen(false)} sx={{ borderRadius: '8px', textTransform: 'none' }}>
             취소
           </Button>
           <Button
@@ -2170,7 +2170,7 @@ const MenuPermissionManagement: React.FC = () => {
             disableElevation
             disabled={!delegationTargetId || saving}
             startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <PersonAddIcon />}
-            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600 }}
+            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
           >
             {saving ? '위임 중...' : '위임'}
           </Button>

@@ -81,7 +81,7 @@ const PublicInfoPageLayout: React.FC<PublicInfoPageLayoutProps> = ({
         sx={{
           ...mvsMainSurfaceSx,
           width: '100%',
-          borderRadius: '12px',
+          borderRadius: '8px',
           border: '1px solid #A8BDD0',
           boxShadow: '0 2px 10px rgba(36, 52, 71, 0.06)',
           px: { xs: 2, sm: 3 },
@@ -122,7 +122,7 @@ const PublicInfoPageLayout: React.FC<PublicInfoPageLayoutProps> = ({
             sx={{
               textTransform: 'none',
               fontWeight: 600,
-              borderRadius: '12px',
+              borderRadius: '8px',
               color: 'text.secondary',
               '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.06) },
             }}
@@ -136,14 +136,14 @@ const PublicInfoPageLayout: React.FC<PublicInfoPageLayoutProps> = ({
             aria-label={t('login.languageToggleAria')}
             size="small"
             sx={{
-              bgcolor: alpha(theme.palette.background.paper, 0.72),
+              bgcolor: theme.palette.background.paper,
               p: 0.35,
-              borderRadius: '999px',
-              border: `1px solid ${alpha('#ffffff', 0.9)}`,
+              borderRadius: '6px',
+              border: `1px solid ${theme.palette.divider}`,
               '& .MuiToggleButtonGroup-grouped': {
                 border: 0,
                 mx: 0.15,
-                borderRadius: '999px !important',
+                borderRadius: '4px !important',
                 px: 1.5,
                 py: 0.4,
                 fontSize: '0.75rem',
@@ -166,7 +166,7 @@ const PublicInfoPageLayout: React.FC<PublicInfoPageLayoutProps> = ({
           sx={{
             position: 'relative',
             overflow: 'hidden',
-            borderRadius: '12px',
+            borderRadius: '8px',
             px: { xs: 2.5, sm: 4 },
             py: { xs: 3, sm: 4 },
             bgcolor: 'background.paper',

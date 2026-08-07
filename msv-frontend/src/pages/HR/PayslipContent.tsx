@@ -470,7 +470,7 @@ function PayslipHeader({
                   py: 1.25,
                   px: 1.75,
                   minWidth: 116,
-                  borderRadius: '12px',
+                  borderRadius: '8px',
                   overflow: 'hidden'
                 }}
               >
@@ -497,7 +497,7 @@ function PayslipHeader({
               width: forPdf ? 'auto' : { xs: '100%', md: 'auto' },
               py: 1.5,
               px: 1.75,
-              borderRadius: '12px',
+              borderRadius: '8px',
               overflow: 'hidden'
             }}
           >
@@ -595,7 +595,7 @@ const PayslipContent = React.forwardRef<HTMLDivElement, Props>(function PayslipC
         <Box sx={{ px: { xs: 2, sm: 2.5 }, pb: 2.5, pt: 2.5 }}>
           {/* 직원 정보 — Body 테이블 인셋 */}
           <SectionHeading>{labels.employee}</SectionHeading>
-          <Box sx={{ ...mvsBodyTableInsetSx, mb: 3, borderRadius: '14px', overflow: 'hidden' }}>
+          <Box sx={{ ...mvsBodyTableInsetSx, mb: 3, borderRadius: '8px', overflow: 'hidden' }}>
             <Box
               sx={{
                 ...mvsBodyTableFrameSx,
@@ -646,7 +646,7 @@ const PayslipContent = React.forwardRef<HTMLDivElement, Props>(function PayslipC
               border: '2px solid',
               borderColor: 'primary.light',
               bgcolor: 'primary.50',
-              borderRadius: '16px',
+              borderRadius: '8px',
               overflow: 'hidden'
             }}
           >

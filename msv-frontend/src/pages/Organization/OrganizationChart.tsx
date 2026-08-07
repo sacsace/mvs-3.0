@@ -80,15 +80,17 @@ interface OrganizationNode {
 const PersonNode = ({ data }: { data: any }) => (
   <Card sx={{ 
     width: 230,
-    boxShadow: 3,
-    borderRadius: 2,
-    border: '2px solid',
-    borderColor: 'primary.main',
+    boxShadow: 'none',
+    borderRadius: 1,
+    border: '1px solid',
+    borderColor: 'divider',
+    borderTop: '3px solid',
+    borderTopColor: 'primary.main',
     position: 'relative',
+    transition: 'border-color 0.15s ease',
     '&:hover': {
-      boxShadow: 6,
-      transform: 'scale(1.02)',
-      transition: 'all 0.2s ease-in-out'
+      borderColor: 'primary.light',
+      borderTopColor: 'primary.main'
     }
   }}>
     <Handle type="target" position={Position.Top} style={orgHandleStyle} />
@@ -108,11 +110,11 @@ const PersonNode = ({ data }: { data: any }) => (
       </Box>
       <Divider sx={{ my: 1 }} />
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-        <Typography variant="caption" color="text.secondary">
-          📧 {data.email}
+        <Typography variant="caption" color="text.secondary" noWrap>
+          {data.email}
         </Typography>
-        <Typography variant="caption" color="text.secondary">
-          📞 {data.phone}
+        <Typography variant="caption" color="text.secondary" noWrap>
+          {data.phone}
         </Typography>
       </Box>
     </CardContent>
@@ -122,15 +124,17 @@ const PersonNode = ({ data }: { data: any }) => (
 const DepartmentNode = ({ data }: { data: any }) => (
   <Card sx={{ 
     width: 230,
-    boxShadow: 3,
-    borderRadius: 2,
-    border: '2px solid',
-    borderColor: 'secondary.main',
+    boxShadow: 'none',
+    borderRadius: 1,
+    border: '1px solid',
+    borderColor: 'divider',
+    borderTop: '3px solid',
+    borderTopColor: 'secondary.main',
     position: 'relative',
+    transition: 'border-color 0.15s ease',
     '&:hover': {
-      boxShadow: 6,
-      transform: 'scale(1.02)',
-      transition: 'all 0.2s ease-in-out'
+      borderColor: 'secondary.light',
+      borderTopColor: 'secondary.main'
     }
   }}>
     <Handle type="target" position={Position.Top} style={orgHandleStyle} />
@@ -167,15 +171,17 @@ const DepartmentNode = ({ data }: { data: any }) => (
 const CompanyNode = ({ data }: { data: any }) => (
   <Card sx={{ 
     width: 280,
-    boxShadow: 4,
-    borderRadius: 3,
-    border: '3px solid',
-    borderColor: 'success.main',
+    boxShadow: 'none',
+    borderRadius: 1,
+    border: '1px solid',
+    borderColor: 'divider',
+    borderTop: '3px solid',
+    borderTopColor: 'success.main',
     position: 'relative',
+    transition: 'border-color 0.15s ease',
     '&:hover': {
-      boxShadow: 8,
-      transform: 'scale(1.02)',
-      transition: 'all 0.2s ease-in-out'
+      borderColor: 'success.light',
+      borderTopColor: 'success.main'
     }
   }}>
     <Handle type="source" position={Position.Bottom} style={orgHandleStyle} />

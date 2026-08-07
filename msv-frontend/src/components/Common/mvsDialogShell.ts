@@ -1,5 +1,5 @@
 import type { SxProps, Theme } from '@mui/material/styles';
-import { lighten, alpha } from '@mui/material/styles';
+import { alpha } from '@mui/material/styles';
 
 /**
  * MVS 공통 모달(확인·입력) 시각 토큰.
@@ -14,9 +14,9 @@ export const MVS_PROMPT_DIALOG_MAX_WIDTH = 'sm' as const;
 
 export function getMvsDialogPaperSx(theme: Theme): SxProps<Theme> {
   return {
-    borderRadius: theme.spacing(3),
+    borderRadius: '8px',
     overflow: 'hidden',
-    boxShadow: '0 20px 48px rgba(15, 74, 82, 0.18)',
+    boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)',
     border: `1px solid ${theme.palette.divider}`,
     bgcolor: theme.palette.background.paper
   };
@@ -41,9 +41,9 @@ export function getMvsDialogIconBoxSx(
   options: { tone: 'brand' | 'danger' }
 ): SxProps<Theme> {
   return {
-    width: 40,
-    height: 40,
-    borderRadius: theme.spacing(2),
+    width: 36,
+    height: 36,
+    borderRadius: '6px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -82,44 +82,43 @@ export function getMvsDialogActionsSx(theme: Theme): SxProps<Theme> {
   };
 }
 
-/** 취소 — 연한 primary 톤, pill */
+/** 취소 — 중립 아웃라인 */
 export function getMvsDialogCancelButtonSx(theme: Theme): SxProps<Theme> {
   return {
-    borderRadius: 999,
+    borderRadius: '6px',
     textTransform: 'none',
-    px: 3,
-    py: 1,
-    minWidth: 100,
-    borderColor: theme.palette.primary.light,
-    color: theme.palette.primary.dark,
-    bgcolor: lighten(theme.palette.primary.main, 0.88),
+    px: 2.5,
+    py: 0.75,
+    minWidth: 88,
+    borderColor: theme.palette.divider,
+    color: theme.palette.text.secondary,
+    bgcolor: 'transparent',
     '&:hover': {
-      borderColor: theme.palette.primary.main,
-      bgcolor: lighten(theme.palette.primary.main, 0.82)
+      borderColor: theme.palette.text.disabled,
+      bgcolor: theme.palette.action.hover
     }
   };
 }
 
-/** 확인(primary) — 흰 테두리 링 / danger 는 MUI `color`에 맡김 */
+/** 확인(primary) / danger 는 MUI `color`에 맡김 */
 export function getMvsDialogPrimaryConfirmButtonSx(): SxProps<Theme> {
   return {
-    borderRadius: 999,
+    borderRadius: '6px',
     textTransform: 'none',
-    px: 3,
-    py: 1,
-    minWidth: 100,
-    boxShadow: 'none',
-    border: '2px solid rgba(255,255,255,0.45)'
+    px: 2.5,
+    py: 0.75,
+    minWidth: 88,
+    boxShadow: 'none'
   };
 }
 
 export function getMvsDialogDangerConfirmButtonSx(): SxProps<Theme> {
   return {
-    borderRadius: 999,
+    borderRadius: '6px',
     textTransform: 'none',
-    px: 3,
-    py: 1,
-    minWidth: 100,
+    px: 2.5,
+    py: 0.75,
+    minWidth: 88,
     boxShadow: 'none'
   };
 }

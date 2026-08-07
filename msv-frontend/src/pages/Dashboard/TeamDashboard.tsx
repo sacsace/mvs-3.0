@@ -196,14 +196,14 @@ const TeamDashboard: React.FC = () => {
     }
   };
 
-  // 상태 아이콘 반환
-  const getStatusIcon = (status: string) => {
+  // 상태 라벨 반환
+  const getStatusLabel = (status: string) => {
     switch (status) {
-      case 'online': return '🟢';
-      case 'offline': return '⚫';
-      case 'busy': return '🟡';
-      case 'away': return '🔵';
-      default: return '⚫';
+      case 'online': return '온라인';
+      case 'offline': return '오프라인';
+      case 'busy': return 'busy';
+      case 'away': return '자리비움';
+      default: return '오프라인';
     }
   };
 
@@ -332,8 +332,9 @@ const TeamDashboard: React.FC = () => {
                   />
                   <ListItemSecondaryAction>
                     <Chip
-                      label={getStatusIcon(member.status)}
+                      label={getStatusLabel(member.status)}
                       size="small"
+                      variant="outlined"
                       color={getStatusColor(member.status) as any}
                     />
                   </ListItemSecondaryAction>

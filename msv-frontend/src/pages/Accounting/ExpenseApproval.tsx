@@ -895,7 +895,7 @@ const ExpenseApproval: React.FC = () => {
               display: 'flex',
               flexDirection: 'column',
               gap: 0.75,
-              borderRadius: '12px',
+              borderRadius: '8px',
               transition: 'border-color 0.15s ease',
               '&:hover': {
                 '& .receipt-thumb': {
@@ -915,7 +915,7 @@ const ExpenseApproval: React.FC = () => {
                 position: 'relative',
                 width: '100%',
                 aspectRatio: '1 / 1',
-                borderRadius: '12px',
+                borderRadius: '8px',
                 overflow: 'hidden',
                 border: '1px solid',
                 borderColor: '#C5CED9',
@@ -1135,7 +1135,7 @@ const ExpenseApproval: React.FC = () => {
   const expenseFormPaperSx = useMemo(
     () => ({
       p: { xs: 2.5, sm: 3.5 },
-      borderRadius: '20px',
+      borderRadius: '8px',
       border: '1px solid',
       borderColor: alpha(theme.palette.text.primary, 0.06),
       boxShadow: '0 4px 32px rgba(0,0,0,0.06)',
@@ -1148,7 +1148,7 @@ const ExpenseApproval: React.FC = () => {
     () => ({
       mb: 2.5,
       p: { xs: 2, sm: 2.5 },
-      borderRadius: '16px',
+      borderRadius: '8px',
       border: '1px solid',
       borderColor: alpha(theme.palette.text.primary, 0.06),
       bgcolor: alpha(theme.palette.text.primary, 0.02),
@@ -1159,7 +1159,7 @@ const ExpenseApproval: React.FC = () => {
   const softFieldSx = useMemo(
     () => ({
       '& .MuiOutlinedInput-root': {
-        borderRadius: '12px',
+        borderRadius: '8px',
         bgcolor: alpha(theme.palette.text.primary, 0.03),
         '& fieldset': { borderColor: alpha(theme.palette.text.primary, 0.08) },
       },
@@ -1170,7 +1170,7 @@ const ExpenseApproval: React.FC = () => {
   const prepCellSx = useMemo(
     () => ({
       p: 1.5,
-      borderRadius: '14px',
+      borderRadius: '8px',
       bgcolor: alpha(theme.palette.text.primary, 0.035),
       border: '1px solid',
       borderColor: alpha(theme.palette.text.primary, 0.08),
@@ -1385,7 +1385,7 @@ const ExpenseApproval: React.FC = () => {
                         onChange={(e) => setFormData({ ...formData, priority: e.target.value as any })}
                         size="small"
                         sx={{
-                          borderRadius: '12px',
+                          borderRadius: '8px',
                           bgcolor: alpha(theme.palette.text.primary, 0.03),
                           '& .MuiOutlinedInput-notchedOutline': { borderColor: alpha(theme.palette.text.primary, 0.08) },
                         }}
@@ -1541,7 +1541,7 @@ const ExpenseApproval: React.FC = () => {
               <TableContainer
                 sx={{
                   mb: 1.5,
-                  borderRadius: '14px',
+                  borderRadius: '8px',
                   border: '1px solid',
                   borderColor: alpha(theme.palette.text.primary, 0.08),
                   overflow: 'hidden',
@@ -1652,7 +1652,7 @@ const ExpenseApproval: React.FC = () => {
                 variant="outlined"
                 startIcon={<AddIcon />}
                 onClick={handleAddLineItem}
-                sx={{ mt: 1, textTransform: 'none', borderRadius: '12px' }}
+                sx={{ mt: 1, textTransform: 'none', borderRadius: '8px' }}
               >
                 {t('expenseApproval.voucher.addItem')}
               </Button>
@@ -1661,7 +1661,7 @@ const ExpenseApproval: React.FC = () => {
             <Box
               sx={{
                 mb: 2,
-                borderRadius: '16px',
+                borderRadius: '8px',
                 p: { xs: 2, sm: 2.5 },
                 bgcolor: 'background.paper',
                 border: '1px solid',
@@ -1692,7 +1692,7 @@ const ExpenseApproval: React.FC = () => {
                   py: 1.25,
                   px: 1.5,
                   mb: 1.5,
-                  borderRadius: '12px',
+                  borderRadius: '8px',
                   bgcolor: (theme) => alpha(theme.palette.text.primary, 0.04),
                 }}
               >
@@ -1849,7 +1849,7 @@ const ExpenseApproval: React.FC = () => {
                   pt: 2,
                   px: 2,
                   pb: 2,
-                  borderRadius: '14px',
+                  borderRadius: '8px',
                   bgcolor: (theme) => alpha(theme.palette.primary.main, 0.06),
                   border: '1px solid',
                   borderColor: (theme) => alpha(theme.palette.primary.main, 0.12),
@@ -1896,10 +1896,10 @@ const ExpenseApproval: React.FC = () => {
                 {t('expenseApproval.voucher.sectionReceipts')}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
-                <Button variant="outlined" startIcon={<QrCodeIcon />} onClick={handleOpenQr} disabled={qrLoading} sx={{ textTransform: 'none', borderRadius: '12px' }}>
+                <Button variant="outlined" startIcon={<QrCodeIcon />} onClick={handleOpenQr} disabled={qrLoading} sx={{ textTransform: 'none', borderRadius: '8px' }}>
                   {qrLoading ? t('expenseApproval.voucher.receiptQrLoading') : t('expenseApproval.voucher.receiptQr')}
                 </Button>
-                <Button variant="outlined" component="label" disabled={uploadingReceipts} sx={{ textTransform: 'none', borderRadius: '12px' }}>
+                <Button variant="outlined" component="label" disabled={uploadingReceipts} sx={{ textTransform: 'none', borderRadius: '8px' }}>
                   {uploadingReceipts ? t('expenseApproval.voucher.receiptUploading') : t('expenseApproval.voucher.receiptUpload')}
                   <input
                     hidden
@@ -1909,7 +1909,7 @@ const ExpenseApproval: React.FC = () => {
                     onChange={(e) => handleUploadReceipts(e.target.files)}
                   />
                 </Button>
-                <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadExpenseData} sx={{ textTransform: 'none', borderRadius: '12px' }}>
+                <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadExpenseData} sx={{ textTransform: 'none', borderRadius: '8px' }}>
                   {t('expenseApproval.voucher.refresh')}
                 </Button>
               </Box>

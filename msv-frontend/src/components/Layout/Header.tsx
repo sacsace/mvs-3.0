@@ -420,14 +420,9 @@ const Header: React.FC<HeaderProps> = ({
                 m: 0,
                 textAlign: 'left',
                 cursor: showMobileNav ? 'default' : 'pointer',
-                borderRadius: '10px',
-                transition: 'opacity 0.2s ease, transform 0.2s ease',
-                '&:hover': showMobileNav
-                  ? {}
-                  : {
-                      opacity: 0.86,
-                      transform: 'translateY(-1px)',
-                    },
+                borderRadius: '8px',
+                transition: 'opacity 0.15s ease',
+                '&:hover': showMobileNav ? {} : { opacity: 0.86 },
               }}
             >
             {companyInfo.logo ? (
@@ -590,11 +585,10 @@ const Header: React.FC<HeaderProps> = ({
             onClick={handleLanguageMenu}
             sx={{ 
               color: 'text.secondary',
-              transition: 'all 0.2s ease',
+              transition: 'background-color 0.15s ease, color 0.15s ease',
               '&:hover': {
                 bgcolor: 'action.hover',
                 color: 'text.primary',
-                transform: 'translateY(-1px)',
               }
             }}
           >
@@ -606,11 +600,10 @@ const Header: React.FC<HeaderProps> = ({
             onClick={handleNotificationMenu}
             sx={{ 
               color: 'text.secondary',
-              transition: 'all 0.2s ease',
+              transition: 'background-color 0.15s ease, color 0.15s ease',
               '&:hover': {
                 bgcolor: 'action.hover',
                 color: 'text.primary',
-                transform: 'translateY(-1px)',
               }
             }}
           >
@@ -651,15 +644,14 @@ const Header: React.FC<HeaderProps> = ({
               pl: 1,
               pr: 0.5,
               border: 'none',
-              borderRadius: '999px',
+              borderRadius: '6px',
               bgcolor: 'transparent',
               cursor: 'pointer',
               font: 'inherit',
               color: 'inherit',
-              transition: 'background-color 0.2s ease, transform 0.2s ease',
+              transition: 'background-color 0.15s ease',
               '&:hover': {
                 bgcolor: 'action.hover',
-                transform: 'translateY(-1px)',
               },
             }}
           >
@@ -701,10 +693,9 @@ const Header: React.FC<HeaderProps> = ({
                 ml: 0.5,
                 bgcolor: fullMenuOpen ? 'primary.main' : '#1F2937',
                 color: '#FFFFFF',
-                transition: 'background-color 0.2s ease, transform 0.2s ease',
+                transition: 'background-color 0.15s ease',
                 '&:hover': {
                   bgcolor: fullMenuOpen ? 'primary.dark' : '#111827',
-                  transform: 'translateY(-1px)',
                 },
               }}
             >

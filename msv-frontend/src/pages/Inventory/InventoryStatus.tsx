@@ -743,7 +743,7 @@ const InventoryStatus: React.FC = () => {
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
                 {t('inventoryStatus.txDialog.totalShown', { total: txTotal })}
               </Typography>
-              <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx, borderRadius: '14px', overflow: 'hidden' }}>
+              <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx, borderRadius: '8px', overflow: 'hidden' }}>
                 <Table size="small" sx={{ borderCollapse: 'collapse', bgcolor: 'transparent' }}>
                   <TableHead sx={mvsTableHeadHighlightSx}>
                     <TableRow>

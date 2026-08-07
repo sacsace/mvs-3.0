@@ -259,7 +259,7 @@ const StockOutBarcode: React.FC = () => {
   const appleInputSx = {
     ...(mvsSearchFieldSx as Record<string, unknown>),
     '& .MuiOutlinedInput-root': {
-      borderRadius: '12px',
+      borderRadius: '8px',
       bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.05),
       minHeight: 48,
       transition: theme.transitions.create(['background-color', 'box-shadow', 'border-color'], { duration: 180 }),

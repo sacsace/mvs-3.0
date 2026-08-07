@@ -16,7 +16,7 @@ export const mvsPageShellSx: SxProps<Theme> = {
 
 export const mvsMainSurfaceSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',
-  borderRadius: '10px',
+  borderRadius: '8px',
   padding: { xs: '16px', sm: '24px', md: '32px' },
   boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
   border: '1px solid #D0DBE8',
@@ -25,7 +25,7 @@ export const mvsMainSurfaceSx: SxProps<Theme> = {
 
 export const mvsSectionGroupSx: SxProps<Theme> = {
   backgroundColor: '#F0F4F8',
-  borderRadius: '10px',
+  borderRadius: '8px',
   padding: '20px',
   marginBottom: '24px',
   border: '1px solid #D0DBE8',
@@ -79,7 +79,7 @@ export const mvsSearchZoneSx: MvsStyleObject = mvsFilterToolbarSx;
 
 export const mvsTableZoneSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',
-  borderRadius: '10px',
+  borderRadius: '8px',
   padding: { xs: '12px', sm: '18px' },
   boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
   border: '1px solid #D0DBE8',
@@ -122,12 +122,9 @@ export const mvsTableWellSx: SxProps<Theme> = (theme) => ({
 });
 
 export const mvsTableInsetWrapSx: SxProps<Theme> = (theme) => ({
-  borderRadius: '10px',
+  borderRadius: '8px',
   p: { xs: 1, sm: 1.25 },
-  bgcolor:
-    theme.palette.mode === 'dark'
-      ? 'rgba(255,255,255,0.04)'
-      : '#E8EDF3',
+  bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#F1F5F9',
 });
 
 /** MuiTableCell head 기본이 transparent인 경우를 대비해 헤더 행을 확실히 구분 */
@@ -180,8 +177,8 @@ export const mvsBodyListZoneSx: MvsStyleObject = {
 
 /** Body 카드·리스트 공통 외곽 톤 */
 export const mvsBodyFrameBorder = '1px solid #D0DBE8';
-export const mvsBodyFrameShadow = '0 4px 14px rgba(15, 23, 42, 0.07)';
-export const mvsBodyFrameRadius = { xs: '14px', sm: '20px' } as const;
+export const mvsBodyFrameShadow = '0 1px 2px rgba(15, 23, 42, 0.05)';
+export const mvsBodyFrameRadius = '8px';
 
 /** Body 리스트 테이블 래퍼 — 컨트롤 카드와 동일 외곽 톤 */
 export const mvsBodyListTableSx: MvsStyleObject = {
@@ -194,18 +191,6 @@ export const mvsBodyListTableSx: MvsStyleObject = {
   borderRadius: mvsBodyFrameRadius,
   border: mvsBodyFrameBorder,
   boxShadow: mvsBodyFrameShadow,
-  '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:first-of-type': {
-    borderTopLeftRadius: { xs: '12px', sm: '18px' },
-  },
-  '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:last-of-type': {
-    borderTopRightRadius: { xs: '12px', sm: '18px' },
-  },
-  '& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-body:first-of-type': {
-    borderBottomLeftRadius: { xs: '12px', sm: '18px' },
-  },
-  '& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-body:last-of-type': {
-    borderBottomRightRadius: { xs: '12px', sm: '18px' },
-  },
 };
 
 /** ── Body 영역 표준 (KPI 아래 리스트·테이블 본문) ── */
@@ -276,18 +261,18 @@ export const mvsBodyPrimaryBtnSx: MvsStyleObject = {
   boxShadow: 'none',
 };
 
-/** Body 필터 래퍼 */
+/** Body 필터 래퍼 — 툴바와 동일 톤(배경 단계 최소화) */
 export const mvsBodyFilterWrapSx: MvsStyleObject = {
   px: { xs: 2, sm: 2.5 },
   py: 2,
-  bgcolor: '#F3F5F7',
+  bgcolor: '#F8FAFC',
 };
 
-/** Body 테이블 인셋 — 회색 배경, 좌우 대칭 패딩으로 리스트 중앙 정렬 */
+/** Body 테이블 인셋 — 배경 없이 여백만 (카드 안 카드 중첩 방지) */
 export const mvsBodyTableInsetSx: MvsStyleObject = {
   px: { xs: 2, sm: 2.5 },
   py: { xs: 2, sm: 2.5 },
-  bgcolor: '#EEF1F3',
+  bgcolor: 'transparent',
 };
 
 /** Body 테이블 프레임 — 인셋 안 흰 테이블 카드 */
@@ -361,7 +346,7 @@ export const mvsWorkBoardPageBg = '#F0F4F9';
 /** 대시보드 하단 위젯 그룹 배경 */
 export const mvsDashboardWidgetGroupSx: SxProps<Theme> = {
   backgroundColor: '#EEF3F8',
-  borderRadius: '10px',
+  borderRadius: '8px',
   padding: '20px',
   gap: '20px',
   border: '1px solid #D0DBE8',

@@ -20,7 +20,7 @@ import PublicInfoPageLayout from './PublicInfoPageLayout';
 
 const contactCardSx = {
   p: 2.25,
-  borderRadius: '16px',
+  borderRadius: '8px',
   border: '1px solid',
   borderColor: 'divider',
   height: '100%',
@@ -125,7 +125,7 @@ const CustomerCenter: React.FC = () => {
               disableGutters
               elevation={0}
               sx={{
-                borderRadius: '14px !important',
+                borderRadius: '8px !important',
                 border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
                 '&:before': { display: 'none' },
                 overflow: 'hidden',

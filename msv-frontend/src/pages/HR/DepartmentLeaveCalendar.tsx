@@ -150,7 +150,7 @@ const DepartmentLeaveCalendar: React.FC<DepartmentLeaveCalendarProps> = ({
           gridTemplateColumns: 'repeat(7, minmax(0, 1fr))',
           gap: 1,
           p: 0.5,
-          borderRadius: '12px',
+          borderRadius: '8px',
           bgcolor: 'transparent',
         }}
       >

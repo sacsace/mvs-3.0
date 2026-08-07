@@ -183,7 +183,7 @@ const dashboardCardTitleBar = (
   ...(opts?.noFlex ? { flex: 'none' as const } : { flex: 1, minWidth: 0 }),
   px: 1.5,
   py: 1,
-  borderRadius: '12px',
+  borderRadius: '8px',
   border: 'none',
   bgcolor: alpha(theme.palette[accent].main, 0.06),
 });
@@ -1846,7 +1846,7 @@ const Dashboard: React.FC = () => {
                           px: 1,
                           py: 1.25,
                           minHeight: 128,
-                          borderRadius: '12px',
+                          borderRadius: '8px',
                           border: '1px solid',
                           borderColor: hasCompanyHoliday
                             ? 'warning.main'

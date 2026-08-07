@@ -227,7 +227,7 @@ const CostAnalysis: React.FC = () => {
   }
 
   const cardShellSx = {
-    borderRadius: '20px',
+    borderRadius: '8px',
     border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'dark' ? 0.35 : 0.65)}`,
     boxShadow: '0 4px 24px rgba(15, 23, 42, 0.06)',
     bgcolor: 'background.paper',
@@ -235,7 +235,7 @@ const CostAnalysis: React.FC = () => {
   };
 
   const filterBarSx = {
-    borderRadius: '20px',
+    borderRadius: '8px',
     border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'dark' ? 0.35 : 0.65)}`,
     boxShadow: '0 4px 24px rgba(15, 23, 42, 0.06)',
     overflow: 'hidden' as const,
@@ -263,7 +263,7 @@ const CostAnalysis: React.FC = () => {
       {error && (
         <Alert
           severity="error"
-          sx={{ mb: 3, borderRadius: '14px' }}
+          sx={{ mb: 3, borderRadius: '8px' }}
           onClose={() => setError('')}
         >
           {error}
@@ -281,7 +281,7 @@ const CostAnalysis: React.FC = () => {
               flexWrap: 'wrap',
               '& .MuiInputLabel-root': { fontSize: '0.8125rem' },
               '& .MuiSelect-select': { fontSize: '0.875rem', fontWeight: 500, py: 1.1 },
-              '& .MuiOutlinedInput-root': { borderRadius: '12px' },
+              '& .MuiOutlinedInput-root': { borderRadius: '8px' },
             }}
           >
             <FormControl size="small" sx={{ minWidth: 128 }}>
@@ -323,7 +323,7 @@ const CostAnalysis: React.FC = () => {
                 fontWeight: 600,
                 px: 2.25,
                 py: 1.1,
-                borderRadius: '12px',
+                borderRadius: '8px',
                 textTransform: 'none',
               }}
             >
@@ -338,7 +338,7 @@ const CostAnalysis: React.FC = () => {
                 fontWeight: 600,
                 px: 2.25,
                 py: 1.1,
-                borderRadius: '12px',
+                borderRadius: '8px',
                 textTransform: 'none',
                 borderColor: alpha(theme.palette.divider, 0.95),
               }}
@@ -354,7 +354,7 @@ const CostAnalysis: React.FC = () => {
         sx={{
           mb: 3,
           p: 0.5,
-          borderRadius: '14px',
+          borderRadius: '8px',
           bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.12 : 0.08),
           border: `1px solid ${alpha(theme.palette.divider, 0.55)}`,
         }}
@@ -373,7 +373,7 @@ const CostAnalysis: React.FC = () => {
               py: 1,
               textTransform: 'none',
               letterSpacing: '-0.01em',
-              borderRadius: '12px',
+              borderRadius: '8px',
               mx: 0.25,
               color: 'text.secondary',
               '&.Mui-selected': {
@@ -465,7 +465,7 @@ const CostAnalysis: React.FC = () => {
                 component={Paper}
                 elevation={0}
                 sx={{
-                  borderRadius: '14px',
+                  borderRadius: '8px',
                   border: `1px solid ${alpha(theme.palette.divider, 0.55)}`,
                   overflow: 'hidden',
                 }}
@@ -669,7 +669,7 @@ const CostAnalysis: React.FC = () => {
         onClose={() => setOpenInsightDialog(false)}
         maxWidth="md"
         fullWidth
-        PaperProps={{ sx: { borderRadius: '20px' } }}
+        PaperProps={{ sx: { borderRadius: '8px' } }}
       >
         <DialogTitle sx={{ pb: 1, pt: 2.5, px: 3 }}>
           <Typography component="span" sx={{ fontSize: '1.125rem', fontWeight: 700, lineHeight: 1.35, letterSpacing: '-0.02em' }}>

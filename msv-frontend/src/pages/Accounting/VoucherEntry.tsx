@@ -597,7 +597,7 @@ const VoucherEntry: React.FC = () => {
                 </Grid>
 
                 {amountRows.length > 0 ? (
-                  <Box sx={{ ...mvsBodyToolbarSx, mt: 2, borderRadius: '12px', border: '1px solid #D0DBE8' }}>
+                  <Box sx={{ ...mvsBodyToolbarSx, mt: 2, borderRadius: '8px', border: '1px solid #D0DBE8' }}>
                     <Box sx={{ width: '100%' }}>
                       <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>{t('voucherEntry.amountBreakdown')}</Typography>
                       {amountRows.map((row) => (
@@ -613,7 +613,7 @@ const VoucherEntry: React.FC = () => {
             </>
           ) : (
             <Box sx={bodyContentSx}>
-              <Alert severity="info" variant="outlined" sx={{ mb: 2, borderRadius: '12px' }}>{t('voucherEntry.advancedHint')}</Alert>
+              <Alert severity="info" variant="outlined" sx={{ mb: 2, borderRadius: '8px' }}>{t('voucherEntry.advancedHint')}</Alert>
               <VoucherLinesEditor lines={advancedLines} accounts={ledgerAccounts} onChange={setAdvancedLines} />
             </Box>
           )}
@@ -671,7 +671,7 @@ const VoucherEntry: React.FC = () => {
           </Box>
         </Card>
 
-        <Box sx={{ ...mvsBodySectionHeaderSx, borderRadius: '20px', border: '1px solid #D0DBE8', boxShadow: '0 4px 14px rgba(15, 23, 42, 0.07)', justifyContent: 'flex-end' }}>
+        <Box sx={{ ...mvsBodySectionHeaderSx, borderRadius: '8px', border: '1px solid #D0DBE8', boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)', justifyContent: 'flex-end' }}>
           <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
             <Tooltip title={!balanced ? t('voucherEntry.errors.notBalanced') : ''}>
               <span>

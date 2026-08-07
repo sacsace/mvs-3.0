@@ -1383,7 +1383,7 @@ const VacationManagement: React.FC = () => {
         return (
           <Box>
             {/* 부서별 휴가 달력 (휴가 현황) */}
-            <Card sx={{ mb: 2, borderRadius: '20px', border: '1px solid #C5CED9', boxShadow: '0 2px 14px rgba(15, 23, 42, 0.05)' }}>
+            <Card sx={{ mb: 2, borderRadius: '8px', border: '1px solid #C5CED9', boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)' }}>
               <CardContent>
                 <Box
                   sx={{
@@ -2395,7 +2395,7 @@ const VacationManagement: React.FC = () => {
                         sx: {
                           mt: 0.5,
                           minWidth: 220,
-                          borderRadius: '12px',
+                          borderRadius: '8px',
                           border: '1px solid #C5CED9',
                           boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
                         },

@@ -1248,7 +1248,7 @@ const GeneralLedger: React.FC = () => {
                           sx: {
                             mt: 0.5,
                             minWidth: 220,
-                            borderRadius: '12px',
+                            borderRadius: '8px',
                             border: '1px solid #C5CED9',
                             boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
                           },

@@ -1234,7 +1234,7 @@ const InventoryManagement: React.FC = () => {
                     sx: {
                       mt: 0.5,
                       minWidth: 220,
-                      borderRadius: '12px',
+                      borderRadius: '8px',
                       border: '1px solid #C5CED9',
                       boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
                     },
@@ -1868,7 +1868,7 @@ const InventoryManagement: React.FC = () => {
         onClose={handleCloseInventoryDialog}
         maxWidth="md"
         fullWidth
-        PaperProps={{ sx: { borderRadius: '20px' } }}
+        PaperProps={{ sx: { borderRadius: '8px' } }}
       >
         <DialogTitle
           sx={{
@@ -1926,7 +1926,7 @@ const InventoryManagement: React.FC = () => {
             <Box sx={{ flex: 1 }} />
             <Button
               onClick={handleCloseInventoryDialog}
-              sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '12px', px: 2 }}
+              sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '8px', px: 2 }}
             >
               {t('inventoryManagement.actions.close')}
             </Button>
@@ -1937,7 +1937,7 @@ const InventoryManagement: React.FC = () => {
                   disableElevation
                   disabled={!basicMenuFlags.canEdit}
                   onClick={() => setInventoryDialogMode('edit')}
-                  sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+                  sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
                 >
                   {t('inventoryManagement.actions.edit')}
                 </Button>
@@ -1953,7 +1953,7 @@ const InventoryManagement: React.FC = () => {
         maxWidth="md"
         fullWidth
         sx={{ zIndex: (theme) => theme.zIndex.modal + 2 }}
-        PaperProps={{ sx: { borderRadius: '16px' } }}
+        PaperProps={{ sx: { borderRadius: '8px' } }}
       >
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, pr: 1 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -1989,7 +1989,7 @@ const InventoryManagement: React.FC = () => {
           ) : null}
         </DialogContent>
         <DialogActions sx={{ px: 2, py: 1.5 }}>
-          <Button onClick={() => setImagePreview(null)} variant="outlined" sx={{ borderRadius: '12px', textTransform: 'none' }}>
+          <Button onClick={() => setImagePreview(null)} variant="outlined" sx={{ borderRadius: '8px', textTransform: 'none' }}>
             {t('inventoryManagement.actions.close')}
           </Button>
         </DialogActions>
@@ -2522,7 +2522,7 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
 
   const detailFieldSx = {
     p: 1.5,
-    borderRadius: '12px',
+    borderRadius: '8px',
     border: '1px solid',
     borderColor: 'divider',
     bgcolor: 'background.paper',
@@ -2536,7 +2536,7 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
           <Box
             sx={(theme) => ({
               p: { xs: 1.5, sm: 2 },
-              borderRadius: '14px',
+              borderRadius: '8px',
               border: `1px solid ${alpha(theme.palette.divider, 0.95)}`,
               bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.03),
             })}
@@ -2553,7 +2553,7 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
                   height: 104,
                   border: '1px solid',
                   borderColor: 'divider',
-                  borderRadius: '12px',
+                  borderRadius: '8px',
                   overflow: 'hidden',
                   flexShrink: 0,
                   bgcolor: 'action.hover',
@@ -2639,7 +2639,7 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
               elevation={0}
               sx={(theme) => ({
                 p: 2,
-                borderRadius: '14px',
+                borderRadius: '8px',
                 border: `1px solid ${alpha(theme.palette.primary.main, 0.28)}`,
                 bgcolor: alpha(theme.palette.primary.main, 0.05),
               })}
@@ -2649,7 +2649,7 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
                   sx={{
                     bgcolor: 'background.paper',
                     p: 2,
-                    borderRadius: '12px',
+                    borderRadius: '8px',
                     border: '1px solid',
                     borderColor: 'divider',
                     display: 'flex',
@@ -3130,7 +3130,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
       fontSize: '0.8125rem',
     },
     '& .MuiOutlinedInput-root': {
-      borderRadius: '12px',
+      borderRadius: '8px',
       minHeight: 40,
       bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.05),
       transition: theme.transitions.create(['background-color', 'box-shadow'], { duration: 150 }),
@@ -3155,7 +3155,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
     height: 40,
     flexShrink: 0,
     whiteSpace: 'nowrap' as const,
-    borderRadius: '12px',
+    borderRadius: '8px',
     textTransform: 'none' as const,
     fontWeight: 600,
   };
@@ -3176,7 +3176,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
               p: 1.5,
               minWidth: 0,
               border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
-              borderRadius: '14px',
+              borderRadius: '8px',
               bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
             }}
           >
@@ -3197,7 +3197,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
                 width: 104,
                 height: 104,
                 border: `1px dashed ${alpha(theme.palette.text.primary, 0.18)}`,
-                borderRadius: '14px',
+                borderRadius: '8px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -3232,7 +3232,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
                 size="medium"
                 sx={{
                   height: 40,
-                  borderRadius: '12px',
+                  borderRadius: '8px',
                   textTransform: 'none',
                   fontWeight: 600,
                   borderStyle: 'dashed',
@@ -3317,7 +3317,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
               p: 0,
               minWidth: 0,
               border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
-              borderRadius: '14px',
+              borderRadius: '8px',
               bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.04),
               boxShadow: `inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.04 : 0.45)}`,
             }}
@@ -3610,7 +3610,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
       <Dialog
         open={categoryDialogOpen}
         onClose={() => !masterSaving && setCategoryDialogOpen(false)}
-        PaperProps={{ sx: { borderRadius: '16px' } }}
+        PaperProps={{ sx: { borderRadius: '8px' } }}
       >
         <DialogTitle sx={{ pt: 2.25, px: 2.5, pb: 1, fontWeight: 700, letterSpacing: '-0.02em' }}>
           {t('inventoryManagement.dialog.registerCategoryTitle')}
@@ -3633,7 +3633,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
           <Button
             onClick={() => setCategoryDialogOpen(false)}
             disabled={masterSaving}
-            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '12px', px: 2 }}
+            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '8px', px: 2 }}
           >
             {t('inventoryManagement.actions.cancel')}
           </Button>
@@ -3642,7 +3642,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
             disableElevation
             onClick={handleAddCategory}
             disabled={!canMutate || masterSaving || !newCategoryName.trim()}
-            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
           >
             {t('inventoryManagement.actions.add')}
           </Button>
@@ -3652,7 +3652,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
       <Dialog
         open={locationDialogOpen}
         onClose={() => !masterSaving && setLocationDialogOpen(false)}
-        PaperProps={{ sx: { borderRadius: '16px' } }}
+        PaperProps={{ sx: { borderRadius: '8px' } }}
       >
         <DialogTitle sx={{ pt: 2.25, px: 2.5, pb: 1, fontWeight: 700, letterSpacing: '-0.02em' }}>
           {t('inventoryManagement.dialog.registerLocationTitle')}
@@ -3675,7 +3675,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
           <Button
             onClick={() => setLocationDialogOpen(false)}
             disabled={masterSaving}
-            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '12px', px: 2 }}
+            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '8px', px: 2 }}
           >
             {t('inventoryManagement.actions.cancel')}
           </Button>
@@ -3684,7 +3684,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
             disableElevation
             onClick={handleAddLocation}
             disabled={!canMutate || masterSaving || !newLocationName.trim()}
-            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
           >
             {t('inventoryManagement.actions.add')}
           </Button>
@@ -3694,7 +3694,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
       <Dialog
         open={unitDialogOpen}
         onClose={() => !masterSaving && setUnitDialogOpen(false)}
-        PaperProps={{ sx: { borderRadius: '16px' } }}
+        PaperProps={{ sx: { borderRadius: '8px' } }}
       >
         <DialogTitle sx={{ pt: 2.25, px: 2.5, pb: 1, fontWeight: 700, letterSpacing: '-0.02em' }}>
           {t('inventoryManagement.dialog.registerUnitTitle')}
@@ -3717,7 +3717,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
           <Button
             onClick={() => setUnitDialogOpen(false)}
             disabled={masterSaving}
-            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '12px', px: 2 }}
+            sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '8px', px: 2 }}
           >
             {t('inventoryManagement.actions.cancel')}
           </Button>
@@ -3726,7 +3726,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
             disableElevation
             onClick={handleAddUnit}
             disabled={!canMutate || masterSaving || !newUnitName.trim()}
-            sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+            sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
           >
             {t('inventoryManagement.actions.add')}
           </Button>
@@ -3746,7 +3746,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
         }}
       >
         <Box sx={{ flex: 1 }} />
-        <Button onClick={onCancel} sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '12px', px: 2 }}>
+        <Button onClick={onCancel} sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '8px', px: 2 }}>
           {t('inventoryManagement.actions.cancel')}
         </Button>
         <Button
@@ -3754,7 +3754,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
           variant="contained"
           disableElevation
           disabled={!canSubmit}
-          sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+          sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
         >
           {item ? t('inventoryManagement.actions.update') : t('inventoryManagement.actions.add')}
         </Button>

@@ -181,7 +181,7 @@ const PersonalSettings: React.FC = () => {
 
   const fieldSx = {
     ...(mvsSearchFieldSx as Record<string, unknown>),
-    '& .MuiOutlinedInput-root': { borderRadius: '12px' },
+    '& .MuiOutlinedInput-root': { borderRadius: '8px' },
   };
 
   return (
@@ -326,7 +326,7 @@ const PersonalSettings: React.FC = () => {
                 p: 2,
                 bgcolor: '#F8FAFC',
                 border: '1px solid #E2E8F0',
-                borderRadius: '12px',
+                borderRadius: '8px',
                 display: 'grid',
                 gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
                 gap: 1.5,

@@ -1223,7 +1223,7 @@ const NoticeManagement: React.FC = () => {
                   sx={{
                     aspectRatio: '3 / 2',
                     border: `1px solid ${cellBorder}`,
-                    borderRadius: '12px',
+                    borderRadius: '8px',
                     p: ycsSp(0.4),
                     display: 'flex',
                     flexDirection: 'column',
@@ -2266,7 +2266,7 @@ const NoticeManagement: React.FC = () => {
                   flexWrap: 'wrap',
                   px: 1,
                   py: 0.5,
-                  borderRadius: '14px',
+                  borderRadius: '8px',
                   bgcolor: alpha(theme.palette.grey[500], 0.08),
                   border: `1px solid ${alpha(theme.palette.divider, 0.65)}`,
                 }}
@@ -2330,7 +2330,7 @@ const NoticeManagement: React.FC = () => {
               </Box>
             </Box>
             {!canManageYearlySchedule && (
-              <Alert severity="info" sx={{ mb: 1.5, borderRadius: '12px' }}>
+              <Alert severity="info" sx={{ mb: 1.5, borderRadius: '8px' }}>
                 {txt(
                   '연간 스케줄 등록·수정·삭제는 관리자(admin) 또는 시스템 관리자(root)만 할 수 있습니다. 날짜를 누르면 해당 일의 일정을 볼 수 있습니다.',
                   'Adding, editing, or deleting yearly schedule entries is limited to admin or root. Click a date to view schedules for that day.'

@@ -1894,7 +1894,7 @@ const EInvoiceManagement: React.FC = () => {
               {/* 상품 목록 */}
               <Box sx={{ mb: 3 }}>
                 <Typography variant="h6" gutterBottom>{t('eInvoiceManagement.detail.itemList')}</Typography>
-                <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx, borderRadius: '14px', overflow: 'hidden' }}>
+                <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx, borderRadius: '8px', overflow: 'hidden' }}>
                   <Table size="small" sx={{ borderCollapse: 'collapse', bgcolor: 'transparent' }}>
                     <TableHead sx={mvsTableHeadHighlightSx}>
                       <TableRow>

@@ -265,7 +265,7 @@ const Login: React.FC = () => {
   const signupFieldSx = {
     '& .MuiOutlinedInput-root': {
       minHeight: 44,
-      borderRadius: '12px',
+      borderRadius: '8px',
       bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.12 : 0.06),
       transition: theme.transitions.create(['background-color', 'box-shadow'], { duration: 150 }),
       '& fieldset': {
@@ -661,7 +661,7 @@ const Login: React.FC = () => {
           sx: {
             width: 'min(96vw, 1176px)',
             maxHeight: '92vh',
-            borderRadius: '20px',
+            borderRadius: '8px',
             overflow: 'hidden',
             border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'light' ? 0.12 : 0.35)}`,
             boxShadow:
@@ -702,7 +702,7 @@ const Login: React.FC = () => {
               <Alert
                 severity="error"
                 variant="outlined"
-                sx={{ gridColumn: '1 / -1', borderRadius: '12px', fontSize: '0.8125rem' }}
+                sx={{ gridColumn: '1 / -1', borderRadius: '8px', fontSize: '0.8125rem' }}
               >
                 {signupError}
               </Alert>
@@ -711,7 +711,7 @@ const Login: React.FC = () => {
               <Alert
                 severity="success"
                 variant="outlined"
-                sx={{ gridColumn: '1 / -1', borderRadius: '12px', fontSize: '0.8125rem' }}
+                sx={{ gridColumn: '1 / -1', borderRadius: '8px', fontSize: '0.8125rem' }}
               >
                 {signupSuccess}
               </Alert>
@@ -893,7 +893,7 @@ const Login: React.FC = () => {
                     severity="success"
                     variant="outlined"
                     sx={{
-                      borderRadius: '12px',
+                      borderRadius: '8px',
                       py: 1.25,
                       '& .MuiAlert-message': { fontSize: '0.875rem', lineHeight: 1.55, letterSpacing: '-0.01em' },
                     }}
@@ -923,7 +923,7 @@ const Login: React.FC = () => {
                     severity="info"
                     variant="outlined"
                     sx={{
-                      borderRadius: '12px',
+                      borderRadius: '8px',
                       py: 1,
                       bgcolor: alpha(theme.palette.info.main, theme.palette.mode === 'light' ? 0.06 : 0.12),
                       borderColor: alpha(theme.palette.info.main, 0.28),
@@ -947,14 +947,14 @@ const Login: React.FC = () => {
 
             {signupStep === 'done' && (
               <Box sx={{ maxWidth: 768, mx: 'auto' }}>
-                <Alert severity="success" variant="outlined" sx={{ mb: 2, borderRadius: '12px', fontSize: '0.875rem' }}>
+                <Alert severity="success" variant="outlined" sx={{ mb: 2, borderRadius: '8px', fontSize: '0.875rem' }}>
                   {t('login.signup.doneSuccess')}
                 </Alert>
                 <Paper
                   variant="outlined"
                   sx={{
                     p: 2.5,
-                    borderRadius: '16px',
+                    borderRadius: '8px',
                     borderColor: alpha(theme.palette.divider, 0.9),
                     bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.04 : 0.02),
                   }}
@@ -991,7 +991,7 @@ const Login: React.FC = () => {
             <Button
               onClick={closeSignupDialog}
               disabled={signupLoading}
-              sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '12px', px: 2 }}
+              sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '8px', px: 2 }}
             >
               {t('common.cancel')}
             </Button>
@@ -1002,7 +1002,7 @@ const Login: React.FC = () => {
                 color="primary"
                 disableElevation
                 disabled={signupLoading}
-                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+                sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
               >
                 {signupLoading ? t('login.signup.processing') : t('login.signup.registerButton')}
               </Button>
@@ -1016,7 +1016,7 @@ const Login: React.FC = () => {
                 onClick={() => {
                   closeSignupDialog();
                 }}
-                sx={{ borderRadius: '12px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
+                sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600, px: 2.5 }}
               >
                 {t('login.signup.finishSignup')}
               </Button>

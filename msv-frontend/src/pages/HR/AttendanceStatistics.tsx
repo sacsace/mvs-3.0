@@ -1510,7 +1510,7 @@ const AttendanceStatistics: React.FC = () => {
                       ...mvsInnerCardSx,
                       py: 1.25,
                       px: 1.5,
-                      borderRadius: '12px'
+                      borderRadius: '8px'
                     }}
                   >
                     <Typography

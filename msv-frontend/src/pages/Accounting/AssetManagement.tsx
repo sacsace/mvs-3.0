@@ -1022,7 +1022,7 @@ const AssetManagement: React.FC = () => {
                 <Box
                   sx={{
                     p: 2,
-                    borderRadius: '12px',
+                    borderRadius: '8px',
                     border: '1px solid #E2E8F0',
                     bgcolor: '#F8FAFC',
                     display: 'grid',

@@ -765,7 +765,7 @@ const AttendanceManagement: React.FC = () => {
                 gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
                 gap: 2,
                 p: 2,
-                borderRadius: '12px',
+                borderRadius: '8px',
                 border: '1px solid',
                 borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.06)' : 'divider',
                 bgcolor: theme.palette.mode === 'light' ? alpha(theme.palette.common.black, 0.02) : alpha(theme.palette.common.white, 0.04),

@@ -74,7 +74,7 @@ const AppInstallBanner: React.FC = () => {
           gap: 1.25,
           px: 1.5,
           py: 1.25,
-          borderRadius: '14px',
+          borderRadius: '8px',
           bgcolor: 'background.paper',
           border: '1px solid',
           borderColor: 'divider',

@@ -497,7 +497,7 @@ export const DepartmentManagementPanel: React.FC<{
         onClose={() => setDialogOpen(false)}
         maxWidth="sm"
         fullWidth
-        PaperProps={{ sx: { borderRadius: '20px' } }}
+        PaperProps={{ sx: { borderRadius: '8px' } }}
       >
         <DialogTitle sx={{ pt: 2.5, px: 3, pb: 1, fontSize: '1.125rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
           {editingId != null ? t('departmentManagement.edit') : t('departmentManagement.add')}
@@ -555,12 +555,12 @@ export const DepartmentManagementPanel: React.FC<{
       </Dialog>
 
       <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError('')}>
-        <Alert severity="error" onClose={() => setError('')} sx={{ borderRadius: '14px' }}>
+        <Alert severity="error" onClose={() => setError('')} sx={{ borderRadius: '8px' }}>
           {error}
         </Alert>
       </Snackbar>
       <Snackbar open={!!success} autoHideDuration={3000} onClose={() => setSuccess('')}>
-        <Alert severity="success" onClose={() => setSuccess('')} sx={{ borderRadius: '14px' }}>
+        <Alert severity="success" onClose={() => setSuccess('')} sx={{ borderRadius: '8px' }}>
           {success}
         </Alert>
       </Snackbar>
