@@ -80,8 +80,12 @@ import { requireMenuPermission, requireMenuPermissionAny } from '../middleware/m
 const MENU_WORK_PROJECTS = '/work/projects';
 const MENU_WORK_STATISTICS = '/work/statistics';
 const MENU_WORK_APPROVAL = '/work/approval';
-/** 객실 예약·호실: 업무 메뉴와 호텔 메뉴에 동일 화면이 두 줄로 존재할 수 있음 → API는 둘 중 하나 권한으로 허용 */
-const MENU_ROOM_RESERVATION_ROUTES = ['/work/room-reservation', '/hotel/room-reservation'];
+/** 객실 예약·호실·예약현황: 업무/호텔 메뉴에 동일·연관 화면이 여러 줄로 존재 → API는 후보 중 하나 권한으로 허용 */
+const MENU_ROOM_RESERVATION_ROUTES = [
+  '/work/room-reservation',
+  '/hotel/room-reservation',
+  '/hotel/reservations',
+];
 const MENU_WORK_REPORTS = '/work/reports';
 
 const router = Router();

@@ -64,6 +64,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../../store';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 import {
   accountingService,
   roomBookingService,
@@ -74,6 +75,12 @@ import {
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import AuthMedia from '../../components/Common/AuthMedia';
 import { generateRoomBookingId } from '../../utils/bookingId';
+
+const ROOM_BOOKING_MENU_ROUTES = [
+  '/hotel/room-reservation',
+  '/work/room-reservation',
+  '/hotel/reservations',
+] as const;
 
 interface Room {
   id: number;
@@ -318,6 +325,9 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
 }) => {
   const { t } = useTranslation();
   const { user } = useStore();
+  const menuFlags = useMenuRoutePermissionFlags(ROOM_BOOKING_MENU_ROUTES);
+  // 페이지 등록·수정 권한이 있으면 과거 날짜 예약 허용
+  const canManagePastCheckIn = menuFlags.canMutate;
   const [rooms, setRooms] = useState<Room[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
@@ -862,7 +872,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   };
 
   const todayIso = toIsoDate(new Date());
-  const canManagePastCheckIn = user?.role === 'root' || user?.role === 'admin';
 
   const guestOptions = useMemo(() => {
     const map = new Map<string, { name: string; email: string; phone: string; companyName: string }>();

@@ -241,31 +241,47 @@ const OrganizationChart: React.FC = () => {
     managerId: ''
   });
 
-  // DB에서 조직도 데이터 로드
+  // DB에서 조직도 데이터 로드 (로그인한 사용자 소속 회사만)
   const loadOrganizationData = useCallback(async () => {
     try {
       setLoading(true);
-      
-      // 회사 정보 가져오기
-      const company = user?.company_id
-        ? await useReferenceDataStore.getState().fetchCompanyById(Number(user.company_id))
-        : null;
 
-      const users = await useReferenceDataStore.getState().fetchUsers();
-      
-      // 활성 사용자만 필터링
-      const activeUsers = users.filter((u: any) => u.status === 'active');
-      
+      const myCompanyId =
+        user?.company_id != null && Number.isFinite(Number(user.company_id))
+          ? Number(user.company_id)
+          : null;
+
+      if (!myCompanyId) {
+        setNodes([]);
+        setEdges([]);
+        setError('소속 회사 정보가 없어 조직도를 표시할 수 없습니다.');
+        return;
+      }
+
+      setError('');
+
+      const company = await useReferenceDataStore.getState().fetchCompanyById(myCompanyId);
+
+      // root/audit도 내 회사 사용자만 조회
+      const users = await useReferenceDataStore.getState().fetchUsers({ company_id: myCompanyId }, true);
+
+      // 활성 + 내 회사 사용자만 (캐시/응답 혼입 방지)
+      const activeUsers = users.filter((u: any) => {
+        if (u.status !== 'active') return false;
+        const uidCompany = u.company_id != null ? Number(u.company_id) : null;
+        return uidCompany == null || uidCompany === myCompanyId;
+      });
+
       // 부서별로 그룹화
       const departmentMap = new Map<string, any[]>();
-      activeUsers.forEach((user: any) => {
-        const dept = user.department || '미지정';
+      activeUsers.forEach((member: any) => {
+        const dept = member.department || '미지정';
         if (!departmentMap.has(dept)) {
           departmentMap.set(dept, []);
         }
-        departmentMap.get(dept)!.push(user);
+        departmentMap.get(dept)!.push(member);
       });
-      
+
       const orgNodes: OrganizationNode[] = [];
       const orgEdges: Edge[] = [];
 
@@ -295,7 +311,7 @@ const OrganizationChart: React.FC = () => {
         Math.max(0, deptLayouts.length - 1) * DEPT_GAP;
       const treeCenterX = totalTreeWidth / 2;
 
-      // 회사 노드 (트리 중앙)
+      // 회사 노드 (트리 중앙) — 내 회사 1개만
       if (company) {
         orgNodes.push({
           id: `company-${company.id}`,
@@ -391,7 +407,7 @@ const OrganizationChart: React.FC = () => {
       setEdges([]);
     } finally {
       setLoading(false);
-          }
+    }
   }, [user?.company_id]);
 
   // 초기 데이터 로드
@@ -471,13 +487,11 @@ const OrganizationChart: React.FC = () => {
     setSuccess(dialogMode === 'edit' ? '노드가 수정되었습니다.' : '노드가 추가되었습니다.');
   };
 
-  // 통계 계산
+  // 통계 계산 (내 회사 기준)
   const stats = useMemo(() => {
     const totalEmployees = nodes.filter(node => node.type === 'person').length;
     const totalDepartments = nodes.filter(node => node.type === 'department').length;
-    const totalCompanies = nodes.filter(node => node.type === 'company').length;
-    
-    return { totalEmployees, totalDepartments, totalCompanies };
+    return { totalEmployees, totalDepartments };
   }, [nodes]);
 
   return (
@@ -511,7 +525,7 @@ const OrganizationChart: React.FC = () => {
       {/* 통계 카드 */}
       <Box sx={{ 
         display: 'grid', 
-        gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
+        gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
         gap: 2, 
         mb: 3 
       }}>
@@ -532,16 +546,6 @@ const OrganizationChart: React.FC = () => {
             </Typography>
             <Typography variant="h4" color="secondary.main">
               {stats.totalDepartments}
-            </Typography>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent sx={{ textAlign: 'center' }}>
-            <Typography color="textSecondary" gutterBottom>
-              회사 수
-            </Typography>
-            <Typography variant="h4" color="success.main">
-              {stats.totalCompanies}
             </Typography>
           </CardContent>
         </Card>
@@ -637,7 +641,6 @@ const OrganizationChart: React.FC = () => {
               >
                 <MenuItem value="person">직원</MenuItem>
                 <MenuItem value="department">부서</MenuItem>
-                <MenuItem value="company">회사</MenuItem>
               </Select>
             </FormControl>
             <TextField

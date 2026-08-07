@@ -41,7 +41,13 @@ import { ChevronLeft, ChevronRight, Search as SearchIcon } from '@mui/icons-mate
 import { useNavigate } from 'react-router-dom';
 import { roomBookingService, roomTypeRoomService, roomTypeService } from '../../services/api';
 import RoomBookingManagement from '../Work/RoomBookingManagement';
-import { useStore } from '../../store';
+import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+
+const RESERVATION_STATUS_MENU_ROUTES = [
+  '/hotel/reservations',
+  '/hotel/room-reservation',
+  '/work/room-reservation',
+] as const;
 
 const reservationFilterFieldSx = {
   ...(mvsSearchFieldSx as Record<string, unknown>),
@@ -167,8 +173,9 @@ const getGuestColor = (guestName?: string) => {
 };
 
 const ReservationStatus: React.FC = () => {
-  const { user } = useStore();
-  const canManagePastCheckIn = user?.role === 'root' || user?.role === 'admin';
+  const menuFlags = useMenuRoutePermissionFlags(RESERVATION_STATUS_MENU_ROUTES);
+  // 페이지 등록·수정 권한이 있으면 과거 날짜 등록/수정 허용 (root/admin 포함)
+  const canManagePastCheckIn = menuFlags.canMutate;
   const theme = useTheme();
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();

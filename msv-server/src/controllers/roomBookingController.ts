@@ -6,34 +6,9 @@ import { Op } from 'sequelize';
 const CHECKOUT_BUFFER_HOURS = 2;
 const DEFAULT_CHECKOUT_TIME = '11:00:00';
 const DEFAULT_CHECKIN_TIME = '00:00:00';
-const HOTEL_TIME_ZONE = 'Asia/Kolkata';
-
-const getTodayDateString = () => {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: HOTEL_TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
-  return `${values.year}-${values.month}-${values.day}`;
-};
 
 const normalizeDateString = (value?: string | Date | null) =>
   String(value || '').slice(0, 10);
-
-const isPastDate = (value?: string | Date | null) => {
-  const normalized = normalizeDateString(value);
-  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) && normalized < getTodayDateString();
-};
-
-const canManagePastCheckIn = (role?: string) => role === 'root' || role === 'admin';
-
-const sendPastCheckInForbidden = (res: Response) =>
-  res.status(403).json({
-    success: false,
-    message: '과거 날짜 체크인은 root 또는 admin만 가능합니다.'
-  });
 
 const normalizeTimeToHHMMSS = (value?: string | null) => {
   const raw = String(value || '').trim();
@@ -397,7 +372,6 @@ export const createRoomBooking = async (req: RequestWithUser, res: Response) => 
     const tenantId = req.user?.tenant_id;
     const companyId = req.user?.company_id;
     const userId = req.user?.id;
-    const userRole = req.user?.role;
     const { booking_id, room_id, room_number, room_type, guest_name, company_name, guest_email, guest_phone,
             check_in_date, check_in_time, check_out_date, check_out_time, number_of_guests, total_amount, payment_method,
             special_requests, airport_pickup, airport_arrival_time, flight_number } = req.body;
@@ -408,10 +382,6 @@ export const createRoomBooking = async (req: RequestWithUser, res: Response) => 
         success: false, 
         message: '필수 필드가 누락되었습니다.' 
       });
-    }
-
-    if (isPastDate(check_in_date) && !canManagePastCheckIn(userRole)) {
-      return sendPastCheckInForbidden(res);
     }
 
     // booking_id 중복 확인
@@ -570,20 +540,6 @@ export const updateRoomBooking = async (req: RequestWithUser, res: Response) => 
         success: false, 
         message: '회의실 예약을 찾을 수 없습니다.' 
       });
-    }
-
-    const effectiveCheckInDate = check_in_date !== undefined
-      ? check_in_date
-      : booking.check_in_date;
-    const checkInDateChanged =
-      check_in_date !== undefined &&
-      normalizeDateString(check_in_date) !== normalizeDateString(booking.check_in_date);
-    const isPastCheckInAttempt =
-      (checkInDateChanged || (status === 'checked_in' && booking.status !== 'checked_in')) &&
-      isPastDate(effectiveCheckInDate);
-
-    if (isPastCheckInAttempt && !canManagePastCheckIn(userRole)) {
-      return sendPastCheckInForbidden(res);
     }
 
     const wantsRoomChange = [room_id, room_number, room_type].some((x) => x !== undefined);

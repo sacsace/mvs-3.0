@@ -2151,7 +2151,7 @@ export default {
         deleteFailed: '예약 삭제에 실패했습니다.',
         moveFailed: '예약 이동에 실패했습니다.',
         moveConflict: '해당 객실·날짜에 이미 다른 예약이 있습니다.',
-        movePastNotAllowed: '과거 날짜로는 예약을 이동할 수 없습니다.',
+        movePastNotAllowed: '과거 날짜로 이동하려면 예약 등록/수정 권한이 필요합니다.',
         moveInvalidRoom: '이동할 객실 정보가 올바르지 않습니다.'
       },
       toast: {
@@ -2363,7 +2363,7 @@ export default {
         invalidRoomId: '호실명에서 객실 ID를 확인할 수 없습니다.',
         enterRequired: '필수 정보를 입력해주세요.',
         airportPickupRequired: '공항 픽업 시 도착시간과 항공편을 입력해주세요.',
-        pastDateNotAllowed: '오늘 이전 날짜는 예약할 수 없습니다.',
+        pastDateNotAllowed: '과거 날짜 예약은 등록/수정 권한이 필요합니다.',
         checkoutAfterCheckin: '체크아웃 날짜는 체크인 이후여야 합니다.',
         createFailed: '예약 등록에 실패했습니다.',
         updateFailed: '예약 수정에 실패했습니다.',

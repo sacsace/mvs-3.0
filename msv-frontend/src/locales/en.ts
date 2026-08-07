@@ -2082,7 +2082,7 @@ export default {
         deleteFailed: 'Failed to delete the booking.',
         moveFailed: 'Failed to move the booking.',
         moveConflict: 'Another booking already occupies that room and dates.',
-        movePastNotAllowed: 'You cannot move a booking to a past date.',
+        movePastNotAllowed: 'Moving a booking to a past date requires create/edit permission.',
         moveInvalidRoom: 'The target room information is invalid.'
       },
       toast: {
@@ -2294,7 +2294,7 @@ export default {
         invalidRoomId: 'Could not resolve room ID from room name.',
         enterRequired: 'Please fill in required information.',
         airportPickupRequired: 'Please enter arrival time and flight number for airport pickup.',
-        pastDateNotAllowed: 'Cannot book a date before today.',
+        pastDateNotAllowed: 'Past-date bookings require create/edit permission.',
         checkoutAfterCheckin: 'Check-out date must be after check-in date.',
         createFailed: 'Failed to create booking.',
         updateFailed: 'Failed to update booking.',

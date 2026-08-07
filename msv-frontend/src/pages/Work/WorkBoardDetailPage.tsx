@@ -960,10 +960,10 @@ const ListColumn = memo(function ListColumn({
       data-kanban-column=""
       sx={{
         boxSizing: 'border-box',
-        flex: { xs: '1 1 100%', sm: `0 0 ${WORK_BOARD_COLUMN_WIDTH_PX}px` },
-        width: { xs: '100%', sm: `${WORK_BOARD_COLUMN_WIDTH_PX}px` },
-        minWidth: { xs: 0, sm: WORK_BOARD_COLUMN_WIDTH_PX },
-        maxWidth: { xs: '100%', sm: `${WORK_BOARD_COLUMN_WIDTH_PX}px` },
+        flex: `0 0 ${WORK_BOARD_COLUMN_WIDTH_PX}px`,
+        width: `${WORK_BOARD_COLUMN_WIDTH_PX}px`,
+        minWidth: WORK_BOARD_COLUMN_WIDTH_PX,
+        maxWidth: `${WORK_BOARD_COLUMN_WIDTH_PX}px`,
         bgcolor: theme.palette.mode === 'light' ? KANBAN_COLUMN_BG : alpha(theme.palette.common.black, 0.22),
         backdropFilter: 'none',
         WebkitBackdropFilter: 'none',
@@ -2878,19 +2878,19 @@ const WorkBoardDetailPage: React.FC = () => {
               maxWidth: '100%',
               minWidth: 0,
               boxSizing: 'border-box',
-              overflow: 'visible',
+              overflowX: 'auto',
+              overflowY: 'visible',
             }}
           >
             <Box
               sx={{
                 display: 'flex',
-                flexWrap: 'wrap',
+                flexWrap: 'nowrap',
                 alignItems: 'flex-start',
                 gap: 1.5,
                 pb: 0.5,
-                width: '100%',
-                maxWidth: '100%',
-                minWidth: 0,
+                width: 'max-content',
+                minWidth: '100%',
                 boxSizing: 'border-box',
               }}
             >
