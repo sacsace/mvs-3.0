@@ -311,7 +311,7 @@ export const createDynamicTheme = (appearanceSettings: {
     },
     typography: {
       fontFamily:
-        '"NanumSquare", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+        '"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
       h1: {
         fontSize: `${22 * fontSizeMultiplier}px`,
         fontWeight: 700,

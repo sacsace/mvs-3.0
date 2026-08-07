@@ -70,11 +70,11 @@ interface SidebarProps {
 const HEADER_HEIGHT_PX = 60;
 /** 헤더 상단 inset — Header.tsx AppBar top 과 동일(화면 상단 밀착) */
 const HEADER_TOP_INSET_PX = 0;
-/** 헤더 하단과 좌측 메뉴 패널 사이 여백 */
-const HEADER_MENU_GAP_PX = 8;
+/** 헤더 하단과 좌측 메뉴 패널 사이 여백 — 헤더에 밀착 */
+const HEADER_MENU_GAP_PX = 0;
 const SIDEBAR_TOP_PX = HEADER_TOP_INSET_PX + HEADER_HEIGHT_PX + HEADER_MENU_GAP_PX;
-/** 메뉴 패널 하단과 화면 맨 아래 사이 여백 */
-const SIDEBAR_BOTTOM_GAP_PX = 12;
+/** 메뉴 패널 하단과 화면 맨 아래 사이 여백 — 화면 하단에 밀착 */
+const SIDEBAR_BOTTOM_GAP_PX = 0;
 const SIDEBAR_HEIGHT_CALC = `calc(100vh - ${SIDEBAR_TOP_PX + SIDEBAR_BOTTOM_GAP_PX}px)`;
 /** 접기/펼치기·본문 패딩과 동일한 easing */
 export const SIDEBAR_WIDTH_TRANSITION_MS = 300;
@@ -83,13 +83,13 @@ export const SIDEBAR_WIDTH_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const SIDEBAR_HOVER_CLOSE_DELAY_MS = 380;
 /** 좌측 메뉴 — 본문과 구분되는 카드형 패널 */
 const MENU_ITEM_RADIUS_PX = 10;
-const MENU_PANEL_INSET_PX = 8;
-/** 패널 모서리 — px 단위(숫자만 쓰면 MUI spacing×8로 과도하게 둥글어짐) */
-const MENU_PANEL_RADIUS_PX = 10;
+/** 화면 왼쪽 끝에 밀착 */
+const MENU_PANEL_INSET_PX = 0;
+/** 화면 가장자리에 붙는 패널이라 모서리를 둥글게 두지 않음 */
+const MENU_PANEL_RADIUS_PX = 0;
 const MENU_PANEL_BG = '#FFFFFF';
 const MENU_PANEL_BORDER = '#A8BDD0';
-const MENU_PANEL_SHADOW =
-  '0 4px 20px rgba(36, 52, 71, 0.1), 0 0 0 1px rgba(74, 127, 168, 0.16)';
+const MENU_PANEL_SHADOW = '2px 0 8px rgba(36, 52, 71, 0.06)';
 const MENU_ACTIVE_COLOR = '#4A7FA8';
 const MENU_ACTIVE_BG = 'rgba(74, 127, 168, 0.12)';
 const MENU_HOVER_BG = 'rgba(74, 127, 168, 0.07)';
@@ -868,14 +868,14 @@ const Sidebar: React.FC<SidebarProps> = ({
     height: SIDEBAR_HEIGHT_CALC,
     minHeight: SIDEBAR_HEIGHT_CALC,
     backgroundColor: MENU_PANEL_BG,
-    border: `1px solid ${MENU_PANEL_BORDER}`,
+    borderRight: `1px solid ${MENU_PANEL_BORDER}`,
     borderRadius: `${MENU_PANEL_RADIUS_PX}px`,
     zIndex: (iconOnly || autoCollapseEnabled) && peekOpen && (iconOnly || isCollapsed) ? 1300 : 1200,
     willChange: 'width, box-shadow',
     overflowX: 'hidden' as const,
     boxShadow:
       (iconOnly || autoCollapseEnabled) && peekOpen
-        ? '0 10px 32px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(74, 127, 168, 0.22)'
+        ? '6px 0 24px rgba(15, 23, 42, 0.14)'
         : MENU_PANEL_SHADOW,
     transition: isResizing
       ? 'none'
@@ -892,7 +892,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     height: SIDEBAR_HEIGHT_CALC,
     minHeight: SIDEBAR_HEIGHT_CALC,
     backgroundColor: MENU_PANEL_BG,
-    border: `1px solid ${MENU_PANEL_BORDER}`,
+    borderRight: `1px solid ${MENU_PANEL_BORDER}`,
     borderRadius: `${MENU_PANEL_RADIUS_PX}px`,
     boxShadow: MENU_PANEL_SHADOW,
     overflowX: 'hidden' as const,

@@ -21,7 +21,7 @@ interface AppLayoutProps {
 
 /** 사이드바·흰 작업 카드 좌우 간격(px) */
 const WORK_AREA_OUTSET = 16;
-/** Sidebar.tsx `HEADER_MENU_GAP_PX` 와 동일 — 헤더~좌측메뉴 / 헤더~본문 상단 회색 띠 */
+/** 헤더~본문 상단 회색 띠 (좌측 메뉴는 헤더에 밀착이라 별도) */
 const HEADER_MENU_GAP_PX = 8;
 /** Header.tsx AppBar top inset 과 동일 — 화면 상단에 밀착 */
 const HEADER_TOP_INSET_PX = 0;

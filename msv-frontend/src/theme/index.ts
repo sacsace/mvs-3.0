@@ -93,7 +93,7 @@ const theme = createTheme({
   },
   typography: {
     fontFamily:
-      '"NanumSquare", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+      '"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
     /** 페이지 메인 타이틀 — 전 화면 동일 */
     h1: {
       fontSize: '22px',

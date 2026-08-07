@@ -27,7 +27,7 @@ const { globalCss } = createStitches({
     },
     fonts: {
       body:
-        '"NanumSquare", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+        '"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
       mono: '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace',
     },
   },
