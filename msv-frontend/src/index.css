@@ -145,6 +145,13 @@ code {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
+/* NanumSquare에는 마스킹 문자(U+2022/U+25CF) 글리프가 비어 있어 입력값이 보이지 않는다 */
+input[type='password'],
+.MuiInputBase-input[type='password'] {
+  font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', Verdana, sans-serif;
+  letter-spacing: 0.06em;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
