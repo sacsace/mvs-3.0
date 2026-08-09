@@ -634,6 +634,7 @@ const Header: React.FC<HeaderProps> = ({
             <Avatar
               src={userAvatarSrc}
               alt={user?.username || 'user'}
+              data-no-photo-preview
               sx={{
                 width: 32,
                 height: 32,
@@ -641,7 +642,8 @@ const Header: React.FC<HeaderProps> = ({
                 color: 'white',
                 fontWeight: 600,
                 fontSize: '0.75rem',
-                '& img': { objectFit: 'cover' },
+                cursor: 'inherit',
+                '& img': { objectFit: 'cover', cursor: 'inherit', pointerEvents: 'none' },
               }}
             >
               {user?.username?.charAt(0).toUpperCase() || 'U'}
