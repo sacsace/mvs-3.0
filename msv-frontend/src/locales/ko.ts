@@ -4065,6 +4065,8 @@ export default {
       leaveBalancesSearchPlaceholder: '직원명, 부서, 직책, 입사일 검색...',
       sickOptional: '비의무',
       sickOptionalHint: '병가는 의무 휴가가 아닙니다.',
+      optionalLeave: '비의무',
+      optionalLeaveHint: '연차를 제외한 휴가는 비의무입니다.',
       department: '부서',
       pending: '미결제',
       completed: '결제 완료/거부',
@@ -4268,6 +4270,10 @@ export default {
       refresh: '조회',
       reset: '초기화',
       loadError: '근태 데이터를 불러오지 못했습니다.',
+      listView: {
+        viewAll: '전체보기',
+        viewPages: '페이지로 보기',
+      },
       empty: {
         loading: '근태 데이터를 불러오는 중입니다.',
         noItems: '집계할 데이터가 없습니다.',

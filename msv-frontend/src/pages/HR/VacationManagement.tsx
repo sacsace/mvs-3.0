@@ -270,6 +270,8 @@ const VacationManagement: React.FC = () => {
   const [leaveBalanceTypes, setLeaveBalanceTypes] = useState<LeaveBalanceTypeKey[]>([...LEAVE_BALANCE_TYPE_KEYS]);
   const [leaveBalancesLoading, setLeaveBalancesLoading] = useState(false);
   const [leaveBalanceSearch, setLeaveBalanceSearch] = useState('');
+  const [leaveBalanceOrderBy, setLeaveBalanceOrderBy] = useState<string>('username');
+  const [leaveBalanceOrder, setLeaveBalanceOrder] = useState<'asc' | 'desc'>('asc');
   const [vacationPolicy, setVacationPolicy] = useState<VacationPolicyState | null>(null);
   const [savingPolicy, setSavingPolicy] = useState(false);
   const [selectedVacation, setSelectedVacation] = useState<VacationRequest | null>(null);
@@ -1002,6 +1004,12 @@ const VacationManagement: React.FC = () => {
     setOrderBy(property);
   };
 
+  const handleLeaveBalanceSort = (property: string) => {
+    const isAsc = leaveBalanceOrderBy === property && leaveBalanceOrder === 'asc';
+    setLeaveBalanceOrder(isAsc ? 'desc' : 'asc');
+    setLeaveBalanceOrderBy(property);
+  };
+
   const adjustedTab = (user?.role === 'admin' || user?.role === 'root') ? activeTab : activeTab + 1;
   const vacationPolicyTab = (user?.role === 'admin' || user?.role === 'root') ? 4 : 2;
   const leaveBalanceTab = (user?.role === 'admin' || user?.role === 'root') ? 3 : -1;
@@ -1014,15 +1022,60 @@ const VacationManagement: React.FC = () => {
 
   const filteredLeaveBalances = useMemo(() => {
     const q = leaveBalanceSearch.trim().toLowerCase();
-    if (!q) return leaveBalances;
-    return leaveBalances.filter((row) => {
-      const blob = [row.username, row.department, row.position, row.hireDate, row.leaveYearLabel]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return blob.includes(q);
+    const filtered = !q
+      ? [...leaveBalances]
+      : leaveBalances.filter((row) => {
+          const blob = [row.username, row.department, row.position, row.hireDate, row.leaveYearLabel]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          return blob.includes(q);
+        });
+
+    const balanceKey = leaveBalanceOrderBy.startsWith('balance:')
+      ? leaveBalanceOrderBy.slice('balance:'.length)
+      : null;
+
+    const getSortValue = (row: LeaveBalanceRow): string | number | null => {
+      if (balanceKey) {
+        if (!row.hireDate) return null;
+        if (balanceKey === 'annual' && !row.canUseAnnualLeave) return null;
+        return Number(row.balances?.[balanceKey]?.remaining ?? 0);
+      }
+      switch (leaveBalanceOrderBy) {
+        case 'username':
+          return (row.username || '').toLowerCase();
+        case 'department':
+          return (row.department || '').toLowerCase();
+        case 'hireDate':
+          return row.hireDate || null;
+        case 'leaveYearLabel':
+          return (row.leaveYearLabel || '').toLowerCase();
+        default:
+          return (row.username || '').toLowerCase();
+      }
+    };
+
+    filtered.sort((a, b) => {
+      const aValue = getSortValue(a);
+      const bValue = getSortValue(b);
+      if (aValue == null && bValue == null) {
+        return (a.username || '').localeCompare(b.username || '', 'ko');
+      }
+      if (aValue == null) return 1;
+      if (bValue == null) return -1;
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        const diff = aValue - bValue;
+        if (diff !== 0) return leaveBalanceOrder === 'asc' ? diff : -diff;
+      } else {
+        const cmp = String(aValue).localeCompare(String(bValue), 'ko', { numeric: true });
+        if (cmp !== 0) return leaveBalanceOrder === 'asc' ? cmp : -cmp;
+      }
+      return (a.username || '').localeCompare(b.username || '', 'ko');
     });
-  }, [leaveBalances, leaveBalanceSearch]);
+
+    return filtered;
+  }, [leaveBalances, leaveBalanceSearch, leaveBalanceOrderBy, leaveBalanceOrder]);
 
   const hasActiveFilters = Boolean(
     searchTerm.trim() || statusFilter !== 'all' || typeFilter !== 'all'
@@ -1647,41 +1700,80 @@ const VacationManagement: React.FC = () => {
                     >
                       <TableHead sx={mvsTableHeadHighlightSx}>
                         <TableRow>
-                          <TableCell>{t('vacationManagement.employee')}</TableCell>
-                          <TableCell>{t('vacationManagement.department')}</TableCell>
-                          <TableCell>{t('vacationManagement.hireDate')}</TableCell>
-                          <TableCell>{t('vacationManagement.leaveYear')}</TableCell>
-                          {leaveBalanceTypes.map((key) => (
-                            <TableCell key={key} align="right">
-                              {key === 'sick' ? (
-                                <Tooltip title={t('vacationManagement.sickOptionalHint')}>
-                                  <Box
-                                    component="span"
-                                    sx={{
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'flex-end',
-                                      gap: 0.5 }}
-                                  >
-                                    <span>{typeLabel(key)}</span>
-                                    <Chip
-                                      size="small"
-                                      label={t('vacationManagement.sickOptional')}
-                                      variant="outlined"
-                                      color="default"
-                                      sx={{
-                                        height: 20,
-                                        fontSize: '0.65rem',
-                                        fontWeight: 600,
-                                        '& .MuiChip-label': { px: 0.75 } }}
-                                    />
-                                  </Box>
-                                </Tooltip>
-                              ) : (
-                                typeLabel(key)
-                              )}
+                          {(
+                            [
+                              ['username', t('vacationManagement.employee'), 'left'],
+                              ['department', t('vacationManagement.department'), 'left'],
+                              ['hireDate', t('vacationManagement.hireDate'), 'left'],
+                              ['leaveYearLabel', t('vacationManagement.leaveYear'), 'left'],
+                            ] as const
+                          ).map(([key, label, align]) => (
+                            <TableCell
+                              key={key}
+                              align={align}
+                              sortDirection={leaveBalanceOrderBy === key ? leaveBalanceOrder : false}
+                            >
+                              <TableSortLabel
+                                active={leaveBalanceOrderBy === key}
+                                direction={leaveBalanceOrderBy === key ? leaveBalanceOrder : 'asc'}
+                                onClick={() => handleLeaveBalanceSort(key)}
+                              >
+                                {label}
+                              </TableSortLabel>
                             </TableCell>
                           ))}
+                          {leaveBalanceTypes.map((key) => {
+                            const sortKey = `balance:${key}`;
+                            const isOptionalLeave = key !== 'annual';
+                            const labelNode = isOptionalLeave ? (
+                              <Tooltip title={t('vacationManagement.optionalLeaveHint')}>
+                                <Box
+                                  component="span"
+                                  sx={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'flex-end',
+                                    gap: 0.5,
+                                  }}
+                                >
+                                  <span>{typeLabel(key)}</span>
+                                  <Chip
+                                    size="small"
+                                    label={t('vacationManagement.optionalLeave')}
+                                    variant="outlined"
+                                    color="default"
+                                    sx={{
+                                      height: 20,
+                                      fontSize: '0.65rem',
+                                      fontWeight: 600,
+                                      '& .MuiChip-label': { px: 0.75 },
+                                    }}
+                                  />
+                                </Box>
+                              </Tooltip>
+                            ) : (
+                              typeLabel(key)
+                            );
+                            return (
+                              <TableCell
+                                key={key}
+                                align="right"
+                                sortDirection={leaveBalanceOrderBy === sortKey ? leaveBalanceOrder : false}
+                              >
+                                <TableSortLabel
+                                  active={leaveBalanceOrderBy === sortKey}
+                                  direction={leaveBalanceOrderBy === sortKey ? leaveBalanceOrder : 'asc'}
+                                  onClick={() => handleLeaveBalanceSort(sortKey)}
+                                  sx={{
+                                    flexDirection: 'row-reverse',
+                                    '& .MuiTableSortLabel-icon': { ml: 0, mr: 0.5 },
+                                  }}
+                                >
+                                  {labelNode}
+                                </TableSortLabel>
+                              </TableCell>
+                            );
+                          })}
                         </TableRow>
                       </TableHead>
                       <TableBody sx={vacationTableBodyRowSx}>

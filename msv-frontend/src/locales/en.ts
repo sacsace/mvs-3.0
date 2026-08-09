@@ -4067,6 +4067,8 @@ export default {
       leaveBalancesSearchPlaceholder: 'Search by employee, department, position, join date…',
       sickOptional: 'Optional',
       sickOptionalHint: 'Sick leave is not mandatory.',
+      optionalLeave: 'Optional',
+      optionalLeaveHint: 'All leave types except annual leave are optional.',
       department: 'Department',
       pending: 'Pending',
       completed: 'Completed/Rejected',
@@ -4271,6 +4273,10 @@ export default {
       refresh: 'Apply',
       reset: 'Reset',
       loadError: 'Failed to load attendance data.',
+      listView: {
+        viewAll: 'View all',
+        viewPages: 'Paged view',
+      },
       empty: {
         loading: 'Loading attendance data…',
         noItems: 'No data to display.',

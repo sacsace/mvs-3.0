@@ -332,6 +332,28 @@ const thEllipsisSx = {
   minWidth: 0,
 } as const;
 
+type ListViewMode = 'page' | 'all';
+
+const listViewModeBarSx = {
+  mb: 1.25,
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: 0.75,
+} as const;
+
+const listViewModeBtnSx = {
+  height: 32,
+  minWidth: 0,
+  px: 1.5,
+  textTransform: 'none' as const,
+  fontWeight: 600,
+  fontSize: '0.75rem',
+  borderRadius: '8px',
+  boxShadow: 'none',
+  whiteSpace: 'nowrap' as const,
+};
+
 const attendanceTableBodyRowSx: SxProps<Theme> = (theme) => {
   const base = typeof mvsTableBodyRowSx === 'function' ? mvsTableBodyRowSx(theme) : mvsTableBodyRowSx;
   const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
@@ -410,6 +432,7 @@ const AttendanceStatistics: React.FC = () => {
   const [heresnowMessage, setHeresnowMessage] = useState<string | null>(null);
   const [heresnowError, setHeresnowError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [listViewMode, setListViewMode] = useState<ListViewMode>('page');
   const [nameColumnWidth, setNameColumnWidth] = useState<number>(() => {
     if (typeof window === 'undefined') return 110;
     const saved = Number(window.localStorage.getItem('attendanceStats.nameColumnWidth') || 110);
@@ -882,10 +905,14 @@ const AttendanceStatistics: React.FC = () => {
   }, [matrixMap]);
 
   const totalMatrixPages = Math.max(1, Math.ceil(matrixUsers.length / ATTENDANCE_USERS_PER_PAGE));
+  const showAllUsers = listViewMode === 'all';
 
-  const paginatedMatrixUsers = useMemo(
-    () => matrixUsers.slice((page - 1) * ATTENDANCE_USERS_PER_PAGE, page * ATTENDANCE_USERS_PER_PAGE),
-    [matrixUsers, page]
+  const visibleMatrixUsers = useMemo(
+    () =>
+      showAllUsers
+        ? matrixUsers
+        : matrixUsers.slice((page - 1) * ATTENDANCE_USERS_PER_PAGE, page * ATTENDANCE_USERS_PER_PAGE),
+    [matrixUsers, page, showAllUsers]
   );
 
   useEffect(() => {
@@ -1251,6 +1278,36 @@ const AttendanceStatistics: React.FC = () => {
             }}
           >
             <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: 2, pb: 1 }}>
+              <Box sx={listViewModeBarSx}>
+                <Button
+                  size="small"
+                  disableElevation
+                  variant={listViewMode === 'all' ? 'contained' : 'outlined'}
+                  onClick={() => setListViewMode('all')}
+                  sx={{
+                    ...listViewModeBtnSx,
+                    ...(listViewMode === 'all'
+                      ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                      : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                  }}
+                >
+                  {t('attendanceStatistics.listView.viewAll')}
+                </Button>
+                <Button
+                  size="small"
+                  disableElevation
+                  variant={listViewMode === 'page' ? 'contained' : 'outlined'}
+                  onClick={() => setListViewMode('page')}
+                  sx={{
+                    ...listViewModeBtnSx,
+                    ...(listViewMode === 'page'
+                      ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                      : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                  }}
+                >
+                  {t('attendanceStatistics.listView.viewPages')}
+                </Button>
+              </Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
                 <Typography variant="body2" sx={{ color: labelColor, fontWeight: 600 }}>
                   {t('attendanceStatistics.matrix.legendTitle')}
@@ -1322,7 +1379,7 @@ const AttendanceStatistics: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody sx={attendanceTableBodyRowSx}>
-                  {paginatedMatrixUsers.map((u, index) => (
+                  {visibleMatrixUsers.map((u, index) => (
                     <TableRow key={u.key}>
                       <TableCell
                         align="center"
@@ -1338,7 +1395,7 @@ const AttendanceStatistics: React.FC = () => {
                           overflow: 'hidden',
                         }}
                       >
-                        {(page - 1) * ATTENDANCE_USERS_PER_PAGE + index + 1}
+                        {(showAllUsers ? 0 : (page - 1) * ATTENDANCE_USERS_PER_PAGE) + index + 1}
                       </TableCell>
                       <TableCell
                         sx={{
@@ -1465,21 +1522,23 @@ const AttendanceStatistics: React.FC = () => {
               </Table>
             </TableContainer>
 
-            <Box sx={mvsBodyPaginationSx}>
-              <Pagination
-                count={totalMatrixPages}
-                page={page}
-                onChange={(_, value) => setPage(value)}
-                color="primary"
-                shape="rounded"
-                sx={{
-                  '& .MuiPaginationItem-root': {
-                    borderRadius: '10px',
-                    fontWeight: 500,
-                  },
-                }}
-              />
-            </Box>
+            {!showAllUsers && matrixUsers.length > ATTENDANCE_USERS_PER_PAGE ? (
+              <Box sx={mvsBodyPaginationSx}>
+                <Pagination
+                  count={totalMatrixPages}
+                  page={page}
+                  onChange={(_, value) => setPage(value)}
+                  color="primary"
+                  shape="rounded"
+                  sx={{
+                    '& .MuiPaginationItem-root': {
+                      borderRadius: '10px',
+                      fontWeight: 500,
+                    },
+                  }}
+                />
+              </Box>
+            ) : null}
           </Box>
         )}
       </Box>
