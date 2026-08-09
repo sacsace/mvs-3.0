@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   Box,
@@ -128,6 +128,44 @@ const VacationRequest: React.FC = () => {
     [t]
   );
 
+  const loadUsers = useCallback(async () => {
+    try {
+      const allUsers = await useReferenceDataStore.getState().fetchUsers({
+        company_id: user?.company_id
+      });
+      const sameCompanyUsers = allUsers.filter(
+        (u: any) => u.status === 'active' && u.company_id === user?.company_id && u.id !== user?.id
+      );
+      setUsers(sameCompanyUsers);
+    } catch {
+      /* ignore */
+    }
+  }, [user?.company_id, user?.id]);
+
+  const loadVacation = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    try {
+      const response = await vacationService.getVacation(parseInt(id));
+      if (response.success && response.data) {
+        const vacation = response.data;
+        setFormData({
+          vacationType: vacation.vacation_type,
+          startDate: vacation.start_date,
+          endDate: vacation.end_date,
+          reason: vacation.reason,
+          approvedBy: vacation.approved_by || null
+        });
+      } else {
+        setError(t('vacationManagement.request.loadFailed'));
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || t('vacationManagement.request.loadError'));
+    } finally {
+      setLoading(false);
+    }
+  }, [id, t]);
+
   useEffect(() => {
     loadUsers();
     loadAnnualLeaveInfo();
@@ -135,7 +173,7 @@ const VacationRequest: React.FC = () => {
     if (id) {
       loadVacation();
     }
-  }, [id]);
+  }, [id, loadUsers, loadVacation]);
 
   useEffect(() => {
     if (menusLoading || !user) return;
@@ -172,8 +210,8 @@ const VacationRequest: React.FC = () => {
       if (response.success) {
         setVacationPolicy(response.data);
       }
-    } catch (err: any) {
-      console.error('vacation policy load error:', err);
+    } catch {
+      /* ignore */
     }
   };
 
@@ -183,47 +221,8 @@ const VacationRequest: React.FC = () => {
       if (response.success) {
         setAnnualLeaveInfo(response.data);
       }
-    } catch (err: any) {
-      console.error('annual leave info load error:', err);
-    }
-  };
-
-  const loadUsers = async () => {
-    try {
-      const allUsers = await useReferenceDataStore.getState().fetchUsers({
-        company_id: user?.company_id
-      });
-      const sameCompanyUsers = allUsers.filter(
-        (u: any) => u.status === 'active' && u.company_id === user?.company_id && u.id !== user?.id
-      );
-      setUsers(sameCompanyUsers);
-    } catch (err: any) {
-      console.error('user list load error:', err);
-    }
-  };
-
-  const loadVacation = async () => {
-    if (!id) return;
-    setLoading(true);
-    try {
-      const response = await vacationService.getVacation(parseInt(id));
-      if (response.success && response.data) {
-        const vacation = response.data;
-        setFormData({
-          vacationType: vacation.vacation_type,
-          startDate: vacation.start_date,
-          endDate: vacation.end_date,
-          reason: vacation.reason,
-          approvedBy: vacation.approved_by || null
-        });
-      } else {
-        setError(t('vacationManagement.request.loadFailed'));
-      }
-    } catch (err: any) {
-      console.error('vacation load error:', err);
-      setError(err.response?.data?.message || t('vacationManagement.request.loadError'));
-    } finally {
-      setLoading(false);
+    } catch {
+      /* ignore */
     }
   };
 
@@ -333,7 +332,6 @@ const VacationRequest: React.FC = () => {
         setError(response.message || t('vacationManagement.request.submitFailed'));
       }
     } catch (err: any) {
-      console.error('vacation save error:', err);
       setError(err.response?.data?.message || t('vacationManagement.request.submitError'));
     } finally {
       setSaving(false);

@@ -1,25 +1,26 @@
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300..800&family=Noto+Sans+KR:wght@300..800&display=swap');
 
 :root {
-  --font-sans: 'Pretendard Variable', 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
-  --primary-500: #7ba3c4;
-  --primary-600: #5a849e;
-  --accent-500: #b5c9b8;
+  /* 영문: Inter(라틴) → 한글: Noto Sans KR (글리프 없는 문자는 다음 폰트로 넘어감) */
+  --font-sans: 'Inter', 'Segoe UI', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --primary-500: #1d4e7c;
+  --primary-600: #163e63;
+  --accent-500: #0d9488;
 
   --bg-primary: #ffffff;
-  --bg-secondary: #f0f4f9;
-  --bg-tertiary: #f5f8fc;
-  --bg-quaternary: #e2eaf3;
+  --bg-secondary: #f1f5f9;
+  --bg-tertiary: #f8fafc;
+  --bg-quaternary: #e2e8f0;
 
-  --text-primary: #243447;
-  --text-secondary: #6b7c8f;
-  --text-tertiary: #8494a6;
-  --text-quaternary: #a3b0bf;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #64748b;
+  --text-quaternary: #94a3b8;
 
-  --border-primary: #d0dbe8;
-  --border-secondary: #bcc9da;
+  --border-primary: #e2e8f0;
+  --border-secondary: #cbd5e1;
 
-  --table-row-hover: #eef3f8;
+  --table-row-hover: #f1f5f9;
 
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -115,10 +116,10 @@ body {
 
 .MuiTableHead-root .MuiTableCell-root {
   text-transform: none;
-  letter-spacing: 0.02em;
-  font-size: 12px;
+  letter-spacing: 0.01em;
+  font-size: 12.5px;
   font-weight: 600;
-  color: #475569;
+  color: #334155;
   line-height: 1.4;
 }
 
@@ -137,7 +138,7 @@ body {
 }
 
 ::selection {
-  background: rgba(13, 138, 255, 0.18);
+  background: rgba(29, 78, 124, 0.16);
   color: var(--text-primary);
 }
 

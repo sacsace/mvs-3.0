@@ -34,12 +34,8 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Search as SearchIcon,
-  Assignment as AssignmentIcon,
-  Person as PersonIcon,
   Schedule as ScheduleIcon,
-  Flag as FlagIcon,
-  CheckCircle as CheckCircleIcon
-} from '@mui/icons-material';
+  Flag as FlagIcon } from '@mui/icons-material';
 
 const TaskManagement: React.FC = () => {
   const [tasks, setTasks] = useState([
@@ -262,8 +258,7 @@ const TaskManagement: React.FC = () => {
                   <InputAdornment position="start">
                     <SearchIcon />
                   </InputAdornment>
-                ),
-              }}
+                ) }}
             />
             <TextField
               fullWidth

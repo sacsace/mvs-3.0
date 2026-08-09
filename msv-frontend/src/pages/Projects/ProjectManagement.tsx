@@ -15,7 +15,6 @@ import {
   Chip,
   TextField,
   FormControl,
-  InputLabel,
   Select,
   MenuItem,
   Autocomplete,
@@ -29,7 +28,6 @@ import {
   InputAdornment
 } from '@mui/material';
 import {
-  Folder as FolderIcon,
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
@@ -123,7 +121,6 @@ const ProjectManagement: React.FC = () => {
         showErrorPopup(response.message || '프로젝트 목록을 불러올 수 없습니다.', '프로젝트 목록 조회 오류');
       }
     } catch (error: any) {
-      console.error('프로젝트 목록 조회 오류:', error);
       showErrorPopup(error, '프로젝트 목록 조회 오류');
     } finally {
       setLoading(false);
@@ -136,8 +133,8 @@ const ProjectManagement: React.FC = () => {
       if (response.data.success) {
         setCompanies(response.data.data || []);
       }
-    } catch (error) {
-      console.error('회사 목록 로드 오류:', error);
+    } catch {
+      /* ignore */
     }
   }, []);
 
@@ -175,8 +172,8 @@ const ProjectManagement: React.FC = () => {
       }
       const usersData = await useReferenceDataStore.getState().fetchUsers(params);
       setUsers(usersData);
-    } catch (error) {
-      console.error('사용자 목록 로드 오류:', error);
+    } catch {
+      /* ignore */
     }
   }, [user?.company_id]);
 
@@ -333,7 +330,6 @@ const ProjectManagement: React.FC = () => {
         }
       }
     } catch (error: any) {
-      console.error('프로젝트 저장 오류:', error);
       showErrorPopup(error, '프로젝트 저장 오류');
     }
   };
@@ -351,7 +347,6 @@ const ProjectManagement: React.FC = () => {
             showErrorPopup(response.message || '프로젝트 삭제에 실패했습니다.', '프로젝트 삭제 오류');
           }
         } catch (error: any) {
-          console.error('프로젝트 삭제 오류:', error);
           showErrorPopup(error, '프로젝트 삭제 오류');
         }
       },
@@ -365,8 +360,6 @@ const ProjectManagement: React.FC = () => {
         title="프로젝트 관리"
         description="프로젝트를 관리하고 조회하는 페이지입니다."
       />
-
-
 
       <Box>
         {/* 검색 및 필터 */}
@@ -390,8 +383,7 @@ const ProjectManagement: React.FC = () => {
                     <InputAdornment position="start">
                       <SearchIcon />
                     </InputAdornment>
-                  ),
-                }}
+                  ) }}
               />
               {(user?.role === 'root' || user?.role === 'audit') && (
                 <TextField

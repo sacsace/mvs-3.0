@@ -1,17 +1,8 @@
 import React, { useState } from 'react';
-import {
-  Box, Typography, Card, CardContent, Button, Dialog, DialogTitle, DialogContent, DialogActions,
-  TextField, FormControl, InputLabel, Select, MenuItem, IconButton, Chip, Avatar,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, InputAdornment, Divider
-} from '@mui/material';
+import { Box, Typography, Card, CardContent, Button, Dialog, DialogTitle, DialogContent, DialogActions, TextField, FormControl, InputLabel, Select, MenuItem, IconButton, Chip, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, InputAdornment } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import { mvsPageRootSx } from '../../theme/mvsLayout';
-import {
-  Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon,
-  Search as SearchIcon, Download as DownloadIcon, Print as PrintIcon, CheckCircle as ApproveIcon,
-  Cancel as RejectIcon, Business as BusinessIcon, Person as PersonIcon, AttachMoney as MoneyIcon,
-  CalendarToday as CalendarIcon, Description as DescriptionIcon, Category as CategoryIcon
-} from '@mui/icons-material';
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Search as SearchIcon, Download as DownloadIcon, CheckCircle as ApproveIcon, Cancel as RejectIcon, Business as BusinessIcon, Person as PersonIcon, AttachMoney as MoneyIcon, CalendarToday as CalendarIcon } from '@mui/icons-material';
 
 interface Expense {
   id: number;
@@ -205,8 +196,7 @@ const ExpenseManagement: React.FC = () => {
                   <InputAdornment position="start">
                     <SearchIcon />
                   </InputAdornment>
-                ),
-              }}
+                ) }}
               sx={{ minWidth: 300 }}
             />
             <TextField

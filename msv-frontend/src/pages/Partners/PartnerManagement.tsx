@@ -375,8 +375,7 @@ const PartnerManagement: React.FC = () => {
       const partnerRows = formatPartners(partnersData);
       const customerRows = formatCustomersAsPartners(customersRaw, partnerRows);
       setPartners([...partnerRows, ...customerRows]);
-    } catch (error: any) {
-      console.error('❌ [파트너 관리] 파트너 목록 로드 오류:', error);
+    } catch {
       setPartners([]);
     } finally {
       setLoading(false);
@@ -507,7 +506,6 @@ const PartnerManagement: React.FC = () => {
       setOpenDialog(false);
       loadPartners();
     } catch (error: any) {
-      console.error('파트너 저장 오류:', error);
       const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || t('partnerManagement.saveError');
       setNotify({ message: errorMessage, severity: 'error' });
     }
@@ -626,7 +624,6 @@ const PartnerManagement: React.FC = () => {
       await partnerService.downloadExcelSample();
     } catch (error: any) {
       setNotify({ message: t('partnerManagement.excelSampleDownloadError'), severity: 'error' });
-      console.error('Excel sample download error:', error);
     }
   };
 
@@ -636,7 +633,6 @@ const PartnerManagement: React.FC = () => {
       await partnerService.exportExcel();
     } catch (error: any) {
       setNotify({ message: t('partnerManagement.excelExportError'), severity: 'error' });
-      console.error('Excel export error:', error);
     }
   };
 
@@ -678,7 +674,6 @@ const PartnerManagement: React.FC = () => {
         setImportFile(null);
       }
     } catch (error: any) {
-      console.error('Excel import error:', error);
       setNotify({
         message: error.response?.data?.message || t('partnerManagement.importError'),
         severity: 'error'
@@ -1042,7 +1037,7 @@ const PartnerManagement: React.FC = () => {
                         mt: 0.5,
                         minWidth: 220,
                         borderRadius: '8px',
-                        border: '1px solid #C5CED9',
+                        border: '1px solid #CBD5E1',
                         boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
                       },
                     },
@@ -1320,7 +1315,7 @@ const PartnerManagement: React.FC = () => {
                   ...listViewModeBtnSx,
                   ...(listViewMode === 'all'
                     ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
-                    : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                    : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
                 }}
               >
                 {t('partnerManagement.listView.viewAll')}
@@ -1334,7 +1329,7 @@ const PartnerManagement: React.FC = () => {
                   ...listViewModeBtnSx,
                   ...(listViewMode === 'page'
                     ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
-                    : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                    : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
                 }}
               >
                 {t('partnerManagement.listView.viewPages')}

@@ -154,7 +154,7 @@ const SystemSettings: React.FC = () => {
     },
     appearance: {
       theme: 'light',
-      primaryColor: '#7BA3C4',
+      primaryColor: '#1D4E7C',
       fontSize: 'medium',
       sidebarCollapsed: false,
       showNotifications: true
@@ -200,7 +200,6 @@ const SystemSettings: React.FC = () => {
   const [backingUp, setBackingUp] = useState(false);
   const [locatingOffice, setLocatingOffice] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewLogo, setPreviewLogo] = useState<string>('');
   /** 메일 비밀번호: 저장만 되어 있을 때 필드에 마스크 표시, 포커스 시 편집용으로 비움 */
   const [mailAuthPassFocused, setMailAuthPassFocused] = useState(false);
@@ -216,8 +215,8 @@ const SystemSettings: React.FC = () => {
         setBackupFiles(response.data.files || []);
         setBackupStoragePath(response.data.storagePath || '');
       }
-    } catch (error) {
-      console.error('백업 목록 조회 오류:', error);
+    } catch {
+      /* ignore */
     }
   }, [isRoot]);
   const loadSettings = useCallback(async () => {
@@ -255,8 +254,6 @@ const SystemSettings: React.FC = () => {
         }
       }
     } catch (error: any) {
-      console.error('설정 로드 오류:', error);
-      
       // Network Error인 경우 서버 연결 문제 안내
       let errorMessage = '설정을 불러오는 중 오류가 발생했습니다.';
       if (error.message === 'Network Error' || error.code === 'ERR_NETWORK') {
@@ -424,7 +421,6 @@ const SystemSettings: React.FC = () => {
         }
       }
     } catch (error: any) {
-      console.error('설정 저장 오류:', error);
       setSnackbar({
         open: true,
         message: error.response?.data?.message || '설정 저장 중 오류가 발생했습니다.',
@@ -438,7 +434,6 @@ const SystemSettings: React.FC = () => {
   const handleLogoUpload = () => {
     setDialogType('logo');
     setOpenDialog(true);
-    setSelectedFile(null);
     setPreviewLogo('');
   };
 
@@ -463,7 +458,6 @@ const SystemSettings: React.FC = () => {
         return;
       }
 
-      setSelectedFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreviewLogo(reader.result as string);
@@ -501,7 +495,6 @@ const SystemSettings: React.FC = () => {
         setOpenDialog(false);
       }
     } catch (error: any) {
-      console.error('로고 업로드 오류:', error);
       setSnackbar({
         open: true,
         message: error.response?.data?.message || '로고 업로드 중 오류가 발생했습니다.',
@@ -544,7 +537,6 @@ const SystemSettings: React.FC = () => {
         setOpenDialog(false);
       }
     } catch (error: any) {
-      console.error('백업 실행 오류:', error);
       setSnackbar({
         open: true,
         message: error.response?.data?.message || '백업 실행 중 오류가 발생했습니다.',
@@ -569,7 +561,6 @@ const SystemSettings: React.FC = () => {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('백업 다운로드 오류:', error);
       setSnackbar({
         open: true,
         message: t('systemSettings.backup.downloadFailed'),

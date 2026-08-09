@@ -237,10 +237,10 @@ const Login: React.FC = () => {
       borderRadius: '8px',
       bgcolor: '#FFFFFF',
       '& fieldset': {
-        borderColor: '#C5CED9',
+        borderColor: '#CBD5E1',
       },
       '&:hover fieldset': {
-        borderColor: '#B8C4D0',
+        borderColor: '#94A3B8',
       },
       '&.Mui-focused fieldset': {
         borderColor: 'primary.main',
@@ -345,7 +345,7 @@ const Login: React.FC = () => {
             bgcolor: 'background.paper',
             p: 0.25,
             borderRadius: '8px',
-            border: '1px solid #C5CED9',
+            border: '1px solid #CBD5E1',
             '& .MuiToggleButtonGroup-grouped': {
               border: 0,
               mx: 0.15,
@@ -382,7 +382,7 @@ const Login: React.FC = () => {
             py: { xs: 3, sm: 3.5 },
             borderRadius: '10px',
             bgcolor: 'background.paper',
-            border: theme.palette.mode === 'light' ? '1px solid #C5CED9' : `1px solid ${alpha(theme.palette.divider, 0.5)}`,
+            border: theme.palette.mode === 'light' ? '1px solid #CBD5E1' : `1px solid ${alpha(theme.palette.divider, 0.5)}`,
             boxShadow: 'none',
             width: `min(100%, ${cardWidth}px)`,
             mx: 'auto',

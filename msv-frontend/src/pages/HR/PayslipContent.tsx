@@ -340,7 +340,7 @@ function EarningsDeductionsTable({
     <Box sx={{ ...mvsBodyTableFrameSx, mb: 2.5, overflow: 'hidden' }}>
       <Box sx={{ display: 'grid', gridTemplateColumns: gridColumns }}>
         <LedgerColumnHeader title={labels.earnings} />
-        <Box sx={{ display: dividerDisplay, bgcolor: '#C5CED9' }} />
+        <Box sx={{ display: dividerDisplay, bgcolor: '#CBD5E1' }} />
         <LedgerColumnHeader title={labels.employeeDeductions} />
       </Box>
 
@@ -355,7 +355,7 @@ function EarningsDeductionsTable({
           ) : (
             <LedgerSpacer />
           )}
-          <Box sx={{ display: dividerDisplay, bgcolor: '#C5CED9' }} />
+          <Box sx={{ display: dividerDisplay, bgcolor: '#CBD5E1' }} />
           {line.deduct ? (
             <LedgerRow label={line.deduct.label} value={line.deduct.value} />
           ) : (
@@ -378,7 +378,7 @@ function EarningsDeductionsTable({
           totalTone="earn"
           isLast
         />
-        <Box sx={{ display: dividerDisplay, bgcolor: '#C5CED9' }} />
+        <Box sx={{ display: dividerDisplay, bgcolor: '#CBD5E1' }} />
         <LedgerRow
           label={labels.totalDeductions}
           value={money(totalDeductions)}
@@ -419,7 +419,7 @@ function PayslipHeader({
         px: { xs: 2, sm: 2.5 },
         py: 2.5,
         bgcolor: '#F0F4F8',
-        borderBottom: '1px solid #C5CED9',
+        borderBottom: '1px solid #CBD5E1',
         borderTop: '3px solid',
         borderTopColor: 'primary.main'
       }}

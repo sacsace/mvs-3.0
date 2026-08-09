@@ -5,19 +5,14 @@ import {
   Card,
   CardContent,
   Button,
-  Grid,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Chip,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
   MenuItem,
   IconButton,
   Dialog,
@@ -35,7 +30,6 @@ import {
   ListItemText,
   ListItemAvatar,
   Badge,
-  Stack,
   ToggleButton,
   ToggleButtonGroup,
   Pagination
@@ -44,13 +38,11 @@ import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
   Delete as DeleteIcon,
   Visibility as ViewIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
   Email as EmailIcon,
-  Send as SendIcon,
   Edit as DraftIcon,
   Inbox as InboxIcon,
   Outbox as OutboxIcon,
@@ -62,15 +54,7 @@ import {
   Delete as DeleteIcon2,
   MarkEmailRead as MarkEmailReadIcon,
   MarkEmailUnread as MarkEmailUnreadIcon,
-  AttachFile as AttachFileIcon,
-  Person as PersonIcon,
-  Schedule as ScheduleIcon,
-  Flag as PriorityIcon,
-  Refresh as RefreshIcon,
-  Print as PrintIcon,
-  Download as DownloadIcon
-} from '@mui/icons-material';
-import { useStore } from '../../store';
+  AttachFile as AttachFileIcon } from '@mui/icons-material';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
@@ -94,11 +78,10 @@ interface Email {
 }
 
 const EmailManagement: React.FC = () => {
-  const { user } = useStore();
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [emails, setEmails] = useState<Email[]>([]);
   const [filteredEmails, setFilteredEmails] = useState<Email[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
@@ -193,8 +176,7 @@ const EmailManagement: React.FC = () => {
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
       setEmails(sampleEmails);
-    } catch (error) {
-      console.error('데이터 로드 오류:', error);
+    } catch {
       setError('데이터를 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
@@ -255,23 +237,6 @@ const EmailManagement: React.FC = () => {
     }
   };
 
-  const getFolderLabel = (folder: string) => {
-    switch (folder) {
-      case 'inbox':
-        return '받은편지함';
-      case 'sent':
-        return '보낸편지함';
-      case 'drafts':
-        return '임시저장함';
-      case 'trash':
-        return '휴지통';
-      case 'archive':
-        return '보관함';
-      default:
-        return '알 수 없음';
-    }
-  };
-
   const handleViewEmail = (email: Email) => {
     setSelectedEmail(email);
     setViewMode('view');
@@ -302,8 +267,7 @@ const EmailManagement: React.FC = () => {
             prev.map((email) => (email.id === id ? { ...email, folder: 'trash' as const } : email))
           );
           setSuccess('이메일이 삭제되었습니다.');
-        } catch (error) {
-          console.error('삭제 오류:', error);
+        } catch {
           setError('삭제 중 오류가 발생했습니다.');
         }
       },
@@ -546,8 +510,7 @@ const EmailManagement: React.FC = () => {
                   <InputAdornment position="start">
                     <SearchIcon />
                   </InputAdornment>
-                ),
-              }}
+                ) }}
             />
             <TextField
               fullWidth

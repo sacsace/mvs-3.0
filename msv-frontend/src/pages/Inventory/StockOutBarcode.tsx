@@ -19,11 +19,10 @@ import {
   mvsBodyCardSx,
   mvsBodyPrimaryBtnSx,
   mvsSearchFieldSx,
-  mvsInnerCardSx,
-} from '../../theme/mvsLayout';
+  mvsInnerCardSx } from '../../theme/mvsLayout';
 import { useTranslation } from 'react-i18next';
 import { alpha, useTheme } from '@mui/material/styles';
-import { api, inventoryService } from '../../services/api';
+import { inventoryService } from '../../services/api';
 import { useMenuStore } from '../../store';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 import { resolveMediaUrl } from '../../utils/uploadUrl';
@@ -253,8 +252,7 @@ const StockOutBarcode: React.FC = () => {
     letterSpacing: '-0.015em',
     color: 'text.primary',
     lineHeight: 1.35,
-    display: 'block',
-  } as const;
+    display: 'block' } as const;
 
   const appleInputSx = {
     ...(mvsSearchFieldSx as Record<string, unknown>),
@@ -264,41 +262,30 @@ const StockOutBarcode: React.FC = () => {
       minHeight: 48,
       transition: theme.transitions.create(['background-color', 'box-shadow', 'border-color'], { duration: 180 }),
       '& .MuiOutlinedInput-notchedOutline': {
-        borderColor: '#C5CED9',
-      },
+        borderColor: '#CBD5E1' },
       '&:hover .MuiOutlinedInput-notchedOutline': {
-        borderColor: '#B8C4D0',
-      },
+        borderColor: '#94A3B8' },
       '& fieldset': {
-        borderColor: '#C5CED9',
-      },
+        borderColor: '#CBD5E1' },
       '&:hover fieldset': {
-        borderColor: '#B8C4D0',
-      },
+        borderColor: '#94A3B8' },
       '&:hover': {
-        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.14 : 0.08),
-      },
+        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.14 : 0.08) },
       '&.Mui-focused': {
         bgcolor: 'background.paper',
         boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}`,
         '& fieldset': {
           borderColor: alpha(theme.palette.divider, 0.95),
-          borderWidth: 1,
-        },
-      },
+          borderWidth: 1 } },
       '&.Mui-disabled': {
-        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
-      },
-    },
+        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04) } },
     '& .MuiOutlinedInput-input': {
       py: 1.35,
       fontSize: '0.9375rem',
-      letterSpacing: '-0.02em',
-    },
+      letterSpacing: '-0.02em' },
     '& .MuiOutlinedInput-input::placeholder': {
       color: alpha(theme.palette.text.secondary, 0.85),
-      opacity: 1,
-    },
+      opacity: 1 },
     '& .MuiFormHelperText-root': {
       mt: 1.25,
       mx: 0,
@@ -306,9 +293,7 @@ const StockOutBarcode: React.FC = () => {
       letterSpacing: '-0.01em',
       fontSize: '0.75rem',
       lineHeight: 1.5,
-      color: alpha(theme.palette.text.secondary, 0.95),
-    },
-  };
+      color: alpha(theme.palette.text.secondary, 0.95) } };
 
   return (
     <Box sx={{ ...mvsPageRootSx, maxWidth: 920, mx: 'auto' }}>
@@ -417,8 +402,7 @@ const StockOutBarcode: React.FC = () => {
                 sx={{
                   ...mvsInnerCardSx,
                   minHeight: 120,
-                  p: 1.5,
-                }}
+                  p: 1.5 }}
               >
             {previewLoading && (
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 3 }}>
@@ -467,8 +451,7 @@ const StockOutBarcode: React.FC = () => {
                       p: 0,
                       overflow: 'hidden',
                       aspectRatio: '1',
-                      maxHeight: 312,
-                    }}
+                      maxHeight: 312 }}
                   >
                     <Box
                       component="img"
@@ -551,8 +534,7 @@ const StockOutBarcode: React.FC = () => {
                   ...mvsBodyPrimaryBtnSx,
                   py: 1.35,
                   minHeight: 48,
-                  fontSize: '0.95rem',
-                }}
+                  fontSize: '0.95rem' }}
               >
                 {txt('출고', 'Ship out')}
               </Button>

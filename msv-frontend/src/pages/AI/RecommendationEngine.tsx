@@ -13,7 +13,6 @@ import {
   Paper,
   Chip,
   Button,
-  LinearProgress,
   Alert,
   Tabs,
   Tab,
@@ -22,8 +21,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  IconButton,
-  Tooltip,
   CircularProgress,
   List,
   ListItem,
@@ -33,7 +30,6 @@ import {
   Divider,
   Avatar,
   Rating,
-  Badge,
   Switch,
   FormControlLabel
 } from '@mui/material';
@@ -42,22 +38,15 @@ import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Psychology as PsychologyIcon,
   TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
   Assessment as AssessmentIcon,
-  AutoAwesome as AutoAwesomeIcon,
   Download as DownloadIcon,
   Refresh as RefreshIcon,
   Insights as InsightsIcon,
   Person as PersonIcon,
   Category as CategoryIcon,
   Settings as SettingsIcon,
-  Star as StarIcon,
-  ThumbUp as ThumbUpIcon,
-  History as HistoryIcon,
-  CheckCircle as CheckCircleIcon,
-  Info as InfoIcon
-} from '@mui/icons-material';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+  History as HistoryIcon } from '@mui/icons-material';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 import { useStore } from '../../store';
 import { api } from '../../services/api';
 
@@ -132,8 +121,7 @@ const RecommendationEngine: React.FC = () => {
         if (response.data.success) {
           setRecommendationData(response.data.data);
         }
-      } catch (error) {
-        console.error('추천 엔진 데이터 로드 오류:', error);
+      } catch {
         setError('추천 엔진 데이터를 불러오는데 실패했습니다.');
       } finally {
         setLoading(false);
@@ -158,8 +146,7 @@ const RecommendationEngine: React.FC = () => {
           recommendations: response.data.data.newRecommendations
         } : null);
       }
-    } catch (error) {
-      console.error('추천 업데이트 오류:', error);
+    } catch {
       setError('추천 업데이트에 실패했습니다.');
     } finally {
       setLoading(false);
@@ -176,8 +163,6 @@ const RecommendationEngine: React.FC = () => {
       }
     } : null);
   };
-
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A28DFF', '#FF6B6B'];
 
   if (loading) {
     return (

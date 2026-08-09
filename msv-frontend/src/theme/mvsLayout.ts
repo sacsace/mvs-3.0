@@ -18,17 +18,17 @@ export const mvsMainSurfaceSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',
   borderRadius: '8px',
   padding: { xs: '16px', sm: '24px', md: '32px' },
-  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
-  border: '1px solid #D0DBE8',
+  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.06)',
+  border: '1px solid #E2E8F0',
   boxSizing: 'border-box',
 };
 
 export const mvsSectionGroupSx: SxProps<Theme> = {
-  backgroundColor: '#F0F4F8',
+  backgroundColor: '#F8FAFC',
   borderRadius: '8px',
   padding: '20px',
   marginBottom: '24px',
-  border: '1px solid #D0DBE8',
+  border: '1px solid #E2E8F0',
   boxShadow: 'none',
 };
 
@@ -36,16 +36,16 @@ export const mvsInnerCardSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',
   borderRadius: '8px',
   padding: '18px',
-  border: '1px solid #D0DBE8',
-  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
+  border: '1px solid #E2E8F0',
+  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.06)',
 };
 
 export const mvsFilterToolbarSx: MvsStyleObject = {
-  backgroundColor: '#F0F4F8',
+  backgroundColor: '#F8FAFC',
   borderRadius: '8px',
   padding: { xs: '12px', sm: '16px' },
   marginBottom: { xs: '16px', sm: '24px' },
-  border: '1px solid #D0DBE8',
+  border: '1px solid #E2E8F0',
   boxShadow: 'none',
 };
 
@@ -55,16 +55,16 @@ export const mvsSearchFieldSx: MvsStyleObject = {
     borderRadius: '8px',
     bgcolor: 'background.paper',
     '& .MuiOutlinedInput-notchedOutline': {
-      borderColor: '#D0DBE8',
+      borderColor: '#CBD5E1',
     },
     '&:hover .MuiOutlinedInput-notchedOutline': {
-      borderColor: '#B8C4D0',
+      borderColor: '#94A3B8',
     },
     '& fieldset': {
-      borderColor: '#D0DBE8',
+      borderColor: '#CBD5E1',
     },
     '&:hover fieldset': {
-      borderColor: '#B8C4D0',
+      borderColor: '#94A3B8',
     },
   },
 };
@@ -81,17 +81,17 @@ export const mvsTableZoneSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',
   borderRadius: '8px',
   padding: { xs: '12px', sm: '18px' },
-  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
-  border: '1px solid #D0DBE8',
+  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.06)',
+  border: '1px solid #E2E8F0',
 };
 
 /** KPI·요약 카드 — 재고·회계 등 목록 상단 통계 */
 export const mvsKpiCardSx: SxProps<Theme> = (theme) => ({
   borderRadius: '8px',
   border: '1px solid',
-  borderColor: theme.palette.mode === 'light' ? '#D0DBE8' : 'divider',
+  borderColor: theme.palette.mode === 'light' ? '#E2E8F0' : 'divider',
   boxShadow:
-    theme.palette.mode === 'light' ? '0 1px 2px rgba(15, 23, 42, 0.05)' : '0 1px 2px rgba(0,0,0,0.25)',
+    theme.palette.mode === 'light' ? '0 1px 2px rgba(15, 23, 42, 0.06)' : '0 1px 2px rgba(0,0,0,0.25)',
   bgcolor: 'background.paper',
 });
 
@@ -117,22 +117,22 @@ export const mvsTableWellSx: SxProps<Theme> = (theme) => ({
   pt: 2.5,
   borderTop: '1px solid',
   borderColor:
-    theme.palette.mode === 'dark' ? theme.palette.divider : '#D0DBE8',
+    theme.palette.mode === 'dark' ? theme.palette.divider : '#E2E8F0',
   borderRadius: 0,
 });
 
 export const mvsTableInsetWrapSx: SxProps<Theme> = (theme) => ({
   borderRadius: '8px',
   p: { xs: 1, sm: 1.25 },
-  bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#F1F5F9',
+  bgcolor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.04)' : '#F8FAFC',
 });
 
 /** MuiTableCell head 기본이 transparent인 경우를 대비해 헤더 행을 확실히 구분 */
 export const mvsTableHeadHighlightSx: SxProps<Theme> = (theme) => {
   const light = theme.palette.mode === 'light';
-  const headBg = light ? '#F1F5F9' : theme.palette.grey[800];
-  const headFg = light ? '#475569' : theme.palette.grey[200];
-  const headBorder = light ? '#A8B4C0' : theme.palette.divider;
+  const headBg = light ? '#F8FAFC' : theme.palette.grey[800];
+  const headFg = light ? '#334155' : theme.palette.grey[200];
+  const headBorder = light ? '#CBD5E1' : theme.palette.divider;
   return {
     bgcolor: headBg,
     '& .MuiTableCell-head': {
@@ -141,7 +141,7 @@ export const mvsTableHeadHighlightSx: SxProps<Theme> = (theme) => {
       fontWeight: 600,
       fontSize: '0.8125rem',
       textTransform: 'none',
-      letterSpacing: '0.02em',
+      letterSpacing: '0.01em',
       overflow: 'hidden',
       borderBottom: `1px solid ${headBorder}`,
       borderTop: '2px solid',
@@ -176,8 +176,8 @@ export const mvsBodyListZoneSx: MvsStyleObject = {
 };
 
 /** Body 카드·리스트 공통 외곽 톤 */
-export const mvsBodyFrameBorder = '1px solid #D0DBE8';
-export const mvsBodyFrameShadow = '0 1px 2px rgba(15, 23, 42, 0.05)';
+export const mvsBodyFrameBorder = '1px solid #E2E8F0';
+export const mvsBodyFrameShadow = '0 1px 2px rgba(15, 23, 42, 0.06)';
 export const mvsBodyFrameRadius = '8px';
 
 /** Body 리스트 테이블 래퍼 — 컨트롤 카드와 동일 외곽 톤 */
@@ -213,7 +213,7 @@ export const mvsBodySectionHeaderSx: MvsStyleObject = {
   gap: 1.5,
   px: { xs: 2, sm: 2.5 },
   py: 2,
-  borderBottom: '1px solid #D0DBE8',
+  borderBottom: '1px solid #E2E8F0',
   bgcolor: '#FFFFFF',
 };
 
@@ -226,7 +226,7 @@ export const mvsBodyToolbarSx: MvsStyleObject = {
   px: { xs: 2, sm: 2.5 },
   py: 1.5,
   bgcolor: '#F8FAFC',
-  borderBottom: '1px solid #D0DBE8',
+  borderBottom: '1px solid #E2E8F0',
 };
 
 /** Body 보조 outlined 버튼 — primary(추가)와 구분되는 연한 슬레이트 톤 */
@@ -237,15 +237,15 @@ export const mvsBodyOutlinedBtnSx: MvsStyleObject = {
   fontSize: '0.8125rem',
   minHeight: 36,
   px: 1.5,
-  borderColor: '#B8C4D0',
+  borderColor: '#CBD5E1',
   color: '#334155',
-  bgcolor: '#F1F5F9',
+  bgcolor: '#FFFFFF',
   boxShadow: 'none',
   '& .MuiButton-startIcon': { mr: '6px', color: '#64748B' },
   '&:hover': {
     borderColor: '#94A3B8',
-    bgcolor: '#E8EDF3',
-    color: '#1E293B',
+    bgcolor: '#F1F5F9',
+    color: '#0F172A',
     '& .MuiButton-startIcon': { color: '#475569' },
   },
 };
@@ -281,17 +281,17 @@ export const mvsBodyTableFrameSx: MvsStyleObject = {
   maxWidth: '100%',
   mx: 'auto',
   borderRadius: '8px',
-  border: '1px solid #D0DBE8',
+  border: '1px solid #E2E8F0',
   overflow: 'hidden',
   bgcolor: '#FFFFFF',
-  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
+  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.06)',
 };
 
 /** Body 테이블 바디 — 줄무늬 없음(전 행 흰색), hover만 구분 */
 export const mvsTableBodyRowSx: SxProps<Theme> = (theme) => {
   const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
-  const hover = theme.palette.mode === 'light' ? '#EFF6FF' : 'action.hover';
-  const border = theme.palette.mode === 'light' ? '#D1DAE4' : theme.palette.divider;
+  const hover = theme.palette.mode === 'light' ? '#F1F5F9' : 'action.hover';
+  const border = theme.palette.mode === 'light' ? '#E2E8F0' : theme.palette.divider;
   return {
     '& .MuiTableCell-body': {
       py: 1.5,
@@ -315,8 +315,8 @@ export const mvsPageTitleSx: SxProps<Theme> = {
   fontSize: { xs: '18px', sm: '20px', md: '22px' },
   fontWeight: 700,
   lineHeight: 1.3,
-  letterSpacing: '-0.02em',
-  color: '#111827',
+  letterSpacing: '-0.01em',
+  color: '#0F172A',
   marginBottom: 0,
 };
 
@@ -333,7 +333,7 @@ export const mvsPageRootSx: SxProps<Theme> = {
 export const mvsPageDescriptionSx: SxProps<Theme> = {
   fontSize: '13px',
   lineHeight: 1.6,
-  color: '#6B7280',
+  color: '#475569',
 };
 
 export const mvsTitleBlockSx: SxProps<Theme> = {
@@ -341,15 +341,16 @@ export const mvsTitleBlockSx: SxProps<Theme> = {
 };
 
 /** 업무 관리(보드 목록·상세) 페이지 배경 */
-export const mvsWorkBoardPageBg = '#F0F4F9';
+export const mvsWorkBoardPageBg = '#F1F5F9';
+
 
 /** 대시보드 하단 위젯 그룹 배경 */
 export const mvsDashboardWidgetGroupSx: SxProps<Theme> = {
-  backgroundColor: '#EEF3F8',
+  backgroundColor: '#F8FAFC',
   borderRadius: '8px',
   padding: '20px',
   gap: '20px',
-  border: '1px solid #D0DBE8',
+  border: '1px solid #E2E8F0',
   boxShadow: 'none',
 };
 
@@ -357,6 +358,6 @@ export const mvsDashboardWidgetGroupSx: SxProps<Theme> = {
 export const mvsDashboardWidgetCardSx: SxProps<Theme> = {
   backgroundColor: '#FFFFFF',
   borderRadius: '8px',
-  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)',
-  border: '1px solid #D0DBE8',
+  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.06)',
+  border: '1px solid #E2E8F0',
 };

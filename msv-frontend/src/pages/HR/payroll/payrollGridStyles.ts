@@ -2,14 +2,14 @@ import type { SxProps, Theme } from '@mui/material/styles';
 
 /** 급여 그리드 열 색상 — 저채도 슬레이트 톤 (그룹 구분만 은은하게) */
 const PAYROLL_COL = {
-  salary: { bg: '#FAFBFC', head: '#EEF1F5', text: '#475569', accent: '#C5CED9' },
-  salaryTotal: { bg: '#F6F8FA', head: '#E8ECF1', text: '#475569', accent: '#C5CED9' },
-  days: { bg: '#F9FAFB', head: '#EDF0F3', text: '#475569', accent: '#C5CED9' },
-  attendance: { bg: '#FAFAF9', head: '#F0EFED', text: '#475569', accent: '#C5CED9' },
-  extra: { bg: '#FFFFFF', head: '#F4F6F8', text: '#475569', accent: '#C5CED9' },
+  salary: { bg: '#FAFBFC', head: '#EEF1F5', text: '#475569', accent: '#CBD5E1' },
+  salaryTotal: { bg: '#F6F8FA', head: '#E8ECF1', text: '#475569', accent: '#CBD5E1' },
+  days: { bg: '#F9FAFB', head: '#EDF0F3', text: '#475569', accent: '#CBD5E1' },
+  attendance: { bg: '#FAFAF9', head: '#F0EFED', text: '#475569', accent: '#CBD5E1' },
+  extra: { bg: '#FFFFFF', head: '#F4F6F8', text: '#475569', accent: '#CBD5E1' },
   sum: { bg: '#F3F5F8', head: '#E4E9EF', text: '#334155', accent: '#94A3B8' },
-  employer: { bg: '#F8F8FA', head: '#EEEEF2', text: '#475569', accent: '#C5CED9' },
-  employee: { bg: '#FAF9F9', head: '#F0EEEE', text: '#475569', accent: '#C5CED9' },
+  employer: { bg: '#F8F8FA', head: '#EEEEF2', text: '#475569', accent: '#CBD5E1' },
+  employee: { bg: '#FAF9F9', head: '#F0EEEE', text: '#475569', accent: '#CBD5E1' },
   net: { bg: '#F4F6F5', head: '#E6EBE8', text: '#1E293B', accent: '#94A3B8' }
 } as const;
 
@@ -155,12 +155,12 @@ export const payrollDataGridSx: SxProps<Theme> = (theme) => {
 
     /* 지급 합계 */
     '& .MuiDataGrid-cell.payroll-col-sum, & .MuiDataGrid-columnHeader.payroll-col-sum': {
-      backgroundColor: light ? PAYROLL_COL.sum.bg : 'rgba(37, 99, 235, 0.16)',
+      backgroundColor: light ? PAYROLL_COL.sum.bg : 'rgba(29, 78, 124, 0.16)',
       color: light ? PAYROLL_COL.sum.text : theme.palette.text.primary,
       fontWeight: 600
     },
     '& .MuiDataGrid-columnHeader.payroll-col-sum': {
-      backgroundColor: light ? PAYROLL_COL.sum.head : 'rgba(37, 99, 235, 0.24)',
+      backgroundColor: light ? PAYROLL_COL.sum.head : 'rgba(29, 78, 124, 0.24)',
       fontWeight: 600
     },
     '& .MuiDataGrid-cell.payroll-col-sum-start, & .MuiDataGrid-columnHeader.payroll-col-sum-start': {

@@ -21,8 +21,7 @@ import {
   Menu,
   MenuItem,
   ListItemIcon,
-  useMediaQuery,
-} from '@mui/material';
+  useMediaQuery } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
   mvsPageRootSx,
@@ -34,8 +33,7 @@ import {
   mvsBodyOutlinedBtnSx,
   mvsBodyPrimaryBtnSx,
   mvsBodyListZoneSx,
-  mvsBodyListTableSx,
-} from '../../theme/mvsLayout';
+  mvsBodyListTableSx } from '../../theme/mvsLayout';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import {
@@ -47,9 +45,8 @@ import {
   RestartAlt as ResetIcon,
   Search as SearchIcon,
   ViewColumn as ViewColumnIcon,
-  MoreHoriz as MoreHorizIcon,
-} from '@mui/icons-material';
-import { companyService, loginInfoService } from '../../services/api';
+  MoreHoriz as MoreHorizIcon } from '@mui/icons-material';
+import { loginInfoService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useStore } from '../../store';
 import LoginInfoExcelGrid, { LoginInfoColumnSchema, LoginInfoExcelGridHandle } from './LoginInfoExcelGrid';
@@ -151,8 +148,7 @@ const LoginInfoManagement: React.FC = () => {
     () => ({
       totalRows: loginInfos.length,
       filteredRows: filteredLoginInfos.length,
-      tabs: tabs.length,
-    }),
+      tabs: tabs.length }),
     [loginInfos.length, filteredLoginInfos.length, tabs.length]
   );
 
@@ -171,8 +167,7 @@ const LoginInfoManagement: React.FC = () => {
     textAlign: 'center',
     py: { xs: 6, sm: 8 },
     px: 3,
-    gap: 1.5,
-  } as const;
+    gap: 1.5 } as const;
 
   const dialogPaperSx = useMemo(
     () =>
@@ -218,7 +213,6 @@ const LoginInfoManagement: React.FC = () => {
 
       setSelectedCompanyId(hasUserCompany ? Number(userCompanyId) : scopedList[0].id);
     } catch (error: any) {
-      console.error('회사 목록 로드 오류:', error);
       setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.loadCompaniesFailed'));
     }
   }, [selectedCompanyId, t, user?.company_id, user?.role]);
@@ -246,7 +240,6 @@ const LoginInfoManagement: React.FC = () => {
           });
         }
       } catch (error: any) {
-        console.error('탭 로드 오류:', error);
         setTabs([]);
         setSelectedTabId('');
         setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.loadTabsFailed'));
@@ -270,8 +263,7 @@ const LoginInfoManagement: React.FC = () => {
       if (response?.success) {
         setLoginInfos(response.data || []);
       }
-    } catch (error: any) {
-      console.error('로그인 정보 로드 오류:', error);
+    } catch {
       setLoginInfos([]);
       setErrorMessage(null);
     } finally {
@@ -338,7 +330,6 @@ const LoginInfoManagement: React.FC = () => {
       await loginInfoService.importExcel(file, Number(selectedCompanyId), Number(selectedTabId));
       await loadLoginInfos(Number(selectedCompanyId), Number(selectedTabId));
     } catch (error: any) {
-      console.error('엑셀 가져오기 오류:', error);
       setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.importFailed'));
     } finally {
       setLoading(false);
@@ -460,8 +451,7 @@ const LoginInfoManagement: React.FC = () => {
           ? {
               backgroundColor: 'rgba(10, 20, 44, 0.72)',
               border: '1px solid rgba(255, 255, 255, 0.16)',
-              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
-            }
+              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)' }
           : undefined,
         '& .MuiTypography-root': isDark ? { color: 'rgba(245, 248, 255, 0.92)' } : undefined,
         '& .MuiInputLabel-root': isDark ? { color: 'rgba(230, 236, 255, 0.78)' } : undefined,
@@ -476,8 +466,7 @@ const LoginInfoManagement: React.FC = () => {
           : undefined,
         '& .MuiAutocomplete-popupIndicator, & .MuiAutocomplete-clearIndicator': isDark
           ? { color: 'rgba(220, 231, 255, 0.8)' }
-          : undefined,
-      }}
+          : undefined }}
     >
       <MvsPageHeader
         title={t('loginInfoManagement.title')}
@@ -513,8 +502,7 @@ const LoginInfoManagement: React.FC = () => {
           display: 'grid',
           gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
           gap: 2.5,
-          mb: 3,
-        }}
+          mb: 3 }}
       >
         {[
           { key: 'rows', label: t('loginInfoManagement.stats.totalRows'), value: loginStats.totalRows },
@@ -544,8 +532,7 @@ const LoginInfoManagement: React.FC = () => {
             gap: { xs: 1.25, md: 1 },
             px: { xs: 2, sm: 2.5 },
             py: 1.5,
-            bgcolor: '#FFFFFF',
-          }}
+            bgcolor: '#FFFFFF' }}
         >
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
             <input
@@ -583,11 +570,8 @@ const LoginInfoManagement: React.FC = () => {
                         mt: 0.5,
                         minWidth: 220,
                         borderRadius: '8px',
-                        border: '1px solid #C5CED9',
-                        boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
-                      },
-                    },
-                  }}
+                        border: '1px solid #CBD5E1',
+                        boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)' } } }}
                 >
                   <MenuItem
                     disabled={
@@ -667,8 +651,7 @@ const LoginInfoManagement: React.FC = () => {
               gap: 1,
               flexShrink: 0,
               width: { xs: '100%', md: 'auto' },
-              ml: { md: 'auto' },
-            }}
+              ml: { md: 'auto' } }}
           >
             <Tooltip title={t('common.menuNoCreate')} disableHoverListener={menuFlags.menusLoading || menuFlags.canCreate}>
               <span style={{ display: 'inline-flex', flexShrink: 0 }}>
@@ -702,11 +685,9 @@ const LoginInfoManagement: React.FC = () => {
             display: 'grid',
             gridTemplateColumns: {
               xs: '1fr',
-              md: 'minmax(280px, 360px) minmax(0, 1fr) auto',
-            },
+              md: 'minmax(280px, 360px) minmax(0, 1fr) auto' },
             gap: 2,
-            alignItems: 'flex-end',
-          }}
+            alignItems: 'flex-end' }}
         >
           <Autocomplete
             options={companies}
@@ -743,8 +724,7 @@ const LoginInfoManagement: React.FC = () => {
                 <InputAdornment position="start">
                   <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
                 </InputAdornment>
-              ),
-            }}
+              ) }}
           />
           <Button
             variant="outlined"
@@ -755,8 +735,7 @@ const LoginInfoManagement: React.FC = () => {
             sx={{
               ...mvsBodyOutlinedBtnSx,
               height: 40,
-              whiteSpace: 'nowrap',
-            }}
+              whiteSpace: 'nowrap' }}
           >
             {t('loginInfoManagement.actions.reset')}
           </Button>
@@ -810,8 +789,7 @@ const LoginInfoManagement: React.FC = () => {
                 alignItems: 'center',
                 gap: 0.5,
                 mb: 1.5,
-                px: { xs: 0.5, sm: 0 },
-              }}
+                px: { xs: 0.5, sm: 0 } }}
             >
               <Tabs
                 value={selectedTabId === '' ? false : selectedTabId}
@@ -823,8 +801,7 @@ const LoginInfoManagement: React.FC = () => {
                   minWidth: 0,
                   borderBottom: 1,
                   borderColor: 'divider',
-                  '& .MuiTab-root': { textTransform: 'none' },
-                }}
+                  '& .MuiTab-root': { textTransform: 'none' } }}
               >
                 {tabs.map((tab) => (
                   <Tab key={tab.id} value={tab.id} label={tab.name} disabled={menuFlags.menusLoading} />

@@ -72,57 +72,32 @@ export const partnerService = {
 
   // ?�트??목록 조회
   getPartners: async () => {
-    try {
-      const response = await api.get('/partners');
-      return response.data;
-    } catch (error) {
-      console.error('?�트??목록 조회 ?�류:', error);
-      throw error;
-    }
+    const response = await api.get('/partners');
+    return response.data;
   },
 
   // ?�정 ?�트??조회
   getPartner: async (id: number) => {
-    try {
-      const response = await api.get(`/partners/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error('?�트??조회 ?�류:', error);
-      throw error;
-    }
+    const response = await api.get(`/partners/${id}`);
+    return response.data;
   },
 
   // ?�트???�성
   createPartner: async (partnerData: any) => {
-    try {
-      const response = await api.post('/partners', partnerData);
-      return response.data;
-    } catch (error) {
-      console.error('?�트???�성 ?�류:', error);
-      throw error;
-    }
+    const response = await api.post('/partners', partnerData);
+    return response.data;
   },
 
   // ?�트???�정
   updatePartner: async (id: number, partnerData: any) => {
-    try {
-      const response = await api.put(`/partners/${id}`, partnerData);
-      return response.data;
-    } catch (error) {
-      console.error('?�트???�정 ?�류:', error);
-      throw error;
-    }
+    const response = await api.put(`/partners/${id}`, partnerData);
+    return response.data;
   },
 
   // ?�트????��
   deletePartner: async (id: number) => {
-    try {
-      const response = await api.delete(`/partners/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error('?�트????�� ?�류:', error);
-      throw error;
-    }
+    const response = await api.delete(`/partners/${id}`);
+    return response.data;
   }
 };
 

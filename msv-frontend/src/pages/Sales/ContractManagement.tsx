@@ -156,7 +156,6 @@ const ContractManagement: React.FC = () => {
       }));
       setContracts(rows);
     } catch (error) {
-      console.error('계약 목록 로드 오류:', error);
       showSnackbar(txt('계약 목록을 불러오는 중 오류가 발생했습니다.', 'Failed to load contracts.'), 'error');
     } finally {
       setLoading(false);
@@ -172,8 +171,8 @@ const ContractManagement: React.FC = () => {
         return true;
       });
       setCustomers(rows);
-    } catch (error) {
-      console.error('고객 목록 로드 오류:', error);
+    } catch {
+      /* ignore */
     }
   }, []);
 
@@ -355,7 +354,6 @@ const ContractManagement: React.FC = () => {
       setSelectedFiles([]);
       loadContracts();
     } catch (error) {
-      console.error('계약 저장 오류:', error);
       showSnackbar(txt('계약 저장 중 오류가 발생했습니다.', 'Failed to save contract.'), 'error');
     }
   };
@@ -374,7 +372,6 @@ const ContractManagement: React.FC = () => {
             showSnackbar(txt('계약이 성공적으로 삭제되었습니다.', 'Contract deleted.'), 'success');
             loadContracts();
           } catch (error) {
-            console.error('계약 삭제 오류:', error);
             showSnackbar(txt('계약 삭제 중 오류가 발생했습니다.', 'Failed to delete contract.'), 'error');
           }
         })();
@@ -455,14 +452,6 @@ const ContractManagement: React.FC = () => {
     return contracts.filter(contract => {
       const endDate = new Date(contract.end_date);
       return endDate <= thirtyDaysFromNow && endDate >= now;
-    }).length;
-  };
-
-  const getExpiredContracts = () => {
-    const now = new Date();
-    return contracts.filter(contract => {
-      const endDate = new Date(contract.end_date);
-      return endDate < now;
     }).length;
   };
 

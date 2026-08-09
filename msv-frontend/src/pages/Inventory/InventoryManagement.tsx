@@ -52,8 +52,7 @@ import {
   mvsBodyListZoneSx,
   mvsBodyListTableSx,
   mvsTableBodyRowSx,
-  mvsBodyPaginationSx,
-} from '../../theme/mvsLayout';
+  mvsBodyPaginationSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -67,11 +66,10 @@ import {
   Print as PrintIcon,
   Scale as ScaleIcon,
   MoreHoriz as MoreHorizIcon,
-  Close as CloseIcon,
-} from '@mui/icons-material';
+  Close as CloseIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { alpha, useTheme } from '@mui/material/styles';
-import { api, inventoryService, partnerService } from '../../services/api';
+import { inventoryService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { resolveMediaUrl } from '../../utils/uploadUrl';
 import { useMenuStore, useStore } from '../../store';
@@ -101,8 +99,7 @@ const INV_COL_DEFAULTS: Record<string, number> = {
   supplier: 180,
   location: 116,
   lastUpdated: 152,
-  actions: 72,
-};
+  actions: 72 };
 
 const INV_COL_TOTAL = Object.values(INV_COL_DEFAULTS).reduce((s, n) => s + n, 0);
 
@@ -119,8 +116,7 @@ const listViewModeBarSx = {
   display: 'flex',
   flexWrap: 'wrap',
   alignItems: 'center',
-  gap: 0.75,
-} as const;
+  gap: 0.75 } as const;
 
 const listViewModeBtnSx = {
   height: 32,
@@ -131,8 +127,7 @@ const listViewModeBtnSx = {
   fontSize: '0.75rem',
   borderRadius: '10px',
   boxShadow: 'none',
-  whiteSpace: 'nowrap' as const,
-};
+  whiteSpace: 'nowrap' as const };
 
 type ListViewMode = 'page' | 'all';
 const INVENTORY_VIEW_ALL_LIMIT = 10000;
@@ -154,8 +149,7 @@ const INV_COL_ALIGN: Record<string, 'left' | 'right' | 'center'> = {
   supplier: 'left',
   location: 'left',
   lastUpdated: 'right',
-  actions: 'center',
-};
+  actions: 'center' };
 
 /** 헤더 라벨이 잘리지 않도록 최소 너비(px) */
 const INV_COL_MIN_WIDTH: Record<string, number> = {
@@ -165,8 +159,7 @@ const INV_COL_MIN_WIDTH: Record<string, number> = {
   unitPrice: 88,
   totalValue: 96,
   lastUpdated: 132,
-  actions: 64,
-};
+  actions: 64 };
 
 function invColTableAlign(key: string): 'left' | 'right' | 'center' {
   return INV_COL_ALIGN[key] ?? 'left';
@@ -255,7 +248,7 @@ const InventoryManagement: React.FC = () => {
   const [itemsPerPage] = useState(10);
   const [listViewMode, setListViewMode] = useState<ListViewMode>('page');
   const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
+  const [, setTotalItems] = useState(0);
   const [orderBy, setOrderBy] = useState<keyof InventoryItem | ''>('');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
   const [excelUploading, setExcelUploading] = useState(false);
@@ -299,17 +292,7 @@ const InventoryManagement: React.FC = () => {
     };
   }, [menus, hasMenuPermission, elevated]);
 
-  useEffect(() => {
-    if (menusLoading || !basicMenuFlags.canRead) return;
-    loadInventoryData();
-  }, [page, searchTerm, categoryFilter, warehouseFilter, listViewMode, menusLoading, basicMenuFlags.canRead]);
-
-  useEffect(() => {
-    if (menusLoading || !basicMenuFlags.canRead) return;
-    void loadWarehouseManageList();
-  }, [menusLoading, basicMenuFlags.canRead]);
-
-  const loadInventoryData = async () => {
+  const loadInventoryData = useCallback(async () => {
     setLoading(true);
     try {
       const [productsResponse, reportResponse] = await Promise.all([
@@ -391,7 +374,6 @@ const InventoryManagement: React.FC = () => {
         .filter((name: string) => name.length > 0);
       setCategories(Array.from(new Set(categoryNames)));
     } catch (error: any) {
-      console.error('재고 데이터 로드 오류:', error);
       setError(error.response?.data?.message || t('inventoryManagement.messages.loadError'));
       setInventoryItems([]);
       setTotalPages(1);
@@ -406,13 +388,19 @@ const InventoryManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, searchTerm, categoryFilter, warehouseFilter, listViewMode, itemsPerPage, t]);
 
   useEffect(() => {
-    filterItems();
-  }, [inventoryItems, statusFilter]);
+    if (menusLoading || !basicMenuFlags.canRead) return;
+    loadInventoryData();
+  }, [loadInventoryData, menusLoading, basicMenuFlags.canRead]);
 
-  const filterItems = () => {
+  useEffect(() => {
+    if (menusLoading || !basicMenuFlags.canRead) return;
+    void loadWarehouseManageList();
+  }, [menusLoading, basicMenuFlags.canRead]);
+
+  const filterItems = useCallback(() => {
     // 검색과 카테고리는 API에서 처리되므로, 상태 필터만 클라이언트에서 처리
     let filtered = inventoryItems;
 
@@ -421,7 +409,11 @@ const InventoryManagement: React.FC = () => {
     }
 
     setFilteredItems(filtered);
-  };
+  }, [inventoryItems, statusFilter]);
+
+  useEffect(() => {
+    filterItems();
+  }, [filterItems]);
 
   const handleCloseInventoryDialog = () => {
     setOpenDialog(false);
@@ -433,8 +425,7 @@ const InventoryManagement: React.FC = () => {
     if (!url) return;
     setImagePreview({
       url,
-      label: (label || '').trim() || t('inventoryManagement.dialog.imagePreview'),
-    });
+      label: (label || '').trim() || t('inventoryManagement.dialog.imagePreview') });
   }, [t]);
 
   const handleAddItem = () => {
@@ -474,8 +465,7 @@ const InventoryManagement: React.FC = () => {
       } else {
         setCategoryManageList([]);
       }
-    } catch (e) {
-      console.error(e);
+    } catch {
       setCategoryManageList([]);
     } finally {
       setCategoryManageLoading(false);
@@ -493,8 +483,7 @@ const InventoryManagement: React.FC = () => {
       } else {
         setWarehouseManageList([]);
       }
-    } catch (e) {
-      console.error(e);
+    } catch {
       setWarehouseManageList([]);
     } finally {
       setWarehouseManageLoading(false);
@@ -652,8 +641,7 @@ const InventoryManagement: React.FC = () => {
       } else {
         setUnitManageList([]);
       }
-    } catch (e) {
-      console.error(e);
+    } catch {
       setUnitManageList([]);
     } finally {
       setUnitManageLoading(false);
@@ -749,8 +737,7 @@ const InventoryManagement: React.FC = () => {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error(err);
+    } catch {
       setError(t('inventoryManagement.messages.excelSampleError'));
     }
   };
@@ -802,7 +789,6 @@ const InventoryManagement: React.FC = () => {
             setSelectedItemIds((prev) => prev.filter((itemId) => itemId !== id));
             loadInventoryData();
           } catch (error: any) {
-            console.error('삭제 오류:', error);
             setError(error.response?.data?.message || t('inventoryManagement.messages.deleteError'));
           }
         })();
@@ -865,7 +851,6 @@ const InventoryManagement: React.FC = () => {
         }
       }
     } catch (error: any) {
-      console.error('저장 오류:', error);
       setError(error.response?.data?.message || t('inventoryManagement.messages.saveError'));
     }
   };
@@ -952,7 +937,6 @@ const InventoryManagement: React.FC = () => {
             setSelectedItemIds([]);
             loadInventoryData();
           } catch (error: any) {
-            console.error('일괄 삭제 오류:', error);
             setError(error.response?.data?.message || t('inventoryManagement.messages.deleteError'));
           }
         })();
@@ -961,8 +945,7 @@ const InventoryManagement: React.FC = () => {
         title: t('common.confirm'),
         confirmColor: 'error',
         confirmText: t('common.delete'),
-        cancelText: t('common.cancel'),
-      }
+        cancelText: t('common.cancel') }
     );
   };
 
@@ -977,8 +960,7 @@ const InventoryManagement: React.FC = () => {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     minWidth: 0,
-    flex: '1 1 auto',
-  } as const;
+    flex: '1 1 auto' } as const;
 
   const thSx = (key: string) => {
     const align = invColTableAlign(key);
@@ -997,12 +979,9 @@ const InventoryManagement: React.FC = () => {
         maxWidth: '100%',
         justifyContent: invColSortLabelJustify(key),
         overflow: 'hidden',
-        ...(align === 'right' ? { flexDirection: 'row-reverse' as const } : {}),
-      },
+        ...(align === 'right' ? { flexDirection: 'row-reverse' as const } : {}) },
       '& .MuiTableSortLabel-icon': {
-        flexShrink: 0,
-      },
-    };
+        flexShrink: 0 } };
   };
 
   const renderHeadSortCell = (
@@ -1029,8 +1008,7 @@ const InventoryManagement: React.FC = () => {
     overflow: INV_TD_ELLIPSIS_KEYS.has(key) ? ('hidden' as const) : ('visible' as const),
     textOverflow: INV_TD_ELLIPSIS_KEYS.has(key) ? ('ellipsis' as const) : undefined,
     verticalAlign: 'middle' as const,
-    boxSizing: 'border-box' as const,
-  });
+    boxSizing: 'border-box' as const });
 
   const softChipSx = (tone: 'default' | 'info' | 'warning' | 'success' | 'error' | 'primary' | 'secondary') => {
     const light = theme.palette.mode === 'light';
@@ -1042,8 +1020,7 @@ const InventoryManagement: React.FC = () => {
         fontSize: '0.6875rem',
         border: `1px solid ${light ? 'rgba(15, 23, 42, 0.12)' : theme.palette.divider}`,
         bgcolor: light ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.06),
-        color: 'text.secondary',
-      } as const;
+        color: 'text.secondary' } as const;
     }
     const main =
       tone === 'primary'
@@ -1064,8 +1041,7 @@ const InventoryManagement: React.FC = () => {
       fontSize: '0.6875rem',
       border: `1px solid ${alpha(main, light ? 0.3 : 0.42)}`,
       bgcolor: alpha(main, light ? 0.08 : 0.12),
-      color: dark,
-    } as const;
+      color: dark } as const;
   };
 
   const getStatusChip = (status: string) => {
@@ -1092,8 +1068,7 @@ const InventoryManagement: React.FC = () => {
     textAlign: 'center',
     py: { xs: 6, sm: 8 },
     px: 3,
-    gap: 1.5,
-  } as const;
+    gap: 1.5 } as const;
 
   const handleResetFilters = () => {
     setSearchTerm('');
@@ -1203,8 +1178,7 @@ const InventoryManagement: React.FC = () => {
             gap: { xs: 1.25, md: 1 },
             px: { xs: 2, sm: 2.5 },
             py: 1.5,
-            bgcolor: '#FFFFFF',
-          }}
+            bgcolor: '#FFFFFF' }}
         >
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
           {isCompactToolbar ? (
@@ -1235,11 +1209,8 @@ const InventoryManagement: React.FC = () => {
                       mt: 0.5,
                       minWidth: 220,
                       borderRadius: '8px',
-                      border: '1px solid #C5CED9',
-                      boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
-                    },
-                  },
-                }}
+                      border: '1px solid #CBD5E1',
+                      boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)' } } }}
               >
                 <MenuItem
                   disabled={menusLoading || !basicMenuFlags.canMutate}
@@ -1387,8 +1358,7 @@ const InventoryManagement: React.FC = () => {
               gap: 1,
               flexShrink: 0,
               width: { xs: '100%', md: 'auto' },
-              ml: { md: 'auto' },
-            }}
+              ml: { md: 'auto' } }}
           >
           {selectedItemIds.length > 0 ? (
             <Tooltip title={t('common.menuNoDelete')} disableHoverListener={menusLoading || basicMenuFlags.canDelete}>
@@ -1408,8 +1378,7 @@ const InventoryManagement: React.FC = () => {
                     fontSize: '0.8125rem',
                     minHeight: 36,
                     px: 2,
-                    boxShadow: 'none',
-                  }}
+                    boxShadow: 'none' }}
                 >
                   {t('inventoryManagement.deleteSelected')} ({selectedItemIds.length})
                 </Button>
@@ -1444,11 +1413,9 @@ const InventoryManagement: React.FC = () => {
             gridTemplateColumns: {
               xs: '1fr',
               sm: 'repeat(2, minmax(0, 1fr))',
-              lg: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto',
-            },
+              lg: 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto' },
             gap: 2,
-            alignItems: 'flex-end',
-          }}
+            alignItems: 'flex-end' }}
         >
             <TextField
               fullWidth
@@ -1464,8 +1431,7 @@ const InventoryManagement: React.FC = () => {
                   <InputAdornment position="start">
                     <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
                   </InputAdornment>
-                ),
-              }}
+                ) }}
             />
             <TextField
               fullWidth
@@ -1478,8 +1444,7 @@ const InventoryManagement: React.FC = () => {
               SelectProps={{
                 displayEmpty: true,
                 renderValue: (selected) =>
-                  selected === '' ? t('inventoryManagement.all') : String(selected),
-              }}
+                  selected === '' ? t('inventoryManagement.all') : String(selected) }}
               sx={inventoryFilterFieldSx}
             >
               <MenuItem value="">{t('inventoryManagement.all')}</MenuItem>
@@ -1500,8 +1465,7 @@ const InventoryManagement: React.FC = () => {
               SelectProps={{
                 displayEmpty: true,
                 renderValue: (selected) =>
-                  selected === '' ? t('inventoryManagement.all') : String(selected),
-              }}
+                  selected === '' ? t('inventoryManagement.all') : String(selected) }}
               sx={inventoryFilterFieldSx}
             >
               <MenuItem value="">{t('inventoryManagement.all')}</MenuItem>
@@ -1527,8 +1491,7 @@ const InventoryManagement: React.FC = () => {
                   if (selected === 'low_stock') return t('inventoryManagement.stockStatus.lowStock');
                   if (selected === 'out_of_stock') return t('inventoryManagement.stockStatus.outOfStock');
                   return String(selected);
-                },
-              }}
+                } }}
               sx={inventoryFilterFieldSx}
             >
               <MenuItem value="">{t('inventoryManagement.all')}</MenuItem>
@@ -1546,8 +1509,7 @@ const InventoryManagement: React.FC = () => {
                 height: 40,
                 whiteSpace: 'nowrap',
                 gridColumn: { xs: '1 / -1', sm: '1 / -1', lg: 'auto' },
-                justifySelf: { lg: 'stretch' },
-              }}
+                justifySelf: { lg: 'stretch' } }}
             >
               {t('inventoryManagement.reset')}
             </Button>
@@ -1615,8 +1577,7 @@ const InventoryManagement: React.FC = () => {
                   ...listViewModeBtnSx,
                   ...(listViewMode === 'all'
                     ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
-                    : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
-                }}
+                    : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }) }}
               >
                 {t('inventoryManagement.listView.viewAll')}
               </Button>
@@ -1629,8 +1590,7 @@ const InventoryManagement: React.FC = () => {
                   ...listViewModeBtnSx,
                   ...(listViewMode === 'page'
                     ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
-                    : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
-                }}
+                    : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }) }}
               >
                 {t('inventoryManagement.listView.viewPages')}
               </Button>
@@ -1647,9 +1607,7 @@ const InventoryManagement: React.FC = () => {
               '& .MuiTableCell-root': {
                 borderLeft: 'none',
                 borderRight: 'none',
-                borderTop: 'none',
-              },
-            }}
+                borderTop: 'none' } }}
           >
             <TableHead sx={mvsTableHeadHighlightSx}>
               <TableRow>
@@ -1680,8 +1638,7 @@ const InventoryManagement: React.FC = () => {
                       maxWidth: '100%',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
+                      whiteSpace: 'nowrap' }}
                     title={t('inventoryManagement.columns.actions')}
                   >
                     {t('inventoryManagement.columns.actions')}
@@ -1698,9 +1655,7 @@ const InventoryManagement: React.FC = () => {
                     cursor: basicMenuFlags.canRead || basicMenuFlags.canEdit ? 'pointer' : 'default',
                     '&:hover .inv-delete-btn:not(.Mui-disabled)': {
                       color: 'error.main',
-                      bgcolor: alpha(theme.palette.error.main, 0.08),
-                    },
-                  }}
+                      bgcolor: alpha(theme.palette.error.main, 0.08) } }}
                 >
                   <TableCell
                     padding="checkbox"
@@ -1744,8 +1699,7 @@ const InventoryManagement: React.FC = () => {
                             borderColor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : 'divider',
                             cursor: 'zoom-in',
                             transition: 'opacity 0.15s ease',
-                            '&:hover': { opacity: 0.85 },
-                          }}
+                            '&:hover': { opacity: 0.85 } }}
                         />
                       ) : null}
                       <Typography
@@ -1823,9 +1777,7 @@ const InventoryManagement: React.FC = () => {
                               transition: 'color 0.15s ease, background-color 0.15s ease',
                               '&:hover': {
                                 color: 'error.main',
-                                bgcolor: alpha(theme.palette.error.main, 0.12),
-                              },
-                            }}
+                                bgcolor: alpha(theme.palette.error.main, 0.12) } }}
                           >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
@@ -1850,9 +1802,7 @@ const InventoryManagement: React.FC = () => {
               sx={{
                 '& .MuiPaginationItem-root': {
                   borderRadius: '10px',
-                  fontWeight: 500,
-                },
-              }}
+                  fontWeight: 500 } }}
             />
           </Box>
         ) : null}
@@ -1878,8 +1828,7 @@ const InventoryManagement: React.FC = () => {
             fontSize: '1.125rem',
             fontWeight: 700,
             letterSpacing: '-0.02em',
-            color: 'text.primary',
-          }}
+            color: 'text.primary' }}
         >
           {inventoryDialogMode === 'view' && selectedItem
             ? t('inventoryManagement.dialog.viewTitle')
@@ -1920,8 +1869,7 @@ const InventoryManagement: React.FC = () => {
               py: 2.5,
               gap: 1,
               borderTop: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
-              bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
-            }}
+              bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03) }}
           >
             <Box sx={{ flex: 1 }} />
             <Button
@@ -1971,8 +1919,7 @@ const InventoryManagement: React.FC = () => {
             alignItems: 'center',
             bgcolor: 'grey.100',
             minHeight: 280,
-            p: 2,
-          }}
+            p: 2 }}
         >
           {imagePreview?.url ? (
             <Box
@@ -1983,8 +1930,7 @@ const InventoryManagement: React.FC = () => {
                 maxWidth: '100%',
                 maxHeight: '75vh',
                 objectFit: 'contain',
-                borderRadius: 1,
-              }}
+                borderRadius: 1 }}
             />
           ) : null}
         </DialogContent>
@@ -2526,8 +2472,7 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
     border: '1px solid',
     borderColor: 'divider',
     bgcolor: 'background.paper',
-    minHeight: 74,
-  } as const;
+    minHeight: 74 } as const;
 
   return (
     <Box sx={{ mt: 0.5 }}>
@@ -2538,8 +2483,7 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
               p: { xs: 1.5, sm: 2 },
               borderRadius: '8px',
               border: `1px solid ${alpha(theme.palette.divider, 0.95)}`,
-              bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.03),
-            })}
+              bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.03) })}
           >
             <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
               <Box
@@ -2564,8 +2508,7 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
                   transition: 'opacity 0.15s ease',
                   ...(item.imageUrl && onPreviewImage
                     ? { '&:hover': { opacity: 0.9 } }
-                    : {}),
-                }}
+                    : {}) }}
               >
                 {item.imageUrl ? (
                   <Box
@@ -2641,8 +2584,7 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
                 p: 2,
                 borderRadius: '8px',
                 border: `1px solid ${alpha(theme.palette.primary.main, 0.28)}`,
-                bgcolor: alpha(theme.palette.primary.main, 0.05),
-              })}
+                bgcolor: alpha(theme.palette.primary.main, 0.05) })}
             >
               <Stack spacing={1.75} alignItems="stretch">
                 <Box
@@ -2655,8 +2597,7 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
                     display: 'flex',
                     justifyContent: 'center',
                     alignItems: 'center',
-                    overflow: 'auto',
-                  }}
+                    overflow: 'auto' }}
                 >
                   <svg ref={detailBarcodeRef} style={{ maxWidth: '100%', width: 320, display: 'block' }} />
                 </Box>
@@ -2719,8 +2660,7 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
               return {
                 ...detailFieldSx,
                 bgcolor: alpha(c.main, 0.1),
-                borderColor: alpha(c.main, 0.35),
-              };
+                borderColor: alpha(c.main, 0.35) };
             }}
           >
             <Typography variant="caption" color="text.secondary" display="block">
@@ -2733,8 +2673,7 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
                 mt: 0.25,
                 mb: 0,
                 fontWeight: 800,
-                color: item.minStock > 0 && item.currentStock <= item.minStock ? 'warning.dark' : 'primary.main',
-              }}
+                color: item.minStock > 0 && item.currentStock <= item.minStock ? 'warning.dark' : 'primary.main' }}
             >
               {item.currentStock}
             </Typography>
@@ -2771,8 +2710,7 @@ const InventoryDetailView: React.FC<InventoryDetailViewProps> = ({ item, getStat
             sx={(theme) => ({
               ...detailFieldSx,
               bgcolor: alpha(theme.palette.success.main, 0.08),
-              borderColor: alpha(theme.palette.success.main, 0.25),
-            })}
+              borderColor: alpha(theme.palette.success.main, 0.25) })}
           >
             <Typography variant="caption" color="text.secondary" display="block">
               {t('inventoryManagement.columns.totalValue')}
@@ -2815,8 +2753,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
   canCreate,
   canEdit,
   canMutate,
-  onPreviewImage,
-}) => {
+  onPreviewImage }) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const formFieldsDisabled = item ? !canEdit : !canCreate;
@@ -2878,8 +2815,8 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
           partRes.data.map((p: { id: number; company_name: string }) => ({ id: p.id, company_name: p.company_name }))
         );
       }
-    } catch (e) {
-      console.error(e);
+    } catch {
+      /* ignore */
     }
   }, []);
 
@@ -3127,29 +3064,22 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
 
   const outlinedControlSx = {
     '& .MuiInputLabel-root': {
-      fontSize: '0.8125rem',
-    },
+      fontSize: '0.8125rem' },
     '& .MuiOutlinedInput-root': {
       borderRadius: '8px',
       minHeight: 40,
       bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.1 : 0.05),
       transition: theme.transitions.create(['background-color', 'box-shadow'], { duration: 150 }),
       '&:hover': {
-        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.14 : 0.08),
-      },
+        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.14 : 0.08) },
       '&.Mui-focused': {
         bgcolor: 'background.paper',
-        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.2)}`,
-      },
+        boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.2)}` },
       '& fieldset': {
-        borderColor: alpha(theme.palette.divider, 0.9),
-      },
+        borderColor: alpha(theme.palette.divider, 0.9) },
       '&.Mui-disabled': {
-        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
-      },
-    },
-    '& .MuiOutlinedInput-input': { py: 1.15 },
-  };
+        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04) } },
+    '& .MuiOutlinedInput-input': { py: 1.15 } };
   const registerBtnSx = {
     minWidth: 88,
     height: 40,
@@ -3157,8 +3087,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
     whiteSpace: 'nowrap' as const,
     borderRadius: '8px',
     textTransform: 'none' as const,
-    fontWeight: 600,
-  };
+    fontWeight: 600 };
 
   return (
     <Box component="form" onSubmit={handleSubmit} sx={{ mt: 0 }}>
@@ -3177,8 +3106,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
               minWidth: 0,
               border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
               borderRadius: '8px',
-              bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
-            }}
+              bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03) }}
           >
             <Box
               component="legend"
@@ -3208,8 +3136,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
                 transition: 'opacity 0.15s ease',
                 ...(formData.imageUrl && onPreviewImage
                   ? { '&:hover': { opacity: 0.9 } }
-                  : {}),
-              }}
+                  : {}) }}
             >
               {formData.imageUrl ? (
                 <Box
@@ -3241,9 +3168,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
                   bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.04),
                   '&:hover': {
                     borderColor: alpha(theme.palette.primary.main, 0.45),
-                    bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.1 : 0.06),
-                  },
-                }}
+                    bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.1 : 0.06) } }}
                 disabled={!canMutate || imageUploading}
                 startIcon={imageUploading ? <CircularProgress size={16} /> : <UploadFileIcon sx={{ fontSize: 18 }} />}
               >
@@ -3319,8 +3244,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
               border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
               borderRadius: '8px',
               bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.04),
-              boxShadow: `inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.04 : 0.45)}`,
-            }}
+              boxShadow: `inset 0 1px 0 ${alpha(theme.palette.common.white, theme.palette.mode === 'dark' ? 0.04 : 0.45)}` }}
           >
             <Box
               component="legend"
@@ -3337,8 +3261,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
                 alignItems: 'center',
                 overflowX: 'auto',
                 overflowY: 'visible',
-                minHeight: 56,
-              }}
+                minHeight: 56 }}
             >
               <svg ref={barcodeRef} style={{ maxWidth: 'min(100%, 360px)', width: 320, height: 'auto', display: 'block' }} />
             </Box>
@@ -3572,8 +3495,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
               SelectProps={{
                 displayEmpty: true,
                 renderValue: (selected) =>
-                  selected === '' ? t('inventoryManagement.form.selectLocation') : String(selected),
-              }}
+                  selected === '' ? t('inventoryManagement.form.selectLocation') : String(selected) }}
               sx={{ ...outlinedControlSx, flex: 1, minWidth: 0 }}
             >
               <MenuItem value="">
@@ -3742,8 +3664,7 @@ const InventoryForm: React.FC<InventoryFormProps> = ({
           pb: 2,
           gap: 1,
           borderTop: `1px solid ${alpha(theme.palette.divider, 0.85)}`,
-          bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03),
-        }}
+          bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.03) }}
       >
         <Box sx={{ flex: 1 }} />
         <Button onClick={onCancel} sx={{ textTransform: 'none', fontWeight: 600, borderRadius: '8px', px: 2 }}>

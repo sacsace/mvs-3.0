@@ -82,7 +82,7 @@ const PublicInfoPageLayout: React.FC<PublicInfoPageLayoutProps> = ({
           ...mvsMainSurfaceSx,
           width: '100%',
           borderRadius: '8px',
-          border: '1px solid #A8BDD0',
+          border: '1px solid #CBD5E1',
           boxShadow: '0 2px 10px rgba(36, 52, 71, 0.06)',
           px: { xs: 2, sm: 3 },
           py: { xs: 2.5, sm: 3 },
@@ -99,7 +99,7 @@ const PublicInfoPageLayout: React.FC<PublicInfoPageLayoutProps> = ({
       sx={{
         minHeight: '100vh',
         backgroundColor:
-          theme.palette.mode === 'light' ? '#F0F4F9' : theme.palette.grey[900],
+          theme.palette.mode === 'light' ? '#F1F5F9' : theme.palette.grey[900],
         py: { xs: 2.5, sm: 4 },
         px: { xs: 2, sm: 3 },
       }}

@@ -42,8 +42,7 @@ import {
   mvsBodyPrimaryBtnSx,
   mvsTableHeadHighlightSx,
   mvsTableBodyRowSx,
-  mvsTableScrollSx,
-} from '../../theme/mvsLayout';
+  mvsTableScrollSx } from '../../theme/mvsLayout';
 import {
   Warning as WarningIcon,
   CheckCircle as CheckCircleIcon,
@@ -65,9 +64,7 @@ import {
   Pie,
   Cell,
   BarChart,
-  Bar,
-  Legend
-} from 'recharts';
+  Bar } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import { alpha, useTheme } from '@mui/material/styles';
 import { inventoryService } from '../../services/api';
@@ -75,14 +72,14 @@ import { UTILS } from '../../constants';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 
 const INVENTORY_REPORT_MENU_ROUTES = ['/inventory/report', '/inventory'] as const;
+const CHART_COLORS = ['#4caf50', '#2196f3', '#ff9800', '#9c27b0', '#00bcd4', '#f44336'];
 
 const FILTER_OUTLINED = mvsOutlinedLabelProps;
 
 const reportFilterFieldSx = {
   ...(mvsSearchFieldSx as Record<string, unknown>),
   ...mvsFilterFieldHeightSx,
-  minWidth: 160,
-} as const;
+  minWidth: 160 } as const;
 
 interface InventoryStats {
   totalProducts: number;
@@ -210,28 +207,24 @@ const InventoryReport: React.FC = () => {
         return {
           label: t('inventoryStatus.rowStatus.outOfStock'),
           chipTone: 'error' as const,
-          icon: <ErrorIcon sx={{ ...is, color: alpha(theme.palette.error.main, 0.85) }} />,
-        };
+          icon: <ErrorIcon sx={{ ...is, color: alpha(theme.palette.error.main, 0.85) }} /> };
       }
       if (product.minStock > 0 && product.currentStock <= product.minStock) {
         return {
           label: t('inventoryStatus.rowStatus.lowStock'),
           chipTone: 'warning' as const,
-          icon: <WarningIcon sx={{ ...is, color: alpha(theme.palette.warning.main, 0.9) }} />,
-        };
+          icon: <WarningIcon sx={{ ...is, color: alpha(theme.palette.warning.main, 0.9) }} /> };
       }
       if (product.maxStock > 0 && product.currentStock >= product.maxStock * 0.9) {
         return {
           label: t('inventoryStatus.rowStatus.overstock'),
           chipTone: 'info' as const,
-          icon: <WarningIcon sx={{ ...is, color: alpha(theme.palette.info.main, 0.88) }} />,
-        };
+          icon: <WarningIcon sx={{ ...is, color: alpha(theme.palette.info.main, 0.88) }} /> };
       }
       return {
         label: t('inventoryStatus.rowStatus.normal'),
         chipTone: 'success' as const,
-        icon: <CheckCircleIcon sx={{ ...is, color: alpha(theme.palette.success.main, 0.85) }} />,
-      };
+        icon: <CheckCircleIcon sx={{ ...is, color: alpha(theme.palette.success.main, 0.85) }} /> };
     },
     [t, theme]
   );
@@ -262,7 +255,7 @@ const InventoryReport: React.FC = () => {
   const [products, setProducts] = useState<ProductReport[]>([]);
   const [categoryDistribution, setCategoryDistribution] = useState<any[]>([]);
   const [monthlyData, setMonthlyData] = useState<any[]>([]);
-  const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
+  const [, setLowStockProducts] = useState<any[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState('month');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [loading, setLoading] = useState(false);
@@ -277,8 +270,6 @@ const InventoryReport: React.FC = () => {
   const [txLoading, setTxLoading] = useState(false);
   const [txError, setTxError] = useState('');
   const [txTotal, setTxTotal] = useState(0);
-
-  const chartColors = ['#4caf50', '#2196f3', '#ff9800', '#9c27b0', '#00bcd4', '#f44336'];
 
   const loadReportData = useCallback(async () => {
     setLoading(true);
@@ -297,7 +288,7 @@ const InventoryReport: React.FC = () => {
         setStats(reportStats);
         setCategoryDistribution((catDist || []).map((item: any, index: number) => ({
           ...item,
-          color: item.color || chartColors[index % chartColors.length]
+          color: item.color || CHART_COLORS[index % CHART_COLORS.length]
         })));
         setMonthlyData(monthlyTransactions || []);
         setLowStockProducts(lowStock || []);
@@ -344,8 +335,7 @@ const InventoryReport: React.FC = () => {
         setProducts([]);
         setLoadError(t('inventoryReport.errors.productsLoadFailed'));
       }
-    } catch (error) {
-      console.error('재고 보고서 데이터 로드 실패:', error);
+    } catch {
       setLoadError(t('inventoryReport.errors.dataLoadError'));
       setProducts([]);
     } finally {
@@ -471,8 +461,7 @@ const InventoryReport: React.FC = () => {
         fontSize: '0.6875rem',
         border: `1px solid ${light ? 'rgba(15, 23, 42, 0.12)' : theme.palette.divider}`,
         bgcolor: light ? 'rgba(0, 0, 0, 0.02)' : alpha(theme.palette.common.white, 0.06),
-        color: 'text.secondary',
-      } as const;
+        color: 'text.secondary' } as const;
     }
     const main =
       tone === 'primary'
@@ -493,8 +482,7 @@ const InventoryReport: React.FC = () => {
       fontSize: '0.6875rem',
       border: `1px solid ${alpha(main, light ? 0.3 : 0.42)}`,
       bgcolor: alpha(main, light ? 0.08 : 0.12),
-      color: dark,
-    } as const;
+      color: dark } as const;
   };
 
   const txTypeChipSx = (c: 'default' | 'success' | 'error' | 'warning' | 'info') => {
@@ -514,8 +502,7 @@ const InventoryReport: React.FC = () => {
     textAlign: 'center',
     py: { xs: 6, sm: 8 },
     px: 3,
-    gap: 1.5,
-  } as const;
+    gap: 1.5 } as const;
 
   return (
     <Box sx={{ ...mvsPageRootSx }}>
@@ -567,8 +554,7 @@ const InventoryReport: React.FC = () => {
                 SelectProps={{
                   displayEmpty: true,
                   renderValue: (selected) =>
-                    selected === '' ? t('inventoryReport.allCategories') : String(selected),
-                }}
+                    selected === '' ? t('inventoryReport.allCategories') : String(selected) }}
                 sx={reportFilterFieldSx}
               >
                 <MenuItem value="">{t('inventoryReport.allCategories')}</MenuItem>
@@ -617,11 +603,9 @@ const InventoryReport: React.FC = () => {
           display: 'grid',
           gridTemplateColumns: {
             xs: '1fr',
-            md: 'repeat(4, 1fr)',
-          },
+            md: 'repeat(4, 1fr)' },
           gap: 2.5,
-          mb: 3,
-        }}
+          mb: 3 }}
       >
         <Card elevation={0} sx={mvsKpiCardSx}>
           <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
@@ -735,7 +719,7 @@ const InventoryReport: React.FC = () => {
                     dataKey="value"
                   >
                     {categoryDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color || chartColors[index % chartColors.length]} />
+                      <Cell key={`cell-${index}`} fill={entry.color || CHART_COLORS[index % CHART_COLORS.length]} />
                     ))}
                   </Pie>
                   <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
@@ -748,7 +732,7 @@ const InventoryReport: React.FC = () => {
                       sx={{
                         width: 12,
                         height: 12,
-                        backgroundColor: item.color || chartColors[index % chartColors.length],
+                        backgroundColor: item.color || CHART_COLORS[index % CHART_COLORS.length],
                         borderRadius: '50%',
                         mr: 1
                       }}
@@ -810,8 +794,7 @@ const InventoryReport: React.FC = () => {
                 <InputAdornment position="start">
                   <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
                 </InputAdornment>
-              ),
-            }}
+              ) }}
             sx={{ ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx, minWidth: 260 }}
           />
         </Box>
@@ -843,9 +826,7 @@ const InventoryReport: React.FC = () => {
                 '& .MuiTableCell-root': {
                   borderLeft: 'none',
                   borderRight: 'none',
-                  borderTop: 'none',
-                },
-              }}
+                  borderTop: 'none' } }}
             >
               <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
@@ -974,8 +955,7 @@ const InventoryReport: React.FC = () => {
                         onClick={menuFlags.canRead ? () => void openTxDialog(product) : undefined}
                         sx={{
                           cursor: menuFlags.canRead ? 'pointer' : 'default',
-                          '&:active': { bgcolor: menuFlags.canRead ? 'action.selected' : undefined },
-                        }}
+                          '&:active': { bgcolor: menuFlags.canRead ? 'action.selected' : undefined } }}
                       >
                         <TableCell>
                           <Typography variant="body2" fontWeight={600}>
@@ -1015,8 +995,7 @@ const InventoryReport: React.FC = () => {
                                 borderRadius: '4px',
                                 bgcolor:
                                   theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.08),
-                                '& .MuiLinearProgress-bar': { borderRadius: '4px' },
-                              }}
+                                '& .MuiLinearProgress-bar': { borderRadius: '4px' } }}
                             />
                             <Typography variant="caption">
                               {stockLevel.displayPercent == null
@@ -1048,8 +1027,7 @@ const InventoryReport: React.FC = () => {
                             size="small"
                             sx={{
                               ...softChipSx(statusInfo.chipTone),
-                              '& .MuiChip-icon': { color: 'inherit', opacity: 0.92, ml: '6px' },
-                            }}
+                              '& .MuiChip-icon': { color: 'inherit', opacity: 0.92, ml: '6px' } }}
                           />
                         </TableCell>
                         <TableCell>

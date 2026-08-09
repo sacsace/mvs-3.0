@@ -9,6 +9,7 @@ import LoginInfoTab from './LoginInfoTab';
 import LoginLog from './LoginLog';
 import Tenant from './Tenant';
 import Department from './Department';
+import Position from './Position';
 import Customer from './Customer';
 import Contract from './Contract';
 import SupportTicket from './SupportTicket';
@@ -78,6 +79,13 @@ import EmploymentContractAuditLog from './EmploymentContractAuditLog';
 (Department as any).belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 (User as any).belongsTo(Department, { foreignKey: 'department_id', as: 'departmentEntity' });
 (Department as any).hasMany(User, { foreignKey: 'department_id', as: 'users' });
+
+(Tenant as any).hasMany(Position, { foreignKey: 'tenant_id', as: 'positions' });
+(Position as any).belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(Company as any).hasMany(Position, { foreignKey: 'company_id', as: 'positions' });
+(Position as any).belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+(User as any).belongsTo(Position, { foreignKey: 'position_id', as: 'positionEntity' });
+(Position as any).hasMany(User, { foreignKey: 'position_id', as: 'users' });
 
 (Tenant as any).hasMany(Company, { foreignKey: 'tenant_id', as: 'companies' });
 (Company as any).belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
@@ -535,6 +543,7 @@ export {
   LoginLog,
   Tenant,
   Department,
+  Position,
   Customer,
   Contract,
   SupportTicket,

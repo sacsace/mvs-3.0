@@ -24,9 +24,6 @@ const getApiBaseUrl = (): string => {
       return normalizeApiUrl(fromEnv);
     }
     if (typeof window !== 'undefined' && window.location?.origin) {
-      console.warn(
-        '[MVS] REACT_APP_API_URL이 없습니다. 동일 오리진의 /api 로 요청합니다. API가 다른 호스트면 Railway 빌드에 REACT_APP_API_URL을 설정하세요.'
-      );
       return `${window.location.origin.replace(/\/+$/, '')}/api`;
     }
   }
@@ -53,7 +50,6 @@ const getApiBaseUrl = (): string => {
     const envPort = localhostMatch?.[2];
 
     if (envPort && envPort !== '5000') {
-      console.warn('⚠️ REACT_APP_API_URL가 프론트 포트로 설정됨. 5000으로 보정합니다:', envApiUrl);
       return 'http://localhost:5000/api';
     }
 

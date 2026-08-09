@@ -109,7 +109,7 @@ const editorContentSx = (minHeight: number): SxProps<Theme> => ({
       margin: '8px 0',
     },
     '& td, & th': {
-      border: '1px solid #C5CED9',
+      border: '1px solid #CBD5E1',
       padding: '6px 8px',
       minWidth: 48,
     },
@@ -271,7 +271,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
   return (
     <Box
       sx={{
-        border: '1px solid #C5CED9',
+        border: '1px solid #CBD5E1',
         borderRadius: 10,
         overflow: 'hidden',
         bgcolor: '#fff',
@@ -288,7 +288,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({
             gap: 0.25,
             px: 0.5,
             py: 0.5,
-            borderBottom: '1px solid #C5CED9',
+            borderBottom: '1px solid #CBD5E1',
             bgcolor: '#F5F7FA',
             borderTopLeftRadius: 'inherit',
             borderTopRightRadius: 'inherit',

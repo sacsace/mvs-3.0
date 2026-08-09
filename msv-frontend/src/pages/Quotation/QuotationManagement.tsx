@@ -14,7 +14,6 @@ import {
   Chip,
   TextField,
   FormControl,
-  InputLabel,
   Select,
   MenuItem,
   IconButton,
@@ -30,8 +29,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Autocomplete,
-} from '@mui/material';
+  Autocomplete } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
   mvsPageRootSx,
@@ -46,8 +44,7 @@ import {
   mvsFilterFieldHeightSx,
   mvsTableScrollSx,
   mvsTableHeadHighlightSx,
-  mvsTableBodyRowSx,
-} from '../../theme/mvsLayout';
+  mvsTableBodyRowSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
@@ -64,7 +61,7 @@ import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import AuthMedia from '../../components/Common/AuthMedia';
 import { useTranslation } from 'react-i18next';
-import { companyService, partnerService, quotationService, userService } from '../../services/api';
+import { companyService, quotationService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { downloadQuotationPdf } from '../../utils/quotationPdf';
 import { parseEmailRecipientsList } from '../../utils/emailRecipients';
@@ -186,8 +183,7 @@ const QUOTATION_APPROVE_BUTTON_SX = {
 
 const quotationFilterFieldSx = {
   ...(mvsSearchFieldSx as Record<string, unknown>),
-  ...mvsFilterFieldHeightSx,
-} as const;
+  ...mvsFilterFieldHeightSx } as const;
 
 /** 오늘(로컬) 기준 N일 후 YYYY-MM-DD — 견적 만료일 기본값 등 */
 function addDaysLocalIso(days: number): string {
@@ -260,8 +256,7 @@ const QuotationManagement: React.FC = () => {
       } else {
         setQuotations([]);
       }
-    } catch (error) {
-      console.error('견적서 데이터 로드 오류:', error);
+    } catch {
       setError(t('quotationManagement.loadFailed'));
     } finally {
       setLoading(false);
@@ -284,8 +279,8 @@ const QuotationManagement: React.FC = () => {
             email: u.email || ''
           }))
       );
-    } catch (e) {
-      console.error('사용자 목록 로드 오류:', e);
+    } catch {
+      /* ignore */
     }
   }, [user?.company_id]);
 
@@ -303,8 +298,8 @@ const QuotationManagement: React.FC = () => {
         setPartners(
           mapped.filter((p: PartnerCustomer) => p.name && p.name.toLowerCase() !== 'test industries')
         );
-    } catch (error) {
-      console.error('파트너 목록 로드 오류:', error);
+    } catch {
+      /* ignore */
     }
   }, []);
 
@@ -327,8 +322,8 @@ const QuotationManagement: React.FC = () => {
           company_logo: typeof data.company_logo === 'string' ? data.company_logo : ''
         });
       }
-    } catch (error) {
-      console.error('회사 정보 로드 오류:', error);
+    } catch {
+      /* ignore */
     }
   }, [user?.company_id]);
 
@@ -413,9 +408,7 @@ const QuotationManagement: React.FC = () => {
       whiteSpace: 'nowrap',
       px: 0.75,
       fontSize: { xs: '0.7rem', sm: '0.75rem' },
-      lineHeight: 1.2,
-    },
-  } as const;
+      lineHeight: 1.2 } } as const;
 
   const getStatusChip = (status: string) => {
     switch (status) {
@@ -471,8 +464,7 @@ const QuotationManagement: React.FC = () => {
           } else {
             setError(t('quotationManagement.deleteFailed'));
           }
-        } catch (error) {
-          console.error('삭제 오류:', error);
+        } catch {
           setError(t('quotationManagement.deleteFailed'));
         }
       },
@@ -592,7 +584,6 @@ const QuotationManagement: React.FC = () => {
       setIsEditing(false);
       setSelectedQuotation(null);
     } catch (error: any) {
-      console.error('저장 오류:', error);
       setError(error?.response?.data?.message || t('quotationManagement.saveFailed'));
     } finally {
       setLoading(false);
@@ -879,8 +870,7 @@ const QuotationManagement: React.FC = () => {
                             name: quotation.customerName,
                             email: quotation.customerEmail,
                             phone: quotation.customerPhone,
-                            address: quotation.customerAddress,
-                          },
+                            address: quotation.customerAddress },
                         ])
                       ).values()
                     )
@@ -980,8 +970,7 @@ const QuotationManagement: React.FC = () => {
                 bgcolor: '#FFFFFF',
                 '& .MuiTabs-indicator': {
                   height: 3,
-                  borderRadius: '3px 3px 0 0',
-                },
+                  borderRadius: '3px 3px 0 0' },
                 '& .MuiTab-root': {
                   textTransform: 'none',
                   fontWeight: 500,
@@ -989,13 +978,10 @@ const QuotationManagement: React.FC = () => {
                   minHeight: 40,
                   py: 0.75,
                   letterSpacing: '-0.01em',
-                  color: 'text.secondary',
-                },
+                  color: 'text.secondary' },
                 '& .MuiTab-root.Mui-selected': {
                   color: 'primary.main',
-                  fontWeight: 700,
-                },
-              }}
+                  fontWeight: 700 } }}
             >
               <Tab value="requested" label={t('quotationManagement.tabRequested')} />
               <Tab value="pending" label={t('quotationManagement.tabPendingApproval')} />
@@ -1013,8 +999,7 @@ const QuotationManagement: React.FC = () => {
                 display: 'grid',
                 gridTemplateColumns: { xs: '1fr', sm: '2fr 1fr 1fr auto' },
                 gap: 2,
-                alignItems: 'flex-end',
-              }}
+                alignItems: 'flex-end' }}
             >
                 <TextField
                   fullWidth
@@ -1029,8 +1014,7 @@ const QuotationManagement: React.FC = () => {
                       <InputAdornment position="start">
                         <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
                       </InputAdornment>
-                    ),
-                  }}
+                    ) }}
                   sx={quotationFilterFieldSx}
                 />
                 <TextField
@@ -1090,9 +1074,7 @@ const QuotationManagement: React.FC = () => {
                   '& .MuiTableCell-root': {
                     borderLeft: 'none',
                     borderRight: 'none',
-                    borderTop: 'none',
-                  },
-                }}
+                    borderTop: 'none' } }}
               >
                 <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
@@ -1123,8 +1105,7 @@ const QuotationManagement: React.FC = () => {
                           py: 0.75,
                           px: { xs: 0.5, sm: 1 },
                           verticalAlign: 'middle',
-                          whiteSpace: 'nowrap',
-                        }}
+                          whiteSpace: 'nowrap' }}
                       >
                         <Typography variant="body2" sx={{ fontWeight: 500, fontSize: { xs: '0.75rem', sm: '0.8125rem' } }}>
                           {quotation.quotationNumber}
@@ -1148,8 +1129,7 @@ const QuotationManagement: React.FC = () => {
                             lineHeight: 1.35,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
+                            whiteSpace: 'nowrap' }}
                         >
                           {quotation.customerName}
                         </Typography>
@@ -1173,8 +1153,7 @@ const QuotationManagement: React.FC = () => {
                             lineHeight: 1.35,
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
+                            whiteSpace: 'nowrap' }}
                           title={quotation.notes?.trim() || undefined}
                         >
                           {quotation.notes?.trim() || '—'}
@@ -1186,8 +1165,7 @@ const QuotationManagement: React.FC = () => {
                           px: { xs: 0.5, sm: 1 },
                           fontSize: { xs: '0.7rem', sm: '0.8125rem' },
                           verticalAlign: 'middle',
-                          whiteSpace: 'nowrap',
-                        }}
+                          whiteSpace: 'nowrap' }}
                       >
                         {quotation.issueDate}
                       </TableCell>
@@ -1196,8 +1174,7 @@ const QuotationManagement: React.FC = () => {
                           variant="body2"
                           sx={{
                             fontWeight: 500,
-                            fontSize: { xs: '0.7rem', sm: '0.8125rem' },
-                          }}
+                            fontSize: { xs: '0.7rem', sm: '0.8125rem' } }}
                         >
                           Rs. {quotation.totalAmount.toLocaleString()}
                         </Typography>
@@ -1208,8 +1185,7 @@ const QuotationManagement: React.FC = () => {
                           px: { xs: 0.5, sm: 1 },
                           fontSize: { xs: '0.7rem', sm: '0.8125rem' },
                           verticalAlign: 'middle',
-                          whiteSpace: 'nowrap',
-                        }}
+                          whiteSpace: 'nowrap' }}
                       >
                         {quotation.createdBy}
                       </TableCell>
@@ -1221,8 +1197,7 @@ const QuotationManagement: React.FC = () => {
                           px: 0.25,
                           verticalAlign: 'middle',
                           width: 56,
-                          whiteSpace: 'nowrap',
-                        }}
+                          whiteSpace: 'nowrap' }}
                       >
                         <Box
                           sx={{
@@ -1230,8 +1205,7 @@ const QuotationManagement: React.FC = () => {
                             flexWrap: 'nowrap',
                             gap: 0.25,
                             justifyContent: 'center',
-                            alignItems: 'center',
-                          }}
+                            alignItems: 'center' }}
                         >
                           {listTab === 'pending' && quotation.status === 'pending_approval' && (
                             <>
@@ -1622,8 +1596,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
         customerName: '',
         customerEmail: '',
         customerPhone: '',
-        customerAddress: '',
-      }));
+        customerAddress: '' }));
       return;
     }
     setFormData(prev => ({
@@ -1631,8 +1604,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
       customerName: selected.name,
       customerEmail: selected.email,
       customerPhone: selected.phone,
-      customerAddress: selected.address,
-    }));
+      customerAddress: selected.address }));
   };
 
   return (
@@ -1667,8 +1639,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                   width: 'auto',
                   height: 'auto',
                   objectFit: 'contain',
-                  mb: 1,
-                }}
+                  mb: 1 }}
               />
             ) : null}
             <Typography variant="caption" color="text.secondary">Company Name</Typography>
@@ -1814,8 +1785,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                     setApproverSubmitAttempted(false);
                     setFormData({
                       ...formData,
-                      approverUserId: newValue?.id ?? '',
-                    });
+                      approverUserId: newValue?.id ?? '' });
                   }}
                   renderOption={(props, option) => (
                     <Box component="li" {...props} key={option.id}>
@@ -2024,16 +1994,14 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                         ...prev,
                         taxType: 'igst',
                         cgstRate: 0,
-                        sgstRate: 0,
-                      }));
+                        sgstRate: 0 }));
                     } else {
                       setFormData(prev => ({
                         ...prev,
                         taxType: 'cgst_sgst',
                         igstRate: 0,
                         cgstRate: prev.cgstRate || 9,
-                        sgstRate: prev.sgstRate || 9,
-                      }));
+                        sgstRate: prev.sgstRate || 9 }));
                     }
                   }}
                 >

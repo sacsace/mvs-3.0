@@ -1043,7 +1043,7 @@ const LoginInfoExcelGrid = forwardRef<LoginInfoExcelGridHandle, Props>(function 
             whiteSpace: 'nowrap',
             ...(listViewMode === 'all'
               ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
-              : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+              : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
           }}
         >
           {t('loginInfoManagement.listView.viewAll')}
@@ -1065,7 +1065,7 @@ const LoginInfoExcelGrid = forwardRef<LoginInfoExcelGridHandle, Props>(function 
             whiteSpace: 'nowrap',
             ...(listViewMode === 'page'
               ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
-              : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+              : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
           }}
         >
           {t('loginInfoManagement.listView.viewPages')}

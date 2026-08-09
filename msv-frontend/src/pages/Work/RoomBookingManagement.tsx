@@ -250,7 +250,7 @@ const invoicePanelSx = {
   p: 1.25,
   height: '100%',
   borderRadius: '10px',
-  border: '1px solid #C5CED9',
+  border: '1px solid #CBD5E1',
   bgcolor: '#FAFBFC',
   boxSizing: 'border-box',
 } as const;
@@ -328,7 +328,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
   const menuFlags = useMenuRoutePermissionFlags(ROOM_BOOKING_MENU_ROUTES);
   // 페이지 등록·수정 권한이 있으면 과거 날짜 예약 허용
   const canManagePastCheckIn = menuFlags.canMutate;
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const [, setRooms] = useState<Room[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [filteredBookings, setFilteredBookings] = useState<Booking[]>([]);
   const [error, setError] = useState('');
@@ -513,8 +513,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       .catch(() => {});
   }, [user?.id]);
 
-  const readStoredInvoiceTaxRates = (): Record<string, StoredInvoiceTaxRate> => invoiceTaxSnapshot;
-
   const persistInvoiceTaxRate = (bookingId: number, next: StoredInvoiceTaxRate) => {
     setInvoiceTaxSnapshot((prev) => {
       const snapshot = { ...prev, [String(bookingId)]: next };
@@ -559,7 +557,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       Number.isFinite(Number(nightly)) ? String(Number(nightly.toFixed(2))) : ''
     );
     const autoRate = getAutoGstRate(nightly);
-    const storedRate = readStoredInvoiceTaxRates()[String(selectedBooking.id)];
+    const storedRate = invoiceTaxSnapshot[String(selectedBooking.id)];
     if (storedRate && Number.isFinite(storedRate.cgstRate) && Number.isFinite(storedRate.sgstRate)) {
       setCgstRate(Number(storedRate.cgstRate));
       setSgstRate(Number(storedRate.sgstRate));
@@ -604,8 +602,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
         } else {
           setIssuerCompany(null);
         }
-      } catch (error) {
-        console.error('회사 정보 로드 오류:', error);
+      } catch {
         setIssuerCompany(null);
       }
     };
@@ -693,9 +690,9 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
           });
           setRoomTypeMaster(Array.from(unique.values()));
         }
-      } catch (error) {
-        console.warn('객실 유형 목록 조회 실패:', error);
-      }
+      } catch {
+      /* ignore */
+    }
     };
 
     loadRoomTypes();
@@ -737,9 +734,9 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
             );
           setRoomTypeRooms(mapped);
         }
-      } catch (error) {
-        console.warn('객실 번호 목록 조회 실패:', error);
-      }
+      } catch {
+      /* ignore */
+    }
     };
 
     loadRoomTypeRooms();
@@ -950,7 +947,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
         setBookings([]);
       }
     } catch (error: any) {
-      console.error('예약 목록 조회 오류:', error);
       setError(error.response?.data?.message || t('roomBookingManagement.errors.loadListFailed'));
       setBookings([]);
     }
@@ -1213,7 +1209,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
         }
       }
     } catch (error: any) {
-      console.error('예약 저장 오류:', error);
       setError(error.response?.data?.message || t('roomBookingManagement.errors.saveFailed'));
     } finally {
       setSaving(false);
@@ -1230,7 +1225,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
         setError(response.message || t('roomBookingManagement.errors.deleteFailed'));
       }
     } catch (error: any) {
-      console.error('삭제 오류:', error);
       setError(error.response?.data?.message || t('roomBookingManagement.errors.deleteError'));
     }
   };
@@ -1261,7 +1255,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
         setError(response.message || t('roomBookingManagement.errors.checkinFailed'));
       }
     } catch (error: any) {
-      console.error('체크인 오류:', error);
       setError(error.response?.data?.message || t('roomBookingManagement.errors.checkinError'));
     }
   };
@@ -1276,7 +1269,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
         setError(response.message || t('roomBookingManagement.errors.checkoutFailed'));
       }
     } catch (error: any) {
-      console.error('체크아웃 오류:', error);
       setError(error.response?.data?.message || t('roomBookingManagement.errors.checkoutError'));
     }
   };
@@ -1359,7 +1351,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       );
       loadBookings();
     } catch (error: any) {
-      console.error('정산 완료 처리 오류:', error);
       setError(error.response?.data?.message || t('roomBookingManagement.errors.settlementError'));
     } finally {
       setSettling(false);
@@ -1376,7 +1367,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
         setError(response.message || t('roomBookingManagement.errors.cancelFailed'));
       }
     } catch (error: any) {
-      console.error('예약 취소 오류:', error);
       setError(error.response?.data?.message || t('roomBookingManagement.errors.cancelError'));
     }
   };
@@ -2009,6 +1999,8 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       void handlePrintInvoice();
     }, 0);
     setShouldAutoPrint(false);
+    // handlePrintInvoice is defined below buildInvoicePdf; stable one-shot auto-print only
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- see above
   }, [selectedBooking, shouldAutoPrint, viewMode]);
 
   const buildInvoicePdf = async (options?: {
@@ -2213,7 +2205,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
               </Box>
             </Box>
 
-            <Divider sx={{ mb: 1.5, borderColor: '#C5CED9' }} />
+            <Divider sx={{ mb: 1.5, borderColor: '#CBD5E1' }} />
 
             <Stack spacing={1} sx={{ mb: 1.5 }}>
               <Box sx={invoicePanelSx}>
@@ -2416,7 +2408,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                   maxWidth: 320,
                   p: 1.5,
                   borderRadius: '10px',
-                  border: '1px solid #C5CED9',
+                  border: '1px solid #CBD5E1',
                   bgcolor: '#FAFBFC',
                 }}
               >
@@ -2474,7 +2466,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     Rs. {formatCurrency(sgstAmount.toFixed(2))}
                   </Typography>
                 </Box>
-                <Divider sx={{ my: 1, borderColor: '#C5CED9' }} />
+                <Divider sx={{ my: 1, borderColor: '#CBD5E1' }} />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="subtitle2" fontWeight={700}>
                     Total
@@ -2492,7 +2484,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                   mb: 2,
                   p: 1.25,
                   borderRadius: '10px',
-                  border: '1px solid #C5CED9',
+                  border: '1px solid #CBD5E1',
                   bgcolor: '#FAFBFC',
                 }}
               >
@@ -2546,7 +2538,7 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
               justifyContent: 'flex-end',
               px: { xs: 2.5, md: 4 },
               py: 2,
-              borderTop: '1px solid #C5CED9',
+              borderTop: '1px solid #CBD5E1',
               bgcolor: '#F8FAFC',
             }}
           >

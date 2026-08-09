@@ -21,14 +21,12 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Pagination,
-} from '@mui/material';
+  Pagination } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
   mvsPageRootSx,
   mvsKpiCardSx,
   mvsBodyCardSx,
-  mvsBodyOutlinedBtnSx,
   mvsBodyPrimaryBtnSx,
   mvsBodySectionHeaderSx,
   mvsBodyListZoneSx,
@@ -38,20 +36,15 @@ import {
   mvsTableScrollSx,
   mvsTableHeadHighlightSx,
   mvsTableBodyRowSx,
-  mvsOutlinedLabelProps,
-} from '../../theme/mvsLayout';
+  mvsOutlinedLabelProps } from '../../theme/mvsLayout';
 import {
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
   Download as DownloadIcon,
   Search as SearchIcon,
-  AccountBalance as AccountBalanceIcon,
   ShowChart as ShowChartIcon,
   PieChart as PieChartIcon,
   BarChart as BarChartIcon,
   ReceiptLong as ReceiptLongIcon,
-  ShoppingCart as ShoppingCartIcon,
-} from '@mui/icons-material';
+  ShoppingCart as ShoppingCartIcon } from '@mui/icons-material';
 import {
   Line,
   XAxis,
@@ -66,8 +59,7 @@ import {
   Bar,
   Area,
   Legend,
-  ComposedChart,
-} from 'recharts';
+  ComposedChart } from 'recharts';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../../store';
@@ -101,8 +93,7 @@ const buildFiscalYearOptions = (now = new Date(), past = 3, future = 3): FyOptio
       startYear: y,
       start_date: `${y}-04-01`,
       end_date: `${y + 1}-03-31`,
-      label: `FY ${y}-${String(y + 1).slice(-2)}`,
-    });
+      label: `FY ${y}-${String(y + 1).slice(-2)}` });
   }
   return options;
 };
@@ -211,8 +202,7 @@ function TabPanel(props: TabPanelProps) {
 
 const accountingStatsFilterFieldSx = {
   ...(mvsSearchFieldSx as Record<string, unknown>),
-  ...mvsFilterFieldHeightSx,
-} as const;
+  ...mvsFilterFieldHeightSx } as const;
 
 const LIST_PAGE_SIZE = 10;
 
@@ -223,8 +213,7 @@ const listViewModeBarSx = {
   display: 'flex',
   flexWrap: 'wrap',
   alignItems: 'center',
-  gap: 0.75,
-} as const;
+  gap: 0.75 } as const;
 
 const listViewModeBtnSx = {
   height: 32,
@@ -235,8 +224,7 @@ const listViewModeBtnSx = {
   fontSize: '0.75rem',
   borderRadius: '10px',
   boxShadow: 'none',
-  whiteSpace: 'nowrap' as const,
-};
+  whiteSpace: 'nowrap' as const };
 
 const ListViewModeButtons: React.FC<{
   value: ListViewMode;
@@ -254,8 +242,7 @@ const ListViewModeButtons: React.FC<{
         ...listViewModeBtnSx,
         ...(value === 'all'
           ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
-          : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
-      }}
+          : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }) }}
     >
       {allLabel}
     </Button>
@@ -268,8 +255,7 @@ const ListViewModeButtons: React.FC<{
         ...listViewModeBtnSx,
         ...(value === 'page'
           ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
-          : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
-      }}
+          : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }) }}
     >
       {pageLabel}
     </Button>
@@ -279,8 +265,7 @@ const ListViewModeButtons: React.FC<{
 const bodyCardTableContainerSx = {
   ...mvsTableScrollSx,
   width: '100%',
-  maxWidth: '100%',
-} as const;
+  maxWidth: '100%' } as const;
 
 const listStateInlineSx = {
   display: 'flex',
@@ -288,8 +273,7 @@ const listStateInlineSx = {
   alignItems: 'center',
   justifyContent: 'center',
   py: 6,
-  px: 2,
-} as const;
+  px: 2 } as const;
 
 const AccountingStatistics: React.FC = () => {
   const theme = useTheme();
@@ -311,8 +295,7 @@ const AccountingStatistics: React.FC = () => {
     profitMargin: 0,
     revenueGrowth: 0,
     expenseGrowth: 0,
-    averageInvoiceAmount: 0,
-  });
+    averageInvoiceAmount: 0 });
   const [periodMode, setPeriodMode] = useState<PeriodMode>('fiscalYear');
   const fyOptions = useMemo(() => buildFiscalYearOptions(), []);
   const currentFyStartYear = useMemo(() => getIndiaFyStartYear(), []);
@@ -365,8 +348,7 @@ const AccountingStatistics: React.FC = () => {
       return {
         start_date: start,
         end_date: end,
-        label: t('purchaseSalesStats.appliedRange.byDate', { start: start || '-', end: end || '-' }),
-      };
+        label: t('purchaseSalesStats.appliedRange.byDate', { start: start || '-', end: end || '-' }) };
     }
     if (!selectedFy) {
       return { start_date: '', end_date: '', label: '' };
@@ -377,15 +359,12 @@ const AccountingStatistics: React.FC = () => {
         ...range,
         label: t('purchaseSalesStats.appliedRange.byQuarter', {
           fy: selectedFy.label,
-          quarterLabel: getQuarterLabel(selectedQuarter),
-        }),
-      };
+          quarterLabel: getQuarterLabel(selectedQuarter) }) };
     }
     return {
       start_date: selectedFy.start_date,
       end_date: selectedFy.end_date,
-      label: t('purchaseSalesStats.appliedRange.byFiscalYear', { fy: selectedFy.label }),
-    };
+      label: t('purchaseSalesStats.appliedRange.byFiscalYear', { fy: selectedFy.label }) };
   }, [periodMode, dateFrom, dateTo, selectedFy, selectedQuarter, t, getQuarterLabel]);
 
   // 언어 전환 시 적용 기간 문구만 갱신
@@ -434,8 +413,8 @@ const AccountingStatistics: React.FC = () => {
       if (response.data.success) {
         setCompanies(response.data.data || []);
       }
-    } catch (error) {
-      console.error('회사 목록 로드 오류:', error);
+    } catch {
+      /* ignore */
     }
   };
 
@@ -455,8 +434,7 @@ const AccountingStatistics: React.FC = () => {
     try {
       const params: any = {
         start_date: range.start_date,
-        end_date: range.end_date,
-      };
+        end_date: range.end_date };
 
       if (selectedCompanyId) {
         params.company_id = selectedCompanyId;
@@ -482,8 +460,7 @@ const AccountingStatistics: React.FC = () => {
           profitMargin: data.profitMargin || 0,
           revenueGrowth: data.revenueGrowth || 0,
           expenseGrowth: data.expenseGrowth || 0,
-          averageInvoiceAmount: data.averageInvoiceAmount || 0,
-        });
+          averageInvoiceAmount: data.averageInvoiceAmount || 0 });
         setMonthlyRevenueData(Array.isArray(data.monthlyRevenueData) ? data.monthlyRevenueData : []);
         setCategoryExpenseData(Array.isArray(data.categoryExpenseData) ? data.categoryExpenseData : []);
         setCategoryRevenueData(Array.isArray(data.categoryRevenueData) ? data.categoryRevenueData : []);
@@ -511,8 +488,7 @@ const AccountingStatistics: React.FC = () => {
           profitMargin: 0,
           revenueGrowth: 0,
           expenseGrowth: 0,
-          averageInvoiceAmount: 0,
-        });
+          averageInvoiceAmount: 0 });
         setMonthlyRevenueData([]);
         setCategoryExpenseData([]);
         setCategoryRevenueData([]);
@@ -526,7 +502,6 @@ const AccountingStatistics: React.FC = () => {
         setPurchasePaidTotal(0);
       }
     } catch (error) {
-      console.error('통계 데이터 로드 실패:', error);
       setError(t('purchaseSalesStats.errors.loadFailed'));
       setStats({
         totalRevenue: 0,
@@ -543,8 +518,7 @@ const AccountingStatistics: React.FC = () => {
         profitMargin: 0,
         revenueGrowth: 0,
         expenseGrowth: 0,
-        averageInvoiceAmount: 0,
-      });
+        averageInvoiceAmount: 0 });
       setMonthlyRevenueData([]);
       setCategoryExpenseData([]);
       setCategoryRevenueData([]);
@@ -597,8 +571,7 @@ const AccountingStatistics: React.FC = () => {
       in_review: { labelKey: 'purchaseSalesStats.expenseStatus.in_review', color: 'warning' },
       approved: { labelKey: 'purchaseSalesStats.expenseStatus.approved', color: 'success' },
       rejected: { labelKey: 'purchaseSalesStats.expenseStatus.rejected', color: 'error' },
-      paid: { labelKey: 'purchaseSalesStats.expenseStatus.paid', color: 'success' },
-    };
+      paid: { labelKey: 'purchaseSalesStats.expenseStatus.paid', color: 'success' } };
     const key = String(status || '').toLowerCase();
     const item = map[key];
     const label = item ? t(item.labelKey) : status || '-';
@@ -664,8 +637,7 @@ const AccountingStatistics: React.FC = () => {
       기간: row.day || row.quarter || row.month || '-',
       수익: row.revenue || 0,
       비용: row.expenses || 0,
-      순이익: row.profit || 0,
-      예산: row.budget || 0
+      순이익: row.profit || 0
     }));
 
     const invoiceRows = invoiceStatusData.map((row) => ({
@@ -694,8 +666,7 @@ const AccountingStatistics: React.FC = () => {
       공급가액: row.amount - row.tax_amount,
       세액: row.tax_amount,
       합계: row.amount,
-      결제상태: row.payment_status,
-    }));
+      결제상태: row.payment_status }));
 
     const purchaseRows = purchaseList.map((row) => ({
       문서번호: row.document_number,
@@ -706,8 +677,7 @@ const AccountingStatistics: React.FC = () => {
       용도: row.purpose,
       금액: row.amount,
       상태: row.status,
-      지급상태: row.payment_status,
-    }));
+      지급상태: row.payment_status }));
 
     const ExcelJS = (await import('exceljs')).default;
     const { addSheetFromObjects, downloadExcelWorkbook } = await import('../../utils/excelExportStyle');
@@ -755,8 +725,7 @@ const AccountingStatistics: React.FC = () => {
               용도: '',
               금액: purchaseTotal,
               상태: '',
-              지급상태: '',
-            },
+              지급상태: '' },
           ]
         : [
             {
@@ -768,8 +737,7 @@ const AccountingStatistics: React.FC = () => {
               용도: '-',
               금액: 0,
               상태: '-',
-              지급상태: '-',
-            },
+              지급상태: '-' },
           ]
     );
 
@@ -816,8 +784,7 @@ const AccountingStatistics: React.FC = () => {
             flexWrap: 'wrap',
             alignItems: 'flex-end',
             gap: 1.25,
-            ...accountingStatsFilterFieldSx,
-          }}
+            ...accountingStatsFilterFieldSx }}
         >
           {canSelectCompany && (
             <TextField
@@ -953,14 +920,12 @@ const AccountingStatistics: React.FC = () => {
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75, fontSize: '0.72rem', lineHeight: 1.35 }}>
                 {t('purchaseSalesStats.kpi.collectedOutstanding', {
                   collected: formatCurrency(stats.collectedRevenue || 0),
-                  outstanding: formatCurrency(stats.outstandingRevenue || 0),
-                })}
+                  outstanding: formatCurrency(stats.outstandingRevenue || 0) })}
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.35, fontSize: '0.72rem', lineHeight: 1.35 }}>
                 {t('purchaseSalesStats.kpi.roomBookingNote', {
                   roomBooking: formatCurrency(stats.roomBookingRevenue || 0),
-                  combined: formatCurrency(stats.combinedRevenue || stats.totalRevenue),
-                })}
+                  combined: formatCurrency(stats.combinedRevenue || stats.totalRevenue) })}
               </Typography>
             </CardContent>
           </Card>
@@ -976,8 +941,7 @@ const AccountingStatistics: React.FC = () => {
               </Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
                 {t('purchaseSalesStats.kpi.vsLastMonth', {
-                  percent: `${stats.expenseGrowth > 0 ? '+' : ''}${stats.expenseGrowth}`,
-                })}
+                  percent: `${stats.expenseGrowth > 0 ? '+' : ''}${stats.expenseGrowth}` })}
               </Typography>
             </CardContent>
           </Card>
@@ -1039,17 +1003,14 @@ const AccountingStatistics: React.FC = () => {
                   minHeight: 48,
                   py: 1.5,
                   letterSpacing: '-0.01em',
-                  color: 'text.secondary',
-                },
-                '& .MuiTab-root.Mui-selected': { color: 'primary.main', fontWeight: 700 },
-              }}
+                  color: 'text.secondary' },
+                '& .MuiTab-root.Mui-selected': { color: 'primary.main', fontWeight: 700 } }}
             >
               <Tab icon={<ReceiptLongIcon />} iconPosition="start" label={t('purchaseSalesStats.tabs.sales')} />
               <Tab icon={<ShoppingCartIcon />} iconPosition="start" label={t('purchaseSalesStats.tabs.purchase')} />
               <Tab icon={<ShowChartIcon />} iconPosition="start" label={t('purchaseSalesStats.tabs.trend')} />
               <Tab icon={<PieChartIcon />} iconPosition="start" label={t('purchaseSalesStats.tabs.categoryAnalysis')} />
               <Tab icon={<BarChartIcon />} iconPosition="start" label={t('purchaseSalesStats.tabs.invoiceStatus')} />
-              <Tab icon={<AccountBalanceIcon />} iconPosition="start" label={t('purchaseSalesStats.tabs.budgetVsActual')} />
             </Tabs>
           </Card>
 
@@ -1101,9 +1062,7 @@ const AccountingStatistics: React.FC = () => {
                         '& .MuiTableCell-root': {
                           borderLeft: 'none',
                           borderRight: 'none',
-                          borderTop: 'none',
-                        },
-                      }}
+                          borderTop: 'none' } }}
                     >
                       <TableHead sx={mvsTableHeadHighlightSx}>
                         <TableRow>
@@ -1171,8 +1130,7 @@ const AccountingStatistics: React.FC = () => {
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                     {t('purchaseSalesStats.purchase.subtitle', {
                       count: purchaseList.length,
-                      paidTotal: formatCurrency(purchasePaidTotal),
-                    })}
+                      paidTotal: formatCurrency(purchasePaidTotal) })}
                   </Typography>
                 </Box>
                 <Box sx={{ textAlign: 'right' }}>
@@ -1211,9 +1169,7 @@ const AccountingStatistics: React.FC = () => {
                         '& .MuiTableCell-root': {
                           borderLeft: 'none',
                           borderRight: 'none',
-                          borderTop: 'none',
-                        },
-                      }}
+                          borderTop: 'none' } }}
                     >
                       <TableHead sx={mvsTableHeadHighlightSx}>
                         <TableRow>
@@ -1507,105 +1463,6 @@ const AccountingStatistics: React.FC = () => {
                           </Typography>
                         </Box>
                       </Stack>
-                  </Box>
-                </Card>
-              </Grid>
-            </Grid>
-          </TabPanel>
-
-          {/* 예산 대비 실적 */}
-          <TabPanel value={activeTab} index={5}>
-            <Grid container spacing={2.5}>
-              <Grid size={{ xs: 12 }}>
-                <Card elevation={0} sx={mvsBodyCardSx}>
-                  <Box sx={mvsBodySectionHeaderSx}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
-                      {t('purchaseSalesStats.budget.analysis')}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2.5 }}>
-                      <ResponsiveContainer width="100%" height={400}>
-                        <ComposedChart data={monthlyRevenueData}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="month" />
-                          <YAxis tickFormatter={formatAxisAmount} />
-                          <RechartsTooltip 
-                            formatter={(value: number) => formatCurrency(value)}
-                          />
-                          <Legend />
-                          <Bar dataKey="budget" fill="#9e9e9e" name={t('purchaseSalesStats.chart.budget')} />
-                          <Line 
-                            type="monotone" 
-                            dataKey="revenue" 
-                            stroke="#4caf50" 
-                            strokeWidth={3}
-                            name={t('purchaseSalesStats.chart.actualRevenue')}
-                          />
-                        </ComposedChart>
-                      </ResponsiveContainer>
-                  </Box>
-                </Card>
-              </Grid>
-              <Grid size={{ xs: 12 }}>
-                <Card elevation={0} sx={mvsBodyCardSx}>
-                  <Box sx={mvsBodySectionHeaderSx}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
-                      {t('purchaseSalesStats.budget.monthlyDetail')}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ ...mvsBodyListZoneSx, mt: 0, pb: 0 }}>
-                    <TableContainer sx={bodyCardTableContainerSx}>
-                        <Table
-                          size="small"
-                          sx={{
-                            borderCollapse: 'collapse',
-                            bgcolor: 'transparent',
-                            '& .MuiTableCell-root': {
-                              borderLeft: 'none',
-                              borderRight: 'none',
-                              borderTop: 'none',
-                            },
-                          }}
-                        >
-                          <TableHead sx={mvsTableHeadHighlightSx}>
-                            <TableRow>
-                              <TableCell>{t('purchaseSalesStats.columns.month')}</TableCell>
-                              <TableCell align="right">{t('purchaseSalesStats.columns.budget')}</TableCell>
-                              <TableCell align="right">{t('purchaseSalesStats.columns.actualRevenue')}</TableCell>
-                              <TableCell align="right">{t('purchaseSalesStats.columns.difference')}</TableCell>
-                              <TableCell align="right">{t('purchaseSalesStats.columns.achievementRate')}</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody sx={mvsTableBodyRowSx}>
-                            {monthlyRevenueData.map((row, index) => {
-                              const difference = row.revenue - row.budget;
-                              const achievementRate = ((row.revenue / row.budget) * 100).toFixed(1);
-                              return (
-                                <TableRow key={index}>
-                                  <TableCell>{row.month}</TableCell>
-                                  <TableCell align="right">{formatCurrency(row.budget)}</TableCell>
-                                  <TableCell align="right">{formatCurrency(row.revenue)}</TableCell>
-                                  <TableCell align="right">
-                                    <Typography 
-                                      variant="body2" 
-                                      color={difference >= 0 ? 'success.main' : 'error.main'}
-                                    >
-                                      {difference >= 0 ? '+' : ''}{formatCurrency(difference)}
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell align="right">
-                                    <Chip
-                                      label={`${achievementRate}%`}
-                                      color={parseFloat(achievementRate) >= 100 ? 'success' : 'warning'}
-                                      size="small"
-                                    />
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
                   </Box>
                 </Card>
               </Grid>

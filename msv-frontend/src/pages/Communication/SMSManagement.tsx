@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -12,12 +12,8 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Chip,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
   MenuItem,
   IconButton,
   Dialog,
@@ -29,45 +25,19 @@ import {
   Snackbar,
   InputAdornment,
   Divider,
-  Avatar,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar,
-  Badge,
-  Stack,
-  ToggleButton,
-  ToggleButtonGroup,
   Pagination
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
-  Edit as EditIcon,
   Delete as DeleteIcon,
   Visibility as ViewIcon,
   Search as SearchIcon,
   FilterList as FilterIcon,
   Sms as SmsIcon,
   Send as SendIcon,
-  Edit as DraftIcon,
-  Inbox as InboxIcon,
-  Outbox as OutboxIcon,
-  Schedule as ScheduleIcon,
-  CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon,
-  Refresh as RefreshIcon,
-  Print as PrintIcon,
-  Download as DownloadIcon,
-  Person as PersonIcon,
-  Group as GroupIcon,
-  Phone as PhoneIcon,
-  Message as MessageIcon,
-  ScheduleSend as ScheduleSendIcon,
-  History as HistoryIcon
-} from '@mui/icons-material';
-import { useStore } from '../../store';
+  Print as PrintIcon } from '@mui/icons-material';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
@@ -88,12 +58,70 @@ interface SMS {
   characterCount: number;
 }
 
+const SAMPLE_SMS: SMS[] = [
+  {
+    id: 1,
+    recipient: '김고객',
+    recipientPhone: '010-1234-5678',
+    content: '안녕하세요. 주문하신 상품이 배송되었습니다. 감사합니다.',
+    status: 'delivered',
+    priority: 'normal',
+    type: 'individual',
+    sentAt: '2024-01-15 14:30:00',
+    deliveredAt: '2024-01-15 14:30:15',
+    createdAt: '2024-01-15 14:25:00',
+    createdBy: '배송팀',
+    cost: 20,
+    characterCount: 45
+  },
+  {
+    id: 2,
+    recipient: '전체 직원',
+    recipientPhone: '그룹 발송',
+    content: '내일 회의가 오후 3시로 변경되었습니다. 참석 부탁드립니다.',
+    status: 'sent',
+    priority: 'high',
+    type: 'group',
+    sentAt: '2024-01-14 16:20:00',
+    createdAt: '2024-01-14 16:15:00',
+    createdBy: '관리자',
+    cost: 200,
+    characterCount: 38
+  },
+  {
+    id: 3,
+    recipient: '이손님',
+    recipientPhone: '010-2345-6789',
+    content: '결제가 완료되었습니다. 영수증을 확인해 주세요.',
+    status: 'scheduled',
+    priority: 'normal',
+    type: 'individual',
+    scheduledAt: '2024-01-16 09:00:00',
+    createdAt: '2024-01-13 10:30:00',
+    createdBy: '결제팀',
+    cost: 20,
+    characterCount: 28
+  },
+  {
+    id: 4,
+    recipient: '박VIP',
+    recipientPhone: '010-3456-7890',
+    content: 'VIP 고객님께 특별 할인 혜택을 제공합니다.',
+    status: 'failed',
+    priority: 'urgent',
+    type: 'individual',
+    createdAt: '2024-01-12 15:45:00',
+    createdBy: '마케팅팀',
+    cost: 0,
+    characterCount: 25
+  }
+];
+
 const SMSManagement: React.FC = () => {
-  const { user } = useStore();
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [smsList, setSmsList] = useState<SMS[]>([]);
   const [filteredSms, setFilteredSms] = useState<SMS[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
@@ -105,88 +133,19 @@ const SMSManagement: React.FC = () => {
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
-  // 샘플 데이터
-  const sampleSMS: SMS[] = [
-    {
-      id: 1,
-      recipient: '김고객',
-      recipientPhone: '010-1234-5678',
-      content: '안녕하세요. 주문하신 상품이 배송되었습니다. 감사합니다.',
-      status: 'delivered',
-      priority: 'normal',
-      type: 'individual',
-      sentAt: '2024-01-15 14:30:00',
-      deliveredAt: '2024-01-15 14:30:15',
-      createdAt: '2024-01-15 14:25:00',
-      createdBy: '배송팀',
-      cost: 20,
-      characterCount: 45
-    },
-    {
-      id: 2,
-      recipient: '전체 직원',
-      recipientPhone: '그룹 발송',
-      content: '내일 회의가 오후 3시로 변경되었습니다. 참석 부탁드립니다.',
-      status: 'sent',
-      priority: 'high',
-      type: 'group',
-      sentAt: '2024-01-14 16:20:00',
-      createdAt: '2024-01-14 16:15:00',
-      createdBy: '관리자',
-      cost: 200,
-      characterCount: 38
-    },
-    {
-      id: 3,
-      recipient: '이손님',
-      recipientPhone: '010-2345-6789',
-      content: '결제가 완료되었습니다. 영수증을 확인해 주세요.',
-      status: 'scheduled',
-      priority: 'normal',
-      type: 'individual',
-      scheduledAt: '2024-01-16 09:00:00',
-      createdAt: '2024-01-13 10:30:00',
-      createdBy: '결제팀',
-      cost: 20,
-      characterCount: 28
-    },
-    {
-      id: 4,
-      recipient: '박VIP',
-      recipientPhone: '010-3456-7890',
-      content: 'VIP 고객님께 특별 할인 혜택을 제공합니다.',
-      status: 'failed',
-      priority: 'urgent',
-      type: 'individual',
-      createdAt: '2024-01-12 15:45:00',
-      createdBy: '마케팅팀',
-      cost: 0,
-      characterCount: 25
-    }
-  ];
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  useEffect(() => {
-    filterSMS();
-  }, [smsList, searchTerm, statusFilter, typeFilter]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
-      setSmsList(sampleSMS);
-    } catch (error) {
-      console.error('데이터 로드 오류:', error);
+      setSmsList(SAMPLE_SMS);
+    } catch {
       setError('데이터를 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const filterSMS = () => {
+  const filterSMS = useCallback(() => {
     let filtered = smsList;
 
     if (searchTerm) {
@@ -206,7 +165,15 @@ const SMSManagement: React.FC = () => {
     }
 
     setFilteredSms(filtered);
-  };
+  }, [smsList, searchTerm, statusFilter, typeFilter]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    filterSMS();
+  }, [filterSMS]);
 
   const getStatusChip = (status: string) => {
     switch (status) {
@@ -265,8 +232,7 @@ const SMSManagement: React.FC = () => {
         try {
           setSmsList((prev) => prev.filter((sms) => sms.id !== id));
           setSuccess('SMS가 성공적으로 삭제되었습니다.');
-        } catch (error) {
-          console.error('삭제 오류:', error);
+        } catch {
           setError('삭제 중 오류가 발생했습니다.');
         }
       },
@@ -292,7 +258,6 @@ const SMSManagement: React.FC = () => {
   const totalSMS = smsList.length;
   const sentSMS = smsList.filter(sms => sms.status === 'sent' || sms.status === 'delivered').length;
   const scheduledSMS = smsList.filter(sms => sms.status === 'scheduled').length;
-  const failedSMS = smsList.filter(sms => sms.status === 'failed').length;
   const totalCost = smsList.reduce((sum, sms) => sum + sms.cost, 0);
 
   const paginatedSMS = filteredSms.slice(
@@ -493,8 +458,7 @@ const SMSManagement: React.FC = () => {
                   <InputAdornment position="start">
                     <SearchIcon />
                   </InputAdornment>
-                ),
-              }}
+                ) }}
             />
             <TextField
               fullWidth

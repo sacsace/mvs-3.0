@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -62,7 +62,7 @@ const reservationMonthNavSx = {
   py: 0.25,
   borderRadius: '10px',
   bgcolor: '#F1F5F9',
-  border: '1px solid #C5CED9',
+  border: '1px solid #CBD5E1',
 } as const;
 
 type BookingStatus = 'pending' | 'confirmed' | 'checked_in' | 'checked_out' | 'cancelled' | 'no_show';
@@ -240,7 +240,7 @@ const ReservationStatus: React.FC = () => {
     return dates;
   }, [monthStart, monthEnd]);
 
-  const loadBookings = async () => {
+  const loadBookings = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
@@ -254,18 +254,17 @@ const ReservationStatus: React.FC = () => {
         setBookings([]);
         setError(response.message || t('reservationStatus.errors.loadFailed'));
       }
-    } catch (err) {
-      console.error('예약 데이터 로드 오류:', err);
+    } catch {
       setBookings([]);
       setError(t('reservationStatus.errors.loadFailed'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [monthStart, monthEnd, t]);
 
   useEffect(() => {
     loadBookings();
-  }, [monthStart, monthEnd]);
+  }, [loadBookings]);
 
   useEffect(() => {
     const loadRoomTypes = async () => {
@@ -281,9 +280,9 @@ const ReservationStatus: React.FC = () => {
             .filter((item: { name: string }) => !!item.name);
           setRoomTypes(mapped);
         }
-      } catch (err) {
-        console.warn('객실 유형 목록 조회 실패:', err);
-      }
+      } catch {
+      /* ignore */
+    }
     };
 
     loadRoomTypes();
@@ -310,9 +309,9 @@ const ReservationStatus: React.FC = () => {
           setRoomNameMap(nameMap);
           setRoomIdMap(idMap);
         }
-      } catch (err) {
-        console.warn('객실 호실명 목록 조회 실패:', err);
-      }
+      } catch {
+      /* ignore */
+    }
     };
     loadRoomNames();
   }, []);
@@ -405,7 +404,7 @@ const ReservationStatus: React.FC = () => {
       groups.get(typeKey)!.push(room);
     });
     return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [filteredRooms]);
+  }, [filteredRooms, t]);
 
   const bookingDaysByRoom = useMemo(() => {
     const map = new Map<string, Set<string>>();
@@ -864,8 +863,8 @@ const ReservationStatus: React.FC = () => {
           return next;
         });
       }
-    } catch (err) {
-      console.warn('객실 호실명 저장 실패:', err);
+    } catch {
+      /* ignore */
     } finally {
       setRoomNameDialogOpen(false);
     }

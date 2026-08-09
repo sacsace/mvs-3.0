@@ -29,16 +29,19 @@ import {
   Menu as MenuIcon,
   OpenInNew as OpenInNewIcon,
   AccessTime as AccessTimeIcon,
+  ExpandMore as ExpandMoreIcon,
+  Inbox as InboxIcon,
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
-import { api, userUiPreferencesService } from '../../services/api';
+import { api, userUiPreferencesService, userService } from '../../services/api';
 import { resolveHeaderCompanyInfo } from '../../store/referenceDataStore';
 import { useTranslation } from 'react-i18next';
-import i18n, { ensureI18nLanguage } from '../../locales/i18n';
+import { ensureI18nLanguage } from '../../locales/i18n';
 import { useErrorStore } from '../../store/errorStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { useNavigate, useLocation } from 'react-router-dom';
 import FullMenuOverlay from './FullMenuOverlay';
+import HeaderNav from './HeaderNav';
 import AuthMedia from '../Common/AuthMedia';
 import NotificationDetailDialog from '../Notifications/NotificationDetailDialog';
 import {
@@ -47,9 +50,9 @@ import {
   buildNotificationsFromSources,
   getNotificationChipColor,
   getNotificationChipLabel,
-  ServerNotificationItem,
-} from '../../utils/notificationFeed';
+  ServerNotificationItem } from '../../utils/notificationFeed';
 import { useNotificationFeed } from '../../hooks/useNotificationFeed';
+import { getUploadUrl } from '../../utils/uploadUrl';
 
 interface CalendarScheduleItem {
   id: string;
@@ -61,18 +64,13 @@ interface HeaderProps {
   showMobileNav?: boolean;
   mobileNavOpen?: boolean;
   onMobileNavToggle?: () => void;
-  sidebarIconOnly?: boolean;
-  onSidebarIconOnlyToggle?: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
   showMobileNav = false,
   mobileNavOpen = false,
-  onMobileNavToggle,
-  sidebarIconOnly = false,
-  onSidebarIconOnlyToggle,
-}) => {
-  const { user, logout } = useStore();
+  onMobileNavToggle }) => {
+  const { user, logout, updateUser } = useStore();
   const { language, setLanguage } = useMenuStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -81,6 +79,7 @@ const Header: React.FC<HeaderProps> = ({
   const isAiRoute =
     location.pathname.startsWith('/ai') ||
     /^\/(cost-analysis|efficiency|forecasting|recommendations)(\/|$)/.test(location.pathname);
+  const userAvatarSrc = getUploadUrl(user?.avatar_url) || undefined;
   const { errors, notifications } = useErrorStore();
   const {
     items: notificationItems,
@@ -88,11 +87,10 @@ const Header: React.FC<HeaderProps> = ({
     mergeFromSources,
     markRead,
     markAllRead,
-    dismissAllFromHeader,
-  } = useNotificationStore();
+    dismissAllFromHeader } = useNotificationStore();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [languageAnchorEl, setLanguageAnchorEl] = useState<null | HTMLElement>(null);
-  const [notificationAnchorEl, setNotificationAnchorEl] = useState<null | HTMLElement>(null);
+  const [updatesAnchorEl, setUpdatesAnchorEl] = useState<null | HTMLElement>(null);
   const [fullMenuOpen, setFullMenuOpen] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<AppNotification | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
@@ -116,8 +114,7 @@ const Header: React.FC<HeaderProps> = ({
       minute: '2-digit',
       second: '2-digit',
       hour12: false,
-      timeZone: 'Asia/Kolkata',
-    });
+      timeZone: 'Asia/Kolkata' });
   }, [now, language]);
 
   useEffect(() => {
@@ -134,13 +131,31 @@ const Header: React.FC<HeaderProps> = ({
     };
   }, [user?.company_id, user?.id]);
 
+  /** 기존 세션에도 프로필 사진이 반영되도록 avatar_url을 보강 */
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    userService
+      .getMyProfile()
+      .then((response) => {
+        if (cancelled || !response?.success || !response.data) return;
+        const nextAvatar = response.data.avatar_url ?? null;
+        if ((user.avatar_url || null) !== nextAvatar) {
+          updateUser({ avatar_url: nextAvatar });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, updateUser]);
+
   const cleanCompanyName = (name: string) => {
     if (!name) return '';
     return name
       .replace(/\s+(Private Limited|Pvt Ltd|LLP|Ltd|Inc|Corp|Corporation|Company|Co\.|Limited)$/gi, '')
       .trim() || '';
   };
-
 
   const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -201,8 +216,7 @@ const Header: React.FC<HeaderProps> = ({
   useNotificationFeed({
     userId: user?.id,
     onServerNotifications: setServerNotifications,
-    onInboxActions: setInboxActions,
-  });
+    onInboxActions: setInboxActions });
 
   useEffect(() => {
     const merged = buildNotificationsFromSources({
@@ -210,8 +224,7 @@ const Header: React.FC<HeaderProps> = ({
       clientNotifications: notifications,
       errors,
       inboxActions,
-      t,
-    });
+      t });
     mergeFromSources(merged);
   }, [errors, notifications, serverNotifications, inboxActions, t, mergeFromSources]);
 
@@ -271,9 +284,9 @@ const Header: React.FC<HeaderProps> = ({
             [tomorrowKey]: todayKey
           }
         });
-      } catch (error) {
-        console.error('회사 휴일 사전 알림 처리 오류:', error);
-      }
+      } catch {
+      /* ignore */
+    }
     };
 
     checkCompanyHolidayReminder();
@@ -299,30 +312,32 @@ const Header: React.FC<HeaderProps> = ({
     [displayNotificationFeed]
   );
 
-  const handleNotificationMenu = (event: React.MouseEvent<HTMLElement>) => {
-    setNotificationAnchorEl(event.currentTarget);
+  const handleUpdatesMenu = (event: React.MouseEvent<HTMLElement>) => {
+    setUpdatesAnchorEl(event.currentTarget);
   };
 
-  const handleNotificationClose = () => {
-    setNotificationAnchorEl(null);
+  const handleUpdatesClose = () => {
+    setUpdatesAnchorEl(null);
   };
 
   const handleOpenNotificationDetail = (item: AppNotification) => {
     setSelectedNotification(item);
     setDetailDialogOpen(true);
     markRead(item.id);
-    handleNotificationClose();
+    handleUpdatesClose();
   };
 
   const handleOpenNotificationsPage = () => {
     navigate('/notifications');
-    handleNotificationClose();
+    handleUpdatesClose();
   };
 
   const handleClearNotificationFeed = () => {
     dismissAllFromHeader();
-    handleNotificationClose();
+    handleUpdatesClose();
   };
+
+  const isUpdatesActive = isNoticeRoute || isAiRoute || location.pathname.startsWith('/notifications');
 
   return (
     <AppBar 
@@ -337,7 +352,7 @@ const Header: React.FC<HeaderProps> = ({
         backgroundImage: 'none',
         backdropFilter: 'none',
         border: 'none',
-        borderBottom: '1px solid #D0DBE8',
+        borderBottom: '1px solid #E2E8F0',
         borderRadius: 0,
         boxShadow: 'none',
         outline: 'none',
@@ -350,7 +365,8 @@ const Header: React.FC<HeaderProps> = ({
       <Toolbar
         sx={{
           minHeight: { xs: '56px !important', sm: '60px !important' },
-          px: { xs: 2, sm: 3 },
+          px: { xs: 1.5, sm: 2.5 },
+          gap: 0,
           borderBottom: 'none !important',
           boxShadow: 'none !important',
           '&::before, &::after': {
@@ -368,75 +384,49 @@ const Header: React.FC<HeaderProps> = ({
             sx={{
               mr: 0.5,
               color: 'text.primary',
-              borderRadius: '10px',
-              '&:hover': { bgcolor: 'action.hover' },
-            }}
+              borderRadius: '4px',
+              '&:hover': { bgcolor: 'action.hover' } }}
           >
             <MenuIcon />
           </IconButton>
         ) : null}
 
-        {/* 왼쪽: 회사 로고 및 회사명 — 데스크톱에서 로고 클릭 시 사이드바 접기/펼치기 */}
+        {/* 브랜드(로고) 영역 */}
         {companyInfo && (
-          <Tooltip
-            title={
-              showMobileNav
-                ? ''
-                : sidebarIconOnly
-                  ? language === 'en'
-                    ? 'Expand menu'
-                    : '메뉴 펼치기'
-                  : language === 'en'
-                    ? 'Collapse menu to icons'
-                    : '메뉴 아이콘만 보기'
-            }
-            disableHoverListener={showMobileNav}
-          >
+          <Tooltip title={language === 'en' ? 'Go to dashboard' : '대시보드로 이동'}>
             <Box
-              component={showMobileNav ? 'div' : 'button'}
-              type={showMobileNav ? undefined : 'button'}
-              onClick={showMobileNav ? undefined : onSidebarIconOnlyToggle}
-              aria-label={
-                showMobileNav
-                  ? undefined
-                  : sidebarIconOnly
-                    ? language === 'en'
-                      ? 'Expand sidebar menu'
-                      : '사이드바 메뉴 펼치기'
-                    : language === 'en'
-                      ? 'Collapse sidebar to icons'
-                      : '사이드바 아이콘만 보기'
-              }
-              aria-pressed={showMobileNav ? undefined : sidebarIconOnly}
+              component="button"
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              aria-label={language === 'en' ? 'Go to dashboard' : '대시보드로 이동'}
               sx={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: { xs: 1, sm: 1.5 },
-                mr: { xs: 1, sm: 4 },
-                minWidth: 0,
+                gap: 1.25,
+                flexShrink: 0,
                 border: 'none',
                 background: 'none',
                 p: 0,
                 m: 0,
+                pr: { xs: 1.5, sm: 2 },
+                height: 40,
                 textAlign: 'left',
-                cursor: showMobileNav ? 'default' : 'pointer',
-                borderRadius: '8px',
-                transition: 'opacity 0.15s ease',
-                '&:hover': showMobileNav ? {} : { opacity: 0.86 },
+                cursor: 'pointer',
+                '&:hover .header-brand-name': {
+                  color: 'primary.main',
+                },
               }}
             >
             {companyInfo.logo ? (
               <Box
                 sx={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: '8px',
+                  width: 36,
+                  height: 36,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   overflow: 'hidden',
-                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                  background: 'transparent'
+                  background: 'transparent',
                 }}
               >
                 <AuthMedia
@@ -452,162 +442,112 @@ const Header: React.FC<HeaderProps> = ({
             ) : (
               <Box
                 sx={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: '8px',
+                  width: 36,
+                  height: 36,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  bgcolor: 'primary.main'
+                  bgcolor: 'primary.main',
                 }}
               >
-                <BusinessIcon sx={{ color: 'white', fontSize: '1.5rem' }} />
+                <BusinessIcon sx={{ color: 'white', fontSize: '1.25rem' }} />
               </Box>
             )}
-            <Box>
-              <Typography variant="h6" component="div" sx={{ 
-                fontWeight: 500, 
-                color: 'text.primary', 
-                fontSize: { xs: '0.9375rem', sm: '1.0625rem' },
-                letterSpacing: '-0.02em',
-                lineHeight: 1.25,
+            <Typography
+              className="header-brand-name"
+              variant="h6"
+              component="div"
+              sx={{
+                fontWeight: 700,
+                color: '#0F172A',
+                fontSize: { xs: '0.9375rem', sm: '1rem' },
+                letterSpacing: '-0.015em',
+                lineHeight: 1.2,
                 display: { xs: 'none', sm: 'block' },
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-              }}>
-                {cleanCompanyName(companyInfo.name) || t('common.companyNameFallback')}
-              </Typography>
-            </Box>
+                maxWidth: { sm: 160, md: 200 },
+                transition: 'color 0.12s ease',
+              }}
+            >
+              {cleanCompanyName(companyInfo.name) || t('common.companyNameFallback')}
+            </Typography>
             </Box>
           </Tooltip>
         )}
 
-        {/* 빈 공간 */}
-        <Box sx={{ flexGrow: 1 }} />
+        {/* 로고 | 메뉴 구분 */}
+        {!showMobileNav && companyInfo ? (
+          <Box
+            aria-hidden
+            sx={{
+              width: '1px',
+              alignSelf: 'stretch',
+              my: 1.25,
+              flexShrink: 0,
+              bgcolor: '#CBD5E1',
+              mr: { sm: 1.5, md: 2 },
+            }}
+          />
+        ) : null}
+
+        {/* 주 메뉴 */}
+        {!showMobileNav ? (
+          <Box sx={{ minWidth: 0, flex: '1 1 auto', display: 'flex', alignItems: 'stretch', alignSelf: 'stretch', overflow: 'hidden' }}>
+            <HeaderNav />
+          </Box>
+        ) : (
+          <Box sx={{ flexGrow: 1, minWidth: 8 }} />
+        )}
         
-        {/* 알림 및 사용자 메뉴 */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.75, sm: 2 } }}>
-          <Tooltip title={language === 'en' ? 'India Time (IST)' : '인도 시간 (IST)'}>
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.5,
-                px: 0.75,
-                py: 0.5,
-                color: 'text.secondary',
-                userSelect: 'none',
-              }}
-              aria-label={language === 'en' ? 'Current time' : '현재 시각'}
-            >
-              <AccessTimeIcon sx={{ fontSize: '1.125rem' }} />
-              <Typography
-                component="span"
+        {/* 유틸 · 계정 */}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            flexShrink: 0,
+            gap: { xs: 0.25, sm: 0.75 },
+            pl: { sm: 1.25 },
+            borderLeft: { sm: '1px solid #E2E8F0' },
+            ml: { sm: 1 },
+          }}
+        >
+          {/* 분석 · 공지사항 · 알림을 하나의 드롭다운으로 */}
+          <Button
+            variant="text"
+            size="small"
+            onClick={handleUpdatesMenu}
+            aria-label={language === 'en' ? 'Updates' : '소식'}
+            aria-controls={Boolean(updatesAnchorEl) ? 'updates-menu' : undefined}
+            aria-haspopup="true"
+            aria-expanded={Boolean(updatesAnchorEl) ? 'true' : undefined}
+            endIcon={
+              <ExpandMoreIcon
                 sx={{
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                  fontVariantNumeric: 'tabular-nums',
-                  whiteSpace: 'nowrap',
-                  letterSpacing: '0.02em',
+                  fontSize: '1rem !important',
+                  transition: 'transform 0.16s ease',
+                  transform: Boolean(updatesAnchorEl) ? 'rotate(180deg)' : 'none',
                 }}
-              >
-                {headerClockLabel}
-              </Typography>
-            </Box>
-          </Tooltip>
-
-          <Tooltip title={language === 'en' ? 'Notices' : '공지사항'}>
-            <Button
-              variant="text"
-              size="small"
-              startIcon={<AnnouncementIcon sx={{ fontSize: '1.125rem !important' }} />}
-              onClick={() => navigate('/communication/notice')}
-              aria-label={language === 'en' ? 'Notices' : '공지사항'}
-              sx={{
-                minWidth: 'auto',
-                px: 0.75,
-                py: 0.5,
-                textTransform: 'none',
-                fontSize: '0.75rem',
-                fontWeight: 500,
-                color: isNoticeRoute ? 'primary.main' : 'text.secondary',
-                '& .MuiButton-startIcon': {
-                  mr: 0.35,
-                  ml: 0
-                },
-                '&:hover': {
-                  bgcolor: 'action.hover',
-                  color: isNoticeRoute ? 'primary.dark' : 'text.primary'
-                }
-              }}
-            >
-              <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
-                {language === 'en' ? 'Notices' : '공지사항'}
-              </Box>
-            </Button>
-          </Tooltip>
-
-          <Tooltip title={language === 'en' ? 'Analysis' : '분석'}>
-            <Button
-              variant="text"
-              size="small"
-              startIcon={<AutoAwesomeIcon sx={{ fontSize: '1.125rem !important' }} />}
-              onClick={() => navigate('/ai')}
-              aria-label={language === 'en' ? 'Analysis' : '분석'}
-              sx={{
-                minWidth: 'auto',
-                px: 0.75,
-                py: 0.5,
-                textTransform: 'none',
-                fontSize: '0.75rem',
-                fontWeight: 500,
-                color: isAiRoute ? 'primary.main' : 'text.secondary',
-                '& .MuiButton-startIcon': {
-                  mr: 0.35,
-                  ml: 0
-                },
-                '&:hover': {
-                  bgcolor: 'action.hover',
-                  color: isAiRoute ? 'primary.dark' : 'text.primary'
-                }
-              }}
-            >
-              <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
-                {language === 'en' ? 'Analysis' : '분석'}
-              </Box>
-            </Button>
-          </Tooltip>
-
-          {/* 언어 전환 버튼 */}
-          <IconButton 
-            size="small"
-            onClick={handleLanguageMenu}
-            sx={{ 
-              color: 'text.secondary',
-              transition: 'background-color 0.15s ease, color 0.15s ease',
+              />
+            }
+            sx={{
+              minWidth: 'auto',
+              px: 0.85,
+              py: 0.5,
+              textTransform: 'none',
+              fontSize: '0.8125rem',
+              fontWeight: isUpdatesActive || Boolean(updatesAnchorEl) ? 600 : 500,
+              color: isUpdatesActive || Boolean(updatesAnchorEl) ? 'primary.main' : 'text.secondary',
+              borderRadius: 0,
+              '& .MuiButton-endIcon': { ml: 0.15 },
               '&:hover': {
-                bgcolor: 'action.hover',
-                color: 'text.primary',
-              }
+                bgcolor: 'transparent',
+                color: 'primary.main',
+              },
             }}
           >
-            <LanguageIcon sx={{ fontSize: '1.125rem' }} />
-          </IconButton>
-
-          <IconButton 
-            size="small"
-            onClick={handleNotificationMenu}
-            sx={{ 
-              color: 'text.secondary',
-              transition: 'background-color 0.15s ease, color 0.15s ease',
-              '&:hover': {
-                bgcolor: 'action.hover',
-                color: 'text.primary',
-              }
-            }}
-          >
-            <Badge 
+            <Badge
               badgeContent={unreadCount}
               invisible={unreadCount === 0}
               sx={{
@@ -617,12 +557,36 @@ const Header: React.FC<HeaderProps> = ({
                   fontSize: '0.625rem',
                   fontWeight: 500,
                   minWidth: '16px',
-                  height: '16px'
-                }
+                  height: '16px',
+                  top: -2,
+                  right: -6,
+                },
               }}
             >
-              <NotificationsIcon sx={{ fontSize: '1.125rem' }} />
+              <Box
+                component="span"
+                sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, whiteSpace: 'nowrap', pr: unreadCount > 0 ? 0.75 : 0 }}
+              >
+                <InboxIcon sx={{ fontSize: '1.05rem' }} />
+                {language === 'en' ? 'Updates' : '소식'}
+              </Box>
             </Badge>
+          </Button>
+
+          {/* 언어 전환 버튼 */}
+          <IconButton
+            size="small"
+            onClick={handleLanguageMenu}
+            sx={{
+              color: 'text.secondary',
+              transition: 'background-color 0.15s ease, color 0.15s ease',
+              '&:hover': {
+                bgcolor: 'action.hover',
+                color: 'text.primary',
+              },
+            }}
+          >
+            <LanguageIcon sx={{ fontSize: '1.125rem' }} />
           </IconButton>
           
           {/* 이름 + 아바타 — 클릭 시 설정/로그아웃 메뉴 */}
@@ -638,18 +602,18 @@ const Header: React.FC<HeaderProps> = ({
               display: 'flex',
               alignItems: 'center',
               gap: 1,
-              mr: 0.5,
+              mr: 0.25,
               ml: 0.25,
-              py: 0.35,
-              pl: 1,
-              pr: 0.5,
+              py: 0.25,
+              pl: 0.75,
+              pr: 0.25,
               border: 'none',
-              borderRadius: '6px',
+              borderRadius: 0,
               bgcolor: 'transparent',
               cursor: 'pointer',
               font: 'inherit',
               color: 'inherit',
-              transition: 'background-color 0.15s ease',
+              transition: 'background-color 0.12s ease',
               '&:hover': {
                 bgcolor: 'action.hover',
               },
@@ -660,20 +624,23 @@ const Header: React.FC<HeaderProps> = ({
               sx={{
                 fontWeight: 500,
                 color: 'text.primary',
-                fontSize: '0.875rem',
+                fontSize: '0.8125rem',
                 whiteSpace: 'nowrap',
               }}
             >
               {user?.username || '사용자'}
             </Typography>
             <Avatar
+              src={userAvatarSrc}
+              alt={user?.username || 'user'}
               sx={{
-                width: 28,
-                height: 28,
-                bgcolor: 'rgba(102, 126, 234, 0.88)',
+                width: 32,
+                height: 32,
+                bgcolor: 'primary.main',
                 color: 'white',
-                fontWeight: 500,
-                fontSize: '0.7rem',
+                fontWeight: 600,
+                fontSize: '0.75rem',
+                '& img': { objectFit: 'cover' },
               }}
             >
               {user?.username?.charAt(0).toUpperCase() || 'U'}
@@ -688,14 +655,15 @@ const Header: React.FC<HeaderProps> = ({
               aria-expanded={fullMenuOpen}
               onClick={() => setFullMenuOpen((prev) => !prev)}
               sx={{
-                width: 36,
-                height: 36,
+                width: 34,
+                height: 34,
                 ml: 0.5,
-                bgcolor: fullMenuOpen ? 'primary.main' : '#1F2937',
+                borderRadius: '4px',
+                bgcolor: fullMenuOpen ? 'primary.main' : '#1D4E7C',
                 color: '#FFFFFF',
-                transition: 'background-color 0.15s ease',
+                transition: 'background-color 0.12s ease',
                 '&:hover': {
-                  bgcolor: fullMenuOpen ? 'primary.dark' : '#111827',
+                  bgcolor: fullMenuOpen ? 'primary.dark' : '#163E63',
                 },
               }}
             >
@@ -705,8 +673,8 @@ const Header: React.FC<HeaderProps> = ({
           ) : null}
           
           <Menu
-            id="notification-menu"
-            anchorEl={notificationAnchorEl}
+            id="updates-menu"
+            anchorEl={updatesAnchorEl}
             anchorOrigin={{
               vertical: 'bottom',
               horizontal: 'right',
@@ -716,35 +684,137 @@ const Header: React.FC<HeaderProps> = ({
               vertical: 'top',
               horizontal: 'right',
             }}
-            open={Boolean(notificationAnchorEl)}
-            onClose={handleNotificationClose}
+            open={Boolean(updatesAnchorEl)}
+            onClose={handleUpdatesClose}
             PaperProps={{
               sx: {
                 mt: 1,
                 minWidth: 340,
                 maxWidth: 420,
-                maxHeight: 420,
+                maxHeight: 480,
                 overflowY: 'auto',
-                p: 0.5
-              }
+                p: 0.5,
+                borderRadius: '8px',
+                border: '1px solid',
+                borderColor: 'divider',
+                boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
+              },
             }}
           >
-            <Box sx={{ px: 1, py: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                {language === 'en' ? 'Notifications' : '알림'}
+            <Box
+              sx={{
+                px: 1.5,
+                py: 1,
+                mx: 0.5,
+                mb: 0.5,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 1,
+                bgcolor: '#F8FAFC',
+                borderRadius: '6px',
+              }}
+              aria-label={language === 'en' ? 'India Time (IST)' : '인도 시간 (IST)'}
+            >
+              <Typography variant="caption" sx={{ fontWeight: 600, color: 'text.secondary' }}>
+                {language === 'en' ? 'India Time (IST)' : '인도 시간 (IST)'}
+              </Typography>
+              <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, color: 'text.primary' }}>
+                <AccessTimeIcon sx={{ fontSize: '0.95rem', color: 'text.secondary' }} />
+                <Typography
+                  component="span"
+                  sx={{
+                    fontSize: '0.8125rem',
+                    fontWeight: 600,
+                    fontVariantNumeric: 'tabular-nums',
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  {headerClockLabel}
+                </Typography>
+              </Box>
+            </Box>
+
+            <MenuItem
+              onClick={() => {
+                navigate('/ai');
+                handleUpdatesClose();
+              }}
+              selected={isAiRoute}
+              sx={{ borderRadius: '6px', mx: 0.5, my: 0.25, py: 1 }}
+            >
+              <ListItemIcon sx={{ minWidth: 36 }}>
+                <AutoAwesomeIcon fontSize="small" color={isAiRoute ? 'primary' : 'inherit'} />
+              </ListItemIcon>
+              <ListItemText
+                primary={language === 'en' ? 'Analysis' : '분석'}
+                primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: isAiRoute ? 600 : 500 }}
+              />
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                navigate('/communication/notice');
+                handleUpdatesClose();
+              }}
+              selected={isNoticeRoute}
+              sx={{ borderRadius: '8px', mx: 0.5, my: 0.25, py: 1 }}
+            >
+              <ListItemIcon sx={{ minWidth: 36 }}>
+                <AnnouncementIcon fontSize="small" color={isNoticeRoute ? 'primary' : 'inherit'} />
+              </ListItemIcon>
+              <ListItemText
+                primary={language === 'en' ? 'Notices' : '공지사항'}
+                primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: isNoticeRoute ? 600 : 500 }}
+              />
+            </MenuItem>
+            <MenuItem
+              onClick={handleOpenNotificationsPage}
+              selected={location.pathname.startsWith('/notifications')}
+              sx={{ borderRadius: '8px', mx: 0.5, my: 0.25, py: 1 }}
+            >
+              <ListItemIcon sx={{ minWidth: 36 }}>
+                <Badge
+                  badgeContent={unreadCount}
+                  invisible={unreadCount === 0}
+                  sx={{
+                    '& .MuiBadge-badge': {
+                      bgcolor: 'rgba(220, 80, 80, 0.92)',
+                      color: 'white',
+                      fontSize: '0.55rem',
+                      minWidth: 14,
+                      height: 14,
+                    },
+                  }}
+                >
+                  <NotificationsIcon
+                    fontSize="small"
+                    color={location.pathname.startsWith('/notifications') ? 'primary' : 'inherit'}
+                  />
+                </Badge>
+              </ListItemIcon>
+              <ListItemText
+                primary={language === 'en' ? 'Notifications' : '알림'}
+                primaryTypographyProps={{
+                  fontSize: '0.875rem',
+                  fontWeight: location.pathname.startsWith('/notifications') ? 600 : 500,
+                }}
+              />
+            </MenuItem>
+
+            <Divider sx={{ my: 0.75 }} />
+
+            <Box sx={{ px: 1.25, py: 0.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Typography variant="caption" sx={{ fontWeight: 700, color: 'text.secondary', letterSpacing: '0.04em' }}>
+                {language === 'en' ? 'RECENT' : '최근 알림'}
               </Typography>
               <Tooltip title={t('notifications.markAllAsRead')}>
-                <IconButton
-                  size="small"
-                  onClick={markAllRead}
-                >
+                <IconButton size="small" onClick={markAllRead}>
                   <CheckIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             </Box>
-            <Divider />
             {displayNotificationFeed.length === 0 ? (
-              <Box sx={{ px: 2, py: 3 }}>
+              <Box sx={{ px: 2, py: 2.5 }}>
                 <Typography variant="body2" color="text.secondary">
                   {language === 'en' ? 'No notifications yet.' : '새 알림이 없습니다.'}
                 </Typography>
@@ -765,23 +835,26 @@ const Header: React.FC<HeaderProps> = ({
                     border: '1px solid',
                     borderColor: item.read
                       ? (theme) => theme.palette.divider
-                      : (theme) => theme.palette.mode === 'light' ? 'rgba(25, 118, 210, 0.22)' : 'rgba(144, 202, 249, 0.35)',
+                      : (theme) =>
+                          theme.palette.mode === 'light'
+                            ? 'rgba(25, 118, 210, 0.22)'
+                            : 'rgba(144, 202, 249, 0.35)',
                     bgcolor: item.read
                       ? 'background.paper'
-                      : (theme) => theme.palette.mode === 'light' ? 'rgba(25, 118, 210, 0.06)' : 'rgba(144, 202, 249, 0.12)',
+                      : (theme) =>
+                          theme.palette.mode === 'light'
+                            ? 'rgba(25, 118, 210, 0.06)'
+                            : 'rgba(144, 202, 249, 0.12)',
                     boxShadow: item.read ? 'none' : '0 2px 8px rgba(15, 23, 42, 0.06)',
                     '&:hover': {
-                      bgcolor: (theme) => theme.palette.mode === 'light' ? 'rgba(25, 118, 210, 0.12)' : 'rgba(144, 202, 249, 0.2)',
-                    }
+                      bgcolor: (theme) =>
+                        theme.palette.mode === 'light'
+                          ? 'rgba(25, 118, 210, 0.12)'
+                          : 'rgba(144, 202, 249, 0.2)',
+                    },
                   }}
                 >
-                  <ListItemIcon
-                    sx={{
-                      mt: 0.25,
-                      minWidth: 72,
-                      mr: 0.5,
-                    }}
-                  >
+                  <ListItemIcon sx={{ mt: 0.25, minWidth: 72, mr: 0.5 }}>
                     <Chip
                       size="small"
                       label={getNotificationChipLabel(item, t)}
@@ -847,13 +920,11 @@ const Header: React.FC<HeaderProps> = ({
             anchorEl={anchorEl}
             anchorOrigin={{
               vertical: 'bottom',
-              horizontal: 'right',
-            }}
+              horizontal: 'right' }}
             keepMounted
             transformOrigin={{
               vertical: 'top',
-              horizontal: 'right',
-            }}
+              horizontal: 'right' }}
             open={Boolean(anchorEl)}
             onClose={handleClose}
             PaperProps={{
@@ -862,8 +933,7 @@ const Header: React.FC<HeaderProps> = ({
                 minWidth: 180,
                 '& .MuiMenuItem-root': {
                   px: 1.5,
-                  py: 0.75,
-                }
+                  py: 0.75 }
               }
             }}
           >
@@ -894,13 +964,11 @@ const Header: React.FC<HeaderProps> = ({
             anchorEl={languageAnchorEl}
             anchorOrigin={{
               vertical: 'bottom',
-              horizontal: 'right',
-            }}
+              horizontal: 'right' }}
             keepMounted
             transformOrigin={{
               vertical: 'top',
-              horizontal: 'right',
-            }}
+              horizontal: 'right' }}
             open={Boolean(languageAnchorEl)}
             onClose={handleLanguageClose}
             PaperProps={{
@@ -909,8 +977,7 @@ const Header: React.FC<HeaderProps> = ({
                 minWidth: 120,
                 '& .MuiMenuItem-root': {
                   px: 1.5,
-                  py: 0.75,
-                }
+                  py: 0.75 }
               }
             }}
           >

@@ -3,6 +3,7 @@ import { Op } from 'sequelize';
 import bcrypt from 'bcrypt';
 import { User, Company, Tenant } from '../models';
 import { resolveDepartmentFieldsForUser } from '../controllers/departmentController';
+import { resolvePositionFieldsForUser } from '../controllers/positionController';
 import { authenticateToken } from '../middleware/auth';
 import { requireAdminRootOrUserMenuPermission } from '../middleware/menuPermission';
 import { getUserUiPreferences, patchUserUiPreferences } from '../controllers/userUiPreferencesController';
@@ -447,7 +448,7 @@ router.get('/', async (req, res) => {
     });
 
     const baseAttributes = [
-      'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'status', 'last_login', 'created_at',
+      'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'position_id', 'status', 'last_login', 'created_at',
       'tenant_id', 'company_id', 'is_payment_officer', 'avatar_url'
     ];
     const hrAttributes = [
@@ -601,6 +602,7 @@ router.post(
       const previousAvatar = String(targetUser.avatar_url || '');
       const avatarUrl = `/uploads/user-avatars/${req.file.filename}`;
       await targetUser.update({ avatar_url: avatarUrl });
+      invalidateAuthUser(targetUser.id);
 
       if (previousAvatar.startsWith('/uploads/user-avatars/')) {
         const previousFile = path.join(userAvatarDir, path.basename(previousAvatar));
@@ -633,7 +635,7 @@ router.get('/:id', async (req, res) => {
     const tenantId = (req as any).user.tenant_id;
     const companyId = (req as any).user.company_id;
     const baseAttributes = [
-      'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'status', 'last_login', 'created_at',
+      'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'position_id', 'status', 'last_login', 'created_at',
       'is_payment_officer', 'avatar_url'
     ];
     
@@ -888,7 +890,20 @@ router.post(
     } else if (department !== undefined) {
       userData.department = department || null;
     }
-    if (position !== undefined) userData.position = position || null;
+    const createPosRes = await resolvePositionFieldsForUser(
+      targetTenantId,
+      (req.body as any).position_id,
+      targetCompanyId
+    );
+    if (createPosRes.kind === 'err') {
+      return res.status(400).json({ success: false, message: createPosRes.message });
+    }
+    if (createPosRes.kind === 'ok') {
+      userData.position_id = createPosRes.position_id;
+      userData.position = createPosRes.position;
+    } else if (position !== undefined) {
+      userData.position = position || null;
+    }
     if (birth_date) userData.birth_date = birth_date;
     if (gender) userData.gender = gender;
     if (phone !== undefined) userData.phone = phone || null;
@@ -969,7 +984,7 @@ router.put(
 
     // 사용자 존재 확인 - 기본 필드만 먼저 조회
     const baseAttributes = [
-      'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'status', 'last_login', 'created_at',
+      'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'position_id', 'status', 'last_login', 'created_at',
       'tenant_id', 'company_id', 'avatar_url'
     ];
     
@@ -1116,7 +1131,20 @@ router.put(
       updateData.department = department || null;
     }
 
-    if (position !== undefined) updateData.position = position || null;
+    const posRes = await resolvePositionFieldsForUser(
+      tenantId,
+      (req.body as any).position_id,
+      user.company_id
+    );
+    if (posRes.kind === 'err') {
+      return res.status(400).json({ success: false, message: posRes.message });
+    }
+    if (posRes.kind === 'ok') {
+      updateData.position_id = posRes.position_id;
+      updateData.position = posRes.position;
+    } else if (position !== undefined) {
+      updateData.position = position || null;
+    }
     if (employee_number !== undefined) updateData.employee_number = employee_number || null;
     if (birth_date !== undefined) updateData.birth_date = birth_date || null;
     if (gender !== undefined) updateData.gender = gender || null;
@@ -1165,7 +1193,7 @@ router.put(
 
     // 업데이트된 사용자 정보 조회 - 기본 필드만 먼저 조회
     const responseBaseAttributes = [
-      'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'status', 'last_login', 'created_at',
+      'id', 'userid', 'username', 'email', 'role', 'department', 'department_id', 'position', 'position_id', 'status', 'last_login', 'created_at',
       'is_payment_officer', 'avatar_url'
     ];
     

@@ -16,18 +16,10 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Alert,
   Divider,
   Paper,
-  Grid,
   IconButton,
-  Tooltip,
-  Badge,
   ListItemAvatar,
   ListItemSecondaryAction,
   Table,
@@ -35,26 +27,11 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TableRow,
-  Switch,
-  FormControlLabel
-} from '@mui/material';
+  TableRow } from '@mui/material';
 import {
-  Dashboard as DashboardIcon,
   People as PeopleIcon,
-  Assignment as AssignmentIcon,
-  CheckCircle as CheckCircleIcon,
-  Pending as PendingIcon,
-  Schedule as ScheduleIcon,
   TrendingUp as TrendingUpIcon,
   Notifications as NotificationsIcon,
-  Star as StarIcon,
-  Settings as SettingsIcon,
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Refresh as RefreshIcon,
-  MoreVert as MoreVertIcon,
   AdminPanelSettings as AdminPanelSettingsIcon,
   Security as SecurityIcon,
   Analytics as AnalyticsIcon,
@@ -63,21 +40,9 @@ import {
   Error as ErrorIcon,
   Info as InfoIcon,
   CheckCircleOutline as CheckCircleOutlineIcon,
-  Timeline as TimelineIcon,
   Storage as StorageIcon,
-  Memory as MemoryIcon,
-  Speed as SpeedIcon,
-  NetworkCheck as NetworkCheckIcon,
-  CloudQueue as CloudQueueIcon,
-  PersonAdd as PersonAddIcon,
-  PersonRemove as PersonRemoveIcon,
   Lock as LockIcon,
-  LockOpen as LockOpenIcon,
-  Visibility as VisibilityIcon,
-  VisibilityOff as VisibilityOffIcon
-} from '@mui/icons-material';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, AreaChart, Area } from 'recharts';
-import { useStore } from '../../store';
+  Visibility as VisibilityIcon } from '@mui/icons-material';
 import { api } from '../../services/api';
 
 // 타입 정의
@@ -152,7 +117,6 @@ interface UserActivity {
 }
 
 const AdminDashboard: React.FC = () => {
-  const { user } = useStore();
   const [systemMetrics, setSystemMetrics] = useState<SystemMetrics | null>(null);
   const [businessMetrics, setBusinessMetrics] = useState<BusinessMetrics | null>(null);
   const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>([]);
@@ -193,8 +157,7 @@ const AdminDashboard: React.FC = () => {
         if (usersResponse.data.success) {
           setUserActivities(usersResponse.data.data);
         }
-      } catch (error) {
-        console.error('관리자 데이터 로드 오류:', error);
+      } catch {
         setError('관리자 데이터를 불러오는데 실패했습니다.');
       } finally {
         setLoading(false);
@@ -211,8 +174,8 @@ const AdminDashboard: React.FC = () => {
       setUserActivities(prev => prev.map(user => 
         user.id === userId ? { ...user, status: status as any } : user
       ));
-    } catch (error) {
-      console.error('사용자 상태 업데이트 오류:', error);
+    } catch {
+      /* ignore */
     }
   };
 
@@ -223,8 +186,8 @@ const AdminDashboard: React.FC = () => {
       setSystemAlerts(prev => prev.map(alert => 
         alert.id === alertId ? { ...alert, resolved: true } : alert
       ));
-    } catch (error) {
-      console.error('알림 해결 오류:', error);
+    } catch {
+      /* ignore */
     }
   };
 

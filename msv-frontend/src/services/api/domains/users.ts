@@ -1,25 +1,15 @@
-import { api, API_BASE_URL, getAuthTokenFromStorage } from '../client';
+import { api } from '../client';
 
 export const userService = {
   getUsers: async (params?: { search?: string; company_id?: number }) => {
-    try {
-      const response = await api.get('/users', { params });
-      return response.data;
-    } catch (error) {
-      console.error('?�용??목록 조회 ?�류:', error);
-      throw error;
-    }
+    const response = await api.get('/users', { params });
+    return response.data;
   },
 
   getNextEmployeeNumber: async (companyId?: number) => {
-    try {
-      const params = companyId != null ? { company_id: companyId } : undefined;
-      const response = await api.get('/users/next-employee-number', { params });
-      return response.data;
-    } catch (error) {
-      console.error('?�원번호 미리보기 ?�류:', error);
-      throw error;
-    }
+    const params = companyId != null ? { company_id: companyId } : undefined;
+    const response = await api.get('/users/next-employee-number', { params });
+    return response.data;
   },
 
   getMyProfile: async () => {
@@ -50,23 +40,13 @@ export const userService = {
 // 로그???�보 관�?API ?�비??
 export const loginInfoService = {
   getLoginInfoTabs: async (companyId: number) => {
-    try {
-      const response = await api.get('/login-info/tabs', { params: { company_id: companyId } });
-      return response.data;
-    } catch (error) {
-      console.error('로그???�보 ??조회 ?�류:', error);
-      throw error;
-    }
+    const response = await api.get('/login-info/tabs', { params: { company_id: companyId } });
+    return response.data;
   },
 
   createLoginInfoTab: async (data: { company_id: number; name: string }) => {
-    try {
-      const response = await api.post('/login-info/tabs', data);
-      return response.data;
-    } catch (error) {
-      console.error('로그???�보 ??추�? ?�류:', error);
-      throw error;
-    }
+    const response = await api.post('/login-info/tabs', data);
+    return response.data;
   },
 
   updateLoginInfoTab: async (
@@ -83,34 +63,19 @@ export const loginInfoService = {
       } | null;
     }
   ) => {
-    try {
-      const response = await api.put(`/login-info/tabs/${tabId}`, data);
-      return response.data;
-    } catch (error) {
-      console.error('로그???�보 ???�정 ?�류:', error);
-      throw error;
-    }
+    const response = await api.put(`/login-info/tabs/${tabId}`, data);
+    return response.data;
   },
 
   deleteLoginInfoTab: async (tabId: number) => {
-    try {
-      const response = await api.delete(`/login-info/tabs/${tabId}`);
-      return response.data;
-    } catch (error) {
-      console.error('로그???�보 ????�� ?�류:', error);
-      throw error;
-    }
+    const response = await api.delete(`/login-info/tabs/${tabId}`);
+    return response.data;
   },
 
   // 로그???�보 목록 조회 (company_id + tab_id ?�수)
   getLoginInfos: async (params: { company_id: number; tab_id: number }) => {
-    try {
-      const response = await api.get('/login-info', { params });
-      return response.data;
-    } catch (error) {
-      console.error('로그???�보 목록 조회 ?�류:', error);
-      throw error;
-    }
+    const response = await api.get('/login-info', { params });
+    return response.data;
   },
 
   // 로그??로그 목록 조회
@@ -122,63 +87,38 @@ export const loginInfoService = {
     end_date?: string;
     limit?: number;
   }) => {
-    try {
-      const response = await api.get('/login-info/logs', { params });
-      return response.data;
-    } catch (error) {
-      console.error('로그??로그 목록 조회 ?�류:', error);
-      throw error;
-    }
+    const response = await api.get('/login-info/logs', { params });
+    return response.data;
   },
 
   // 로그???�보 ?�성
   createLoginInfo: async (data: any) => {
-    try {
-      const response = await api.post('/login-info', data);
-      return response.data;
-    } catch (error) {
-      console.error('로그???�보 ?�성 ?�류:', error);
-      throw error;
-    }
+    const response = await api.post('/login-info', data);
+    return response.data;
   },
 
   // 로그???�보 ?�정
   updateLoginInfo: async (id: number, data: any) => {
-    try {
-      const response = await api.put(`/login-info/${id}`, data);
-      return response.data;
-    } catch (error) {
-      console.error('로그???�보 ?�정 ?�류:', error);
-      throw error;
-    }
+    const response = await api.put(`/login-info/${id}`, data);
+    return response.data;
   },
 
   // 로그???�보 ??��
   deleteLoginInfo: async (id: number) => {
-    try {
-      const response = await api.delete(`/login-info/${id}`);
-      return response.data;
-    } catch (error) {
-      console.error('로그???�보 ??�� ?�류:', error);
-      throw error;
-    }
+    const response = await api.delete(`/login-info/${id}`);
+    return response.data;
   },
 
   // ?��? 가?�오�?
   importExcel: async (file: File, companyId: number, tabId: number) => {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('company_id', String(companyId));
-      formData.append('tab_id', String(tabId));
-      const response = await api.post('/login-info/import', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('로그???�보 ?��? 가?�오�??�류:', error);
-      throw error;
-    }
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('company_id', String(companyId));
+    formData.append('tab_id', String(tabId));
+    const response = await api.post('/login-info/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
   }
 };
 

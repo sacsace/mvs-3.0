@@ -266,7 +266,7 @@ const FullMenuOverlay: React.FC<FullMenuOverlayProps> = ({
                 size="small"
                 startIcon={<HomeOutlinedIcon sx={{ fontSize: '1rem !important' }} />}
                 onClick={() => goTo('/dashboard')}
-                sx={{ textTransform: 'none', fontWeight: 600, color: '#111827' }}
+                sx={{ textTransform: 'none', fontWeight: 600, color: '#0F172A' }}
               >
                 {language === 'en' ? 'Home' : '홈'}
               </Button>
@@ -396,7 +396,7 @@ const FullMenuOverlay: React.FC<FullMenuOverlayProps> = ({
                         fontWeight: 800,
                         letterSpacing: '0.04em',
                         textTransform: 'uppercase',
-                        color: '#111827',
+                        color: '#0F172A',
                         transition: 'color 0.15s ease',
                         ...(topMenu.route && {
                           '&:hover': { color: 'primary.main' },

@@ -298,8 +298,9 @@ const DRAG_TRANSITION = 'transform 40ms ease-out';
 const DRAG_LAYOUT_TRANSITION = 'none';
 
 const BOARD_PAN_IGNORE_SELECTOR = [
-  '[data-kanban-column]',
   '[data-kanban-card]',
+  '[data-kanban-list-handle]',
+  '[data-board-no-pan]',
   'button',
   'a',
   'input',
@@ -324,10 +325,10 @@ const KANBAN_CARD_RADIUS = '6px';
 
 /** 소분류(칸반 열) — 불투명 패널 + 얇은 보더 */
 const KANBAN_COLUMN_BG = '#F1F5F9';
-const KANBAN_COLUMN_BORDER = '1px solid #D0DBE8';
+const KANBAN_COLUMN_BORDER = '1px solid #E2E8F0';
 const KANBAN_COLUMN_SHADOW = 'none';
 const KANBAN_MEMBER_PANEL_BG = '#F8FAFC';
-const KANBAN_MEMBER_PANEL_BORDER = '1px solid #D0DBE8';
+const KANBAN_MEMBER_PANEL_BORDER = '1px solid #E2E8F0';
 const KANBAN_CARD_BG = '#FFFFFF';
 const KANBAN_CARD_BORDER = '1px solid #D8E1EC';
 const KANBAN_CARD_SHADOW = 'none';
@@ -386,8 +387,8 @@ const cardDetailInputSx = {
   '& .MuiOutlinedInput-root': {
     borderRadius: KANBAN_CONTROL_RADIUS,
     bgcolor: '#FFFFFF',
-    '& .MuiOutlinedInput-notchedOutline': { borderColor: '#D0DBE8' },
-    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
+    '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E2E8F0' },
+    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#94A3B8' },
     '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: 'primary.main' },
   },
   '& .MuiInputBase-input': { fontSize: '0.875rem' },
@@ -439,11 +440,11 @@ function renderCommentWithMentions(text: string): React.ReactNode {
         sx={{
           color: '#4C6A6E',
           fontWeight: 700,
-          bgcolor: alpha('#7BA3C4', 0.14),
+          bgcolor: alpha('#1D4E7C', 0.14),
           px: 0.45,
           py: 0.1,
           borderRadius: 0.75,
-          border: `1px solid ${alpha('#7BA3C4', 0.28)}`,
+          border: `1px solid ${alpha('#1D4E7C', 0.28)}`,
         }}
       >
         {token}
@@ -986,6 +987,7 @@ const ListColumn = memo(function ListColumn({
       }}
     >
       <Box
+        data-kanban-list-handle=""
         sx={{
           display: 'flex',
           alignItems: 'center',
@@ -1314,8 +1316,8 @@ const WorkBoardDetailPage: React.FC = () => {
         excludeUserId: user?.id != null ? Number(user.id) : undefined,
       });
       setCompanyUsers(list);
-    } catch (e) {
-      console.error(e);
+    } catch {
+      /* ignore */
     }
   }, [board?.company_id, board?.tenant_id, user?.id, user?.role]);
 
@@ -1352,6 +1354,7 @@ const WorkBoardDetailPage: React.FC = () => {
   };
 
   const isKanbanDragging = Boolean(activeCard || activeList);
+  const boardHScrollRef = useRef<HTMLDivElement | null>(null);
   const boardPanRef = useRef<{
     active: boolean;
     pointerId: number | null;
@@ -1406,7 +1409,14 @@ const WorkBoardDetailPage: React.FC = () => {
     boardPanRef.current.moved = true;
     boardPanRef.current.lastX = e.clientX;
     boardPanRef.current.lastY = e.clientY;
-    window.scrollBy(-dx, -dy);
+    // 좌우: 칸반 가로 스크롤 컨테이너 / 상하: 브라우저 스크롤
+    const hScroll = boardHScrollRef.current;
+    if (hScroll && dx !== 0) {
+      hScroll.scrollLeft -= dx;
+    }
+    if (dy !== 0) {
+      window.scrollBy(0, -dy);
+    }
   }, []);
 
   const handleBoardPanPointerUp = useCallback(
@@ -2725,7 +2735,7 @@ const WorkBoardDetailPage: React.FC = () => {
               borderRadius: '8px',
               minWidth: 240,
               mt: 1,
-              border: '1px solid #D0DBE8',
+              border: '1px solid #E2E8F0',
               boxShadow: '0 8px 24px rgba(9, 30, 66, 0.14)',
             },
           },
@@ -2872,6 +2882,7 @@ const WorkBoardDetailPage: React.FC = () => {
           onDragEnd={menuCanEdit ? handleDragEnd : () => {}}
         >
           <Box
+            ref={boardHScrollRef}
             sx={{
               display: 'flex',
               width: '100%',
@@ -2880,6 +2891,7 @@ const WorkBoardDetailPage: React.FC = () => {
               boxSizing: 'border-box',
               overflowX: 'auto',
               overflowY: 'visible',
+              cursor: boardPanning ? 'grabbing' : 'grab',
             }}
           >
             <Box
@@ -3026,9 +3038,9 @@ const WorkBoardDetailPage: React.FC = () => {
               mb: 2,
               height: 'auto',
               borderRadius: KANBAN_DETAIL_SHELL_RADIUS,
-              boxShadow: '0 1px 0 #D0DBE8, 0 1px 2px rgba(15, 23, 42, 0.05)',
+              boxShadow: '0 1px 0 #E2E8F0, 0 1px 2px rgba(15, 23, 42, 0.05)',
               overflow: 'hidden',
-              border: '1px solid #D0DBE8',
+              border: '1px solid #E2E8F0',
               borderLeft: `4px solid ${accent}`,
               bgcolor: '#FFFFFF',
               display: 'flex',
@@ -3041,7 +3053,7 @@ const WorkBoardDetailPage: React.FC = () => {
             display: 'flex',
             alignItems: 'center',
             gap: 1,
-            borderBottom: '1px solid #D0DBE8',
+            borderBottom: '1px solid #E2E8F0',
             bgcolor: '#FFFFFF',
             py: 1,
             px: 1.5,
@@ -3198,10 +3210,10 @@ const WorkBoardDetailPage: React.FC = () => {
                   ...(isCardDetailCompleted
                     ? {
                         borderWidth: 1.5,
-                        bgcolor: alpha('#7BA3C4', 0.06),
+                        bgcolor: alpha('#1D4E7C', 0.06),
                         '&:hover': {
                           borderWidth: 1.5,
-                          bgcolor: alpha('#7BA3C4', 0.12),
+                          bgcolor: alpha('#1D4E7C', 0.12),
                         },
                       }
                     : {
@@ -3393,8 +3405,8 @@ const WorkBoardDetailPage: React.FC = () => {
                   borderRadius: KANBAN_CONTROL_RADIUS,
                   bgcolor: '#FFFFFF',
                   p: 0.25,
-                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#D0DBE8' },
-                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E2E8F0' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#94A3B8' },
                 },
                 '& input[type="color"]': {
                   borderRadius: KANBAN_CONTROL_RADIUS,
@@ -3492,7 +3504,7 @@ const WorkBoardDetailPage: React.FC = () => {
               flexShrink: 0,
               p: 1.5,
               borderRadius: KANBAN_SURFACE_RADIUS,
-              border: '1px solid #D0DBE8',
+              border: '1px solid #E2E8F0',
               bgcolor: '#FFFFFF',
               boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)',
             }}
@@ -3528,7 +3540,7 @@ const WorkBoardDetailPage: React.FC = () => {
                 py: 0.5,
                 px: 1,
                 borderRadius: KANBAN_CONTROL_RADIUS,
-                border: '1px solid #D0DBE8',
+                border: '1px solid #E2E8F0',
                 bgcolor: '#F0F4F8',
               }}
             >
@@ -3553,7 +3565,7 @@ const WorkBoardDetailPage: React.FC = () => {
             sx={{
               display: 'flex',
               mb: 0.75,
-              border: '1px solid #D0DBE8',
+              border: '1px solid #E2E8F0',
               borderRadius: KANBAN_CONTROL_RADIUS,
               overflow: 'hidden',
               bgcolor: '#FFFFFF',
@@ -3661,7 +3673,7 @@ const WorkBoardDetailPage: React.FC = () => {
                 fontWeight: 700,
                 fontSize: '0.8125rem',
                 textTransform: 'none',
-                borderLeft: '1px solid #D0DBE8',
+                borderLeft: '1px solid #E2E8F0',
                 bgcolor: 'primary.main',
                 color: '#FFFFFF',
                 '&:hover': {
@@ -3720,7 +3732,7 @@ const WorkBoardDetailPage: React.FC = () => {
                       pl: isReply ? 2 : 1.1,
                       borderRadius: KANBAN_CONTROL_RADIUS,
                       border: '1px solid #E2E8F0',
-                      borderLeft: isReply ? '3px solid #7BA3C4' : '1px solid #E2E8F0',
+                      borderLeft: isReply ? '3px solid #1D4E7C' : '1px solid #E2E8F0',
                       bgcolor: '#FFFFFF',
                       boxShadow: '0 1px 2px rgba(15, 23, 42, 0.03)',
                     }}

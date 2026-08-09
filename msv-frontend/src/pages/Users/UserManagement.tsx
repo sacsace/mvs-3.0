@@ -71,13 +71,14 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import { useStore, useMenuStore } from '../../store';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
-import { api, departmentService, userService } from '../../services/api';
+import { api, departmentService, positionService, userService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useTranslation } from 'react-i18next';
 import { alpha, useTheme, type SxProps, type Theme } from '@mui/material/styles';
 import { DepartmentManagementPanel } from '../HR/DepartmentManagement';
+import { PositionManagementPanel } from '../HR/PositionManagement';
 import { getUploadUrl } from '../../utils/uploadUrl';
 
 const USER_MGMT_MENU_ROUTES = ['/hr/users', '/users'];
@@ -151,6 +152,7 @@ interface User {
   company_id?: number | null;
   department?: string;
   department_id?: number | null;
+  position_id?: number | null;
   position?: string;
   status: string;
   created_at: string;
@@ -395,11 +397,12 @@ const UserManagement: React.FC = () => {
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
+  const [positions, setPositions] = useState<{ id: number; name: string; sort_order: number }[]>([]);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('');
   const [existingAvatarUrl, setExistingAvatarUrl] = useState('');
-  /** 0: 사용자 목록, 1: 사용자 추가/수정 폼, 2: 부서 관리 */
-  const [pageTab, setPageTab] = useState<0 | 1 | 2>(0);
+  /** 0: 사용자 목록, 1: 사용자 추가/수정 폼, 2: 부서 관리, 3: 직책 관리 */
+  const [pageTab, setPageTab] = useState<0 | 1 | 2 | 3>(0);
   const [formData, setFormData] = useState({
     // 기본 정보
     employee_number: '',
@@ -416,6 +419,7 @@ const UserManagement: React.FC = () => {
     department: '',
     department_id: '' as number | '',
     position: '',
+    position_id: '' as number | '',
     employment_type: 'fulltime',
     salary: '',
     ot_eligible: true,
@@ -443,6 +447,7 @@ const UserManagement: React.FC = () => {
     department: string;
     department_id: number | '';
     position: string;
+    position_id: number | '';
     employment_type: string;
     salary: string;
     ot_eligible: boolean;
@@ -503,8 +508,8 @@ const UserManagement: React.FC = () => {
         const nextNumber = response.data?.employee_number || '';
         setFormData((prev) => ({ ...prev, employee_number: nextNumber }));
       }
-    } catch (err) {
-      console.error('사원번호 미리보기 오류:', err);
+    } catch {
+      /* ignore */
     } finally {
       setPreviewEmployeeNumberLoading(false);
     }
@@ -519,8 +524,8 @@ const UserManagement: React.FC = () => {
     try {
       const companiesData = await useReferenceDataStore.getState().fetchCompanies();
       setCompanies(companiesData.map((c: any) => ({ id: c.id, name: c.name })));
-    } catch (error) {
-      console.error('회사 목록 조회 오류:', error);
+    } catch {
+      /* ignore */
     }
   }, []);
 
@@ -540,12 +545,6 @@ const UserManagement: React.FC = () => {
       const usersData = await useReferenceDataStore.getState().fetchUsers(params, true);
       setUsers(usersData);
     } catch (error: any) {
-      console.error('❌ [사용자 관리] 사용자 목록 조회 실패:', error);
-      console.error('❌ [사용자 관리] 에러 상세:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
       const errorMessage = error.response?.data?.message || error.message || t('userManagement.loadFailed');
       setError(errorMessage);
       setUsers([]);
@@ -576,9 +575,36 @@ const UserManagement: React.FC = () => {
       } else {
         setDepartments([]);
       }
-    } catch (e) {
-      console.error('부서 목록:', e);
+    } catch {
       setDepartments([]);
+    }
+  }, [user?.company_id, user?.role]);
+
+  const loadPositions = useCallback(async (companyId?: number | null) => {
+    const cid =
+      companyId != null && Number.isFinite(Number(companyId))
+        ? Number(companyId)
+        : user?.role === 'root' || user?.role === 'audit'
+          ? null
+          : user?.company_id != null
+            ? Number(user.company_id)
+            : null;
+    if (cid == null) {
+      setPositions([]);
+      return;
+    }
+    try {
+      const res = await positionService.list(false, cid);
+      if (res.success && Array.isArray(res.data)) {
+        const list = (res.data as { id: number; name: string; sort_order?: number }[])
+          .map((d) => ({ id: d.id, name: d.name, sort_order: d.sort_order ?? 0 }))
+          .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'ko'));
+        setPositions(list);
+      } else {
+        setPositions([]);
+      }
+    } catch {
+      setPositions([]);
     }
   }, [user?.company_id, user?.role]);
 
@@ -597,11 +623,26 @@ const UserManagement: React.FC = () => {
         user?.company_id ??
         null;
       void loadDepartments(cid != null ? Number(cid) : null);
+      void loadPositions(cid != null ? Number(cid) : null);
     }
-  }, [viewMode, loadDepartments, formData.company_id, editingUser?.company_id, user?.company_id]);
+  }, [viewMode, loadDepartments, loadPositions, formData.company_id, editingUser?.company_id, user?.company_id]);
+
+  /** 기존 사용자에 position 문자열만 있을 때 마스터와 이름 매칭 */
+  useEffect(() => {
+    if (viewMode !== 'create' && viewMode !== 'edit') return;
+    if (formData.position_id !== '' || !formData.position || positions.length === 0) return;
+    const match = positions.find((p) => p.name === formData.position);
+    if (!match) return;
+    setFormData((prev) =>
+      prev.position_id === '' && prev.position === match.name
+        ? { ...prev, position_id: match.id }
+        : prev
+    );
+  }, [viewMode, positions, formData.position, formData.position_id]);
 
   useEffect(() => {
-    if (searchParams.get('tab') !== 'departments') return;
+    const tab = searchParams.get('tab');
+    if (tab !== 'departments' && tab !== 'positions') return;
     if (menusLoading) return;
     if (!hrElevated && !userMgmtMenuFlags.canCreate) {
       setSearchParams((prev) => {
@@ -611,7 +652,7 @@ const UserManagement: React.FC = () => {
       }, { replace: true });
       return;
     }
-    setPageTab(2);
+    setPageTab(tab === 'positions' ? 3 : 2);
     setViewMode('list');
     setEditingUser(null);
     setSearchParams((prev) => {
@@ -652,6 +693,7 @@ const UserManagement: React.FC = () => {
       department: '',
       department_id: '' as number | '',
       position: '',
+      position_id: '' as number | '',
       employment_type: 'fulltime',
       salary: '',
       ot_eligible: true,
@@ -683,7 +725,7 @@ const UserManagement: React.FC = () => {
       setViewMode('list');
       setEditingUser(null);
     }
-    if (pageTab === 2 && !hrElevated && !userMgmtMenuFlags.canCreate) {
+    if ((pageTab === 2 || pageTab === 3) && !hrElevated && !userMgmtMenuFlags.canCreate) {
       setPageTab(0);
       setViewMode('list');
       setEditingUser(null);
@@ -730,6 +772,7 @@ const UserManagement: React.FC = () => {
       department: '',
       department_id: '' as number | '',
       position: '',
+      position_id: '' as number | '',
       employment_type: 'fulltime',
       salary: '',
       ot_eligible: true,
@@ -767,6 +810,10 @@ const UserManagement: React.FC = () => {
           ? Number((user as any).department_id)
           : ('' as number | ''),
       position: user.position || '',
+      position_id:
+        (user as any).position_id != null && (user as any).position_id !== ''
+          ? Number((user as any).position_id)
+          : ('' as number | ''),
       employment_type: (user as any).employment_type || 'fulltime',
       salary: (user as any).salary || '',
       ot_eligible: (user as any).ot_eligible !== false,
@@ -819,7 +866,7 @@ const UserManagement: React.FC = () => {
           setSuccess(t('userManagement.deleteSelectedSuccess', { count: selectedUsers.length }));
           setSelectedUsers([]);
           fetchUsers();
-        } catch (error) {
+        } catch {
           setError(t('userManagement.deleteFailed'));
         }
       },
@@ -841,8 +888,7 @@ const UserManagement: React.FC = () => {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Excel 샘플 다운로드 오류:', error);
+    } catch {
       setError(t('userManagement.excelSampleDownloadError'));
     }
   };
@@ -866,8 +912,7 @@ const UserManagement: React.FC = () => {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Excel 내보내기 오류:', error);
+    } catch {
       setError(t('userManagement.excelExportError'));
     }
   };
@@ -912,7 +957,6 @@ const UserManagement: React.FC = () => {
         }, 2000);
       }
     } catch (error: any) {
-      console.error('Excel 가져오기 오류:', error);
       setError(error.response?.data?.message || t('userManagement.excelImportError'));
     } finally {
       setImportLoading(false);
@@ -938,6 +982,12 @@ const UserManagement: React.FC = () => {
         submitData.department_id = null;
       } else {
         submitData.department_id = Number(submitData.department_id);
+      }
+
+      if (submitData.position_id === '' || submitData.position_id === undefined) {
+        submitData.position_id = null;
+      } else {
+        submitData.position_id = Number(submitData.position_id);
       }
 
       if (
@@ -972,9 +1022,13 @@ const UserManagement: React.FC = () => {
       if (avatarFile && Number.isFinite(savedUserId)) {
         const avatarForm = new FormData();
         avatarForm.append('avatar', avatarFile);
-        await api.post(`/users/${savedUserId}/avatar`, avatarForm, {
+        const avatarResponse = await api.post(`/users/${savedUserId}/avatar`, avatarForm, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
+        const nextAvatarUrl = avatarResponse.data?.data?.avatar_url;
+        if (nextAvatarUrl && user?.id === savedUserId) {
+          useStore.getState().updateUser({ avatar_url: nextAvatarUrl });
+        }
       }
 
       resetAvatarInput();
@@ -1200,14 +1254,14 @@ const UserManagement: React.FC = () => {
               },
             }}
             onChange={(e, newValue) => {
-              const v = newValue as 0 | 1 | 2;
+              const v = newValue as 0 | 1 | 2 | 3;
               if (v === 0 && !menusLoading && !hrElevated && !userMgmtMenuFlags.canView) {
                 return;
               }
               if (v === 1 && !menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate) {
                 return;
               }
-              if (v === 2 && !menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate) {
+              if ((v === 2 || v === 3) && !menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate) {
                 return;
               }
               if (v === 1) {
@@ -1215,13 +1269,8 @@ const UserManagement: React.FC = () => {
                 return;
               }
               setPageTab(v);
-              if (v === 0) {
-                setViewMode('list');
-                setEditingUser(null);
-              } else {
-                setViewMode('list');
-                setEditingUser(null);
-              }
+              setViewMode('list');
+              setEditingUser(null);
             }}
           >
             <Tab
@@ -1244,6 +1293,15 @@ const UserManagement: React.FC = () => {
             />
             <Tab
               label={t('userManagement.departmentTab')}
+              disabled={!menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate}
+              title={
+                !menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate
+                  ? t('userManagement.tabDisabledNoCreate')
+                  : undefined
+              }
+            />
+            <Tab
+              label={t('userManagement.positionTab')}
               disabled={!menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate}
               title={
                 !menusLoading && !hrElevated && !userMgmtMenuFlags.canCreate
@@ -1333,7 +1391,7 @@ const UserManagement: React.FC = () => {
                             mt: 0.5,
                             minWidth: 220,
                             borderRadius: '8px',
-                            border: '1px solid #C5CED9',
+                            border: '1px solid #CBD5E1',
                             boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
                           },
                         },
@@ -1844,6 +1902,51 @@ const UserManagement: React.FC = () => {
         </Box>
       )}
 
+      {/* 직책 관리 (탭) — 회사별 */}
+      {pageTab === 3 && (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {(user?.role === 'root' || user?.role === 'audit') && (
+            <Card elevation={0} sx={mvsBodyCardSx}>
+              <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2, maxWidth: 420 }}>
+                <TextField
+                  fullWidth
+                  size="small"
+                  select
+                  label={t('userManagement.company')}
+                  {...USER_FILTER_OUTLINED}
+                  value={selectedCompanyId}
+                  onChange={(e) => setSelectedCompanyId(e.target.value as number | '')}
+                  SelectProps={{ displayEmpty: true }}
+                  sx={userFilterFieldSx}
+                >
+                  <MenuItem value="">{t('positionManagement.selectCompanyFirst')}</MenuItem>
+                  {companies.map((company) => (
+                    <MenuItem key={company.id} value={company.id}>
+                      {company.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Box>
+            </Card>
+          )}
+          <PositionManagementPanel
+            embedded
+            companyId={
+              user?.role === 'root' || user?.role === 'audit'
+                ? selectedCompanyId === ''
+                  ? null
+                  : Number(selectedCompanyId)
+                : user?.company_id != null
+                  ? Number(user.company_id)
+                  : null
+            }
+            canCreate={hrElevated || userMgmtMenuFlags.canCreate}
+            canEdit={hrElevated || userMgmtMenuFlags.canEdit}
+            canDelete={hrElevated || userMgmtMenuFlags.canDelete}
+          />
+        </Box>
+      )}
+
       {/* 사용자 생성/편집 폼 */}
       {isFormView && (
         <>
@@ -2204,15 +2307,70 @@ const UserManagement: React.FC = () => {
                               {t('userManagement.deptFromMasterHint')}
                             </Typography>
                           </Box>
-                          <TextField
-                            fullWidth
-                            size="small"
-                            label={t('userManagement.positionTitle')}
-                            {...OUTLINED_FIELD}
-                            value={formData.position}
-                            onChange={(e) => setFormData({ ...formData, position: e.target.value })}
-                            placeholder={t('userManagement.positionPlaceholder')}
-                          />
+                          <Box sx={{ width: '100%', minWidth: 0 }}>
+                            <TextField
+                              fullWidth
+                              size="small"
+                              select
+                              label={t('userManagement.positionTitle')}
+                              {...OUTLINED_FIELD}
+                              value={formData.position_id === '' ? '' : String(formData.position_id)}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === '') {
+                                  setFormData({ ...formData, position_id: '', position: '' });
+                                } else {
+                                  const id = Number(v);
+                                  const p = positions.find((x) => x.id === id);
+                                  setFormData({
+                                    ...formData,
+                                    position_id: id,
+                                    position: p?.name || ''
+                                  });
+                                }
+                              }}
+                              SelectProps={{
+                                displayEmpty: true,
+                                renderValue: (selected) => {
+                                  if (selected === '') {
+                                    return (
+                                      <Typography component="span" color="text.secondary" sx={{ fontStyle: 'italic', fontSize: '0.8125rem' }}>
+                                        {t('positionManagement.noPosition')}
+                                      </Typography>
+                                    );
+                                  }
+                                  const p = positions.find((x) => String(x.id) === selected);
+                                  return p?.name ?? formData.position ?? '';
+                                },
+                                MenuProps: {
+                                  PaperProps: {
+                                    sx: { maxHeight: 320, '& .MuiMenuItem-root': { fontSize: '0.8125rem' } }
+                                  },
+                                  anchorOrigin: { vertical: 'bottom', horizontal: 'left' },
+                                  transformOrigin: { vertical: 'top', horizontal: 'left' }
+                                },
+                              }}
+                            >
+                              <MenuItem value="">
+                                <em>{t('positionManagement.noPosition')}</em>
+                              </MenuItem>
+                              {positions.map((p, idx) => (
+                                <MenuItem key={p.id} value={String(p.id)}>
+                                  {t('positionManagement.rankBadge', { level: idx + 1 })} · {p.name}
+                                </MenuItem>
+                              ))}
+                              {formData.position_id !== '' &&
+                                !positions.some((p) => p.id === formData.position_id) &&
+                                formData.position && (
+                                  <MenuItem value={String(formData.position_id)}>
+                                    {formData.position}
+                                  </MenuItem>
+                                )}
+                            </TextField>
+                            <Typography color="text.secondary" sx={hrHintSx}>
+                              {t('userManagement.positionFromMasterHint')}
+                            </Typography>
+                          </Box>
                         </Box>
                       </Box>
                       <FormControlLabel
@@ -2310,6 +2468,8 @@ const UserManagement: React.FC = () => {
                             company_id,
                             department_id: '',
                             department: '',
+                            position_id: '',
+                            position: '',
                           });
                         }}
                         required

@@ -58,8 +58,8 @@ const eWayBillFilterSelectSx = {
   borderRadius: '8px',
   bgcolor: '#FFFFFF',
   height: 40,
-  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
-  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
+  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#CBD5E1' },
+  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#94A3B8' },
 };
 
 interface EWayBillItem {
@@ -470,8 +470,7 @@ const EWayBillComponent: React.FC = () => {
         // API 실패 시 샘플 데이터 사용
         setAllEwayBills(sampleData);
       }
-    } catch (error) {
-      console.error('E-Way Bill 데이터 로드 오류:', error);
+    } catch {
       // API 실패 시 샘플 데이터 사용
       setAllEwayBills(sampleData);
     }
@@ -646,7 +645,6 @@ const EWayBillComponent: React.FC = () => {
       setDeleteTargetId(null);
       await loadEwayBillData();
     } catch (error: unknown) {
-      console.error('삭제 오류:', error);
       const err = error as { response?: { data?: { message?: string } } };
       setError(err.response?.data?.message || '삭제 중 오류가 발생했습니다.');
     } finally {
@@ -667,7 +665,6 @@ const EWayBillComponent: React.FC = () => {
         setError((response as { message?: string }).message || 'E-Way Bill 생성에 실패했습니다.');
       }
     } catch (error: any) {
-      console.error('생성 오류:', error);
       setError(error.response?.data?.message || 'E-Way Bill 생성 중 오류가 발생했습니다.');
     }
   };
@@ -684,7 +681,6 @@ const EWayBillComponent: React.FC = () => {
               loadEwayBillData();
             }
           } catch (error: any) {
-            console.error('취소 오류:', error);
             setError(error.response?.data?.message || 'E-Way Bill 취소 중 오류가 발생했습니다.');
           }
         })();

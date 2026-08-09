@@ -41,21 +41,19 @@ import ReactFlow, {
   MarkerType,
   BackgroundVariant,
   Handle,
-  Position,
-} from 'reactflow';
+  Position } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { useStore } from '../../store';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import { mvsPageRootSx } from '../../theme/mvsLayout';
-import { filterActiveCompanyUsers, useReferenceDataStore } from '../../store/referenceDataStore';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 
 const orgHandleStyle: React.CSSProperties = {
   width: 8,
   height: 8,
   border: '2px solid #94a3b8',
   background: '#fff',
-  opacity: 0,
-};
+  opacity: 0 };
 
 // 조직도 노드 타입 정의
 interface OrganizationNode {
@@ -218,8 +216,7 @@ const CompanyNode = ({ data }: { data: any }) => (
 const nodeTypes: NodeTypes = {
   person: PersonNode,
   department: DepartmentNode,
-  company: CompanyNode,
-};
+  company: CompanyNode };
 
 const OrganizationChart: React.FC = () => {
   const { user } = useStore();
@@ -320,10 +317,8 @@ const OrganizationChart: React.FC = () => {
             label: company.name,
             name: company.name,
             level: 0,
-            employeeCount: activeUsers.length,
-          },
-          position: { x: treeCenterX - COMPANY_W / 2, y: COMPANY_Y },
-        });
+            employeeCount: activeUsers.length },
+          position: { x: treeCenterX - COMPANY_W / 2, y: COMPANY_Y } });
       }
 
       let cursorX = 0;
@@ -339,10 +334,8 @@ const OrganizationChart: React.FC = () => {
             label: deptName,
             name: deptName,
             level: 1,
-            employeeCount: deptUsers.length,
-          },
-          position: { x: deptX, y: DEPT_Y },
-        });
+            employeeCount: deptUsers.length },
+          position: { x: deptX, y: DEPT_Y } });
 
         if (company) {
           orgEdges.push({
@@ -352,8 +345,7 @@ const OrganizationChart: React.FC = () => {
             type: 'smoothstep',
             animated: false,
             style: { stroke: '#94a3b8', strokeWidth: 2 },
-            markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#94a3b8' },
-          });
+            markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#94a3b8' } });
         }
 
         const personStartX = subtreeCenterX - peopleRowWidth / 2;
@@ -370,13 +362,10 @@ const OrganizationChart: React.FC = () => {
               email: userData.email || '',
               phone: userData.phone || '',
               level: 2,
-              managerId: deptNodeId,
-            },
+              managerId: deptNodeId },
             position: {
               x: personStartX + userIndex * (PERSON_W + PERSON_GAP),
-              y: PERSON_Y,
-            },
-          });
+              y: PERSON_Y } });
 
           orgEdges.push({
             id: `edge-${deptNodeId}-${userId}`,
@@ -385,8 +374,7 @@ const OrganizationChart: React.FC = () => {
             type: 'smoothstep',
             animated: false,
             style: { stroke: '#94a3b8', strokeWidth: 2 },
-            markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#94a3b8' },
-          });
+            markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#94a3b8' } });
         });
 
         cursorX += subtreeWidth + DEPT_GAP;
@@ -395,12 +383,6 @@ const OrganizationChart: React.FC = () => {
       setNodes(orgNodes);
       setEdges(orgEdges);
     } catch (error: any) {
-      console.error('❌ [조직도] 데이터 로드 오류:', error);
-      console.error('❌ [조직도] 에러 상세:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
       const errorMessage = error.response?.data?.message || error.message || '조직도 데이터를 불러오는데 실패했습니다.';
       setError(errorMessage);
       setNodes([]);
@@ -408,7 +390,7 @@ const OrganizationChart: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.company_id]);
+  }, [user?.company_id, setNodes, setEdges]);
 
   // 초기 데이터 로드
   React.useEffect(() => {
@@ -595,8 +577,7 @@ const OrganizationChart: React.FC = () => {
             defaultEdgeOptions={{
               type: 'smoothstep',
               style: { stroke: '#94a3b8', strokeWidth: 2 },
-              markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#94a3b8' },
-            }}
+              markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#94a3b8' } }}
             fitView
             fitViewOptions={{ padding: 0.2 }}
             attributionPosition="bottom-left"

@@ -22,8 +22,7 @@ import {
   Tabs,
   TextField,
   Tooltip,
-  Typography,
-} from '@mui/material';
+  Typography } from '@mui/material';
 import {
   AccountBalance as BankIcon,
   CheckCircle as CheckIcon,
@@ -33,8 +32,7 @@ import {
   Sell as SellIcon,
   ShoppingCart as PurchaseIcon,
   SwapHoriz as ContraIcon,
-  Warning as WarningIcon,
-} from '@mui/icons-material';
+  Warning as WarningIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
@@ -54,8 +52,7 @@ import {
   mvsPageRootSx,
   mvsSearchFieldSx,
   mvsTableHeadHighlightSx,
-  mvsTableScrollSx,
-} from '../../theme/mvsLayout';
+  mvsTableScrollSx } from '../../theme/mvsLayout';
 import { formatInr, parseInrInput } from '../../utils/formatInr';
 import { getBilingualName } from '../../utils/accountingMasterLabel';
 
@@ -67,8 +64,7 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   contra: <ContraIcon />,
   journal: <JournalIcon />,
   credit_note: <ReceiptIcon />,
-  debit_note: <PaymentIcon />,
-};
+  debit_note: <PaymentIcon /> };
 
 type PreviewLine = {
   lineNo: number;
@@ -91,8 +87,7 @@ const VoucherEntry: React.FC = () => {
     effectiveCompanyId,
     selectedCompanyName,
     companyQuery,
-    changeCompany,
-  } = useAccountingCompany();
+    changeCompany } = useAccountingCompany();
 
   const [pageTab, setPageTab] = useState(0);
   const [inputMode, setInputMode] = useState<'simple' | 'advanced'>('simple');
@@ -108,7 +103,7 @@ const VoucherEntry: React.FC = () => {
   const [bankAccounts, setBankAccounts] = useState<any[]>([]);
   const [financialYears, setFinancialYears] = useState<any[]>([]);
   const [partyOptions, setPartyOptions] = useState<any[]>([]);
-  const [partySearch, setPartySearch] = useState('');
+  const [, setPartySearch] = useState('');
 
   const [selectedVoucherType, setSelectedVoucherType] = useState<any | null>(null);
   const [selectedParty, setSelectedParty] = useState<any | null>(null);
@@ -122,8 +117,8 @@ const VoucherEntry: React.FC = () => {
   const [postingDate, setPostingDate] = useState(new Date().toISOString().slice(0, 10));
   const [narration, setNarration] = useState('');
   const [taxableAmount, setTaxableAmount] = useState('');
-  const [discount, setDiscount] = useState('');
-  const [roundOff, setRoundOff] = useState('');
+  const [discount] = useState('');
+  const [roundOff] = useState('');
   const [applyGst, setApplyGst] = useState(false);
   const [applyTds, setApplyTds] = useState(false);
   const [isInterState, setIsInterState] = useState(false);
@@ -199,8 +194,7 @@ const VoucherEntry: React.FC = () => {
           accountName: l.accountName,
           debit: l.debit,
           credit: l.credit,
-          narration: l.narration,
-        }));
+          narration: l.narration }));
         const res = await accountingService.previewVoucher({ inputMode: 'advanced', lines }, effectiveCompanyId);
         const data = res?.data || {};
         setPreviewLines(data.lines || []);
@@ -224,9 +218,7 @@ const VoucherEntry: React.FC = () => {
             gstCodeId: applyGst ? selectedGst?.id : undefined,
             tdsCodeId: applyTds ? selectedTds?.id : undefined,
             isInterState,
-            narration,
-          },
-        },
+            narration } },
         effectiveCompanyId
       );
       const data = res?.data || {};
@@ -283,8 +275,7 @@ const VoucherEntry: React.FC = () => {
             accountName: l.accountName,
             debit: l.debit,
             credit: l.credit,
-            narration: l.narration,
-          }))
+            narration: l.narration }))
         : previewLines;
 
       const res = await accountingService.createEnhancedVoucher(
@@ -299,8 +290,7 @@ const VoucherEntry: React.FC = () => {
           amountDetails,
           lines,
           status,
-          postImmediately: status === 'posted',
-        },
+          postImmediately: status === 'posted' },
         effectiveCompanyId
       );
       setSuccess(t('voucherEntry.saved'));
@@ -350,10 +340,9 @@ const VoucherEntry: React.FC = () => {
 
   const typeCardSx = (selected: boolean) => ({
     ...mvsBodyCardSx,
-    borderColor: selected ? '#7BA3C4' : '#D0DBE8',
+    borderColor: selected ? '#1D4E7C' : '#E2E8F0',
     bgcolor: selected ? 'rgba(106, 143, 147, 0.08)' : '#FFFFFF',
-    transition: 'border-color 0.2s, background-color 0.2s',
-  });
+    transition: 'border-color 0.2s, background-color 0.2s' });
 
   return (
     <Box sx={mvsPageRootSx}>
@@ -449,7 +438,7 @@ const VoucherEntry: React.FC = () => {
                   <Card elevation={0} sx={typeCardSx(selectedVoucherType?.id === vt.id)}>
                     <CardActionArea onClick={() => handleSelectVoucherType(vt)} sx={{ borderRadius: 'inherit' }}>
                       <Box sx={{ textAlign: 'center', py: 2, px: 1 }}>
-                        <Box sx={{ color: '#7BA3C4', mb: 0.5, display: 'flex', justifyContent: 'center' }}>
+                        <Box sx={{ color: '#1D4E7C', mb: 0.5, display: 'flex', justifyContent: 'center' }}>
                           {CATEGORY_ICONS[vt.category] || <JournalIcon />}
                         </Box>
                         <Typography variant="body2" fontWeight={600}>{getBilingualName(vt, i18n.language)}</Typography>
@@ -530,8 +519,7 @@ const VoucherEntry: React.FC = () => {
                           sx={mvsSearchFieldSx}
                           InputProps={{
                             ...params.InputProps,
-                            startAdornment: <BankIcon fontSize="small" sx={{ mr: 1, opacity: 0.6 }} />,
-                          }}
+                            startAdornment: <BankIcon fontSize="small" sx={{ mr: 1, opacity: 0.6 }} /> }}
                         />
                       )}
                     />
@@ -597,7 +585,7 @@ const VoucherEntry: React.FC = () => {
                 </Grid>
 
                 {amountRows.length > 0 ? (
-                  <Box sx={{ ...mvsBodyToolbarSx, mt: 2, borderRadius: '8px', border: '1px solid #D0DBE8' }}>
+                  <Box sx={{ ...mvsBodyToolbarSx, mt: 2, borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                     <Box sx={{ width: '100%' }}>
                       <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>{t('voucherEntry.amountBreakdown')}</Typography>
                       {amountRows.map((row) => (
@@ -671,7 +659,7 @@ const VoucherEntry: React.FC = () => {
           </Box>
         </Card>
 
-        <Box sx={{ ...mvsBodySectionHeaderSx, borderRadius: '8px', border: '1px solid #D0DBE8', boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)', justifyContent: 'flex-end' }}>
+        <Box sx={{ ...mvsBodySectionHeaderSx, borderRadius: '8px', border: '1px solid #E2E8F0', boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)', justifyContent: 'flex-end' }}>
           <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
             <Tooltip title={!balanced ? t('voucherEntry.errors.notBalanced') : ''}>
               <span>

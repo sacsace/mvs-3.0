@@ -35,8 +35,6 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Search as SearchIcon,
-  Person as PersonIcon,
-  Work as WorkIcon,
   Email as EmailIcon,
   Phone as PhoneIcon,
   LocationOn as LocationIcon
@@ -262,8 +260,7 @@ const EmployeeManagement: React.FC = () => {
                   <InputAdornment position="start">
                     <SearchIcon />
                   </InputAdornment>
-                ),
-              }}
+                ) }}
             />
             <TextField
               fullWidth

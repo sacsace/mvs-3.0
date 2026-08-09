@@ -206,7 +206,7 @@ const buildCompletedDurationDistribution = (
 ) => {
   const buckets = [
     { name: labels.under1Day, min: 0, max: 24, color: '#16A34A' },
-    { name: labels.days1to3, min: 24, max: 72, color: '#2563EB' },
+    { name: labels.days1to3, min: 24, max: 72, color: '#1D4E7C' },
     { name: labels.days3to7, min: 72, max: 168, color: '#F59E0B' },
     { name: labels.days7to14, min: 168, max: 336, color: '#F97316' },
     { name: labels.over14Days, min: 336, max: Infinity, color: '#DC2626' }
@@ -641,7 +641,6 @@ const WorkStatistics: React.FC = () => {
       setStatusSummary(summary);
       setCompletedDurationSamples(globalCompletedSamples);
     } catch (err: any) {
-      console.error('통계 데이터 로드 오류:', err);
       setError(err?.message || t('workStatistics.errors.loadStatsFailed'));
       setStatistics([]);
       setStatusSummary({ todo: 0, progress: 0, done: 0, unassigned: 0 });
@@ -776,7 +775,7 @@ const WorkStatistics: React.FC = () => {
 
   const timeDistributionData = [
     { name: t('workStatistics.status.todo'), value: statusSummary.todo, color: '#94A3B8' },
-    { name: t('workStatistics.status.inProgress'), value: statusSummary.progress, color: '#2563EB' },
+    { name: t('workStatistics.status.inProgress'), value: statusSummary.progress, color: '#1D4E7C' },
     { name: t('workStatistics.status.done'), value: statusSummary.done, color: '#16A34A' },
     { name: t('workStatistics.status.unassigned'), value: statusSummary.unassigned, color: '#F59E0B' }
   ];
@@ -1037,7 +1036,7 @@ const WorkStatistics: React.FC = () => {
       </Card>
 
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
-        <Box sx={{ borderBottom: 1, borderColor: '#D0DBE8' }}>
+        <Box sx={{ borderBottom: 1, borderColor: '#E2E8F0' }}>
           <Tabs
             value={tabValue}
             onChange={(_e, newValue) => setTabValue(newValue)}
@@ -1083,7 +1082,7 @@ const WorkStatistics: React.FC = () => {
                 ...listViewModeBtnSx,
                 ...(listViewMode === 'all'
                   ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
-                  : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                  : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
               }}
             >
               {t('workStatistics.listView.viewAll')}
@@ -1097,7 +1096,7 @@ const WorkStatistics: React.FC = () => {
                 ...listViewModeBtnSx,
                 ...(listViewMode === 'page'
                   ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
-                  : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                  : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
               }}
             >
               {t('workStatistics.listView.viewPages')}
@@ -1288,8 +1287,8 @@ const WorkStatistics: React.FC = () => {
                 <XAxis dataKey="name" />
                 <YAxis />
                 <RechartsTooltip />
-                <Line type="monotone" dataKey="productivity" name={t('workStatistics.columns.completionRate')} stroke="#2563EB" strokeWidth={2} />
-                <Line type="monotone" dataKey="efficiency" name={t('workStatistics.columns.efficiency')} stroke="#7BA3C4" strokeWidth={2} />
+                <Line type="monotone" dataKey="productivity" name={t('workStatistics.columns.completionRate')} stroke="#1D4E7C" strokeWidth={2} />
+                <Line type="monotone" dataKey="efficiency" name={t('workStatistics.columns.efficiency')} stroke="#1D4E7C" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
           </Box>
@@ -1341,13 +1340,13 @@ const WorkStatistics: React.FC = () => {
                   <Bar
                     dataKey="personalEfficiency"
                     name={t('workStatistics.columns.personalEfficiency')}
-                    fill="#7BA3C4"
+                    fill="#1D4E7C"
                     radius={[6, 6, 0, 0]}
                   />
                   <Bar
                     dataKey="completionRate"
                     name={t('workStatistics.columns.completionRate')}
-                    fill="#2563EB"
+                    fill="#1D4E7C"
                     radius={[6, 6, 0, 0]}
                   />
                   <Bar
@@ -1520,19 +1519,19 @@ const WorkStatistics: React.FC = () => {
                     <Legend />
                     <ReferenceLine
                       y={teamCompletedMedianDays}
-                      stroke="#7BA3C4"
+                      stroke="#1D4E7C"
                       strokeDasharray="6 4"
                       label={{
                         value: t('workStatistics.processingTime.teamMedianLine'),
                         position: 'insideTopRight',
-                        fill: '#7BA3C4',
+                        fill: '#1D4E7C',
                         fontSize: 12
                       }}
                     />
                     <Bar
                       dataKey="completedDays"
                       name={t('workStatistics.charts.avgCompletedProcessing')}
-                      fill="#2563EB"
+                      fill="#1D4E7C"
                       radius={[6, 6, 0, 0]}
                       barSize={28}
                     >

@@ -3,16 +3,16 @@ import { createStitches } from '@stitches/react';
 const { globalCss } = createStitches({
   theme: {
     colors: {
-      bgCanvas: '#F0F4F9',
+      bgCanvas: '#F1F5F9',
       bgSurface: '#ffffff',
       bgMuted: '#F3F7FB',
-      textStrong: '#243447',
-      textMuted: '#6B7C8F',
-      borderSubtle: '#D0DBE8',
-      borderStrong: '#BCC9DA',
-      primary: '#7BA3C4',
-      primaryHover: '#5A849E',
-      focusRing: 'rgba(123, 163, 196, 0.24)',
+      textStrong: '#0F172A',
+      textMuted: '#475569',
+      borderSubtle: '#E2E8F0',
+      borderStrong: '#CBD5E1',
+      primary: '#1D4E7C',
+      primaryHover: '#163E63',
+      focusRing: 'rgba(29, 78, 124, 0.24)',
     },
     radii: {
       sm: '6px',
@@ -27,7 +27,7 @@ const { globalCss } = createStitches({
     },
     fonts: {
       body:
-        '"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+        'Inter, "Segoe UI", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
       mono: '"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace',
     },
   },
@@ -48,21 +48,21 @@ const applyGlobalStyles = globalCss({
     MozOsxFontSmoothing: 'grayscale',
   },
   '.MuiPaper-root': {
-    border: '1px solid #D0DBE8',
+    border: '1px solid #E2E8F0',
     backgroundImage: 'none',
     boxShadow: '$card',
   },
   '.MuiCard-root': {
     borderRadius: '8px',
     boxShadow: '$card',
-    border: '1px solid #D0DBE8',
+    border: '1px solid #E2E8F0',
     transition: 'border-color 0.15s ease',
     '&:hover': {
-      borderColor: '#BCC9DA',
+      borderColor: '#CBD5E1',
     },
   },
   '.MuiCard-root:has([data-testid="SearchIcon"])': {
-    border: '1px solid #D0DBE8 !important',
+    border: '1px solid #E2E8F0 !important',
     backgroundColor: '#F0F4F8',
     boxShadow: 'none !important',
     '&:hover': {
@@ -70,10 +70,10 @@ const applyGlobalStyles = globalCss({
     },
   },
   '.MuiOutlinedInput-root:not(.Mui-disabled) .MuiOutlinedInput-notchedOutline': {
-    borderColor: '#D0DBE8',
+    borderColor: '#E2E8F0',
   },
   '.MuiOutlinedInput-root:not(.Mui-disabled):hover .MuiOutlinedInput-notchedOutline': {
-    borderColor: '#B8C4D0',
+    borderColor: '#94A3B8',
   },
   '.MuiCard-root.MuiPaper-outlined': {
     borderRadius: '8px',

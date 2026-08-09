@@ -38,7 +38,7 @@ import { AutoAwesome as AutoAwesomeIcon, Download as DownloadIcon } from '@mui/i
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ComposedChart, Area, PieChart, Pie, Cell } from 'recharts';
 import { useMenuStore } from '../../store';
 import { api } from '../../services/api';
-import { mvsFilterToolbarSx, mvsSearchFieldSx, mvsInnerCardSx, mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
+import { mvsFilterToolbarSx, mvsSearchFieldSx, mvsInnerCardSx } from '../../theme/mvsLayout';
 
 // TabPanel 컴포넌트 정의
 interface TabPanelProps {
@@ -156,8 +156,7 @@ const CostAnalysis: React.FC = () => {
         if (response.data.success) {
           setAnalysisData(response.data.data);
         }
-      } catch (error) {
-        console.error('비용 분석 데이터 로드 오류:', error);
+      } catch {
         setError(
           language === 'en'
             ? 'Failed to load cost analysis data.'
@@ -186,8 +185,7 @@ const CostAnalysis: React.FC = () => {
           aiInsights: [...prev.aiInsights, ...response.data.data.insights]
         } : null);
       }
-    } catch (error) {
-      console.error('AI 인사이트 생성 오류:', error);
+    } catch {
       setError(
         language === 'en' ? 'Failed to generate insights.' : '인사이트 생성에 실패했습니다.'
       );
@@ -206,8 +204,8 @@ const CostAnalysis: React.FC = () => {
           insight.id === insightId ? { ...insight, status: status as any } : insight
         )
       } : null);
-    } catch (error) {
-      console.error('인사이트 상태 업데이트 오류:', error);
+    } catch {
+      /* ignore */
     }
   };
 
@@ -231,15 +229,13 @@ const CostAnalysis: React.FC = () => {
     border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'dark' ? 0.35 : 0.65)}`,
     boxShadow: '0 4px 24px rgba(15, 23, 42, 0.06)',
     bgcolor: 'background.paper',
-    overflow: 'hidden' as const,
-  };
+    overflow: 'hidden' as const };
 
   const filterBarSx = {
     borderRadius: '8px',
     border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'dark' ? 0.35 : 0.65)}`,
     boxShadow: '0 4px 24px rgba(15, 23, 42, 0.06)',
-    overflow: 'hidden' as const,
-  };
+    overflow: 'hidden' as const };
 
   const sectionTitleSx = {
     fontSize: '15px',
@@ -247,8 +243,7 @@ const CostAnalysis: React.FC = () => {
     letterSpacing: '-0.01em',
     lineHeight: 1.35,
     mb: 2,
-    color: 'text.primary',
-  };
+    color: 'text.primary' };
 
   return (
     <Box sx={{ ...mvsPageRootSx }}>
@@ -281,8 +276,7 @@ const CostAnalysis: React.FC = () => {
               flexWrap: 'wrap',
               '& .MuiInputLabel-root': { fontSize: '0.8125rem' },
               '& .MuiSelect-select': { fontSize: '0.875rem', fontWeight: 500, py: 1.1 },
-              '& .MuiOutlinedInput-root': { borderRadius: '8px' },
-            }}
+              '& .MuiOutlinedInput-root': { borderRadius: '8px' } }}
           >
             <FormControl size="small" sx={{ minWidth: 128 }}>
               <InputLabel shrink>{txt('기간', 'Period')}</InputLabel>
@@ -324,8 +318,7 @@ const CostAnalysis: React.FC = () => {
                 px: 2.25,
                 py: 1.1,
                 borderRadius: '8px',
-                textTransform: 'none',
-              }}
+                textTransform: 'none' }}
             >
               {aiProcessing ? txt('분석 중...', 'Analyzing...') : txt('인사이트 생성', 'Generate insights')}
             </Button>
@@ -340,8 +333,7 @@ const CostAnalysis: React.FC = () => {
                 py: 1.1,
                 borderRadius: '8px',
                 textTransform: 'none',
-                borderColor: alpha(theme.palette.divider, 0.95),
-              }}
+                borderColor: alpha(theme.palette.divider, 0.95) }}
             >
               {txt('보고서 다운로드', 'Download report')}
             </Button>
@@ -356,8 +348,7 @@ const CostAnalysis: React.FC = () => {
           p: 0.5,
           borderRadius: '8px',
           bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.12 : 0.08),
-          border: `1px solid ${alpha(theme.palette.divider, 0.55)}`,
-        }}
+          border: `1px solid ${alpha(theme.palette.divider, 0.55)}` }}
       >
         <Tabs
           value={activeTab}
@@ -379,10 +370,7 @@ const CostAnalysis: React.FC = () => {
               '&.Mui-selected': {
                 color: 'text.primary',
                 bgcolor: 'background.paper',
-                boxShadow: '0 1px 4px rgba(15, 23, 42, 0.08)',
-              },
-            },
-          }}
+                boxShadow: '0 1px 4px rgba(15, 23, 42, 0.08)' } } }}
         >
           <Tab label={txt('개요', 'Overview')} />
           <Tab label={txt('인사이트', 'Insights')} />
@@ -467,8 +455,7 @@ const CostAnalysis: React.FC = () => {
                 sx={{
                   borderRadius: '8px',
                   border: `1px solid ${alpha(theme.palette.divider, 0.55)}`,
-                  overflow: 'hidden',
-                }}
+                  overflow: 'hidden' }}
               >
                 <Table size="small">
                   <TableHead>
@@ -721,8 +708,7 @@ const CostAnalysis: React.FC = () => {
                         bgcolor: 'primary.main',
                         mt: 0.85,
                         mr: 2,
-                        flexShrink: 0,
-                      }}
+                        flexShrink: 0 }}
                     />
                     <ListItemText
                       primary={recommendation}

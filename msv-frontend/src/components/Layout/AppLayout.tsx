@@ -3,10 +3,11 @@ import { Box, Alert, Typography, Button, CircularProgress, useMediaQuery } from 
 import { alpha, useTheme } from '@mui/material/styles';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from './Header';
-import Sidebar, { SIDEBAR_WIDTH_EASING, SIDEBAR_WIDTH_TRANSITION_MS } from './Sidebar';
+import MobileNavDrawer from './MobileNavDrawer';
 import { useStore, useMenuStore } from '../../store';
 import { userUiPreferencesService } from '../../services/api';
-import i18n, { ensureI18nLanguage } from '../../locales/i18n';
+import { ensureI18nLanguage } from '../../locales/i18n';
+import { useMenuLoader } from '../../hooks/useMenuLoader';
 import { mvsPageShellSx, mvsWorkBoardPageBg } from '../../theme/mvsLayout';
 
 /** 서버 prefs의 ko가 클라이언트 영어 선택보다 늦게 도착할 때 UI 언어를 덮어쓰지 않음 */
@@ -19,15 +20,10 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-/** 사이드바·흰 작업 카드 좌우 간격(px) */
 const WORK_AREA_OUTSET = 16;
-/** 헤더~본문 상단 회색 띠 (좌측 메뉴는 헤더에 밀착이라 별도) */
 const HEADER_MENU_GAP_PX = 8;
-/** Header.tsx AppBar top inset 과 동일 — 화면 상단에 밀착 */
 const HEADER_TOP_INSET_PX = 0;
-/** Toolbar와 동일 — 고정 헤더용 레이아웃 스페이서 높이(상단 inset 포함) */
 const HEADER_LAYOUT_HEIGHT = HEADER_TOP_INSET_PX + 60;
-const SIDEBAR_ICON_ONLY_STORAGE_KEY = 'mvs.sidebarIconOnly';
 
 /** 로그인한 사용자 본인의 계정 설정은 메뉴 권한과 무관한 셀프서비스 경로 */
 const isPersonalAccountRoute = (pathname: string): boolean =>
@@ -40,83 +36,29 @@ const isLegalPublicRoute = (pathname: string): boolean =>
   pathname === '/legal/support' ||
   pathname.startsWith('/legal/');
 
-const readSidebarIconOnlyPref = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  try {
-    return window.localStorage.getItem(SIDEBAR_ICON_ONLY_STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-};
-
-const writeSidebarIconOnlyPref = (value: boolean) => {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(SIDEBAR_ICON_ONLY_STORAGE_KEY, value ? '1' : '0');
-  } catch {
-    // ignore
-  }
-};
-
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const theme = useTheme();
   const isMobileNav = useMediaQuery(theme.breakpoints.down('md'));
-  const [sidebarOpen] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState<number>(280);
-  const [sidebarIconOnly, setSidebarIconOnly] = useState<boolean>(() => readSidebarIconOnlyPref());
-  const [autoCollapseEnabled, setAutoCollapseEnabled] = useState<boolean>(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
-  const collapsedWidth = 72;
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useStore();
   const { menus, hasMenuPermission, setLanguage, loading: menusLoading } = useMenuStore();
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
 
-  // 사이드바 너비 변경 핸들러
-  const handleSidebarWidthChange = useCallback((newWidth: number) => {
-    setSidebarWidth(newWidth);
-    userUiPreferencesService.patch({ sidebarWidth: newWidth }).catch(() => {});
-  }, []);
+  useMenuLoader();
 
-  const handleSidebarToggle = () => {
-    if (isMobileNav) {
-      setMobileNavOpen((prev) => !prev);
-    }
+  const handleMobileNavToggle = () => {
+    if (isMobileNav) setMobileNavOpen((prev) => !prev);
   };
 
-  const handleSidebarIconOnlyToggle = useCallback(() => {
-    setSidebarIconOnly((prev) => {
-      const next = !prev;
-      writeSidebarIconOnlyPref(next);
-      return next;
-    });
-  }, []);
-
   useEffect(() => {
-    if (!isMobileNav) {
-      setMobileNavOpen(false);
-    }
+    if (!isMobileNav) setMobileNavOpen(false);
   }, [isMobileNav]);
 
   useEffect(() => {
     setMobileNavOpen(false);
   }, [location.pathname]);
-
-  useEffect(() => {
-    const handleAutoCollapseChange = (event: Event) => {
-      const detail = (event as CustomEvent<{ collapsed?: boolean }>).detail;
-      if (detail && typeof detail.collapsed === 'boolean') {
-        setAutoCollapseEnabled(detail.collapsed);
-      }
-    };
-
-    window.addEventListener('mvs-sidebar-auto-collapse', handleAutoCollapseChange as EventListener);
-    return () => {
-      window.removeEventListener('mvs-sidebar-auto-collapse', handleAutoCollapseChange as EventListener);
-    };
-  }, []);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -125,12 +67,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       .get()
       .then((prefs) => {
         if (cancelled) return;
-        if (typeof prefs.sidebarWidth === 'number' && prefs.sidebarWidth >= 200 && prefs.sidebarWidth <= 480) {
-          setSidebarWidth(prefs.sidebarWidth);
-        }
-        if (typeof prefs.sidebarAutoCollapse === 'boolean') {
-          setAutoCollapseEnabled(prefs.sidebarAutoCollapse);
-        }
         if (prefs.language === 'ko' || prefs.language === 'en') {
           const current = useMenuStore.getState().language;
           if (!shouldApplyPrefsLanguage(prefs.language, current)) {
@@ -146,10 +82,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       cancelled = true;
     };
   }, [user?.id, setLanguage]);
-
-  useEffect(() => {
-    setIsSidebarCollapsed(autoCollapseEnabled);
-  }, [autoCollapseEnabled]);
 
   const findMenuByRoute = useCallback(
     (route: string): number | null => {
@@ -188,81 +120,59 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     [menus]
   );
 
-  // 메뉴 권한 체크
   useEffect(() => {
     const checkMenuPermission = () => {
-      // 로그인 페이지는 체크하지 않음
       if (location.pathname === '/login') {
         setHasAccess(true);
         return;
       }
 
-      // 개인정보·개인 비밀번호 설정은 모든 로그인 사용자에게 허용
       if (user?.id && isPersonalAccountRoute(location.pathname)) {
         setHasAccess(true);
         return;
       }
 
-      // 이용약관·개인정보 처리방침·고객센터
       if (user?.id && isLegalPublicRoute(location.pathname)) {
         setHasAccess(true);
         return;
       }
 
-      // root만 모든 메뉴 접근 가능 (admin도 권한 체크 필요)
       if (user?.role === 'root') {
         setHasAccess(true);
         return;
       }
 
-      // 대시보드는 항상 접근 가능
-      if (location.pathname === '/dashboard' || 
-          location.pathname.startsWith('/dashboard/')) {
+      if (location.pathname === '/dashboard' || location.pathname.startsWith('/dashboard/')) {
         setHasAccess(true);
         return;
       }
 
-      // 현재 경로에 해당하는 메뉴 찾기
       const menuId = findMenuByRoute(location.pathname);
 
       if (!menuId) {
-        // 메뉴를 찾을 수 없으면 접근 차단 (보안상 안전하게 처리)
-        // 단, 대시보드나 로그인 페이지가 아닌 경우에만 차단
-        console.warn('⚠️ [권한 체크] 메뉴를 찾을 수 없음:', location.pathname);
         setHasAccess(false);
         return;
       }
 
-      // view 권한 체크
-      const canView = hasMenuPermission(menuId, 'view');
-
-      setHasAccess(canView);
+      setHasAccess(hasMenuPermission(menuId, 'view'));
     };
 
-    // 메뉴 트리가 비어 있으면 Sidebar fetch 전/직후일 수 있음 → false로 두면 "권한 없음"이 한 프레임 깜빡임
     if (menus.length > 0) {
       checkMenuPermission();
     } else if (menusLoading) {
       setHasAccess(null);
+    } else if (user?.role === 'root') {
+      setHasAccess(true);
     } else {
-      if (user?.role === 'root') {
-        setHasAccess(true);
-      } else {
-        checkMenuPermission();
-      }
+      checkMenuPermission();
     }
   }, [location.pathname, menus, menusLoading, hasMenuPermission, user?.id, user?.role, findMenuByRoute]);
-
-  const contentInsetLeft = isMobileNav
-    ? WORK_AREA_OUTSET
-    : (sidebarIconOnly || (autoCollapseEnabled && isSidebarCollapsed) ? collapsedWidth : sidebarWidth) +
-      WORK_AREA_OUTSET;
 
   const useChromelessWorkArea = true;
 
   return (
-    <Box 
-      sx={{ 
+    <Box
+      sx={{
         display: 'flex',
         flexDirection: 'column',
         minHeight: '100vh',
@@ -271,20 +181,15 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           ? { background: mvsWorkBoardPageBg, backgroundColor: 'transparent' }
           : {}),
         fontFamily: 'var(--font-sans)',
-        // CSS 변수로 사이드바 너비 정의
-        '--sidebar-width': '280px',
-        '--sidebar-width-mobile': '240px',
-        '--sidebar-width-tablet': '260px',
       }}
     >
-      {/* 헤더 - 최상단 (fixed라 문서 높이 0 → 아래 스페이서로 본문 시작 위치 확보) */}
       <Header
         showMobileNav={isMobileNav}
         mobileNavOpen={mobileNavOpen}
-        onMobileNavToggle={handleSidebarToggle}
-        sidebarIconOnly={sidebarIconOnly}
-        onSidebarIconOnlyToggle={handleSidebarIconOnlyToggle}
+        onMobileNavToggle={handleMobileNavToggle}
       />
+      <MobileNavDrawer open={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
+
       <Box
         aria-hidden
         sx={{
@@ -295,7 +200,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         }}
       />
 
-      {/* 메인 컨테이너 - 스페이서 아래부터 = 헤더와 겹치지 않음 */}
       <Box
         sx={{
           position: 'relative',
@@ -304,27 +208,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           display: 'flex',
           flexDirection: 'column',
           backgroundColor: useChromelessWorkArea ? 'transparent' : 'bodyArea.main',
-        ...(useChromelessWorkArea
-          ? { background: mvsWorkBoardPageBg, backgroundColor: 'transparent' }
-          : {}),
+          ...(useChromelessWorkArea
+            ? { background: mvsWorkBoardPageBg, backgroundColor: 'transparent' }
+            : {}),
         }}
       >
-        {/* 사이드바 - 절대 위치로 고정 */}
-        <Sidebar 
-          open={isMobileNav ? mobileNavOpen : sidebarOpen} 
-          onClose={() => setMobileNavOpen(false)} 
-          onToggle={handleSidebarToggle}
-          isMobile={isMobileNav}
-          width={sidebarWidth}
-          onWidthChange={handleSidebarWidthChange}
-          autoCollapseEnabled={autoCollapseEnabled}
-          isCollapsed={isSidebarCollapsed}
-          collapsedWidth={collapsedWidth}
-          onCollapseChange={setIsSidebarCollapsed}
-          iconOnly={sidebarIconOnly}
-        />
-        
-        {/* 메인 콘텐츠 영역 - 사이드바 공간을 고려한 중앙 정렬 */}
         <Box
           sx={{
             width: '100%',
@@ -342,22 +230,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             border: 'none',
             outline: 'none',
             boxShadow: 'none',
-            // 사이드바 너비 + 카드와의 간격(회색 띠가 보이도록)
-            paddingLeft: `${contentInsetLeft}px`,
+            paddingLeft: { xs: 1, sm: 1.5, md: `${WORK_AREA_OUTSET + 8}px` },
             paddingRight: { xs: 1, sm: 1.5, md: `${WORK_AREA_OUTSET + 8}px` },
             paddingTop: { xs: 0.75, sm: `${HEADER_MENU_GAP_PX + 4}px` },
             paddingBottom: { xs: 1.5, sm: 2, md: `${WORK_AREA_OUTSET + 16}px` },
-            transition: isMobileNav
-              ? 'none'
-              : `padding-left ${SIDEBAR_WIDTH_TRANSITION_MS}ms ${SIDEBAR_WIDTH_EASING}`,
-            // CSS-in-JS로 즉시 적용되는 스타일
             '& > *': {
               width: '100%',
               maxWidth: '100%',
-            }
+            },
           }}
         >
-          {/* 작업 영역 컨테이너 - 중앙 정렬된 흰색 패널 */}
           <Box
             sx={{
               width: '100%',
@@ -366,7 +248,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               backgroundColor: useChromelessWorkArea ? 'transparent' : 'workArea.main',
               borderRadius: useChromelessWorkArea ? 0 : { xs: '12px', sm: '18px', md: '24px' },
               boxShadow: useChromelessWorkArea ? 'none' : '0 4px 16px rgba(15, 23, 42, 0.08)',
-              border: useChromelessWorkArea ? 'none' : '1px solid #C5CED9',
+              border: useChromelessWorkArea ? 'none' : '1px solid #CBD5E1',
               ...(useChromelessWorkArea
                 ? { background: mvsWorkBoardPageBg, backgroundColor: 'transparent' }
                 : {}),
@@ -379,15 +261,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               flexDirection: 'column',
               backgroundImage: 'none',
               backgroundSize: 'none',
-              '&::before': {
-                display: 'none'
-              },
-              '&::after': {
-                display: 'none'
-              }
+              '&::before': { display: 'none' },
+              '&::after': { display: 'none' },
             }}
           >
-            {/* 페이지 콘텐츠 내부 - 완전히 중앙 정렬 */}
             <Box
               sx={{
                 flex: 1,
@@ -411,18 +288,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                     }
                   : {}),
                 ...mvsPageShellSx,
-                '&::before': {
-                  display: 'none'
-                },
-                '&::after': {
-                  display: 'none'
-                },
-                // 모든 페이지 콘텐츠가 자동으로 조정되도록 설정
+                '&::before': { display: 'none' },
+                '&::after': { display: 'none' },
                 '& > *': {
                   width: '100%',
                   maxWidth: '100%',
                 },
-                // 그리드나 플렉스 컨테이너가 자동 조정되도록
                 '& .MuiGrid-container': {
                   width: '100%',
                   maxWidth: '100%',
@@ -431,35 +302,33 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                   width: '100%',
                   maxWidth: '100%',
                 },
-                // 카드나 페이퍼 컴포넌트가 자동 조정되도록
                 '& .MuiCard-root, & .MuiPaper-root': {
                   width: '100%',
                   maxWidth: '100%',
                 },
-                // 테이블이 자동 조정되도록
                 '& .MuiTableContainer-root': {
                   width: '100%',
                   maxWidth: '100%',
                 },
-                /* 보조 텍스트·플레이스홀더 등 (테이블 헤더 색은 테마 MuiTableCell head 유지) */
-                '& .MuiTypography-colorTextSecondary, & .MuiFormHelperText-root, & .MuiInputBase-input::placeholder, & .MuiTableSortLabel-root, & .MuiInputAdornment-root, & .MuiFormLabel-root': {
-                  color: (theme) => alpha(theme.palette.text.primary, 0.84),
-                },
+                '& .MuiTypography-colorTextSecondary, & .MuiFormHelperText-root, & .MuiInputBase-input::placeholder, & .MuiTableSortLabel-root, & .MuiInputAdornment-root, & .MuiFormLabel-root':
+                  {
+                    color: (t) => alpha(t.palette.text.primary, 0.84),
+                  },
                 '& .MuiTableSortLabel-root.Mui-active': {
                   color: 'text.primary',
                 },
               }}
             >
               {hasAccess === false ? (
-                <Box 
-                  sx={{ 
+                <Box
+                  sx={{
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
                     minHeight: 'calc(100vh - 200px)',
                     width: '100%',
-                    p: 3
+                    p: 3,
                   }}
                 >
                   <Box sx={{ maxWidth: 500, width: '100%' }}>
@@ -472,8 +341,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                       </Typography>
                     </Alert>
                     <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                      <Button 
-                        variant="contained" 
+                      <Button
+                        variant="contained"
                         color="primary"
                         onClick={() => navigate('/dashboard')}
                         sx={{ mt: 2 }}
@@ -491,7 +360,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                     justifyContent: 'center',
                     minHeight: 'min(360px, 50vh)',
                     width: '100%',
-                    py: 6
+                    py: 6,
                   }}
                 >
                   <CircularProgress size={36} />

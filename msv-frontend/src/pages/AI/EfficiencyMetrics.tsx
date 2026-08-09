@@ -18,12 +18,7 @@ import {
   Tabs,
   Tab,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
   MenuItem,
-  IconButton,
-  Tooltip,
   CircularProgress
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
@@ -36,20 +31,12 @@ import {
   Psychology as PsychologyIcon,
   AutoAwesome as AutoAwesomeIcon,
   Download as DownloadIcon,
-  Refresh as RefreshIcon,
-  Insights as InsightsIcon,
   Timeline as TimelineIcon,
-  Compare as CompareIcon,
   Work as WorkIcon,
   People as PeopleIcon,
   AttachMoney as AttachMoneyIcon,
-  Schedule as ScheduleIcon,
-  CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
-  Info as InfoIcon
-} from '@mui/icons-material';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
-import { useStore } from '../../store';
+  Schedule as ScheduleIcon } from '@mui/icons-material';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { api } from '../../services/api';
 
 // TabPanel 컴포넌트 정의
@@ -128,7 +115,6 @@ interface EfficiencyData {
 }
 
 const EfficiencyMetrics: React.FC = () => {
-  const { user } = useStore();
   const [efficiencyData, setEfficiencyData] = useState<EfficiencyData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -145,8 +131,7 @@ const EfficiencyMetrics: React.FC = () => {
         if (response.data.success) {
           setEfficiencyData(response.data.data);
         }
-      } catch (error) {
-        console.error('효율성 지표 데이터 로드 오류:', error);
+      } catch {
         setError('효율성 지표 데이터를 불러오는데 실패했습니다.');
       } finally {
         setLoading(false);
@@ -169,8 +154,7 @@ const EfficiencyMetrics: React.FC = () => {
           aiRecommendations: [...prev.aiRecommendations, ...response.data.data.recommendations]
         } : null);
       }
-    } catch (error) {
-      console.error('AI 추천 생성 오류:', error);
+    } catch {
       setError('AI 추천 생성에 실패했습니다.');
     }
   };

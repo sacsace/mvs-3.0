@@ -39,7 +39,6 @@ const ExpenseTransferLog: React.FC = () => {
         }
         setExpense(response.data);
       } catch (err: any) {
-        console.error('송금 로그 상세 조회 오류:', err);
         setError(err?.message || '송금 로그를 불러오지 못했습니다.');
       } finally {
         setLoading(false);

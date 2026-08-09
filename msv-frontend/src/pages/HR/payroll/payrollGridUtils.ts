@@ -42,7 +42,6 @@ const PF_BASIC_RATE = 0.12;
 const PF_CAP_INR = 1800;
 const BASIC_RATIO = 0.5;
 const HRA_RATIO = 0.3;
-const OTHER_ALLOWANCE_RATIO = 0.2;
 const LEGACY_DAY_SHIFT_RATE_INR = 50;
 
 function num(v: unknown, fallback = 0): number {

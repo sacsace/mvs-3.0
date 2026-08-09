@@ -88,11 +88,11 @@ const MENU_PANEL_INSET_PX = 0;
 /** 화면 가장자리에 붙는 패널이라 모서리를 둥글게 두지 않음 */
 const MENU_PANEL_RADIUS_PX = 0;
 const MENU_PANEL_BG = '#FFFFFF';
-const MENU_PANEL_BORDER = '#A8BDD0';
+const MENU_PANEL_BORDER = '#CBD5E1';
 const MENU_PANEL_SHADOW = '2px 0 8px rgba(36, 52, 71, 0.06)';
-const MENU_ACTIVE_COLOR = '#4A7FA8';
-const MENU_ACTIVE_BG = 'rgba(74, 127, 168, 0.12)';
-const MENU_HOVER_BG = 'rgba(74, 127, 168, 0.07)';
+const MENU_ACTIVE_COLOR = '#1D4E7C';
+const MENU_ACTIVE_BG = 'rgba(29, 78, 124, 0.12)';
+const MENU_HOVER_BG = 'rgba(29, 78, 124, 0.07)';
 const MENU_MAIN_TEXT_COLOR = '#1E2F42';
 const MENU_SUB_TEXT_COLOR = '#526578';
 const MENU_SECTION_MUTED = '#6E8092';
@@ -131,7 +131,7 @@ const menuItemButtonSx = (
       : {},
   '&:hover': {
     backgroundColor:
-      isActive && level > 0 ? 'rgba(74, 127, 168, 0.2)' : MENU_HOVER_BG,
+      isActive && level > 0 ? 'rgba(29, 78, 124, 0.2)' : MENU_HOVER_BG,
   },
 });
 
@@ -618,8 +618,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         
         setError(null);
       } catch (error: any) {
-        console.error('메뉴 로드 오류:', error);
-        
         if (error.response?.status === 429 && retryCount < 3) {
           window.clearTimeout(timeoutId);
           setTimeout(() => {
@@ -843,7 +841,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 ml: 1.75,
                 pl: 1.1,
                 borderLeft: `2px solid ${MENU_NEST_BORDER}`,
-                bgcolor: 'rgba(74, 127, 168, 0.035)',
+                bgcolor: 'rgba(29, 78, 124, 0.035)',
                 borderRadius: '0 10px 10px 0',
                 py: 0.25,
                 mr: 0.75,
@@ -912,7 +910,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         flexDirection: 'column',
         '&::-webkit-scrollbar': { width: 5 },
         '&::-webkit-scrollbar-thumb': {
-          backgroundColor: 'rgba(74, 127, 168, 0.28)',
+          backgroundColor: 'rgba(29, 78, 124, 0.28)',
           borderRadius: 8,
         },
         '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },

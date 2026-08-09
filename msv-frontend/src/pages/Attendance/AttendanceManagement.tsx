@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -177,11 +177,11 @@ const AttendanceManagement: React.FC = () => {
       second: lookup('second')
     };
   };
-  const getClientDate = () => {
+  const getClientDate = useCallback(() => {
     const { year, month, day } = getClientTimeParts();
     return `${year}-${month}-${day}`;
-  };
-  const getMonthBoundsIST = () => {
+  }, []);
+  const getMonthBoundsIST = useCallback(() => {
     const { year, month } = getClientTimeParts();
     const y = parseInt(year, 10);
     const mb = parseInt(month, 10);
@@ -192,7 +192,7 @@ const AttendanceManagement: React.FC = () => {
       year: y,
       month: mb
     };
-  };
+  }, []);
   const initialBounds = getMonthBoundsIST();
   const [startDate, setStartDate] = useState(initialBounds.start_date);
   const [endDate, setEndDate] = useState(initialBounds.end_date);
@@ -230,7 +230,6 @@ const AttendanceManagement: React.FC = () => {
           }
         }
       } catch (locationError) {
-        console.error('??? ?? ?? ??:', locationError);
       }
     };
 
@@ -275,15 +274,15 @@ const AttendanceManagement: React.FC = () => {
         if (response.success) {
           setTodayAttendance(response.data);
         }
-      } catch (error) {
-        console.error('??? ?? ?? ??:', error);
-      }
+      } catch {
+      /* ignore */
+    }
     };
 
     if (user) {
       fetchTodayAttendance();
     }
-  }, [user]);
+  }, [user, getClientDate]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -327,7 +326,7 @@ const AttendanceManagement: React.FC = () => {
   }, [attendances, user?.id, startDate, endDate]);
 
   // ?? ?? ??
-  const fetchAttendances = async () => {
+  const fetchAttendances = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -346,18 +345,17 @@ const AttendanceManagement: React.FC = () => {
         setError(response.message || t('attendanceManagement.loadListFailed'));
       }
     } catch (error: any) {
-      console.error('?? ?? ?? ??:', error);
       setError(error.response?.data?.message || t('attendanceManagement.loadListError'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [startDate, endDate, filter.status, t]);
 
   useEffect(() => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) return;
     if (startDate > endDate) return;
     fetchAttendances();
-  }, [filter.status, startDate, endDate]);
+  }, [fetchAttendances, startDate, endDate]);
 
   // ?? ??
   const handleCheckIn = async () => {
@@ -423,7 +421,6 @@ const AttendanceManagement: React.FC = () => {
         setError(response.message || t('attendanceManagement.checkInFailed'));
       }
     } catch (error: any) {
-      console.error('?? ?? ??:', error);
       if (error.code === 1 || error.message?.includes('Geolocation')) {
         setError(t('attendanceManagement.locationRequired'));
       } else {
@@ -461,7 +458,6 @@ const AttendanceManagement: React.FC = () => {
         setError(response.message || t('attendanceManagement.checkOutFailed'));
       }
     } catch (error: any) {
-      console.error('?? ?? ??:', error);
         setError(error.response?.data?.message || t('attendanceManagement.checkOutError'));
     } finally {
       setCheckOutLoading(false);
@@ -522,8 +518,7 @@ const AttendanceManagement: React.FC = () => {
         hour12: true,
         timeZone: TIME_ZONE,
       }).format(date);
-    } catch (error) {
-      console.error('?? ??? ??:', error, dateString);
+    } catch {
       return dateString;
     }
   };
@@ -631,7 +626,7 @@ const AttendanceManagement: React.FC = () => {
   const hasActiveFilters = useMemo(() => {
     const bounds = getMonthBoundsIST();
     return filter.status !== 'all' || startDate !== bounds.start_date || endDate !== bounds.end_date;
-  }, [filter.status, startDate, endDate]);
+  }, [filter.status, startDate, endDate, getMonthBoundsIST]);
 
   const handleResetFilters = () => {
     const bounds = getMonthBoundsIST();

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Menu, UserPermission } from '../services/menuService';
-import i18n, { ensureI18nLanguage } from '../locales/i18n';
+import { ensureI18nLanguage } from '../locales/i18n';
 import { useNotificationStore, bindNotificationPrefsUser } from './notificationStore';
 import { useErrorStore } from './errorStore';
 
@@ -16,6 +16,7 @@ export interface User {
   department?: string;
   position?: string;
   is_payment_officer?: boolean;
+  avatar_url?: string | null;
 }
 
 interface AuthState {
@@ -90,8 +91,7 @@ export const useStore = create<AuthState>()(
         if (userId != null) {
           bindNotificationPrefsUser(userId);
         }
-      },
-    }
+      } }
   )
 );
 

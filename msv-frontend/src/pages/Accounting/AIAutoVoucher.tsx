@@ -766,7 +766,7 @@ const AIAutoVoucher: React.FC = () => {
                     sx={{
                       p: 1.25,
                       borderRadius: 1.5,
-                      border: '1px solid #C5CED9',
+                      border: '1px solid #CBD5E1',
                       bgcolor: alpha(theme.palette.primary.main, 0.04),
                     }}
                   >
@@ -782,7 +782,7 @@ const AIAutoVoucher: React.FC = () => {
                 )}
                 {Array.isArray(selected.ai_analysis?.historicalMatches) &&
                   selected.ai_analysis!.historicalMatches!.length > 0 && (
-                    <Box sx={{ p: 1.25, borderRadius: 1.5, border: '1px solid #C5CED9' }}>
+                    <Box sx={{ p: 1.25, borderRadius: 1.5, border: '1px solid #CBD5E1' }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.75 }}>
                         Historical matches
                       </Typography>
@@ -930,7 +930,7 @@ const AIAutoVoucher: React.FC = () => {
                 <Typography variant="subtitle2" sx={{ mt: 1, fontWeight: 700 }}>
                   {t('autoVoucher.review.auditLog')}
                 </Typography>
-                <Box sx={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #C5CED9', borderRadius: 1.5, p: 1 }}>
+                <Box sx={{ maxHeight: 180, overflowY: 'auto', border: '1px solid #CBD5E1', borderRadius: 1.5, p: 1 }}>
                   {(selected.auditLogs || []).length === 0 && (
                     <Typography variant="caption" color="text.secondary">
                       {t('autoVoucher.review.noLog')}

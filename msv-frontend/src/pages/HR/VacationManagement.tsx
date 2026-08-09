@@ -20,10 +20,6 @@ import {
   Tooltip,
   Tabs,
   Tab,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent,
   CircularProgress,
   Alert,
   TextField,
@@ -42,8 +38,7 @@ import {
   Autocomplete,
   TableSortLabel,
   Pagination,
-  useMediaQuery,
-} from '@mui/material';
+  useMediaQuery } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
   mvsPageRootSx,
@@ -58,8 +53,7 @@ import {
   mvsBodyListTableSx,
   mvsTableHeadHighlightSx,
   mvsTableBodyRowSx,
-  mvsBodyPaginationSx,
-} from '../../theme/mvsLayout';
+  mvsBodyPaginationSx } from '../../theme/mvsLayout';
 import { alpha, useTheme, type SxProps, type Theme } from '@mui/material/styles';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
@@ -84,8 +78,7 @@ import {
   Schedule as ScheduleIcon,
   MoreHoriz as MoreHorizIcon,
   Groups as GroupsIcon,
-  Favorite as FavoriteIcon,
-} from '@mui/icons-material';
+  Favorite as FavoriteIcon } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
@@ -172,8 +165,7 @@ const DEFAULT_LEAVE_TYPE_DAYS: Record<string, number> = {
   maternity: 182,
   paternity: 15,
   marriage: 5,
-  bereavement: 3,
-};
+  bereavement: 3 };
 
 const DEFAULT_AVAILABLE_TYPES = [
   'annual',
@@ -201,8 +193,7 @@ const vacationTableBodyRowSx: SxProps<Theme> = (theme) => {
     ...(base as object),
     '& .MuiTableRow-root:nth-of-type(odd)': { bgcolor: rowBg },
     '& .MuiTableRow-root:nth-of-type(even)': { bgcolor: rowBg },
-    '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
-  };
+    '& .MuiTableRow-root:hover': { bgcolor: hoverBg } };
 };
 
 const VacationManagement: React.FC = () => {
@@ -333,7 +324,6 @@ const VacationManagement: React.FC = () => {
         setError(response.message || t('vacationManagement.noLeaveBalances'));
       }
     } catch (e: any) {
-      console.error('휴가 잔여일 로드 오류:', e);
       setLeaveBalances([]);
       setError(e?.response?.data?.message || t('vacationManagement.noLeaveBalances'));
     } finally {
@@ -392,7 +382,6 @@ const VacationManagement: React.FC = () => {
         setError(response.message || '휴가 목록을 불러올 수 없습니다.');
       }
     } catch (error: any) {
-      console.error('휴가 목록 조회 오류:', error);
       setError(error.response?.data?.message || '휴가 목록을 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
@@ -469,7 +458,6 @@ const VacationManagement: React.FC = () => {
         setError(response.message || '휴가 목록을 불러올 수 없습니다.');
       }
     } catch (error: any) {
-      console.error('휴가 목록 조회 오류:', error);
       setError(error.response?.data?.message || '휴가 목록을 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
@@ -482,8 +470,8 @@ const VacationManagement: React.FC = () => {
       if (response.success) {
         setVacationPolicy(response.data);
       }
-    } catch (error: any) {
-      console.error('휴가 정책 조회 오류:', error);
+    } catch {
+      /* ignore */
     }
   };
 
@@ -499,8 +487,7 @@ const VacationManagement: React.FC = () => {
         annualLeaveStartDays: startDays,
         annualLeaveEarnDays: vacationPolicy?.annualLeaveEarnDays || 20,
         availableTypes: vacationPolicy?.availableTypes || DEFAULT_AVAILABLE_TYPES,
-        leaveTypeDays: vacationPolicy?.leaveTypeDays || DEFAULT_LEAVE_TYPE_DAYS,
-      });
+        leaveTypeDays: vacationPolicy?.leaveTypeDays || DEFAULT_LEAVE_TYPE_DAYS });
       if (response.success) {
         setSuccess('휴가 정책이 저장되었습니다.');
         setVacationPolicy(response.data);
@@ -508,7 +495,6 @@ const VacationManagement: React.FC = () => {
         setError(response.message || '휴가 정책 저장에 실패했습니다.');
       }
     } catch (error: any) {
-      console.error('휴가 정책 저장 오류:', error);
       setError(error.response?.data?.message || '휴가 정책 저장 중 오류가 발생했습니다.');
     } finally {
       setSavingPolicy(false);
@@ -533,8 +519,7 @@ const VacationManagement: React.FC = () => {
         annualLeaveStartDays: vacationPolicy?.annualLeaveStartDays || 240,
         annualLeaveEarnDays: vacationPolicy?.annualLeaveEarnDays || 20,
         availableTypes: newTypes,
-        leaveTypeDays: vacationPolicy?.leaveTypeDays || DEFAULT_LEAVE_TYPE_DAYS,
-      });
+        leaveTypeDays: vacationPolicy?.leaveTypeDays || DEFAULT_LEAVE_TYPE_DAYS });
       if (response.success) {
         setSuccess('휴가 정책이 저장되었습니다.');
         setVacationPolicy(response.data);
@@ -542,7 +527,6 @@ const VacationManagement: React.FC = () => {
         setError(response.message || '휴가 정책 저장에 실패했습니다.');
       }
     } catch (error: any) {
-      console.error('휴가 정책 저장 오류:', error);
       setError(error.response?.data?.message || '휴가 정책 저장 중 오류가 발생했습니다.');
     } finally {
       setSavingPolicy(false);
@@ -565,9 +549,7 @@ const VacationManagement: React.FC = () => {
         leaveTypeDays: {
           ...DEFAULT_LEAVE_TYPE_DAYS,
           ...(vacationPolicy?.leaveTypeDays || {}),
-          [vacationType]: days,
-        },
-      });
+          [vacationType]: days } });
       if (response.success) {
         setSuccess('휴가 정책이 저장되었습니다.');
         setVacationPolicy(response.data);
@@ -575,7 +557,6 @@ const VacationManagement: React.FC = () => {
         setError(response.message || '휴가 정책 저장에 실패했습니다.');
       }
     } catch (error: any) {
-      console.error('휴가 정책 저장 오류:', error);
       setError(error.response?.data?.message || '휴가 정책 저장 중 오류가 발생했습니다.');
     } finally {
       setSavingPolicy(false);
@@ -673,11 +654,9 @@ const VacationManagement: React.FC = () => {
       window.URL.revokeObjectURL(url);
       setSuccess(t('vacationManagement.excelDownloadSuccess'));
     } catch (error: any) {
-      console.error('Excel 내보내기 오류:', error);
       setError(error.response?.data?.message || t('vacationManagement.excelExportError'));
     }
   };
-
 
   const handleApprove = async (id: number) => {
     try {
@@ -689,7 +668,6 @@ const VacationManagement: React.FC = () => {
         setError(response.message || '휴가 승인에 실패했습니다.');
       }
     } catch (error: any) {
-      console.error('휴가 승인 오류:', error);
       setError(error.response?.data?.message || '휴가 승인 중 오류가 발생했습니다.');
     }
   };
@@ -708,7 +686,6 @@ const VacationManagement: React.FC = () => {
               setError(response.message || '휴가 거부에 실패했습니다.');
             }
           } catch (error: any) {
-            console.error('휴가 거부 오류:', error);
             setError(error.response?.data?.message || '휴가 거부 중 오류가 발생했습니다.');
           }
         })();
@@ -738,7 +715,6 @@ const VacationManagement: React.FC = () => {
               setError(response.message || '휴가 삭제에 실패했습니다.');
             }
           } catch (error: any) {
-            console.error('휴가 삭제 오류:', error);
             setError(error.response?.data?.message || '휴가 삭제 중 오류가 발생했습니다.');
           }
         })();
@@ -751,7 +727,6 @@ const VacationManagement: React.FC = () => {
       }
     );
   };
-
 
   const vacationTypes = [
     { key: 'annual', name: t('vacationManagement.annual'), icon: <HomeIcon />, color: 'primary' },
@@ -788,11 +763,6 @@ const VacationManagement: React.FC = () => {
     );
   };
 
-  const handleEdit = (request: VacationRequest) => {
-    // 페이지 이동으로 변경
-    window.location.href = `/hr/leave/request/${request.id}`;
-  };
-
   const handleRowClick = (request: VacationRequest) => {
     setSelectedVacation(request);
     setDetailDialogOpen(true);
@@ -816,8 +786,7 @@ const VacationManagement: React.FC = () => {
     (async () => {
       try {
         const allUsers = await useReferenceDataStore.getState().fetchUsers({
-          company_id: user?.company_id,
-        });
+          company_id: user?.company_id });
         if (cancelled) return;
         const options = allUsers.filter(
           (u: any) =>
@@ -845,8 +814,7 @@ const VacationManagement: React.FC = () => {
     setApproverSaving(true);
     try {
       const response = await vacationService.updateVacation(selectedVacation.id, {
-        approved_by: nextApprover.id,
-      });
+        approved_by: nextApprover.id });
       if (response.success) {
         const updated: VacationRequest = {
           ...selectedVacation,
@@ -854,8 +822,7 @@ const VacationManagement: React.FC = () => {
           approvedByUserId:
             response.data?.approved_by != null
               ? Number(response.data.approved_by)
-              : nextApprover.id,
-        };
+              : nextApprover.id };
         setSelectedVacation(updated);
         setVacationRequests((prev) =>
           prev.map((v) => (v.id === updated.id ? updated : v))
@@ -892,7 +859,6 @@ const VacationManagement: React.FC = () => {
         setError(response.message || '휴가 승인에 실패했습니다.');
       }
     } catch (error: any) {
-      console.error('휴가 승인 오류:', error);
       setError(error.response?.data?.message || '휴가 승인 중 오류가 발생했습니다.');
     }
   };
@@ -913,11 +879,9 @@ const VacationManagement: React.FC = () => {
         setError(response.message || '휴가 거부에 실패했습니다.');
       }
     } catch (error: any) {
-      console.error('휴가 거부 오류:', error);
       setError(error.response?.data?.message || '휴가 거부 중 오류가 발생했습니다.');
     }
   };
-
 
   const filteredRequests = React.useMemo(() => {
     const filtered = vacationRequests.filter(request => {
@@ -1110,13 +1074,11 @@ const VacationManagement: React.FC = () => {
     textAlign: 'center',
     py: { xs: 6, sm: 8 },
     px: 3,
-    gap: 1.5,
-  } as const;
+    gap: 1.5 } as const;
 
   const vacationListCardSx = {
     ...mvsBodyListTableSx,
-    overflow: 'hidden',
-  } as const;
+    overflow: 'hidden' } as const;
 
   const renderVacationTable = (
     requests: VacationRequest[],
@@ -1198,9 +1160,8 @@ const VacationManagement: React.FC = () => {
             sx={{
               px: { xs: 2, sm: 2.5 },
               py: 1.5,
-              borderBottom: '1px solid #C5CED9',
-              bgcolor: '#FFFFFF',
-            }}
+              borderBottom: '1px solid #CBD5E1',
+              bgcolor: '#FFFFFF' }}
           >
             <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
               {options.sectionTitle}
@@ -1218,9 +1179,7 @@ const VacationManagement: React.FC = () => {
               '& .MuiTableCell-root': {
                 borderLeft: 'none',
                 borderRight: 'none',
-                borderTop: 'none',
-              },
-            }}
+                borderTop: 'none' } }}
           >
             <TableHead sx={mvsTableHeadHighlightSx}>
               <TableRow>
@@ -1316,8 +1275,7 @@ const VacationManagement: React.FC = () => {
                             aria-label={t('vacationManagement.delete')}
                             sx={{
                               color: alpha(theme.palette.text.secondary, theme.palette.mode === 'light' ? 0.72 : 1),
-                              borderRadius: '10px',
-                            }}
+                              borderRadius: '10px' }}
                           >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
@@ -1383,7 +1341,7 @@ const VacationManagement: React.FC = () => {
         return (
           <Box>
             {/* 부서별 휴가 달력 (휴가 현황) */}
-            <Card sx={{ mb: 2, borderRadius: '8px', border: '1px solid #C5CED9', boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)' }}>
+            <Card sx={{ mb: 2, borderRadius: '8px', border: '1px solid #CBD5E1', boxShadow: '0 1px 2px rgba(15, 23, 42, 0.05)' }}>
               <CardContent>
                 <Box
                   sx={{
@@ -1392,8 +1350,7 @@ const VacationManagement: React.FC = () => {
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     gap: 2,
-                    mb: 2,
-                  }}
+                    mb: 2 }}
                 >
                   <Typography
                     variant="subtitle1"
@@ -1537,8 +1494,7 @@ const VacationManagement: React.FC = () => {
               emptyHint:
                 vacationRequests.length === 0
                   ? t('vacationManagement.empty.noItemsHint')
-                  : t('vacationManagement.empty.noResultsHint'),
-            })}
+                  : t('vacationManagement.empty.noResultsHint') })}
           </Box>
         );
       case 2: {
@@ -1555,8 +1511,7 @@ const VacationManagement: React.FC = () => {
                 sectionTitle: `${t('vacationManagement.pending')} (${pendingRequests.length}${t('vacationManagement.casesUnit')})`,
                 pageNum: pendingPage,
                 onPageChange: setPendingPage,
-                emptyTitle: t('vacationManagement.noPendingLeave'),
-              })}
+                emptyTitle: t('vacationManagement.noPendingLeave') })}
             </Box>
             <Box sx={{ ...mvsBodyListZoneSx, mt: 0 }}>
               {renderVacationTable(processedRequests, {
@@ -1564,8 +1519,7 @@ const VacationManagement: React.FC = () => {
                 sectionTitle: `${t('vacationManagement.completed')} (${processedRequests.length}${t('vacationManagement.casesUnit')})`,
                 pageNum: processedPage,
                 onPageChange: setProcessedPage,
-                emptyTitle: t('vacationManagement.noProcessedLeave'),
-              })}
+                emptyTitle: t('vacationManagement.noProcessedLeave') })}
             </Box>
           </Box>
         );
@@ -1606,8 +1560,7 @@ const VacationManagement: React.FC = () => {
                   display: 'flex',
                   flexWrap: 'wrap',
                   alignItems: 'center',
-                  gap: 1,
-                }}
+                  gap: 1 }}
               >
                 <TextField
                   size="small"
@@ -1620,8 +1573,7 @@ const VacationManagement: React.FC = () => {
                       <InputAdornment position="start">
                         <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
                       </InputAdornment>
-                    ),
-                  }}
+                    ) }}
                 />
               </Box>
               <Box sx={{ ...mvsBodyCardSx, overflow: 'hidden' }}>
@@ -1649,9 +1601,7 @@ const VacationManagement: React.FC = () => {
                           borderLeft: 'none',
                           borderRight: 'none',
                           borderTop: 'none',
-                          whiteSpace: 'nowrap',
-                        },
-                      }}
+                          whiteSpace: 'nowrap' } }}
                     >
                       <TableHead sx={mvsTableHeadHighlightSx}>
                         <TableRow>
@@ -1669,8 +1619,7 @@ const VacationManagement: React.FC = () => {
                                       display: 'inline-flex',
                                       alignItems: 'center',
                                       justifyContent: 'flex-end',
-                                      gap: 0.5,
-                                    }}
+                                      gap: 0.5 }}
                                   >
                                     <span>{typeLabel(key)}</span>
                                     <Chip
@@ -1682,8 +1631,7 @@ const VacationManagement: React.FC = () => {
                                         height: 20,
                                         fontSize: '0.65rem',
                                         fontWeight: 600,
-                                        '& .MuiChip-label': { px: 0.75 },
-                                      }}
+                                        '& .MuiChip-label': { px: 0.75 } }}
                                     />
                                   </Box>
                                 </Tooltip>
@@ -1739,8 +1687,7 @@ const VacationManagement: React.FC = () => {
                                           ? 'text.disabled'
                                           : bal.remaining <= 0
                                             ? 'text.secondary'
-                                            : 'text.primary',
-                                      }}
+                                            : 'text.primary' }}
                                     >
                                       {annualLocked ? '—' : bal.remaining}
                                     </Typography>
@@ -2177,8 +2124,7 @@ const VacationManagement: React.FC = () => {
             display: 'grid',
             gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
             gap: 2.5,
-            mb: 3,
-          }}
+            mb: 3 }}
         >
           {kpiItems.map((item) => (
             <Card key={item.key} elevation={0} sx={mvsKpiCardSx}>
@@ -2209,8 +2155,7 @@ const VacationManagement: React.FC = () => {
             px: { xs: 1.5, sm: 2 },
             py: 0.75,
             bgcolor: '#FFFFFF',
-            borderBottom: showListFilters ? '1px solid #C5CED9' : 'none',
-          }}
+            borderBottom: showListFilters ? '1px solid #CBD5E1' : 'none' }}
         >
           <Tabs
             value={activeTab}
@@ -2225,8 +2170,7 @@ const VacationManagement: React.FC = () => {
               '& .MuiTabs-flexContainer': { gap: 0.25 },
               '& .MuiTabs-indicator': {
                 height: 3,
-                borderRadius: '3px 3px 0 0',
-              },
+                borderRadius: '3px 3px 0 0' },
               '& .MuiTab-root': {
                 textTransform: 'none',
                 fontWeight: 500,
@@ -2240,14 +2184,10 @@ const VacationManagement: React.FC = () => {
                 '& .MuiTab-iconWrapper': {
                   marginRight: '6px',
                   marginBottom: '0 !important',
-                  fontSize: '1.125rem',
-                },
-              },
+                  fontSize: '1.125rem' } },
               '& .MuiTab-root.Mui-selected': {
                 color: 'primary.main',
-                fontWeight: 700,
-              },
-            }}
+                fontWeight: 700 } }}
           >
             {(user?.role === 'admin' || user?.role === 'root') && (
               <Tab
@@ -2314,11 +2254,9 @@ const VacationManagement: React.FC = () => {
                 sm: 'repeat(2, minmax(0, 1fr))',
                 lg: canExportVacations
                   ? 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto auto'
-                  : 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto',
-              },
+                  : 'minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto' },
               gap: 2,
-              alignItems: 'flex-end',
-            }}
+              alignItems: 'flex-end' }}
           >
             <TextField
               fullWidth
@@ -2334,8 +2272,7 @@ const VacationManagement: React.FC = () => {
                   <InputAdornment position="start">
                     <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
                   </InputAdornment>
-                ),
-              }}
+                ) }}
             />
             <TextField
               fullWidth
@@ -2396,11 +2333,8 @@ const VacationManagement: React.FC = () => {
                           mt: 0.5,
                           minWidth: 220,
                           borderRadius: '8px',
-                          border: '1px solid #C5CED9',
-                          boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
-                        },
-                      },
-                    }}
+                          border: '1px solid #CBD5E1',
+                          boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)' } } }}
                   >
                     <MenuItem
                       onClick={() => {
@@ -2544,8 +2478,7 @@ const VacationManagement: React.FC = () => {
                         (selectedVacation.approvedByUserId
                           ? {
                               id: Number(selectedVacation.approvedByUserId),
-                              username: selectedVacation.approvedBy || String(selectedVacation.approvedByUserId),
-                            }
+                              username: selectedVacation.approvedBy || String(selectedVacation.approvedByUserId) }
                           : null)
                       }
                       onChange={(_event, newValue) => {

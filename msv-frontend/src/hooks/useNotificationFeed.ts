@@ -35,8 +35,8 @@ export function useNotificationFeed({
         const rows = Array.isArray(response.data.data) ? response.data.data : [];
         onServerRef.current(rows);
       }
-    } catch (error) {
-      console.error('서버 알림 로드 오류:', error);
+    } catch {
+      /* ignore */
     }
   }, []);
 
@@ -49,8 +49,8 @@ export function useNotificationFeed({
       } else {
         onInboxRef.current([]);
       }
-    } catch (error) {
-      console.error('알림 인박스 로드 오류:', error);
+    } catch {
+      /* ignore */
     }
   }, [userId]);
 

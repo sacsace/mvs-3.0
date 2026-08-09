@@ -52,7 +52,6 @@ import {
   mvsTableHeadHighlightSx,
   mvsTableBodyRowSx,
 } from '../../theme/mvsLayout';
-import type { SelectChangeEvent } from '@mui/material/Select';
 import {
   Add as AddIcon,
   Edit as EditIcon,
@@ -527,7 +526,6 @@ const RegularInvoice: React.FC = () => {
               }
             }
           } catch (gstError) {
-            console.error('?? ?? GST ?? ?? ??:', gstError);
           }
 
           setIssuerCompany({
@@ -553,8 +551,7 @@ const RegularInvoice: React.FC = () => {
         } else {
           setIssuerCompany(null);
         }
-      } catch (error) {
-        console.error('?? ?? ?? ?? ??:', error);
+      } catch {
         setIssuerCompany(null);
       }
     };
@@ -596,9 +593,9 @@ const RegularInvoice: React.FC = () => {
               email: u.email || '',
             }))
         );
-      } catch (e) {
-        console.error(e);
-      }
+      } catch {
+      /* ignore */
+    }
     };
     void loadUsers();
   }, [user?.company_id]);
@@ -621,8 +618,8 @@ const RegularInvoice: React.FC = () => {
           gst_numbers: normalizeGstNumbers(p.gst_numbers ?? p.gstNumbers ?? p.business_number)
         }));
         setCompanies(mapped);
-    } catch (error) {
-      console.error('???(???) ?? ?? ??:', error);
+    } catch {
+      /* ignore */
     }
   }, [normalizeGstNumbers]);
 
@@ -766,9 +763,9 @@ const RegularInvoice: React.FC = () => {
         if (response?.success) {
           setNextInvoiceNumber(response.data?.invoice_number || '');
         }
-      } catch (error) {
-        console.error('Failed to load invoice number:', error);
-      }
+      } catch {
+      /* ignore */
+    }
     };
     loadNextNumber();
   }, [isCreating]);
@@ -887,7 +884,6 @@ const RegularInvoice: React.FC = () => {
       };
       document.body.appendChild(iframe);
     } catch (error) {
-      console.error('Print failed:', error);
       showSnackbar(tr('인쇄에 실패했습니다.', 'Failed to print.'), 'error');
     }
   };
@@ -905,7 +901,6 @@ const RegularInvoice: React.FC = () => {
       const pdf = await generateInvoicePdf();
       pdf.save(`${selectedInvoice.invoice_number}.pdf`);
     } catch (error) {
-      console.error('PDF download failed:', error);
       showSnackbar(tr('PDF 다운로드에 실패했습니다.', 'Failed to download PDF.'), 'error');
     }
   };
@@ -941,7 +936,7 @@ const RegularInvoice: React.FC = () => {
         to: toEmail,
         subject: emailSubject,
         message: emailBody,
-        filename: `${selectedInvoice.invoice_number.replace(/[^\w.\-]+/g, '_')}.pdf`
+        filename: `${selectedInvoice.invoice_number.replace(/[^\w.-]+/g, '_')}.pdf`
       });
       if (res?.success === false && res?.message) {
         showSnackbar(res.message, 'error');
@@ -949,7 +944,6 @@ const RegularInvoice: React.FC = () => {
       }
       showSnackbar(tr('이메일을 전송했습니다.', 'Email sent.'), 'success');
     } catch (error: unknown) {
-      console.error('Email send failed:', error);
       const err = error as {
         code?: string;
         message?: string;
@@ -1092,7 +1086,6 @@ const RegularInvoice: React.FC = () => {
 
       setIsEditing(true);
     } catch (error) {
-      console.error('Failed to load invoice details:', error);
       showSnackbar(tr('인보이스 상세를 불러오지 못했습니다.', 'Failed to load invoice details.'), 'error');
     } finally {
       setLoading(false);
@@ -1223,7 +1216,6 @@ const RegularInvoice: React.FC = () => {
       await loadInvoices();
       setNextInvoiceNumber('');
     } catch (error: any) {
-      console.error('Invoice save failed:', error);
       showSnackbar(error?.response?.data?.message || 'Failed to save invoice.', 'error');
     } finally {
       setLoading(false);
@@ -1322,7 +1314,6 @@ const RegularInvoice: React.FC = () => {
       );
       showSnackbar(tr('정산 완료 처리되었습니다.', 'Settlement completed.'), 'success');
     } catch (error: any) {
-      console.error('정산 완료 처리 오류:', error);
       showSnackbar(error?.response?.data?.message || tr('정산 완료 처리 중 오류가 발생했습니다.', 'An error occurred during settlement.'), 'error');
     }
   };
@@ -1369,7 +1360,6 @@ const RegularInvoice: React.FC = () => {
       setSelectedInvoice(null);
       await loadInvoices();
     } catch (error: any) {
-      console.error('Invoice delete failed:', error);
       showSnackbar(error?.response?.data?.message || tr('삭제 승인 요청 등록에 실패했습니다.', 'Failed to submit delete approval request.'), 'error');
     } finally {
       setLoading(false);
@@ -1484,8 +1474,7 @@ const RegularInvoice: React.FC = () => {
           tax_amount: Number(it.tax_amount || 0)
         }))
       });
-    } catch (error) {
-      console.error('Failed to load invoice details:', error);
+    } catch {
       // 상세 보강 실패는 무시하고 이미 열린 화면(리스트 스냅샷) 유지
     } finally {
       setLoading(false);

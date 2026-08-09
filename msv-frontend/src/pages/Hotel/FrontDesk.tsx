@@ -43,7 +43,6 @@ import {
   mvsKpiCardSx,
   mvsBodyCardSx,
   mvsBodyOutlinedBtnSx,
-  mvsBodyPrimaryBtnSx,
   mvsBodySectionHeaderSx,
   mvsBodyFilterWrapSx,
   mvsBodyListZoneSx,
@@ -664,9 +663,9 @@ const FrontDesk: React.FC = () => {
             );
           setRoomTypeRooms(mapped);
         }
-      } catch (e) {
-        console.warn('워크인: 객실 마스터 로드 실패:', e);
-      }
+      } catch {
+      /* ignore */
+    }
     })();
     return () => {
       cancelled = true;
@@ -772,7 +771,7 @@ const FrontDesk: React.FC = () => {
     setAssignRoomOpen(true);
   };
 
-  const loadBookings = async () => {
+  const loadBookings = useCallback(async () => {
     setLoading(true);
     try {
       const response = await roomBookingService.getRoomBookings({});
@@ -781,17 +780,16 @@ const FrontDesk: React.FC = () => {
       } else {
         setBookings([]);
       }
-    } catch (error) {
-      console.error('예약 목록 로드 실패:', error);
+    } catch {
       setSnackbar({ open: true, message: t('frontDesk.errors.loadBookingsFailed'), severity: 'error' });
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
   useEffect(() => {
     loadBookings();
-  }, []);
+  }, [loadBookings]);
 
   const updateStatus = async (id: number, status: 'checked_in' | 'checked_out' | 'no_show') => {
     try {
@@ -814,7 +812,6 @@ const FrontDesk: React.FC = () => {
         setSnackbar({ open: true, message: response.message || t('frontDesk.errors.processFailed'), severity: 'error' });
       }
     } catch (error) {
-      console.error('상태 변경 실패:', error);
       setSnackbar({ open: true, message: t('frontDesk.errors.processFailed'), severity: 'error' });
     } finally {
       setLoading(false);
@@ -863,7 +860,6 @@ const FrontDesk: React.FC = () => {
         });
       }
     } catch (error: any) {
-      console.error('예약 취소 실패:', error);
       setSnackbar({
         open: true,
         message: error?.response?.data?.message || t('frontDesk.errors.cancelFailed'),
@@ -961,7 +957,6 @@ const FrontDesk: React.FC = () => {
       setWalkInOpen(false);
       await loadBookings();
     } catch (error: any) {
-      console.error('워크인 체크인 오류:', error);
       setSnackbar({
         open: true,
         message: error?.response?.data?.message || t('frontDesk.walkIn.errors.createFailed'),
@@ -1007,7 +1002,6 @@ const FrontDesk: React.FC = () => {
       setAssignRoomOpen(false);
       await loadBookings();
     } catch (error: any) {
-      console.error('객실 배정 오류:', error);
       setSnackbar({
         open: true,
         message: error?.response?.data?.message || t('frontDesk.assignRoom.errors.failed'),
@@ -1085,7 +1079,6 @@ const FrontDesk: React.FC = () => {
         });
       }
     } catch (error) {
-      console.error('체크아웃 결제 처리 실패:', error);
       setSnackbar({ open: true, message: t('frontDesk.errors.processFailed'), severity: 'error' });
     } finally {
       setLoading(false);
@@ -1385,7 +1378,7 @@ const FrontDesk: React.FC = () => {
                         onClick={(e) => openRowActionMenu(e, booking)}
                         sx={{
                           color: 'text.secondary',
-                          '&:hover': { color: 'primary.main', bgcolor: alpha('#4A7FA8', 0.08) },
+                          '&:hover': { color: 'primary.main', bgcolor: alpha('#1D4E7C', 0.08) },
                         }}
                       >
                         <MoreHorizIcon fontSize="small" />

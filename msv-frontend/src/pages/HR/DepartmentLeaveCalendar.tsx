@@ -109,7 +109,7 @@ const DepartmentLeaveCalendar: React.FC<DepartmentLeaveCalendarProps> = ({
   }, [gridDays, vacations]);
 
   const maxChips = 3;
-  const cellBorder = '1px solid #B8C4D0';
+  const cellBorder = '1px solid #94A3B8';
 
   return (
     <Box>

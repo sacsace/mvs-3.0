@@ -43,7 +43,7 @@ export const getNotices = async (req: RequestWithUser, res: Response) => {
         {
           model: User,
           as: 'author',
-          attributes: ['id', 'username', 'email']
+          attributes: ['id', 'username', 'email', 'avatar_url']
         }
       ],
       limit: Number(limit),
@@ -62,6 +62,7 @@ export const getNotices = async (req: RequestWithUser, res: Response) => {
       targetAudience: notice.target_audience,
       author: notice.author?.username || '알 수 없음',
       authorId: notice.author_id,
+      authorAvatarUrl: notice.author?.avatar_url || null,
       createdAt: notice.created_at,
       publishedAt: notice.published_at,
       expiresAt: notice.expires_at,
@@ -110,7 +111,7 @@ export const getNotice = async (req: RequestWithUser, res: Response) => {
         {
           model: User,
           as: 'author',
-          attributes: ['id', 'username', 'email', 'department', 'position']
+          attributes: ['id', 'username', 'email', 'department', 'position', 'avatar_url']
         }
       ]
     });
@@ -133,6 +134,7 @@ export const getNotice = async (req: RequestWithUser, res: Response) => {
       targetAudience: notice.target_audience,
       author: notice.author?.username || '알 수 없음',
       authorId: notice.author_id,
+      authorAvatarUrl: notice.author?.avatar_url || null,
       createdAt: notice.created_at,
       publishedAt: notice.published_at,
       expiresAt: notice.expires_at,

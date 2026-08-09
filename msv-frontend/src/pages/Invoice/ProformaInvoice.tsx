@@ -13,9 +13,6 @@ import {
   TableRow,
   Chip,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
   MenuItem,
   IconButton,
   Dialog,
@@ -27,9 +24,7 @@ import {
   Snackbar,
   Pagination,
   InputAdornment,
-  Divider,
-  Avatar
-} from '@mui/material';
+  Divider } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
@@ -41,19 +36,11 @@ import {
   FilterList as FilterIcon,
   Receipt as ReceiptIcon,
   CheckCircle as CheckCircleIcon,
-  Pending as PendingIcon,
-  Cancel as CancelIcon,
-  Person as PersonIcon,
-  Schedule as ScheduleIcon,
   Send as SendIcon,
   Print as PrintIcon,
   Download as DownloadIcon,
-  Refresh as RefreshIcon,
-  AttachMoney as MoneyIcon,
-  Business as BusinessIcon,
   Description as DescriptionIcon
 } from '@mui/icons-material';
-import { useStore } from '../../store';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 
@@ -106,11 +93,10 @@ interface ProformaInvoice {
 }
 
 const ProformaInvoice: React.FC = () => {
-  const { user } = useStore();
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [proformaInvoices, setProformaInvoices] = useState<ProformaInvoice[]>([]);
   const [filteredProformaInvoices, setFilteredProformaInvoices] = useState<ProformaInvoice[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
@@ -276,8 +262,7 @@ const ProformaInvoice: React.FC = () => {
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
       setProformaInvoices(sampleData);
-    } catch (error) {
-      console.error('프로포마 인보이스 데이터 로드 오류:', error);
+    } catch {
       setError('프로포마 인보이스 데이터를 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
@@ -343,8 +328,7 @@ const ProformaInvoice: React.FC = () => {
         try {
           setProformaInvoices((prev) => prev.filter((proformaInvoice) => proformaInvoice.id !== id));
           setSuccess('프로포마 인보이스가 성공적으로 삭제되었습니다.');
-        } catch (error) {
-          console.error('삭제 오류:', error);
+        } catch {
           setError('삭제 중 오류가 발생했습니다.');
         }
       },
@@ -741,8 +725,7 @@ const ProformaInvoice: React.FC = () => {
                   <InputAdornment position="start">
                     <SearchIcon />
                   </InputAdornment>
-                ),
-              }}
+                ) }}
             />
             <TextField
               fullWidth

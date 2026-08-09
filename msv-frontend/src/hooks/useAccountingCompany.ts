@@ -39,7 +39,6 @@ export const useAccountingCompany = () => {
         setCompanies(response.data.data || []);
       }
     } catch (loadError) {
-      console.error('회사 목록 로드 오류:', loadError);
     }
   }, []);
 
@@ -52,7 +51,6 @@ export const useAccountingCompany = () => {
         setCompanies([response.data.data]);
       }
     } catch (loadError) {
-      console.error('회사 정보 로드 오류:', loadError);
     }
   }, [user?.company_id]);
 

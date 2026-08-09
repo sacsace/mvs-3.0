@@ -156,7 +156,6 @@ function App() {
           })
         );
       } catch (error) {
-        console.error('테마 모드 로드 오류:', error);
         if (typeof document !== 'undefined') {
           document.documentElement.setAttribute('data-app-theme', 'light');
         }
@@ -217,6 +216,10 @@ function App() {
             <Route
               path="hr/departments"
               element={<Navigate replace to={`/hr/users?tab=departments`} />}
+            />
+            <Route
+              path="hr/positions"
+              element={<Navigate replace to={`/hr/users?tab=positions`} />}
             />
             <Route path="hr/attendance/statistics" element={<AttendanceStatistics />} />
             <Route path="hr/attendance" element={<AttendanceManagement />} />

@@ -13,9 +13,6 @@ import {
   Paper,
   Button,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
   MenuItem,
   IconButton,
   Chip,
@@ -192,8 +189,7 @@ const QuotationList: React.FC = () => {
                   <InputAdornment position="start">
                     <SearchIcon />
                   </InputAdornment>
-                ),
-              }}
+                ) }}
             />
             <TextField
               fullWidth

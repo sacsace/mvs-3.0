@@ -20,11 +20,10 @@ import {
   mvsBodyCardSx,
   mvsBodyPrimaryBtnSx,
   mvsSearchFieldSx,
-  mvsInnerCardSx,
-} from '../../theme/mvsLayout';
+  mvsInnerCardSx } from '../../theme/mvsLayout';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
-import { api, inventoryService } from '../../services/api';
+import { inventoryService } from '../../services/api';
 import { useMenuStore } from '../../store';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 import { resolveMediaUrl } from '../../utils/uploadUrl';
@@ -305,8 +304,7 @@ const StockInSimple: React.FC = () => {
     fontWeight: 600,
     letterSpacing: '-0.015em',
     color: 'text.primary',
-    lineHeight: 1.35,
-  } as const;
+    lineHeight: 1.35 } as const;
 
   /** 편집 가능 입력 — MVS Body 검색 필드 + 폼 높이 */
   const appleInputSx = {
@@ -317,41 +315,30 @@ const StockInSimple: React.FC = () => {
       minHeight: 48,
       transition: theme.transitions.create(['background-color', 'box-shadow', 'border-color'], { duration: 180 }),
       '& .MuiOutlinedInput-notchedOutline': {
-        borderColor: '#C5CED9',
-      },
+        borderColor: '#CBD5E1' },
       '&:hover .MuiOutlinedInput-notchedOutline': {
-        borderColor: '#B8C4D0',
-      },
+        borderColor: '#94A3B8' },
       '& fieldset': {
-        borderColor: '#C5CED9',
-      },
+        borderColor: '#CBD5E1' },
       '&:hover fieldset': {
-        borderColor: '#B8C4D0',
-      },
+        borderColor: '#94A3B8' },
       '&:hover': {
-        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.14 : 0.08),
-      },
+        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.14 : 0.08) },
       '&.Mui-focused': {
         bgcolor: 'background.paper',
         boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.18)}`,
         '& fieldset': {
           borderColor: alpha(theme.palette.divider, 0.95),
-          borderWidth: 1,
-        },
-      },
+          borderWidth: 1 } },
       '&.Mui-disabled': {
-        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
-      },
-    },
+        bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04) } },
     '& .MuiOutlinedInput-input': {
       py: 1.35,
       fontSize: '0.9375rem',
-      letterSpacing: '-0.02em',
-    },
+      letterSpacing: '-0.02em' },
     '& .MuiOutlinedInput-input::placeholder': {
       color: alpha(theme.palette.text.secondary, 0.85),
-      opacity: 1,
-    },
+      opacity: 1 },
     '& .MuiFormHelperText-root': {
       mt: 1.25,
       mx: 0,
@@ -359,9 +346,7 @@ const StockInSimple: React.FC = () => {
       letterSpacing: '-0.01em',
       fontSize: '0.75rem',
       lineHeight: 1.5,
-      color: alpha(theme.palette.text.secondary, 0.95),
-    },
-  };
+      color: alpha(theme.palette.text.secondary, 0.95) } };
 
   /** 조회된 품목 읽기 전용 — MVS Body 검색 필드 톤 + 읽기 전용 배경 */
   const appleReadOnlySx = {
@@ -371,20 +356,15 @@ const StockInSimple: React.FC = () => {
       minHeight: 48,
       bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
       '& .MuiOutlinedInput-notchedOutline': {
-        borderColor: '#C5CED9',
-      },
+        borderColor: '#CBD5E1' },
       '& fieldset': {
-        borderColor: '#C5CED9',
-      },
+        borderColor: '#CBD5E1' },
       '&:hover fieldset': {
-        borderColor: '#B8C4D0',
-      },
-    },
+        borderColor: '#94A3B8' } },
     '& .MuiOutlinedInput-input': {
       py: 1.35,
       fontSize: '0.9375rem',
-      letterSpacing: '-0.02em',
-    },
+      letterSpacing: '-0.02em' },
     '& .MuiFormHelperText-root': {
       mt: 1.25,
       mx: 0,
@@ -392,9 +372,7 @@ const StockInSimple: React.FC = () => {
       letterSpacing: '-0.01em',
       fontSize: '0.75rem',
       lineHeight: 1.5,
-      color: alpha(theme.palette.text.secondary, 0.95),
-    },
-  };
+      color: alpha(theme.palette.text.secondary, 0.95) } };
 
   return (
     <Box sx={{ ...mvsPageRootSx, maxWidth: 920, mx: 'auto' }}>
@@ -428,8 +406,7 @@ const StockInSimple: React.FC = () => {
                   alignItems: 'center',
                   flexWrap: 'wrap',
                   columnGap: 0.75,
-                  rowGap: 0.5,
-                }}
+                  rowGap: 0.5 }}
               >
                 {txt('제품 검색 · 품목코드 / 바코드', 'Product search · item code / barcode')}
                 <Box component="span" sx={{ color: 'error.main', px: 0.375, display: 'inline-flex' }}>
@@ -447,10 +424,7 @@ const StockInSimple: React.FC = () => {
                       boxShadow:
                         theme.palette.mode === 'light'
                           ? '0 12px 40px rgba(15, 23, 42, 0.1)'
-                          : '0 12px 40px rgba(0,0,0,0.45)',
-                    },
-                  },
-                }}
+                          : '0 12px 40px rgba(0,0,0,0.45)' } } }}
                 value={namePick}
                 inputValue={comboInput}
                 disabled={perm.menusLoading || !perm.canMutate}
@@ -514,8 +488,7 @@ const StockInSimple: React.FC = () => {
                           e.preventDefault();
                           void runLookup();
                         }
-                      },
-                    }}
+                      } }}
                     InputProps={{
                       ...params.InputProps,
                       endAdornment: (
@@ -527,8 +500,7 @@ const StockInSimple: React.FC = () => {
                           ) : null}
                           {params.InputProps.endAdornment}
                         </>
-                      ),
-                    }}
+                      ) }}
                   />
                 )}
               />
@@ -552,8 +524,7 @@ const StockInSimple: React.FC = () => {
                     minHeight: 160,
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
+                    justifyContent: 'center' }}
                 >
                   {previewImageUrl ? (
                     <Box
@@ -566,8 +537,7 @@ const StockInSimple: React.FC = () => {
                         width: 'auto',
                         objectFit: 'contain',
                         borderRadius: '8px',
-                        bgcolor: 'background.paper',
-                      }}
+                        bgcolor: 'background.paper' }}
                     />
                   ) : (
                     <Typography variant="body2" color="text.secondary" sx={{ letterSpacing: '-0.01em' }}>
@@ -652,8 +622,7 @@ const StockInSimple: React.FC = () => {
                     FormHelperTextProps={{ sx: { mx: 0 } }}
                     sx={{
                       ...appleInputSx,
-                      '& .MuiOutlinedInput-input': { fontVariantNumeric: 'tabular-nums' },
-                    }}
+                      '& .MuiOutlinedInput-input': { fontVariantNumeric: 'tabular-nums' } }}
                   />
                 </Box>
                 <Tooltip title={t('common.menuNoMutate')} disableHoverListener={perm.menusLoading || perm.canMutate}>
@@ -670,8 +639,7 @@ const StockInSimple: React.FC = () => {
                         mt: 0.5,
                         py: 1.35,
                         minHeight: 48,
-                        fontSize: '0.95rem',
-                      }}
+                        fontSize: '0.95rem' }}
                     >
                       {txt('입고 처리', 'Receive stock')}
                     </Button>

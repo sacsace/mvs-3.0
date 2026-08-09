@@ -89,10 +89,10 @@ function getReportDialogFieldSx(theme: Theme) {
       bgcolor: 'background.paper',
       transition: theme.transitions.create(['border-color', 'box-shadow'], { duration: 150 }),
       '&:not(.MuiInputBase-multiline)': { minHeight: 40 },
-      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#C5CED9' },
-      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#B8C4D0' },
-      '& fieldset': { borderColor: '#C5CED9' },
-      '&:hover fieldset': { borderColor: '#B8C4D0' },
+      '& .MuiOutlinedInput-notchedOutline': { borderColor: '#CBD5E1' },
+      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#94A3B8' },
+      '& fieldset': { borderColor: '#CBD5E1' },
+      '&:hover fieldset': { borderColor: '#94A3B8' },
       '&.Mui-focused': {
         boxShadow: `0 0 0 3px ${alpha(theme.palette.primary.main, 0.2)}`,
         '& .MuiOutlinedInput-notchedOutline': { borderColor: theme.palette.primary.main },
@@ -377,7 +377,7 @@ const WorkReport: React.FC = () => {
   );
   const theme = useTheme();
   const reportDialogFieldSx = useMemo(() => getReportDialogFieldSx(theme), [theme]);
-  const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
+  const { dialogState, handleConfirm, handleCancel } = useConfirmDialog();
 
   const [reports, setReports] = useState<WorkReportItem[]>([]);
   const [filteredReports, setFilteredReports] = useState<WorkReportItem[]>([]);
@@ -462,7 +462,6 @@ const WorkReport: React.FC = () => {
         setReports([]);
       }
     } catch (error: any) {
-      console.error('보고서 데이터 로드 오류:', error);
       setError(error.response?.data?.message || tr('보고서 데이터를 불러오는데 실패했습니다.', 'Failed to load report data.'));
       setReports([]);
     }
@@ -846,7 +845,6 @@ const WorkReport: React.FC = () => {
         setError(response.message || tr('보고서 저장에 실패했습니다.', 'Failed to save report.'));
       }
     } catch (error: any) {
-      console.error('보고서 저장 오류:', error);
       setError(error.response?.data?.message || tr('An error occurred while saving report.', 'An error occurred while saving report.'));
     } finally {
       setSaving(false);
@@ -874,7 +872,6 @@ const WorkReport: React.FC = () => {
         setError(response.message || tr('제출에 실패했습니다.', 'Failed to submit.'));
       }
     } catch (error: any) {
-      console.error('보고서 제출 오류:', error);
       setError(error.response?.data?.message || tr('제출 중 오류가 발생했습니다.', 'An error occurred while submitting.'));
     }
   };
@@ -892,7 +889,6 @@ const WorkReport: React.FC = () => {
         setError(response.message || tr('보고서 승인에 실패했습니다.', 'Failed to approve report.'));
       }
     } catch (error: any) {
-      console.error('보고서 승인 오류:', error);
       setError(error.response?.data?.message || tr('보고서 승인 중 오류가 발생했습니다.', 'An error occurred while approving report.'));
     }
   };
@@ -934,7 +930,6 @@ const WorkReport: React.FC = () => {
         setError(response.message || tr('피드백 전송에 실패했습니다.', 'Failed to send feedback.'));
       }
     } catch (error: any) {
-      console.error('보고서 피드백 오류:', error);
       setError(
         error.response?.data?.message ||
           tr('피드백 전송 중 오류가 발생했습니다.', 'An error occurred while sending feedback.')
@@ -943,8 +938,6 @@ const WorkReport: React.FC = () => {
       setFeedbackSending(false);
     }
   };
-
-
 
   const pendingCount = reports.filter(report => report.status === 'submitted' || report.status === 'reviewed').length;
   const approvedCount = reports.filter(report => report.status === 'approved').length;
@@ -1891,7 +1884,7 @@ const WorkReport: React.FC = () => {
                 m: 0,
                 p: 0,
                 minWidth: 0,
-                border: '1px solid #C5CED9',
+                border: '1px solid #CBD5E1',
                 borderRadius: '8px',
                 bgcolor: 'background.paper',
               }}

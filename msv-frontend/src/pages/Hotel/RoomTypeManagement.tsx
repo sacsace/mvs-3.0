@@ -150,8 +150,8 @@ const RoomTypeManagement: React.FC = () => {
         }));
         setRoomTypes(mapped);
       }
-    } catch (error) {
-      console.warn('객실 유형 목록 조회 실패:', error);
+    } catch {
+      /* ignore */
     }
   };
 
@@ -255,9 +255,9 @@ const RoomTypeManagement: React.FC = () => {
             if (response.success) {
               await loadRoomTypes();
             }
-          } catch (error) {
-            console.warn('객실 유형 삭제 실패:', error);
-          }
+          } catch {
+      /* ignore */
+    }
         })();
       },
       {

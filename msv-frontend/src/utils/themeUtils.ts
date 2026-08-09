@@ -100,14 +100,14 @@ const THEME_PRESETS: Record<
   /** 모던 SaaS/ERP: 밝은 캔버스·낮은 채도 파스텔 포인트 */
   light: {
     mode: 'light',
-    primaryColor: '#7BA3C4',
-    secondaryColor: '#B5C9B8',
-    backgroundDefault: '#F0F4F9',
+    primaryColor: '#1D4E7C',
+    secondaryColor: '#0D9488',
+    backgroundDefault: '#F1F5F9',
     backgroundPaper: '#FFFFFF',
-    workArea: { main: '#FFFFFF', light: '#F5F8FC', dark: '#E8EEF6' },
-    bodyArea: { main: '#F0F4F9', light: '#F5F8FC', dark: '#E2EAF3' },
-    textPrimary: '#243447',
-    textSecondary: '#6B7C8F'
+    workArea: { main: '#FFFFFF', light: '#F8FAFC', dark: '#E2E8F0' },
+    bodyArea: { main: '#F1F5F9', light: '#F8FAFC', dark: '#E2E8F0' },
+    textPrimary: '#0F172A',
+    textSecondary: '#475569'
   },
   dark: {
     mode: 'dark',
@@ -188,7 +188,7 @@ export const createDynamicTheme = (appearanceSettings: {
   const isLightMode = mode === 'light';
   const containedButtonShadow = 'none';
   const containedButtonShadowHover = 'none';
-  const dividerColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#475569' : '#EEF2F7';
+  const dividerColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#475569' : '#E2E8F0';
   const actionActiveColor = isForestTheme
     ? 'rgba(218, 248, 230, 0.78)'
     : mode === 'dark'
@@ -219,14 +219,14 @@ export const createDynamicTheme = (appearanceSettings: {
     : mode === 'dark'
       ? 'rgba(148, 163, 184, 0.28)'
       : alpha(resolvedPrimaryColor, 0.22);
-  const cardBorderColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#52647a' : '#D0DBE8';
-  const cardHoverBorderColor = isForestTheme ? '#3b8f66' : mode === 'dark' ? '#64748b' : '#BCC9DA';
+  const cardBorderColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#52647a' : '#E2E8F0';
+  const cardHoverBorderColor = isForestTheme ? '#3b8f66' : mode === 'dark' ? '#64748b' : '#CBD5E1';
   const cardShadow =
-    mode === 'dark' ? '0 1px 0 rgba(0, 0, 0, 0.2)' : '0 1px 2px rgba(36, 52, 71, 0.05)';
+    mode === 'dark' ? '0 1px 0 rgba(0, 0, 0, 0.2)' : '0 1px 2px rgba(15, 23, 42, 0.06)';
   const appBarBackground = mode === 'dark' ? '#253345' : '#FFFFFF';
-  const appBarTextColor = isForestTheme ? '#eafcf1' : mode === 'dark' ? '#f8fafc' : '#243447';
-  const appBarBorderColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#52647a' : 'rgba(36, 52, 71, 0.06)';
-  const listHoverBg = isForestTheme ? 'rgba(127, 168, 138, 0.2)' : mode === 'dark' ? '#334155' : 'rgba(36, 52, 71, 0.04)';
+  const appBarTextColor = isForestTheme ? '#eafcf1' : mode === 'dark' ? '#f8fafc' : '#0F172A';
+  const appBarBorderColor = isForestTheme ? '#2d6a4f' : mode === 'dark' ? '#52647a' : '#E2E8F0';
+  const listHoverBg = isForestTheme ? 'rgba(127, 168, 138, 0.2)' : mode === 'dark' ? '#334155' : 'rgba(15, 23, 42, 0.04)';
   const listSelectedBg = isForestTheme
     ? 'rgba(127, 168, 138, 0.34)'
     : mode === 'dark'
@@ -265,7 +265,7 @@ export const createDynamicTheme = (appearanceSettings: {
       info: {
         main: '#3b82f6',
         light: '#60a5fa',
-        dark: '#2563eb',
+        dark: '#1d4e7c',
       },
       success: {
         main: '#22c55e',
@@ -311,53 +311,53 @@ export const createDynamicTheme = (appearanceSettings: {
     },
     typography: {
       fontFamily:
-        '"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+        'Inter, "Segoe UI", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
       h1: {
         fontSize: `${22 * fontSizeMultiplier}px`,
         fontWeight: 700,
         lineHeight: 1.3,
         letterSpacing: '-0.02em',
-        ...(isLightMode ? { color: '#111827' } : {}),
+        ...(isLightMode ? { color: '#0F172A' } : {}),
       },
       pageTitle: {
         fontSize: `${22 * fontSizeMultiplier}px`,
         fontWeight: 700,
         lineHeight: 1.3,
         letterSpacing: '-0.02em',
-        ...(isLightMode ? { color: '#111827', marginBottom: '6px' } : {}),
+        ...(isLightMode ? { color: '#0F172A', marginBottom: '6px' } : {}),
       },
       sectionTitle: {
         fontSize: `${16 * fontSizeMultiplier}px`,
         fontWeight: 600,
         lineHeight: 1.4,
         letterSpacing: '-0.015em',
-        ...(isLightMode ? { color: '#111827' } : {}),
+        ...(isLightMode ? { color: '#0F172A' } : {}),
       },
       cardTitle: {
         fontSize: `${14 * fontSizeMultiplier}px`,
         fontWeight: 600,
         lineHeight: 1.4,
         letterSpacing: '-0.01em',
-        ...(isLightMode ? { color: '#111827' } : {}),
+        ...(isLightMode ? { color: '#0F172A' } : {}),
       },
       pageDescription: {
         fontSize: `${13 * fontSizeMultiplier}px`,
         lineHeight: 1.6,
-        ...(isLightMode ? { color: '#6B7280' } : {}),
+        ...(isLightMode ? { color: '#475569' } : {}),
       },
       kpiNumber: {
         fontSize: `${22 * fontSizeMultiplier}px`,
         fontWeight: 700,
         lineHeight: 1.3,
         letterSpacing: '-0.02em',
-        ...(isLightMode ? { color: '#111827' } : {}),
+        ...(isLightMode ? { color: '#0F172A' } : {}),
       },
       h2: {
         fontSize: `${16 * fontSizeMultiplier}px`,
         fontWeight: 600,
         lineHeight: 1.4,
         letterSpacing: '-0.015em',
-        ...(isLightMode ? { marginBottom: '12px', color: '#111827' } : {}),
+        ...(isLightMode ? { marginBottom: '12px', color: '#0F172A' } : {}),
       },
       h3: {
         fontSize: `${1.0625 * fontSizeMultiplier}rem`,
@@ -384,11 +384,11 @@ export const createDynamicTheme = (appearanceSettings: {
         letterSpacing: '0',
       },
         body1: {
-        fontSize: `${13.5 * fontSizeMultiplier}px`,
+        fontSize: `${14 * fontSizeMultiplier}px`,
         fontWeight: 400,
         lineHeight: 1.6,
         letterSpacing: '0',
-        ...(isLightMode ? { color: '#111827' } : {}),
+        ...(isLightMode ? { color: '#0F172A' } : {}),
       },
       body2: {
         fontSize: `${0.8125 * fontSizeMultiplier}rem`,
@@ -400,14 +400,14 @@ export const createDynamicTheme = (appearanceSettings: {
         fontWeight: 400,
         lineHeight: 1.5,
         letterSpacing: '0',
-        ...(isLightMode ? { color: '#6B7280' } : {}),
+        ...(isLightMode ? { color: '#475569' } : {}),
       },
       subtitle1: {
         fontSize: `${14 * fontSizeMultiplier}px`,
         fontWeight: 600,
         lineHeight: 1.4,
         letterSpacing: '-0.01em',
-        ...(isLightMode ? { color: '#111827' } : {}),
+        ...(isLightMode ? { color: '#0F172A' } : {}),
       },
       subtitle2: {
         fontSize: `${0.875 * fontSizeMultiplier}rem`,
@@ -428,9 +428,9 @@ export const createDynamicTheme = (appearanceSettings: {
             MozOsxFontSmoothing: 'grayscale',
             ...(isLightMode
               ? {
-                  backgroundColor: '#F5F6F8',
-                  color: '#111827',
-                  fontSize: `${13.5 * fontSizeMultiplier}px`,
+                  backgroundColor: '#F1F5F9',
+                  color: '#0F172A',
+                  fontSize: `${14 * fontSizeMultiplier}px`,
                 }
               : {}),
           },
@@ -453,7 +453,7 @@ export const createDynamicTheme = (appearanceSettings: {
             borderRadius: 8,
             textTransform: 'none',
             fontWeight: 600,
-            fontSize: `${13.5 * fontSizeMultiplier}px`,
+            fontSize: `${14 * fontSizeMultiplier}px`,
             minHeight: isLightMode ? 40 : 36,
             padding: isLightMode ? '8px 16px' : '8px 16px',
             boxShadow: 'none',
@@ -464,10 +464,11 @@ export const createDynamicTheme = (appearanceSettings: {
           },
           outlined: isLightMode
             ? {
-                borderColor: '#E5E7EB',
+                borderColor: '#CBD5E1',
+                color: '#334155',
                 '&:hover': {
-                  borderColor: '#D1D5DB',
-                  backgroundColor: '#F9FAFB',
+                  borderColor: '#94A3B8',
+                  backgroundColor: '#F8FAFC',
                 },
               }
             : {},
@@ -565,17 +566,21 @@ export const createDynamicTheme = (appearanceSettings: {
               ? {
                   borderRadius: 8,
                   minHeight: 44,
+                  transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
                 }
               : {}),
             '& .MuiOutlinedInput-notchedOutline': {
-              borderColor: isLightMode ? '#C5CED9' : dividerColor,
+              borderColor: isLightMode ? '#CBD5E1' : dividerColor,
             },
             '&:hover .MuiOutlinedInput-notchedOutline': {
-              borderColor: isLightMode ? '#B8C4D0' : '#64748b',
+              borderColor: isLightMode ? '#94A3B8' : '#64748b',
             },
+            '&.Mui-focused': isLightMode
+              ? { boxShadow: `0 0 0 3px ${alpha(primaryColors.main, 0.16)}` }
+              : {},
             '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
               borderColor: primaryColors.main,
-              borderWidth: isLightMode ? 2 : 1,
+              borderWidth: 1,
             },
           },
         },
@@ -583,18 +588,18 @@ export const createDynamicTheme = (appearanceSettings: {
       MuiTableCell: {
         styleOverrides: {
           root: {
-            borderBottom: isLightMode ? '1px solid #EEF2F7' : `1px solid ${dividerColor}`,
-            ...(isLightMode && { fontSize: '13.5px', padding: '14px 16px', color: '#111827', lineHeight: 1.5 }),
+            borderBottom: isLightMode ? '1px solid #E2E8F0' : `1px solid ${dividerColor}`,
+            ...(isLightMode && { fontSize: '14px', padding: '14px 16px', color: '#0F172A', lineHeight: 1.5 }),
           },
           head: {
             backgroundColor: isLightMode ? 'transparent' : '#2b3a4f',
-            color: isLightMode ? '#475569' : preset.textSecondary,
+            color: isLightMode ? '#334155' : preset.textSecondary,
             fontWeight: 600,
-            fontSize: isLightMode ? '12px' : undefined,
+            fontSize: isLightMode ? '12.5px' : undefined,
             lineHeight: isLightMode ? 1.4 : undefined,
-            letterSpacing: isLightMode ? '0.02em' : undefined,
+            letterSpacing: isLightMode ? '0.01em' : undefined,
             textTransform: 'none',
-            borderBottom: isLightMode ? '1px solid #EEF2F7' : `1px solid ${dividerColor}`,
+            borderBottom: isLightMode ? '1px solid #E2E8F0' : `1px solid ${dividerColor}`,
           },
         },
       },
@@ -624,18 +629,18 @@ export const createDynamicTheme = (appearanceSettings: {
             ? {
                 '& .MuiTableHead-root': { backgroundColor: '#F8FAFC' },
                 '& .MuiTableCell-head': {
-                  fontSize: '12px',
+                  fontSize: '12.5px',
                   fontWeight: 600,
-                  color: '#475569',
+                  color: '#334155',
                   lineHeight: 1.4,
                 },
                 '& .MuiTableRow-root': { height: 56 },
                 '& .MuiTableRow-root:hover': { backgroundColor: '#F8FAFC' },
                 '& .MuiTableCell-root': {
-                  borderBottom: '1px solid #EEF2F7',
-                  fontSize: '13.5px',
+                  borderBottom: '1px solid #E2E8F0',
+                  fontSize: '14px',
                   lineHeight: 1.5,
-                  color: '#111827',
+                  color: '#0F172A',
                 },
               }
             : {},
@@ -656,9 +661,9 @@ export const createDynamicTheme = (appearanceSettings: {
       MuiDrawer: {
         styleOverrides: {
           paper: {
-            borderRight: isLightMode ? '1px solid rgba(15, 23, 42, 0.06)' : `1px solid ${dividerColor}`,
+            borderRight: isLightMode ? '1px solid #E2E8F0' : `1px solid ${dividerColor}`,
             boxShadow: 'none',
-            backgroundColor: mode === 'dark' ? '#1b2738' : '#F7F8FA',
+            backgroundColor: mode === 'dark' ? '#1b2738' : '#FFFFFF',
             backgroundImage: 'none',
           },
         },
@@ -669,7 +674,7 @@ export const createDynamicTheme = (appearanceSettings: {
             background: appBarBackground,
             color: appBarTextColor,
             boxShadow: 'none',
-            borderBottom: isLightMode ? '1px solid #E5E7EB' : `1px solid ${appBarBorderColor}`,
+            borderBottom: `1px solid ${appBarBorderColor}`,
             backdropFilter: 'none',
           },
         },
@@ -683,8 +688,8 @@ export const createDynamicTheme = (appearanceSettings: {
             borderLeft: 'none',
             ...(isLightMode
               ? {
-                  fontSize: '13px',
-                  color: '#4B5563',
+                  fontSize: '13.5px',
+                  color: '#475569',
                 }
               : {}),
             transition: 'background-color 0.15s ease, color 0.15s ease',
@@ -695,8 +700,8 @@ export const createDynamicTheme = (appearanceSettings: {
               backgroundColor: listSelectedBg,
               ...(isLightMode
                 ? {
-                    color: '#4C6A6E',
-                    fontWeight: 500,
+                    color: primaryColors.dark,
+                    fontWeight: 600,
                   }
                 : {}),
               '&:hover': {

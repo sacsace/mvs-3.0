@@ -506,7 +506,7 @@ export const login = async (req: Request, res: Response) => {
       attributes: [
         'id', 'tenant_id', 'company_id', 'userid', 'username', 'email',
         'password_hash', 'role', 'department', 'position', 'status', 'last_login',
-        'is_payment_officer', 'session_version'
+        'is_payment_officer', 'session_version', 'avatar_url'
       ]
     });
 
@@ -679,7 +679,8 @@ export const login = async (req: Request, res: Response) => {
           position: user.position,
           tenant_id: user.tenant_id,
           company_id: user.company_id,
-          is_payment_officer: user.is_payment_officer
+          is_payment_officer: user.is_payment_officer,
+          avatar_url: user.avatar_url || null
         },
         sessionReplaced: prevSv > 0
       },
@@ -709,7 +710,8 @@ export const getProfile = async (req: Request, res: Response) => {
         department: user.department,
         position: user.position,
         last_login: user.last_login,
-        is_payment_officer: user.is_payment_officer
+        is_payment_officer: user.is_payment_officer,
+        avatar_url: user.avatar_url || null
       }
     });
   } catch (error) {

@@ -31,8 +31,7 @@ import {
   Tab,
   InputAdornment,
   ToggleButton,
-  ToggleButtonGroup,
-} from '@mui/material';
+  ToggleButtonGroup } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -51,8 +50,7 @@ import {
   mvsTableBodyRowSx,
   mvsSearchZoneSx,
   mvsOutlinedLabelProps,
-  mvsBodyToolbarSx,
-} from '../../theme/mvsLayout';
+  mvsBodyToolbarSx } from '../../theme/mvsLayout';
 import type { SelectChangeEvent } from '@mui/material/Select';
 import {
   ReceiptLong as ReceiptLongIcon,
@@ -74,7 +72,7 @@ import {
   ThumbDown as ThumbDownIcon
 } from '@mui/icons-material';
 import { useStore } from '../../store';
-import { api, userService, accountingService } from '../../services/api';
+import { api, accountingService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { AxiosResponse } from 'axios';
 import { useTranslation } from 'react-i18next';
@@ -108,8 +106,7 @@ const eInvoiceMainTabsSx = {
   borderBottom: '1px solid #E8EDF3',
   '& .MuiTabs-indicator': {
     height: 3,
-    borderRadius: '3px 3px 0 0',
-  },
+    borderRadius: '3px 3px 0 0' },
   '& .MuiTab-root': {
     textTransform: 'none',
     fontWeight: 500,
@@ -119,13 +116,10 @@ const eInvoiceMainTabsSx = {
     px: { xs: 1.25, sm: 2 },
     letterSpacing: '-0.01em',
     color: 'text.secondary',
-    transition: 'color 0.2s ease',
-  },
+    transition: 'color 0.2s ease' },
   '& .MuiTab-root.Mui-selected': {
     color: 'primary.main',
-    fontWeight: 700,
-  },
-} as const;
+    fontWeight: 700 } } as const;
 
 const eInvoiceSubTabSx = {
   bgcolor: '#F1F5F9',
@@ -149,18 +143,13 @@ const eInvoiceSubTabSx = {
       color: 'primary.main',
       boxShadow: '0 1px 4px rgba(15, 23, 42, 0.08)',
       '&:hover': {
-        bgcolor: '#FFFFFF',
-      },
-    },
-  },
-} as const;
+        bgcolor: '#FFFFFF' } } } } as const;
 
 const eInvoiceChipSx = {
   height: 22,
   fontSize: '0.6875rem',
   fontWeight: 600,
-  '& .MuiChip-label': { px: 0.75 },
-} as const;
+  '& .MuiChip-label': { px: 0.75 } } as const;
 
 const eInvoiceActionBarSx = {
   display: 'inline-flex',
@@ -178,15 +167,11 @@ const eInvoiceActionBarSx = {
     color: 'text.secondary',
     '&:hover': {
       bgcolor: alpha('#0F172A', 0.06),
-      color: 'primary.main',
-    },
-  },
-} as const;
+      color: 'primary.main' } } } as const;
 
 const eInvoiceFilterFieldSx = {
   ...(mvsSearchFieldSx as Record<string, unknown>),
-  ...mvsFilterFieldHeightSx,
-} as const;
+  ...mvsFilterFieldHeightSx } as const;
 
 // 타입 정의
 interface EInvoice {
@@ -422,8 +407,7 @@ const EInvoiceManagement: React.FC = () => {
         if (customersResponse.data.success) {
           setCustomers(customersResponse.data.data || []);
         }
-      } catch (error) {
-        console.error('데이터 로드 오류:', error);
+      } catch {
         setError(t('eInvoiceManagement.errors.loadData'));
       } finally {
         setLoading(false);
@@ -450,9 +434,9 @@ const EInvoiceManagement: React.FC = () => {
             .filter((u: any) => u.status === 'active')
             .map((u: any) => ({ id: u.id, username: u.username || u.userid || '', email: u.email || '' }))
         );
-      } catch (e) {
-        console.error(e);
-      }
+      } catch {
+      /* ignore */
+    }
     };
     loadUsers();
   }, [user?.company_id]);
@@ -463,8 +447,8 @@ const EInvoiceManagement: React.FC = () => {
       if (response.data.success) {
         setCompanies(response.data.data || []);
       }
-    } catch (error) {
-      console.error('회사 목록 로드 오류:', error);
+    } catch {
+      /* ignore */
     }
   };
 
@@ -546,8 +530,7 @@ const EInvoiceManagement: React.FC = () => {
           setEinvoices(normalized);
         }
       }
-    } catch (error) {
-      console.error('E-Invoice 생성 오류:', error);
+    } catch {
       setError(t('eInvoiceManagement.errors.createEInvoice'));
     }
   };
@@ -584,8 +567,7 @@ const EInvoiceManagement: React.FC = () => {
         setEinvoices(prev => [normalizeEInvoice(response.data.data), ...prev]);
         setError('');
       }
-    } catch (error) {
-      console.error('프로포마 인보이스에서 E-Invoice 생성 오류:', error);
+    } catch {
       setError(t('eInvoiceManagement.errors.createEInvoice'));
     }
   };
@@ -599,8 +581,7 @@ const EInvoiceManagement: React.FC = () => {
           einvoice.id === id ? { ...einvoice, status: status as any } : einvoice
         ));
       }
-    } catch (error) {
-      console.error('상태 업데이트 오류:', error);
+    } catch {
       setError(t('eInvoiceManagement.errors.updateStatus'));
     }
   };
@@ -636,8 +617,7 @@ const EInvoiceManagement: React.FC = () => {
         ));
         setError('');
       }
-    } catch (error) {
-      console.error('E-Way Bill 생성 오류:', error);
+    } catch {
       setError(t('eInvoiceManagement.errors.createEWayBill'));
     }
   };
@@ -790,18 +770,13 @@ const EInvoiceManagement: React.FC = () => {
     px: 3,
     gap: 1.5,
     '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:first-of-type': {
-      borderTopLeftRadius: 0,
-    },
+      borderTopLeftRadius: 0 },
     '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:last-of-type': {
-      borderTopRightRadius: 0,
-    },
+      borderTopRightRadius: 0 },
     '& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-body:first-of-type': {
-      borderBottomLeftRadius: 0,
-    },
+      borderBottomLeftRadius: 0 },
     '& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-body:last-of-type': {
-      borderBottomRightRadius: 0,
-    },
-  } as const;
+      borderBottomRightRadius: 0 } } as const;
 
   const eInvoiceListTableSx = {
     width: '100%',
@@ -811,9 +786,7 @@ const EInvoiceManagement: React.FC = () => {
     '& .MuiTableCell-root': {
       borderLeft: 'none',
       borderRight: 'none',
-      borderTop: 'none',
-    },
-  } as const;
+      borderTop: 'none' } } as const;
 
   const eInvoiceListContainerSx = {
     ...mvsBodyListTableSx,
@@ -821,26 +794,20 @@ const EInvoiceManagement: React.FC = () => {
     overflowX: 'hidden',
     borderRadius: 0,
     '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:first-of-type': {
-      borderTopLeftRadius: 0,
-    },
+      borderTopLeftRadius: 0 },
     '& .MuiTableHead-root .MuiTableRow-root .MuiTableCell-head:last-of-type': {
-      borderTopRightRadius: 0,
-    },
+      borderTopRightRadius: 0 },
     '& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-body:first-of-type': {
-      borderBottomLeftRadius: 0,
-    },
+      borderBottomLeftRadius: 0 },
     '& .MuiTableBody-root .MuiTableRow-root:last-of-type .MuiTableCell-body:last-of-type': {
-      borderBottomRightRadius: 0,
-    },
-  } as const;
+      borderBottomRightRadius: 0 } } as const;
 
   const eInvoiceCellBaseSx = {
     fontSize: { xs: '0.75rem', sm: '0.8125rem' },
     py: { xs: 0.85, sm: 1 },
     px: { xs: 0.75, sm: 1.25 },
     verticalAlign: 'middle' as const,
-    lineHeight: 1.45,
-  } as const;
+    lineHeight: 1.45 } as const;
 
   const eInvoiceTableHeadCellSx = {
     ...eInvoiceCellBaseSx,
@@ -848,15 +815,13 @@ const EInvoiceManagement: React.FC = () => {
     fontWeight: 600,
     color: '#475569',
     letterSpacing: '0.01em',
-    whiteSpace: 'nowrap' as const,
-  } as const;
+    whiteSpace: 'nowrap' as const } as const;
 
   const eInvoiceCellEllipsisSx = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-    maxWidth: 0,
-  } as const;
+    maxWidth: 0 } as const;
 
   const renderEllipsisText = (text: string, fontWeight?: number, color?: string) => (
     <Tooltip title={text} placement="top-start" enterDelay={400}>
@@ -869,8 +834,7 @@ const EInvoiceManagement: React.FC = () => {
           whiteSpace: 'nowrap',
           fontWeight,
           color,
-          minWidth: 0,
-        }}
+          minWidth: 0 }}
       >
         {text}
       </Box>
@@ -903,8 +867,7 @@ const EInvoiceManagement: React.FC = () => {
       total: einvoices.length,
       draft: einvoices.filter((e) => e.status === 'draft').length,
       irnReady: einvoices.filter((e) => e.irpStatus === 'irn_generated').length,
-      pending: einvoices.filter((e) => e.approvalStatus === 'pending_approval').length,
-    }),
+      pending: einvoices.filter((e) => e.approvalStatus === 'pending_approval').length }),
     [einvoices]
   );
 
@@ -1155,30 +1118,25 @@ const EInvoiceManagement: React.FC = () => {
                     display: 'grid',
                     gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
                     gap: { xs: 1.5, sm: 2 },
-                    mb: { xs: 2, sm: 2.5 },
-                  }}
+                    mb: { xs: 2, sm: 2.5 } }}
                 >
                   {[
                     {
                       label: t('eInvoiceManagement.analytics.totalEInvoices'),
                       value: listKpiStats.total,
-                      color: 'primary.main',
-                    },
+                      color: 'primary.main' },
                     {
                       label: t('eInvoiceManagement.status.draft'),
                       value: listKpiStats.draft,
-                      color: 'text.primary',
-                    },
+                      color: 'text.primary' },
                     {
                       label: t('eInvoiceManagement.columns.irn'),
                       value: listKpiStats.irnReady,
-                      color: 'success.main',
-                    },
+                      color: 'success.main' },
                     {
                       label: t('eInvoiceManagement.approval.tabPending'),
                       value: listKpiStats.pending,
-                      color: 'warning.main',
-                    },
+                      color: 'warning.main' },
                   ].map((item) => (
                     <Card key={item.label} elevation={0} sx={mvsKpiCardSx}>
                       <CardContent sx={{ py: 1.75, px: 2, '&:last-child': { pb: 1.75 } }}>
@@ -1208,18 +1166,16 @@ const EInvoiceManagement: React.FC = () => {
                       mb: 0,
                       borderRadius: 0,
                       border: 'none',
-                      borderBottom: '1px solid #C5CED9',
+                      borderBottom: '1px solid #CBD5E1',
                       bgcolor: '#F0F4F8',
                       px: { xs: 2, sm: 2.5 },
                       py: { xs: 1.5, sm: 2 },
                       display: 'grid',
                       gridTemplateColumns: {
                         xs: '1fr',
-                        sm: (user?.role === 'root' || user?.role === 'audit') ? '2fr 1fr 1fr auto' : '2fr 1fr auto',
-                      },
+                        sm: (user?.role === 'root' || user?.role === 'audit') ? '2fr 1fr 1fr auto' : '2fr 1fr auto' },
                       gap: { xs: 1.5, sm: 2 },
-                      alignItems: 'flex-end',
-                    }}
+                      alignItems: 'flex-end' }}
                   >
                       <TextField
                         fullWidth
@@ -1234,8 +1190,7 @@ const EInvoiceManagement: React.FC = () => {
                             <InputAdornment position="start">
                               <SearchIcon sx={{ color: 'text.secondary', fontSize: 20 }} />
                             </InputAdornment>
-                          ),
-                        }}
+                          ) }}
                         sx={eInvoiceFilterFieldSx}
                       />
                       {(user?.role === 'root' || user?.role === 'audit') && (
@@ -1806,7 +1761,6 @@ const EInvoiceManagement: React.FC = () => {
               </Card>
             </Box>
           </TabPanel>
-
 
       {/* E-Invoice 상세 보기 다이얼로그 */}
       <Dialog open={openViewDialog} onClose={() => setOpenViewDialog(false)} maxWidth="lg" fullWidth>

@@ -554,7 +554,7 @@ const EmploymentContractManagement: React.FC = () => {
     </Box>
   );
 
-  const loadCompanies = async () => {
+  const loadCompanies = useCallback(async () => {
     if (!isRoot) return;
     try {
       const rows = await useReferenceDataStore.getState().fetchCompanies();
@@ -565,13 +565,12 @@ const EmploymentContractManagement: React.FC = () => {
         const matchedCompany = mapped.find((company: CompanyOption) => company.id === loginCompanyId);
         setSelectedCompanyId(matchedCompany ? matchedCompany.id : mapped[0].id);
       }
-    } catch (error) {
-      console.error('회사 목록 조회 오류:', error);
+    } catch {
       setMessage({ type: 'error', text: txt('회사 목록을 불러오지 못했습니다.', 'Failed to load companies.') });
     }
-  };
+  }, [isRoot, selectedCompanyId, user?.company_id, txt]);
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     try {
       const params = isRoot && selectedCompanyId ? { company_id: Number(selectedCompanyId) } : undefined;
       const rows = await useReferenceDataStore.getState().fetchUsers(params);
@@ -583,13 +582,12 @@ const EmploymentContractManagement: React.FC = () => {
           userid: String(u.userid || '')
         }));
       setUsers(mapped);
-    } catch (error) {
-      console.error('직원 목록 조회 오류:', error);
+    } catch {
       setMessage({ type: 'error', text: txt('직원 목록을 불러오지 못했습니다.', 'Failed to load employees.') });
     }
-  };
+  }, [isRoot, selectedCompanyId, txt]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const queryCompanyId = isRoot && selectedCompanyId ? Number(selectedCompanyId) : undefined;
@@ -607,8 +605,7 @@ const EmploymentContractManagement: React.FC = () => {
         setTemplates([]);
         setContracts([]);
       }
-    } catch (error) {
-      console.error('전자근로계약 데이터 조회 오류:', error);
+    } catch {
       setMessage({
         type: 'error',
         text: txt('전자근로계약 데이터를 불러오지 못했습니다.', 'Failed to load employment contract data.'),
@@ -616,16 +613,16 @@ const EmploymentContractManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [canManage, isRoot, selectedCompanyId, txt]);
 
   useEffect(() => {
     void loadCompanies();
-  }, [isRoot, user?.company_id]);
+  }, [loadCompanies]);
 
   useEffect(() => {
     void loadUsers();
     void loadData();
-  }, [selectedCompanyId, isRoot, canManage]);
+  }, [loadData, loadUsers]);
 
   const openCreateTemplate = () => {
     setEditTemplate(null);
@@ -2015,7 +2012,7 @@ const EmploymentContractManagement: React.FC = () => {
                 sx={{
                   p: 2,
                   borderRadius: 1.5,
-                  border: '1px solid #C5CED9',
+                  border: '1px solid #CBD5E1',
                   bgcolor: '#F8FAFC',
                 }}
               >

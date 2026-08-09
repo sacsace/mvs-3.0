@@ -116,7 +116,7 @@ const ListViewModeButtons: React.FC<{
         ...listViewModeBtnSx,
         ...(value === 'page'
           ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
-          : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+          : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
       }}
     >
       {pageLabel}
@@ -130,7 +130,7 @@ const ListViewModeButtons: React.FC<{
         ...listViewModeBtnSx,
         ...(value === 'all'
           ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
-          : { borderColor: '#C5CED9', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+          : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
       }}
     >
       {allLabel}
@@ -221,7 +221,7 @@ const periodToggleGroupSx = {
 } as const;
 
 const periodBtnSx = {
-  border: '1px solid #C5CED9',
+  border: '1px solid #CBD5E1',
   borderRadius: '10px',
   px: 1.25,
   height: 40,
@@ -792,7 +792,10 @@ const GeneralLedger: React.FC = () => {
     setSearchParams(next, { replace: true });
   };
 
-  const statusLabel = (status: string) => t(`generalLedger.status.${status}`, status);
+  const statusLabel = useCallback(
+    (status: string) => t(`generalLedger.status.${status}`, status),
+    [t]
+  );
 
   const filteredVouchers = useMemo(() => {
     const q = voucherSearch.trim().toLowerCase();
@@ -811,7 +814,7 @@ const GeneralLedger: React.FC = () => {
         debit.includes(q)
       );
     });
-  }, [vouchers, voucherSearch, t, i18n.language]);
+  }, [vouchers, voucherSearch, statusLabel]);
 
   const sortedVouchers = useMemo(() => {
     const rows = [...filteredVouchers];
@@ -842,7 +845,7 @@ const GeneralLedger: React.FC = () => {
       );
     });
     return rows;
-  }, [filteredVouchers, voucherSortBy, voucherSortDir, t, i18n.language]);
+  }, [filteredVouchers, voucherSortBy, voucherSortDir, statusLabel]);
 
   const voucherPageCount = Math.max(1, Math.ceil(sortedVouchers.length / PAGE_SIZE));
   const pagedVouchers = useMemo(() => {
@@ -868,11 +871,14 @@ const GeneralLedger: React.FC = () => {
     setVoucherSortDir(key === 'date' || key === 'debit' ? 'desc' : 'asc');
   };
 
-  const resolveAccountName = (accountId: number, fallback?: string) => {
-    const found = accounts.find((a) => a.id === accountId);
-    if (found) return getGlAccountName(found, i18n.language);
-    return fallback || '-';
-  };
+  const resolveAccountName = useCallback(
+    (accountId: number, fallback?: string) => {
+      const found = accounts.find((a) => a.id === accountId);
+      if (found) return getGlAccountName(found, i18n.language);
+      return fallback || '-';
+    },
+    [accounts, i18n.language]
+  );
 
   const filteredLedgerAccounts = useMemo(() => {
     const ledgers = accounts.filter((a) => a.account_type === 'ledger');
@@ -930,7 +936,7 @@ const GeneralLedger: React.FC = () => {
       const rawName = String(r.name || '').toLowerCase();
       return code.includes(q) || name.includes(q) || rawName.includes(q);
     });
-  }, [trialData, trialSearch, accounts, i18n.language]);
+  }, [trialData, trialSearch, resolveAccountName]);
 
   const sortedTrialRows = useMemo(() => {
     const rows = [...filteredTrialRows];
@@ -954,7 +960,7 @@ const GeneralLedger: React.FC = () => {
       );
     });
     return rows;
-  }, [filteredTrialRows, trialSortBy, trialSortDir, accounts, i18n.language]);
+  }, [filteredTrialRows, trialSortBy, trialSortDir, resolveAccountName]);
 
   const handleTrialSort = (key: TrialSortKey) => {
     if (trialSortBy === key) {
@@ -1249,7 +1255,7 @@ const GeneralLedger: React.FC = () => {
                             mt: 0.5,
                             minWidth: 220,
                             borderRadius: '8px',
-                            border: '1px solid #C5CED9',
+                            border: '1px solid #CBD5E1',
                             boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
                           },
                         },

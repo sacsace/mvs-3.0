@@ -176,8 +176,8 @@ const NotificationManagement: React.FC = () => {
 
       setSettings({ ...DEFAULT_SETTINGS, ...(prefs.notificationSettings || {}) });
       setTemplates(Array.isArray(prefs.notificationTemplates) ? prefs.notificationTemplates : []);
-    } catch (error) {
-      console.error('알림 관리 데이터 로드 오류:', error);
+    } catch {
+      /* ignore */
     } finally {
       setLoading(false);
     }

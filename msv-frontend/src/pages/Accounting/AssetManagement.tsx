@@ -319,8 +319,7 @@ const AssetManagement: React.FC = () => {
         setAssets([]);
         setError(response.message || '자산 목록을 불러오지 못했습니다.');
       }
-    } catch (err) {
-      console.error('asset load error:', err);
+    } catch {
       setError('자산 목록을 불러오지 못했습니다.');
     } finally {
       setLoading(false);
@@ -414,8 +413,7 @@ const AssetManagement: React.FC = () => {
       setOpenDialog(false);
       setSelectedAsset(null);
       await loadAssets();
-    } catch (err) {
-      console.error('asset save error:', err);
+    } catch {
       setError('자산 저장에 실패했습니다.');
     }
   };
@@ -430,8 +428,7 @@ const AssetManagement: React.FC = () => {
             if (!response.success) throw new Error(response.message || 'Delete failed');
             setSuccess('자산을 삭제했습니다.');
             await loadAssets();
-          } catch (err) {
-            console.error('asset delete error:', err);
+          } catch {
             setError('자산 삭제에 실패했습니다.');
           }
         })();
@@ -486,8 +483,7 @@ const AssetManagement: React.FC = () => {
       const today = new Date().toISOString().slice(0, 10);
       await downloadExcelWorkbook(workbook, `자산_감가상각표_${today}.xlsx`);
       setSuccess('감가상각표를 다운로드했습니다.');
-    } catch (err) {
-      console.error('depreciation export error:', err);
+    } catch {
       setError('감가상각표 다운로드에 실패했습니다.');
     } finally {
       setExporting(false);

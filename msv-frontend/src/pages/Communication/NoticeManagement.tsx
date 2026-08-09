@@ -5,14 +5,12 @@ import {
   Card,
   CardContent,
   Button,
-  Grid,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Chip,
   TextField,
   FormControl,
@@ -34,10 +32,6 @@ import {
   ListItem,
   ListItemText,
   ListItemAvatar,
-  Badge,
-  Stack,
-  ToggleButton,
-  ToggleButtonGroup,
   Pagination,
   DialogContentText,
   Tabs,
@@ -61,37 +55,17 @@ import {
   mvsSearchFieldSx,
   mvsTableBodyRowSx,
   mvsTableHeadHighlightSx,
-  mvsTableScrollSx,
-} from '../../theme/mvsLayout';
+  mvsTableScrollSx } from '../../theme/mvsLayout';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Visibility as ViewIcon,
   Search as SearchIcon,
-  FilterList as FilterIcon,
-  Person as PersonIcon,
-  Schedule as ScheduleIcon,
   Flag as PriorityIcon,
-  Public as PublicIcon,
-  Group as GroupIcon,
-  Email as EmailIcon,
-  Send as SendIcon,
-  Edit as DraftIcon,
-  CheckCircle as CheckCircleIcon,
-  Cancel as CancelIcon,
-  Print as PrintIcon,
   Download as DownloadIcon,
-  Refresh as RefreshIcon,
   RestartAlt as ResetIcon,
-  CalendarToday as CalendarTodayIcon,
-  Business as BusinessIcon,
-  Category as CategoryIcon,
-  Timeline as TimelineIcon,
   AttachFile as AttachFileIcon,
-  VisibilityOff as VisibilityOffIcon,
-  Visibility as VisibilityIcon,
   Warning as WarningIcon,
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
@@ -100,17 +74,16 @@ import {
   FormatAlignRight as FormatAlignRightIcon,
   Image as ImageIcon,
   FormatColorText as FormatColorTextIcon,
-  Palette as PaletteIcon,
   PushPin as PushPinIcon
 } from '@mui/icons-material';
 import { useStore } from '../../store';
 import { noticeService, userUiPreferencesService } from '../../services/api';
+import { getUploadUrl } from '../../utils/uploadUrl';
 import { useTranslation } from 'react-i18next';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
-import { Node, mergeAttributes } from '@tiptap/core';
 import { Table as TableExtension } from '@tiptap/extension-table';
 import { TableRow as TableRowExtension } from '@tiptap/extension-table-row';
 import { TableCell as TableCellExtension } from '@tiptap/extension-table-cell';
@@ -132,6 +105,7 @@ interface Notice {
   targetAudience: 'all' | 'employees' | 'managers' | 'specific';
   author: string;
   authorId: number;
+  authorAvatarUrl?: string | null;
   createdAt: string;
   publishedAt?: string;
   expiresAt?: string;
@@ -185,10 +159,8 @@ const ResizableImage = Image.extend({
           }
           return {
             width: attributes.width,
-            style: `width: ${attributes.width}px; height: auto; display: block;`,
-          };
-        },
-      },
+            style: `width: ${attributes.width}px; height: auto; display: block;` };
+        } },
       height: {
         default: null,
         parseHTML: element => element.getAttribute('height'),
@@ -197,13 +169,9 @@ const ResizableImage = Image.extend({
             return {};
           }
           return {
-            height: attributes.height,
-          };
-        },
-      },
-    };
-  },
-});
+            height: attributes.height };
+        } } };
+  } });
 
 /** 연간 스케줄표 달력 표시 크기 (기준 대비 약 20% 확대) */
 const YEARLY_CALENDAR_SCALE = 1.2;
@@ -258,8 +226,6 @@ const NoticeManagement: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'view' | 'edit'>('list');
   const [isEditing, setIsEditing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [priorityFilter, setPriorityFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(10);
@@ -276,7 +242,7 @@ const NoticeManagement: React.FC = () => {
   const [tableDialogOpen, setTableDialogOpen] = useState(false);
   const [tableRows, setTableRows] = useState(3);
   const [tableCols, setTableCols] = useState(3);
-  const [tableHasHeader, setTableHasHeader] = useState(true);
+  const [tableHasHeader] = useState(true);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [formData, setFormData] = useState({
     title: '',
@@ -300,12 +266,9 @@ const NoticeManagement: React.FC = () => {
         allowBase64: true,
         HTMLAttributes: {
           class: 'resizable-image',
-          style: 'display: block; margin: 12px auto; max-width: 100%; clear: both;',
-        },
-      }),
+          style: 'display: block; margin: 12px auto; max-width: 100%; clear: both;' } }),
       TableExtension.configure({
-        resizable: true,
-      }),
+        resizable: true }),
       TableRowExtension,
       TableHeaderExtension,
       TableCellExtension,
@@ -314,8 +277,7 @@ const NoticeManagement: React.FC = () => {
       FontFamily,
       TextAlign.configure({
         types: ['heading', 'paragraph', 'image'],
-        defaultAlignment: 'left',
-      }),
+        defaultAlignment: 'left' }),
     ],
     content: formData.content,
     onUpdate: ({ editor }: { editor: any }) => {
@@ -390,9 +352,7 @@ const NoticeManagement: React.FC = () => {
         }
         
         return false;
-      },
-    },
-  });
+      } } });
 
   // formData.content가 변경되면 에디터 내용 업데이트
   useEffect(() => {
@@ -550,7 +510,6 @@ const NoticeManagement: React.FC = () => {
         setNotices([]);
       }
     } catch (error: any) {
-      console.error('데이터 로드 오류:', error);
       setError(error.response?.data?.message || '데이터를 불러오는데 실패했습니다.');
       setNotices([]);
     } finally {
@@ -561,38 +520,6 @@ const NoticeManagement: React.FC = () => {
   useEffect(() => {
     void loadData();
   }, [loadData]);
-
-  const getCategoryChip = (category: string) => {
-    switch (category) {
-      case 'general':
-        return <Chip label={txt('일반', 'General')} color="default" size="small" />;
-      case 'urgent':
-        return <Chip label={txt('긴급', 'Urgent')} color="error" size="small" />;
-      case 'maintenance':
-        return <Chip label={txt('점검', 'Maintenance')} color="warning" size="small" />;
-      case 'policy':
-        return <Chip label={txt('정책', 'Policy')} color="info" size="small" />;
-      case 'event':
-        return <Chip label={txt('행사', 'Event')} color="success" size="small" />;
-      default:
-        return <Chip label={txt('알 수 없음', 'Unknown')} color="default" size="small" />;
-    }
-  };
-
-  const getPriorityChip = (priority: string) => {
-    switch (priority) {
-      case 'low':
-        return <Chip label={txt('낮음', 'Low')} color="default" size="small" />;
-      case 'medium':
-        return <Chip label={txt('보통', 'Medium')} color="info" size="small" />;
-      case 'high':
-        return <Chip label={txt('높음', 'High')} color="warning" size="small" />;
-      case 'urgent':
-        return <Chip label={txt('긴급', 'Urgent')} color="error" size="small" />;
-      default:
-        return <Chip label={txt('알 수 없음', 'Unknown')} color="default" size="small" />;
-    }
-  };
 
   const getStatusChip = (status: string) => {
     switch (status) {
@@ -633,7 +560,6 @@ const NoticeManagement: React.FC = () => {
         setError('공지사항을 불러오는데 실패했습니다.');
       }
     } catch (error: any) {
-      console.error('공지사항 상세 조회 오류:', error);
       setError(error.response?.data?.message || '공지사항을 불러오는데 실패했습니다.');
       // 에러가 발생해도 기본 정보로 표시
       setSelectedNotice(notice);
@@ -716,7 +642,6 @@ const NoticeManagement: React.FC = () => {
         setError(response.message || '수정 중 오류가 발생했습니다.');
       }
     } catch (error: any) {
-      console.error('공지사항 수정 오류:', error);
       setError(error.response?.data?.message || '수정 중 오류가 발생했습니다.');
     }
   };
@@ -789,7 +714,6 @@ const NoticeManagement: React.FC = () => {
         }
       }
     } catch (error: any) {
-      console.error('공지사항 저장 오류:', error);
       setError(error.response?.data?.message || '저장 중 오류가 발생했습니다.');
     }
   };
@@ -821,16 +745,9 @@ const NoticeManagement: React.FC = () => {
         setError(response.message || '삭제 중 오류가 발생했습니다.');
       }
     } catch (error: any) {
-      console.error('삭제 오류:', error);
       setError(error.response?.data?.message || '삭제 중 오류가 발생했습니다.');
     }
   };
-
-
-  const totalNotices = notices.length;
-  const publishedNotices = notices.filter(notice => notice.status === 'published').length;
-  const draftNotices = notices.filter(notice => notice.status === 'draft').length;
-  const urgentNotices = notices.filter(notice => notice.priority === 'urgent').length;
 
   const getGoodFriday = (year: number): Date => {
     // Gregorian Easter Sunday 계산(Anonymous Gregorian algorithm)
@@ -1132,8 +1049,7 @@ const NoticeManagement: React.FC = () => {
           maxHeight: { xs: 'calc(100vh - 200px)', sm: 'calc(100vh - 220px)' },
           overflowY: 'auto',
           pr: { xs: 0.5, sm: 1 },
-          boxSizing: 'border-box',
-        }}
+          boxSizing: 'border-box' }}
       >
         {/* 요일 헤더 */}
         <Box
@@ -1142,8 +1058,7 @@ const NoticeManagement: React.FC = () => {
             gridTemplateColumns: 'repeat(7, 1fr)',
             gap: 0.75,
             mb: 1.25,
-            px: 0.25,
-          }}
+            px: 0.25 }}
         >
           {weekDays.map((day, index) => (
             <Box
@@ -1152,8 +1067,7 @@ const NoticeManagement: React.FC = () => {
                 textAlign: 'center',
                 py: 1,
                 borderRadius: '10px',
-                bgcolor: alpha(theme.palette.grey[500], 0.06),
-              }}
+                bgcolor: alpha(theme.palette.grey[500], 0.06) }}
             >
               <Typography
                 variant="body2"
@@ -1164,8 +1078,7 @@ const NoticeManagement: React.FC = () => {
                   color:
                     index === 0 || index === 6
                       ? alpha(theme.palette.error.main, 0.92)
-                      : alpha(theme.palette.text.primary, 0.72),
-                }}
+                      : alpha(theme.palette.text.primary, 0.72) }}
               >
                 {day}
               </Typography>
@@ -1179,8 +1092,7 @@ const NoticeManagement: React.FC = () => {
             display: 'grid',
             gridTemplateColumns: 'repeat(7, 1fr)',
             gap: 0.75,
-            px: 0.25,
-          }}
+            px: 0.25 }}
         >
           {days.map((date, index) => {
             if (!date) return null;
@@ -1242,9 +1154,7 @@ const NoticeManagement: React.FC = () => {
                             ? alpha(theme.palette.primary.main, 0.12)
                             : alpha(theme.palette.grey[500], 0.08),
                       color: isTodayDate ? theme.palette.primary.contrastText : theme.palette.text.primary,
-                      boxShadow: isTodayDate ? `0 4px 16px ${alpha(theme.palette.primary.main, 0.4)}` : undefined,
-                    },
-                  }}
+                      boxShadow: isTodayDate ? `0 4px 16px ${alpha(theme.palette.primary.main, 0.4)}` : undefined } }}
                   onClick={() => openScheduleDialog(date)}
                 >
                   <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: ycsSp(0.25) }}>
@@ -1269,8 +1179,7 @@ const NoticeManagement: React.FC = () => {
                           : isTodayDate && !hasCompanyHoliday
                             ? theme.palette.primary.contrastText
                             : undefined,
-                        lineHeight: 1,
-                      }}
+                        lineHeight: 1 }}
                     >
                       {date.getDate()}
                     </Typography>
@@ -1292,8 +1201,7 @@ const NoticeManagement: React.FC = () => {
                             color: isTodayDate ? alpha('#fff', 0.95) : alpha(theme.palette.error.main, 0.92),
                             fontWeight: 600,
                             lineHeight: 1.25,
-                            letterSpacing: '0.01em',
-                          }}
+                            letterSpacing: '0.01em' }}
                         >
                           {getHolidayDisplayName(name)}
                         </Typography>
@@ -1305,8 +1213,7 @@ const NoticeManagement: React.FC = () => {
                             fontSize: ycsRem(0.56),
                             color: isTodayDate ? alpha('#fff', 0.95) : alpha(theme.palette.error.main, 0.92),
                             fontWeight: 600,
-                            lineHeight: 1.25,
-                          }}
+                            lineHeight: 1.25 }}
                         >
                           +{holidayNames.length - 2}
                         </Typography>
@@ -1350,8 +1257,7 @@ const NoticeManagement: React.FC = () => {
                           sx={{
                             fontSize: ycsRem(0.6),
                             color: isTodayDate ? alpha('#fff', 0.95) : alpha(theme.palette.primary.main, 0.9),
-                            fontWeight: 600,
-                          }}
+                            fontWeight: 600 }}
                         >
                           +{customLabels.length - 2}
                         </Typography>
@@ -1369,8 +1275,7 @@ const NoticeManagement: React.FC = () => {
                             color: item.color,
                             fontWeight: 600,
                             lineHeight: 1.2,
-                            letterSpacing: '0.01em',
-                          }}
+                            letterSpacing: '0.01em' }}
                         >
                           {item.label}
                         </Typography>
@@ -1428,8 +1333,7 @@ const NoticeManagement: React.FC = () => {
                     sx={{
                       '& .MuiOutlinedInput-root': {
                         borderRadius: 1.5,
-                        bgcolor: 'background.paper',
-                      }
+                        bgcolor: 'background.paper' }
                     }}
                   />
                 </Box>
@@ -1444,8 +1348,7 @@ const NoticeManagement: React.FC = () => {
                         onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value as any })}
                         sx={{
                           borderRadius: 1.5,
-                          bgcolor: 'background.paper',
-                        }}
+                          bgcolor: 'background.paper' }}
                       >
                         <MenuItem value="all">전체</MenuItem>
                         <MenuItem value="employees">직원</MenuItem>
@@ -1768,12 +1671,27 @@ const NoticeManagement: React.FC = () => {
                       <Chip label="고정" color="warning" size="small" icon={<PriorityIcon />} />
                     )}
                   </Box>
-                  <Typography variant="body2" color="text.secondary">
-                    대상: {getTargetAudienceLabel(selectedNotice.targetAudience)} • 
-                    작성자: {selectedNotice.author} • 
-                    작성일: {selectedNotice.createdAt}
-                    {selectedNotice.publishedAt && ` • 게시일: ${selectedNotice.publishedAt}`}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 0.5 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      대상: {getTargetAudienceLabel(selectedNotice.targetAudience)} •
+                    </Typography>
+                    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+                      <Avatar
+                        src={getUploadUrl(selectedNotice.authorAvatarUrl) || undefined}
+                        alt={selectedNotice.author}
+                        sx={{ width: 24, height: 24, bgcolor: 'primary.main', fontSize: '0.75rem' }}
+                      >
+                        {(selectedNotice.author || '?').charAt(0)}
+                      </Avatar>
+                      <Typography variant="body2" color="text.secondary">
+                        작성자: {selectedNotice.author}
+                      </Typography>
+                    </Box>
+                    <Typography variant="body2" color="text.secondary">
+                      • 작성일: {selectedNotice.createdAt}
+                      {selectedNotice.publishedAt && ` • 게시일: ${selectedNotice.publishedAt}`}
+                    </Typography>
+                  </Box>
                   {isNoticeAuthor(selectedNotice) && !noticeMenuFlags.canEdit && (
                     <Alert severity="info" sx={{ mt: 2 }}>
                       {isEn
@@ -1923,15 +1841,13 @@ const NoticeManagement: React.FC = () => {
     textAlign: 'center',
     py: { xs: 6, sm: 8 },
     px: 3,
-    gap: 1.5,
-  } as const;
+    gap: 1.5 } as const;
 
   const cellEllipsisSx = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
-    maxWidth: 0,
-  } as const;
+    maxWidth: 0 } as const;
 
   const noticeTableSx = {
     width: '100%',
@@ -1941,9 +1857,7 @@ const NoticeManagement: React.FC = () => {
     '& .MuiTableCell-root': {
       borderLeft: 'none',
       borderRight: 'none',
-      borderTop: 'none',
-    },
-  } as const;
+      borderTop: 'none' } } as const;
 
   const filterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx };
 
@@ -1980,8 +1894,7 @@ const NoticeManagement: React.FC = () => {
             '& .MuiTabs-indicator': {
               height: 3,
               borderRadius: '3px 3px 0 0',
-              bgcolor: 'primary.main',
-            },
+              bgcolor: 'primary.main' },
             '& .MuiTab-root': {
               textTransform: 'none',
               fontWeight: 600,
@@ -1991,10 +1904,7 @@ const NoticeManagement: React.FC = () => {
               py: 1.5,
               color: 'text.secondary',
               '&.Mui-selected': {
-                color: 'primary.main',
-              },
-            },
-          }}
+                color: 'primary.main' } } }}
         >
           <Tab label={txt('공지사항', 'Notices')} disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead} />
           <Tab
@@ -2021,11 +1931,9 @@ const NoticeManagement: React.FC = () => {
               display: 'grid',
               gridTemplateColumns: {
                 xs: '1fr',
-                sm: 'minmax(0, 2fr) minmax(0, 1fr) auto auto',
-              },
+                sm: 'minmax(0, 2fr) minmax(0, 1fr) auto auto' },
               gap: 2,
-              alignItems: 'flex-end',
-            }}
+              alignItems: 'flex-end' }}
           >
             <TextField
               fullWidth
@@ -2042,8 +1950,7 @@ const NoticeManagement: React.FC = () => {
                   <InputAdornment position="start">
                     <SearchIcon sx={{ color: 'text.secondary', opacity: 0.85, fontSize: '1.125rem' }} />
                   </InputAdornment>
-                ),
-              }}
+                ) }}
             />
             <FormControl
               fullWidth
@@ -2171,8 +2078,12 @@ const NoticeManagement: React.FC = () => {
                   </TableCell>
                   <TableCell sx={cellEllipsisSx}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
-                      <Avatar sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: '0.875rem', flexShrink: 0 }}>
-                        {notice.author.charAt(0)}
+                      <Avatar
+                        src={getUploadUrl(notice.authorAvatarUrl) || undefined}
+                        alt={notice.author}
+                        sx={{ width: 32, height: 32, bgcolor: 'primary.main', fontSize: '0.875rem', flexShrink: 0 }}
+                      >
+                        {(notice.author || '?').charAt(0)}
                       </Avatar>
                       <Typography variant="body2" noWrap>{notice.author}</Typography>
                     </Box>
@@ -2206,9 +2117,7 @@ const NoticeManagement: React.FC = () => {
                               transition: 'color 0.15s ease, background-color 0.15s ease',
                               '&:hover': {
                                 color: 'error.main',
-                                bgcolor: alpha(theme.palette.error.main, 0.12),
-                              },
-                            }}
+                                bgcolor: alpha(theme.palette.error.main, 0.12) } }}
                           >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
@@ -2249,8 +2158,7 @@ const NoticeManagement: React.FC = () => {
                 justifyContent: 'space-between',
                 alignItems: 'center',
                 flexWrap: 'wrap',
-                gap: 1.5,
-              }}
+                gap: 1.5 }}
             >
               <Typography
                 variant="subtitle1"
@@ -2268,8 +2176,7 @@ const NoticeManagement: React.FC = () => {
                   py: 0.5,
                   borderRadius: '8px',
                   bgcolor: alpha(theme.palette.grey[500], 0.08),
-                  border: `1px solid ${alpha(theme.palette.divider, 0.65)}`,
-                }}
+                  border: `1px solid ${alpha(theme.palette.divider, 0.65)}` }}
               >
                 <IconButton
                   onClick={() => {
@@ -2291,8 +2198,7 @@ const NoticeManagement: React.FC = () => {
                     fontSize: '0.9375rem',
                     fontWeight: 600,
                     letterSpacing: '0.01em',
-                    color: 'text.primary',
-                  }}
+                    color: 'text.primary' }}
                 >
                   {isEn
                     ? `${currentDate.toLocaleString('en-US', { month: 'long' })} ${currentDate.getFullYear()}`
@@ -2322,8 +2228,7 @@ const NoticeManagement: React.FC = () => {
                     fontSize: '0.8125rem',
                     px: 1.5,
                     py: 0.5,
-                    borderColor: alpha(theme.palette.divider, 0.95),
-                  }}
+                    borderColor: alpha(theme.palette.divider, 0.95) }}
                 >
                   {txt('오늘', 'Today')}
                 </Button>
@@ -2373,8 +2278,7 @@ const NoticeManagement: React.FC = () => {
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     borderRadius: 1.5,
-                    bgcolor: 'background.paper',
-                  }
+                    bgcolor: 'background.paper' }
                 }}
               />
             </Box>
@@ -2389,8 +2293,7 @@ const NoticeManagement: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value as any })}
                     sx={{
                       borderRadius: 1.5,
-                      bgcolor: 'background.paper',
-                    }}
+                      bgcolor: 'background.paper' }}
                   >
                     <MenuItem value="all">전체</MenuItem>
                     <MenuItem value="employees">직원</MenuItem>
@@ -2710,11 +2613,10 @@ const NoticeManagement: React.FC = () => {
                   variant="contained"
                   onClick={() => {
                     if (editor) {
-                      const table = editor.chain().focus().insertTable({
+                      editor.chain().focus().insertTable({
                         rows: tableRows,
                         cols: tableCols,
-                        withHeaderRow: tableHasHeader,
-                      }).run();
+                        withHeaderRow: tableHasHeader }).run();
                       setTableDialogOpen(false);
                     }
                   }}

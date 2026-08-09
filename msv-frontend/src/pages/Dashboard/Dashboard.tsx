@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Box,
   Card,
@@ -20,12 +20,6 @@ import {
   Checkbox,
   FormControlLabel,
   Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -78,7 +72,6 @@ import {
   approvalService,
   vacationService,
   projectService,
-  workBoardService,
   userUiPreferencesService,
   departmentService
 } from '../../services/api';
@@ -94,8 +87,7 @@ import {
   mvsDashboardWidgetCardSx,
   mvsDashboardWidgetGroupSx,
   mvsKpiCardSx,
-  mvsPageRootSx,
-} from '../../theme/mvsLayout';
+  mvsPageRootSx } from '../../theme/mvsLayout';
 import DepartmentLeaveCalendar, { CALENDAR_DEPARTMENT_ALL_VALUE } from '../HR/DepartmentLeaveCalendar';
 
 interface TabPanelProps {
@@ -169,7 +161,6 @@ const DASHBOARD_CARD_DEFAULT_IDS = [
 
 const DASHBOARD_CARD_PAD = 2.5;
 const DASHBOARD_CARD_SPACING = 1.5;
-const DASHBOARD_CARD_CHART_MIN = 168;
 
 type DashboardCardTitleAccent = 'primary' | 'error';
 
@@ -185,14 +176,13 @@ const dashboardCardTitleBar = (
   py: 1,
   borderRadius: '8px',
   border: 'none',
-  bgcolor: alpha(theme.palette[accent].main, 0.06),
-});
+  bgcolor: alpha(theme.palette[accent].main, 0.06) });
 
 const DASHBOARD_CARD_TITLE_TYPO: SxProps<Theme> = {
   fontWeight: 600,
   fontSize: '14px',
   lineHeight: 1.4,
-  color: '#111827',
+  color: '#0F172A',
   letterSpacing: '-0.01em'
 };
 
@@ -203,9 +193,7 @@ const DASHBOARD_WIDGET_CARD_BASE_SX: SxProps<Theme> = {
   flexDirection: 'column',
   transition: 'box-shadow 0.2s ease',
   '&:hover': {
-    boxShadow: '0 12px 32px rgba(15, 23, 42, 0.08)',
-  },
-};
+    boxShadow: '0 12px 32px rgba(15, 23, 42, 0.08)' } };
 
 const dashboardWidgetCardSx = (
   order: number,
@@ -213,8 +201,7 @@ const dashboardWidgetCardSx = (
 ): SxProps<Theme> => ({
   ...DASHBOARD_WIDGET_CARD_BASE_SX,
   order,
-  ...(extra && typeof extra !== 'function' ? extra : {}),
-});
+  ...(extra && typeof extra !== 'function' ? extra : {}) });
 
 const Dashboard: React.FC = () => {
   const theme = useTheme();
@@ -243,16 +230,16 @@ const Dashboard: React.FC = () => {
     { name: t('dashboard.inventoryHigh'), value: 0, color: '#ffe66d' },
   ];
 
-  const [salesData, setSalesData] = useState(defaultSalesData);
+  const [, setSalesData] = useState(defaultSalesData);
   const [inventoryData, setInventoryData] = useState(getDefaultInventoryData());
   const [notices, setNotices] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [, setError] = useState<string | null>(null);
   const [currentWeekStart, setCurrentWeekStart] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
   });
-  const [pendingVacations, setPendingVacations] = useState<any[]>([]);
+  const [, setPendingVacations] = useState<any[]>([]);
   const [lowStockItems, setLowStockItems] = useState<any[]>([]);
   const [recentInvoices, setRecentInvoices] = useState<any[]>([]);
   
@@ -293,10 +280,14 @@ const Dashboard: React.FC = () => {
   const canViewAdminDashboard = isRoot || isAdmin;
 
   // 사용 가능한 탭 목록
-  const availableTabs = [
-    { index: 0, label: t('dashboard.personal'), icon: PersonIcon, available: true },
-    { index: 2, label: t('dashboard.admin'), icon: AdminPanelSettingsIcon, available: canViewAdminDashboard }
-  ].filter(tab => tab.available);
+  const availableTabs = useMemo(
+    () =>
+      [
+        { index: 0, label: t('dashboard.personal'), icon: PersonIcon, available: true },
+        { index: 2, label: t('dashboard.admin'), icon: AdminPanelSettingsIcon, available: canViewAdminDashboard }
+      ].filter(tab => tab.available),
+    [t, canViewAdminDashboard]
+  );
 
   // 실제 탭 인덱스를 사용 가능한 탭 인덱스로 매핑
   const getTabIndex = (displayIndex: number) => {
@@ -467,8 +458,7 @@ const Dashboard: React.FC = () => {
       startDate: v.start_date,
       endDate: v.end_date,
       status: v.status as 'pending' | 'approved' | 'rejected' | 'cancelled',
-      days: Number(v.days) || 0,
-    }));
+      days: Number(v.days) || 0 }));
   }, [dashboardLeaveRaw]);
 
   const dashboardLeaveDeptOptions = useMemo(() => {
@@ -519,8 +509,7 @@ const Dashboard: React.FC = () => {
         startDate,
         endDate,
         status,
-        days,
-      })),
+        days })),
     [dashboardLeaveForCalendar]
   );
 
@@ -932,10 +921,10 @@ const Dashboard: React.FC = () => {
       second: lookup('second')
     };
   };
-  const getClientDate = () => {
+  const getClientDate = useCallback(() => {
     const { year, month, day } = getClientTimeParts();
     return `${year}-${month}-${day}`;
-  };
+  }, []);
   const getClientTimeISO = () => {
     const { year, month, day, hour, minute, second } = getClientTimeParts();
     return `${year}-${month}-${day}T${hour}:${minute}:${second}+05:30`;
@@ -965,12 +954,12 @@ const Dashboard: React.FC = () => {
         if (response.data?.success) {
           setTodayAttendance(response.data.data);
         }
-      } catch (error) {
-        console.error('오늘의 근태 조회 오류:', error);
-      }
+      } catch {
+      /* ignore */
+    }
     };
     fetchTodayAttendance();
-  }, [user]);
+  }, [user, getClientDate]);
 
   const handleCheckIn = async () => {
     setCheckInLoading(true);
@@ -1044,9 +1033,7 @@ const Dashboard: React.FC = () => {
       const status = error.response?.status;
       const serverPath = error.response?.data?.path;
       const serverMessage = error.response?.data?.message;
-      const requestUrl = (error.config?.baseURL || '') + (error.config?.url || '');
       if (process.env.NODE_ENV === 'development' && (status === 404 || serverPath)) {
-        console.warn('[출근 요청 실패]', { status, serverPath, requestUrl, method: error.config?.method });
       }
       if (serverMessage?.includes('이미 출근')) {
         setAttendanceMessage(serverMessage);
@@ -1153,9 +1140,7 @@ const Dashboard: React.FC = () => {
       const status = error.response?.status;
       const serverPath = error.response?.data?.path;
       const serverMessage = error.response?.data?.message;
-      const requestUrl = (error.config?.baseURL || '') + (error.config?.url || '');
       if (process.env.NODE_ENV === 'development' && (status === 404 || serverPath)) {
-        console.warn('[퇴근 요청 실패]', { status, serverPath, requestUrl, method: error.config?.method });
       }
       if (serverMessage?.includes('이미 퇴근')) {
         setAttendanceMessage(serverMessage);
@@ -1191,7 +1176,7 @@ const Dashboard: React.FC = () => {
   };
 
   // 실제 데이터 로드 함수
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -1239,16 +1224,14 @@ const Dashboard: React.FC = () => {
           totalCustomers: statsResponse.data.data.customerCount || 0,
           totalInvoices: statsResponse.data.data.invoiceCount || 0,
           totalInventory: statsResponse.data.data.inventoryCount || 0,
-          totalEmployees: statsResponse.data.data.employeeCount || 0,
-        }));
+          totalEmployees: statsResponse.data.data.employeeCount || 0 }));
       }
 
       if (revenueResponse?.data?.success) {
         const revenueData = revenueResponse.data.data.map((item: any) => ({
           name: new Date(item.month).toLocaleDateString('ko-KR', { month: 'short' }),
           sales: parseFloat(item.revenue) || 0,
-          profit: parseFloat(item.revenue) * 0.3 || 0,
-        }));
+          profit: parseFloat(item.revenue) * 0.3 || 0 }));
         setSalesData(revenueData);
       }
 
@@ -1312,18 +1295,17 @@ const Dashboard: React.FC = () => {
         const approvals = raw.filter((a: any) => Number(a.requester_id) === uid);
         setMyRequestedApprovals(approvals.slice(0, 5));
       }
-    } catch (error) {
-      console.error('대시보드 데이터 로드 오류:', error);
+    } catch {
       setError(t('errors.serverError'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, t]);
 
   // 컴포넌트 마운트 시 데이터 로드
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, [loadDashboardData]);
 
   const handleRefresh = () => {
     loadDashboardData();
@@ -1340,7 +1322,7 @@ const Dashboard: React.FC = () => {
       const firstAvailableTab = availableTabs[0].index;
       setActiveTab(firstAvailableTab);
     }
-  }, [user?.role, canViewAdminDashboard]);
+  }, [availableTabs]);
 
   const StatCard = ({ title, value, icon, trend, color = 'primary', onClick, showIfEmpty = false }: any) => {
     // 데이터가 없고 showIfEmpty가 false이면 카드를 표시하지 않음
@@ -1360,8 +1342,7 @@ const Dashboard: React.FC = () => {
           transition: 'box-shadow 0.2s ease',
           '&:hover': onClick
             ? { boxShadow: '0 12px 32px rgba(15, 23, 42, 0.08)' }
-            : {},
-        })}
+            : {} })}
         onClick={onClick}
       >
         <CardContent sx={{ p: 3 }}>
@@ -1375,8 +1356,7 @@ const Dashboard: React.FC = () => {
                   fontSize: '0.75rem',
                   fontWeight: 500,
                   mb: 1,
-                  color: '#6E6E73',
-                }}
+                  color: '#6E6E73' }}
               >
                 {title}
               </Typography>
@@ -1434,8 +1414,7 @@ const Dashboard: React.FC = () => {
                   color: dark,
                   width: 48,
                   height: 48,
-                  boxShadow: 'none',
-                };
+                  boxShadow: 'none' };
               }}
             >
               {React.cloneElement(icon, { sx: { fontSize: '1.2rem' } })}
@@ -1470,9 +1449,7 @@ const Dashboard: React.FC = () => {
           ? {}
           : {
               bgcolor: alpha(theme.palette.grey[500], 0.04),
-              boxShadow: '0 8px 26px rgba(15, 23, 42, 0.08)',
-            },
-      }}
+              boxShadow: '0 8px 26px rgba(15, 23, 42, 0.08)' } }}
       onClick={disabled ? undefined : onClick}
     >
       <CardContent
@@ -1482,8 +1459,7 @@ const Dashboard: React.FC = () => {
           alignItems: 'center',
           gap: 2,
           flex: 1,
-          '&:last-child': { pb: 2 },
-        }}
+          '&:last-child': { pb: 2 } }}
       >
         <Avatar
           sx={(th) => {
@@ -1497,8 +1473,7 @@ const Dashboard: React.FC = () => {
               color: dark,
               width: 44,
               height: 44,
-              flexShrink: 0,
-            };
+              flexShrink: 0 };
           }}
         >
           {React.cloneElement(icon, { sx: { fontSize: '1.1rem' } })}
@@ -1510,8 +1485,7 @@ const Dashboard: React.FC = () => {
               fontSize: '0.8125rem',
               fontWeight: 600,
               lineHeight: 1.35,
-              letterSpacing: '-0.015em',
-            }}
+              letterSpacing: '-0.015em' }}
           >
             {title}
           </Typography>
@@ -1535,10 +1509,9 @@ const Dashboard: React.FC = () => {
                 size="small"
                 sx={{
                   borderRadius: '10px',
-                  border: '1px solid #C5CED9',
+                  border: '1px solid #CBD5E1',
                   bgcolor: '#F8FAFC',
-                  '&:hover': { bgcolor: '#E8EDF3' },
-                }}
+                  '&:hover': { bgcolor: '#E8EDF3' } }}
               >
                 <Refresh sx={{ fontSize: '1.125rem' }} />
               </IconButton>
@@ -1548,10 +1521,9 @@ const Dashboard: React.FC = () => {
                 size="small"
                 sx={{
                   borderRadius: '10px',
-                  border: '1px solid #C5CED9',
+                  border: '1px solid #CBD5E1',
                   bgcolor: '#F8FAFC',
-                  '&:hover': { bgcolor: '#E8EDF3' },
-                }}
+                  '&:hover': { bgcolor: '#E8EDF3' } }}
               >
                 <Notifications sx={{ fontSize: '1.125rem' }} />
               </IconButton>
@@ -1562,8 +1534,7 @@ const Dashboard: React.FC = () => {
                 height: 34,
                 bgcolor: 'error.main',
                 fontSize: '0.875rem',
-                fontWeight: 600,
-              }}
+                fontWeight: 600 }}
             >
               R
             </Avatar>
@@ -1583,8 +1554,7 @@ const Dashboard: React.FC = () => {
             '& .MuiTabs-indicator': {
               backgroundColor: 'primary.main',
               height: 3,
-              borderRadius: '3px 3px 0 0',
-            },
+              borderRadius: '3px 3px 0 0' },
             '& .MuiTab-root': {
               textTransform: 'none',
               fontSize: '0.875rem',
@@ -1595,10 +1565,7 @@ const Dashboard: React.FC = () => {
               letterSpacing: '0.01em',
               color: 'text.secondary',
               '&.Mui-selected': {
-                color: 'primary.main',
-              },
-            },
-          }}
+                color: 'primary.main' } } }}
         >
           {availableTabs.map((tab) => (
             <Tab
@@ -1623,8 +1590,7 @@ const Dashboard: React.FC = () => {
               display: 'flex',
               gap: 2.5,
               alignItems: 'stretch',
-              flexDirection: { xs: 'column', md: 'row' },
-            }}
+              flexDirection: { xs: 'column', md: 'row' } }}
           >
             <Box
               sx={{
@@ -1632,13 +1598,11 @@ const Dashboard: React.FC = () => {
                 gridTemplateColumns: {
                   xs: '1fr',
                   sm: 'repeat(2, 1fr)',
-                  md: `repeat(${Math.min(Math.max(selectedQuickActions.length, 1), 4)}, 1fr)`,
-                },
+                  md: `repeat(${Math.min(Math.max(selectedQuickActions.length, 1), 4)}, 1fr)` },
                 gap: 2,
                 flex: 1,
                 minWidth: 0,
-                alignItems: 'stretch',
-              }}
+                alignItems: 'stretch' }}
             >
               {selectedQuickActions.length === 0 ? (
                 <Card variant="outlined" sx={{ borderStyle: 'dashed', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 88 }}>
@@ -1677,8 +1641,7 @@ const Dashboard: React.FC = () => {
                 maxWidth: { md: 280 },
                 flexShrink: 0,
                 alignSelf: { xs: 'stretch', md: 'flex-start' },
-                justifyContent: 'flex-start',
-              }}
+                justifyContent: 'flex-start' }}
             >
               <Button
                 size="small"
@@ -1688,8 +1651,7 @@ const Dashboard: React.FC = () => {
                 sx={{
                   ...mvsBodyOutlinedBtnSx,
                   width: { xs: '100%', sm: 'auto', md: '100%' },
-                  whiteSpace: 'nowrap',
-                }}
+                  whiteSpace: 'nowrap' }}
               >
                 {language === 'en' ? 'Edit quick actions' : '빠른 액션 편집'}
               </Button>
@@ -1705,8 +1667,7 @@ const Dashboard: React.FC = () => {
                   width: { xs: '100%', sm: 'auto', md: '100%' },
                   minHeight: 40,
                   whiteSpace: 'nowrap',
-                  '& .MuiButton-startIcon': { mr: 0.75, ml: 0 },
-                }}
+                  '& .MuiButton-startIcon': { mr: 0.75, ml: 0 } }}
               >
                 {checkInLoading ? t('dashboard.registering') : t('dashboard.checkIn')}
               </Button>
@@ -1721,8 +1682,7 @@ const Dashboard: React.FC = () => {
                   width: { xs: '100%', sm: 'auto', md: '100%' },
                   minHeight: 40,
                   whiteSpace: 'nowrap',
-                  '& .MuiButton-startIcon': { mr: 0.75, ml: 0 },
-                }}
+                  '& .MuiButton-startIcon': { mr: 0.75, ml: 0 } }}
               >
                 {checkOutLoading ? t('dashboard.registering') : t('dashboard.checkOut')}
               </Button>
@@ -1740,8 +1700,7 @@ const Dashboard: React.FC = () => {
               flexWrap: 'wrap',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 1,
-            }}
+              gap: 1 }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <CalendarTodayIcon color="primary" fontSize="small" />
@@ -1805,11 +1764,9 @@ const Dashboard: React.FC = () => {
                     display: 'grid',
                     gridTemplateColumns: {
                       xs: 'repeat(7, minmax(88px, 1fr))',
-                      md: 'repeat(7, 1fr)',
-                    },
+                      md: 'repeat(7, 1fr)' },
                     gap: { xs: 1, sm: 1.25 },
-                    minWidth: { xs: 640, md: '100%' },
-                  }}
+                    minWidth: { xs: 640, md: '100%' } }}
                 >
                   {weekDates.map((date) => {
                     const dayName = weekDaysShort[date.getDay()];
@@ -1828,8 +1785,7 @@ const Dashboard: React.FC = () => {
                       ...customLabels.map((item) => ({
                         key: `c-${item.id}`,
                         label: item.title || (language === 'en' ? 'Company Holiday' : '회사 휴일'),
-                        type: item.type === 'company_holiday' ? 'company_holiday' as const : 'custom' as const,
-                      })),
+                        type: item.type === 'company_holiday' ? 'company_holiday' as const : 'custom' as const })),
                       ...complianceLabels.map((item) => ({ key: `p-${item.id}`, label: item.label, type: 'compliance' as const })),
                     ];
                     const visibleLabels = allLabels.slice(0, 2);
@@ -1863,17 +1819,14 @@ const Dashboard: React.FC = () => {
                           cursor: 'pointer',
                           transition: 'background-color 0.15s ease',
                           '&:hover': {
-                            bgcolor: 'action.hover',
-                          },
-                        }}
+                            bgcolor: 'action.hover' } }}
                       >
                         <Typography
                           variant="caption"
                           sx={{
                             fontWeight: 700,
                             color: isTodayDate ? 'common.white' : 'text.secondary',
-                            mb: 0.25,
-                          }}
+                            mb: 0.25 }}
                         >
                           {dayName}
                         </Typography>
@@ -1883,8 +1836,7 @@ const Dashboard: React.FC = () => {
                             sx={{
                               fontWeight: 800,
                               lineHeight: 1,
-                              color: isTodayDate ? 'common.white' : 'text.primary',
-                            }}
+                              color: isTodayDate ? 'common.white' : 'text.primary' }}
                           >
                             {date.getDate()}
                           </Typography>
@@ -1902,8 +1854,7 @@ const Dashboard: React.FC = () => {
                             flexDirection: 'column',
                             alignItems: 'stretch',
                             gap: 0.4,
-                            flex: 1,
-                          }}
+                            flex: 1 }}
                         >
                           {visibleLabels.map((item) => (
                             <Chip
@@ -1918,8 +1869,7 @@ const Dashboard: React.FC = () => {
                                 '& .MuiChip-label': {
                                   px: 0.75,
                                   overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                },
+                                  textOverflow: 'ellipsis' },
                                 bgcolor:
                                   item.type === 'holiday'
                                     ? 'error.light'
@@ -1935,8 +1885,7 @@ const Dashboard: React.FC = () => {
                                       ? 'common.white'
                                       : item.type === 'compliance'
                                         ? 'info.dark'
-                                        : 'primary.main',
-                              }}
+                                        : 'primary.main' }}
                             />
                           ))}
                           {!hasAnySchedule && (
@@ -1945,8 +1894,7 @@ const Dashboard: React.FC = () => {
                               sx={{
                                 textAlign: 'center',
                                 color: isTodayDate ? 'common.white' : 'text.secondary',
-                                fontWeight: 600,
-                              }}
+                                fontWeight: 600 }}
                             >
                               {language === 'en' ? 'No schedules' : '일정 없음'}
                             </Typography>
@@ -1957,8 +1905,7 @@ const Dashboard: React.FC = () => {
                               sx={{
                                 textAlign: 'center',
                                 fontWeight: 700,
-                                color: isTodayDate ? 'common.white' : 'primary.main',
-                              }}
+                                color: isTodayDate ? 'common.white' : 'primary.main' }}
                             >
                               +{hiddenCount}
                             </Typography>
@@ -2557,8 +2504,7 @@ const Dashboard: React.FC = () => {
           elevation={0}
           onClick={() => navigate('/work/approval')}
           sx={dashboardWidgetCardSx(selectedDashboardCards.indexOf('approval'), {
-            cursor: 'pointer',
-          })}
+            cursor: 'pointer' })}
         >
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>

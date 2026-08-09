@@ -12,6 +12,7 @@ interface UserAttributes {
   role: 'root' | 'audit' | 'admin' | 'user';
   department?: string;
   department_id?: number | null;
+  position_id?: number | null;
   position?: string;
   status: 'active' | 'inactive' | 'suspended';
   last_login?: Date;
@@ -52,6 +53,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   public role!: 'root' | 'audit' | 'admin' | 'user';
   public department?: string;
   public department_id?: number | null;
+  public position_id?: number | null;
   public position?: string;
   public status!: 'active' | 'inactive' | 'suspended';
   public last_login?: Date;
@@ -124,6 +126,10 @@ User.init(
       allowNull: true
     },
     department_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    position_id: {
       type: DataTypes.INTEGER,
       allowNull: true
     },

@@ -73,6 +73,12 @@ import {
   updateDepartment,
   deleteDepartment
 } from '../controllers/departmentController';
+import {
+  listPositions,
+  createPosition,
+  updatePosition,
+  deletePosition
+} from '../controllers/positionController';
 import { authenticateToken, restrictAuditToReadOnly, requireRole } from '../middleware/auth';
 import { requireAdminRootOrMenuPermissionAnyOf, VACATION_MENU_ROUTES } from '../middleware/menuPermission';
 import { validateBody } from '../middleware/validate';
@@ -100,6 +106,25 @@ router.delete(
   restrictAuditToReadOnly,
   requireRole(['admin', 'root']),
   deleteDepartment
+);
+
+// 직책 관리
+router.get('/positions', listPositions);
+router.post(
+  '/positions',
+  restrictAuditToReadOnly,
+  requireRole(['admin', 'root']),
+  validateBody({
+    name: { required: true, type: 'string', minLength: 1, maxLength: 200 }
+  }),
+  createPosition
+);
+router.put('/positions/:id', restrictAuditToReadOnly, requireRole(['admin', 'root']), updatePosition);
+router.delete(
+  '/positions/:id',
+  restrictAuditToReadOnly,
+  requireRole(['admin', 'root']),
+  deletePosition
 );
 
 router.get('/payroll-period-locks', getPayrollPeriodLocks);

@@ -18,17 +18,10 @@ import {
   Tabs,
   Tab,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
   MenuItem,
-  IconButton,
-  Tooltip,
   CircularProgress,
   List,
   ListItem,
-  ListItemText,
-  ListItemIcon,
   Divider
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
@@ -41,22 +34,16 @@ import {
   Psychology as PsychologyIcon,
   AutoAwesome as AutoAwesomeIcon,
   Download as DownloadIcon,
-  Refresh as RefreshIcon,
-  Insights as InsightsIcon,
   Compare as CompareIcon,
-  Work as WorkIcon,
   People as PeopleIcon,
   AttachMoney as AttachMoneyIcon,
   Schedule as ScheduleIcon,
-  CheckCircle as CheckCircleIcon,
   Warning as WarningIcon,
-  Info as InfoIcon,
   Analytics as AnalyticsIcon,
   BarChart as BarChartIcon,
   PieChart as PieChartIcon
 } from '@mui/icons-material';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, ComposedChart } from 'recharts';
-import { useStore } from '../../store';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, Area, ComposedChart } from 'recharts';
 import { api } from '../../services/api';
 
 // TabPanel 컴포넌트 정의
@@ -82,7 +69,7 @@ function TabPanel(props: TabPanelProps) {
 }
 
 // 예측 데이터 타입
-interface ForecastingData {
+interface ForecastingDataPayload {
   salesForecast: Array<{
     period: string;
     actual: number;
@@ -149,8 +136,7 @@ interface ForecastingData {
 }
 
 const ForecastingData: React.FC = () => {
-  const { user } = useStore();
-  const [forecastingData, setForecastingData] = useState<ForecastingData | null>(null);
+  const [forecastingData, setForecastingData] = useState<ForecastingDataPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState(0);
@@ -166,8 +152,7 @@ const ForecastingData: React.FC = () => {
         if (response.data.success) {
           setForecastingData(response.data.data);
         }
-      } catch (error) {
-        console.error('예측 데이터 로드 오류:', error);
+      } catch {
         setError('예측 데이터를 불러오는데 실패했습니다.');
       } finally {
         setLoading(false);
@@ -190,14 +175,12 @@ const ForecastingData: React.FC = () => {
           aiInsights: [...prev.aiInsights, ...response.data.data.insights]
         } : null);
       }
-    } catch (error) {
-      console.error('AI 인사이트 생성 오류:', error);
+    } catch {
       setError('AI 인사이트 생성에 실패했습니다.');
     }
   };
 
   // 색상 팔레트
-  const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00ff00', '#ff6b6b', '#4ecdc4', '#45b7d1'];
 
   if (loading) {
     return (

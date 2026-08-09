@@ -6,10 +6,6 @@ import {
   CardContent,
   Button,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Grid,
   Divider,
   Stepper,
@@ -28,32 +24,19 @@ import {
   DialogContent,
   DialogActions,
   Alert,
-  Snackbar,
-  Chip,
-  Avatar,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar
-} from '@mui/material';
+  Snackbar } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import { mvsPageRootSx } from '../../theme/mvsLayout';
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
-  Save as SaveIcon,
   Send as SendIcon,
   Print as PrintIcon,
   Download as DownloadIcon,
-  QrCode as QrCodeIcon,
   Receipt as ReceiptIcon,
-  Business as BusinessIcon,
-  Person as PersonIcon,
-  AttachMoney as MoneyIcon,
   Edit as EditIcon
 } from '@mui/icons-material';
 import { alpha, useTheme } from '@mui/material/styles';
-import { useStore } from '../../store';
 import { useTranslation } from 'react-i18next';
 
 interface EInvoiceItem {
@@ -122,7 +105,6 @@ interface EInvoice {
 const EInvoiceCreate: React.FC = () => {
   const theme = useTheme();
   const { i18n } = useTranslation();
-  const { user } = useStore();
   const txt = (ko: string, en: string) => (i18n.language?.startsWith('en') ? en : ko);
   const [activeStep, setActiveStep] = useState(0);
   const [invoice, setInvoice] = useState<Partial<EInvoice>>({
@@ -161,8 +143,7 @@ const EInvoiceCreate: React.FC = () => {
     borderRadius: '8px',
     border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
     bgcolor: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.03) : '#FFFFFF',
-    boxShadow: '0 2px 12px rgba(15, 23, 42, 0.05)',
-  };
+    boxShadow: '0 2px 12px rgba(15, 23, 42, 0.05)' };
 
   useEffect(() => {
     calculateTotals();
@@ -223,25 +204,8 @@ const EInvoiceCreate: React.FC = () => {
   const handleGenerateInvoice = async () => {
     setLoading(true);
     try {
-      // IRN 생성 시뮬레이션
-      const irn = `IRN${Date.now()}`;
-      const qrCode = `QR${Date.now()}`;
-      
-      const newInvoice: EInvoice = {
-        ...invoice as EInvoice,
-        id: Date.now(),
-        invoiceNumber: `EINV-${Date.now()}`,
-        irn,
-        qrCode,
-        items,
-        status: 'generated',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-            setSuccess('E-Invoice가 성공적으로 생성되었습니다.');
-    } catch (error) {
-      console.error('E-Invoice 생성 오류:', error);
+      setSuccess('E-Invoice가 성공적으로 생성되었습니다.');
+    } catch {
       setError('E-Invoice 생성 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
@@ -321,15 +285,13 @@ const EInvoiceCreate: React.FC = () => {
           sx={{
             borderRadius: '8px',
             border: `1px solid ${alpha(theme.palette.divider, 0.9)}`,
-            overflow: 'hidden',
-          }}
+            overflow: 'hidden' }}
         >
           <Table>
             <TableHead
               sx={{
                 bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.03)' : alpha(theme.palette.common.white, 0.05),
-                '& .MuiTableCell-head': { fontWeight: 700, fontSize: '0.78rem' },
-              }}
+                '& .MuiTableCell-head': { fontWeight: 700, fontSize: '0.78rem' } }}
             >
               <TableRow>
                 <TableCell>{txt('상품명', 'Item')}</TableCell>
@@ -428,8 +390,7 @@ const EInvoiceCreate: React.FC = () => {
     <Box
       sx={{
         ...mvsPageRootSx,
-        px: { xs: 0, sm: 0.5, md: 1 },
-      }}
+        px: { xs: 0, sm: 0.5, md: 1 } }}
     >
       <MvsPageHeader
         title={txt('E-Invoice 생성', 'Create E-Invoice')}

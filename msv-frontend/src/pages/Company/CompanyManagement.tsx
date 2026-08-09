@@ -6,7 +6,6 @@ import {
   Typography,
   TextField,
   Button,
-  Grid,
   FormControl,
   Select,
   MenuItem,
@@ -15,21 +14,10 @@ import {
   Alert,
   Divider,
   Chip,
-  Paper,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent,
-  Tabs,
-  Tab,
   Table,
   TableBody,
   TableCell,
@@ -41,8 +29,7 @@ import {
   CircularProgress,
   Tooltip,
   Checkbox,
-  Pagination,
-} from '@mui/material';
+  Pagination } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
   mvsPageRootSx,
@@ -58,29 +45,15 @@ import {
   mvsTableHeadHighlightSx,
   mvsTableBodyRowSx,
   mvsTableScrollSx,
-  mvsBodyPaginationSx,
-} from '../../theme/mvsLayout';
+  mvsBodyPaginationSx } from '../../theme/mvsLayout';
 import {
   Business as BusinessIcon,
-  Save as SaveIcon,
   Upload as UploadIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
   Add as AddIcon,
-  Schedule as ScheduleIcon,
-  AccountBalance as AccountBalanceIcon,
-  Image as ImageIcon,
-  Security as SecurityIcon,
-  Settings as SettingsIcon,
-  CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
-  Info as InfoIcon,
   Search as SearchIcon,
   RestartAlt as ResetIcon,
-  Visibility as ViewIcon,
-  Phone as PhoneIcon,
-  Email as EmailIcon,
-  Language as LanguageIcon,
   People as PeopleIcon,
   Close as CloseIcon,
   PhotoCamera as PhotoCameraIcon
@@ -106,8 +79,7 @@ const COMP_COL_DEFAULTS: Record<string, number> = {
   industry: 140,
   employee_count: 120,
   mvs_start: 180,
-  actions: 72,
-};
+  actions: 72 };
 
 const COMP_COL_TOTAL = Object.values(COMP_COL_DEFAULTS).reduce((s, n) => s + n, 0);
 
@@ -118,8 +90,7 @@ const COMP_COL_ALIGN: Record<string, 'left' | 'right' | 'center'> = {
   industry: 'left',
   employee_count: 'right',
   mvs_start: 'left',
-  actions: 'center',
-};
+  actions: 'center' };
 
 const COMP_COL_MIN_WIDTH: Record<string, number> = {
   select: 48,
@@ -128,8 +99,7 @@ const COMP_COL_MIN_WIDTH: Record<string, number> = {
   industry: 72,
   employee_count: 96,
   mvs_start: 120,
-  actions: 56,
-};
+  actions: 56 };
 
 function compColWidthPct(key: string): string {
   const w = COMP_COL_DEFAULTS[key] ?? 80;
@@ -161,25 +131,21 @@ const companyTableBodyRowSx: SxProps<Theme> = (theme) => {
       py: 0.75,
       px: cellPaddingX,
       fontSize: { xs: '0.75rem', sm: '0.8125rem' },
-      lineHeight: 1.35,
-    },
+      lineHeight: 1.35 },
     '& .MuiTableCell-body.MuiTableCell-paddingCheckbox': {
       width: 48,
       minWidth: 48,
       maxWidth: 48,
       px: cellPaddingX,
-      py: 0.75,
-    },
+      py: 0.75 },
     '& .MuiTableRow-root:nth-of-type(odd)': { bgcolor: rowBg },
     '& .MuiTableRow-root:nth-of-type(even)': { bgcolor: rowBg },
-    '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
-  };
+    '& .MuiTableRow-root:hover': { bgcolor: hoverBg } };
 };
 
 const companyListTextSx = {
   fontSize: 'inherit',
-  lineHeight: 1.35,
-} as const;
+  lineHeight: 1.35 } as const;
 
 const companyCheckboxColSx = {
   width: 48,
@@ -187,30 +153,9 @@ const companyCheckboxColSx = {
   maxWidth: 48,
   px: { xs: 1, sm: 1.25 },
   py: 0.75,
-  boxSizing: 'border-box' as const,
-} as const;
+  boxSizing: 'border-box' as const } as const;
 
 // TabPanel 컴포넌트 정의
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`simple-tabpanel-${index}`}
-      aria-labelledby={`simple-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ pt: 2 }}>{children}</Box>}
-    </div>
-  );
-}
 
 // 회사 정보 타입 정의
 interface Company {
@@ -286,15 +231,6 @@ function getCompanySortComparator(
     : (a, b) => -descendingComparator(a, b, orderBy);
 }
 
-// 로그인 기간 설정 타입
-interface LoginPeriod {
-  start_date: string;
-  end_date: string;
-  start_time: string;
-  end_time: string;
-  timezone: string;
-}
-
 // 회사 이미지 타입
 interface CompanyImages {
   company_logo: File | null;
@@ -323,11 +259,6 @@ const CompanyManagement: React.FC = () => {
   const { t } = useTranslation();
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const theme = useTheme();
-  /** text.secondary보다 진한 보조 텍스트 (통계·테이블 보조 열) */
-  const pageMutedFg = alpha(
-    theme.palette.text.primary,
-    theme.palette.mode === 'dark' ? 0.93 : 0.84
-  );
   /** 테이블 주요 본문(회사명·대표 등) */
   const tablePrimaryFg = alpha(
     theme.palette.text.primary,
@@ -409,8 +340,7 @@ const CompanyManagement: React.FC = () => {
       setImageFiles(prev => ({ ...prev, [field]: file }));
       setImagePreviews(prev => ({ ...prev, [field]: base64 }));
       setFormData(prev => ({ ...prev, [field]: base64 }));
-    } catch (error) {
-      console.error('이미지 변환 오류:', error);
+    } catch {
       setError('이미지 업로드 중 오류가 발생했습니다.');
     }
   };
@@ -514,25 +444,15 @@ const CompanyManagement: React.FC = () => {
               };
               setCompanies([transformedCompany]);
             } else {
-              console.error('❌ [회사 정보 관리] 회사 데이터 없음');
               setError('회사 정보를 불러오는데 실패했습니다.');
               setCompanies([]);
             }
           } else {
-            console.warn('⚠️ [회사 정보 관리] 사용자에게 company_id가 없음');
             setError('회사 정보가 없습니다. 관리자에게 문의하세요.');
             setCompanies([]);
           }
         }
       } catch (error: any) {
-        console.error('❌ [회사 정보 관리] 회사 목록 로드 오류:', error);
-        console.error('❌ [회사 정보 관리] 에러 상세:', {
-          message: error.message,
-          response: error.response?.data,
-          status: error.response?.status,
-          statusText: error.response?.statusText
-        });
-        
         // 인증 오류인 경우 특별 처리
         if (error.response?.status === 401 || error.response?.status === 403) {
           const errorMessage = error.response?.data?.message || '인증 오류가 발생했습니다. 다시 로그인해주세요.';
@@ -732,7 +652,6 @@ const CompanyManagement: React.FC = () => {
             response.data.warning ? `${baseMsg} (주의: ${response.data.warning})` : baseMsg
           );
         } else {
-          console.error('❌ 회사 등록 실패:', response.data.message);
           setError(describeSaveFailure(response.data, '회사 등록에 실패했습니다.'));
           setLoading(false);
           return;
@@ -773,7 +692,6 @@ const CompanyManagement: React.FC = () => {
           // 성공 시 다이얼로그 닫기
           setOpenDialog(false);
         } else {
-          console.error('❌ 회사 정보 수정 실패:', response.data.message);
           // 오류 메시지는 메인 페이지에 표시되도록 유지 (다이얼로그는 닫지 않음)
           setError(describeSaveFailure(response.data, '회사 정보 수정에 실패했습니다.'));
           setLoading(false);
@@ -810,17 +728,11 @@ const CompanyManagement: React.FC = () => {
         setOpenDialog(false);
       }
     } catch (error: any) {
-      console.error('회사 저장 오류:', error);
       const errorMessage = describeSaveFailure(
         error.response?.data,
         error.message || '회사 저장 중 오류가 발생했습니다.'
       );
       setError(errorMessage);
-      console.error('에러 상세:', {
-        message: errorMessage,
-        status: error.response?.status,
-        data: error.response?.data
-      });
       // 오류 발생 시 다이얼로그는 닫지 않음 (사용자가 직접 닫도록)
     } finally {
       setLoading(false);
@@ -871,7 +783,6 @@ const CompanyManagement: React.FC = () => {
 
             setCompanies(transformedCompanies);
           } catch (error: any) {
-            console.error('회사 삭제 오류:', error);
             setError(error.response?.data?.message || '회사 삭제 중 오류가 발생했습니다.');
           } finally {
             setLoading(false);
@@ -919,12 +830,10 @@ const CompanyManagement: React.FC = () => {
               login_time_start: company.login_time_start || '09:00:00',
               login_time_end: company.login_time_end || '18:00:00',
               timezone: company.timezone || 'Asia/Seoul',
-              settings: company.settings || {},
-            }));
+              settings: company.settings || {} }));
 
             setCompanies(transformedCompanies);
           } catch (error: any) {
-            console.error('회사 일괄 삭제 오류:', error);
             setError(error.response?.data?.message || '회사 삭제 중 오류가 발생했습니다.');
           } finally {
             setLoading(false);
@@ -1010,8 +919,7 @@ const CompanyManagement: React.FC = () => {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     minWidth: 0,
-    flex: '1 1 auto',
-  } as const;
+    flex: '1 1 auto' } as const;
 
   const companyColBaseSx = (key: string) => {
     const align = compColTableAlign(key);
@@ -1024,8 +932,7 @@ const CompanyManagement: React.FC = () => {
       boxSizing: 'border-box' as const,
       px: { xs: 1, sm: 1.25 },
       py: 0.75,
-      overflow: 'hidden',
-    };
+      overflow: 'hidden' };
   };
 
   const thSx = (key: string) => {
@@ -1039,21 +946,17 @@ const CompanyManagement: React.FC = () => {
         maxWidth: '100%',
         justifyContent: compColSortLabelJustify(key),
         overflow: 'hidden',
-        ...(align === 'right' ? { flexDirection: 'row-reverse' as const } : {}),
-      },
+        ...(align === 'right' ? { flexDirection: 'row-reverse' as const } : {}) },
       '& .MuiTableSortLabel-icon': {
         flexShrink: 0,
         opacity: 0,
         width: 0,
-        margin: 0,
-      },
+        margin: 0 },
       '& .MuiTableSortLabel-root.Mui-active .MuiTableSortLabel-icon': {
         opacity: 1,
         width: '1.125rem',
         marginLeft: align === 'right' ? 0 : '4px',
-        marginRight: align === 'right' ? '4px' : 0,
-      },
-    };
+        marginRight: align === 'right' ? '4px' : 0 } };
   };
 
   const tdSx = (key: string) => ({
@@ -1061,8 +964,7 @@ const CompanyManagement: React.FC = () => {
     textOverflow:
       key === 'name' || key === 'ceo_name' || key === 'industry' || key === 'mvs_start'
         ? ('ellipsis' as const)
-        : undefined,
-  });
+        : undefined });
 
   const renderHeadSortCell = (key: CompanySortKey, label: string) => (
     <TableCell key={key} align={compColTableAlign(key)} sx={thSx(key)}>
@@ -1088,8 +990,7 @@ const CompanyManagement: React.FC = () => {
     textAlign: 'center',
     py: { xs: 6, sm: 8 },
     px: 3,
-    gap: 1.5,
-  } as const;
+    gap: 1.5 } as const;
 
   // 공통 TextField 스타일
   const textFieldStyles = {
@@ -1140,8 +1041,7 @@ const CompanyManagement: React.FC = () => {
                   height: 100,
                   objectFit: 'cover',
                   borderRadius: 8,
-                  border: '1px solid #e0e0e0',
-                }}
+                  border: '1px solid #e0e0e0' }}
                 onError={() => {
                   setImagePreviews((prev) => ({ ...prev, [field]: '' }));
                 }}
@@ -1784,8 +1684,7 @@ const CompanyManagement: React.FC = () => {
               display: 'grid',
               gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
               gap: 2.5,
-              mb: 3,
-            }}
+              mb: 3 }}
           >
             {[filteredCompanies.length, companies.length].map((value, idx) => (
               <Card key={idx === 0 ? 'mvs' : 'total'} elevation={0} sx={mvsKpiCardSx}>
@@ -1811,8 +1710,7 @@ const CompanyManagement: React.FC = () => {
                 gap: 1,
                 px: { xs: 2, sm: 2.5 },
                 py: 1.5,
-                bgcolor: '#FFFFFF',
-              }}
+                bgcolor: '#FFFFFF' }}
             >
               {selectedCompanyIds.length > 0 ? (
                 <Tooltip title={t('common.menuNoDelete')} disableHoverListener={menuFlags.menusLoading || menuFlags.canDelete}>
@@ -1832,8 +1730,7 @@ const CompanyManagement: React.FC = () => {
                         fontSize: '0.8125rem',
                         minHeight: 36,
                         px: 2,
-                        boxShadow: 'none',
-                      }}
+                        boxShadow: 'none' }}
                     >
                       {t('companyManagement.deleteSelected')} ({selectedCompanyIds.length})
                     </Button>
@@ -1866,11 +1763,9 @@ const CompanyManagement: React.FC = () => {
                 display: 'grid',
                 gridTemplateColumns: {
                   xs: '1fr',
-                  md: 'minmax(0, 1fr) auto',
-                },
+                  md: 'minmax(0, 1fr) auto' },
                 gap: 2,
-                alignItems: 'flex-end',
-              }}
+                alignItems: 'flex-end' }}
             >
               <TextField
                 fullWidth
@@ -1887,8 +1782,7 @@ const CompanyManagement: React.FC = () => {
                     <InputAdornment position="start">
                       <SearchIcon sx={{ fontSize: '1.125rem', color: 'text.secondary' }} />
                     </InputAdornment>
-                  ),
-                }}
+                  ) }}
               />
               <Button
                 variant="outlined"
@@ -1899,8 +1793,7 @@ const CompanyManagement: React.FC = () => {
                 sx={{
                   ...mvsBodyOutlinedBtnSx,
                   height: 40,
-                  whiteSpace: 'nowrap',
-                }}
+                  whiteSpace: 'nowrap' }}
               >
                 {t('companyManagement.reset')}
               </Button>
@@ -1968,9 +1861,7 @@ const CompanyManagement: React.FC = () => {
                     '& .MuiTableCell-root': {
                       borderLeft: 'none',
                       borderRight: 'none',
-                      borderTop: 'none',
-                    },
-                  }}
+                      borderTop: 'none' } }}
                 >
                   <TableHead
                     sx={(theme) => {
@@ -1982,13 +1873,10 @@ const CompanyManagement: React.FC = () => {
                         ...(headBase as object),
                         '& .MuiTableCell-head': {
                           py: 0.75,
-                          px: { xs: 1, sm: 1.25 },
-                        },
+                          px: { xs: 1, sm: 1.25 } },
                         '& .MuiTableCell-head.MuiTableCell-paddingCheckbox': {
                           ...companyCheckboxColSx,
-                          overflow: 'visible',
-                        },
-                      };
+                          overflow: 'visible' } };
                     }}
                   >
                     <TableRow>
@@ -2017,8 +1905,7 @@ const CompanyManagement: React.FC = () => {
                             maxWidth: '100%',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
+                            whiteSpace: 'nowrap' }}
                           title={t('companyManagement.actions')}
                         >
                           {t('companyManagement.actions')}
@@ -2037,9 +1924,7 @@ const CompanyManagement: React.FC = () => {
                           cursor: menuFlags.menusLoading || !menuFlags.canRead ? 'default' : 'pointer',
                           '&:hover .company-delete-btn:not(.Mui-disabled)': {
                             color: 'error.main',
-                            bgcolor: alpha(theme.palette.error.main, 0.08),
-                          },
-                        }}
+                            bgcolor: alpha(theme.palette.error.main, 0.08) } }}
                       >
                         <TableCell
                           padding="checkbox"
@@ -2069,8 +1954,7 @@ const CompanyManagement: React.FC = () => {
                                   theme.palette.mode === 'light'
                                     ? 'rgba(15, 23, 42, 0.08)'
                                     : alpha(theme.palette.common.white, 0.12),
-                                color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.75)' : theme.palette.grey[200],
-                              }}
+                                color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.75)' : theme.palette.grey[200] }}
                             >
                               {company.name.charAt(0)}
                             </Avatar>
@@ -2085,8 +1969,7 @@ const CompanyManagement: React.FC = () => {
                                 flex: 1,
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
-                                display: 'block',
-                              }}
+                                display: 'block' }}
                             >
                               {company.name}
                             </Typography>
@@ -2148,9 +2031,7 @@ const CompanyManagement: React.FC = () => {
                                     transition: 'color 0.15s ease, background-color 0.15s ease',
                                     '&:hover': {
                                       color: 'error.main',
-                                      bgcolor: alpha(theme.palette.error.main, 0.12),
-                                    },
-                                  }}
+                                      bgcolor: alpha(theme.palette.error.main, 0.12) } }}
                                 >
                                   <DeleteIcon fontSize="small" />
                                 </IconButton>
@@ -2174,9 +2055,7 @@ const CompanyManagement: React.FC = () => {
                   sx={{
                     '& .MuiPaginationItem-root': {
                       borderRadius: '10px',
-                      fontWeight: 500,
-                    },
-                  }}
+                      fontWeight: 500 } }}
                 />
               </Box>
               </>
@@ -2228,8 +2107,7 @@ const CompanyManagement: React.FC = () => {
                           theme.palette.mode === 'light'
                             ? 'rgba(15, 23, 42, 0.08)'
                             : alpha(theme.palette.common.white, 0.12),
-                        color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.75)' : theme.palette.grey[200],
-                      }}
+                        color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.75)' : theme.palette.grey[200] }}
                     >
                       {companies[0].name.charAt(0)}
                     </Avatar>
@@ -2243,8 +2121,7 @@ const CompanyManagement: React.FC = () => {
                           theme.palette.mode === 'light'
                             ? 'rgba(15, 23, 42, 0.08)'
                             : alpha(theme.palette.common.white, 0.12),
-                        color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.75)' : theme.palette.grey[200],
-                      }}
+                        color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.75)' : theme.palette.grey[200] }}
                     >
                       {companies[0].name.charAt(0)}
                     </Avatar>

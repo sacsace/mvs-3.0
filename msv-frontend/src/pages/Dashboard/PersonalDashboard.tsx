@@ -143,8 +143,7 @@ const PersonalDashboard: React.FC = () => {
         if (notificationsResponse.data.success) {
           setNotifications(notificationsResponse.data.data);
         }
-      } catch (error) {
-        console.error('대시보드 데이터 로드 오류:', error);
+      } catch {
         setError('대시보드 데이터를 불러오는데 실패했습니다.');
       } finally {
         setLoading(false);
@@ -161,8 +160,8 @@ const PersonalDashboard: React.FC = () => {
       setRecentTasks(prev => prev.map(task => 
         task.id === taskId ? { ...task, status: status as any } : task
       ));
-    } catch (error) {
-      console.error('작업 상태 업데이트 오류:', error);
+    } catch {
+      /* ignore */
     }
   };
 
@@ -173,8 +172,8 @@ const PersonalDashboard: React.FC = () => {
       setNotifications(prev => prev.map(notif => 
         notif.id === notificationId ? { ...notif, read: true } : notif
       ));
-    } catch (error) {
-      console.error('알림 읽음 처리 오류:', error);
+    } catch {
+      /* ignore */
     }
   };
 
@@ -184,8 +183,8 @@ const PersonalDashboard: React.FC = () => {
       await api.put('/user/settings', settings);
       setUserStats(prev => prev ? { ...prev, personalSettings: settings } : null);
       setOpenSettings(false);
-    } catch (error) {
-      console.error('설정 저장 오류:', error);
+    } catch {
+      /* ignore */
     }
   };
 

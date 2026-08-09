@@ -975,7 +975,6 @@ const ElectronicApproval: React.FC = () => {
         setDocuments([]);
       }
     } catch (error: any) {
-      console.error('전자 결제 목록 조회 오류:', error);
       setError(error.response?.data?.message || t('approval.errors.loadListFailed'));
       setDocuments([]);
     }
@@ -1015,8 +1014,8 @@ const ElectronicApproval: React.FC = () => {
         excludeUserId: user?.id != null ? Number(user.id) : undefined,
       });
       setUsers(filteredUsers);
-    } catch (error: any) {
-      console.error('사용자 목록 조회 오류:', error);
+    } catch {
+      /* ignore */
     }
   }, [user]);
 
@@ -1138,7 +1137,7 @@ const ElectronicApproval: React.FC = () => {
       return;
     }
     resolveHeaderCompanyInfo(user).then((info) => setCompanyLogo(info.logo || ''));
-  }, [user?.company_id, user?.id]);
+  }, [user]);
 
   useEffect(() => {
     filterDocuments();
@@ -1558,8 +1557,8 @@ const ElectronicApproval: React.FC = () => {
       if (response.success && response.data) {
         setSelectedDocument(mapApprovalFromApi(response.data, users, { normalizeDescription: true }));
       }
-    } catch (error) {
-      console.error('결재 문서 상세 조회 오류:', error);
+    } catch {
+      /* ignore */
     }
   };
 
@@ -1712,7 +1711,6 @@ const ElectronicApproval: React.FC = () => {
         setError(response.message || t('approval.errors.saveFailed'));
       }
     } catch (error: any) {
-      console.error('결재 문서 저장 오류:', error);
       setError(error.response?.data?.message || t('approval.errors.saveError'));
     } finally {
       setSaving(false);
@@ -1733,7 +1731,6 @@ const ElectronicApproval: React.FC = () => {
               setError(response.message || t('approval.errors.deleteFailed'));
             }
           } catch (error: any) {
-            console.error('삭제 오류:', error);
             setError(error.response?.data?.message || t('approval.errors.deleteError'));
           }
         })();
@@ -1763,7 +1760,6 @@ const ElectronicApproval: React.FC = () => {
         setError(response.message || t('approval.errors.approveFailed'));
       }
     } catch (error: any) {
-      console.error('결재 승인 오류:', error);
       setError(error.response?.data?.message || t('approval.errors.approveError'));
     }
   };
@@ -1788,7 +1784,6 @@ const ElectronicApproval: React.FC = () => {
               setError(response.message || t('approval.errors.rejectFailed'));
             }
           } catch (error: any) {
-            console.error('결재 반려 오류:', error);
             setError(error.response?.data?.message || t('approval.errors.rejectError'));
           }
         })();
@@ -1831,7 +1826,6 @@ const ElectronicApproval: React.FC = () => {
         setError(response.message || t('approval.errors.escalateFailed'));
       }
     } catch (error: any) {
-      console.error('에스컬레이션 오류:', error);
       setError(error.response?.data?.message || t('approval.errors.escalateError'));
     } finally {
       setEscalating(false);
@@ -1948,7 +1942,6 @@ const ElectronicApproval: React.FC = () => {
         setError(response.data.message || t('approval.errors.commentAddFailed'));
       }
     } catch (error: any) {
-      console.error('댓글 추가 오류:', error);
       setError(error.response?.data?.message || t('approval.errors.commentAddError'));
     }
   };
@@ -1975,7 +1968,6 @@ const ElectronicApproval: React.FC = () => {
           setError(response.message || t('approval.errors.approveFailed'));
         }
       } catch (error: any) {
-        console.error('결재 승인 오류:', error);
         setError(error.response?.data?.message || t('approval.errors.approveError'));
       }
     }
@@ -3798,7 +3790,7 @@ const ElectronicApproval: React.FC = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon sx={{ color: '#6B7280', fontSize: 20 }} />
+                    <SearchIcon sx={{ color: '#475569', fontSize: 20 }} />
                   </InputAdornment>
                 ),
               }}

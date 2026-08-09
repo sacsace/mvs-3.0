@@ -230,8 +230,7 @@ const InventoryStatus: React.FC = () => {
           outOfStockItems: out
         });
       }
-    } catch (e: unknown) {
-      console.error(e);
+    } catch {
       setLoadError(t('inventoryStatus.errors.loadDataError'));
       setInventoryItems([]);
     } finally {

@@ -18,6 +18,7 @@ const AUTH_USER_ATTRIBUTES = [
   'last_login',
   'is_payment_officer',
   'session_version',
+  'avatar_url',
 ] as const;
 
 /** JWT sv와 DB session_version 불일치 — 다른 기기 로그인 */

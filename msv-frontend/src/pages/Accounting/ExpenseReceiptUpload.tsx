@@ -40,7 +40,6 @@ const ExpenseReceiptUpload: React.FC = () => {
       setSuccess('영수증 업로드가 완료되었습니다.');
       setFile(null);
     } catch (uploadError: any) {
-      console.error('영수증 업로드 오류:', uploadError);
       setError(uploadError?.message || '업로드 중 오류가 발생했습니다.');
     } finally {
       setUploading(false);

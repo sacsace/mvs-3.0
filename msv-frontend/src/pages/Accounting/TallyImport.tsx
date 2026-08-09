@@ -527,7 +527,7 @@ const TallyImport: React.FC = () => {
                         mt: 0.5,
                         minWidth: 220,
                         borderRadius: '8px',
-                        border: '1px solid #C5CED9',
+                        border: '1px solid #CBD5E1',
                         boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
                       },
                     },
@@ -838,7 +838,7 @@ const TallyImport: React.FC = () => {
                   sx={{
                     mb: 1.5,
                     borderRadius: '8px',
-                    border: '1px solid #C5CED9',
+                    border: '1px solid #CBD5E1',
                     boxShadow: 'none',
                   }}
                 >

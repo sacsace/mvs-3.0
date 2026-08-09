@@ -40,7 +40,6 @@ import {
   Receipt as ReceiptIcon,
   Search as SearchIcon
 } from '@mui/icons-material';
-import { useStore } from '../../store';
 import { api } from '../../services/api';
 
 // TabPanel 컴포넌트 정의
@@ -121,11 +120,10 @@ interface Quotation {
 }
 
 const ProformaInvoiceManagement: React.FC = () => {
-  const { user } = useStore();
   const [proformaInvoices, setProformaInvoices] = useState<ProformaInvoice[]>([]);
   const [quotations, setQuotations] = useState<Quotation[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [, setCustomers] = useState<Customer[]>([]);
+  const [, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState(0);
   const [openDialog, setOpenDialog] = useState(false);
@@ -165,8 +163,7 @@ const ProformaInvoiceManagement: React.FC = () => {
         if (customersResponse.data.success) {
           setCustomers(customersResponse.data.data);
         }
-      } catch (error) {
-        console.error('데이터 로드 오류:', error);
+      } catch {
         setError('데이터를 불러오는데 실패했습니다.');
       } finally {
         setLoading(false);
@@ -198,8 +195,7 @@ const ProformaInvoiceManagement: React.FC = () => {
           terms: 'Payment due within 30 days of invoice date.'
         });
       }
-    } catch (error) {
-      console.error('프로포마 인보이스 생성 오류:', error);
+    } catch {
       setError('프로포마 인보이스를 생성하는데 실패했습니다.');
     }
   };
@@ -212,8 +208,7 @@ const ProformaInvoiceManagement: React.FC = () => {
         setProformaInvoices(prev => [response.data.data, ...prev]);
         setError('');
       }
-    } catch (error) {
-      console.error('견적서에서 프로포마 인보이스 생성 오류:', error);
+    } catch {
       setError('프로포마 인보이스를 생성하는데 실패했습니다.');
     }
   };
@@ -227,8 +222,7 @@ const ProformaInvoiceManagement: React.FC = () => {
           invoice.id === id ? { ...invoice, status: status as any } : invoice
         ));
       }
-    } catch (error) {
-      console.error('상태 업데이트 오류:', error);
+    } catch {
       setError('상태를 업데이트하는데 실패했습니다.');
     }
   };

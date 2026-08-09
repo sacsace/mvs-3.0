@@ -155,7 +155,7 @@ const periodToggleGroupSx = {
 } as const;
 
 const periodBtnSx = {
-  border: '1px solid #C5CED9',
+  border: '1px solid #CBD5E1',
   borderRadius: '10px',
   px: 1.25,
   height: 40,

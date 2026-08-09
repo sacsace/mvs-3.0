@@ -23,46 +23,24 @@ import {
   MenuItem,
   Alert,
   Divider,
-  Paper,
-  Grid,
-  IconButton,
-  Tooltip,
-  Badge,
   ListItemAvatar,
   ListItemSecondaryAction
 } from '@mui/material';
 import {
-  Dashboard as DashboardIcon,
   People as PeopleIcon,
   Assignment as AssignmentIcon,
-  CheckCircle as CheckCircleIcon,
-  Pending as PendingIcon,
-  Schedule as ScheduleIcon,
-  TrendingUp as TrendingUpIcon,
   Notifications as NotificationsIcon,
-  Star as StarIcon,
   Settings as SettingsIcon,
   Add as AddIcon,
   Edit as EditIcon,
-  Delete as DeleteIcon,
-  Refresh as RefreshIcon,
-  MoreVert as MoreVertIcon,
   Group as GroupIcon,
   EmojiEvents as EmojiEventsIcon,
-  Speed as SpeedIcon,
   Handshake as HandshakeIcon,
-  SentimentSatisfied as SentimentSatisfiedIcon,
   CalendarToday as CalendarTodayIcon,
   Chat as ChatIcon,
-  Share as ShareIcon,
   VideoCall as VideoCallIcon,
   Edit as WhiteboardIcon,
-  AttachFile as AttachFileIcon,
-  PersonAdd as PersonAddIcon,
-  PersonRemove as PersonRemoveIcon
-} from '@mui/icons-material';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, AreaChart, Area } from 'recharts';
-import { useStore } from '../../store';
+  PersonAdd as PersonAddIcon } from '@mui/icons-material';
 import { api } from '../../services/api';
 
 // 타입 정의
@@ -143,9 +121,8 @@ interface TeamMember {
 }
 
 const TeamDashboard: React.FC = () => {
-  const { user } = useStore();
   const [teamStats, setTeamStats] = useState<TeamStats | null>(null);
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [, setTeamMembers] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [openMemberDialog, setOpenMemberDialog] = useState(false);
@@ -168,8 +145,7 @@ const TeamDashboard: React.FC = () => {
         if (membersResponse.data.success) {
           setTeamMembers(membersResponse.data.data);
         }
-      } catch (error) {
-        console.error('팀 데이터 로드 오류:', error);
+      } catch {
         setError('팀 데이터를 불러오는데 실패했습니다.');
       } finally {
         setLoading(false);

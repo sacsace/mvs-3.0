@@ -30,7 +30,6 @@ import {
   CircularProgress
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
   Security as SecurityIcon,
@@ -50,7 +49,6 @@ import { api } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { showErrorPopup, showSuccessPopup } from '../../utils/errorHandler';
 import { useTranslation } from 'react-i18next';
-import { mvsPageDescriptionSx, mvsPageTitleSx } from '../../theme/mvsLayout';
 
 interface User {
   id: number;
@@ -239,12 +237,10 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
               my: 0,
               minWidth: 0,
               flexGrow: 1,
-              overflow: 'visible',
-            },
+              overflow: 'visible' },
             '& .MuiAccordionSummary-content.Mui-expanded': {
               margin: '0 !important',
-              minWidth: 0,
-            },
+              minWidth: 0 },
             '& .MuiAccordionSummary-expandIconWrapper': {
               padding: 0
             }
@@ -258,8 +254,7 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
               alignItems: 'center',
               width: '100%',
               minWidth: 0,
-              pr: 0.5,
-            }}
+              pr: 0.5 }}
           >
             {/* 1. 메뉴명 */}
             <Typography
@@ -275,8 +270,7 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
                 lineHeight: 1.35,
-                letterSpacing: '-0.01em',
-              }}
+                letterSpacing: '-0.01em' }}
             >
               {language === 'ko' ? menu.name_ko : menu.name_en}
             </Typography>
@@ -295,9 +289,7 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
                 style: {
                   textAlign: 'center',
                   padding: '6px 4px',
-                  fontSize: '0.8125rem',
-                },
-              }}
+                  fontSize: '0.8125rem' } }}
               sx={{
                 width: '100%',
                 maxWidth: 76,
@@ -307,21 +299,15 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
                   borderRadius: '10px',
                   bgcolor: (theme) => alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.12 : 0.06),
                   '& fieldset': {
-                    borderColor: (theme) => alpha(theme.palette.divider, 0.9),
-                  },
+                    borderColor: (theme) => alpha(theme.palette.divider, 0.9) },
                   '&:hover fieldset': {
-                    borderColor: (theme) => alpha(theme.palette.text.primary, 0.15),
-                  },
+                    borderColor: (theme) => alpha(theme.palette.text.primary, 0.15) },
                   '&.Mui-focused fieldset': {
-                    borderWidth: 1,
-                  },
+                    borderWidth: 1 },
                   '& input': {
                     padding: '6px 4px',
                     fontSize: '0.8125rem',
-                    fontWeight: 600,
-                  },
-                },
-              }}
+                    fontWeight: 600 } } }}
             />
 
             {/* 3. 권한 체크박스 */}
@@ -332,8 +318,7 @@ const MenuPermissionItem: React.FC<MenuPermissionItemProps> = ({
                 gap: 0.5,
                 alignItems: 'center',
                 justifyContent: 'flex-end',
-                minWidth: 'min-content',
-              }}
+                minWidth: 'min-content' }}
             >
               <Tooltip
                 title={
@@ -509,7 +494,7 @@ const MenuPermissionManagement: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [defaultPermissionDialogOpen, setDefaultPermissionDialogOpen] = useState(false);
   /** 레이아웃 추정용 기본 사이드바 너비 (실제 너비는 DB 사용자 UI 설정) */
-  const getSidebarWidth = () => 280;
+  const getSidebarWidth = () => 0;
 
   // 4:6 비율을 위한 기본 너비 계산 (전체 너비의 40%)
   const getDefaultLeftPanelWidth = () => {
@@ -757,12 +742,10 @@ const MenuPermissionManagement: React.FC = () => {
             });
           }
         } catch (companyError: any) {
-          console.error('❌ [메뉴 권한 관리] 회사 목록 로드 오류:', companyError);
         }
         
         setUsers(usersData);
-      } catch (error: any) {
-        console.error('❌ [메뉴 권한 관리] 데이터 로드 오류:', error);
+      } catch {
         setUsers([]);
         setCompanies([]);
       } finally {
@@ -795,7 +778,6 @@ const MenuPermissionManagement: React.FC = () => {
           setAdminPermissions({});
         }
       } catch (error) {
-        console.error('Admin 권한 로드 오류:', error);
         setAdminPermissions({});
       }
     };
@@ -814,9 +796,9 @@ const MenuPermissionManagement: React.FC = () => {
           setExpandedMenus(new Set<number>());
           setMenuList(response.data);
         }
-      } catch (error) {
-        console.error('메뉴 로드 오류:', error);
-      }
+      } catch {
+      /* ignore */
+    }
     };
     loadMenus();
   }, [user, language, canManagePermissionPage]);
@@ -851,8 +833,7 @@ const MenuPermissionManagement: React.FC = () => {
       
       // 사이드바 메뉴 즉시 업데이트
       setMenus(newMenuList);
-    } catch (error) {
-      console.error('메뉴명 저장 오류:', error);
+    } catch {
       // 실패 시 원래 메뉴명으로 복구
       setMenuList(menus || []);
     }
@@ -920,8 +901,7 @@ const MenuPermissionManagement: React.FC = () => {
       
       // 사이드바 메뉴 즉시 업데이트
       setMenus(newMenuList);
-    } catch (error) {
-      console.error('메뉴 순서 저장 오류:', error);
+    } catch {
       // 실패 시 원래 순서로 복구
       setMenuList(menus || []);
     }
@@ -951,7 +931,6 @@ const MenuPermissionManagement: React.FC = () => {
             setPermissions({});
           }
         } catch (error) {
-          console.error('권한 로드 오류:', error);
           setPermissions({});
         } finally {
           setLoading(false);
@@ -1002,9 +981,6 @@ const MenuPermissionManagement: React.FC = () => {
           };
 
           const hasAnyPermission = permission.can_view || permission.can_create || permission.can_edit || permission.can_delete;
-          const isLastItem = index === sortedMenuList.length - 1;
-          const canMoveUp = index > 0;
-          const canMoveDown = index < sortedMenuList.length - 1;
           const canGrant = getCanGrantFlags(menuKey);
 
           return (
@@ -1245,7 +1221,6 @@ const MenuPermissionManagement: React.FC = () => {
         );
       }
     } catch (error: any) {
-      console.error('권한 저장 오류:', error);
       showErrorPopup(error, t('menuPermissionManagement.permissionsSaveFailed'));
     } finally {
       setSaving(false);
@@ -1263,7 +1238,6 @@ const MenuPermissionManagement: React.FC = () => {
       setDelegationDialogOpen(false);
       setDelegationTargetId(null);
     } catch (error: any) {
-      console.error('권한 위임 오류:', error);
       showErrorPopup(error, t('menuPermissionManagement.delegationFailed'));
     } finally {
       setSaving(false);
@@ -1360,7 +1334,6 @@ const MenuPermissionManagement: React.FC = () => {
         showSuccessPopup(`${companyUsers.length}명의 사용자에게 기본 권한이 적용되었습니다.`);
       }
     } catch (error: any) {
-      console.error('기본 권한 적용 오류:', error);
       showErrorPopup(error, '기본 권한 적용 오류');
     } finally {
       setSaving(false);
@@ -1437,7 +1410,6 @@ const MenuPermissionManagement: React.FC = () => {
       await menuService.setUserPermissions(selectedUserId, permissionData);
       showSuccessPopup(`${selectedUser.role} 역할의 기본 권한이 적용되었습니다.`);
     } catch (error: any) {
-      console.error('역할별 기본 권한 적용 오류:', error);
       showErrorPopup(error, '역할별 기본 권한 적용 오류');
     } finally {
       setSaving(false);
@@ -1467,43 +1439,34 @@ const MenuPermissionManagement: React.FC = () => {
   const cardShellSx = {
     borderRadius: '8px',
     border: '1px solid',
-    borderColor: theme.palette.mode === 'light' ? '#C5CED9' : alpha(theme.palette.divider, 0.35),
+    borderColor: theme.palette.mode === 'light' ? '#CBD5E1' : alpha(theme.palette.divider, 0.35),
     boxShadow:
       theme.palette.mode === 'light' ? '0 2px 10px rgba(15, 23, 42, 0.08)' : '0 4px 24px rgba(15, 23, 42, 0.06)',
     bgcolor: 'background.paper',
-    overflow: 'hidden' as const,
-  };
+    overflow: 'hidden' as const };
 
   const selectionInputSx = {
     '& .MuiOutlinedInput-root': {
       borderRadius: '8px',
       bgcolor: 'background.paper',
       '& fieldset': {
-        borderColor: theme.palette.mode === 'light' ? '#C5CED9' : undefined,
-      },
+        borderColor: theme.palette.mode === 'light' ? '#CBD5E1' : undefined },
       '&:hover fieldset': {
-        borderColor: theme.palette.mode === 'light' ? '#B8C4D0' : undefined,
-      },
-    },
-  };
+        borderColor: theme.palette.mode === 'light' ? '#94A3B8' : undefined } } };
 
   const listSectionTitleSx = {
     fontSize: '13px',
     fontWeight: 600,
     letterSpacing: '-0.01em',
     color: 'text.primary',
-    mb: 1.25,
-  };
+    mb: 1.25 };
 
   const listItemSelectedSx = {
     '&.Mui-selected': {
       bgcolor: alpha(theme.palette.primary.main, 0.1),
       color: 'text.primary',
       '&:hover': {
-        bgcolor: alpha(theme.palette.primary.main, 0.16),
-      },
-    },
-  };
+        bgcolor: alpha(theme.palette.primary.main, 0.16) } } };
 
   // 권한이 없으면 접근 불가 메시지 표시
   if (!canManagePermissionPage) {
@@ -1550,8 +1513,7 @@ const MenuPermissionManagement: React.FC = () => {
                       textTransform: 'none',
                       fontWeight: 600,
                       px: 2,
-                      borderColor: alpha(theme.palette.divider, 0.95),
-                    }}
+                      borderColor: alpha(theme.palette.divider, 0.95) }}
                   >
                     {t('menuPermissionManagement.defaultPermissions')}
                   </Button>
@@ -1565,8 +1527,7 @@ const MenuPermissionManagement: React.FC = () => {
                       textTransform: 'none',
                       fontWeight: 600,
                       px: 2,
-                      borderColor: alpha(theme.palette.divider, 0.95),
-                    }}
+                      borderColor: alpha(theme.palette.divider, 0.95) }}
                   >
                     {t('menuPermissionManagement.permissionDelegation')}
                   </Button>
@@ -1670,8 +1631,7 @@ const MenuPermissionManagement: React.FC = () => {
                           mb: 0.5,
                           borderRadius: '8px',
                           py: 1,
-                          ...listItemSelectedSx,
-                        }}
+                          ...listItemSelectedSx }}
                       >
                         <ListItemIcon sx={{ minWidth: 40 }}>
                           <Avatar
@@ -1684,8 +1644,7 @@ const MenuPermissionManagement: React.FC = () => {
                                 selectedUserId === u.id
                                   ? alpha(theme.palette.primary.main, 0.22)
                                   : theme.palette.primary.main,
-                              color: selectedUserId === u.id ? 'primary.dark' : theme.palette.primary.contrastText,
-                            }}
+                              color: selectedUserId === u.id ? 'primary.dark' : theme.palette.primary.contrastText }}
                           >
                             {u.name.charAt(0)}
                           </Avatar>
@@ -1704,8 +1663,7 @@ const MenuPermissionManagement: React.FC = () => {
                                   bgcolor: alpha(theme.palette.primary.main, 0.1),
                                   color: 'primary.dark',
                                   border: 'none',
-                                  '& .MuiChip-label': { px: 1 },
-                                }}
+                                  '& .MuiChip-label': { px: 1 } }}
                               />
                               <Typography variant="caption" color="text.secondary" sx={{ ml: 0 }}>
                                 {u.company}
@@ -1730,8 +1688,7 @@ const MenuPermissionManagement: React.FC = () => {
                   backgroundColor: isVerticalResizing ? alpha(theme.palette.primary.main, 0.35) : alpha(theme.palette.divider, 0.9),
                   borderRadius: '4px',
                   '&:hover': {
-                    backgroundColor: alpha(theme.palette.primary.main, 0.2),
-                  },
+                    backgroundColor: alpha(theme.palette.primary.main, 0.2) },
                   position: 'relative',
                   flexShrink: 0,
                   transition: isVerticalResizing ? 'none' : 'background-color 0.2s',
@@ -1782,15 +1739,13 @@ const MenuPermissionManagement: React.FC = () => {
                           mb: 0.5,
                           borderRadius: '8px',
                           py: 1,
-                          ...listItemSelectedSx,
-                        }}
+                          ...listItemSelectedSx }}
                       >
                         <ListItemIcon sx={{ minWidth: 40 }}>
                           <BusinessIcon
                             sx={{
                               fontSize: '1.25rem',
-                              color: selectedCompanyId === c.id ? 'primary.main' : alpha(theme.palette.text.secondary, 0.85),
-                            }}
+                              color: selectedCompanyId === c.id ? 'primary.main' : alpha(theme.palette.text.secondary, 0.85) }}
                           />
                         </ListItemIcon>
                         <ListItemText
@@ -1816,8 +1771,7 @@ const MenuPermissionManagement: React.FC = () => {
             backgroundColor: isResizing ? alpha(theme.palette.primary.main, 0.35) : alpha(theme.palette.divider, 0.9),
             borderRadius: '4px',
             '&:hover': {
-              backgroundColor: alpha(theme.palette.primary.main, 0.2),
-            },
+              backgroundColor: alpha(theme.palette.primary.main, 0.2) },
             position: 'relative',
             flexShrink: 0,
             transition: isResizing ? 'none' : 'background-color 0.2s',
@@ -1846,8 +1800,7 @@ const MenuPermissionManagement: React.FC = () => {
                 minWidth: 0,
                 py: 2.75,
                 px: { xs: 2.25, sm: 2.75 },
-                '&:last-child': { pb: 2.75 },
-              }}
+                '&:last-child': { pb: 2.75 } }}
             >
               <Box sx={{ 
                 display: 'flex', 
@@ -1856,8 +1809,7 @@ const MenuPermissionManagement: React.FC = () => {
                 mb: 2.5,
                 pb: 2,
                 borderBottom: '1px solid',
-                borderColor: alpha(theme.palette.divider, 0.85),
-              }}>
+                borderColor: alpha(theme.palette.divider, 0.85) }}>
                 <Box sx={{ minWidth: 0 }}>
                   <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5, fontSize: '1.0625rem', letterSpacing: '-0.02em' }}>
                     {selectedUserId
@@ -1889,8 +1841,7 @@ const MenuPermissionManagement: React.FC = () => {
                     overflow: 'auto',
                     pr: 1.5,
                     pb: 1,
-                    maxHeight: 'calc(100vh - 350px)',
-                  }}
+                    maxHeight: 'calc(100vh - 350px)' }}
                 >
                   <Box sx={{ minWidth: 'max-content', width: '100%' }}>
                     {/* 헤더 — 행과 동일 그리드로 정렬 */}
@@ -1905,8 +1856,7 @@ const MenuPermissionManagement: React.FC = () => {
                         pb: 1.25,
                         pr: 0.5,
                         borderBottom: '1px solid',
-                        borderColor: alpha(theme.palette.divider, 0.75),
-                      }}
+                        borderColor: alpha(theme.palette.divider, 0.75) }}
                     >
                       <Typography
                         variant="body2"
@@ -1924,8 +1874,7 @@ const MenuPermissionManagement: React.FC = () => {
                           fontWeight: 600,
                           fontSize: '0.8125rem',
                           letterSpacing: '-0.01em',
-                          color: 'text.secondary',
-                        }}
+                          color: 'text.secondary' }}
                       >
                         {t('menuPermissionManagement.menuOrder')}
                       </Typography>
@@ -1937,8 +1886,7 @@ const MenuPermissionManagement: React.FC = () => {
                           fontSize: '0.8125rem',
                           letterSpacing: '-0.01em',
                           color: 'text.secondary',
-                          whiteSpace: 'nowrap',
-                        }}
+                          whiteSpace: 'nowrap' }}
                       >
                         {t('menuPermissionManagement.permissions')}
                       </Typography>
@@ -1959,8 +1907,7 @@ const MenuPermissionManagement: React.FC = () => {
                     px: 3,
                     borderRadius: '8px',
                     border: `1px dashed ${alpha(theme.palette.divider, 0.9)}`,
-                    bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04),
-                  }}
+                    bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.06 : 0.04) }}
                 >
                   <SecurityIcon sx={{ fontSize: 40, mb: 2, opacity: 0.22, color: 'text.secondary' }} />
                   <Typography variant="body1" sx={{ mb: 0.75, fontWeight: 600, letterSpacing: '-0.01em', color: 'text.primary' }}>
@@ -2009,8 +1956,7 @@ const MenuPermissionManagement: React.FC = () => {
                   textTransform: 'none',
                   py: 1.5,
                   borderRadius: '8px',
-                  borderColor: alpha(theme.palette.divider, 0.95),
-                }}
+                  borderColor: alpha(theme.palette.divider, 0.95) }}
               >
                 {users.find(u => u.id === selectedUserId)?.role} 역할 기본 권한 적용
               </Button>

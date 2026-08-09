@@ -34,7 +34,6 @@ class MenuService {
       });
       return response.data;
     } catch (error) {
-      console.error('사용자 메뉴 조회 오류:', error);
       throw error;
     }
   }
@@ -47,7 +46,6 @@ class MenuService {
       });
       return response.data;
     } catch (error) {
-      console.error('전체 메뉴 조회 오류:', error);
       throw error;
     }
   }
@@ -59,7 +57,6 @@ class MenuService {
       const response = await api.post(`/menus/tenant/${tenantId}`, menuData);
       return response.data;
     } catch (error) {
-      console.error('메뉴 생성 오류:', error);
       throw error;
     }
   }
@@ -70,7 +67,6 @@ class MenuService {
       const response = await api.put(`/menus/${menuId}`, menuData);
       return response.data;
     } catch (error) {
-      console.error('메뉴 수정 오류:', error);
       throw error;
     }
   }
@@ -81,7 +77,6 @@ class MenuService {
       const response = await api.delete(`/menus/${menuId}`);
       return response.data;
     } catch (error) {
-      console.error('메뉴 삭제 오류:', error);
       throw error;
     }
   }
@@ -94,7 +89,6 @@ class MenuService {
       });
       return response.data;
     } catch (error) {
-      console.error('사용자 권한 설정 오류:', error);
       throw error;
     }
   }
@@ -105,7 +99,6 @@ class MenuService {
       const response = await api.get(`/menus/permissions/user/${userId}`);
       return response.data;
     } catch (error) {
-      console.error('사용자 권한 조회 오류:', error);
       throw error;
     }
   }

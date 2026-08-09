@@ -156,8 +156,7 @@ const PayrollManagement: React.FC = () => {
           gst_numbers: gstNumbers
         });
         if (!cancelled) setCompanyRegisteredStateCode(code);
-      } catch (e) {
-        console.error(e);
+      } catch {
         if (!cancelled) setCompanyRegisteredStateCode(null);
       }
     };
@@ -188,8 +187,8 @@ const PayrollManagement: React.FC = () => {
           .filter(Boolean);
         setLockedPeriods(new Set(keys));
       }
-    } catch (e) {
-      console.error(e);
+    } catch {
+      /* ignore */
     }
   }, [menuFlags.menusLoading, menuFlags.canRead]);
 
@@ -209,7 +208,6 @@ const PayrollManagement: React.FC = () => {
         setError(response.message || t('payrollManagement.errors.loadFailed'));
       }
     } catch (err: any) {
-      console.error('급여 데이터 로드 오류:', err);
       setError(err.response?.data?.message || t('payrollManagement.errors.loadFailed'));
     } finally {
       setLoading(false);
@@ -829,7 +827,7 @@ const PayrollManagement: React.FC = () => {
               sx={{
                 px: { xs: 2, sm: 2.5 },
                 py: 1.5,
-                borderBottom: '1px solid #C5CED9',
+                borderBottom: '1px solid #CBD5E1',
                 bgcolor: '#FFFFFF',
                 display: 'flex',
                 flexWrap: 'wrap',

@@ -159,7 +159,6 @@ const SystemLoginHistoryTab: React.FC = () => {
 
       setSelectedCompanyId(hasUserCompany ? Number(userCompanyId) : companyList[0].id);
     } catch (error: any) {
-      console.error('회사 목록 로드 오류:', error);
       setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.loadCompaniesFailed'));
     }
   }, [selectedCompanyId, t, user?.company_id]);
@@ -183,7 +182,6 @@ const SystemLoginHistoryTab: React.FC = () => {
           setLoginLogs([]);
         }
       } catch (error: any) {
-        console.error('로그인 로그 로드 오류:', error);
         setLoginLogs([]);
         setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.loadLogsFailed'));
       } finally {
