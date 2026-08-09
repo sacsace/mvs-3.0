@@ -378,6 +378,11 @@ export default {
       deleteSelected: '선택 삭제',
       reset: '초기화',
       moreTools: '관리·도구',
+      listView: {
+        viewAll: '전체보기',
+        viewPages: '페이지로 보기',
+        showingAll: '전체 {{count}}명 표시',
+      },
       stats: {
         totalUsers: '총 사용자',
         activeUsers: '활성 사용자',

@@ -378,6 +378,11 @@ export default {
       deleteSelected: 'Delete Selected',
       reset: 'Reset',
       moreTools: 'Tools',
+      listView: {
+        viewAll: 'View all',
+        viewPages: 'View by page',
+        showingAll: 'Showing all {{count}} users',
+      },
       stats: {
         totalUsers: 'Total Users',
         activeUsers: 'Active Users',

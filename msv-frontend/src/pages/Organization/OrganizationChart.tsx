@@ -41,6 +41,8 @@ import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { departmentService, positionService } from '../../services/api';
 import { getUploadUrl } from '../../utils/uploadUrl';
+import { formatPositionLabel } from '../../utils/positionLabels';
+import { useTranslation } from 'react-i18next';
 
 /** 직책명 폴백 순위 (낮을수록 상위). DB sort_order / position_id 우선 */
 const POSITION_NAME_RANK: Record<string, number> = {
@@ -131,6 +133,27 @@ const ORG_PERSON_H = 170;
 const ORG_DEPT_H = 148;
 const ORG_LAYER_GAP = 48;
 const ORG_COL_GAP = 80;
+/** 동일 직책 동료를 가로로 배치할 때 간격 */
+const ORG_PEER_GAP = 40;
+
+function groupUsersBySamePosition(deptUsers: any[]): { key: string; users: any[] }[] {
+  const groups: { key: string; users: any[] }[] = [];
+  deptUsers.forEach((u) => {
+    const key = normalizePositionName(u?.position) || '__none__';
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) {
+      last.users.push(u);
+    } else {
+      groups.push({ key, users: [u] });
+    }
+  });
+  return groups;
+}
+
+function rowWidthForCount(count: number): number {
+  const n = Math.max(1, count);
+  return n * ORG_NODE_W + Math.max(0, n - 1) * ORG_PEER_GAP;
+}
 
 const orgHandleStyle: React.CSSProperties = {
   width: 10,
@@ -227,7 +250,10 @@ const orgCardSx = {
   boxSizing: 'border-box' as const,
 };
 
-const PersonNode = ({ data }: { data: any }) => (
+const PersonNode = ({ data }: { data: any }) => {
+  const { i18n } = useTranslation();
+  const positionLabel = formatPositionLabel(data.position, i18n.language) || data.position || '—';
+  return (
   <Card
     sx={{
       ...orgCardSx,
@@ -255,8 +281,8 @@ const PersonNode = ({ data }: { data: any }) => (
           <Typography variant="subtitle1" fontWeight="bold" noWrap>
             {data.name}
           </Typography>
-          <Typography variant="body2" color="text.secondary" noWrap>
-            {data.position || '—'}
+          <Typography variant="body2" color="text.secondary" noWrap title={positionLabel}>
+            {positionLabel}
           </Typography>
         </Box>
       </Box>
@@ -271,7 +297,8 @@ const PersonNode = ({ data }: { data: any }) => (
       </Box>
     </CardContent>
   </Card>
-);
+  );
+};
 
 const DepartmentNode = ({ data }: { data: any }) => (
   <Card
@@ -378,16 +405,21 @@ function buildOrgLayout(
     ...vpUsers.map((u) => ({ user: u, roleLabel: '부사장', level: 2 })),
   ];
 
-  const deptLayouts = visibleDeptNames.map((deptName) => ({
-    deptName,
-    deptUsers: departments[deptName] || [],
-  }));
+  // 부서별: 직책 순위는 세로, 같은 직책은 가로
+  const deptLayouts = visibleDeptNames.map((deptName) => {
+    const deptUsers = departments[deptName] || [];
+    const groups = groupUsersBySamePosition(deptUsers);
+    const maxPeers = Math.max(1, ...groups.map((g) => g.users.length), 1);
+    const columnWidth = rowWidthForCount(maxPeers);
+    return { deptName, deptUsers, groups, columnWidth };
+  });
 
   const branchSideways = deptLayouts.length > 1;
   const totalTreeWidth =
     deptLayouts.length === 0
       ? ORG_NODE_W
-      : deptLayouts.length * ORG_NODE_W + Math.max(0, deptLayouts.length - 1) * ORG_COL_GAP;
+      : deptLayouts.reduce((sum, d) => sum + d.columnWidth, 0) +
+        Math.max(0, deptLayouts.length - 1) * ORG_COL_GAP;
 
   const spineCenterX = Math.max(ORG_NODE_W, totalTreeWidth) / 2;
   const nodeLeft = (centerX: number) => centerX - ORG_NODE_W / 2;
@@ -449,8 +481,8 @@ function buildOrgLayout(
   });
 
   let cursorX = spineCenterX - totalTreeWidth / 2;
-  deptLayouts.forEach(({ deptName, deptUsers }) => {
-    const colCenterX = branchSideways ? cursorX + ORG_NODE_W / 2 : spineCenterX;
+  deptLayouts.forEach(({ deptName, deptUsers, groups, columnWidth }) => {
+    const colCenterX = branchSideways ? cursorX + columnWidth / 2 : spineCenterX;
     const deptNodeId = `dept-${deptName}`;
 
     orgNodes.push({
@@ -467,39 +499,56 @@ function buildOrgLayout(
 
     if (spineAnchorId) orgEdges.push(makeOrgEdge(spineAnchorId, deptNodeId));
 
-    let previousId = deptNodeId;
-    deptUsers.forEach((userData, userIndex) => {
-      const userId = `user-${userData.id}`;
-      orgNodes.push({
-        id: userId,
-        type: 'person',
-        data: {
-          label: userData.username,
-          name: userData.username,
-          position: userData.position || '',
-          department: userData.department || deptName,
-          email: userData.email || '',
-          phone: userData.phone || '',
-          avatar: getUploadUrl(userData.avatar_url) || undefined,
-          level: personBaseLevel + userIndex,
-          managerId: previousId,
-        },
-        position: {
-          x: nodeLeft(colCenterX),
-          y: personStartY + userIndex * (ORG_PERSON_H + ORG_LAYER_GAP),
-        },
+    let rowParentId = deptNodeId;
+    let rowY = personStartY;
+    let personLevel = personBaseLevel;
+
+    groups.forEach((group, groupIndex) => {
+      const peers = group.users;
+      const rowW = rowWidthForCount(peers.length);
+      let peerLeft = colCenterX - rowW / 2;
+      const peerIds: string[] = [];
+
+      peers.forEach((userData) => {
+        const userId = `user-${userData.id}`;
+        orgNodes.push({
+          id: userId,
+          type: 'person',
+          data: {
+            label: userData.username,
+            name: userData.username,
+            position: userData.position || '',
+            department: userData.department || deptName,
+            email: userData.email || '',
+            phone: userData.phone || '',
+            avatar: getUploadUrl(userData.avatar_url) || undefined,
+            level: personLevel,
+            managerId: rowParentId,
+          },
+          position: { x: peerLeft, y: rowY },
+        });
+        orgEdges.push(makeOrgEdge(rowParentId, userId));
+        peerIds.push(userId);
+        peerLeft += ORG_NODE_W + ORG_PEER_GAP;
       });
-      orgEdges.push(makeOrgEdge(previousId, userId));
-      previousId = userId;
+
+      personLevel += 1;
+
+      if (groupIndex < groups.length - 1) {
+        // 다음 직책 행의 부모: 동료가 여러 명이면 가운데 사람
+        rowParentId = peerIds[Math.floor((peerIds.length - 1) / 2)] || rowParentId;
+        rowY += ORG_PERSON_H + ORG_LAYER_GAP;
+      }
     });
 
-    if (branchSideways) cursorX += ORG_NODE_W + ORG_COL_GAP;
+    if (branchSideways) cursorX += columnWidth + ORG_COL_GAP;
   });
 
   return { nodes: orgNodes, edges: orgEdges };
 }
 
 const OrganizationChart: React.FC = () => {
+  const { i18n } = useTranslation();
   const { user } = useStore();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -676,7 +725,7 @@ const OrganizationChart: React.FC = () => {
     <Box sx={{ ...mvsPageRootSx, height: 'calc(100vh - 200px)' }}>
       <MvsPageHeader
         title="조직도 관리"
-        description="연결선은 수직·직교만 사용합니다. 노드는 드래그로 위치를 옮길 수 있고, 부서별로 검토할 수 있습니다."
+        description="같은 직책은 가로로, 직책이 다르면 세로로 배치합니다. 노드는 드래그로 옮길 수 있고 부서별 검토도 가능합니다."
         actions={
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             <Button
@@ -769,7 +818,9 @@ const OrganizationChart: React.FC = () => {
                 reviewMembers.map((member: any) => (
                   <Typography key={member.id} variant="body2" color="text.secondary" noWrap>
                     {member.username}
-                    {member.position ? ` · ${member.position}` : ''}
+                    {member.position
+                      ? ` · ${formatPositionLabel(member.position, i18n.language)}`
+                      : ''}
                     {member.email ? ` · ${member.email}` : ''}
                   </Typography>
                 ))

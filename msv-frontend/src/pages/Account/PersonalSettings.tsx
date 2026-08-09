@@ -29,6 +29,7 @@ import {
 import { userService } from '../../services/api';
 import { useStore } from '../../store';
 import { getUploadUrl } from '../../utils/uploadUrl';
+import { formatPositionLabel } from '../../utils/positionLabels';
 
 type PersonalProfile = {
   userid: string;
@@ -65,7 +66,7 @@ const emptyProfile: PersonalProfile = {
 };
 
 const PersonalSettings: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const updateUser = useStore((state) => state.updateUser);
   const [profile, setProfile] = useState<PersonalProfile>(emptyProfile);
   const [loading, setLoading] = useState(true);
@@ -464,7 +465,10 @@ const PersonalSettings: React.FC = () => {
                 [t('personalSettings.userId'), profile.userid],
                 [t('personalSettings.role'), profile.role],
                 [t('personalSettings.department'), profile.department || '-'],
-                [t('personalSettings.position'), profile.position || '-'],
+                [
+                  t('personalSettings.position'),
+                  formatPositionLabel(profile.position, i18n.language) || '-',
+                ],
                 [t('personalSettings.employeeNumber'), profile.employee_number || '-'],
               ].map(([label, value]) => (
                 <Box key={label}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Typography,
   Box,
@@ -80,9 +80,32 @@ import { alpha, useTheme, type SxProps, type Theme } from '@mui/material/styles'
 import { DepartmentManagementPanel } from '../HR/DepartmentManagement';
 import { PositionManagementPanel } from '../HR/PositionManagement';
 import { getUploadUrl } from '../../utils/uploadUrl';
+import { formatPositionLabel } from '../../utils/positionLabels';
 
 const USER_MGMT_MENU_ROUTES = ['/hr/users', '/users'];
 const USERS_PER_PAGE = 10;
+
+type ListViewMode = 'page' | 'all';
+
+const listViewModeBarSx = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: 0.75,
+  mb: 1.25,
+} as const;
+
+const listViewModeBtnSx = {
+  height: 32,
+  minWidth: 0,
+  px: 1.5,
+  textTransform: 'none' as const,
+  fontWeight: 600,
+  fontSize: '0.75rem',
+  borderRadius: '8px',
+  boxShadow: 'none',
+  whiteSpace: 'nowrap' as const,
+};
 
 /** 사용자 목록 열 너비 — 상태·생성일은 내용에 맞게 좁게 */
 const USER_LIST_COL_WIDTHS = {
@@ -388,7 +411,15 @@ const UserManagement: React.FC = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [selectedUsers, setSelectedUsers] = useState<number[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>('');
+  /** root: 로그인 사용자 소속 회사를 기본 선택 */
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>(() => {
+    const u = useStore.getState().user;
+    if (u?.role === 'root' && u.company_id != null && Number(u.company_id) > 0) {
+      return Number(u.company_id);
+    }
+    return '';
+  });
+  const rootCompanyDefaultApplied = useRef(selectedCompanyId !== '');
   const [showInactive, setShowInactive] = useState(false); // 비활성 사용자 표시 여부
   const [orderBy, setOrderBy] = useState<string>('');
   const [order, setOrder] = useState<'asc' | 'desc'>('asc');
@@ -466,6 +497,7 @@ const UserManagement: React.FC = () => {
   const [previewEmployeeNumberLoading, setPreviewEmployeeNumberLoading] = useState(false);
   const [toolbarMenuAnchor, setToolbarMenuAnchor] = useState<null | HTMLElement>(null);
   const [page, setPage] = useState(1);
+  const [listViewMode, setListViewMode] = useState<ListViewMode>('page');
 
   useEffect(() => {
     return () => {
@@ -519,6 +551,16 @@ const UserManagement: React.FC = () => {
     const id = user?.company_id;
     return id != null && id > 0 ? id : undefined;
   }, [user?.company_id]);
+
+  // root: 사용자 정보가 늦게 로드돼도 소속 회사를 한 번만 기본 선택
+  useEffect(() => {
+    if (rootCompanyDefaultApplied.current) return;
+    if (user?.role !== 'root') return;
+    const cid = user?.company_id != null ? Number(user.company_id) : NaN;
+    if (!Number.isFinite(cid) || cid <= 0) return;
+    setSelectedCompanyId(cid);
+    rootCompanyDefaultApplied.current = true;
+  }, [user?.role, user?.company_id]);
 
   const fetchCompanies = useCallback(async () => {
     try {
@@ -1158,9 +1200,11 @@ const UserManagement: React.FC = () => {
     [filteredUsers, page]
   );
 
+  const displayedUsers = listViewMode === 'all' ? filteredUsers : paginatedUsers;
+
   const visibleUserIds = useMemo(
-    () => paginatedUsers.map((u) => u.id),
-    [paginatedUsers]
+    () => displayedUsers.map((u) => u.id),
+    [displayedUsers]
   );
 
   const allVisibleSelected =
@@ -1178,13 +1222,20 @@ const UserManagement: React.FC = () => {
     }
   }, [page, totalPages]);
 
+  const rootDefaultCompanyId =
+    user?.role === 'root' && loginUserCompanyId != null ? loginUserCompanyId : '';
+
   const hasActiveFilters = Boolean(
-    searchTerm.trim() || selectedCompanyId || showInactive
+    searchTerm.trim() ||
+      showInactive ||
+      (user?.role === 'root'
+        ? selectedCompanyId !== rootDefaultCompanyId
+        : Boolean(selectedCompanyId))
   );
 
   const handleResetFilters = () => {
     setSearchTerm('');
-    setSelectedCompanyId('');
+    setSelectedCompanyId(rootDefaultCompanyId === '' ? '' : rootDefaultCompanyId);
     setShowInactive(false);
   };
 
@@ -1562,8 +1613,11 @@ const UserManagement: React.FC = () => {
                   select
                   label={t('userManagement.company')}
                   {...USER_FILTER_OUTLINED}
-                  value={selectedCompanyId}
-                  onChange={(e) => setSelectedCompanyId(e.target.value as number | '')}
+                  value={selectedCompanyId === '' ? '' : selectedCompanyId}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSelectedCompanyId(v === '' ? '' : Number(v));
+                  }}
                   disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
                   SelectProps={{ displayEmpty: true }}
                   sx={userFilterFieldSx}
@@ -1652,6 +1706,38 @@ const UserManagement: React.FC = () => {
               </Box>
             ) : (
               <>
+                <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: 1.5, pb: 0 }}>
+                  <Box sx={listViewModeBarSx}>
+                    <Button
+                      size="small"
+                      disableElevation
+                      variant={listViewMode === 'all' ? 'contained' : 'outlined'}
+                      onClick={() => setListViewMode('all')}
+                      sx={{
+                        ...listViewModeBtnSx,
+                        ...(listViewMode === 'all'
+                          ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                          : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                      }}
+                    >
+                      {t('userManagement.listView.viewAll')}
+                    </Button>
+                    <Button
+                      size="small"
+                      disableElevation
+                      variant={listViewMode === 'page' ? 'contained' : 'outlined'}
+                      onClick={() => setListViewMode('page')}
+                      sx={{
+                        ...listViewModeBtnSx,
+                        ...(listViewMode === 'page'
+                          ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                          : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                      }}
+                    >
+                      {t('userManagement.listView.viewPages')}
+                    </Button>
+                  </Box>
+                </Box>
                 <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
                   <Table
                     size="small"
@@ -1772,7 +1858,7 @@ const UserManagement: React.FC = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody sx={userTableBodyRowSx}>
-                      {paginatedUsers.map((rowUser) => (
+                      {displayedUsers.map((rowUser) => (
                         <TableRow
                           key={rowUser.id}
                           onClick={() => {
@@ -1815,8 +1901,13 @@ const UserManagement: React.FC = () => {
                             </Typography>
                           </TableCell>
                           <TableCell sx={{ overflow: 'hidden' }}>
-                            <Typography variant="body2" color="text.secondary" noWrap title={rowUser.position || '—'}>
-                              {rowUser.position || '—'}
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              noWrap
+                              title={formatPositionLabel(rowUser.position, i18n.language) || '—'}
+                            >
+                              {formatPositionLabel(rowUser.position, i18n.language) || '—'}
                             </Typography>
                           </TableCell>
                           <TableCell sx={userStatusColSx}>
@@ -1836,21 +1927,29 @@ const UserManagement: React.FC = () => {
                   </Table>
                 </TableContainer>
 
-                <Box sx={mvsBodyPaginationSx}>
-                  <Pagination
-                    count={totalPages}
-                    page={page}
-                    onChange={(_, value) => setPage(value)}
-                    color="primary"
-                    shape="rounded"
-                    sx={{
-                      '& .MuiPaginationItem-root': {
-                        borderRadius: '10px',
-                        fontWeight: 500,
-                      },
-                    }}
-                  />
-                </Box>
+                {listViewMode === 'page' ? (
+                  <Box sx={mvsBodyPaginationSx}>
+                    <Pagination
+                      count={totalPages}
+                      page={page}
+                      onChange={(_, value) => setPage(value)}
+                      color="primary"
+                      shape="rounded"
+                      sx={{
+                        '& .MuiPaginationItem-root': {
+                          borderRadius: '10px',
+                          fontWeight: 500,
+                        },
+                      }}
+                    />
+                  </Box>
+                ) : (
+                  <Box sx={{ ...mvsBodyPaginationSx, justifyContent: 'flex-end' }}>
+                    <Typography variant="body2" color="text.secondary">
+                      {t('userManagement.listView.showingAll', { count: displayedUsers.length })}
+                    </Typography>
+                  </Box>
+                )}
               </>
             )}
           </Box>
@@ -1869,8 +1968,11 @@ const UserManagement: React.FC = () => {
                   select
                   label={t('userManagement.company')}
                   {...USER_FILTER_OUTLINED}
-                  value={selectedCompanyId}
-                  onChange={(e) => setSelectedCompanyId(e.target.value as number | '')}
+                  value={selectedCompanyId === '' ? '' : selectedCompanyId}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSelectedCompanyId(v === '' ? '' : Number(v));
+                  }}
                   SelectProps={{ displayEmpty: true }}
                   sx={userFilterFieldSx}
                 >
@@ -1914,8 +2016,11 @@ const UserManagement: React.FC = () => {
                   select
                   label={t('userManagement.company')}
                   {...USER_FILTER_OUTLINED}
-                  value={selectedCompanyId}
-                  onChange={(e) => setSelectedCompanyId(e.target.value as number | '')}
+                  value={selectedCompanyId === '' ? '' : selectedCompanyId}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setSelectedCompanyId(v === '' ? '' : Number(v));
+                  }}
                   SelectProps={{ displayEmpty: true }}
                   sx={userFilterFieldSx}
                 >
@@ -2340,7 +2445,8 @@ const UserManagement: React.FC = () => {
                                     );
                                   }
                                   const p = positions.find((x) => String(x.id) === selected);
-                                  return p?.name ?? formData.position ?? '';
+                                  const label = p?.name ?? formData.position ?? '';
+                                  return formatPositionLabel(label, i18n.language) || label;
                                 },
                                 MenuProps: {
                                   PaperProps: {
@@ -2356,14 +2462,15 @@ const UserManagement: React.FC = () => {
                               </MenuItem>
                               {positions.map((p, idx) => (
                                 <MenuItem key={p.id} value={String(p.id)}>
-                                  {t('positionManagement.rankBadge', { level: idx + 1 })} · {p.name}
+                                  {t('positionManagement.rankBadge', { level: idx + 1 })} ·{' '}
+                                  {formatPositionLabel(p.name, i18n.language)}
                                 </MenuItem>
                               ))}
                               {formData.position_id !== '' &&
                                 !positions.some((p) => p.id === formData.position_id) &&
                                 formData.position && (
                                   <MenuItem value={String(formData.position_id)}>
-                                    {formData.position}
+                                    {formatPositionLabel(formData.position, i18n.language)}
                                   </MenuItem>
                                 )}
                             </TextField>
@@ -2805,7 +2912,7 @@ const UserManagement: React.FC = () => {
                         {t('userManagement.positionTitle')}
                       </Typography>
                       <Typography variant="body1" sx={userDetailValueSx}>
-                        {selectedUser.position || '-'}
+                        {formatPositionLabel(selectedUser.position, i18n.language) || '-'}
                       </Typography>
                     </Box>
                     <Box>

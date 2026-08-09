@@ -44,6 +44,7 @@ import {
   mvsOutlinedLabelProps,
 } from '../../theme/mvsLayout';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
+import { formatPositionLabel } from '../../utils/positionLabels';
 
 const POS_FORM_FIELD_SX = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
 
@@ -118,7 +119,7 @@ export const PositionManagementPanel: React.FC<{
   canDelete = true,
 }) => {
   const theme = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const [rows, setRows] = useState<PosRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -484,7 +485,7 @@ export const PositionManagementPanel: React.FC<{
                     <Typography
                       variant="body2"
                       noWrap
-                      title={row.name}
+                      title={formatPositionLabel(row.name, i18n.language)}
                       sx={{
                         fontWeight: 600,
                         fontSize: '0.875rem',
@@ -492,7 +493,7 @@ export const PositionManagementPanel: React.FC<{
                         color: inactive ? 'text.secondary' : 'text.primary',
                       }}
                     >
-                      {row.name}
+                      {formatPositionLabel(row.name, i18n.language)}
                     </Typography>
                     <Typography
                       variant="caption"
