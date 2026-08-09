@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+﻿import React, { useState, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -14,11 +14,15 @@ import {
 } from '@mui/material';
 import {
   Person as PersonIcon,
+  Group as GroupIcon,
   Business as BusinessIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import ReactFlow, {
+  BaseEdge,
   Edge,
+  EdgeProps,
+  EdgeTypes,
   useNodesState,
   useEdgesState,
   Controls,
@@ -35,7 +39,8 @@ import { useStore } from '../../store';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import { mvsPageRootSx } from '../../theme/mvsLayout';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
-import { positionService } from '../../services/api';
+import { departmentService, positionService } from '../../services/api';
+import { getUploadUrl } from '../../utils/uploadUrl';
 
 /** 직책명 폴백 순위 (낮을수록 상위). DB sort_order / position_id 우선 */
 const POSITION_NAME_RANK: Record<string, number> = {
@@ -43,9 +48,11 @@ const POSITION_NAME_RANK: Record<string, number> = {
   대표: 1,
   ceo: 1,
   'chief executive officer': 1,
+  부사장: 2,
   부대표: 2,
   'vice president': 2,
   vp: 2,
+  'executive vice president': 2,
   전무: 3,
   상무: 4,
   'executive director': 4,
@@ -68,6 +75,31 @@ function normalizePositionName(value: unknown): string {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, ' ');
+}
+
+/** 대표이사(CEO) — 조직도에서 회사 바로 아래 고정 */
+function isCeoUser(userData: any): boolean {
+  const normalized = normalizePositionName(userData?.position);
+  return (
+    normalized === '대표이사' ||
+    normalized === '대표' ||
+    normalized === 'ceo' ||
+    normalized === 'chief executive officer'
+  );
+}
+
+/** 부사장 — 대표이사 바로 아래 고정 */
+function isVicePresidentUser(userData: any): boolean {
+  if (isCeoUser(userData)) return false;
+  const normalized = normalizePositionName(userData?.position);
+  return (
+    normalized === '부사장' ||
+    normalized === '부대표' ||
+    normalized === 'vice president' ||
+    normalized === 'vp' ||
+    normalized === 'executive vice president' ||
+    normalized === 'executive director'
+  );
 }
 
 function getUserPositionRank(
@@ -93,14 +125,78 @@ function getUserPositionRank(
   return 999;
 }
 
+const ORG_NODE_W = 260;
+const ORG_COMPANY_H = 178;
+const ORG_PERSON_H = 170;
+const ORG_DEPT_H = 148;
+const ORG_LAYER_GAP = 48;
+const ORG_COL_GAP = 80;
+
 const orgHandleStyle: React.CSSProperties = {
-  width: 8,
-  height: 8,
+  width: 10,
+  height: 10,
   border: '2px solid #94a3b8',
   background: '#fff',
-  opacity: 0 };
+  opacity: 0,
+};
 
-// 조직도 노드 타입 정의
+const orgEdgeStyle = { stroke: '#94a3b8', strokeWidth: 1.75 };
+const orgEdgeMarker = {
+  type: MarkerType.ArrowClosed,
+  width: 14,
+  height: 14,
+  color: '#94a3b8',
+} as const;
+
+/** 대각선 금지: 같은 X면 수직선, 아니면 직교(┐└) 선 */
+const OrgEdge = React.memo(function OrgEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  style,
+  markerEnd,
+}: EdgeProps) {
+  const aligned = Math.abs(sourceX - targetX) < 2;
+  const path = aligned
+    ? `M ${(sourceX + targetX) / 2},${sourceY} L ${(sourceX + targetX) / 2},${targetY}`
+    : (() => {
+        const midY = sourceY + Math.max(28, (targetY - sourceY) * 0.5);
+        return `M ${sourceX},${sourceY} L ${sourceX},${midY} L ${targetX},${midY} L ${targetX},${targetY}`;
+      })();
+
+  return (
+    <BaseEdge
+      id={id}
+      path={path}
+      style={{ ...orgEdgeStyle, ...style }}
+      markerEnd={markerEnd}
+    />
+  );
+});
+
+function makeOrgEdge(source: string, target: string): Edge {
+  return {
+    id: `edge-${source}-${target}`,
+    source,
+    target,
+    type: 'org',
+    animated: false,
+    style: orgEdgeStyle,
+    markerEnd: orgEdgeMarker,
+  };
+}
+
+type OrgSnapshot = {
+  company: any | null;
+  activeUsers: any[];
+  ceoUsers: any[];
+  vpUsers: any[];
+  deptNames: string[];
+  departments: Record<string, any[]>;
+};
+
 interface OrganizationNode {
   id: string;
   type: 'person' | 'department' | 'company';
@@ -117,31 +213,43 @@ interface OrganizationNode {
     level: number;
   };
   position: { x: number; y: number };
+  draggable?: boolean;
+  selectable?: boolean;
 }
 
-// 커스텀 노드 컴포넌트들
+const orgCardSx = {
+  width: ORG_NODE_W,
+  boxShadow: 'none',
+  borderRadius: 1,
+  border: '1px solid',
+  borderColor: 'divider',
+  position: 'relative' as const,
+  boxSizing: 'border-box' as const,
+};
+
 const PersonNode = ({ data }: { data: any }) => (
-  <Card sx={{ 
-    width: 230,
-    boxShadow: 'none',
-    borderRadius: 1,
-    border: '1px solid',
-    borderColor: 'divider',
-    borderTop: '3px solid',
-    borderTopColor: 'primary.main',
-    position: 'relative',
-    transition: 'border-color 0.15s ease',
-    '&:hover': {
-      borderColor: 'primary.light',
-      borderTopColor: 'primary.main'
-    }
-  }}>
+  <Card
+    sx={{
+      ...orgCardSx,
+      borderTop: '3px solid',
+      borderTopColor: 'primary.main',
+      transition: 'border-color 0.15s ease',
+      '&:hover': {
+        borderColor: 'primary.light',
+        borderTopColor: 'primary.main',
+      },
+    }}
+  >
     <Handle type="target" position={Position.Top} style={orgHandleStyle} />
     <Handle type="source" position={Position.Bottom} style={orgHandleStyle} />
-    <CardContent sx={{ p: 2 }}>
+    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-        <Avatar sx={{ mr: 1, bgcolor: 'primary.main' }}>
-          <PersonIcon />
+        <Avatar
+          src={data.avatar || undefined}
+          alt={data.name || ''}
+          sx={{ mr: 1, bgcolor: 'primary.main', '& img': { objectFit: 'cover' } }}
+        >
+          {data.name ? String(data.name).charAt(0).toUpperCase() : <PersonIcon />}
         </Avatar>
         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
           <Typography variant="subtitle1" fontWeight="bold" noWrap>
@@ -150,11 +258,6 @@ const PersonNode = ({ data }: { data: any }) => (
           <Typography variant="body2" color="text.secondary" noWrap>
             {data.position || '—'}
           </Typography>
-          {data.department ? (
-            <Typography variant="caption" color="text.secondary" noWrap display="block">
-              {data.department}
-            </Typography>
-          ) : null}
         </Box>
       </Box>
       <Divider sx={{ my: 1 }} />
@@ -170,30 +273,67 @@ const PersonNode = ({ data }: { data: any }) => (
   </Card>
 );
 
-const CompanyNode = ({ data }: { data: any }) => (
-  <Card sx={{ 
-    width: 280,
-    boxShadow: 'none',
-    borderRadius: 1,
-    border: '1px solid',
-    borderColor: 'divider',
-    borderTop: '3px solid',
-    borderTopColor: 'success.main',
-    position: 'relative',
-    transition: 'border-color 0.15s ease',
-    '&:hover': {
-      borderColor: 'success.light',
-      borderTopColor: 'success.main'
-    }
-  }}>
+const DepartmentNode = ({ data }: { data: any }) => (
+  <Card
+    sx={{
+      ...orgCardSx,
+      borderTop: '3px solid',
+      borderTopColor: 'secondary.main',
+      transition: 'border-color 0.15s ease',
+      '&:hover': {
+        borderColor: 'secondary.light',
+        borderTopColor: 'secondary.main',
+      },
+    }}
+  >
+    <Handle type="target" position={Position.Top} style={orgHandleStyle} />
     <Handle type="source" position={Position.Bottom} style={orgHandleStyle} />
-    <CardContent sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <Avatar sx={{ mr: 2, bgcolor: 'success.main', width: 48, height: 48 }}>
+    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+        <Avatar sx={{ mr: 1, bgcolor: 'secondary.main' }}>
+          <GroupIcon />
+        </Avatar>
+        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Typography variant="subtitle1" fontWeight="bold" noWrap>
+            {data.name}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            부서
+          </Typography>
+        </Box>
+      </Box>
+      <Divider sx={{ my: 1 }} />
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="caption" color="text.secondary">
+          직원 수
+        </Typography>
+        <Chip label={data.employeeCount || 0} size="small" color="secondary" />
+      </Box>
+    </CardContent>
+  </Card>
+);
+
+const CompanyNode = ({ data }: { data: any }) => (
+  <Card
+    sx={{
+      ...orgCardSx,
+      borderTop: '3px solid',
+      borderTopColor: 'success.main',
+      transition: 'border-color 0.15s ease',
+      '&:hover': {
+        borderColor: 'success.light',
+        borderTopColor: 'success.main',
+      },
+    }}
+  >
+    <Handle type="source" position={Position.Bottom} style={orgHandleStyle} />
+    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5 }}>
+        <Avatar sx={{ mr: 1.5, bgcolor: 'success.main', width: 44, height: 44 }}>
           <BusinessIcon />
         </Avatar>
-        <Box sx={{ flexGrow: 1 }}>
-          <Typography variant="h6" fontWeight="bold" noWrap>
+        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Typography variant="subtitle1" fontWeight="bold" noWrap>
             {data.name}
           </Typography>
           <Typography variant="body2" color="text.secondary">
@@ -201,26 +341,163 @@ const CompanyNode = ({ data }: { data: any }) => (
           </Typography>
         </Box>
       </Box>
-      <Divider sx={{ my: 2 }} />
+      <Divider sx={{ my: 1.5 }} />
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="body2" color="text.secondary">
           총 직원 수
         </Typography>
-        <Chip 
-          label={data.employeeCount || 0} 
-          color="success" 
-          size="medium"
-        />
+        <Chip label={data.employeeCount || 0} color="success" size="small" />
       </Box>
     </CardContent>
   </Card>
 );
 
-// 노드 타입 정의 — 사용자/회사 정보만 표시
 const nodeTypes: NodeTypes = {
   person: PersonNode,
+  department: DepartmentNode,
   company: CompanyNode,
 };
+
+const edgeTypes: EdgeTypes = {
+  org: OrgEdge,
+};
+
+function buildOrgLayout(
+  snapshot: OrgSnapshot,
+  deptFilter: string
+): { nodes: OrganizationNode[]; edges: Edge[] } {
+  const { company, activeUsers, ceoUsers, vpUsers, deptNames, departments } = snapshot;
+  const visibleDeptNames =
+    deptFilter === 'all' ? deptNames : deptNames.filter((name) => name === deptFilter);
+
+  const orgNodes: OrganizationNode[] = [];
+  const orgEdges: Edge[] = [];
+
+  const fixedExecUsers = [
+    ...ceoUsers.map((u) => ({ user: u, roleLabel: '대표이사', level: 1 })),
+    ...vpUsers.map((u) => ({ user: u, roleLabel: '부사장', level: 2 })),
+  ];
+
+  const deptLayouts = visibleDeptNames.map((deptName) => ({
+    deptName,
+    deptUsers: departments[deptName] || [],
+  }));
+
+  const branchSideways = deptLayouts.length > 1;
+  const totalTreeWidth =
+    deptLayouts.length === 0
+      ? ORG_NODE_W
+      : deptLayouts.length * ORG_NODE_W + Math.max(0, deptLayouts.length - 1) * ORG_COL_GAP;
+
+  const spineCenterX = Math.max(ORG_NODE_W, totalTreeWidth) / 2;
+  const nodeLeft = (centerX: number) => centerX - ORG_NODE_W / 2;
+
+  const companyY = 24;
+  let cursorY = companyY + ORG_COMPANY_H + ORG_LAYER_GAP;
+  const execPositions: number[] = [];
+  fixedExecUsers.forEach(() => {
+    execPositions.push(cursorY);
+    cursorY += ORG_PERSON_H + ORG_LAYER_GAP;
+  });
+  if (fixedExecUsers.length === 0) {
+    cursorY = companyY + ORG_COMPANY_H + ORG_LAYER_GAP;
+  }
+  const deptY = cursorY;
+  const personStartY = deptY + ORG_DEPT_H + ORG_LAYER_GAP;
+
+  const deptLevel = fixedExecUsers.length > 0 ? 3 : 1;
+  const personBaseLevel = deptLevel + 1;
+  const companyNodeId = company ? `company-${company.id}` : '';
+
+  if (company) {
+    orgNodes.push({
+      id: companyNodeId,
+      type: 'company',
+      data: {
+        label: company.name,
+        name: company.name,
+        level: 0,
+        employeeCount: activeUsers.length,
+      },
+      position: { x: nodeLeft(spineCenterX), y: companyY },
+    });
+  }
+
+  let spineAnchorId = companyNodeId;
+  fixedExecUsers.forEach(({ user: userData, roleLabel, level }, execIndex) => {
+    const userId = `user-${userData.id}`;
+    const sourceId =
+      execIndex === 0 ? companyNodeId : `user-${fixedExecUsers[execIndex - 1].user.id}`;
+    orgNodes.push({
+      id: userId,
+      type: 'person',
+      data: {
+        label: userData.username,
+        name: userData.username,
+        position: userData.position || roleLabel,
+        department: userData.department || '',
+        email: userData.email || '',
+        phone: userData.phone || '',
+        avatar: getUploadUrl(userData.avatar_url) || undefined,
+        level,
+        managerId: sourceId,
+      },
+      position: { x: nodeLeft(spineCenterX), y: execPositions[execIndex] },
+    });
+    if (sourceId) orgEdges.push(makeOrgEdge(sourceId, userId));
+    spineAnchorId = userId;
+  });
+
+  let cursorX = spineCenterX - totalTreeWidth / 2;
+  deptLayouts.forEach(({ deptName, deptUsers }) => {
+    const colCenterX = branchSideways ? cursorX + ORG_NODE_W / 2 : spineCenterX;
+    const deptNodeId = `dept-${deptName}`;
+
+    orgNodes.push({
+      id: deptNodeId,
+      type: 'department',
+      data: {
+        label: deptName,
+        name: deptName,
+        level: deptLevel,
+        employeeCount: deptUsers.length,
+      },
+      position: { x: nodeLeft(colCenterX), y: deptY },
+    });
+
+    if (spineAnchorId) orgEdges.push(makeOrgEdge(spineAnchorId, deptNodeId));
+
+    let previousId = deptNodeId;
+    deptUsers.forEach((userData, userIndex) => {
+      const userId = `user-${userData.id}`;
+      orgNodes.push({
+        id: userId,
+        type: 'person',
+        data: {
+          label: userData.username,
+          name: userData.username,
+          position: userData.position || '',
+          department: userData.department || deptName,
+          email: userData.email || '',
+          phone: userData.phone || '',
+          avatar: getUploadUrl(userData.avatar_url) || undefined,
+          level: personBaseLevel + userIndex,
+          managerId: previousId,
+        },
+        position: {
+          x: nodeLeft(colCenterX),
+          y: personStartY + userIndex * (ORG_PERSON_H + ORG_LAYER_GAP),
+        },
+      });
+      orgEdges.push(makeOrgEdge(previousId, userId));
+      previousId = userId;
+    });
+
+    if (branchSideways) cursorX += ORG_NODE_W + ORG_COL_GAP;
+  });
+
+  return { nodes: orgNodes, edges: orgEdges };
+}
 
 const OrganizationChart: React.FC = () => {
   const { user } = useStore();
@@ -229,8 +506,20 @@ const OrganizationChart: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [departmentCount, setDepartmentCount] = useState(0);
+  const [snapshot, setSnapshot] = useState<OrgSnapshot | null>(null);
+  const [deptFilter, setDeptFilter] = useState<string>('all');
+  const [layoutNonce, setLayoutNonce] = useState(0);
 
-  // DB에서 조직도 데이터 로드 (로그인한 사용자 소속 회사만)
+  const applyLayout = useCallback(
+    (nextSnapshot: OrgSnapshot, filter: string) => {
+      const { nodes: nextNodes, edges: nextEdges } = buildOrgLayout(nextSnapshot, filter);
+      setNodes(nextNodes);
+      setEdges(nextEdges);
+      setLayoutNonce((n) => n + 1);
+    },
+    [setNodes, setEdges]
+  );
+
   const loadOrganizationData = useCallback(async () => {
     try {
       setLoading(true);
@@ -241,6 +530,7 @@ const OrganizationChart: React.FC = () => {
           : null;
 
       if (!myCompanyId) {
+        setSnapshot(null);
         setNodes([]);
         setEdges([]);
         setDepartmentCount(0);
@@ -252,10 +542,10 @@ const OrganizationChart: React.FC = () => {
 
       const company = await useReferenceDataStore.getState().fetchCompanyById(myCompanyId);
 
-      // 사용자 관리에 등록된 활성 사용자만 표시 (내 회사)
-      const [users, positionsRes] = await Promise.all([
+      const [users, positionsRes, departmentsRes] = await Promise.all([
         useReferenceDataStore.getState().fetchUsers({ company_id: myCompanyId }, true),
         positionService.list(false, myCompanyId).catch(() => ({ data: [] })),
+        departmentService.list(false, myCompanyId).catch(() => ({ data: [] })),
       ]);
 
       const activeUsers = (Array.isArray(users) ? users : []).filter((u: any) => {
@@ -264,14 +554,9 @@ const OrganizationChart: React.FC = () => {
         return uidCompany == null || uidCompany === myCompanyId;
       });
 
-      const uniqueDepartments = new Set(
-        activeUsers
-          .map((u: any) => String(u.department || '').trim())
-          .filter((d: string) => d.length > 0)
-      );
-      setDepartmentCount(uniqueDepartments.size);
-
       const positions = Array.isArray(positionsRes?.data) ? positionsRes.data : [];
+      const departmentsMaster = Array.isArray(departmentsRes?.data) ? departmentsRes.data : [];
+
       const rankByPositionId = new Map<number, number>();
       const rankByPositionName = new Map<string, number>();
       positions.forEach((p: any) => {
@@ -285,158 +570,133 @@ const OrganizationChart: React.FC = () => {
         }
       });
 
-      // 직책 순위(상위 → 하위)별 그룹
-      const rankGroups = new Map<number, any[]>();
-      activeUsers.forEach((member: any) => {
-        const rank = getUserPositionRank(member, rankByPositionId, rankByPositionName);
-        if (!rankGroups.has(rank)) rankGroups.set(rank, []);
-        rankGroups.get(rank)!.push(member);
+      const deptSortByName = new Map<string, number>();
+      departmentsMaster.forEach((d: any) => {
+        const name = String(d.name || '').trim();
+        if (!name) return;
+        const order = Number(d.sort_order);
+        deptSortByName.set(name, Number.isFinite(order) ? order : 999);
       });
 
-      const sortedRanks = Array.from(rankGroups.keys()).sort((a, b) => a - b);
-      sortedRanks.forEach((rank) => {
-        rankGroups.get(rank)!.sort((a, b) => {
-          const deptCmp = String(a.department || '미지정').localeCompare(
-            String(b.department || '미지정'),
-            'ko'
-          );
-          if (deptCmp !== 0) return deptCmp;
+      const byName = (a: any, b: any) =>
+        String(a.username || '').localeCompare(String(b.username || ''), 'ko');
+      const ceoUsers = activeUsers.filter((member: any) => isCeoUser(member)).sort(byName);
+      const vpUsers = activeUsers.filter((member: any) => isVicePresidentUser(member)).sort(byName);
+      const fixedExecIdSet = new Set([...ceoUsers, ...vpUsers].map((u: any) => u.id));
+
+      const departmentMap = new Map<string, any[]>();
+      activeUsers.forEach((member: any) => {
+        if (fixedExecIdSet.has(member.id)) return;
+        const dept = String(member.department || '').trim() || '미지정';
+        if (!departmentMap.has(dept)) departmentMap.set(dept, []);
+        departmentMap.get(dept)!.push(member);
+      });
+
+      const sortedDeptNames = Array.from(departmentMap.keys()).sort((a, b) => {
+        const sa = deptSortByName.has(a) ? deptSortByName.get(a)! : a === '미지정' ? 9999 : 500;
+        const sb = deptSortByName.has(b) ? deptSortByName.get(b)! : b === '미지정' ? 9999 : 500;
+        if (sa !== sb) return sa - sb;
+        return a.localeCompare(b, 'ko');
+      });
+
+      sortedDeptNames.forEach((deptName) => {
+        departmentMap.get(deptName)!.sort((a, b) => {
+          const ra = getUserPositionRank(a, rankByPositionId, rankByPositionName);
+          const rb = getUserPositionRank(b, rankByPositionId, rankByPositionName);
+          if (ra !== rb) return ra - rb;
           return String(a.username || '').localeCompare(String(b.username || ''), 'ko');
         });
       });
 
-      const orgNodes: OrganizationNode[] = [];
-      const orgEdges: Edge[] = [];
-
-      // 직책 순위 세로 배치: 회사 → 상위 직책 행 → 하위 직책 행
-      const PERSON_W = 230;
-      const PERSON_GAP = 32;
-      const COMPANY_W = 280;
-      const COMPANY_Y = 24;
-      const RANK_ROW_START_Y = 220;
-      const RANK_ROW_STEP = 250;
-
-      const rankLayouts = sortedRanks.map((rank) => {
-        const rankUsers = rankGroups.get(rank)!;
-        const peopleRowWidth =
-          rankUsers.length * PERSON_W + Math.max(0, rankUsers.length - 1) * PERSON_GAP;
-        return { rank, rankUsers, peopleRowWidth };
+      const departments: Record<string, any[]> = {};
+      sortedDeptNames.forEach((name) => {
+        departments[name] = departmentMap.get(name) || [];
       });
 
-      const maxRowWidth = Math.max(
-        COMPANY_W,
-        ...rankLayouts.map((r) => r.peopleRowWidth),
-        PERSON_W
-      );
-      const treeCenterX = maxRowWidth / 2;
-      const companyNodeId = company ? `company-${company.id}` : '';
+      const nextSnapshot: OrgSnapshot = {
+        company,
+        activeUsers,
+        ceoUsers,
+        vpUsers,
+        deptNames: sortedDeptNames,
+        departments,
+      };
 
-      if (company) {
-        orgNodes.push({
-          id: companyNodeId,
-          type: 'company',
-          data: {
-            label: company.name,
-            name: company.name,
-            level: 0,
-            employeeCount: activeUsers.length,
-          },
-          position: { x: treeCenterX - COMPANY_W / 2, y: COMPANY_Y },
-        });
-      }
-
-      let previousRowIds: string[] = company ? [companyNodeId] : [];
-
-      rankLayouts.forEach(({ rank, rankUsers, peopleRowWidth }, rankIndex) => {
-        const rowY = RANK_ROW_START_Y + rankIndex * RANK_ROW_STEP;
-        const personStartX = treeCenterX - peopleRowWidth / 2;
-        const currentRowIds: string[] = [];
-
-        rankUsers.forEach((userData, userIndex) => {
-          const userId = `user-${userData.id}`;
-          currentRowIds.push(userId);
-          orgNodes.push({
-            id: userId,
-            type: 'person',
-            data: {
-              label: userData.username,
-              name: userData.username,
-              position: userData.position || '',
-              department: userData.department || '',
-              email: userData.email || '',
-              phone: userData.phone || '',
-              level: rankIndex + 1,
-              managerId: previousRowIds[0] || companyNodeId,
-            },
-            position: {
-              x: personStartX + userIndex * (PERSON_W + PERSON_GAP),
-              y: rowY,
-            },
-          });
-
-          // 직전 상위 행(회사 또는 상위 직책)에서 연결 — 줄 수를 줄이기 위해 상위 행 중앙 노드 위주
-          const sourceId =
-            previousRowIds[Math.min(userIndex, previousRowIds.length - 1)] || previousRowIds[0];
-          if (sourceId) {
-            orgEdges.push({
-              id: `edge-${sourceId}-${userId}-r${rank}`,
-              source: sourceId,
-              target: userId,
-              type: 'smoothstep',
-              animated: false,
-              style: { stroke: '#94a3b8', strokeWidth: 2 },
-              markerEnd: {
-                type: MarkerType.ArrowClosed,
-                width: 16,
-                height: 16,
-                color: '#94a3b8',
-              },
-            });
-          }
-        });
-
-        previousRowIds = currentRowIds.length > 0 ? currentRowIds : previousRowIds;
+      setDepartmentCount(sortedDeptNames.filter((d) => d !== '미지정').length);
+      setSnapshot(nextSnapshot);
+      setDeptFilter((prev) => {
+        const next = prev === 'all' || sortedDeptNames.includes(prev) ? prev : 'all';
+        applyLayout(nextSnapshot, next);
+        return next;
       });
-
-      setNodes(orgNodes);
-      setEdges(orgEdges);
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || error.message || '조직도 데이터를 불러오는데 실패했습니다.';
+    } catch (err: any) {
+      const errorMessage =
+        err.response?.data?.message || err.message || '조직도 데이터를 불러오는데 실패했습니다.';
       setError(errorMessage);
+      setSnapshot(null);
       setNodes([]);
       setEdges([]);
       setDepartmentCount(0);
     } finally {
       setLoading(false);
     }
-  }, [user?.company_id, setNodes, setEdges]);
+  }, [user?.company_id, setNodes, setEdges, applyLayout]);
 
   React.useEffect(() => {
     if (user?.company_id) {
       loadOrganizationData();
     }
-  }, [loadOrganizationData, user?.company_id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.company_id]);
+
+  const handleDeptFilterChange = (nextFilter: string) => {
+    setDeptFilter(nextFilter);
+    if (snapshot) applyLayout(snapshot, nextFilter);
+  };
+
+  const handleResetLayout = () => {
+    if (snapshot) applyLayout(snapshot, deptFilter);
+  };
+
+  const reviewMembers = useMemo(() => {
+    if (!snapshot || deptFilter === 'all') return [];
+    return snapshot.departments[deptFilter] || [];
+  }, [snapshot, deptFilter]);
 
   const stats = useMemo(() => {
-    const totalEmployees = nodes.filter((node) => node.type === 'person').length;
-    return { totalEmployees, totalDepartments: departmentCount };
-  }, [nodes, departmentCount]);
+    const visiblePeople = nodes.filter((node) => node.type === 'person').length;
+    return {
+      totalEmployees: snapshot?.activeUsers.length ?? visiblePeople,
+      totalDepartments: departmentCount,
+      visibleEmployees: visiblePeople,
+    };
+  }, [nodes, departmentCount, snapshot]);
 
   return (
     <Box sx={{ ...mvsPageRootSx, height: 'calc(100vh - 200px)' }}>
       <MvsPageHeader
         title="조직도 관리"
-        description="사용자 관리에 등록된 직원·직책 정보를 기준으로 조직 구조를 표시합니다."
+        description="연결선은 수직·직교만 사용합니다. 노드는 드래그로 위치를 옮길 수 있고, 부서별로 검토할 수 있습니다."
         actions={
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={loadOrganizationData}
-            sx={{ borderRadius: 2 }}
-            disabled={loading}
-          >
-            새로고침
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              onClick={handleResetLayout}
+              sx={{ borderRadius: 2 }}
+              disabled={loading || !snapshot}
+            >
+              위치 초기화
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={loadOrganizationData}
+              sx={{ borderRadius: 2 }}
+              disabled={loading}
+            >
+              새로고침
+            </Button>
+          </Box>
         }
       />
 
@@ -445,7 +705,7 @@ const OrganizationChart: React.FC = () => {
           display: 'grid',
           gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
           gap: 2,
-          mb: 3,
+          mb: 2,
         }}
       >
         <Card>
@@ -470,13 +730,64 @@ const OrganizationChart: React.FC = () => {
         </Card>
       </Box>
 
+      <Paper variant="outlined" sx={{ p: 1.5, mb: 2, borderRadius: 1 }}>
+        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
+          부서별 검토
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: deptFilter === 'all' ? 0 : 1.5 }}>
+          <Chip
+            label="전체"
+            color={deptFilter === 'all' ? 'primary' : 'default'}
+            variant={deptFilter === 'all' ? 'filled' : 'outlined'}
+            onClick={() => handleDeptFilterChange('all')}
+            size="small"
+            sx={{ borderRadius: '4px' }}
+          />
+          {(snapshot?.deptNames || []).map((name) => (
+            <Chip
+              key={name}
+              label={`${name} (${(snapshot?.departments[name] || []).length})`}
+              color={deptFilter === name ? 'primary' : 'default'}
+              variant={deptFilter === name ? 'filled' : 'outlined'}
+              onClick={() => handleDeptFilterChange(name)}
+              size="small"
+              sx={{ borderRadius: '4px' }}
+            />
+          ))}
+        </Box>
+        {deptFilter !== 'all' && (
+          <Box sx={{ borderTop: '1px solid', borderColor: 'divider', pt: 1.5 }}>
+            <Typography variant="body2" sx={{ mb: 1, fontWeight: 600 }}>
+              {deptFilter} · 직원 {reviewMembers.length}명
+            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+              {reviewMembers.length === 0 ? (
+                <Typography variant="caption" color="text.secondary">
+                  이 부서에 표시할 직원이 없습니다. (대표이사·부사장은 상단 고정)
+                </Typography>
+              ) : (
+                reviewMembers.map((member: any) => (
+                  <Typography key={member.id} variant="body2" color="text.secondary" noWrap>
+                    {member.username}
+                    {member.position ? ` · ${member.position}` : ''}
+                    {member.email ? ` · ${member.email}` : ''}
+                  </Typography>
+                ))
+              )}
+            </Box>
+          </Box>
+        )}
+      </Paper>
+
       <Paper
         sx={{
-          height: 'calc(100vh - 400px)',
+          height: 'calc(100vh - 480px)',
           minHeight: 500,
-          borderRadius: 2,
+          borderRadius: 1,
           overflow: 'hidden',
           position: 'relative',
+          border: '1px solid',
+          borderColor: 'divider',
         }}
       >
         {loading ? (
@@ -515,24 +826,29 @@ const OrganizationChart: React.FC = () => {
           </Box>
         ) : (
           <ReactFlow
-            key={`org-${nodes.length}-${edges.length}`}
+            key={`org-${layoutNonce}`}
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
             nodesConnectable={false}
             elementsSelectable
             nodesDraggable
             panOnDrag
+            preventScrolling={false}
             defaultEdgeOptions={{
-              type: 'smoothstep',
-              style: { stroke: '#94a3b8', strokeWidth: 2 },
-              markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#94a3b8' },
+              type: 'org',
+              style: orgEdgeStyle,
+              markerEnd: orgEdgeMarker,
             }}
             fitView
-            fitViewOptions={{ padding: 0.2 }}
+            fitViewOptions={{ padding: 0.25, minZoom: 0.35, maxZoom: 1.25 }}
+            minZoom={0.25}
+            maxZoom={1.5}
             attributionPosition="bottom-left"
+            proOptions={{ hideAttribution: true }}
           >
             <Controls />
             <MiniMap
@@ -540,6 +856,8 @@ const OrganizationChart: React.FC = () => {
                 switch (node.type) {
                   case 'company':
                     return '#22c55e';
+                  case 'department':
+                    return '#3b82f6';
                   case 'person':
                     return '#0d8aff';
                   default:

@@ -598,6 +598,7 @@ const Header: React.FC<HeaderProps> = ({
             aria-haspopup="true"
             aria-expanded={Boolean(anchorEl) ? 'true' : undefined}
             onClick={handleMenu}
+            data-no-photo-preview
             sx={{
               display: 'flex',
               alignItems: 'center',

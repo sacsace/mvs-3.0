@@ -19,6 +19,8 @@ const AuthMedia: React.FC<AuthMediaProps> = ({ src, alt = '', sx, style, classNa
       component="img"
       src={resolved}
       alt={alt}
+      data-photo-preview={resolved}
+      data-photo-preview-alt={alt}
       sx={sx}
       style={style}
       className={className}

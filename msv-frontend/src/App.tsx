@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
+import PhotoPreviewProvider from './components/Common/PhotoPreviewProvider';
 import { useTranslation } from 'react-i18next';
 import { theme as defaultTheme } from './theme';
 import { createDynamicTheme } from './utils/themeUtils';
@@ -170,6 +171,7 @@ function App() {
   return (
     <ThemeProvider theme={currentTheme}>
       <CssBaseline />
+      <PhotoPreviewProvider>
       <ErrorBoundary>
         <ErrorDialog />
         <NotificationSnackbar />
@@ -379,6 +381,7 @@ function App() {
         </Routes>
         </Router>
       </ErrorBoundary>
+      </PhotoPreviewProvider>
     </ThemeProvider>
   );
 }
