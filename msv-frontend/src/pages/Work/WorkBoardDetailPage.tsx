@@ -76,6 +76,8 @@ type BoardList = {
   title: string;
   description?: string | null;
   position: number;
+  assignee_user_id?: number | null;
+  assignee?: { id: number; username: string; userid?: string; avatar_url?: string | null } | null;
   cards?: BoardCard[];
 };
 
@@ -493,6 +495,23 @@ const applyOptimisticListMove = (board: any, activeListId: number, targetIndex: 
   return { ...board, lists: next };
 };
 
+/** 대분류에 담당자가 있으면 카드 업무 담당을 그 담당자로 맞춤 */
+const resolveListAssigneeForCard = (
+  list: BoardList | undefined | null
+): BoardCard['assignee'] | undefined => {
+  if (!list) return undefined;
+  const aid = list.assignee_user_id != null ? Number(list.assignee_user_id) : null;
+  if (aid == null || !Number.isFinite(aid) || aid <= 0) return undefined;
+  if (list.assignee && Number(list.assignee.id) === aid) {
+    return {
+      id: aid,
+      username: list.assignee.username || '',
+      avatar_url: list.assignee.avatar_url
+    };
+  }
+  return { id: aid, username: list.assignee?.username || '' };
+};
+
 /** 서버 moveCard와 동일하게 카드만 미리 옮김 — 성공 시 전체 리로드 없이 자연스러운 UX */
 const applyOptimisticCardMove = (
   board: any,
@@ -507,11 +526,13 @@ const applyOptimisticCardMove = (
   }));
 
   let moved: BoardCard | null = null;
+  let sourceListId: number | null = null;
   for (const l of lists) {
     const row = l.cards ?? [];
     const i = row.findIndex((c: BoardCard) => c.id === activeCardId);
     if (i >= 0) {
       moved = row[i];
+      sourceListId = l.id;
       row.splice(i, 1);
       l.cards = row;
       break;
@@ -522,12 +543,70 @@ const applyOptimisticCardMove = (
   const target = lists.find((l: BoardList) => l.id === targetListId);
   if (!target) return board;
 
+  let cardToInsert = moved;
+  if (sourceListId !== targetListId) {
+    const nextAssignee = resolveListAssigneeForCard(target);
+    if (nextAssignee) {
+      const prevAssigneeId = moved.assignee?.id != null ? Number(moved.assignee.id) : null;
+      const nextRefs = new Set(
+        (moved.reference_user_ids || [])
+          .map((id) => Number(id))
+          .filter((id) => Number.isInteger(id) && id > 0)
+      );
+      if (prevAssigneeId != null && prevAssigneeId !== nextAssignee.id) {
+        nextRefs.add(prevAssigneeId);
+      }
+      nextRefs.delete(nextAssignee.id);
+      cardToInsert = {
+        ...moved,
+        assignee: nextAssignee,
+        reference_user_ids: Array.from(nextRefs)
+      };
+    }
+  }
+
   const filtered = (target.cards ?? []).filter((c: BoardCard) => c.id !== activeCardId);
   const insertAt = Math.min(Math.max(0, targetIndex), filtered.length);
-  filtered.splice(insertAt, 0, moved);
+  filtered.splice(insertAt, 0, cardToInsert);
   target.cards = filtered;
 
   return { ...board, lists };
+};
+
+const applyCardMoveMetaOnBoard = (
+  board: any,
+  cardId: number,
+  meta: {
+    assignee?: { id: number; username?: string; avatar_url?: string | null } | null;
+    reference_user_ids?: number[];
+  }
+): any => {
+  if (!board?.lists) return board;
+  return {
+    ...board,
+    lists: (board.lists as BoardList[]).map((list) => ({
+      ...list,
+      cards: (list.cards || []).map((c) => {
+        if (c.id !== cardId) return c;
+        const next: BoardCard = { ...c };
+        if (meta.assignee !== undefined) {
+          next.assignee = meta.assignee
+            ? {
+                id: Number(meta.assignee.id),
+                username: meta.assignee.username || c.assignee?.username || '',
+                avatar_url: meta.assignee.avatar_url ?? c.assignee?.avatar_url
+              }
+            : undefined;
+        }
+        if (meta.reference_user_ids !== undefined) {
+          next.reference_user_ids = meta.reference_user_ids
+            .map((id) => Number(id))
+            .filter((id) => Number.isInteger(id) && id > 0);
+        }
+        return next;
+      })
+    }))
+  };
 };
 
 /** 드롭 시 위치가 실제로 바뀌는지 판별 (불필요한 moveCard 방지) */
@@ -873,6 +952,7 @@ const ListColumn = memo(function ListColumn({
   composerDesc,
   onListTitleDraftChange,
   onStartEditListTitle,
+  onOpenListSettings,
   onSaveListTitle,
   onDeleteList,
   onComposerTitleChange,
@@ -900,6 +980,7 @@ const ListColumn = memo(function ListColumn({
   composerDesc: string;
   onListTitleDraftChange: (v: string) => void;
   onStartEditListTitle: (listId: number) => void;
+  onOpenListSettings: (listId: number) => void;
   onSaveListTitle: () => void;
   onDeleteList: (listId: number, listTitle: string) => void;
   onComposerTitleChange: (v: string) => void;
@@ -1078,6 +1159,17 @@ const ListColumn = memo(function ListColumn({
                   {txt('제목 수정', 'Edit title')}
                 </MenuItem>
               ) : null}
+              {allowListTitleEdit ? (
+                <MenuItem
+                  onClick={() => {
+                    setListMenuAnchor(null);
+                    onOpenListSettings(list.id);
+                  }}
+                >
+                  <PersonAddIcon fontSize="small" sx={{ mr: 1 }} />
+                  {txt('대분류 설정', 'List settings')}
+                </MenuItem>
+              ) : null}
               {allowListDelete ? (
                 <MenuItem
                   onClick={() => {
@@ -1094,6 +1186,23 @@ const ListColumn = memo(function ListColumn({
           </>
         ) : null}
       </Box>
+      {!listTitleEditing && (list.assignee?.username || list.assignee_user_id) ? (
+        <Typography
+          sx={{
+            px: 1,
+            pb: 0.75,
+            fontSize: '0.75rem',
+            color: '#6B778C',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          title={list.assignee?.username || String(list.assignee_user_id)}
+        >
+          {txt('대분류 담당', 'List owner')}:{' '}
+          {list.assignee?.username || `${txt('사용자', 'User')} ${list.assignee_user_id}`}
+        </Typography>
+      ) : null}
       <Box
         sx={{
           overflow: 'visible',
@@ -1234,8 +1343,14 @@ const WorkBoardDetailPage: React.FC = () => {
   const [listSaving, setListSaving] = useState(false);
   const [newListTitle, setNewListTitle] = useState('');
   const [newListDescription, setNewListDescription] = useState('');
+  const [newListAssigneeUserId, setNewListAssigneeUserId] = useState<number | null>(null);
   const [creatingList, setCreatingList] = useState(false);
   const [addListOpen, setAddListOpen] = useState(false);
+  const [listSettingsOpen, setListSettingsOpen] = useState(false);
+  const [listSettingsId, setListSettingsId] = useState<number | null>(null);
+  const [listSettingsDescription, setListSettingsDescription] = useState('');
+  const [listSettingsAssigneeUserId, setListSettingsAssigneeUserId] = useState<number | null>(null);
+  const [listSettingsSaving, setListSettingsSaving] = useState(false);
   const [completedTasksOpen, setCompletedTasksOpen] = useState(false);
   const [completedTaskSearch, setCompletedTaskSearch] = useState('');
   const [completedTaskPage, setCompletedTaskPage] = useState(1);
@@ -1575,6 +1690,15 @@ const WorkBoardDetailPage: React.FC = () => {
       if (!res.success) {
         setBoard(prevBoard);
         showErrorPopup(res.message || '이동 실패', '작업 보드');
+        return;
+      }
+      if (res.data?.assignee || res.data?.reference_user_ids) {
+        setBoard((p: any) =>
+          applyCardMoveMetaOnBoard(p, activeCardId, {
+            assignee: res.data?.assignee,
+            reference_user_ids: res.data?.reference_user_ids
+          })
+        );
       }
     } catch (e: any) {
       setBoard(prevBoard);
@@ -1593,6 +1717,73 @@ const WorkBoardDetailPage: React.FC = () => {
     },
     [board?.lists, menuCanEdit]
   );
+
+  const openListSettingsById = useCallback(
+    (listId: number) => {
+      if (!menuCanEdit) return;
+      const list = (board?.lists || []).find((l: BoardList) => l.id === listId);
+      if (!list) return;
+      setListSettingsId(list.id);
+      setListSettingsDescription(list.description || '');
+      setListSettingsAssigneeUserId(
+        list.assignee_user_id != null
+          ? Number(list.assignee_user_id)
+          : list.assignee?.id != null
+            ? Number(list.assignee.id)
+            : null
+      );
+      setListSettingsOpen(true);
+    },
+    [board?.lists, menuCanEdit]
+  );
+
+  const saveListSettings = useCallback(async () => {
+    if (!listSettingsId) return;
+    if (!menuCanEdit) {
+      showErrorPopup(
+        txt('대분류를 수정할 권한이 없습니다.', 'You do not have permission to edit lists.'),
+        txt('업무 보드', 'Work board')
+      );
+      return;
+    }
+    setListSettingsSaving(true);
+    try {
+      const res = await workBoardService.updateList(boardId, listSettingsId, {
+        description: listSettingsDescription.trim() || null,
+        assignee_user_id: listSettingsAssigneeUserId
+      });
+      if (!res.success) {
+        showErrorPopup(res.message || txt('대분류 설정 저장 실패', 'Failed to save list settings.'), txt('업무 보드', 'Work board'));
+        return;
+      }
+      const cascadedCount = Number(res.meta?.cascaded_card_count || 0);
+      setListSettingsOpen(false);
+      setListSettingsId(null);
+      await loadBoard();
+      if (cascadedCount > 0) {
+        showSuccessToast(
+          txt(
+            `대분류 담당자가 변경되어 하위 카드 ${cascadedCount}건의 담당자를 갱신했습니다.`,
+            `List owner updated; assignee refreshed on ${cascadedCount} card(s).`
+          )
+        );
+      } else {
+        showSuccessToast(txt('대분류 설정이 저장되었습니다.', 'List settings saved.'));
+      }
+    } catch (error: any) {
+      showErrorPopup(error, txt('업무 보드', 'Work board'));
+    } finally {
+      setListSettingsSaving(false);
+    }
+  }, [
+    boardId,
+    listSettingsAssigneeUserId,
+    listSettingsDescription,
+    listSettingsId,
+    loadBoard,
+    menuCanEdit,
+    txt
+  ]);
 
   const saveListTitle = useCallback(async () => {
     if (!editingListId) return;
@@ -1686,6 +1877,7 @@ const WorkBoardDetailPage: React.FC = () => {
       const res = await workBoardService.createList(boardId, {
         title: newListTitle.trim(),
         description: newListDescription.trim() || null,
+        assignee_user_id: newListAssigneeUserId
       });
       if (!res.success) {
         showErrorPopup(res.message || '대분류 추가 실패', '업무 보드');
@@ -1693,6 +1885,7 @@ const WorkBoardDetailPage: React.FC = () => {
       }
       setNewListTitle('');
       setNewListDescription('');
+      setNewListAssigneeUserId(null);
       setAddListOpen(false);
       await loadBoard();
     } catch (error: any) {
@@ -2554,6 +2747,7 @@ const WorkBoardDetailPage: React.FC = () => {
             onClick={() => {
               setNewListTitle('');
               setNewListDescription('');
+              setNewListAssigneeUserId(null);
               setAddListOpen(true);
             }}
             sx={{
@@ -2922,6 +3116,7 @@ const WorkBoardDetailPage: React.FC = () => {
                 composerDesc={composerDesc}
                 onListTitleDraftChange={setEditingListTitle}
                 onStartEditListTitle={startEditListTitleById}
+                onOpenListSettings={openListSettingsById}
                 onSaveListTitle={saveListTitle}
                 onDeleteList={deleteList}
                 onComposerTitleChange={setComposerTitle}
@@ -3259,11 +3454,34 @@ const WorkBoardDetailPage: React.FC = () => {
               variant="outlined"
               value={cardDetail?.listId || ''}
               disabled={!menuCanEdit}
-              onChange={(e) =>
-                setCardDetail((prev) =>
-                  prev ? { ...prev, listId: Number(e.target.value) } : prev
-                )
-              }
+              onChange={(e) => {
+                const nextListId = Number(e.target.value);
+                const targetList = lists.find((l) => l.id === nextListId);
+                const listAssignee = resolveListAssigneeForCard(targetList);
+                setCardDetail((prev) => {
+                  if (!prev) return prev;
+                  if (!listAssignee || prev.originalListId === nextListId) {
+                    return { ...prev, listId: nextListId };
+                  }
+                  const prevAssigneeId =
+                    prev.assigneeUserId != null ? Number(prev.assigneeUserId) : null;
+                  const nextRefs = new Set(
+                    (prev.referenceUserIds || [])
+                      .map((id) => Number(id))
+                      .filter((id) => Number.isInteger(id) && id > 0)
+                  );
+                  if (prevAssigneeId != null && prevAssigneeId !== listAssignee.id) {
+                    nextRefs.add(prevAssigneeId);
+                  }
+                  nextRefs.delete(listAssignee.id);
+                  return {
+                    ...prev,
+                    listId: nextListId,
+                    assigneeUserId: listAssignee.id,
+                    referenceUserIds: Array.from(nextRefs)
+                  };
+                });
+              }}
               sx={cardDetailOutlinedWhiteSx}
             >
               {lists.map((list) => (
@@ -3827,6 +4045,7 @@ const WorkBoardDetailPage: React.FC = () => {
             setAddListOpen(false);
             setNewListTitle('');
             setNewListDescription('');
+            setNewListAssigneeUserId(null);
           }
         }}
         maxWidth="xs"
@@ -3835,7 +4054,10 @@ const WorkBoardDetailPage: React.FC = () => {
         <DialogTitle>{txt('대분류 추가', 'Add List')}</DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            {txt('새 열(대분류) 이름과 설명을 입력하세요.', 'Enter a name and optional description for the new list.')}
+            {txt(
+              '새 열(대분류) 이름·설명·담당자를 입력하세요. 담당자는 선택 사항입니다.',
+              'Enter a name, optional description, and optional list owner for the new list.'
+            )}
           </Typography>
           <TextField
             autoFocus
@@ -3860,8 +4082,41 @@ const WorkBoardDetailPage: React.FC = () => {
             value={newListDescription}
             onChange={(e) => setNewListDescription(e.target.value)}
             placeholder={txt('설명 (선택)', 'Description (optional)')}
-            sx={{ '& .MuiOutlinedInput-root': { borderRadius: KANBAN_CONTROL_RADIUS } }}
+            sx={{ mb: 1.25, '& .MuiOutlinedInput-root': { borderRadius: KANBAN_CONTROL_RADIUS } }}
           />
+          <TextField
+            select
+            fullWidth
+            hiddenLabel
+            size="small"
+            value={newListAssigneeUserId ?? ''}
+            onChange={(e) =>
+              setNewListAssigneeUserId(e.target.value === '' ? null : Number(e.target.value))
+            }
+            SelectProps={{
+              displayEmpty: true,
+              renderValue: (selected) => {
+                if (selected === '' || selected == null) {
+                  return txt('대분류 담당자 (선택)', 'List owner (optional)');
+                }
+                const m = members.find((mem: any) => mem.user_id === Number(selected));
+                return m?.user?.username || `${txt('사용자', 'User')} ${selected}`;
+              },
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': { borderRadius: KANBAN_CONTROL_RADIUS },
+              '& .MuiSelect-select': {
+                color: newListAssigneeUserId == null ? 'text.secondary' : 'text.primary',
+              },
+            }}
+          >
+            <MenuItem value="">{txt('미지정', 'Unassigned')}</MenuItem>
+            {members.map((m: any) => (
+              <MenuItem key={m.user_id} value={m.user_id}>
+                {m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`}
+              </MenuItem>
+            ))}
+          </TextField>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button
@@ -3870,6 +4125,7 @@ const WorkBoardDetailPage: React.FC = () => {
                 setAddListOpen(false);
                 setNewListTitle('');
                 setNewListDescription('');
+                setNewListAssigneeUserId(null);
               }
             }}
             disabled={creatingList}
@@ -3882,6 +4138,90 @@ const WorkBoardDetailPage: React.FC = () => {
             disabled={creatingList || !newListTitle.trim()}
           >
             {creatingList ? <CircularProgress size={22} /> : txt('추가', 'Add')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={listSettingsOpen}
+        onClose={() => {
+          if (!listSettingsSaving) {
+            setListSettingsOpen(false);
+            setListSettingsId(null);
+          }
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{txt('대분류 설정', 'List settings')}</DialogTitle>
+        <DialogContent sx={{ pt: 1 }}>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+            {txt(
+              '설명과 대분류 담당자를 설정할 수 있습니다. 담당자는 비워둘 수 있습니다.',
+              'Set description and optional list owner. Owner can be left empty.'
+            )}
+          </Typography>
+          <TextField
+            fullWidth
+            hiddenLabel
+            size="small"
+            value={listSettingsDescription}
+            onChange={(e) => setListSettingsDescription(e.target.value)}
+            placeholder={txt('설명 (선택)', 'Description (optional)')}
+            sx={{ mb: 1.25, '& .MuiOutlinedInput-root': { borderRadius: KANBAN_CONTROL_RADIUS } }}
+          />
+          <TextField
+            select
+            fullWidth
+            hiddenLabel
+            size="small"
+            value={listSettingsAssigneeUserId ?? ''}
+            onChange={(e) =>
+              setListSettingsAssigneeUserId(e.target.value === '' ? null : Number(e.target.value))
+            }
+            SelectProps={{
+              displayEmpty: true,
+              renderValue: (selected) => {
+                if (selected === '' || selected == null) {
+                  return txt('대분류 담당자 (선택)', 'List owner (optional)');
+                }
+                const m = members.find((mem: any) => mem.user_id === Number(selected));
+                return m?.user?.username || `${txt('사용자', 'User')} ${selected}`;
+              },
+            }}
+            sx={{
+              '& .MuiOutlinedInput-root': { borderRadius: KANBAN_CONTROL_RADIUS },
+              '& .MuiSelect-select': {
+                color: listSettingsAssigneeUserId == null ? 'text.secondary' : 'text.primary',
+              },
+            }}
+          >
+            <MenuItem value="">{txt('미지정', 'Unassigned')}</MenuItem>
+            {members.map((m: any) => (
+              <MenuItem key={m.user_id} value={m.user_id}>
+                {m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`}
+              </MenuItem>
+            ))}
+          </TextField>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => {
+              if (!listSettingsSaving) {
+                setListSettingsOpen(false);
+                setListSettingsId(null);
+              }
+            }}
+            disabled={listSettingsSaving}
+          >
+            {txt('취소', 'Cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => void saveListSettings()}
+            disabled={listSettingsSaving}
+          >
+            {listSettingsSaving ? <CircularProgress size={22} /> : txt('저장', 'Save')}
           </Button>
         </DialogActions>
       </Dialog>

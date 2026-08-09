@@ -452,6 +452,8 @@ GlVoucherLine.belongsTo(GlAccount, { foreignKey: 'account_id', as: 'account' });
 
 (WorkBoardList as any).hasMany(WorkBoardCard, { foreignKey: 'list_id', as: 'cards' });
 (WorkBoardCard as any).belongsTo(WorkBoardList, { foreignKey: 'list_id', as: 'list' });
+(User as any).hasMany(WorkBoardList, { foreignKey: 'assignee_user_id', as: 'assignedBoardLists' });
+(WorkBoardList as any).belongsTo(User, { foreignKey: 'assignee_user_id', as: 'assignee' });
 (User as any).hasMany(WorkBoardCard, { foreignKey: 'assignee_user_id', as: 'assignedBoardCards' });
 (WorkBoardCard as any).belongsTo(User, { foreignKey: 'assignee_user_id', as: 'assignee' });
 (User as any).hasMany(WorkBoardCard, { foreignKey: 'created_by', as: 'createdBoardCards' });

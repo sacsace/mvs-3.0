@@ -60,11 +60,18 @@ export const workBoardService = {
     const response = await api.delete(`/work/boards/${boardId}`);
     return response.data;
   },
-  createList: async (boardId: number, data: { title: string; description?: string | null }) => {
+  createList: async (
+    boardId: number,
+    data: { title: string; description?: string | null; assignee_user_id?: number | null }
+  ) => {
     const response = await api.post(`/work/boards/${boardId}/lists`, data);
     return response.data;
   },
-  updateList: async (boardId: number, listId: number, data: { title?: string; description?: string | null }) => {
+  updateList: async (
+    boardId: number,
+    listId: number,
+    data: { title?: string; description?: string | null; assignee_user_id?: number | null }
+  ) => {
     const response = await api.put(`/work/boards/${boardId}/lists/${listId}`, data);
     return response.data;
   },

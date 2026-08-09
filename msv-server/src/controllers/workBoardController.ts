@@ -77,6 +77,20 @@ const ensureWorkBoardListSchema = async () => {
       defaultValue: null
     });
   }
+  if (!table.assignee_user_id) {
+    try {
+      await queryInterface.addColumn('work_board_lists', 'assignee_user_id', {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        defaultValue: null,
+        references: { model: 'users', key: 'id' },
+        onUpdate: 'CASCADE',
+        onDelete: 'SET NULL'
+      });
+    } catch (error) {
+      if (!isDuplicateColumnError(error)) throw error;
+    }
+  }
   workBoardListSchemaEnsured = true;
 };
 
@@ -170,6 +184,12 @@ const buildBoardDetailInclude = (light: boolean): any[] => [
     model: WorkBoardList,
     as: 'lists',
     include: [
+      {
+        model: User,
+        as: 'assignee',
+        attributes: ['id', 'username', 'userid', 'email', 'avatar_url'],
+        required: false
+      },
       {
         model: WorkBoardCard,
         as: 'cards',
@@ -293,6 +313,32 @@ const sendCardAssignmentNotification = (
     },
     socketService
   );
+};
+
+/** 담당 변경 시 기존 담당을 참조에 넣고, 기존 참조는 유지. 새 담당은 참조에서 제거. */
+const buildCardAssigneeTransfer = (
+  currentAssigneeId: number | null,
+  currentReferenceIds: unknown,
+  nextAssigneeId: number
+): { assignee_user_id: number; reference_user_ids: number[]; demotedAssigneeId: number | null; assigneeChanged: boolean } => {
+  const prevRefs = Array.isArray(currentReferenceIds)
+    ? (currentReferenceIds as unknown[])
+        .map((id) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    : [];
+  const nextRefs = new Set<number>(prevRefs);
+  let demotedAssigneeId: number | null = null;
+  if (currentAssigneeId != null && currentAssigneeId !== nextAssigneeId) {
+    demotedAssigneeId = currentAssigneeId;
+    nextRefs.add(currentAssigneeId);
+  }
+  nextRefs.delete(nextAssigneeId);
+  return {
+    assignee_user_id: nextAssigneeId,
+    reference_user_ids: Array.from(nextRefs),
+    demotedAssigneeId,
+    assigneeChanged: currentAssigneeId !== nextAssigneeId
+  };
 };
 
 const sendCardReferenceNotification = (
@@ -666,9 +712,22 @@ export const createWorkBoardList = async (req: RequestWithUser, res: Response) =
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }
 
-    const { title, description } = req.body;
+    const { title, description, assignee_user_id } = req.body;
     if (!title || String(title).trim().length === 0) {
       return res.status(400).json({ success: false, message: '목록 이름이 필요합니다.' });
+    }
+
+    let resolvedAssigneeId: number | null = null;
+    if (assignee_user_id !== undefined && assignee_user_id !== null && assignee_user_id !== '') {
+      const aid = Number(assignee_user_id);
+      if (!Number.isFinite(aid) || aid <= 0) {
+        return res.status(400).json({ success: false, message: '대분류 담당자가 올바르지 않습니다.' });
+      }
+      const assignee = await User.findByPk(aid);
+      if (!assignee || assignee.company_id !== board.company_id || assignee.tenant_id !== board.tenant_id) {
+        return res.status(400).json({ success: false, message: '같은 회사 사용자만 대분류 담당자로 지정할 수 있습니다.' });
+      }
+      resolvedAssigneeId = aid;
     }
 
     const max = await WorkBoardList.max('position', { where: { board_id: board.id } });
@@ -682,10 +741,15 @@ export const createWorkBoardList = async (req: RequestWithUser, res: Response) =
       board_id: board.id,
       title: String(title).trim().slice(0, 120),
       description: normalizedDescription,
+      assignee_user_id: resolvedAssigneeId,
       position
     });
 
-    res.status(201).json({ success: true, data: list });
+    const withAssignee = await WorkBoardList.findByPk(list.id, {
+      include: [{ model: User, as: 'assignee', attributes: ['id', 'username', 'userid', 'email', 'avatar_url'] }]
+    });
+
+    res.status(201).json({ success: true, data: withAssignee || list });
   } catch (error: any) {
     console.error('createWorkBoardList:', error);
     res.status(500).json({ success: false, message: '목록 생성에 실패했습니다.' });
@@ -708,7 +772,10 @@ export const updateWorkBoardList = async (req: RequestWithUser, res: Response) =
       return res.status(404).json({ success: false, message: '목록을 찾을 수 없습니다.' });
     }
 
-    const { title, description } = req.body;
+    const previousListAssigneeId =
+      (list as any).assignee_user_id != null ? Number((list as any).assignee_user_id) : null;
+
+    const { title, description, assignee_user_id } = req.body;
     if (title !== undefined) {
       const normalized = String(title).trim();
       if (normalized.length === 0) {
@@ -722,11 +789,125 @@ export const updateWorkBoardList = async (req: RequestWithUser, res: Response) =
           ? null
           : String(description).trim().slice(0, 500);
     }
-    if (title !== undefined || description !== undefined) {
-      await list.save();
+
+    let nextListAssigneeId: number | null | undefined = undefined;
+    if (assignee_user_id !== undefined) {
+      if (assignee_user_id === null || assignee_user_id === '') {
+        nextListAssigneeId = null;
+        list.assignee_user_id = null;
+      } else {
+        const aid = Number(assignee_user_id);
+        if (!Number.isFinite(aid) || aid <= 0) {
+          return res.status(400).json({ success: false, message: '대분류 담당자가 올바르지 않습니다.' });
+        }
+        const assignee = await User.findByPk(aid);
+        if (!assignee || assignee.company_id !== board.company_id || assignee.tenant_id !== board.tenant_id) {
+          return res.status(400).json({ success: false, message: '같은 회사 사용자만 대분류 담당자로 지정할 수 있습니다.' });
+        }
+        nextListAssigneeId = aid;
+        list.assignee_user_id = aid;
+      }
     }
 
-    return res.json({ success: true, data: list });
+    const shouldCascadeCardAssignees =
+      nextListAssigneeId !== undefined &&
+      nextListAssigneeId != null &&
+      nextListAssigneeId !== previousListAssigneeId;
+
+    const cascadedAssignmentCardIds: number[] = [];
+    const demotedReferenceByUser = new Map<number, { cardId: number; cardTitle: string }>();
+
+    await sequelize.transaction(async (transaction) => {
+      if (title !== undefined || description !== undefined || assignee_user_id !== undefined) {
+        await list.save({ transaction });
+      }
+
+      if (!shouldCascadeCardAssignees || nextListAssigneeId == null) {
+        return;
+      }
+
+      const cards = await WorkBoardCard.findAll({
+        where: { list_id: list.id },
+        transaction
+      });
+
+      for (const card of cards) {
+        const currentAssigneeId =
+          (card as any).assignee_user_id != null ? Number((card as any).assignee_user_id) : null;
+        if (currentAssigneeId === nextListAssigneeId) {
+          continue;
+        }
+
+        const transfer = buildCardAssigneeTransfer(
+          currentAssigneeId,
+          (card as any).reference_user_ids,
+          nextListAssigneeId
+        );
+        await card.update(
+          {
+            assignee_user_id: transfer.assignee_user_id,
+            reference_user_ids: transfer.reference_user_ids
+          },
+          { transaction }
+        );
+
+        if (transfer.assigneeChanged) {
+          cascadedAssignmentCardIds.push(card.id);
+        }
+        if (transfer.demotedAssigneeId != null && !demotedReferenceByUser.has(transfer.demotedAssigneeId)) {
+          demotedReferenceByUser.set(transfer.demotedAssigneeId, {
+            cardId: card.id,
+            cardTitle: card.title
+          });
+        }
+      }
+    });
+
+    const actorName = user.username || user.userid || '사용자';
+    if (
+      shouldCascadeCardAssignees &&
+      nextListAssigneeId != null &&
+      cascadedAssignmentCardIds.length > 0 &&
+      Number(nextListAssigneeId) !== Number(user.id)
+    ) {
+      const sampleCardId = cascadedAssignmentCardIds[0];
+      const sampleCard = await WorkBoardCard.findByPk(sampleCardId, { attributes: ['id', 'title'] });
+      sendCardAssignmentNotification(req, {
+        targetUserId: nextListAssigneeId,
+        boardId: board.id,
+        boardName: board.name,
+        cardId: sampleCardId,
+        cardTitle:
+          cascadedAssignmentCardIds.length > 1
+            ? `${sampleCard?.title || '카드'} 외 ${cascadedAssignmentCardIds.length - 1}건`
+            : sampleCard?.title || '카드',
+        actorName
+      });
+    }
+    for (const [demotedUserId, sample] of demotedReferenceByUser.entries()) {
+      if (Number(demotedUserId) === Number(user.id)) continue;
+      if (nextListAssigneeId != null && Number(demotedUserId) === Number(nextListAssigneeId)) continue;
+      sendCardReferenceNotification(req, {
+        targetUserId: demotedUserId,
+        boardId: board.id,
+        boardName: board.name,
+        cardId: sample.cardId,
+        cardTitle: sample.cardTitle,
+        actorName
+      });
+    }
+
+    const withAssignee = await WorkBoardList.findByPk(list.id, {
+      include: [{ model: User, as: 'assignee', attributes: ['id', 'username', 'userid', 'email', 'avatar_url'] }]
+    });
+
+    return res.json({
+      success: true,
+      data: withAssignee || list,
+      meta: shouldCascadeCardAssignees
+        ? { cascaded_card_count: cascadedAssignmentCardIds.length }
+        : undefined
+    });
   } catch (error: any) {
     console.error('updateWorkBoardList:', error);
     return res.status(500).json({ success: false, message: '목록 수정에 실패했습니다.' });
@@ -906,6 +1087,13 @@ export const createWorkBoardCard = async (req: RequestWithUser, res: Response) =
         return res.status(400).json({ success: false, message: '같은 회사 사용자만 담당자로 지정할 수 있습니다.' });
       }
     }
+    const listAssigneeId =
+      (list as any).assignee_user_id != null ? Number((list as any).assignee_user_id) : null;
+    const resolvedCardAssigneeId = assignee_user_id
+      ? Number(assignee_user_id)
+      : listAssigneeId != null && Number.isFinite(listAssigneeId)
+        ? listAssigneeId
+        : null;
     const colorParsed = normalizeCardColor(color);
     if (!colorParsed.valid) {
       return res.status(400).json({ success: false, message: '카드 색상은 #RRGGBB 형식이어야 합니다.' });
@@ -946,7 +1134,7 @@ export const createWorkBoardCard = async (req: RequestWithUser, res: Response) =
       title: String(title).trim().slice(0, 300),
       description: normalizeCardDescription(description),
       position,
-      assignee_user_id: assignee_user_id || null,
+      assignee_user_id: resolvedCardAssigneeId,
       reference_user_ids: parsedReferenceUserIds.value ?? [],
       due_date: due_date || null,
       color: colorParsed.value ?? null,
@@ -958,9 +1146,9 @@ export const createWorkBoardCard = async (req: RequestWithUser, res: Response) =
       include: [{ model: User, as: 'assignee', attributes: ['id', 'username', 'userid', 'email', 'avatar_url'] }]
     });
 
-    if (assignee_user_id && Number(assignee_user_id) !== Number(user.id)) {
+    if (resolvedCardAssigneeId && Number(resolvedCardAssigneeId) !== Number(user.id)) {
       sendCardAssignmentNotification(req, {
-        targetUserId: Number(assignee_user_id),
+        targetUserId: Number(resolvedCardAssigneeId),
         boardId: board.id,
         boardName: board.name,
         cardId: card.id,
@@ -975,7 +1163,7 @@ export const createWorkBoardCard = async (req: RequestWithUser, res: Response) =
     const actorNameForRef = user.username || user.userid || '사용자';
     for (const refUserId of createdReferenceIds) {
       if (Number(refUserId) === Number(user.id)) continue;
-      if (assignee_user_id && Number(refUserId) === Number(assignee_user_id)) continue;
+      if (resolvedCardAssigneeId && Number(refUserId) === Number(resolvedCardAssigneeId)) continue;
       sendCardReferenceNotification(req, {
         targetUserId: Number(refUserId),
         boardId: board.id,
@@ -1141,6 +1329,20 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
       return res.status(404).json({ success: false, message: '권한이 없습니다.' });
     }
 
+    let assignmentNotify: {
+      targetUserId: number;
+      cardId: number;
+      cardTitle: string;
+    } | null = null;
+    let referenceNotify: {
+      targetUserId: number;
+      cardId: number;
+      cardTitle: string;
+    } | null = null;
+    let movedCardAssignee: { id: number; username: string; userid?: string; email?: string; avatar_url?: string | null } | null =
+      null;
+    let movedCardReferenceUserIds: number[] | null = null;
+
     await sequelize.transaction(async (transaction) => {
       const card = await WorkBoardCard.findByPk(cardId, {
         include: [{ model: WorkBoardList, as: 'list' }],
@@ -1152,6 +1354,9 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
 
       const newList = await WorkBoardList.findOne({
         where: { id: targetListId, board_id: board!.id },
+        include: [
+          { model: User, as: 'assignee', attributes: ['id', 'username', 'userid', 'email', 'avatar_url'], required: false }
+        ],
         transaction
       });
       if (!newList) {
@@ -1219,6 +1424,47 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
       ) {
         patch.completed_at = null;
       }
+
+      // 대분류에 담당자가 있으면 카드 업무 담당자를 그 담당자로 맞추고, 기존 담당은 참조로 이동
+      const listAssigneeId =
+        (newList as any).assignee_user_id != null ? Number((newList as any).assignee_user_id) : null;
+      if (oldListId !== newList.id && listAssigneeId != null && Number.isFinite(listAssigneeId)) {
+        const transfer = buildCardAssigneeTransfer(
+          assigneeUserId,
+          (card as any).reference_user_ids,
+          listAssigneeId
+        );
+        patch.assignee_user_id = transfer.assignee_user_id;
+        patch.reference_user_ids = transfer.reference_user_ids;
+        movedCardReferenceUserIds = transfer.reference_user_ids;
+
+        const listAssignee = (newList as any).assignee;
+        movedCardAssignee = listAssignee
+          ? {
+              id: Number(listAssignee.id),
+              username: listAssignee.username,
+              userid: listAssignee.userid,
+              email: listAssignee.email,
+              avatar_url: listAssignee.avatar_url
+            }
+          : { id: listAssigneeId, username: '' };
+
+        if (transfer.assigneeChanged) {
+          assignmentNotify = {
+            targetUserId: listAssigneeId,
+            cardId: card.id,
+            cardTitle: card.title
+          };
+        }
+        if (transfer.demotedAssigneeId != null) {
+          referenceNotify = {
+            targetUserId: transfer.demotedAssigneeId,
+            cardId: card.id,
+            cardTitle: card.title
+          };
+        }
+      }
+
       await card.update(patch, { transaction });
 
       for (let i = 0; i < orderedIds.length; i++) {
@@ -1233,7 +1479,48 @@ export const moveWorkBoardCard = async (req: RequestWithUser, res: Response) => 
       }
     });
 
-    res.json({ success: true, message: '이동되었습니다.' });
+    const actorName = user.username || user.userid || '사용자';
+    if (
+      assignmentNotify &&
+      Number(assignmentNotify.targetUserId) !== Number(user.id)
+    ) {
+      sendCardAssignmentNotification(req, {
+        targetUserId: assignmentNotify.targetUserId,
+        boardId: board.id,
+        boardName: board.name,
+        cardId: assignmentNotify.cardId,
+        cardTitle: assignmentNotify.cardTitle,
+        actorName
+      });
+    }
+    if (
+      referenceNotify &&
+      Number(referenceNotify.targetUserId) !== Number(user.id) &&
+      (!assignmentNotify || Number(referenceNotify.targetUserId) !== Number(assignmentNotify.targetUserId))
+    ) {
+      sendCardReferenceNotification(req, {
+        targetUserId: referenceNotify.targetUserId,
+        boardId: board.id,
+        boardName: board.name,
+        cardId: referenceNotify.cardId,
+        cardTitle: referenceNotify.cardTitle,
+        actorName
+      });
+    }
+
+    res.json({
+      success: true,
+      message: '이동되었습니다.',
+      data:
+        movedCardAssignee || movedCardReferenceUserIds
+          ? {
+              ...(movedCardAssignee
+                ? { assignee_user_id: movedCardAssignee.id, assignee: movedCardAssignee }
+                : {}),
+              ...(movedCardReferenceUserIds ? { reference_user_ids: movedCardReferenceUserIds } : {})
+            }
+          : undefined
+    });
   } catch (error: any) {
     if (error?.message === 'NOT_FOUND') {
       return res.status(404).json({ success: false, message: '카드를 찾을 수 없습니다.' });
