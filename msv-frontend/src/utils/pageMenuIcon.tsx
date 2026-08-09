@@ -25,6 +25,7 @@ import {
   Settings,
   TrendingUp,
   ViewKanban,
+  AssignmentInd,
 } from '@mui/icons-material';
 import type { Menu } from '../services/menuService';
 
@@ -83,6 +84,7 @@ export function getPageIconByRoute(route: string): React.ReactElement | null {
   if (normalized.includes('/hr')) return <People />;
 
   if (normalized.includes('/work/projects')) return <ViewKanban />;
+  if (normalized.includes('/work/assignee-list')) return <AssignmentInd />;
   if (normalized.includes('/work/statistics')) return <Assessment />;
   if (normalized.includes('/work/approval')) return <Description />;
   if (normalized.includes('/work/room')) return <LocalShipping />;

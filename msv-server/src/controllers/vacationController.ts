@@ -750,6 +750,7 @@ export const getVacationPolicy = async (req: AuthRequest, res: Response) => {
     const defaultPolicy = {
       annualLeaveStartDays: 240,
       annualLeaveEarnDays: 20,
+      deductAbsenceFromLeave: true,
       availableTypes: [
         'annual',
         'sick',
@@ -763,7 +764,10 @@ export const getVacationPolicy = async (req: AuthRequest, res: Response) => {
       leaveTypeDays: { ...DEFAULT_LEAVE_TYPE_DAYS },
     };
 
-    const vacationPolicy = company.settings?.vacationPolicy || defaultPolicy;
+    const vacationPolicy = {
+      ...defaultPolicy,
+      ...(company.settings?.vacationPolicy || {}),
+    };
     
     if (!vacationPolicy.availableTypes) {
       vacationPolicy.availableTypes = defaultPolicy.availableTypes;
@@ -775,6 +779,9 @@ export const getVacationPolicy = async (req: AuthRequest, res: Response) => {
         ...DEFAULT_LEAVE_TYPE_DAYS,
         ...vacationPolicy.leaveTypeDays,
       };
+    }
+    if (vacationPolicy.deductAbsenceFromLeave === undefined) {
+      vacationPolicy.deductAbsenceFromLeave = true;
     }
 
     res.json({
@@ -813,9 +820,19 @@ export const updateVacationPolicy = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    const { annualLeaveStartDays, annualLeaveEarnDays, availableTypes, leaveTypeDays } = req.body;
+    const {
+      annualLeaveStartDays,
+      annualLeaveEarnDays,
+      availableTypes,
+      leaveTypeDays,
+      deductAbsenceFromLeave,
+    } = req.body;
 
-    if (annualLeaveStartDays === undefined && leaveTypeDays === undefined) {
+    if (
+      annualLeaveStartDays === undefined &&
+      leaveTypeDays === undefined &&
+      deductAbsenceFromLeave === undefined
+    ) {
       return res.status(400).json({
         success: false,
         message: '연차 시작일 설정 또는 휴가 일수 설정이 필요합니다.'
@@ -868,6 +885,10 @@ export const updateVacationPolicy = async (req: AuthRequest, res: Response) => {
           ...(currentPolicy.leaveTypeDays || {}),
           ...(leaveTypeDays || {}),
         },
+        deductAbsenceFromLeave:
+          deductAbsenceFromLeave !== undefined
+            ? Boolean(deductAbsenceFromLeave)
+            : currentPolicy.deductAbsenceFromLeave !== false,
       }
     };
 

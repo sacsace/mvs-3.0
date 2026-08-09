@@ -29,6 +29,7 @@ import {
   MenuBook,
   Hotel,
   UploadFile,
+  AssignmentInd,
 } from '@mui/icons-material';
 import type { Menu } from '../../services/menuService';
 import { isRemovedNavMenuRoute } from '../../utils/isRemovedNavMenuRoute';
@@ -252,6 +253,7 @@ const getIconByRoute = (route: string): React.ReactElement | null => {
   if (normalized.includes('/hr/employment-contracts')) return <Description />;
 
   if (normalized.includes('/work/projects')) return <ViewKanban />;
+  if (normalized.includes('/work/assignee-list')) return <AssignmentInd />;
   if (normalized.includes('/work/statistics')) return <Assessment />;
   if (normalized.includes('/work/approval')) return <Description />;
   if (normalized.includes('/hotel/room-reservation')) return <Hotel />;

@@ -139,7 +139,10 @@ interface LeaveBalanceRow {
   hireDate: string | null;
   leaveYearLabel: string | null;
   canUseAnnualLeave: boolean;
-  balances: Record<string, { quota: number; used: number; remaining: number }>;
+  balances: Record<
+    string,
+    { quota: number; used: number; remaining: number; vacationUsed?: number; absenceUsed?: number }
+  >;
 }
 
 const LEAVE_BALANCE_TYPE_KEYS: LeaveBalanceTypeKey[] = [
@@ -183,6 +186,7 @@ type VacationPolicyState = {
   annualLeaveEarnDays: number;
   availableTypes?: string[];
   leaveTypeDays?: Record<string, number>;
+  deductAbsenceFromLeave?: boolean;
 };
 
 const vacationTableBodyRowSx: SxProps<Theme> = (theme) => {
@@ -487,10 +491,43 @@ const VacationManagement: React.FC = () => {
         annualLeaveStartDays: startDays,
         annualLeaveEarnDays: vacationPolicy?.annualLeaveEarnDays || 20,
         availableTypes: vacationPolicy?.availableTypes || DEFAULT_AVAILABLE_TYPES,
-        leaveTypeDays: vacationPolicy?.leaveTypeDays || DEFAULT_LEAVE_TYPE_DAYS });
+        leaveTypeDays: vacationPolicy?.leaveTypeDays || DEFAULT_LEAVE_TYPE_DAYS,
+        deductAbsenceFromLeave: vacationPolicy?.deductAbsenceFromLeave !== false,
+      });
       if (response.success) {
         setSuccess('휴가 정책이 저장되었습니다.');
         setVacationPolicy(response.data);
+      } else {
+        setError(response.message || '휴가 정책 저장에 실패했습니다.');
+      }
+    } catch (error: any) {
+      setError(error.response?.data?.message || '휴가 정책 저장 중 오류가 발생했습니다.');
+    } finally {
+      setSavingPolicy(false);
+    }
+  };
+
+  const handleToggleAbsenceDeduction = async (checked: boolean) => {
+    if (!canEditPolicy) {
+      setError('관리자만 휴가 형태를 수정할 수 있습니다.');
+      return;
+    }
+    setSavingPolicy(true);
+    setError(null);
+    try {
+      const response = await vacationService.updateVacationPolicy({
+        annualLeaveStartDays: vacationPolicy?.annualLeaveStartDays || 240,
+        annualLeaveEarnDays: vacationPolicy?.annualLeaveEarnDays || 20,
+        availableTypes: vacationPolicy?.availableTypes || DEFAULT_AVAILABLE_TYPES,
+        leaveTypeDays: vacationPolicy?.leaveTypeDays || DEFAULT_LEAVE_TYPE_DAYS,
+        deductAbsenceFromLeave: checked,
+      });
+      if (response.success) {
+        setSuccess('휴가 정책이 저장되었습니다.');
+        setVacationPolicy(response.data);
+        if (activeTab === leaveBalanceTab) {
+          void loadLeaveBalances();
+        }
       } else {
         setError(response.message || '휴가 정책 저장에 실패했습니다.');
       }
@@ -519,7 +556,9 @@ const VacationManagement: React.FC = () => {
         annualLeaveStartDays: vacationPolicy?.annualLeaveStartDays || 240,
         annualLeaveEarnDays: vacationPolicy?.annualLeaveEarnDays || 20,
         availableTypes: newTypes,
-        leaveTypeDays: vacationPolicy?.leaveTypeDays || DEFAULT_LEAVE_TYPE_DAYS });
+        leaveTypeDays: vacationPolicy?.leaveTypeDays || DEFAULT_LEAVE_TYPE_DAYS,
+        deductAbsenceFromLeave: vacationPolicy?.deductAbsenceFromLeave !== false,
+      });
       if (response.success) {
         setSuccess('휴가 정책이 저장되었습니다.');
         setVacationPolicy(response.data);
@@ -549,7 +588,10 @@ const VacationManagement: React.FC = () => {
         leaveTypeDays: {
           ...DEFAULT_LEAVE_TYPE_DAYS,
           ...(vacationPolicy?.leaveTypeDays || {}),
-          [vacationType]: days } });
+          [vacationType]: days,
+        },
+        deductAbsenceFromLeave: vacationPolicy?.deductAbsenceFromLeave !== false,
+      });
       if (response.success) {
         setSuccess('휴가 정책이 저장되었습니다.');
         setVacationPolicy(response.data);
@@ -1672,25 +1714,79 @@ const VacationManagement: React.FC = () => {
                               </Typography>
                             </TableCell>
                             {leaveBalanceTypes.map((key) => {
-                              const bal = row.balances?.[key] || { quota: 0, used: 0, remaining: 0 };
+                              const bal = row.balances?.[key] || {
+                                quota: 0,
+                                used: 0,
+                                remaining: 0,
+                                vacationUsed: 0,
+                                absenceUsed: 0,
+                              };
+                              const noHireDate = !row.hireDate;
                               const annualLocked = key === 'annual' && !row.canUseAnnualLeave;
+                              const showDash = noHireDate || annualLocked;
+                              const usedBreakdown =
+                                key === 'annual' && (bal.absenceUsed || 0) > 0
+                                  ? t('vacationManagement.usedDaysWithAbsence', {
+                                      vacation: bal.vacationUsed ?? bal.used,
+                                      absence: bal.absenceUsed ?? 0,
+                                      total: bal.used,
+                                    })
+                                  : t('vacationManagement.usedDays', { days: bal.used });
+                              const absenceDays = Number(bal.absenceUsed || 0);
                               return (
                                 <TableCell key={key} align="right">
                                   <Tooltip
-                                    title={`${t('vacationManagement.quotaDays')}: ${bal.quota} / ${t('vacationManagement.usedDays', { days: bal.used })}`}
+                                    title={
+                                      showDash
+                                        ? noHireDate
+                                          ? t('vacationManagement.hireDateRequired')
+                                          : t('vacationManagement.annualNotEligible')
+                                        : `${t('vacationManagement.quotaDays')}: ${bal.quota} · ${usedBreakdown} · ${t('vacationManagement.remainingDays')}: ${bal.remaining}`
+                                    }
                                   >
-                                    <Typography
-                                      variant="body2"
+                                    <Box
                                       sx={{
-                                        fontWeight: 600,
-                                        color: annualLocked
-                                          ? 'text.disabled'
-                                          : bal.remaining <= 0
-                                            ? 'text.secondary'
-                                            : 'text.primary' }}
+                                        display: 'inline-flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'flex-end',
+                                        lineHeight: 1.25,
+                                      }}
                                     >
-                                      {annualLocked ? '—' : bal.remaining}
-                                    </Typography>
+                                      <Typography
+                                        variant="body2"
+                                        sx={{
+                                          fontWeight: 700,
+                                          fontVariantNumeric: 'tabular-nums',
+                                          color: showDash
+                                            ? 'text.disabled'
+                                            : bal.remaining <= 0
+                                              ? 'text.secondary'
+                                              : 'text.primary',
+                                        }}
+                                      >
+                                        {showDash
+                                          ? '—'
+                                          : t('vacationManagement.remainingOfQuota', {
+                                              remaining: bal.remaining,
+                                              quota: bal.quota,
+                                            })}
+                                      </Typography>
+                                      {!showDash && key === 'annual' && absenceDays > 0 ? (
+                                        <Typography
+                                          variant="caption"
+                                          sx={{
+                                            mt: 0.15,
+                                            fontVariantNumeric: 'tabular-nums',
+                                            color: 'error.main',
+                                            fontWeight: 600,
+                                          }}
+                                        >
+                                          {t('vacationManagement.absenceDeductedShort', {
+                                            days: absenceDays,
+                                          })}
+                                        </Typography>
+                                      ) : null}
+                                    </Box>
                                   </Tooltip>
                                 </TableCell>
                               );
@@ -1798,8 +1894,21 @@ const VacationManagement: React.FC = () => {
                     <Typography variant="body2" color="text.secondary" paragraph>
                       • {t('vacationManagement.earnedLeaveDesc2')}
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" color="text.secondary" paragraph>
                       • {t('vacationManagement.earnedLeaveDesc3')}
+                    </Typography>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={vacationPolicy?.deductAbsenceFromLeave !== false}
+                          onChange={(e) => handleToggleAbsenceDeduction(e.target.checked)}
+                          disabled={savingPolicy || !canEditPolicy}
+                        />
+                      }
+                      label={t('vacationManagement.deductAbsenceFromLeave')}
+                    />
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ pl: 4 }}>
+                      {t('vacationManagement.absenceDeductionNote')}
                     </Typography>
                   </Box>
                 </CardContent>

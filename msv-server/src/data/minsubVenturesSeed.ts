@@ -64,10 +64,11 @@ const SUB_MENUS: Record<string, Array<{ name_ko: string; name_en: string; route:
   ],
   '/work': [
     { name_ko: '업무 관리', name_en: 'Projects', route: '/work/projects', icon: 'view_kanban', order: 1 },
-    { name_ko: '계약 관리', name_en: 'Contracts', route: '/customers/contracts', icon: 'description', order: 2 },
-    { name_ko: '전자결재', name_en: 'Approval', route: '/work/approval', icon: 'approval', order: 3 },
-    { name_ko: '업무 보고서', name_en: 'Reports', route: '/work/reports', icon: 'assessment', order: 4 },
-    { name_ko: '업무 통계', name_en: 'Statistics', route: '/work/statistics', icon: 'bar_chart', order: 5 },
+    { name_ko: '업무 담당 리스트', name_en: 'Work Assignment List', route: '/work/assignee-list', icon: 'assignment_ind', order: 2 },
+    { name_ko: '계약 관리', name_en: 'Contracts', route: '/customers/contracts', icon: 'description', order: 3 },
+    { name_ko: '전자결재', name_en: 'Approval', route: '/work/approval', icon: 'approval', order: 4 },
+    { name_ko: '업무 보고서', name_en: 'Reports', route: '/work/reports', icon: 'assessment', order: 5 },
+    { name_ko: '업무 통계', name_en: 'Statistics', route: '/work/statistics', icon: 'bar_chart', order: 6 },
   ],
   '/sales': [
     { name_ko: '견적서', name_en: 'Quotation', route: '/accounting/quotation', icon: 'request_quote', order: 1 },

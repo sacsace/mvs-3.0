@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  Avatar,
   Box,
   Button,
   Card,
@@ -14,6 +15,7 @@ import {
 import {
   LockOutlined as LockIcon,
   PersonOutline as PersonIcon,
+  PhotoCameraOutlined as PhotoCameraIcon,
   SaveOutlined as SaveIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +28,7 @@ import {
 } from '../../theme/mvsLayout';
 import { userService } from '../../services/api';
 import { useStore } from '../../store';
+import { getUploadUrl } from '../../utils/uploadUrl';
 
 type PersonalProfile = {
   userid: string;
@@ -41,6 +44,7 @@ type PersonalProfile = {
   address?: string | null;
   emergency_contact?: string | null;
   emergency_phone?: string | null;
+  avatar_url?: string | null;
 };
 
 const emptyProfile: PersonalProfile = {
@@ -57,6 +61,7 @@ const emptyProfile: PersonalProfile = {
   address: '',
   emergency_contact: '',
   emergency_phone: '',
+  avatar_url: null,
 };
 
 const PersonalSettings: React.FC = () => {
@@ -65,9 +70,12 @@ const PersonalSettings: React.FC = () => {
   const [profile, setProfile] = useState<PersonalProfile>(emptyProfile);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingPhoto, setSavingPhoto] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('');
   const [passwords, setPasswords] = useState({
     currentPassword: '',
     newPassword: '',
@@ -99,8 +107,62 @@ const PersonalSettings: React.FC = () => {
     };
   }, [t]);
 
+  useEffect(() => {
+    return () => {
+      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+    };
+  }, [avatarPreviewUrl]);
+
   const setField = (field: keyof PersonalProfile, value: string) => {
     setProfile((previous) => ({ ...previous, [field]: value }));
+  };
+
+  const handleAvatarSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      setError(t('personalSettings.errors.avatarInvalidType'));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError(t('personalSettings.errors.avatarTooLarge'));
+      return;
+    }
+    setError('');
+    setMessage('');
+    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+    setAvatarFile(file);
+    setAvatarPreviewUrl(URL.createObjectURL(file));
+  };
+
+  const handlePhotoSave = async () => {
+    if (!avatarFile) {
+      setError(t('personalSettings.errors.avatarRequired'));
+      return;
+    }
+    setSavingPhoto(true);
+    setError('');
+    setMessage('');
+    try {
+      const response = await userService.uploadMyAvatar(avatarFile);
+      if (!response?.success) throw new Error(response?.message);
+      const nextAvatarUrl = response.data?.avatar_url || null;
+      setProfile((previous) => ({ ...previous, avatar_url: nextAvatarUrl }));
+      updateUser({ avatar_url: nextAvatarUrl });
+      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
+      setAvatarFile(null);
+      setAvatarPreviewUrl('');
+      setMessage(response.message || t('personalSettings.success.photo'));
+    } catch (photoError: any) {
+      setError(
+        photoError?.response?.data?.message ||
+          photoError?.message ||
+          t('personalSettings.errors.photo')
+      );
+    } finally {
+      setSavingPhoto(false);
+    }
   };
 
   const handleProfileSave = async () => {
@@ -127,6 +189,7 @@ const PersonalSettings: React.FC = () => {
       updateUser({
         username: response.data.username,
         email: response.data.email,
+        avatar_url: response.data.avatar_url,
       });
       setMessage(response.message || t('personalSettings.success.profile'));
     } catch (saveError: any) {
@@ -184,6 +247,9 @@ const PersonalSettings: React.FC = () => {
     '& .MuiOutlinedInput-root': { borderRadius: '8px' },
   };
 
+  const displayAvatarSrc =
+    avatarPreviewUrl || (profile.avatar_url ? getUploadUrl(profile.avatar_url) : undefined);
+
   return (
     <Box sx={mvsPageRootSx}>
       <MvsPageHeader
@@ -221,6 +287,68 @@ const PersonalSettings: React.FC = () => {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
               {t('personalSettings.personalInfoHint')}
             </Typography>
+
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                p: 1.5,
+                mb: 2.5,
+                border: '1px dashed',
+                borderColor: 'divider',
+                borderRadius: '8px',
+                bgcolor: '#F8FAFC',
+              }}
+            >
+              <Avatar
+                src={displayAvatarSrc || undefined}
+                alt={profile.username}
+                sx={{ width: 80, height: 80, bgcolor: 'action.selected', flexShrink: 0 }}
+              >
+                {(profile.username || '?').charAt(0).toUpperCase()}
+              </Avatar>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, minWidth: 0 }}>
+                <Typography variant="subtitle2" fontWeight={700}>
+                  {t('personalSettings.profilePhoto')}
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                  <Button
+                    component="label"
+                    variant="outlined"
+                    size="small"
+                    startIcon={<PhotoCameraIcon />}
+                    sx={{ textTransform: 'none', borderRadius: '8px' }}
+                  >
+                    {avatarFile
+                      ? t('personalSettings.changePhoto')
+                      : t('personalSettings.selectPhoto')}
+                    <input
+                      hidden
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      onChange={handleAvatarSelect}
+                    />
+                  </Button>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    disableElevation
+                    disabled={!avatarFile || savingPhoto}
+                    startIcon={
+                      savingPhoto ? <CircularProgress size={14} color="inherit" /> : <SaveIcon />
+                    }
+                    onClick={handlePhotoSave}
+                    sx={{ ...mvsBodyPrimaryBtnSx, py: 0.5 }}
+                  >
+                    {t('personalSettings.savePhoto')}
+                  </Button>
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                  {avatarFile?.name || t('personalSettings.avatarHelper')}
+                </Typography>
+              </Box>
+            </Box>
 
             <Box
               sx={{

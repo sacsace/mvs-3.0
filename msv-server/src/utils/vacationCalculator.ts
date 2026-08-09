@@ -1,5 +1,6 @@
-import { User, Vacation, AcFinancialYear } from '../models';
+import { User, Vacation, AcFinancialYear, Attendance } from '../models';
 import { Op } from 'sequelize';
+import { isWeekendYmd } from './attendanceOtCalculation';
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 
@@ -45,7 +46,7 @@ function parseDateOnly(value: string): Date {
   return d;
 }
 
-/** 인도 회계연도 기본값: 4/1 ~ 다음 해 3/31 */
+/** 인도 회계연도(휴가 연도): 4/1 ~ 다음 해 3/31 */
 export function getDefaultIndiaFiscalYearRange(referenceDate: Date = new Date()): LeaveYearRange {
   const ref = new Date(referenceDate);
   ref.setHours(0, 0, 0, 0);
@@ -54,11 +55,17 @@ export function getDefaultIndiaFiscalYearRange(referenceDate: Date = new Date())
   start.setHours(0, 0, 0, 0);
   const end = new Date(startYear + 1, 2, 31);
   end.setHours(23, 59, 59, 999);
+  const shortLabel = `${startYear}-${String(startYear + 1).slice(-2)}`;
   return {
     start,
     end,
-    label: `${toDateOnlyString(start)} ~ ${toDateOnlyString(end)}`,
+    label: `${shortLabel} (${toDateOnlyString(start)} ~ ${toDateOnlyString(end)})`,
   };
+}
+
+/** 휴가 관리용 연도 — 항상 인도 회계연도(4/1~3/31) */
+export function getLeaveYearRange(referenceDate: Date = new Date()): LeaveYearRange {
+  return getDefaultIndiaFiscalYearRange(referenceDate);
 }
 
 /** 회사 회계연도(등록된 FY 우선, 없으면 인도 FY 기본) */
@@ -118,7 +125,7 @@ export async function getCompanyFiscalYearRange(
   return getDefaultIndiaFiscalYearRange(ref);
 }
 
-/** @deprecated 입사일 기준 연도 — 회계연도 전환 후 호환용 */
+/** @deprecated 휴가 연도는 getLeaveYearRange(인도 회계연도)를 사용하세요 */
 export function getHireDateLeaveYearRange(hireDate: Date, referenceDate: Date = new Date()): LeaveYearRange {
   const hire = new Date(hireDate);
   hire.setHours(0, 0, 0, 0);
@@ -149,6 +156,8 @@ export function getHireDateLeaveYearRange(hireDate: Date, referenceDate: Date = 
 interface AnnualLeaveInfo {
   availableDays: number;
   usedDays: number;
+  vacationUsedDays: number;
+  absenceUsedDays: number;
   totalEarnedDays: number;
   canUseAnnualLeave: boolean;
   daysUntilEligible: number;
@@ -169,7 +178,17 @@ interface CompanyVacationPolicy {
   annualLeaveEarnDays: number;
   leaveTypeDays: LeaveTypeDays;
   availableTypes: string[];
+  /** 출퇴근 결근(status=absent)을 연차에서 차감 (기본 true) */
+  deductAbsenceFromLeave: boolean;
 }
+
+const DEFAULT_POLICY: CompanyVacationPolicy = {
+  annualLeaveStartDays: 240,
+  annualLeaveEarnDays: 20,
+  leaveTypeDays: { ...DEFAULT_LEAVE_TYPE_DAYS },
+  availableTypes: [...DEFAULT_AVAILABLE_TYPES],
+  deductAbsenceFromLeave: true,
+};
 
 async function getCompanyVacationPolicy(companyId: number): Promise<CompanyVacationPolicy> {
   try {
@@ -177,12 +196,7 @@ async function getCompanyVacationPolicy(companyId: number): Promise<CompanyVacat
     const company = await (Company as any).findByPk(companyId);
 
     if (!company) {
-      return {
-        annualLeaveStartDays: 240,
-        annualLeaveEarnDays: 20,
-        leaveTypeDays: { ...DEFAULT_LEAVE_TYPE_DAYS },
-        availableTypes: [...DEFAULT_AVAILABLE_TYPES],
-      };
+      return { ...DEFAULT_POLICY, leaveTypeDays: { ...DEFAULT_LEAVE_TYPE_DAYS }, availableTypes: [...DEFAULT_AVAILABLE_TYPES] };
     }
 
     const policy = company.settings?.vacationPolicy;
@@ -197,16 +211,85 @@ async function getCompanyVacationPolicy(companyId: number): Promise<CompanyVacat
         ...(policy?.leaveTypeDays || {}),
       },
       availableTypes,
+      deductAbsenceFromLeave: policy?.deductAbsenceFromLeave !== false,
     };
   } catch (error) {
     console.error('휴가 정책 조회 오류:', error);
-    return {
-      annualLeaveStartDays: 240,
-      annualLeaveEarnDays: 20,
-      leaveTypeDays: { ...DEFAULT_LEAVE_TYPE_DAYS },
-      availableTypes: [...DEFAULT_AVAILABLE_TYPES],
-    };
+    return { ...DEFAULT_POLICY, leaveTypeDays: { ...DEFAULT_LEAVE_TYPE_DAYS }, availableTypes: [...DEFAULT_AVAILABLE_TYPES] };
   }
+}
+
+/**
+ * 인도 회계연도 내 출퇴근 결근 일수 (연차 차감용).
+ * - status = 'absent' 또는 (과거 일자 + 체크인 없음)
+ * - 주말 제외
+ * - 승인된 휴가 기간과 겹치는 날은 제외 (이중 차감 방지)
+ */
+export async function getAbsenceDeductionDaysInLeaveYear(
+  userId: number,
+  leaveYear: LeaveYearRange
+): Promise<number> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = toDateOnlyString(today);
+  const startStr = toDateOnlyString(leaveYear.start);
+  const endStr = toDateOnlyString(leaveYear.end);
+  const rangeEndStr = endStr < todayStr ? endStr : todayStr;
+
+  if (rangeEndStr < startStr) return 0;
+
+  const attendanceRows = await (Attendance as any).findAll({
+    where: {
+      user_id: userId,
+      is_active: { [Op.ne]: false },
+      date: { [Op.between]: [startStr, rangeEndStr] },
+      [Op.or]: [
+        { status: 'absent' },
+        { check_in: null, date: { [Op.lt]: todayStr } },
+      ],
+    },
+    attributes: ['date', 'status', 'check_in'],
+  });
+
+  const absentDates = new Set<string>();
+  for (const row of attendanceRows) {
+    const ymd = String(row.date || '').slice(0, 10);
+    if (!ymd || isWeekendYmd(ymd) || ymd >= todayStr) continue;
+    const isAbsentStatus = String(row.status || '') === 'absent';
+    const noCheckIn = row.check_in == null;
+    if (isAbsentStatus || noCheckIn) {
+      absentDates.add(ymd);
+    }
+  }
+  if (absentDates.size === 0) return 0;
+
+  const vacations = await (Vacation as any).findAll({
+    where: {
+      user_id: userId,
+      status: { [Op.in]: ['approved', 'pending'] },
+      is_active: { [Op.ne]: false },
+      start_date: { [Op.lte]: endStr },
+      end_date: { [Op.gte]: startStr },
+    },
+    attributes: ['start_date', 'end_date'],
+  });
+
+  const coveredByLeave = new Set<string>();
+  for (const vacation of vacations) {
+    const rangeStart = parseDateOnly(String(vacation.start_date).slice(0, 10));
+    const rangeEnd = parseDateOnly(String(vacation.end_date).slice(0, 10));
+    const cursor = new Date(rangeStart);
+    while (cursor <= rangeEnd) {
+      coveredByLeave.add(toDateOnlyString(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+
+  let count = 0;
+  for (const ymd of absentDates) {
+    if (!coveredByLeave.has(ymd)) count += 1;
+  }
+  return count;
 }
 
 async function getUsedDaysInLeaveYear(
@@ -238,12 +321,18 @@ async function getUsedDaysInLeaveYear(
 }
 
 /**
- * 연차: 회계연도 내에서만 적립·사용 (이월 불가). 사용 가능 시점은 입사일+대기일 기준.
+ * 연차: 인도 회계연도(4/1~3/31) 내 적립·사용 (이월 불가).
+ * 사용 가능 시점은 입사일+대기일 기준.
+ * 총일수 = (대기일 이후 ~ 오늘까지, 휴가연도 교집합 근무일) / earnDays
+ * 사용 = 연차 신청(승인·대기) + 출퇴근 결근 차감
+ * 잔여 = max(0, 총일수 - 사용일수)
  */
 export async function calculateAnnualLeave(userId: number, excludeVacationId?: number): Promise<AnnualLeaveInfo> {
   const empty: AnnualLeaveInfo = {
     availableDays: 0,
     usedDays: 0,
+    vacationUsedDays: 0,
+    absenceUsedDays: 0,
     totalEarnedDays: 0,
     canUseAnnualLeave: false,
     daysUntilEligible: 0,
@@ -260,14 +349,14 @@ export async function calculateAnnualLeave(userId: number, excludeVacationId?: n
 
     const policy = await getCompanyVacationPolicy(user.company_id);
     const startDays = policy.annualLeaveStartDays;
-    const earnDays = policy.annualLeaveEarnDays;
+    const earnDays = Math.max(1, policy.annualLeaveEarnDays || 20);
 
     const hireDate = new Date(user.hire_date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     hireDate.setHours(0, 0, 0, 0);
 
-    const leaveYear = await getCompanyFiscalYearRange(user.company_id, today);
+    const leaveYear = getLeaveYearRange(today);
 
     const eligibilityDate = new Date(hireDate);
     eligibilityDate.setDate(eligibilityDate.getDate() + startDays);
@@ -279,7 +368,9 @@ export async function calculateAnnualLeave(userId: number, excludeVacationId?: n
 
     let totalEarnedDays = 0;
     if (canUseAnnualLeave) {
-      const periodStart = new Date(Math.max(eligibilityDate.getTime(), leaveYear.start.getTime()));
+      const periodStart = new Date(
+        Math.max(eligibilityDate.getTime(), leaveYear.start.getTime(), hireDate.getTime())
+      );
       const periodEnd = new Date(Math.min(today.getTime(), leaveYear.end.getTime()));
       if (periodStart <= periodEnd) {
         const eligibleDays = Math.floor((periodEnd.getTime() - periodStart.getTime()) / DAY_MS) + 1;
@@ -287,7 +378,11 @@ export async function calculateAnnualLeave(userId: number, excludeVacationId?: n
       }
     }
 
-    const usedDays = await getUsedDaysInLeaveYear(userId, 'annual', leaveYear, excludeVacationId);
+    const vacationUsedDays = await getUsedDaysInLeaveYear(userId, 'annual', leaveYear, excludeVacationId);
+    const absenceUsedDays = policy.deductAbsenceFromLeave
+      ? await getAbsenceDeductionDaysInLeaveYear(userId, leaveYear)
+      : 0;
+    const usedDays = vacationUsedDays + absenceUsedDays;
     const availableDays = Math.max(0, totalEarnedDays - usedDays);
 
     const leaveYearStart = toDateOnlyString(leaveYear.start);
@@ -296,6 +391,8 @@ export async function calculateAnnualLeave(userId: number, excludeVacationId?: n
     return {
       availableDays,
       usedDays,
+      vacationUsedDays,
+      absenceUsedDays,
       totalEarnedDays,
       canUseAnnualLeave,
       daysUntilEligible,
@@ -332,7 +429,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 /**
- * 모든 휴가 유형 — 회계연도 내 잔여 일수 검증 (누적·이월 없음)
+ * 모든 휴가 유형 — 인도 회계연도(4/1~3/31) 내 잔여 일수 검증 (누적·이월 없음)
  */
 export async function validateVacationLeaveRequest(
   userId: number,
@@ -348,7 +445,7 @@ export async function validateVacationLeaveRequest(
     return { valid: false, message: '입사일이 등록되지 않아 휴가를 신청할 수 없습니다.' };
   }
 
-  const leaveYear = await getCompanyFiscalYearRange(user.company_id, new Date());
+  const leaveYear = getLeaveYearRange(new Date());
   const yearLabel = leaveYear.label;
 
   if (vacationType === 'annual') {
@@ -366,7 +463,7 @@ export async function validateVacationLeaveRequest(
     if (requestedDays > leaveInfo.availableDays) {
       return {
         valid: false,
-        message: `회계연도(${yearLabel}) 사용 가능 연차(${leaveInfo.availableDays}일)를 초과했습니다. 미사용 연차는 이월되지 않습니다.`,
+        message: `인도 회계연도(${yearLabel}) 사용 가능 연차(${leaveInfo.availableDays}일)를 초과했습니다. 미사용 연차는 이월되지 않습니다.`,
         availableDays: leaveInfo.availableDays,
       };
     }
@@ -387,13 +484,21 @@ export async function validateVacationLeaveRequest(
   if (requestedDays > availableDays) {
     return {
       valid: false,
-      message: `회계연도(${yearLabel}) ${TYPE_LABELS[vacationType] || vacationType} 잔여 일수(${availableDays}일)를 초과했습니다. 미사용 일수는 이월되지 않습니다.`,
+      message: `인도 회계연도(${yearLabel}) ${TYPE_LABELS[vacationType] || vacationType} 잔여 일수(${availableDays}일)를 초과했습니다. 미사용 일수는 이월되지 않습니다.`,
       availableDays,
     };
   }
 
   return { valid: true, availableDays };
 }
+
+export type LeaveBalanceCell = {
+  quota: number;
+  used: number;
+  remaining: number;
+  vacationUsed?: number;
+  absenceUsed?: number;
+};
 
 export type LeaveBalanceRow = {
   userId: number;
@@ -403,7 +508,7 @@ export type LeaveBalanceRow = {
   hireDate: string | null;
   leaveYearLabel: string | null;
   canUseAnnualLeave: boolean;
-  balances: Record<string, { quota: number; used: number; remaining: number }>;
+  balances: Record<string, LeaveBalanceCell>;
 };
 
 const BALANCE_TYPES = [
@@ -417,10 +522,10 @@ const BALANCE_TYPES = [
   'bereavement',
 ] as const;
 
-function buildZeroBalances(): Record<string, { quota: number; used: number; remaining: number }> {
-  const balances: Record<string, { quota: number; used: number; remaining: number }> = {};
+function buildZeroBalances(): Record<string, LeaveBalanceCell> {
+  const balances: Record<string, LeaveBalanceCell> = {};
   for (const type of BALANCE_TYPES) {
-    balances[type] = { quota: 0, used: 0, remaining: 0 };
+    balances[type] = { quota: 0, used: 0, remaining: 0, vacationUsed: 0, absenceUsed: 0 };
   }
   return balances;
 }
@@ -450,12 +555,12 @@ export async function getUserLeaveBalanceSummary(userId: number): Promise<LeaveB
     hireDate: formatHireDate(user.hire_date),
   };
 
-  const fiscalYear = await getCompanyFiscalYearRange(user.company_id, new Date());
+  const leaveYear = getLeaveYearRange(new Date());
 
   if (!user.hire_date) {
     return {
       ...baseRow,
-      leaveYearLabel: fiscalYear.label,
+      leaveYearLabel: leaveYear.label,
       canUseAnnualLeave: false,
       balances: buildZeroBalances(),
     };
@@ -464,18 +569,20 @@ export async function getUserLeaveBalanceSummary(userId: number): Promise<LeaveB
   const policy = await getCompanyVacationPolicy(user.company_id);
   const annualInfo = await calculateAnnualLeave(userId);
 
-  const balances: Record<string, { quota: number; used: number; remaining: number }> = {
+  const balances: Record<string, LeaveBalanceCell> = {
     annual: {
       quota: annualInfo.totalEarnedDays,
       used: annualInfo.usedDays,
       remaining: annualInfo.availableDays,
+      vacationUsed: annualInfo.vacationUsedDays,
+      absenceUsed: annualInfo.absenceUsedDays,
     },
   };
 
   for (const type of BALANCE_TYPES) {
     if (type === 'annual') continue;
     const quota = policy.leaveTypeDays[type] ?? 0;
-    const used = await getUsedDaysInLeaveYear(userId, type, fiscalYear);
+    const used = await getUsedDaysInLeaveYear(userId, type, leaveYear);
     balances[type] = {
       quota,
       used,
@@ -485,7 +592,7 @@ export async function getUserLeaveBalanceSummary(userId: number): Promise<LeaveB
 
   return {
     ...baseRow,
-    leaveYearLabel: fiscalYear.label,
+    leaveYearLabel: leaveYear.label,
     canUseAnnualLeave: annualInfo.canUseAnnualLeave,
     balances,
   };
@@ -497,7 +604,7 @@ export async function getCompanyLeaveBalances(companyId: number): Promise<{
   fiscalYearLabel: string;
 }> {
   const policy = await getCompanyVacationPolicy(companyId);
-  const fiscalYear = await getCompanyFiscalYearRange(companyId, new Date());
+  const leaveYear = getLeaveYearRange(new Date());
   const users = await (User as any).findAll({
     where: {
       company_id: companyId,
@@ -517,7 +624,7 @@ export async function getCompanyLeaveBalances(companyId: number): Promise<{
   return {
     rows,
     availableTypes: policy.availableTypes,
-    fiscalYearLabel: fiscalYear.label,
+    fiscalYearLabel: leaveYear.label,
   };
 }
 

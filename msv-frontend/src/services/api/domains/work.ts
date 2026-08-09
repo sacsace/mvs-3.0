@@ -278,9 +278,55 @@ export const workReportService = {
     return response.data;
   },
 
-  // ?�무 보고??검??(?�인/거�?)
+  // 업무 보고 검수 (승인/거절)
   reviewWorkReport: async (id: number, status: 'approved' | 'rejected', review_comment?: string) => {
     const response = await api.post(`/work/reports/${id}/review`, { status, review_comment });
     return response.data;
   }
+};
+
+/** 업무 담당 리스트 (/api/work/assignee-list) */
+export const workAssigneeListService = {
+  getList: async (params?: { company_id?: number }) => {
+    const response = await api.get('/work/assignee-list', { params });
+    return response.data;
+  },
+  createAssignee: async (data: { name: string; title?: string; email?: string; company_id?: number }) => {
+    const response = await api.post('/work/assignee-list/assignees', data);
+    return response.data;
+  },
+  updateAssignee: async (id: number, data: { name?: string; title?: string | null; email?: string | null }) => {
+    const response = await api.put(`/work/assignee-list/assignees/${id}`, data);
+    return response.data;
+  },
+  deleteAssignee: async (id: number) => {
+    const response = await api.delete(`/work/assignee-list/assignees/${id}`);
+    return response.data;
+  },
+  moveAssignee: async (id: number, index: number) => {
+    const response = await api.post(`/work/assignee-list/assignees/${id}/move`, { index });
+    return response.data;
+  },
+  createItem: async (
+    assigneeId: number,
+    data: { name: string; note?: string; is_highlighted?: boolean }
+  ) => {
+    const response = await api.post(`/work/assignee-list/assignees/${assigneeId}/items`, data);
+    return response.data;
+  },
+  updateItem: async (
+    id: number,
+    data: { name?: string; note?: string | null; is_highlighted?: boolean }
+  ) => {
+    const response = await api.put(`/work/assignee-list/items/${id}`, data);
+    return response.data;
+  },
+  deleteItem: async (id: number) => {
+    const response = await api.delete(`/work/assignee-list/items/${id}`);
+    return response.data;
+  },
+  moveItem: async (id: number, data: { assignee_id: number; index: number }) => {
+    const response = await api.post(`/work/assignee-list/items/${id}/move`, data);
+    return response.data;
+  },
 };

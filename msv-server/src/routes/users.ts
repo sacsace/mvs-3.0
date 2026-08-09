@@ -79,7 +79,8 @@ const avatarUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, userAvatarDir),
     filename: (req, file, cb) => {
-      const userId = String(req.params.id || 'user').replace(/\D/g, '') || 'user';
+      const userId =
+        String(req.params.id || (req as any).user?.id || 'user').replace(/\D/g, '') || 'user';
       const originalExt = path.extname(file.originalname || '').toLowerCase();
       const extByMime: Record<string, string> = {
         'image/jpeg': '.jpg',
@@ -367,6 +368,47 @@ router.post('/me/password', async (req, res) => {
     return res.status(500).json({
       success: false,
       message: '비밀번호 변경 중 오류가 발생했습니다.'
+    });
+  }
+});
+
+// 내 프로필 사진 업로드
+router.post('/me/avatar', avatarUpload.single('avatar'), async (req, res) => {
+  const uploadedPath = req.file?.path;
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: '사진 파일을 선택해주세요.' });
+    }
+
+    const user = await findCurrentUser(req);
+    if (!user) {
+      await fs.promises.unlink(req.file.path).catch(() => undefined);
+      return res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
+    }
+
+    const previousAvatar = String(user.avatar_url || '');
+    const avatarUrl = `/uploads/user-avatars/${req.file.filename}`;
+    await user.update({ avatar_url: avatarUrl });
+    invalidateAuthUser(user.id);
+
+    if (previousAvatar.startsWith('/uploads/user-avatars/')) {
+      const previousFile = path.join(userAvatarDir, path.basename(previousAvatar));
+      if (path.resolve(previousFile) !== path.resolve(req.file.path)) {
+        await fs.promises.unlink(previousFile).catch(() => undefined);
+      }
+    }
+
+    return res.json({
+      success: true,
+      data: { avatar_url: avatarUrl },
+      message: '프로필 사진이 저장되었습니다.'
+    });
+  } catch (error: any) {
+    if (uploadedPath) await fs.promises.unlink(uploadedPath).catch(() => undefined);
+    console.error('내 프로필 사진 업로드 오류:', error);
+    return res.status(500).json({
+      success: false,
+      message: '프로필 사진 저장 중 오류가 발생했습니다.'
     });
   }
 });

@@ -73,11 +73,23 @@ import {
   removeWorkBoardMember,
   updateWorkBoardMember,
 } from '../controllers/workBoardController';
+import {
+  getWorkAssigneeList,
+  createWorkAssignee,
+  updateWorkAssignee,
+  deleteWorkAssignee,
+  moveWorkAssignee,
+  createWorkAssigneeItem,
+  updateWorkAssigneeItem,
+  deleteWorkAssigneeItem,
+  moveWorkAssigneeItem,
+} from '../controllers/workAssigneeListController';
 import { authenticateToken, restrictAuditToReadOnly } from '../middleware/auth';
 import { requireMenuPermission, requireMenuPermissionAny } from '../middleware/menuPermission';
 
 /** DB `menus.route` 값과 동일 (프론트 App 라우트 기준) */
 const MENU_WORK_PROJECTS = '/work/projects';
+const MENU_WORK_ASSIGNEE_LIST = '/work/assignee-list';
 const MENU_WORK_STATISTICS = '/work/statistics';
 const MENU_WORK_APPROVAL = '/work/approval';
 /** 객실 예약·호실·예약현황: 업무/호텔 메뉴에 동일·연관 화면이 여러 줄로 존재 → API는 후보 중 하나 권한으로 허용 */
@@ -407,6 +419,57 @@ router.put(
   restrictAuditToReadOnly,
   requireMenuPermissionAny(MENU_ROOM_RESERVATION_ROUTES, 'can_edit'),
   upsertRoomTypeRoom
+);
+
+// 업무 담당 리스트 (엑셀형 담당자 컬럼 + 담당 회사)
+router.get('/assignee-list', requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_view'), getWorkAssigneeList);
+router.post(
+  '/assignee-list/assignees',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_create'),
+  createWorkAssignee
+);
+router.put(
+  '/assignee-list/assignees/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_edit'),
+  updateWorkAssignee
+);
+router.delete(
+  '/assignee-list/assignees/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_delete'),
+  deleteWorkAssignee
+);
+router.post(
+  '/assignee-list/assignees/:id/move',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_edit'),
+  moveWorkAssignee
+);
+router.post(
+  '/assignee-list/assignees/:assigneeId/items',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_create'),
+  createWorkAssigneeItem
+);
+router.put(
+  '/assignee-list/items/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_edit'),
+  updateWorkAssigneeItem
+);
+router.delete(
+  '/assignee-list/items/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_delete'),
+  deleteWorkAssigneeItem
+);
+router.post(
+  '/assignee-list/items/:id/move',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_edit'),
+  moveWorkAssigneeItem
 );
 
 // 업무 보고서 관련 라우트

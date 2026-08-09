@@ -35,6 +35,15 @@ export const userService = {
     const response = await api.post('/users/me/password', data);
     return response.data;
   },
+
+  uploadMyAvatar: async (file: File) => {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const response = await api.post('/users/me/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
 };
 
 // 로그???�보 관�?API ?�비??

@@ -96,6 +96,7 @@ export const vacationService = {
     annualLeaveEarnDays?: number;
     availableTypes?: string[];
     leaveTypeDays?: Record<string, number>;
+    deductAbsenceFromLeave?: boolean;
   }) => {
     const response = await api.put('/hr/vacations/policy', data);
     return response.data;

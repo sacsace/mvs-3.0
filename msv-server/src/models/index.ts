@@ -63,6 +63,8 @@ import WorkBoardList from './WorkBoardList';
 import WorkBoardCard from './WorkBoardCard';
 import WorkBoardCardComment from './WorkBoardCardComment';
 import WorkBoardMember from './WorkBoardMember';
+import WorkAssignee from './WorkAssignee';
+import WorkAssigneeItem from './WorkAssigneeItem';
 import EmploymentContractTemplate from './EmploymentContractTemplate';
 import EmploymentContract from './EmploymentContract';
 import EmploymentContractSignature from './EmploymentContractSignature';
@@ -473,6 +475,15 @@ GlVoucherLine.belongsTo(GlAccount, { foreignKey: 'account_id', as: 'account' });
 (WorkBoardMember as any).belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 (WorkBoardMember as any).belongsTo(User, { foreignKey: 'invited_by', as: 'inviter' });
 
+(Tenant as any).hasMany(WorkAssignee, { foreignKey: 'tenant_id', as: 'workAssignees' });
+(WorkAssignee as any).belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(Company as any).hasMany(WorkAssignee, { foreignKey: 'company_id', as: 'workAssignees' });
+(WorkAssignee as any).belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+(User as any).hasMany(WorkAssignee, { foreignKey: 'created_by', as: 'createdWorkAssignees' });
+(WorkAssignee as any).belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+(WorkAssignee as any).hasMany(WorkAssigneeItem, { foreignKey: 'assignee_id', as: 'items' });
+(WorkAssigneeItem as any).belongsTo(WorkAssignee, { foreignKey: 'assignee_id', as: 'assignee' });
+
 // 전자근로계약
 (Tenant as any).hasMany(EmploymentContractTemplate, { foreignKey: 'tenant_id', as: 'employmentContractTemplates' });
 (EmploymentContractTemplate as any).belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
@@ -597,6 +608,8 @@ export {
   WorkBoardCard,
   WorkBoardCardComment,
   WorkBoardMember,
+  WorkAssignee,
+  WorkAssigneeItem,
   EmploymentContractTemplate,
   EmploymentContract,
   EmploymentContractSignature,
