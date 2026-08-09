@@ -1537,7 +1537,7 @@ export default {
     },
     workBoards: {
       title: 'Work Management',
-      description: 'This is a Trello-style work board. Create boards and invite coworkers in your company to manage cards together.',
+      description: 'Create work boards and invite coworkers to manage cards together.',
       memberCount: '{{count}} members',
       actions: {
         newBoard: 'New Work Board',
@@ -1686,7 +1686,20 @@ export default {
       empty: {
         noAssigneeStats: 'No assignee statistics to display.',
         noProcessingTimeData: 'No processing time data to display.',
-        noPersonalEfficiencyData: 'No personal efficiency data to display.'
+        noPersonalEfficiencyData: 'No personal efficiency data to display.',
+        noUserCards: 'No work cards for this assignee.'
+      },
+      cardList: {
+        title: '{{name}} — Work cards',
+        count: '{{count}} cards',
+        openCard: 'Open card',
+        columns: {
+          title: 'Title',
+          board: 'Board',
+          list: 'List',
+          status: 'Status',
+          dueDate: 'Due date'
+        }
       },
       listView: {
         viewAll: 'View all',

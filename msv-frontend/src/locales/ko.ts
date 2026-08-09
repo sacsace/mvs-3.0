@@ -1605,7 +1605,7 @@ export default {
     },
     workBoards: {
       title: '업무 관리',
-      description: '트렐로 스타일의 작업 보드입니다. 보드를 만들고 같은 회사 동료를 초대해 함께 카드를 관리하세요.',
+      description: '작업 보드를 만들고 동료를 초대해 카드를 함께 관리하세요.',
       memberCount: '멤버 {{count}}명',
       actions: {
         newBoard: '새 작업 보드',
@@ -1755,7 +1755,20 @@ export default {
       empty: {
         noAssigneeStats: '표시할 담당자 통계가 없습니다.',
         noProcessingTimeData: '표시할 처리 시간 데이터가 없습니다.',
-        noPersonalEfficiencyData: '표시할 개인 효율 데이터가 없습니다.'
+        noPersonalEfficiencyData: '표시할 개인 효율 데이터가 없습니다.',
+        noUserCards: '해당 담당자의 업무 카드가 없습니다.'
+      },
+      cardList: {
+        title: '{{name}} 업무 목록',
+        count: '{{count}}건',
+        openCard: '카드 열기',
+        columns: {
+          title: '업무명',
+          board: '보드',
+          list: '목록',
+          status: '상태',
+          dueDate: '만료일'
+        }
       },
       listView: {
         viewAll: '전체보기',

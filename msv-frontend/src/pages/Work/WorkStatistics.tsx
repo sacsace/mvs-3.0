@@ -7,6 +7,10 @@ import {
   Card,
   CardContent,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   InputAdornment,
   MenuItem,
   Pagination,
@@ -24,6 +28,7 @@ import {
   TextField,
   Typography
 } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
   mvsPageRootSx,
@@ -88,6 +93,64 @@ const listViewModeBtnSx = {
   whiteSpace: 'nowrap' as const,
 };
 
+/** 통계 표: 줄바꿈 없이 한 줄 유지, 좁으면 말줄임 + 가로 스크롤 */
+const statsTableSx = {
+  borderCollapse: 'collapse' as const,
+  bgcolor: 'transparent',
+  minWidth: 960,
+  tableLayout: 'auto' as const,
+  '& .MuiTableCell-root': {
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    verticalAlign: 'middle',
+    borderLeft: 'none',
+    borderRight: 'none',
+    borderTop: 'none',
+  },
+  '& .MuiTableCell-head': {
+    whiteSpace: 'nowrap' as const,
+  },
+};
+
+const statsEmployeeCellSx = {
+  maxWidth: 168,
+  minWidth: 120,
+};
+
+const statsChipSx = {
+  height: 26,
+  maxWidth: '100%',
+  borderRadius: '8px',
+  fontWeight: 600,
+  fontSize: '0.6875rem',
+  border: '1px solid',
+  '& .MuiChip-label': {
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    px: 1,
+  },
+};
+
+/** 업무 목록 팝업: 가로 스크롤 없이 모달 너비에 맞춤 */
+const cardListDialogTableSx = {
+  borderCollapse: 'collapse' as const,
+  bgcolor: 'transparent',
+  width: '100%',
+  tableLayout: 'fixed' as const,
+  '& .MuiTableCell-root': {
+    whiteSpace: 'nowrap' as const,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    verticalAlign: 'middle',
+    borderLeft: 'none',
+    borderRight: 'none',
+    borderTop: 'none',
+    px: 1.25,
+  },
+};
+
 type ListViewMode = 'page' | 'all';
 
 const TEAM_STATS_ROLES = new Set(['root', 'audit', 'admin', 'manager']);
@@ -147,6 +210,22 @@ interface WorkStatistic {
   completedDuration: ProcessingDurationStats;
   openDuration: ProcessingDurationStats;
 }
+
+interface UserWorkCardItem {
+  id: number;
+  title: string;
+  boardId: number;
+  boardName: string;
+  listTitle: string;
+  status: 'todo' | 'progress' | 'done';
+  dueDate: string | null;
+}
+
+const STATUS_SORT_ORDER: Record<UserWorkCardItem['status'], number> = {
+  progress: 0,
+  todo: 1,
+  done: 2
+};
 
 const EMPTY_DURATION_STATS: ProcessingDurationStats = {
   count: 0,
@@ -420,6 +499,7 @@ const listStatusForStats = (
 const WorkStatistics: React.FC = () => {
   const theme = useTheme();
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { user } = useStore();
   const isPersonalStatsView = !user?.role || !TEAM_STATS_ROLES.has(user.role);
   const currentUserId = user?.id != null ? Number(user.id) : null;
@@ -436,6 +516,11 @@ const WorkStatistics: React.FC = () => {
   const [tabValue, setTabValue] = useState(0);
   const [processingTimeMetric, setProcessingTimeMetric] = useState<ProcessingTimeMetric>('median');
   const [completedDurationSamples, setCompletedDurationSamples] = useState<number[]>([]);
+  const [cardsByEmployeeId, setCardsByEmployeeId] = useState<Record<number, UserWorkCardItem[]>>({});
+  const [cardListEmployee, setCardListEmployee] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
 
   const currentPeriod = useMemo(() => {
     const now = new Date();
@@ -455,6 +540,7 @@ const WorkStatistics: React.FC = () => {
       if (boardIds.length === 0) {
         setStatistics([]);
         setStatusSummary({ todo: 0, progress: 0, done: 0, unassigned: 0 });
+        setCardsByEmployeeId({});
         return;
       }
 
@@ -472,12 +558,15 @@ const WorkStatistics: React.FC = () => {
       const validBoards = details.filter(Boolean) as any[];
       const memberMeta = new Map<number, { name: string; department: string; position: string }>();
       const statMap = new Map<number, StatAccumulator>();
+      const cardsMap = new Map<number, UserWorkCardItem[]>();
       const now = new Date();
       const globalCompletedSamples: number[] = [];
 
       const summary: StatusSummary = { todo: 0, progress: 0, done: 0, unassigned: 0 };
 
       for (const board of validBoards) {
+        const boardId = Number(board.id);
+        const boardName = String(board.name || '');
         for (const m of board.members || []) {
           const uid = m?.user?.id;
           if (!uid) continue;
@@ -498,10 +587,11 @@ const WorkStatistics: React.FC = () => {
         const completedListId = resolveCompletedListId(listsForResolve);
 
         for (const list of board.lists || []) {
+          const listTitle = String(list.title || '');
           const status = listStatusForStats(
             {
               id: Number(list.id),
-              title: String(list.title || ''),
+              title: listTitle,
               position: Number(list.position) || 0
             },
             completedListId
@@ -524,6 +614,19 @@ const WorkStatistics: React.FC = () => {
               summary.unassigned += 1;
               continue;
             }
+
+            const cardItem: UserWorkCardItem = {
+              id: Number(card.id),
+              title: String(card.title || '').trim() || `#${card.id}`,
+              boardId,
+              boardName,
+              listTitle,
+              status,
+              dueDate: card.due_date ? String(card.due_date).slice(0, 10) : null
+            };
+            const existingCards = cardsMap.get(statUserId) || [];
+            existingCards.push(cardItem);
+            cardsMap.set(statUserId, existingCards);
 
             if (!statMap.has(statUserId)) {
               const meta = memberMeta.get(statUserId);
@@ -637,16 +740,55 @@ const WorkStatistics: React.FC = () => {
           b.tasksCompleted - a.tasksCompleted
       );
 
+      const cardsRecord: Record<number, UserWorkCardItem[]> = {};
+      cardsMap.forEach((cards, uid) => {
+        cardsRecord[uid] = [...cards].sort(
+          (a, b) =>
+            STATUS_SORT_ORDER[a.status] - STATUS_SORT_ORDER[b.status] ||
+            a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
+        );
+      });
+
       setStatistics(rows);
       setStatusSummary(summary);
       setCompletedDurationSamples(globalCompletedSamples);
+      setCardsByEmployeeId(cardsRecord);
     } catch (err: any) {
       setError(err?.message || t('workStatistics.errors.loadStatsFailed'));
       setStatistics([]);
       setStatusSummary({ todo: 0, progress: 0, done: 0, unassigned: 0 });
       setCompletedDurationSamples([]);
+      setCardsByEmployeeId({});
     }
   }, [currentPeriod, currentUserId, isPersonalStatsView, t, user]);
+
+  const openEmployeeCardList = useCallback((employeeId: number, employeeName: string) => {
+    setCardListEmployee({ id: employeeId, name: employeeName });
+  }, []);
+
+  const closeEmployeeCardList = useCallback(() => {
+    setCardListEmployee(null);
+  }, []);
+
+  const selectedEmployeeCards = useMemo(() => {
+    if (!cardListEmployee) return [];
+    return cardsByEmployeeId[cardListEmployee.id] || [];
+  }, [cardListEmployee, cardsByEmployeeId]);
+
+  const statusLabel = useCallback(
+    (status: UserWorkCardItem['status']) => {
+      if (status === 'done') return t('workStatistics.status.done');
+      if (status === 'progress') return t('workStatistics.status.inProgress');
+      return t('workStatistics.status.todo');
+    },
+    [t]
+  );
+
+  const statusChipColor = (status: UserWorkCardItem['status']) => {
+    if (status === 'done') return 'success' as const;
+    if (status === 'progress') return 'warning' as const;
+    return 'default' as const;
+  };
 
   const filterStatistics = useCallback(() => {
     let filtered = statistics;
@@ -1102,22 +1244,18 @@ const WorkStatistics: React.FC = () => {
               {t('workStatistics.listView.viewPages')}
             </Button>
           </Box>
-          <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
-            <Table
-              size="small"
-              sx={{
-                borderCollapse: 'collapse',
-                bgcolor: 'transparent',
-                '& .MuiTableCell-root': {
-                  borderLeft: 'none',
-                  borderRight: 'none',
-                  borderTop: 'none',
-                },
-              }}
-            >
+          <TableContainer
+            sx={{
+              ...mvsBodyListTableSx,
+              ...mvsTableScrollSx,
+              // 전체보기: 표 하단 선과 카드 외곽선이 붙지 않도록 여백
+              mb: listViewMode === 'all' ? 2.5 : 0,
+            }}
+          >
+            <Table size="small" sx={statsTableSx}>
               <TableHead sx={mvsTableHeadHighlightSx}>
                 <TableRow>
-                  <TableCell>{t('workStatistics.columns.employeeInfo')}</TableCell>
+                  <TableCell sx={statsEmployeeCellSx}>{t('workStatistics.columns.employeeInfo')}</TableCell>
                   <TableCell>{t('workStatistics.columns.period')}</TableCell>
                   <TableCell>{t('workStatistics.columns.totalAssignedCards')}</TableCell>
                   <TableCell>{t('workStatistics.columns.inProgress')}</TableCell>
@@ -1134,24 +1272,50 @@ const WorkStatistics: React.FC = () => {
               <TableBody sx={mvsTableBodyRowSx}>
                 {displayedStatistics.map((stat) => (
                   <TableRow key={stat.id}>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <TableCell sx={statsEmployeeCellSx}>
+                      <Box
+                        component="button"
+                        type="button"
+                        onClick={() => openEmployeeCardList(stat.employeeId, stat.employeeName)}
+                        title={stat.employeeName}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          minWidth: 0,
+                          maxWidth: '100%',
+                          p: 0,
+                          m: 0,
+                          border: 'none',
+                          background: 'none',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          '&:hover .employee-name': {
+                            color: 'primary.main',
+                            textDecoration: 'underline',
+                          },
+                        }}
+                      >
                         <Avatar
                           sx={{
                             mr: 1.25,
                             width: 34,
                             height: 34,
+                            flexShrink: 0,
                             bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.12),
                             color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.55)' : theme.palette.grey[300],
                           }}
                         >
                           <PersonIcon sx={{ fontSize: 17 }} />
                         </Avatar>
-                        <Box>
-                          <Typography variant="body2" fontWeight={600} sx={{ color: 'text.primary' }}>
-                            {stat.employeeName}
-                          </Typography>
-                        </Box>
+                        <Typography
+                          className="employee-name"
+                          variant="body2"
+                          fontWeight={600}
+                          noWrap
+                          sx={{ color: 'text.primary', minWidth: 0 }}
+                        >
+                          {stat.employeeName}
+                        </Typography>
                       </Box>
                     </TableCell>
                     <TableCell sx={{ color: 'text.primary', opacity: 0.88, fontWeight: 500 }}>{stat.period}</TableCell>
@@ -1169,11 +1333,7 @@ const WorkStatistics: React.FC = () => {
                         label={`${stat.personalEfficiencyScore.toFixed(1)}%`}
                         size="small"
                         sx={{
-                          height: 26,
-                          borderRadius: '8px',
-                          fontWeight: 600,
-                          fontSize: '0.6875rem',
-                          border: '1px solid',
+                          ...statsChipSx,
                           borderColor:
                             getEfficiencyColor(stat.personalEfficiencyScore) === 'success'
                               ? alpha(theme.palette.success.main, 0.35)
@@ -1195,11 +1355,7 @@ const WorkStatistics: React.FC = () => {
                         label={`${stat.productivity.toFixed(1)}%`}
                         size="small"
                         sx={{
-                          height: 26,
-                          borderRadius: '8px',
-                          fontWeight: 600,
-                          fontSize: '0.6875rem',
-                          border: '1px solid',
+                          ...statsChipSx,
                           borderColor:
                             getProductivityColor(stat.productivity) === 'success'
                               ? alpha(theme.palette.success.main, 0.35)
@@ -1221,11 +1377,7 @@ const WorkStatistics: React.FC = () => {
                         label={`${stat.onTimeRate.toFixed(1)}%`}
                         size="small"
                         sx={{
-                          height: 26,
-                          borderRadius: '8px',
-                          fontWeight: 600,
-                          fontSize: '0.6875rem',
-                          border: '1px solid',
+                          ...statsChipSx,
                           borderColor:
                             getProductivityColor(stat.onTimeRate) === 'success'
                               ? alpha(theme.palette.success.main, 0.35)
@@ -1370,10 +1522,10 @@ const WorkStatistics: React.FC = () => {
             {t('workStatistics.sections.personalEfficiencyDetail')}
           </Typography>
           <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx, mb: 2 }}>
-            <Table size="small" sx={{ borderCollapse: 'collapse', bgcolor: 'transparent' }}>
+            <Table size="small" sx={statsTableSx}>
               <TableHead sx={mvsTableHeadHighlightSx}>
                 <TableRow>
-                  <TableCell>{t('workStatistics.columns.employeeInfo')}</TableCell>
+                  <TableCell sx={statsEmployeeCellSx}>{t('workStatistics.columns.employeeInfo')}</TableCell>
                   <TableCell>{t('workStatistics.columns.personalEfficiency')}</TableCell>
                   <TableCell>{t('workStatistics.columns.completionRate')}</TableCell>
                   <TableCell>{t('workStatistics.columns.onTimeRate')}</TableCell>
@@ -1385,7 +1537,30 @@ const WorkStatistics: React.FC = () => {
               <TableBody sx={mvsTableBodyRowSx}>
                 {personalEfficiencyRows.slice(0, 15).map((stat) => (
                   <TableRow key={`efficiency-${stat.id}`}>
-                    <TableCell>{stat.employeeName}</TableCell>
+                    <TableCell sx={statsEmployeeCellSx}>
+                      <Typography
+                        component="button"
+                        type="button"
+                        noWrap
+                        title={stat.employeeName}
+                        onClick={() => openEmployeeCardList(stat.employeeId, stat.employeeName)}
+                        sx={{
+                          p: 0,
+                          m: 0,
+                          border: 'none',
+                          background: 'none',
+                          cursor: 'pointer',
+                          font: 'inherit',
+                          fontWeight: 600,
+                          color: 'text.primary',
+                          maxWidth: '100%',
+                          textAlign: 'left',
+                          '&:hover': { color: 'primary.main', textDecoration: 'underline' },
+                        }}
+                      >
+                        {stat.employeeName}
+                      </Typography>
+                    </TableCell>
                     <TableCell>{stat.personalEfficiencyScore.toFixed(1)}%</TableCell>
                     <TableCell>{stat.productivity.toFixed(1)}%</TableCell>
                     <TableCell>{stat.onTimeRate.toFixed(1)}%</TableCell>
@@ -1602,10 +1777,10 @@ const WorkStatistics: React.FC = () => {
             {t('workStatistics.tooltips.processingTimeDetail')}
           </Typography>
           <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx, mb: 2 }}>
-            <Table size="small" sx={{ borderCollapse: 'collapse', bgcolor: 'transparent' }}>
+            <Table size="small" sx={statsTableSx}>
               <TableHead sx={mvsTableHeadHighlightSx}>
                 <TableRow>
-                  <TableCell>{t('workStatistics.columns.employeeInfo')}</TableCell>
+                  <TableCell sx={statsEmployeeCellSx}>{t('workStatistics.columns.employeeInfo')}</TableCell>
                   <TableCell>{t('workStatistics.processingTime.sampleSize')}</TableCell>
                   <TableCell>{t('workStatistics.processingTime.median')}</TableCell>
                   <TableCell>{t('workStatistics.processingTime.average')}</TableCell>
@@ -1618,7 +1793,30 @@ const WorkStatistics: React.FC = () => {
               <TableBody sx={mvsTableBodyRowSx}>
                 {processingTimeDetailRows.map((stat) => (
                   <TableRow key={`processing-${stat.id}`}>
-                    <TableCell>{stat.employeeName}</TableCell>
+                    <TableCell sx={statsEmployeeCellSx}>
+                      <Typography
+                        component="button"
+                        type="button"
+                        noWrap
+                        title={stat.employeeName}
+                        onClick={() => openEmployeeCardList(stat.employeeId, stat.employeeName)}
+                        sx={{
+                          p: 0,
+                          m: 0,
+                          border: 'none',
+                          background: 'none',
+                          cursor: 'pointer',
+                          font: 'inherit',
+                          fontWeight: 600,
+                          color: 'text.primary',
+                          maxWidth: '100%',
+                          textAlign: 'left',
+                          '&:hover': { color: 'primary.main', textDecoration: 'underline' },
+                        }}
+                      >
+                        {stat.employeeName}
+                      </Typography>
+                    </TableCell>
                     <TableCell>
                       {t('workStatistics.processingTime.sampleCount', {
                         completed: stat.completedDuration.count,
@@ -1659,6 +1857,103 @@ const WorkStatistics: React.FC = () => {
           </TableContainer>
         </TabPanel>
       </Card>
+
+      <Dialog
+        open={Boolean(cardListEmployee)}
+        onClose={closeEmployeeCardList}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: '8px' } }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, pr: 2 }}>
+          {cardListEmployee
+            ? t('workStatistics.cardList.title', { name: cardListEmployee.name })
+            : ''}
+          <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1, fontWeight: 600 }}>
+            {t('workStatistics.cardList.count', { count: selectedEmployeeCards.length })}
+          </Typography>
+        </DialogTitle>
+        <DialogContent dividers sx={{ px: 0, py: 0, overflowX: 'hidden' }}>
+          {selectedEmployeeCards.length === 0 ? (
+            <Box sx={{ py: 5, px: 3, textAlign: 'center' }}>
+              <Typography color="text.secondary">{t('workStatistics.empty.noUserCards')}</Typography>
+            </Box>
+          ) : (
+            <TableContainer sx={{ maxHeight: 480, overflowX: 'hidden' }}>
+              <Table size="small" stickyHeader sx={cardListDialogTableSx}>
+                <TableHead sx={mvsTableHeadHighlightSx}>
+                  <TableRow>
+                    <TableCell sx={{ width: '28%' }}>{t('workStatistics.cardList.columns.title')}</TableCell>
+                    <TableCell sx={{ width: '18%' }}>{t('workStatistics.cardList.columns.board')}</TableCell>
+                    <TableCell sx={{ width: '16%' }}>{t('workStatistics.cardList.columns.list')}</TableCell>
+                    <TableCell sx={{ width: '14%' }}>{t('workStatistics.cardList.columns.status')}</TableCell>
+                    <TableCell sx={{ width: '12%' }}>{t('workStatistics.cardList.columns.dueDate')}</TableCell>
+                    <TableCell align="right" sx={{ width: '12%' }} />
+                  </TableRow>
+                </TableHead>
+                <TableBody sx={mvsTableBodyRowSx}>
+                  {selectedEmployeeCards.map((card) => (
+                    <TableRow
+                      key={`${card.boardId}-${card.id}`}
+                      hover
+                      sx={{ cursor: 'pointer' }}
+                      onClick={() => navigate(`/work/projects/${card.boardId}?card=${card.id}`)}
+                    >
+                      <TableCell title={card.title}>{card.title}</TableCell>
+                      <TableCell title={card.boardName}>{card.boardName || '-'}</TableCell>
+                      <TableCell title={card.listTitle}>{card.listTitle || '-'}</TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={statusLabel(card.status)}
+                          color={statusChipColor(card.status)}
+                          variant={card.status === 'todo' ? 'outlined' : 'filled'}
+                          sx={{
+                            height: 24,
+                            maxWidth: '100%',
+                            fontWeight: 600,
+                            fontSize: '0.6875rem',
+                            '& .MuiChip-label': {
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              px: 0.75,
+                            },
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>{card.dueDate || '-'}</TableCell>
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          variant="text"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/work/projects/${card.boardId}?card=${card.id}`);
+                          }}
+                          sx={{
+                            textTransform: 'none',
+                            fontWeight: 600,
+                            minWidth: 0,
+                            px: 0.5,
+                            fontSize: '0.75rem',
+                          }}
+                        >
+                          {t('workStatistics.cardList.openCard')}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, py: 1.5 }}>
+          <Button onClick={closeEmployeeCardList} sx={{ textTransform: 'none', fontWeight: 600 }}>
+            {t('common.close')}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError('')}>
         <Alert onClose={() => setError('')} severity="error">{error}</Alert>
