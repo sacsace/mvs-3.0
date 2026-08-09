@@ -14,6 +14,7 @@ import {
   DialogTitle,
   Divider,
   IconButton,
+  InputAdornment,
   Menu,
   MenuItem,
   Pagination,
@@ -37,6 +38,7 @@ import {
   Notes as NotesIcon,
   PersonAdd as PersonAddIcon,
   LibraryAddOutlined as LibraryAddOutlinedIcon,
+  Search as SearchIcon,
   VisibilityOutlined as VisibilityOutlinedIcon
 } from '@mui/icons-material';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -1354,6 +1356,7 @@ const WorkBoardDetailPage: React.FC = () => {
   const [completedTasksOpen, setCompletedTasksOpen] = useState(false);
   const [completedTaskSearch, setCompletedTaskSearch] = useState('');
   const [completedTaskPage, setCompletedTaskPage] = useState(1);
+  const [cardSearch, setCardSearch] = useState('');
   const [reopeningCardId, setReopeningCardId] = useState<number | null>(null);
 
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -2456,6 +2459,41 @@ const WorkBoardDetailPage: React.FC = () => {
   const activeLists = completedList
     ? lists.filter((list) => list.id !== completedList.id)
     : lists;
+  const normalizedCardSearch = cardSearch.trim().toLowerCase();
+  const cardSearchActive = normalizedCardSearch.length > 0;
+  const displayActiveLists = useMemo(() => {
+    if (!cardSearchActive) return activeLists;
+    const boardMembers = (board?.members || []) as any[];
+    return activeLists.map((list) => ({
+      ...list,
+      cards: (list.cards || []).filter((card) => {
+        const creator = boardMembers.find(
+          (member: any) => Number(member.user_id) === Number(card.created_by)
+        );
+        const referenceNames = (card.reference_user_ids || []).map((rid) => {
+          const m = boardMembers.find((member: any) => Number(member.user_id) === Number(rid));
+          return m?.user?.username || '';
+        });
+        const searchable = [
+          card.title,
+          getPlainTextFromHtml(card.description),
+          card.assignee?.username,
+          creator?.user?.username,
+          list.title,
+          list.assignee?.username,
+          ...referenceNames,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return searchable.includes(normalizedCardSearch);
+      }),
+    }));
+  }, [activeLists, board?.members, cardSearchActive, normalizedCardSearch]);
+  const cardSearchMatchCount = useMemo(
+    () => displayActiveLists.reduce((sum, list) => sum + (list.cards?.length || 0), 0),
+    [displayActiveLists]
+  );
   const completedCards = [...(completedList?.cards || [])].sort((a, b) => {
     const aTime = new Date(a.completed_at || 0).getTime();
     const bTime = new Date(b.completed_at || 0).getTime();
@@ -2787,6 +2825,60 @@ const WorkBoardDetailPage: React.FC = () => {
 
       <Box
         sx={{
+          mb: 1.5,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.25,
+          flexWrap: 'wrap',
+        }}
+      >
+        <TextField
+          size="small"
+          value={cardSearch}
+          onChange={(e) => setCardSearch(e.target.value)}
+          placeholder={txt(
+            '카드 검색 (제목, 내용, 담당자, 참조)',
+            'Search cards (title, details, assignee, reference)'
+          )}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
+              </InputAdornment>
+            ),
+            endAdornment: cardSearch ? (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  aria-label={txt('검색 지우기', 'Clear search')}
+                  onClick={() => setCardSearch('')}
+                  edge="end"
+                >
+                  <CloseIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </InputAdornment>
+            ) : null,
+          }}
+          sx={{
+            width: { xs: '100%', sm: 360 },
+            maxWidth: '100%',
+            '& .MuiOutlinedInput-root': {
+              borderRadius: KANBAN_CONTROL_RADIUS,
+              bgcolor: '#FFFFFF',
+            },
+          }}
+        />
+        {cardSearchActive ? (
+          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
+            {cardSearchMatchCount > 0
+              ? txt(`${cardSearchMatchCount}건`, `${cardSearchMatchCount} match(es)`)
+              : txt('검색 결과 없음', 'No matches')}
+          </Typography>
+        ) : null}
+      </Box>
+
+      <Box
+        sx={{
           mb: 2.5,
           px: { xs: 1.25, sm: 1.5 },
           py: { xs: 1, sm: 1.15 },
@@ -3073,7 +3165,7 @@ const WorkBoardDetailPage: React.FC = () => {
           }}
           onDragStart={handleDragStart}
           onDragCancel={handleDragCancel}
-          onDragEnd={menuCanEdit ? handleDragEnd : () => {}}
+          onDragEnd={menuCanEdit && !cardSearchActive ? handleDragEnd : () => {}}
         >
           <Box
             ref={boardHScrollRef}
@@ -3100,7 +3192,7 @@ const WorkBoardDetailPage: React.FC = () => {
                 boxSizing: 'border-box',
               }}
             >
-            {activeLists.map((list) => (
+            {displayActiveLists.map((list) => (
               <ListColumn
                 key={list.id}
                 list={list}
@@ -3111,7 +3203,7 @@ const WorkBoardDetailPage: React.FC = () => {
                 listTitleEditing={editingListId === list.id}
                 listTitleDraft={editingListId === list.id ? editingListTitle : list.title}
                 listSaving={listSaving}
-                composerOpen={composerListId === list.id}
+                composerOpen={composerListId === list.id && !cardSearchActive}
                 composerTitle={composerTitle}
                 composerDesc={composerDesc}
                 onListTitleDraftChange={setEditingListTitle}
@@ -3126,10 +3218,10 @@ const WorkBoardDetailPage: React.FC = () => {
                 onSubmitCard={submitCard}
                 savingCard={savingCard}
                 onOpenCardDetail={openCardDetail}
-                allowListReorder={menuCanEdit}
+                allowListReorder={menuCanEdit && !cardSearchActive}
                 allowListTitleEdit={menuCanEdit}
                 allowListDelete={menuCanDelete}
-                allowAddCard={menuCanCreate}
+                allowAddCard={menuCanCreate && !cardSearchActive}
               />
             ))}
             </Box>
