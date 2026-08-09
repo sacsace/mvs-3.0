@@ -2825,60 +2825,6 @@ const WorkBoardDetailPage: React.FC = () => {
 
       <Box
         sx={{
-          mb: 1.5,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1.25,
-          flexWrap: 'wrap',
-        }}
-      >
-        <TextField
-          size="small"
-          value={cardSearch}
-          onChange={(e) => setCardSearch(e.target.value)}
-          placeholder={txt(
-            '카드 검색 (제목, 내용, 담당자, 참조)',
-            'Search cards (title, details, assignee, reference)'
-          )}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-              </InputAdornment>
-            ),
-            endAdornment: cardSearch ? (
-              <InputAdornment position="end">
-                <IconButton
-                  size="small"
-                  aria-label={txt('검색 지우기', 'Clear search')}
-                  onClick={() => setCardSearch('')}
-                  edge="end"
-                >
-                  <CloseIcon sx={{ fontSize: 16 }} />
-                </IconButton>
-              </InputAdornment>
-            ) : null,
-          }}
-          sx={{
-            width: { xs: '100%', sm: 360 },
-            maxWidth: '100%',
-            '& .MuiOutlinedInput-root': {
-              borderRadius: KANBAN_CONTROL_RADIUS,
-              bgcolor: '#FFFFFF',
-            },
-          }}
-        />
-        {cardSearchActive ? (
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8125rem' }}>
-            {cardSearchMatchCount > 0
-              ? txt(`${cardSearchMatchCount}건`, `${cardSearchMatchCount} match(es)`)
-              : txt('검색 결과 없음', 'No matches')}
-          </Typography>
-        ) : null}
-      </Box>
-
-      <Box
-        sx={{
           mb: 2.5,
           px: { xs: 1.25, sm: 1.5 },
           py: { xs: 1, sm: 1.15 },
@@ -2914,7 +2860,89 @@ const WorkBoardDetailPage: React.FC = () => {
           >
             {txt('보드 멤버', 'Board Members')} · {members.length}{txt('명', '')}
           </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              flexWrap: 'wrap',
+              minWidth: 0,
+              ml: { xs: 0, sm: 'auto' },
+              mr: { xs: 0, sm: 1 },
+              width: { xs: '100%', sm: 'auto' },
+              justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+            }}
+          >
+            <TextField
+              size="small"
+              value={cardSearch}
+              onChange={(e) => setCardSearch(e.target.value)}
+              placeholder={txt(
+                '카드 검색 (제목, 내용, 담당자, 참조)',
+                'Search cards (title, details, assignee, reference)'
+              )}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ fontSize: 18, color: '#475569' }} />
+                  </InputAdornment>
+                ),
+                endAdornment: cardSearch ? (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      aria-label={txt('검색 지우기', 'Clear search')}
+                      onClick={() => setCardSearch('')}
+                      edge="end"
+                    >
+                      <CloseIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null,
+              }}
+              sx={{
+                width: { xs: '100%', sm: 300 },
+                maxWidth: '100%',
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: KANBAN_CONTROL_RADIUS,
+                  bgcolor: '#FFFFFF',
+                  height: 38,
+                  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.06)',
+                  '& fieldset': {
+                    borderColor: '#94A3B8',
+                    borderWidth: 1.5,
+                  },
+                  '&:hover fieldset': {
+                    borderColor: '#64748B',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: theme.palette.primary.main,
+                    borderWidth: 1.5,
+                  },
+                },
+                '& .MuiInputBase-input': {
+                  color: '#0F172A',
+                  fontWeight: 500,
+                  fontSize: '0.8125rem',
+                  '&::placeholder': {
+                    color: '#64748B',
+                    opacity: 1,
+                  },
+                },
+              }}
+            />
+            {cardSearchActive ? (
+              <Typography
+                variant="body2"
+                sx={{ fontSize: '0.75rem', flexShrink: 0, color: '#475569', fontWeight: 600 }}
+              >
+                {cardSearchMatchCount > 0
+                  ? txt(`${cardSearchMatchCount}건`, `${cardSearchMatchCount} match(es)`)
+                  : txt('검색 결과 없음', 'No matches')}
+              </Typography>
+            ) : null}
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, flexShrink: 0 }}>
             {members.slice(0, BOARD_MEMBER_AVATAR_MAX).map((m: any, index: number) => {
               const name = m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`;
               const initial = name.trim().charAt(0).toUpperCase() || '?';
@@ -3348,67 +3376,29 @@ const WorkBoardDetailPage: React.FC = () => {
         >
           <Button
             size="small"
-            variant="text"
-            startIcon={<ArrowBackIcon sx={{ fontSize: 20 }} />}
+            variant="contained"
+            disableElevation
+            startIcon={<ArrowBackIcon sx={{ fontSize: 18 }} />}
             onClick={closeCardDetail}
             sx={{
               minWidth: 0,
-              px: 0.5,
-              py: 0.25,
+              px: 1.5,
+              py: 0.5,
+              height: 36,
               fontWeight: 700,
-              fontSize: '1rem',
+              fontSize: '0.875rem',
               letterSpacing: '-0.01em',
-              color: 'text.primary',
               textTransform: 'none',
+              borderRadius: KANBAN_CONTROL_RADIUS,
+              bgcolor: '#0F766E',
+              color: '#FFFFFF',
               '&:hover': {
-                bgcolor: 'transparent',
-                color: 'primary.main',
+                bgcolor: '#0D9488',
               },
             }}
           >
             {txt('뒤로 가기', 'Back')}
           </Button>
-          <Box sx={{ flexGrow: 1 }} />
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {menuCanDelete && (
-              <Button
-                size="small"
-                color="error"
-                variant="outlined"
-                onClick={handleDeleteCard}
-                disabled={cardSaving || !cardDetail?.cardId}
-                sx={{
-                  borderRadius: KANBAN_CONTROL_RADIUS,
-                  minWidth: 88,
-                  fontWeight: 700,
-                  borderWidth: 1.5,
-                  bgcolor: alpha('#D32F2F', 0.04),
-                  '&:hover': {
-                    borderWidth: 1.5,
-                    bgcolor: alpha('#D32F2F', 0.1),
-                  },
-                }}
-              >
-                {txt('카드 삭제', 'Delete Card')}
-              </Button>
-            )}
-            <Button
-              size="small"
-              variant="contained"
-              color="primary"
-              disableElevation
-              onClick={saveCardDetail}
-              disabled={!menuCanEdit || cardSaving || !cardDetail?.title?.trim()}
-              sx={{
-                borderRadius: KANBAN_CONTROL_RADIUS,
-                minWidth: 80,
-                fontWeight: 700,
-                boxShadow: 'none',
-              }}
-            >
-              {cardSaving ? <CircularProgress size={18} color="inherit" /> : txt('저장', 'Save')}
-            </Button>
-          </Box>
         </Box>
         <Box
           sx={{
@@ -3427,9 +3417,6 @@ const WorkBoardDetailPage: React.FC = () => {
             sx={{
               ...cardDetailFormSectionSx,
               py: 0.32,
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: 1,
             }}
           >
           <TextField
@@ -3446,82 +3433,8 @@ const WorkBoardDetailPage: React.FC = () => {
             }
             disabled={!menuCanEdit}
             placeholder={txt('카드 제목', 'Card Title')}
-            sx={{
-              ...cardDetailOutlinedWhiteSx,
-              flex: 1,
-              minWidth: 0,
-            }}
+            sx={cardDetailOutlinedWhiteSx}
           />
-          <Tooltip
-            title={
-              isCardDetailCompleted && !canReopenCardDetail
-                ? txt(
-                    '담당자 또는 업무를 지시한 사람만 재오픈할 수 있습니다.',
-                    'Only the assignee or task creator can reopen it.'
-                  )
-                : ''
-            }
-          >
-            <span style={{ display: 'inline-flex', marginTop: 2 }}>
-              <Button
-                size="small"
-                color={isCardDetailCompleted ? 'primary' : 'success'}
-                variant={isCardDetailCompleted ? 'outlined' : 'contained'}
-                disableElevation
-                onClick={() => {
-                  if (isCardDetailCompleted) {
-                    if (completedCardDetail) {
-                      void handleReopenCard(completedCardDetail, true);
-                    }
-                    return;
-                  }
-                  handleCompleteTask();
-                }}
-                disabled={
-                  isCardDetailCompleted
-                    ? !canReopenCardDetail ||
-                      !completedCardDetail ||
-                      !reopenTargetList?.id ||
-                      reopeningCardId === cardDetail?.cardId
-                    : !menuCanEdit ||
-                      cardSaving ||
-                      !cardDetail?.title?.trim() ||
-                      !canUserCompleteTask
-                }
-                sx={{
-                  borderRadius: KANBAN_CONTROL_RADIUS,
-                  minWidth: 104,
-                  height: 40,
-                  fontWeight: 700,
-                  flexShrink: 0,
-                  ...(isCardDetailCompleted
-                    ? {
-                        borderWidth: 1.5,
-                        bgcolor: alpha('#1D4E7C', 0.06),
-                        '&:hover': {
-                          borderWidth: 1.5,
-                          bgcolor: alpha('#1D4E7C', 0.12),
-                        },
-                      }
-                    : {
-                        bgcolor: 'success.main',
-                        color: '#FFFFFF',
-                        '&:hover': { bgcolor: 'success.dark' },
-                        '&.Mui-disabled': {
-                          bgcolor: alpha('#7FA88A', 0.4),
-                          color: '#FFFFFF',
-                        },
-                      }),
-                }}
-              >
-                {reopeningCardId === cardDetail?.cardId
-                  ? <CircularProgress size={16} color="inherit" />
-                  : isCardDetailCompleted
-                    ? txt('재오픈', 'Reopen')
-                    : txt('업무 완료', 'Complete Task')}
-              </Button>
-            </span>
-          </Tooltip>
           </Box>
 
           <Box
@@ -3803,6 +3716,133 @@ const WorkBoardDetailPage: React.FC = () => {
               )}
               sx={{ borderRadius: KANBAN_CONTROL_RADIUS, width: '100%' }}
             />
+          </Box>
+
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 1,
+              flexWrap: 'wrap',
+            }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              {menuCanDelete ? (
+                <Button
+                  size="small"
+                  variant="contained"
+                  disableElevation
+                  onClick={handleDeleteCard}
+                  disabled={cardSaving || !cardDetail?.cardId}
+                  sx={{
+                    borderRadius: KANBAN_CONTROL_RADIUS,
+                    minWidth: 104,
+                    height: 40,
+                    fontWeight: 700,
+                    bgcolor: '#DC2626',
+                    color: '#FFFFFF',
+                    '&:hover': {
+                      bgcolor: '#B91C1C',
+                    },
+                    '&.Mui-disabled': {
+                      bgcolor: alpha('#DC2626', 0.35),
+                      color: '#FFFFFF',
+                    },
+                  }}
+                >
+                  {txt('카드 삭제', 'Delete Card')}
+                </Button>
+              ) : null}
+              <Tooltip
+                title={
+                  isCardDetailCompleted && !canReopenCardDetail
+                    ? txt(
+                        '담당자 또는 업무를 지시한 사람만 재오픈할 수 있습니다.',
+                        'Only the assignee or task creator can reopen it.'
+                      )
+                    : ''
+                }
+              >
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    size="small"
+                    color={isCardDetailCompleted ? 'primary' : 'success'}
+                    variant={isCardDetailCompleted ? 'outlined' : 'contained'}
+                    disableElevation
+                    onClick={() => {
+                      if (isCardDetailCompleted) {
+                        if (completedCardDetail) {
+                          void handleReopenCard(completedCardDetail, true);
+                        }
+                        return;
+                      }
+                      handleCompleteTask();
+                    }}
+                    disabled={
+                      isCardDetailCompleted
+                        ? !canReopenCardDetail ||
+                          !completedCardDetail ||
+                          !reopenTargetList?.id ||
+                          reopeningCardId === cardDetail?.cardId
+                        : !menuCanEdit ||
+                          cardSaving ||
+                          !cardDetail?.title?.trim() ||
+                          !canUserCompleteTask
+                    }
+                    sx={{
+                      borderRadius: KANBAN_CONTROL_RADIUS,
+                      minWidth: 120,
+                      height: 40,
+                      fontWeight: 700,
+                      flexShrink: 0,
+                      ...(isCardDetailCompleted
+                        ? {
+                            borderWidth: 1.5,
+                            bgcolor: alpha('#1D4E7C', 0.06),
+                            '&:hover': {
+                              borderWidth: 1.5,
+                              bgcolor: alpha('#1D4E7C', 0.12),
+                            },
+                          }
+                        : {
+                            bgcolor: 'success.main',
+                            color: '#FFFFFF',
+                            '&:hover': { bgcolor: 'success.dark' },
+                            '&.Mui-disabled': {
+                              bgcolor: alpha('#7FA88A', 0.4),
+                              color: '#FFFFFF',
+                            },
+                          }),
+                    }}
+                  >
+                    {reopeningCardId === cardDetail?.cardId
+                      ? <CircularProgress size={16} color="inherit" />
+                      : isCardDetailCompleted
+                        ? txt('재오픈', 'Reopen')
+                        : txt('업무 완료', 'Complete Task')}
+                  </Button>
+                </span>
+              </Tooltip>
+            </Box>
+            <Button
+              size="small"
+              variant="contained"
+              color="primary"
+              disableElevation
+              onClick={saveCardDetail}
+              disabled={!menuCanEdit || cardSaving || !cardDetail?.title?.trim()}
+              sx={{
+                borderRadius: KANBAN_CONTROL_RADIUS,
+                minWidth: 104,
+                height: 40,
+                fontWeight: 700,
+                boxShadow: 'none',
+                ml: 'auto',
+              }}
+            >
+              {cardSaving ? <CircularProgress size={18} color="inherit" /> : txt('저장', 'Save')}
+            </Button>
           </Box>
 
           <Paper

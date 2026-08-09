@@ -1615,6 +1615,10 @@ export default {
         boardName: '보드 이름',
         descriptionOptional: '설명 (선택)'
       },
+      filters: {
+        company: '회사',
+        selectCompany: '회사 선택'
+      },
       placeholders: {
         boardName: '예: 1분기 마케팅',
         description: '보드에 대한 간단한 설명'
@@ -1622,7 +1626,8 @@ export default {
       /** 카드 목록에서 설명 미입력 시에도 한 줄 영역 유지 */
       noDescription: '설명 없음',
       empty: {
-        noBoards: '아직 작업 보드가 없습니다. 새 작업 보드를 만들어 보세요.'
+        noBoards: '아직 작업 보드가 없습니다. 새 작업 보드를 만들어 보세요.',
+        selectCompany: '회사를 선택하면 해당 회사의 작업 보드를 볼 수 있습니다.'
       },
       dialog: {
         newBoardTitle: '새 작업 보드'
@@ -1630,7 +1635,8 @@ export default {
       errors: {
         loadListFailed: '목록을 불러올 수 없습니다.',
         createFailed: '생성에 실패했습니다.',
-        reorderFailed: '보드 순서를 변경하지 못했습니다.'
+        reorderFailed: '보드 순서를 변경하지 못했습니다.',
+        companyRequired: '회사를 선택해주세요.'
       },
       cardDetail: {
         title: '카드 세부사항',

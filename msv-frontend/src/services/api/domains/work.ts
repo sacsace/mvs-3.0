@@ -39,7 +39,12 @@ export const workBoardService = {
     const response = await api.get('/work/boards', { params });
     return response.data;
   },
-  createBoard: async (data: { name: string; description?: string; board_color?: string }) => {
+  createBoard: async (data: {
+    name: string;
+    description?: string;
+    board_color?: string;
+    company_id?: number;
+  }) => {
     const response = await api.post('/work/boards', data);
     return response.data;
   },

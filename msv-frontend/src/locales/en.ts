@@ -1547,13 +1547,18 @@ export default {
         boardName: 'Board Name',
         descriptionOptional: 'Description (Optional)'
       },
+      filters: {
+        company: 'Company',
+        selectCompany: 'Select company'
+      },
       placeholders: {
         boardName: 'e.g. Q1 Marketing',
         description: 'A short description of the board'
       },
       noDescription: 'No description',
       empty: {
-        noBoards: 'There are no work boards yet. Create a new work board to get started.'
+        noBoards: 'There are no work boards yet. Create a new work board to get started.',
+        selectCompany: 'Select a company to view its work boards.'
       },
       dialog: {
         newBoardTitle: 'New Work Board'
@@ -1561,7 +1566,8 @@ export default {
       errors: {
         loadListFailed: 'Unable to load the list.',
         createFailed: 'Failed to create.',
-        reorderFailed: 'Could not reorder boards.'
+        reorderFailed: 'Could not reorder boards.',
+        companyRequired: 'Please select a company.'
       },
       cardDetail: {
         title: 'Card details',

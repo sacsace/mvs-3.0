@@ -11,6 +11,8 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  MenuItem,
+  TextField,
   Typography,
   CircularProgress,
   Chip,
@@ -50,9 +52,10 @@ import { workBoardService } from '../../services/api';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import { showErrorPopup } from '../../utils/errorHandler';
 import { useMenuStore, useStore } from '../../store';
+import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import { mvsOutlinedLabelProps, mvsPageRootSx } from '../../theme/mvsLayout';
 
 /** 보드 색상 — 채도를 낮춘 시스템 톤에 가깝게 */
 const BOARD_COLOR_OPTIONS = [
@@ -385,18 +388,82 @@ const WorkBoardsPage: React.FC = () => {
   const [description, setDescription] = useState('');
   const [boardColor, setBoardColor] = useState<string>(themePrimaryColor);
   const [saving, setSaving] = useState(false);
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [companiesLoading, setCompaniesLoading] = useState(false);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(() =>
+    user?.company_id != null && Number(user.company_id) > 0 ? Number(user.company_id) : null
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  const effectiveCompanyId = useMemo(() => {
+    if (isRootUser) {
+      return selectedCompanyId != null && Number.isFinite(selectedCompanyId) ? selectedCompanyId : null;
+    }
+    return user?.company_id != null ? Number(user.company_id) : null;
+  }, [isRootUser, selectedCompanyId, user?.company_id]);
+
+  useEffect(() => {
+    if (!isRootUser) return;
+    const userCompanyId = user?.company_id != null ? Number(user.company_id) : NaN;
+    if (Number.isFinite(userCompanyId) && userCompanyId > 0) {
+      setSelectedCompanyId((prev) => (prev == null ? userCompanyId : prev));
+    }
+    let cancelled = false;
+    setCompaniesLoading(true);
+    (async () => {
+      try {
+        const store = useReferenceDataStore.getState();
+        const list = await store.fetchCompanies();
+        if (cancelled) return;
+        let scoped = Array.isArray(list) ? list : [];
+        // 목록이 비었거나 로그인 회사가 없으면 단건 조회로 보강
+        if (
+          Number.isFinite(userCompanyId) &&
+          userCompanyId > 0 &&
+          !scoped.some((c: any) => Number(c.id) === userCompanyId)
+        ) {
+          const one = await store.fetchCompanyById(userCompanyId);
+          if (one && !cancelled) {
+            scoped = [{ ...one, id: Number(one.id) }, ...scoped];
+          }
+        }
+        if (cancelled) return;
+        setCompanies(scoped);
+        setSelectedCompanyId((prev) => {
+          if (prev != null && scoped.some((c: any) => Number(c.id) === Number(prev))) {
+            return Number(prev);
+          }
+          if (Number.isFinite(userCompanyId) && scoped.some((c: any) => Number(c.id) === userCompanyId)) {
+            return userCompanyId;
+          }
+          return scoped[0]?.id != null ? Number(scoped[0].id) : prev;
+        });
+      } catch (e: any) {
+        if (!cancelled) showErrorPopup(e, t('workBoards.title'));
+      } finally {
+        if (!cancelled) setCompaniesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isRootUser, t, user?.company_id]);
+
   const load = useCallback(async () => {
+    if (isRootUser && (effectiveCompanyId == null || !Number.isFinite(effectiveCompanyId))) {
+      setBoards([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const res = await workBoardService.getBoards({
         light: true,
-        company_id: user?.company_id,
+        ...(effectiveCompanyId != null ? { company_id: effectiveCompanyId } : {}),
       });
       if (res.success) {
         setBoards(res.data || []);
@@ -408,7 +475,7 @@ const WorkBoardsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [t, user?.company_id]);
+  }, [effectiveCompanyId, isRootUser, t]);
 
   useEffect(() => {
     load();
@@ -422,6 +489,10 @@ const WorkBoardsPage: React.FC = () => {
     }
     if (!editingBoardId && !canCreateBoard) {
       showErrorPopup(isEn ? 'You do not have permission to create boards.' : '보드를 만들 권한이 없습니다.', t('workBoards.title'));
+      return;
+    }
+    if (!editingBoardId && isRootUser && effectiveCompanyId == null) {
+      showErrorPopup(t('workBoards.errors.companyRequired'), t('workBoards.title'));
       return;
     }
     setSaving(true);
@@ -446,7 +517,8 @@ const WorkBoardsPage: React.FC = () => {
         const createRes = await workBoardService.createBoard({
           name: name.trim(),
           description: trimmedDesc === '' ? undefined : trimmedDesc,
-          board_color: boardColor
+          board_color: boardColor,
+          ...(isRootUser && effectiveCompanyId != null ? { company_id: effectiveCompanyId } : {}),
         });
         if (createRes.success && createRes.data?.id) {
           setOpen(false);
@@ -466,12 +538,71 @@ const WorkBoardsPage: React.FC = () => {
   };
 
   const openCreateDialog = () => {
+    if (isRootUser && effectiveCompanyId == null) {
+      showErrorPopup(t('workBoards.errors.companyRequired'), t('workBoards.title'));
+      return;
+    }
     setEditingBoardId(null);
     setName('');
     setDescription('');
     setBoardColor(themePrimaryColor);
     setOpen(true);
   };
+
+  const selectedCompanyLabel = useMemo(() => {
+    if (selectedCompanyId == null) return '';
+    const found = companies.find((c: any) => Number(c.id) === Number(selectedCompanyId));
+    const name = String(found?.name || found?.company_name || '').trim();
+    return name;
+  }, [companies, selectedCompanyId]);
+
+  const companySelectField =
+    isRootUser ? (
+      <TextField
+        select
+        size="small"
+        label={t('workBoards.filters.company')}
+        value={
+          selectedCompanyId != null &&
+          companies.some((c: any) => Number(c.id) === Number(selectedCompanyId))
+            ? selectedCompanyId
+            : ''
+        }
+        onChange={(e) => {
+          const num = Number(e.target.value);
+          setSelectedCompanyId(Number.isFinite(num) && num > 0 ? num : null);
+        }}
+        disabled={companiesLoading || companies.length === 0}
+        {...mvsOutlinedLabelProps}
+        SelectProps={{
+          displayEmpty: true,
+          renderValue: (selected) => {
+            if (companiesLoading) return t('common.loading');
+            if (selectedCompanyLabel) return selectedCompanyLabel;
+            if (selected === '' || selected == null) {
+              return t('workBoards.filters.selectCompany');
+            }
+            return selectedCompanyLabel || t('workBoards.filters.selectCompany');
+          },
+        }}
+        sx={{
+          minWidth: { xs: '100%', sm: 220 },
+          maxWidth: { xs: '100%', sm: 280 },
+          alignSelf: 'center',
+          bgcolor: '#FFFFFF',
+          '& .MuiOutlinedInput-root': {
+            borderRadius: '8px',
+            height: 40,
+          },
+        }}
+      >
+        {companies.map((company) => (
+          <MenuItem key={company.id} value={Number(company.id)}>
+            {company.name || company.company_name || `#${company.id}`}
+          </MenuItem>
+        ))}
+      </TextField>
+    ) : null;
 
   const openEditDialog = (board: any) => {
     setEditingBoardId(board.id);
@@ -519,22 +650,29 @@ const WorkBoardsPage: React.FC = () => {
         title={t('workBoards.title')}
         description={t('workBoards.description')}
         actions={
-          canCreateBoard ? (
-            <Button
-              variant="contained"
-              disableElevation
-              startIcon={<AddIcon sx={{ fontSize: 20 }} />}
-              onClick={openCreateDialog}
-              sx={{
-                flexShrink: 0,
-                borderRadius: '8px',
-                px: 2.5,
-                textTransform: 'none',
-                fontWeight: 600,
-              }}
-            >
-              {t('workBoards.actions.newBoard')}
-            </Button>
+          isRootUser || canCreateBoard ? (
+            <>
+              {companySelectField}
+              {canCreateBoard ? (
+                <Button
+                  variant="contained"
+                  disableElevation
+                  startIcon={<AddIcon sx={{ fontSize: 20 }} />}
+                  onClick={openCreateDialog}
+                  sx={{
+                    flexShrink: 0,
+                    alignSelf: 'center',
+                    height: 40,
+                    borderRadius: '8px',
+                    px: 2.5,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                  }}
+                >
+                  {t('workBoards.actions.newBoard')}
+                </Button>
+              ) : null}
+            </>
           ) : undefined
         }
       />
@@ -542,6 +680,10 @@ const WorkBoardsPage: React.FC = () => {
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
             <CircularProgress />
+          </Box>
+        ) : isRootUser && effectiveCompanyId == null ? (
+          <Box sx={{ py: 8, textAlign: 'center' }}>
+            <Typography color="text.secondary">{t('workBoards.empty.selectCompany')}</Typography>
           </Box>
         ) : (
           <DndContext

@@ -10,7 +10,8 @@ import {
   WorkBoardCard,
   WorkBoardCardComment,
   WorkBoardMember,
-  User
+  User,
+  Company
 } from '../models';
 
 const DEFAULT_LISTS = [
@@ -386,10 +387,8 @@ async function userCanAccessBoard(
   forWrite = false
 ): Promise<boolean> {
   if (user.role === 'root') {
-    return (
-      board.tenant_id === user.tenant_id &&
-      board.company_id === user.company_id
-    );
+    // root는 같은 테넌트 내 모든 회사 보드 조회/관리 가능
+    return board.tenant_id === user.tenant_id;
   }
   if (user.role === 'audit') {
     if (board.tenant_id !== user.tenant_id) return false;
@@ -404,6 +403,27 @@ async function userCanAccessBoard(
     isMember
   );
 }
+
+const resolveRootTargetCompanyId = async (
+  user: RequestWithUser['user'],
+  rawCompanyId: unknown
+): Promise<{ companyId: number | null; error?: string }> => {
+  if (rawCompanyId === undefined || rawCompanyId === null || rawCompanyId === '') {
+    return { companyId: user.company_id != null ? Number(user.company_id) : null };
+  }
+  const companyId = Number(rawCompanyId);
+  if (!Number.isFinite(companyId) || companyId <= 0) {
+    return { companyId: null, error: '회사 정보가 올바르지 않습니다.' };
+  }
+  const company = await Company.findOne({
+    where: { id: companyId, tenant_id: user.tenant_id },
+    attributes: ['id']
+  });
+  if (!company) {
+    return { companyId: null, error: '선택한 회사를 찾을 수 없습니다.' };
+  }
+  return { companyId };
+};
 
 async function findBoardForUser(
   boardId: number,
@@ -446,10 +466,17 @@ export const getWorkBoards = async (req: RequestWithUser, res: Response) => {
     let boards: WorkBoard[];
 
     if (user.role === 'root' || user.role === 'audit') {
-      const where: any =
-        user.role === 'root'
-          ? { tenant_id: user.tenant_id, company_id: user.company_id }
-          : { tenant_id: user.tenant_id };
+      const where: any = { tenant_id: user.tenant_id };
+      if (user.role === 'root') {
+        const resolved = await resolveRootTargetCompanyId(user, req.query.company_id);
+        if (resolved.error) {
+          return res.status(400).json({ success: false, message: resolved.error });
+        }
+        if (resolved.companyId == null || !Number.isFinite(resolved.companyId)) {
+          return res.status(400).json({ success: false, message: '회사를 선택해주세요.' });
+        }
+        where.company_id = resolved.companyId;
+      }
       boards = await WorkBoard.findAll({
         where,
         attributes: boardAttributes as any,
@@ -516,16 +543,30 @@ export const createWorkBoard = async (req: RequestWithUser, res: Response) => {
       return res.status(400).json({ success: false, message: '보드 색상 형식이 올바르지 않습니다.' });
     }
 
+    let targetCompanyId = user.company_id != null ? Number(user.company_id) : NaN;
+    if (user.role === 'root') {
+      const resolved = await resolveRootTargetCompanyId(user, req.body.company_id);
+      if (resolved.error) {
+        return res.status(400).json({ success: false, message: resolved.error });
+      }
+      if (resolved.companyId == null || !Number.isFinite(resolved.companyId)) {
+        return res.status(400).json({ success: false, message: '회사를 선택해주세요.' });
+      }
+      targetCompanyId = resolved.companyId;
+    } else if (!Number.isFinite(targetCompanyId) || targetCompanyId <= 0) {
+      return res.status(400).json({ success: false, message: '회사 정보가 필요합니다.' });
+    }
+
     const board = await sequelize.transaction(async (t) => {
       await WorkBoard.increment('position', {
         by: 1,
-        where: { tenant_id: user.tenant_id, company_id: user.company_id },
+        where: { tenant_id: user.tenant_id, company_id: targetCompanyId },
         transaction: t
       });
       const b = await WorkBoard.create(
         {
           tenant_id: user.tenant_id,
-          company_id: user.company_id,
+          company_id: targetCompanyId,
           name: String(name).trim().slice(0, 200),
           description: description ? String(description).slice(0, 5000) : undefined,
           board_color: parsedBoardColor.value ?? null,
