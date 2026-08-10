@@ -10,13 +10,13 @@ export interface AppNotification {
   severity: 'info' | 'warning' | 'success' | 'error';
   read: boolean;
   href?: string;
-  inboxChip?: 'payment' | 'vacation' | 'quotation';
+  inboxChip?: 'payment' | 'vacation' | 'quotation' | 'approval';
   source?: 'error' | 'notification' | 'server' | 'inbox';
 }
 
 export interface ActionInboxRow {
   id: string;
-  kind: 'expense_payment' | 'vacation_pending' | 'quotation_pending';
+  kind: 'expense_payment' | 'vacation_pending' | 'quotation_pending' | 'approval_pending';
   timestamp: string;
   href: string;
   payload: Record<string, unknown>;
@@ -59,6 +59,12 @@ export function hrefFromServerNotificationData(data: unknown): string | undefine
       }
       return `/work/projects/${boardId}`;
     }
+  }
+
+  if (d.feature === 'approval') {
+    return typeof d.href === 'string' && d.href.startsWith('/') && !d.href.startsWith('//')
+      ? d.href
+      : '/work/approval';
   }
 
   if (d.feature !== 'work_report') return undefined;
@@ -114,6 +120,24 @@ export const mapInboxRowToNotification = (
       read: false,
       href: row.href,
       inboxChip: 'vacation',
+      source: 'inbox',
+    };
+  }
+
+  if (row.kind === 'approval_pending') {
+    return {
+      id: `inbox-${row.id}`,
+      title: t('common.notificationInbox.approvalTitle'),
+      message: t('common.notificationInbox.approvalBody', {
+        requester: String(p.requesterName ?? '—'),
+        title: String(p.approvalTitle ?? ''),
+        documentId: String(p.documentId ?? ''),
+      }),
+      timestamp: ts,
+      severity: 'warning',
+      read: false,
+      href: row.href,
+      inboxChip: 'approval',
       source: 'inbox',
     };
   }
@@ -212,6 +236,7 @@ export function getNotificationChipLabel(
   if (item.inboxChip === 'payment') return t('common.notificationInbox.chipPayment');
   if (item.inboxChip === 'vacation') return t('common.notificationInbox.chipVacation');
   if (item.inboxChip === 'quotation') return t('common.notificationInbox.chipQuotation');
+  if (item.inboxChip === 'approval') return t('common.notificationInbox.chipApproval');
   return item.severity.toUpperCase();
 }
 
@@ -221,6 +246,7 @@ export function getNotificationChipColor(
   if (item.inboxChip === 'payment') return 'warning';
   if (item.inboxChip === 'vacation') return 'info';
   if (item.inboxChip === 'quotation') return 'secondary';
+  if (item.inboxChip === 'approval') return 'warning';
   if (item.severity === 'error') return 'error';
   if (item.severity === 'warning') return 'warning';
   if (item.severity === 'success') return 'success';

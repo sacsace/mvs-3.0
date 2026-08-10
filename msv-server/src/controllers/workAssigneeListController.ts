@@ -43,7 +43,7 @@ async function renumberAssignees(tenantId: number, companyId: number) {
 
 async function renumberItems(assigneeId: number) {
   const rows = await WorkAssigneeItem.findAll({
-    where: { assignee_id: assigneeId },
+    where: { assignee_id: assigneeId, is_active: true },
     order: [
       ['sort_order', 'ASC'],
       ['id', 'ASC'],
@@ -77,6 +77,7 @@ async function findDuplicateClientAssignment(params: {
   const items = await WorkAssigneeItem.findAll({
     where: {
       assignee_id: { [Op.in]: assigneeIds },
+      is_active: true,
       ...(excludeItemId != null ? { id: { [Op.ne]: excludeItemId } } : {}),
     },
     attributes: ['id', 'name', 'assignee_id'],
@@ -109,6 +110,7 @@ export const getWorkAssigneeList = async (req: RequestWithUser, res: Response) =
           as: 'items',
           required: false,
           separate: true,
+          where: { is_active: true },
           order: [
             ['sort_order', 'ASC'],
             ['id', 'ASC'],
@@ -229,7 +231,10 @@ export const deleteWorkAssignee = async (req: RequestWithUser, res: Response) =>
       return res.status(404).json({ success: false, message: '담당자를 찾을 수 없습니다.' });
     }
 
-    await WorkAssigneeItem.destroy({ where: { assignee_id: id }, transaction: t });
+    await WorkAssigneeItem.update(
+      { is_active: false },
+      { where: { assignee_id: id, is_active: true }, transaction: t }
+    );
     await assignee.update({ is_active: false }, { transaction: t });
     await t.commit();
     await renumberAssignees(assignee.tenant_id, assignee.company_id);
@@ -322,7 +327,7 @@ export const createWorkAssigneeItem = async (req: RequestWithUser, res: Response
     }
 
     const maxOrder = (await WorkAssigneeItem.max('sort_order', {
-      where: { assignee_id: assigneeId },
+      where: { assignee_id: assigneeId, is_active: true },
     })) as number | null;
 
     const item = await WorkAssigneeItem.create({
@@ -331,6 +336,7 @@ export const createWorkAssigneeItem = async (req: RequestWithUser, res: Response
       note: req.body?.note != null ? String(req.body.note).trim() || null : null,
       is_highlighted: Boolean(req.body?.is_highlighted),
       sort_order: (maxOrder ?? -1) + 1,
+      is_active: true,
     });
 
     return res.status(201).json({ success: true, data: item });
@@ -350,7 +356,7 @@ export const updateWorkAssigneeItem = async (req: RequestWithUser, res: Response
     const { tenantId, companyId } = resolveScope(req);
     const id = parseInt(String(req.params.id), 10);
     const item = await WorkAssigneeItem.findByPk(id);
-    if (!item) {
+    if (!item || item.is_active === false) {
       return res.status(404).json({ success: false, message: '항목을 찾을 수 없습니다.' });
     }
 
@@ -404,7 +410,7 @@ export const deleteWorkAssigneeItem = async (req: RequestWithUser, res: Response
     const { tenantId, companyId } = resolveScope(req);
     const id = parseInt(String(req.params.id), 10);
     const item = await WorkAssigneeItem.findByPk(id);
-    if (!item) {
+    if (!item || item.is_active === false) {
       return res.status(404).json({ success: false, message: '항목을 찾을 수 없습니다.' });
     }
 
@@ -414,7 +420,7 @@ export const deleteWorkAssigneeItem = async (req: RequestWithUser, res: Response
     }
 
     const assigneeId = item.assignee_id;
-    await item.destroy();
+    await item.update({ is_active: false });
     await renumberItems(assigneeId);
     return res.json({ success: true, message: '항목이 삭제되었습니다.' });
   } catch (error: any) {
@@ -445,7 +451,7 @@ export const moveWorkAssigneeItem = async (req: RequestWithUser, res: Response) 
     }
 
     const item = await WorkAssigneeItem.findByPk(id, { transaction: t });
-    if (!item) {
+    if (!item || item.is_active === false) {
       await t.rollback();
       return res.status(404).json({ success: false, message: '항목을 찾을 수 없습니다.' });
     }
@@ -462,7 +468,7 @@ export const moveWorkAssigneeItem = async (req: RequestWithUser, res: Response) 
 
     if (sameColumn) {
       const rows = await WorkAssigneeItem.findAll({
-        where: { assignee_id: sourceId },
+        where: { assignee_id: sourceId, is_active: true },
         order: [
           ['sort_order', 'ASC'],
           ['id', 'ASC'],
@@ -484,7 +490,7 @@ export const moveWorkAssigneeItem = async (req: RequestWithUser, res: Response) 
 
     // 다른 담당자로 이동
     const sourceRows = await WorkAssigneeItem.findAll({
-      where: { assignee_id: sourceId, id: { [Op.ne]: id } },
+      where: { assignee_id: sourceId, is_active: true, id: { [Op.ne]: id } },
       order: [
         ['sort_order', 'ASC'],
         ['id', 'ASC'],
@@ -496,7 +502,7 @@ export const moveWorkAssigneeItem = async (req: RequestWithUser, res: Response) 
     );
 
     const targetRows = await WorkAssigneeItem.findAll({
-      where: { assignee_id: targetAssigneeId },
+      where: { assignee_id: targetAssigneeId, is_active: true },
       order: [
         ['sort_order', 'ASC'],
         ['id', 'ASC'],

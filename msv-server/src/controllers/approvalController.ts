@@ -5,6 +5,27 @@ import { Op } from 'sequelize';
 import { pushNotification } from './notificationController';
 import SocketService from '../services/socketService';
 
+const parseJsonArray = (value: unknown): any[] => {
+  if (value == null) return [];
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const flowApproverId = (step: any): number | null => {
+  if (!step) return null;
+  const raw = step.approverId ?? step.approver_id;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
 const notifyApprovalUser = (
   req: RequestWithUser,
   targetUserId: number | null | undefined,
@@ -78,12 +99,17 @@ export const getApprovals = async (req: RequestWithUser, res: Response) => {
     const rid = parseQueryInt(requester_id);
     const curAppr = parseQueryInt(current_approver_id);
 
-    // 일반 사용자: 기본은 본인이 요청한 건만. current_approver_id가 본인이면 결재 대기함(다른 사람이 올린 건) 조회
+    // 일반 사용자: 본인이 요청한 건 + 본인에게 온 결재 건
     if (userRole === 'user' && userId != null) {
-      if (curAppr != null && curAppr === userId) {
+      if (curAppr != null && curAppr === userId && (rid == null || rid !== userId)) {
         whereClause.current_approver_id = userId;
-      } else {
+      } else if (rid != null && rid === userId && (curAppr == null || curAppr !== userId)) {
         whereClause.requester_id = userId;
+      } else {
+        whereClause[Op.or] = [
+          { requester_id: userId },
+          { current_approver_id: userId },
+        ];
       }
     } else {
       if (rid != null) {
@@ -217,7 +243,7 @@ export const createApproval = async (req: RequestWithUser, res: Response) => {
     const userId = req.user?.id;
     const { document_id, title, type, category, amount, description, attachments, priority, due_date, approval_flow } = req.body;
 
-    if (!document_id || !title || !type || !category || !description) {
+    if (!document_id || !title || !type || !description) {
       return res.status(400).json({ 
         success: false, 
         message: '필수 필드가 누락되었습니다.' 
@@ -247,14 +273,14 @@ export const createApproval = async (req: RequestWithUser, res: Response) => {
       is_active: true,
       title,
       type,
-      category,
+      category: category != null && String(category).trim() !== '' ? String(category).trim() : '',
       amount: amount || null,
       requester_id: userId,
       description,
-      attachments: attachments ? JSON.stringify(attachments) : null,
+      attachments: attachments != null ? attachments : null,
       status: 'draft',
       priority: priority || 'medium',
-      approval_flow: approval_flow ? JSON.stringify(approval_flow) : '[]',
+      approval_flow: Array.isArray(approval_flow) ? approval_flow : [],
       due_date: due_date || null
     });
 
@@ -323,11 +349,15 @@ export const updateApproval = async (req: RequestWithUser, res: Response) => {
       category: category !== undefined ? category : approval.category,
       amount: amount !== undefined ? amount : approval.amount,
       description: description !== undefined ? description : approval.description,
-      attachments: attachments !== undefined ? JSON.stringify(attachments) : approval.attachments,
+      attachments: attachments !== undefined ? attachments : approval.attachments,
       priority: priority !== undefined ? priority : approval.priority,
       due_date: due_date !== undefined ? due_date : approval.due_date,
-      approval_flow: approval_flow !== undefined ? JSON.stringify(approval_flow) : approval.approval_flow,
-      status: status !== undefined ? status : approval.status
+      // 제출 이후에는 승인자/결재흐름 변경 불가 (전달·승인 API만 가능)
+      approval_flow:
+        approval.status === 'draft' && approval_flow !== undefined
+          ? approval_flow
+          : approval.approval_flow,
+      status: approval.status === 'draft' && status !== undefined ? status : approval.status
     });
 
     // 사용자 정보 포함하여 반환
@@ -437,19 +467,19 @@ export const submitApproval = async (req: RequestWithUser, res: Response) => {
     }
 
     // approval_flow에서 첫 번째 승인자 설정
-    const approvalFlow = approval.approval_flow ? JSON.parse(approval.approval_flow) : [];
-    const firstApprover = approvalFlow.length > 0 ? approvalFlow[0] : null;
+    const approvalFlow = parseJsonArray(approval.approval_flow);
+    const firstApproverId = flowApproverId(approvalFlow[0]);
 
     await approval.update({
       status: 'submitted',
-      current_approver_id: firstApprover ? firstApprover.approverId : null
+      current_approver_id: firstApproverId
     });
 
-    if (firstApprover?.approverId) {
+    if (firstApproverId) {
       const requesterName = req.user?.username || '요청자';
       notifyApprovalUser(
         req,
-        Number(firstApprover.approverId),
+        firstApproverId,
         '전자결재 승인 요청',
         `${requesterName}님이 "${approval.title}" 결재를 요청했습니다.`,
         approval
@@ -514,8 +544,10 @@ export const approveApproval = async (req: RequestWithUser, res: Response) => {
     }
 
     // approval_flow 업데이트
-    const approvalFlow = approval.approval_flow ? JSON.parse(approval.approval_flow) : [];
-    const currentStepIndex = approvalFlow.findIndex((step: any) => step.approverId === userId && step.status === 'pending');
+    const approvalFlow = parseJsonArray(approval.approval_flow);
+    const currentStepIndex = approvalFlow.findIndex(
+      (step: any) => flowApproverId(step) === Number(userId) && step.status === 'pending'
+    );
     
     if (currentStepIndex >= 0) {
       approvalFlow[currentStepIndex].status = 'approved';
@@ -526,18 +558,19 @@ export const approveApproval = async (req: RequestWithUser, res: Response) => {
 
     // 다음 승인자 확인
     const nextStep = approvalFlow.find((step: any) => step.status === 'pending');
+    const nextApproverId = flowApproverId(nextStep);
     
-    if (nextStep) {
+    if (nextApproverId) {
       // 다음 승인자가 있으면 in_review 상태 유지
       await approval.update({
         status: 'in_review',
-        current_approver_id: nextStep.approverId,
-        approval_flow: JSON.stringify(approvalFlow)
+        current_approver_id: nextApproverId,
+        approval_flow: approvalFlow
       });
       const approverName = req.user?.username || '승인자';
       notifyApprovalUser(
         req,
-        Number(nextStep.approverId),
+        nextApproverId,
         '전자결재 승인 요청',
         `${approverName}님이 "${approval.title}" 결재를 승인했습니다. 다음 승인이 필요합니다.`,
         approval
@@ -547,7 +580,7 @@ export const approveApproval = async (req: RequestWithUser, res: Response) => {
       await approval.update({
         status: 'approved',
         current_approver_id: null,
-        approval_flow: JSON.stringify(approvalFlow)
+        approval_flow: approvalFlow
       });
       const approverName = req.user?.username || '승인자';
       notifyApprovalUser(
@@ -703,8 +736,10 @@ export const rejectApproval = async (req: RequestWithUser, res: Response) => {
     }
 
     // approval_flow 업데이트
-    const approvalFlow = approval.approval_flow ? JSON.parse(approval.approval_flow) : [];
-    const currentStepIndex = approvalFlow.findIndex((step: any) => step.approverId === userId && step.status === 'pending');
+    const approvalFlow = parseJsonArray(approval.approval_flow);
+    const currentStepIndex = approvalFlow.findIndex(
+      (step: any) => flowApproverId(step) === Number(userId) && step.status === 'pending'
+    );
     
     if (currentStepIndex >= 0) {
       approvalFlow[currentStepIndex].status = 'rejected';
@@ -715,7 +750,7 @@ export const rejectApproval = async (req: RequestWithUser, res: Response) => {
     await approval.update({
       status: 'rejected',
       current_approver_id: null,
-      approval_flow: JSON.stringify(approvalFlow)
+      approval_flow: approvalFlow
     });
 
     const approverName = req.user?.username || '승인자';
@@ -775,6 +810,14 @@ export const escalateApproval = async (req: RequestWithUser, res: Response) => {
       });
     }
 
+    const forwardReason = String(comment || '').trim();
+    if (!forwardReason) {
+      return res.status(400).json({
+        success: false,
+        message: '전달 사유를 입력해주세요.'
+      });
+    }
+
     const approval = await (Approval as any).findOne({
       where: {
         id,
@@ -792,8 +835,7 @@ export const escalateApproval = async (req: RequestWithUser, res: Response) => {
       });
     }
 
-    const approvalFlowRaw = approval.approval_flow || [];
-    const approvalFlow = typeof approvalFlowRaw === 'string' ? JSON.parse(approvalFlowRaw) : approvalFlowRaw;
+    const approvalFlow = parseJsonArray(approval.approval_flow);
     const escalationCount = approvalFlow.filter((step: any) => step.escalated).length;
 
     if (escalationCount >= 4) {
@@ -804,7 +846,7 @@ export const escalateApproval = async (req: RequestWithUser, res: Response) => {
     }
 
     const currentStepIndex = approvalFlow.findIndex(
-      (step: any) => step.approverId === userId && step.status === 'pending'
+      (step: any) => flowApproverId(step) === Number(userId) && step.status === 'pending'
     );
 
     if (currentStepIndex < 0) {
@@ -836,7 +878,7 @@ export const escalateApproval = async (req: RequestWithUser, res: Response) => {
       });
     }
 
-    const alreadyInFlow = approvalFlow.some((step: any) => step.approverId === nextApprover.id);
+    const alreadyInFlow = approvalFlow.some((step: any) => flowApproverId(step) === Number(nextApprover.id));
     if (alreadyInFlow) {
       return res.status(400).json({
         success: false,
@@ -849,7 +891,7 @@ export const escalateApproval = async (req: RequestWithUser, res: Response) => {
       ...approvalFlow[currentStepIndex],
       status: 'skipped',
       approvedAt: nowIso,
-      comment: comment || '에스컬레이션',
+      comment: forwardReason,
       escalated: true,
       escalatedToId: nextApprover.id,
       escalatedToName: nextApprover.username,
@@ -872,7 +914,7 @@ export const escalateApproval = async (req: RequestWithUser, res: Response) => {
     await approval.update({
       status: 'in_review',
       current_approver_id: nextApprover.id,
-      approval_flow: JSON.stringify(approvalFlow)
+      approval_flow: approvalFlow
     });
 
     const actorName = req.user?.username || '승인자';

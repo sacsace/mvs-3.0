@@ -65,6 +65,7 @@ import WorkBoardCardComment from './WorkBoardCardComment';
 import WorkBoardMember from './WorkBoardMember';
 import WorkAssignee from './WorkAssignee';
 import WorkAssigneeItem from './WorkAssigneeItem';
+import ApprovalType from './ApprovalType';
 import EmploymentContractTemplate from './EmploymentContractTemplate';
 import EmploymentContract from './EmploymentContract';
 import EmploymentContractSignature from './EmploymentContractSignature';
@@ -612,6 +613,7 @@ export {
   WorkBoardMember,
   WorkAssignee,
   WorkAssigneeItem,
+  ApprovalType,
   EmploymentContractTemplate,
   EmploymentContract,
   EmploymentContractSignature,

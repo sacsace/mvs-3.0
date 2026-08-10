@@ -240,7 +240,27 @@ export const approvalService = {
   escalateApproval: async (id: number, data: { next_approver_id: number; comment?: string }) => {
     const response = await api.post(`/work/approvals/${id}/escalate`, data);
     return response.data;
-  }
+  },
+
+  getApprovalTypes: async (params?: { company_id?: number; include_inactive?: number }) => {
+    const response = await api.get('/work/approvals/types', { params });
+    return response.data;
+  },
+
+  createApprovalType: async (data: { name: string; code?: string; sort_order?: number; company_id?: number }) => {
+    const response = await api.post('/work/approvals/types', data);
+    return response.data;
+  },
+
+  updateApprovalType: async (id: number, data: { name?: string; sort_order?: number; company_id?: number }) => {
+    const response = await api.put(`/work/approvals/types/${id}`, data);
+    return response.data;
+  },
+
+  deleteApprovalType: async (id: number) => {
+    const response = await api.delete(`/work/approvals/types/${id}`);
+    return response.data;
+  },
 };
 
 // 견적??관�?API ?�비??

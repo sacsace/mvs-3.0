@@ -8,6 +8,7 @@ interface WorkAssigneeItemAttributes {
   note?: string | null;
   is_highlighted: boolean;
   sort_order: number;
+  is_active: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -15,7 +16,7 @@ interface WorkAssigneeItemAttributes {
 interface WorkAssigneeItemCreationAttributes
   extends Optional<
     WorkAssigneeItemAttributes,
-    'id' | 'note' | 'is_highlighted' | 'sort_order' | 'created_at' | 'updated_at'
+    'id' | 'note' | 'is_highlighted' | 'sort_order' | 'is_active' | 'created_at' | 'updated_at'
   > {}
 
 class WorkAssigneeItem
@@ -28,6 +29,7 @@ class WorkAssigneeItem
   public note?: string | null;
   public is_highlighted!: boolean;
   public sort_order!: number;
+  public is_active!: boolean;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
 }
@@ -61,6 +63,11 @@ WorkAssigneeItem.init(
       allowNull: false,
       defaultValue: 0,
     },
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+    },
   },
   {
     sequelize,
@@ -72,6 +79,7 @@ WorkAssigneeItem.init(
     indexes: [
       { fields: ['assignee_id'] },
       { fields: ['assignee_id', 'sort_order'] },
+      { fields: ['assignee_id', 'is_active'] },
     ],
   }
 );

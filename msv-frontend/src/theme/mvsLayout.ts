@@ -7,7 +7,7 @@ export type MvsStyleObject = SystemStyleObject<Theme>;
 /** MVS 공통 레이아웃 토큰 — 페이지에서 sx로 재사용 가능 (로직 변경 없음) */
 
 /** Body 영역 기본 최대 너비 (초광폭 모니터에서 가독성 유지) */
-export const mvsPageContentMaxWidth = 1960;
+export const mvsPageContentMaxWidth = 1764;
 
 export const mvsPageShellSx: SxProps<Theme> = {
   width: '100%',

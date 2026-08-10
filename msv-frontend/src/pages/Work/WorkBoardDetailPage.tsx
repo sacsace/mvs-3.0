@@ -2692,10 +2692,21 @@ const WorkBoardDetailPage: React.FC = () => {
     assigneeUidComplete === myUidComplete;
   const canUserCompleteTask =
     isOwner || assigneeUidComplete === null || isCardAssigneeComplete;
-  const members = useMemo(
-    () => (board?.members || []) as any[],
-    [board?.members]
-  );
+  const members = useMemo(() => {
+    const list = [...((board?.members || []) as any[])];
+    const creatorId =
+      board?.created_by != null && Number.isFinite(Number(board.created_by))
+        ? Number(board.created_by)
+        : null;
+    if (creatorId == null) return list;
+    list.sort((a, b) => {
+      const aIsCreator = Number(a.user_id) === creatorId ? 0 : 1;
+      const bIsCreator = Number(b.user_id) === creatorId ? 0 : 1;
+      if (aIsCreator !== bIsCreator) return aIsCreator - bIsCreator;
+      return Number(a.id) - Number(b.id);
+    });
+    return list;
+  }, [board?.members, board?.created_by]);
   const memberOptions = useMemo<MemberOption[]>(
     () =>
       members.map((m: any) => ({

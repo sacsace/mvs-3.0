@@ -4,7 +4,7 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { useErrorStore } from './store/errorStore';
-import i18n from './locales/i18n';
+import i18n, { bootstrapI18n } from './locales/i18n';
 
 // Completely disable service worker in development only
 if (process.env.NODE_ENV === 'development' && 'serviceWorker' in navigator) {
@@ -14,7 +14,7 @@ if (process.env.NODE_ENV === 'development' && 'serviceWorker' in navigator) {
       registration.unregister();
     }
   });
-  
+
   // Clear all caches
   if ('caches' in window) {
     caches.keys().then((cacheNames) => {
@@ -66,32 +66,30 @@ window.addEventListener('unhandledrejection', (event) => {
       userMessage = event.reason.response.data.message;
     }
   }
-  
-  const errorDetails = process.env.NODE_ENV === 'development' 
-    ? `Promise Rejection: ${JSON.stringify(event.reason, null, 2)}` 
+
+  const errorDetails = process.env.NODE_ENV === 'development'
+    ? `Promise Rejection: ${JSON.stringify(event.reason, null, 2)}`
     : undefined;
-  
+
   errorStore.showError(
     i18n.t('common.pageError'),
     userMessage,
     errorDetails,
     'error'
   );
-  
-  // 기본 에러 동작은 유지 (콘솔에 로그)
+
   console.error('❌ [전역 Promise Rejection 핸들러]', event.reason);
-  
-  // 기본 동작 방지 (선택사항)
-  // event.preventDefault();
 });
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
 
-reportWebVitals();
+void bootstrapI18n().finally(() => {
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+  reportWebVitals();
+});

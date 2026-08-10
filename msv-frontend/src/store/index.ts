@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { Menu, UserPermission } from '../services/menuService';
-import { ensureI18nLanguage } from '../locales/i18n';
+import { detectOsLanguage } from '../locales/i18n';
 import { useNotificationStore, bindNotificationPrefsUser } from './notificationStore';
 import { useErrorStore } from './errorStore';
 
@@ -103,7 +103,7 @@ export const useMenuStore = create<MenuState>()(
       /** Sidebar 첫 fetch 전까지 true — AppLayout이 “권한 없음”을 잠깐 띄우지 않도록 */
       loading: true,
       error: null,
-      language: 'ko',
+      language: detectOsLanguage(),
 
       setMenus: (menus: Menu[]) => set({ menus }),
       setUserPermissions: (permissions: UserPermission[]) => set({ userPermissions: permissions }),
@@ -170,12 +170,8 @@ export const useMenuStore = create<MenuState>()(
     {
       name: 'mvs-menu-ui',
       storage: createJSONStorage(() => sessionStorage),
-      partialize: (state) => ({ language: state.language }),
-      onRehydrateStorage: () => (state) => {
-        if (state?.language === 'ko' || state?.language === 'en') {
-          void ensureI18nLanguage(state.language);
-        }
-      }
+      // 언어는 OS(및 로그인 후 서버 prefs)로 결정 — sessionStorage에 고정하지 않음
+      partialize: () => ({}),
     }
   )
 );

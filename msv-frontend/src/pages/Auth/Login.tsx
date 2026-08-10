@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Container,
   Paper,
   TextField,
   Button,
@@ -23,7 +22,7 @@ import { useStore, useMenuStore } from '../../store';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { api, API_BASE_URL } from '../../services/api';
 import { useTranslation } from 'react-i18next';
-import { ensureI18nLanguage } from '../../locales/i18n';
+import { ensureI18nLanguage, detectOsLanguage } from '../../locales/i18n';
 import { alpha, useTheme } from '@mui/material/styles';
 
 const Login: React.FC = () => {
@@ -66,6 +65,13 @@ const Login: React.FC = () => {
     address: ''
   });
 
+  // 로그인 화면: OS 언어(한국어 외 → 영어)로 SEO/UI 동기화
+  useEffect(() => {
+    const lang = detectOsLanguage();
+    setMenuLanguage(lang);
+    void ensureI18nLanguage(lang);
+  }, [setMenuLanguage]);
+
   // 컴포넌트 언마운트 시 타이머 정리
   useEffect(() => {
     return () => {
@@ -83,7 +89,6 @@ const Login: React.FC = () => {
     // 에러 메시지를 즉시 지우지 않고 사용자가 로그인 버튼을 다시 클릭할 때까지 유지
   };
 
-  const cardWidth = 400;
   const controlWidth = 320;
 
   const getPeriodEndDate = (startDate: string): string => {
@@ -234,13 +239,13 @@ const Login: React.FC = () => {
   const loginInputSx = {
     '& .MuiOutlinedInput-root': {
       minHeight: 40,
-      borderRadius: '8px',
+      borderRadius: '4px',
       bgcolor: '#FFFFFF',
       '& fieldset': {
-        borderColor: '#CBD5E1',
+        borderColor: '#B4B4B4',
       },
       '&:hover fieldset': {
-        borderColor: '#94A3B8',
+        borderColor: '#6B7280',
       },
       '&.Mui-focused fieldset': {
         borderColor: 'primary.main',
@@ -320,106 +325,138 @@ const Login: React.FC = () => {
     <Box
       sx={{
         minHeight: '100vh',
-        bgcolor: theme.palette.mode === 'light' ? '#F0F4F8' : theme.palette.grey[900],
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: { xs: 2, sm: 3 },
+        flexDirection: { xs: 'column', md: 'row' },
+        bgcolor: '#FFFFFF',
         position: 'relative',
       }}
     >
       <Box
         sx={{
-          position: 'absolute',
-          top: { xs: 14, sm: 22 },
-          right: { xs: 14, sm: 22 },
-          zIndex: 2,
+          flex: { xs: '0 0 auto', md: '0 0 42%' },
+          bgcolor: '#163E63',
+          color: '#F8FAFC',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: { xs: 'center', md: 'flex-end' },
+          px: { xs: 2.5, sm: 4, md: 5 },
+          py: { xs: 2.5, md: 5 },
+          borderRight: { md: '1px solid #112F4B' },
+          borderBottom: { xs: '1px solid #112F4B', md: 'none' },
+          minHeight: { xs: 120, md: '100vh' },
         }}
       >
-        <ToggleButtonGroup
-          exclusive
-          value={i18n.language?.startsWith('en') ? 'en' : 'ko'}
-          onChange={handleLoginLanguage}
-          aria-label={t('login.languageToggleAria')}
+        <Typography
+          component="p"
           sx={{
-            bgcolor: 'background.paper',
-            p: 0.25,
-            borderRadius: '8px',
-            border: '1px solid #CBD5E1',
-            '& .MuiToggleButtonGroup-grouped': {
-              border: 0,
-              mx: 0.15,
-              borderRadius: '6px !important',
-              px: 1.5,
-              py: 0.45,
-              fontSize: '0.8125rem',
-              fontWeight: 600,
-              textTransform: 'none',
-              color: 'text.secondary',
-              '&.Mui-selected': {
-                bgcolor: alpha(theme.palette.primary.main, 0.1),
-                color: 'primary.main',
-                '&:hover': {
-                  bgcolor: alpha(theme.palette.primary.main, 0.14),
+            fontSize: { xs: '1.75rem', md: '2.75rem' },
+            fontWeight: 800,
+            letterSpacing: '-0.04em',
+            lineHeight: 1.05,
+            color: '#FFFFFF',
+            mb: 0.75,
+          }}
+        >
+          {t('login.brandName')}
+        </Typography>
+        <Typography
+          sx={{
+            fontSize: { xs: '0.8125rem', md: '0.9375rem' },
+            fontWeight: 500,
+            color: alpha('#F8FAFC', 0.78),
+            letterSpacing: '-0.01em',
+            maxWidth: 280,
+          }}
+        >
+          {t('login.brandTagline')}
+        </Typography>
+      </Box>
+
+      <Box
+        sx={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minWidth: 0,
+          bgcolor: '#F1F5F9',
+          position: 'relative',
+        }}
+      >
+        <Box
+          sx={{
+            position: 'absolute',
+            top: { xs: 12, sm: 18 },
+            right: { xs: 12, sm: 18 },
+            zIndex: 2,
+          }}
+        >
+          <ToggleButtonGroup
+            exclusive
+            value={i18n.language?.startsWith('en') ? 'en' : 'ko'}
+            onChange={handleLoginLanguage}
+            aria-label={t('login.languageToggleAria')}
+            sx={{
+              bgcolor: '#FFFFFF',
+              p: 0.25,
+              borderRadius: '4px',
+              border: '1px solid #B4B4B4',
+              boxShadow: 'none',
+              '& .MuiToggleButtonGroup-grouped': {
+                border: 0,
+                mx: 0.15,
+                borderRadius: '2px !important',
+                px: 1.5,
+                py: 0.45,
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                textTransform: 'none',
+                color: 'text.secondary',
+                '&.Mui-selected': {
+                  bgcolor: '#E2E8F0',
+                  color: '#0F172A',
+                  '&:hover': { bgcolor: '#CBD5E1' },
                 },
               },
-            },
-          }}
-        >
-          <ToggleButton value="en" disableRipple>
-            {t('login.langEn')}
-          </ToggleButton>
-          <ToggleButton value="ko" disableRipple>
-            {t('login.langKo')}
-          </ToggleButton>
-        </ToggleButtonGroup>
-      </Box>
-      <Container maxWidth="xs">
-        <Paper
-          elevation={0}
-          sx={{
-            px: { xs: 3, sm: 3.5 },
-            py: { xs: 3, sm: 3.5 },
-            borderRadius: '10px',
-            bgcolor: 'background.paper',
-            border: theme.palette.mode === 'light' ? '1px solid #CBD5E1' : `1px solid ${alpha(theme.palette.divider, 0.5)}`,
-            boxShadow: 'none',
-            width: `min(100%, ${cardWidth}px)`,
-            mx: 'auto',
-          }}
-        >
-          <Box
-            sx={{
-              textAlign: 'center',
-              mb: 2,
-              width: `min(100%, ${controlWidth}px)`,
-              mx: 'auto',
             }}
           >
+            <ToggleButton value="en" disableRipple>
+              {t('login.langEn')}
+            </ToggleButton>
+            <ToggleButton value="ko" disableRipple>
+              {t('login.langKo')}
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+
+        <Box
+          sx={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            px: { xs: 2.5, sm: 4 },
+            py: { xs: 4, sm: 5 },
+          }}
+        >
+          <Box sx={{ width: '100%', maxWidth: controlWidth }}>
             <Typography
               component="h1"
               sx={{
                 fontWeight: 700,
-                fontSize: '1.25rem',
+                fontSize: '1.125rem',
                 color: 'text.primary',
                 letterSpacing: '-0.02em',
                 lineHeight: 1.3,
+                mb: 2.5,
+                pb: 1.25,
+                borderBottom: '1px solid #B4B4B4',
               }}
             >
               {t('login.cardTitle')}
             </Typography>
-          </Box>
 
-          <Box sx={{ width: `min(100%, ${controlWidth}px)`, mx: 'auto' }}>
             {error && (
-              <Alert
-                severity="error"
-                sx={{
-                  mb: 2,
-                  borderRadius: '8px',
-                  fontSize: '0.8125rem',
-                }}
-              >
+              <Alert severity="error" sx={{ mb: 2, borderRadius: '4px', fontSize: '0.8125rem', boxShadow: 'none' }}>
                 {error}
               </Alert>
             )}
@@ -443,7 +480,7 @@ const Login: React.FC = () => {
                 />
               </Box>
 
-              <Box sx={{ mb: 2 }}>
+              <Box sx={{ mb: 2.25 }}>
                 <Typography component="label" htmlFor="password" sx={loginFieldLabelSx}>
                   {t('login.password')}
                 </Typography>
@@ -463,16 +500,14 @@ const Login: React.FC = () => {
                         <IconButton
                           onClick={() => setShowPassword(!showPassword)}
                           edge="end"
-                          aria-label={
-                            showPassword ? t('login.hidePassword') : t('login.showPassword')
-                          }
+                          aria-label={showPassword ? t('login.hidePassword') : t('login.showPassword')}
                           size="small"
                           sx={{ color: 'text.secondary' }}
                         >
                           {showPassword ? <VisibilityOff sx={{ fontSize: '1rem' }} /> : <Visibility sx={{ fontSize: '1rem' }} />}
                         </IconButton>
                       </Box>
-                    )
+                    ),
                   }}
                   sx={loginInputSx}
                 />
@@ -490,8 +525,10 @@ const Login: React.FC = () => {
                   minHeight: 40,
                   fontSize: '0.875rem',
                   fontWeight: 600,
-                  borderRadius: '8px',
+                  borderRadius: '4px',
                   textTransform: 'none',
+                  boxShadow: 'none',
+                  '&:hover': { boxShadow: 'none' },
                 }}
               >
                 {loading ? t('common.loading') : t('login.loginButton')}
@@ -508,148 +545,96 @@ const Login: React.FC = () => {
                   setSignupResult(null);
                 }}
                 sx={{
-                  mt: 1,
+                  mt: 0.75,
                   py: 0.75,
                   minHeight: 36,
                   fontSize: '0.8125rem',
                   fontWeight: 600,
-                  color: 'primary.main',
+                  color: 'text.secondary',
                   textTransform: 'none',
+                  borderRadius: '4px',
+                  '&:hover': { bgcolor: 'transparent', color: 'primary.main', textDecoration: 'underline' },
                 }}
               >
                 {t('login.signUpCta')}
               </Button>
             </Box>
           </Box>
+        </Box>
 
-        </Paper>
-      </Container>
-      <Box
-        sx={{
-          position: 'absolute',
-          left: '50%',
-          bottom: 38,
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 0.75,
-          flexWrap: 'wrap',
-          maxWidth: 'min(96vw, 640px)',
-          px: 1,
-        }}
-      >
-        {[
-          { to: '/legal/terms', label: t('login.footerTerms') },
-          { to: '/legal/privacy', label: t('login.footerPrivacy') },
-          { to: '/legal/support', label: t('login.footerSupport') },
-        ].map((link, index) => (
-          <React.Fragment key={link.to}>
-            {index > 0 && (
-              <Typography
-                variant="caption"
-                sx={{ color: alpha(theme.palette.text.secondary, 0.45), fontSize: '0.6875rem' }}
-              >
-                ·
-              </Typography>
-            )}
+        <Box
+          sx={{
+            px: { xs: 2.5, sm: 4 },
+            pb: 2,
+            pt: 1,
+            borderTop: '1px solid #E2E8F0',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 0.5,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+            {[
+              { to: '/legal/terms', label: t('login.footerTerms') },
+              { to: '/legal/privacy', label: t('login.footerPrivacy') },
+              { to: '/legal/support', label: t('login.footerSupport') },
+            ].map((link, index) => (
+              <React.Fragment key={link.to}>
+                {index > 0 && (
+                  <Typography variant="caption" sx={{ color: alpha(theme.palette.text.secondary, 0.45), fontSize: '0.6875rem' }}>
+                    ·
+                  </Typography>
+                )}
+                <Typography
+                  component={RouterLink}
+                  to={link.to}
+                  variant="caption"
+                  sx={{
+                    color: alpha(theme.palette.text.secondary, 0.82),
+                    fontSize: '0.6875rem',
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                    whiteSpace: 'nowrap',
+                    '&:hover': { color: 'primary.main', textDecoration: 'underline' },
+                  }}
+                >
+                  {link.label}
+                </Typography>
+              </React.Fragment>
+            ))}
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+            <Typography variant="caption" sx={{ color: alpha(theme.palette.text.secondary, 0.7), fontSize: '0.6875rem', whiteSpace: 'nowrap' }}>
+              {t('login.footerDevelopedBy')}
+            </Typography>
+            <Typography variant="caption" sx={{ color: alpha(theme.palette.text.secondary, 0.45), fontSize: '0.6875rem' }}>
+              ·
+            </Typography>
+            <Typography variant="caption" sx={{ color: alpha(theme.palette.text.secondary, 0.7), fontSize: '0.6875rem', whiteSpace: 'nowrap' }}>
+              {t('login.footerCompanyName')}
+            </Typography>
+            <Typography variant="caption" sx={{ color: alpha(theme.palette.text.secondary, 0.45), fontSize: '0.6875rem' }}>
+              ·
+            </Typography>
             <Typography
-              component={RouterLink}
-              to={link.to}
+              component="a"
+              href="https://www.msventures.in"
+              target="_blank"
+              rel="noopener noreferrer"
               variant="caption"
               sx={{
-                color: alpha(theme.palette.text.secondary, 0.82),
+                color: alpha(theme.palette.text.secondary, 0.7),
                 fontSize: '0.6875rem',
-                fontWeight: 600,
                 textDecoration: 'none',
                 whiteSpace: 'nowrap',
-                '&:hover': {
-                  color: 'primary.main',
-                  textDecoration: 'underline',
-                },
+                '&:hover': { textDecoration: 'underline', color: 'primary.main' },
               }}
             >
-              {link.label}
+              {t('login.footerWebsite')}
             </Typography>
-          </React.Fragment>
-        ))}
-      </Box>
-      <Box
-        sx={{
-          position: 'absolute',
-          left: '50%',
-          bottom: 14,
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 0.75,
-          flexWrap: 'nowrap',
-          maxWidth: 'min(96vw, 560px)',
-          px: 1,
-        }}
-      >
-        <Typography
-          variant="caption"
-          sx={{
-            color: alpha(theme.palette.text.secondary, 0.7),
-            fontSize: '0.6875rem',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {t('login.footerDevelopedBy')}
-        </Typography>
-        <Typography
-          variant="caption"
-          sx={{ color: alpha(theme.palette.text.secondary, 0.45), fontSize: '0.6875rem' }}
-        >
-          ·
-        </Typography>
-        <Typography
-          component="a"
-          href="https://www.msventures.in"
-          target="_blank"
-          rel="noopener noreferrer"
-          variant="caption"
-          sx={{
-            color: alpha(theme.palette.text.secondary, 0.85),
-            fontSize: '0.6875rem',
-            fontWeight: 600,
-            textDecoration: 'none',
-            whiteSpace: 'nowrap',
-            '&:hover': {
-              color: 'primary.main',
-              textDecoration: 'underline',
-            },
-          }}
-        >
-          {t('login.footerCompanyName')}
-        </Typography>
-        <Typography
-          variant="caption"
-          sx={{ color: alpha(theme.palette.text.secondary, 0.45), fontSize: '0.6875rem' }}
-        >
-          ·
-        </Typography>
-        <Typography
-          component="a"
-          href="https://www.msventures.in"
-          target="_blank"
-          rel="noopener noreferrer"
-          variant="caption"
-          sx={{
-            color: alpha(theme.palette.text.secondary, 0.75),
-            fontSize: '0.6875rem',
-            textDecoration: 'none',
-            whiteSpace: 'nowrap',
-            '&:hover': {
-              color: 'primary.main',
-              textDecoration: 'underline',
-            },
-          }}
-        >
-          {t('login.footerWebsite')}
-        </Typography>
+          </Box>
+        </Box>
       </Box>
 
       <Dialog
@@ -661,13 +646,10 @@ const Login: React.FC = () => {
           sx: {
             width: 'min(96vw, 1176px)',
             maxHeight: '92vh',
-            borderRadius: '8px',
+            borderRadius: '4px',
             overflow: 'hidden',
-            border: `1px solid ${alpha(theme.palette.divider, theme.palette.mode === 'light' ? 0.12 : 0.35)}`,
-            boxShadow:
-              theme.palette.mode === 'light'
-                ? '0 24px 60px rgba(15, 23, 42, 0.1)'
-                : '0 24px 60px rgba(0,0,0,0.5)',
+            border: '1px solid #B4B4B4',
+            boxShadow: 'none',
           },
         }}
       >

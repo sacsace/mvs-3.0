@@ -16,7 +16,7 @@
     <script>
       (function () {
         try {
-          var raw = (navigator.language || navigator.userLanguage || 'ko').toLowerCase();
+          var raw = (navigator.language || (navigator.languages && navigator.languages[0]) || navigator.userLanguage || 'en').toLowerCase();
           var isKorean = raw.indexOf('ko') === 0;
           var seo = isKorean
             ? {
@@ -49,7 +49,7 @@
     <title>MVS - 통합 업무 관리 시스템</title>
   </head>
   <body>
-    <noscript>JavaScript를 활성화해야 이 앱을 실행할 수 있습니다.</noscript>
+    <noscript>Please enable JavaScript to run this app. / 이 앱을 실행하려면 JavaScript를 활성화하세요.</noscript>
     <div id="root"></div>
   </body>
 </html>

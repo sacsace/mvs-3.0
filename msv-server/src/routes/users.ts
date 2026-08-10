@@ -1332,26 +1332,7 @@ router.delete('/:id', requireAdminRootOrUserMenuPermission('can_delete'), async 
       });
     }
 
-    // root 권한자는 물리 삭제 가능
-    if (userRole === 'root') {
-      try {
-        await user.destroy();
-        return res.json({
-          success: true,
-          message: '사용자가 영구 삭제되었습니다.'
-        });
-      } catch (destroyError: any) {
-        if (destroyError?.name === 'SequelizeForeignKeyConstraintError') {
-          return res.status(409).json({
-            success: false,
-            message: '다른 데이터와 연결된 사용자라 영구 삭제할 수 없습니다. 먼저 관련 데이터를 정리해주세요.'
-          });
-        }
-        throw destroyError;
-      }
-    }
-
-    // admin/audit는 소프트 삭제: status를 inactive로 변경
+    // 물리 삭제 금지 — status를 inactive로 소프트 삭제 (데이터·FK 보존)
     await user.update({ status: 'inactive' });
 
     res.json({

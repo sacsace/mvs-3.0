@@ -23,6 +23,12 @@ import {
   addComment,
 } from '../controllers/approvalController';
 import {
+  getApprovalTypes,
+  createApprovalType,
+  updateApprovalType,
+  deleteApprovalType,
+} from '../controllers/approvalTypeController';
+import {
   getRoomBookings,
   getRoomBooking,
   createRoomBooking,
@@ -292,6 +298,25 @@ router.delete(
 );
 
 // 전자 결제 관련 라우트
+router.get('/approvals/types', requireMenuPermission(MENU_WORK_APPROVAL, 'can_view'), getApprovalTypes);
+router.post(
+  '/approvals/types',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_APPROVAL, 'can_create'),
+  createApprovalType
+);
+router.put(
+  '/approvals/types/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_APPROVAL, 'can_edit'),
+  updateApprovalType
+);
+router.delete(
+  '/approvals/types/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermission(MENU_WORK_APPROVAL, 'can_delete'),
+  deleteApprovalType
+);
 router.get('/approvals', requireMenuPermission(MENU_WORK_APPROVAL, 'can_view'), getApprovals);
 router.get('/approvals/:id', requireMenuPermission(MENU_WORK_APPROVAL, 'can_view'), getApproval);
 router.post(

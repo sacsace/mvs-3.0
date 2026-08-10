@@ -7,8 +7,8 @@ interface ApprovalAttributes {
   company_id: number;
   document_id: string;
   title: string;
-  type: 'expense' | 'vacation' | 'purchase' | 'contract' | 'other';
-  category: string;
+  type: string;
+  category?: string | null;
   amount?: number;
   requester_id: number;
   description: string;
@@ -32,8 +32,8 @@ class Approval extends Model<ApprovalAttributes, ApprovalCreationAttributes> imp
   public company_id!: number;
   public document_id!: string;
   public title!: string;
-  public type!: 'expense' | 'vacation' | 'purchase' | 'contract' | 'other';
-  public category!: string;
+  public type!: string;
+  public category?: string | null;
   public amount?: number;
   public requester_id!: number;
   public description!: string;
@@ -74,12 +74,13 @@ Approval.init(
       allowNull: false
     },
     type: {
-      type: DataTypes.ENUM('expense', 'vacation', 'purchase', 'contract', 'other'),
+      type: DataTypes.STRING(50),
       allowNull: false
     },
     category: {
       type: DataTypes.STRING(100),
-      allowNull: false
+      allowNull: true,
+      defaultValue: ''
     },
     amount: {
       type: DataTypes.DECIMAL(15, 2),
@@ -134,6 +135,10 @@ Approval.init(
   {
     sequelize,
     tableName: 'approvals',
+    underscored: true,
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
     indexes: [
       {
         fields: ['tenant_id', 'company_id']

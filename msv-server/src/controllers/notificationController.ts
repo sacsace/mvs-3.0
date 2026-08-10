@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import SocketService from '../services/socketService';
-import { ExpenseReport, Vacation, Quotation, User, Customer } from '../models';
+import { ExpenseReport, Vacation, Quotation, User, Customer, Approval } from '../models';
 import { Op } from 'sequelize';
 import { isMissingTableError } from '../utils/dbErrors';
 import { sendUserNotificationEmail } from '../utils/userNotificationMail';
@@ -72,7 +72,7 @@ export const getActionInbox = async (req: Request, res: Response) => {
 
     const items: Array<{
       id: string;
-      kind: 'expense_payment' | 'vacation_pending' | 'quotation_pending';
+      kind: 'expense_payment' | 'vacation_pending' | 'quotation_pending' | 'approval_pending';
       timestamp: string;
       href: string;
       payload: Record<string, unknown>;
@@ -213,6 +213,55 @@ export const getActionInbox = async (req: Request, res: Response) => {
     } catch (quotationError) {
       if (!isMissingTableError(quotationError)) throw quotationError;
       console.warn('알림 인박스: quotations 조회 건너뜀 —', (quotationError as Error).message);
+    }
+
+    // 4) 전자결재 승인 대기 — 현재 승인자(본인)에게 온 건만
+    try {
+      const approvalWhere: any = {
+        is_active: true,
+        status: { [Op.in]: ['submitted', 'in_review'] },
+        current_approver_id: userId,
+        requester_id: { [Op.ne]: userId },
+      };
+      baseCompany(approvalWhere);
+
+      const approvals = await (Approval as any).findAll({
+        where: approvalWhere,
+        include: [
+          {
+            model: User,
+            as: 'requester',
+            attributes: ['id', 'username', 'email'],
+            required: false,
+          },
+        ],
+        order: [['updated_at', 'DESC']],
+        limit: 40,
+      });
+
+      for (const a of approvals) {
+        const row = a.toJSON ? a.toJSON() : a;
+        items.push({
+          id: `approval_pending-${row.id}`,
+          kind: 'approval_pending',
+          timestamp: row.updated_at
+            ? new Date(row.updated_at).toISOString()
+            : row.created_at
+              ? new Date(row.created_at).toISOString()
+              : new Date().toISOString(),
+          href: '/work/approval',
+          payload: {
+            approvalId: row.id,
+            documentId: row.document_id || '',
+            approvalTitle: row.title || '',
+            requesterName: (row as any).requester?.username || '',
+            type: row.type || '',
+          },
+        });
+      }
+    } catch (approvalError) {
+      if (!isMissingTableError(approvalError)) throw approvalError;
+      console.warn('알림 인박스: approvals 조회 건너뜀 —', (approvalError as Error).message);
     }
 
     items.sort(

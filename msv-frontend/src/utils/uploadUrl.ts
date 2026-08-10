@@ -11,7 +11,7 @@ export const getUploadUrl = (path?: string | null): string => {
   if (!path || typeof path !== 'string') return '';
   const trimmed = path.trim();
   if (!trimmed) return '';
-  if (trimmed.startsWith('data:')) return trimmed;
+  if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) return trimmed;
 
   const normalized = trimmed.startsWith('http')
     ? trimmed

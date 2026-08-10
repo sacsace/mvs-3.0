@@ -296,7 +296,7 @@ const StockOutBarcode: React.FC = () => {
       color: alpha(theme.palette.text.secondary, 0.95) } };
 
   return (
-    <Box sx={{ ...mvsPageRootSx, maxWidth: 920, mx: 'auto' }}>
+    <Box sx={mvsPageRootSx}>
       <MvsPageHeader
         title={txt('출고 관리', 'Outbound management')}
         description={txt(
