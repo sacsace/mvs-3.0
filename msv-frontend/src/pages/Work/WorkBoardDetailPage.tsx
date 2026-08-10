@@ -39,6 +39,7 @@ import {
   MoreHoriz as MoreHorizIcon,
   Notes as NotesIcon,
   PersonAdd as PersonAddIcon,
+  PhotoOutlined as PhotoOutlinedIcon,
   LibraryAddOutlined as LibraryAddOutlinedIcon,
   Search as SearchIcon,
   VisibilityOutlined as VisibilityOutlinedIcon
@@ -68,6 +69,7 @@ import { showErrorPopup, showSuccessPopup, showSuccessToast } from '../../utils/
 import { getUploadUrl } from '../../utils/uploadUrl';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import { usePhotoPreviewOptional } from '../../components/Common/PhotoPreviewProvider';
 import RichTextEditor from '../../components/RichTextEditor/RichTextEditor';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
@@ -349,7 +351,7 @@ const WORK_BOARD_CARD_MIN_HEIGHT_PX = 68;
 /** 보드 멤버 — 겹침 원형 아바타 */
 const BOARD_MEMBER_AVATAR_SIZE = 32;
 const BOARD_MEMBER_AVATAR_OVERLAP_PX = 10;
-const BOARD_MEMBER_AVATAR_MAX = 7;
+const BOARD_MEMBER_AVATAR_MAX = 20;
 
 const AVATAR_PALETTE = ['#6554C0', '#00B8D9', '#36B37E', '#FF5630', '#FFAB00', '#403294'];
 
@@ -1339,6 +1341,7 @@ const WorkBoardDetailPage: React.FC = () => {
   const menuCanDelete =
     isRootUser || (workProjectsMenuId != null && hasMenuPermission(workProjectsMenuId, 'delete'));
   const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
+  const photoPreview = usePhotoPreviewOptional();
 
   const [board, setBoard] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -1373,7 +1376,6 @@ const WorkBoardDetailPage: React.FC = () => {
   const [companyUsers, setCompanyUsers] = useState<any[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<any[]>([]);
   const [inviteLoading, setInviteLoading] = useState(false);
-  const [memberRoleUpdatingId, setMemberRoleUpdatingId] = useState<number | null>(null);
   const [memberRemovingId, setMemberRemovingId] = useState<number | null>(null);
   const [memberMenuAnchor, setMemberMenuAnchor] = useState<HTMLElement | null>(null);
   const [memberMenuTarget, setMemberMenuTarget] = useState<any | null>(null);
@@ -2378,24 +2380,6 @@ const WorkBoardDetailPage: React.FC = () => {
     }
   };
 
-  const handleChangeMemberRole = async (memberUserId: number, nextRole: 'owner' | 'member') => {
-    if (!menuCanEdit) return;
-    setMemberRoleUpdatingId(memberUserId);
-    try {
-      const res = await workBoardService.updateMemberRole(boardId, memberUserId, nextRole);
-      if (res.success) {
-        showSuccessToast('멤버 권한이 변경되었습니다.');
-        await loadBoard();
-      } else {
-        showErrorPopup(res.message || '멤버 권한 변경 실패', '작업 보드');
-      }
-    } catch (e: any) {
-      showErrorPopup(e, '작업 보드');
-    } finally {
-      setMemberRoleUpdatingId(null);
-    }
-  };
-
   const closeMemberMenu = () => {
     setMemberMenuAnchor(null);
     setMemberMenuTarget(null);
@@ -3011,13 +2995,6 @@ const WorkBoardDetailPage: React.FC = () => {
                         {roleLabel}
                         {userid ? ` · ${userid}` : ''}
                       </Typography>
-                      <Typography
-                        variant="caption"
-                        display="block"
-                        sx={{ color: 'rgba(248, 250, 252, 0.72)', mt: 0.35, fontSize: '0.65rem' }}
-                      >
-                        {txt('클릭하여 관리', 'Click to manage')}
-                      </Typography>
                     </Box>
                   }
                   arrow
@@ -3036,6 +3013,7 @@ const WorkBoardDetailPage: React.FC = () => {
                   <Avatar
                     component="button"
                     type="button"
+                    data-no-photo-preview
                     src={avatarSrc}
                     alt={name}
                     aria-label={`${name}, ${roleLabel}`}
@@ -3117,7 +3095,7 @@ const WorkBoardDetailPage: React.FC = () => {
           paper: {
             sx: {
               borderRadius: '8px',
-              minWidth: 248,
+              minWidth: 180,
               mt: 0.75,
               border: '1px solid #E2E8F0',
               boxShadow: '0 8px 24px rgba(9, 30, 66, 0.14)',
@@ -3129,7 +3107,6 @@ const WorkBoardDetailPage: React.FC = () => {
         {memberMenuTarget ? (() => {
           const m = memberMenuTarget;
           const name = m.user?.username || `${txt('사용자', 'User')} ${m.user_id}`;
-          const initial = name.trim().charAt(0).toUpperCase() || '?';
           const avatarSrc = resolveUserAvatarSrc(m.user?.avatar_url);
           const isOwnerMember = m.role === 'owner';
           const ownerCount = members.filter((x: any) => x.role === 'owner').length;
@@ -3139,117 +3116,67 @@ const WorkBoardDetailPage: React.FC = () => {
             (canManageMembers || isSelf) &&
             (menuCanEdit || isSelf) &&
             !isLastOwner;
-          return (
-            <Box sx={{ minWidth: 240 }}>
-              <Box sx={{ px: 2, pt: 1.5, pb: 1.25, display: 'flex', alignItems: 'center', gap: 1.25 }}>
-                <Avatar
-                  src={avatarSrc}
-                  alt={name}
-                  sx={{
-                    width: 40,
-                    height: 40,
-                    fontSize: '0.85rem',
-                    fontWeight: 700,
-                    bgcolor: avatarSrc
-                      ? 'transparent'
-                      : isOwnerMember
-                        ? 'primary.main'
-                        : getAvatarColor(Number(m.user_id)),
-                    color: '#FFFFFF',
-                  }}
-                >
-                  {initial}
-                </Avatar>
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography sx={{ fontWeight: 700, fontSize: '0.875rem', lineHeight: 1.3, color: '#0F172A' }} noWrap>
-                    {name}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: '#64748B' }} noWrap>
-                    {isOwnerMember ? txt('소유자', 'Owner') : txt('멤버', 'Member')}
-                    {m.user?.userid ? ` · ${m.user.userid}` : ''}
-                  </Typography>
-                </Box>
-              </Box>
-              {canManageMembers ? (
-                <Box sx={{ px: 2, pb: 1 }}>
-                  <TextField
-                    select
-                    fullWidth
-                    size="small"
-                    hiddenLabel
-                    value={m.role}
-                    disabled={memberRoleUpdatingId === Number(m.user_id)}
-                    onChange={(e) => {
-                      const nextRole = e.target.value as 'owner' | 'member';
-                      if (nextRole !== m.role) {
-                        void handleChangeMemberRole(Number(m.user_id), nextRole);
-                      }
-                    }}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        borderRadius: KANBAN_CHIP_RADIUS,
-                        fontSize: '0.75rem',
-                        minHeight: 34,
-                        bgcolor: '#F4F6FA',
-                      },
-                    }}
-                  >
-                    <MenuItem value="member" dense>
-                      {txt('멤버', 'Member')}
-                    </MenuItem>
-                    <MenuItem value="owner" dense>
-                      {txt('소유자', 'Owner')}
-                    </MenuItem>
-                  </TextField>
-                </Box>
-              ) : null}
-              <Divider />
-              {canRemoveMember ? (
-                <MenuItem
-                  onClick={() => handleRemoveMember(Number(m.user_id), name)}
-                  disabled={memberRemovingId === Number(m.user_id)}
-                  sx={{
-                    py: 1.15,
-                    color: theme.palette.error.main,
-                    '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.08) },
-                  }}
-                >
-                  <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
-                    {memberRemovingId === Number(m.user_id) ? (
-                      <CircularProgress size={16} color="inherit" />
-                    ) : (
-                      <DeleteIcon fontSize="small" />
-                    )}
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={
-                      isSelf && !canManageMembers
-                        ? txt('보드 나가기', 'Leave board')
-                        : txt('멤버 삭제', 'Remove member')
-                    }
-                    primaryTypographyProps={{ fontWeight: 600, fontSize: '0.8125rem' }}
-                  />
-                </MenuItem>
-              ) : (
-                <Box sx={{ px: 2, py: 1.25 }}>
-                  <Typography
-                    variant="caption"
-                    sx={{ display: 'block', textAlign: 'center', lineHeight: 1.4, color: '#64748B' }}
-                  >
-                    {isLastOwner
-                      ? txt(
-                          '마지막 소유자는 삭제할 수 없습니다.',
-                          'The last owner cannot be removed.'
-                        )
-                      : txt(
-                          '이 멤버를 삭제할 권한이 없습니다.',
-                          'You do not have permission to remove this member.'
-                        )}
-                  </Typography>
-                </Box>
-              )}
-            </Box>
-          );
+          return [
+            <MenuItem
+              key="view-photo"
+              onClick={() => {
+                closeMemberMenu();
+                if (avatarSrc) {
+                  photoPreview?.openPhotoPreview(avatarSrc, name);
+                } else {
+                  showErrorPopup(
+                    txt('등록된 사진이 없습니다.', 'No photo available.'),
+                    txt('사진보기', 'View photo')
+                  );
+                }
+              }}
+              sx={{ py: 1.1 }}
+            >
+              <ListItemIcon sx={{ minWidth: 36 }}>
+                <PhotoOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText
+                primary={txt('사진보기', 'View photo')}
+                primaryTypographyProps={{ fontWeight: 600, fontSize: '0.8125rem' }}
+              />
+            </MenuItem>,
+            <MenuItem
+              key="remove-member"
+              onClick={() => {
+                if (!canRemoveMember) return;
+                handleRemoveMember(Number(m.user_id), name);
+              }}
+              disabled={!canRemoveMember || memberRemovingId === Number(m.user_id)}
+              sx={{
+                py: 1.1,
+                color: canRemoveMember ? theme.palette.error.main : undefined,
+                '&:hover': canRemoveMember
+                  ? { bgcolor: alpha(theme.palette.error.main, 0.08) }
+                  : undefined,
+              }}
+            >
+              <ListItemIcon
+                sx={{
+                  minWidth: 36,
+                  color: canRemoveMember ? 'inherit' : undefined,
+                }}
+              >
+                {memberRemovingId === Number(m.user_id) ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : (
+                  <DeleteIcon fontSize="small" />
+                )}
+              </ListItemIcon>
+              <ListItemText
+                primary={
+                  isSelf && !canManageMembers
+                    ? txt('보드 나가기', 'Leave board')
+                    : txt('보드에서 삭제', 'Remove from board')
+                }
+                primaryTypographyProps={{ fontWeight: 600, fontSize: '0.8125rem' }}
+              />
+            </MenuItem>,
+          ];
         })() : null}
       </Menu>
 
