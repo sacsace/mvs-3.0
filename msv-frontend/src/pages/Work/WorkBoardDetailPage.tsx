@@ -99,6 +99,7 @@ type BoardCard = {
   list_id?: number;
   created_by?: number | null;
   completed_at?: string | null;
+  assignee_user_id?: number | null;
   assignee?: { id: number; username: string; avatar_url?: string | null };
   comments?: BoardCardComment[];
 };
@@ -1375,6 +1376,7 @@ const WorkBoardDetailPage: React.FC = () => {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [companyUsers, setCompanyUsers] = useState<any[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<any[]>([]);
+  const [inviteSearch, setInviteSearch] = useState('');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [memberRemovingId, setMemberRemovingId] = useState<number | null>(null);
   const [memberMenuAnchor, setMemberMenuAnchor] = useState<HTMLElement | null>(null);
@@ -1921,7 +1923,12 @@ const WorkBoardDetailPage: React.FC = () => {
       description: normalizeRichTextHtml(card.description),
       dueDate: formatDueDate(card.due_date),
       color: card.color || '',
-      assigneeUserId: card.assignee?.id ?? null,
+      assigneeUserId:
+        card.assignee?.id != null
+          ? Number(card.assignee.id)
+          : card.assignee_user_id != null
+            ? Number(card.assignee_user_id)
+            : null,
       referenceUserIds: Array.isArray(card.reference_user_ids)
         ? card.reference_user_ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
         : [],
@@ -1977,31 +1984,61 @@ const WorkBoardDetailPage: React.FC = () => {
       );
       return;
     }
+    const list = (board?.lists || []).find((l: BoardList) => l.id === composerListId);
+    const listAssigneeId =
+      list?.assignee?.id != null
+        ? Number(list.assignee.id)
+        : list?.assignee_user_id != null
+          ? Number(list.assignee_user_id)
+          : null;
+    const defaultAssigneeId =
+      listAssigneeId != null && Number.isFinite(listAssigneeId) && listAssigneeId > 0
+        ? listAssigneeId
+        : user?.id != null
+          ? Number(user.id)
+          : null;
     setSavingCard(true);
     try {
       const res = await workBoardService.createCard(boardId, composerListId, {
         title: composerTitle.trim(),
-        description: composerDesc.trim() || undefined
+        description: composerDesc.trim() || undefined,
+        ...(defaultAssigneeId != null ? { assignee_user_id: defaultAssigneeId } : {}),
       });
       if (res.success) {
-        const payload = res.data as { id?: number } | undefined;
+        const payload = res.data as BoardCard | undefined;
         const newId = Number(payload?.id);
         const savedListId = composerListId;
         const savedTitle = composerTitle.trim();
         const savedDesc = composerDesc.trim();
+        const createdAssigneeId =
+          payload?.assignee?.id != null
+            ? Number(payload.assignee.id)
+            : payload?.assignee_user_id != null
+              ? Number(payload.assignee_user_id)
+              : defaultAssigneeId;
         setComposerListId(null);
         setComposerTitle('');
         setComposerDesc('');
         if (Number.isInteger(newId) && newId > 0) {
           lastQuickCreatedCardIdRef.current = newId;
-          const list = (board?.lists || []).find((l: BoardList) => l.id === savedListId);
           openCardDetail(
             {
               id: newId,
               title: savedTitle,
               description: savedDesc || undefined,
               position: 0,
-              comments: []
+              comments: [],
+              assignee_user_id: createdAssigneeId,
+              assignee:
+                payload?.assignee ||
+                (createdAssigneeId != null
+                  ? {
+                      id: createdAssigneeId,
+                      username:
+                        list?.assignee?.username ||
+                        (createdAssigneeId === Number(user?.id) ? String(user?.username || '') : ''),
+                    }
+                  : undefined),
             },
             list?.title ?? '',
             savedListId
@@ -2018,7 +2055,19 @@ const WorkBoardDetailPage: React.FC = () => {
     } finally {
       setSavingCard(false);
     }
-  }, [board, boardId, composerListId, composerTitle, composerDesc, loadBoard, menuCanCreate, openCardDetail, txt]);
+  }, [
+    board,
+    boardId,
+    composerListId,
+    composerTitle,
+    composerDesc,
+    loadBoard,
+    menuCanCreate,
+    openCardDetail,
+    txt,
+    user?.id,
+    user?.username,
+  ]);
 
   const openComposer = useCallback(
     (listId: number) => {
@@ -2359,6 +2408,7 @@ const WorkBoardDetailPage: React.FC = () => {
         );
         setInviteOpen(false);
         setSelectedUsers([]);
+        setInviteSearch('');
         await loadBoard();
       } else {
         showErrorPopup(
@@ -2660,6 +2710,29 @@ const WorkBoardDetailPage: React.FC = () => {
     const memberIds = new Set(members.map((m: any) => Number(m.user_id)));
     return companyUsers.filter((u: any) => !memberIds.has(Number(u.id)));
   }, [companyUsers, members]);
+  const filteredInviteUsers = useMemo(() => {
+    const keyword = inviteSearch.trim().toLowerCase();
+    const selectedIds = new Set(selectedUsers.map((u: any) => Number(u.id)));
+    const available = inviteUserOptions.filter((u: any) => !selectedIds.has(Number(u.id)));
+    if (!keyword) return available.slice(0, 12);
+    return available
+      .filter((u: any) => {
+        const name = String(u.username || '').toLowerCase();
+        const userid = String(u.userid || '').toLowerCase();
+        const email = String(u.email || '').toLowerCase();
+        return name.includes(keyword) || userid.includes(keyword) || email.includes(keyword);
+      })
+      .slice(0, 12);
+  }, [inviteSearch, inviteUserOptions, selectedUsers]);
+  const toggleInviteUser = useCallback((userRow: any) => {
+    const id = Number(userRow.id);
+    setSelectedUsers((prev) => {
+      if (prev.some((u: any) => Number(u.id) === id)) {
+        return prev.filter((u: any) => Number(u.id) !== id);
+      }
+      return [...prev, userRow];
+    });
+  }, []);
   const mentionCandidates = useMemo<MemberOption[]>(() => {
     const keyword = mentionQuery.trim().toLowerCase();
     if (!keyword) return memberOptions.slice(0, 6);
@@ -2796,6 +2869,7 @@ const WorkBoardDetailPage: React.FC = () => {
             color="primary"
             onClick={() => {
               setSelectedUsers([]);
+              setInviteSearch('');
               setInviteOpen(true);
               loadUsers();
             }}
@@ -4552,56 +4626,92 @@ const WorkBoardDetailPage: React.FC = () => {
         onClose={() => !inviteLoading && setInviteOpen(false)}
         maxWidth="sm"
         fullWidth
-        disableEnforceFocus
-        slotProps={{
-          paper: {
-            sx: { overflow: 'visible' },
-          },
-        }}
       >
         <DialogTitle>{txt('같은 회사 사용자 초대', 'Invite a user from same company')}</DialogTitle>
-        <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
+        <DialogContent sx={{ pt: 2 }}>
           <Typography variant="subtitle2" sx={{ display: 'block', mb: 0.75, fontWeight: 600, fontSize: '0.875rem' }}>
             {txt('사용자 검색', 'Search User')}
           </Typography>
-          <Autocomplete
-            multiple
-            options={inviteUserOptions}
-            getOptionLabel={(o) => `${o.username} (${o.userid})`}
-            value={selectedUsers}
-            onChange={(_e, v) => setSelectedUsers(Array.isArray(v) ? v : [])}
-            isOptionEqualToValue={(option, value) => Number(option.id) === Number(value.id)}
-            openOnFocus
-            slotProps={{
-              popper: {
-                disablePortal: true,
-                sx: { zIndex: (theme) => theme.zIndex.modal + 2 },
-              },
-              listbox: {
-                // Dialog 안에서 옵션 mousedown 시 input blur로 목록이 먼저 닫히는 것 방지
-                onMouseDown: (e: React.MouseEvent) => {
-                  e.preventDefault();
-                },
+          <TextField
+            fullWidth
+            size="small"
+            autoFocus
+            value={inviteSearch}
+            onChange={(e) => setInviteSearch(e.target.value)}
+            placeholder={txt('이름 또는 아이디', 'Name or User ID')}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ fontSize: 18, color: '#64748B' }} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              mb: 1.25,
+              '& .MuiOutlinedInput-root': {
+                borderRadius: '8px',
+                bgcolor: '#FFFFFF',
               },
             }}
-            renderOption={(props, option) => {
-              const { key, ...rest } = props as React.HTMLAttributes<HTMLLIElement> & { key?: React.Key };
-              return (
-                <li key={key ?? option.id} {...rest}>
-                  {option.username} ({option.userid})
-                </li>
-              );
-            }}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                variant="outlined"
-                hiddenLabel
-                placeholder={txt('이름 또는 아이디', 'Name or User ID')}
-                onMouseDown={(e) => e.stopPropagation()}
-              />
-            )}
           />
+          {selectedUsers.length > 0 ? (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, mb: 1.25 }}>
+              {selectedUsers.map((u: any) => (
+                <Chip
+                  key={u.id}
+                  size="small"
+                  label={`${u.username || u.userid} (${u.userid})`}
+                  onDelete={() => toggleInviteUser(u)}
+                  sx={{ borderRadius: '6px', fontWeight: 600 }}
+                />
+              ))}
+            </Box>
+          ) : null}
+          <Paper
+            variant="outlined"
+            sx={{
+              maxHeight: 280,
+              overflowY: 'auto',
+              borderRadius: '8px',
+              borderColor: '#E2E8F0',
+            }}
+          >
+            {filteredInviteUsers.length === 0 ? (
+              <Typography
+                variant="body2"
+                sx={{ px: 2, py: 2, color: '#64748B', textAlign: 'center' }}
+              >
+                {txt('초대할 사용자가 없습니다.', 'No users available to invite.')}
+              </Typography>
+            ) : (
+              filteredInviteUsers.map((u: any) => {
+                const selected = selectedUsers.some((s: any) => Number(s.id) === Number(u.id));
+                return (
+                  <MenuItem
+                    key={u.id}
+                    selected={selected}
+                    onClick={() => toggleInviteUser(u)}
+                    sx={{
+                      py: 1.1,
+                      px: 1.5,
+                      borderBottom: '1px solid #F1F5F9',
+                      '&:last-of-type': { borderBottom: 'none' },
+                    }}
+                  >
+                    <ListItemText
+                      primary={u.username || u.userid}
+                      secondary={u.userid}
+                      primaryTypographyProps={{ fontWeight: 600, fontSize: '0.875rem' }}
+                      secondaryTypographyProps={{ fontSize: '0.75rem' }}
+                    />
+                    {selected ? (
+                      <CheckIcon sx={{ fontSize: 18, color: 'primary.main', ml: 1 }} />
+                    ) : null}
+                  </MenuItem>
+                );
+              })
+            )}
+          </Paper>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
             {txt(
               '이 보드가 속한 회사의 활성 사용자 중, 아직 멤버가 아닌 사용자만 표시됩니다.',

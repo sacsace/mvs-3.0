@@ -1206,7 +1206,9 @@ export const createWorkBoardCard = async (req: RequestWithUser, res: Response) =
       ? Number(assignee_user_id)
       : listAssigneeId != null && Number.isFinite(listAssigneeId)
         ? listAssigneeId
-        : null;
+        : user.id != null
+          ? Number(user.id)
+          : null;
     const colorParsed = normalizeCardColor(color);
     if (!colorParsed.valid) {
       return res.status(400).json({ success: false, message: '카드 색상은 #RRGGBB 형식이어야 합니다.' });
@@ -2057,7 +2059,9 @@ export const removeWorkBoardMember = async (req: RequestWithUser, res: Response)
         });
       }
     }
-    if (member.role !== 'owner' && user.role !== 'root' && memberUserId !== user.id) {
+    // root는 보드 멤버가 아니어도 제거 가능 (member가 null일 수 있음)
+    const canRemoveOthers = member?.role === 'owner' || user.role === 'root';
+    if (!canRemoveOthers && memberUserId !== user.id) {
       return res.status(403).json({ success: false, message: '멤버를 내보낼 권한이 없습니다.' });
     }
 
@@ -2065,7 +2069,11 @@ export const removeWorkBoardMember = async (req: RequestWithUser, res: Response)
     res.json({ success: true, message: '제거되었습니다.' });
   } catch (error: any) {
     console.error('removeWorkBoardMember:', error);
-    res.status(500).json({ success: false, message: '제거에 실패했습니다.' });
+    res.status(500).json({
+      success: false,
+      message: '제거에 실패했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error?.message : undefined
+    });
   }
 };
 

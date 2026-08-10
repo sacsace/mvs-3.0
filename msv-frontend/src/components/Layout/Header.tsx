@@ -642,8 +642,9 @@ const Header: React.FC<HeaderProps> = ({
                 color: 'white',
                 fontWeight: 600,
                 fontSize: '0.75rem',
-                cursor: 'inherit',
-                '& img': { objectFit: 'cover', cursor: 'inherit', pointerEvents: 'none' },
+                cursor: 'pointer',
+                '&:hover': { cursor: 'pointer' },
+                '& img': { objectFit: 'cover', cursor: 'pointer', pointerEvents: 'none' },
               }}
             >
               {user?.username?.charAt(0).toUpperCase() || 'U'}
