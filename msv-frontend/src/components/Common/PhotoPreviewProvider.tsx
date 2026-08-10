@@ -123,13 +123,11 @@ export const PhotoPreviewProvider: React.FC<{ children: React.ReactNode }> = ({ 
           '.MuiAvatar-root:has(img.MuiAvatar-img), [data-photo-preview]': {
             cursor: 'zoom-in',
           },
-          // 헤더 계정 메뉴 등 — 미리보기/줌 커서 제외
-          '[data-no-photo-preview] .MuiAvatar-root, [data-no-photo-preview].MuiAvatar-root': {
-            cursor: 'inherit',
-          },
-          '[data-no-photo-preview] [data-photo-preview]': {
-            cursor: 'inherit',
-          },
+          // 헤더 계정·보드 멤버 메뉴 등 — 미리보기/줌(+) 커서 제외
+          '[data-no-photo-preview].MuiAvatar-root, [data-no-photo-preview].MuiAvatar-root:has(img.MuiAvatar-img), [data-no-photo-preview] .MuiAvatar-root, [data-no-photo-preview] .MuiAvatar-root:has(img.MuiAvatar-img), [data-no-photo-preview] [data-photo-preview]':
+            {
+              cursor: 'pointer !important',
+            },
         }}
       />
       {children}

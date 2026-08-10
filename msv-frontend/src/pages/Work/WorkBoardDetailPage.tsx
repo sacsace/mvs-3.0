@@ -2380,10 +2380,10 @@ const WorkBoardDetailPage: React.FC = () => {
     }
   };
 
-  const closeMemberMenu = () => {
+  const closeMemberMenu = useCallback(() => {
     setMemberMenuAnchor(null);
     setMemberMenuTarget(null);
-  };
+  }, []);
 
   const handleRemoveMember = (memberUserId: number, memberName: string) => {
     if (!menuCanEdit && Number(memberUserId) !== Number(user?.id)) return;
@@ -2429,6 +2429,31 @@ const WorkBoardDetailPage: React.FC = () => {
     setMemberMenuAnchor(event.currentTarget);
     setMemberMenuTarget(member);
   };
+
+  // 바깥(바탕) 클릭 시 멤버 드롭메뉴 닫기 — 보드 팬/툴팁과 충돌해도 닫히도록
+  useEffect(() => {
+    if (!memberMenuAnchor) return;
+    const onPointerDownCapture = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        closeMemberMenu();
+        return;
+      }
+      // 앵커 아바타·메뉴 본문 안 클릭은 유지
+      if (memberMenuAnchor.contains(target)) return;
+      if (target.closest('.MuiMenu-paper, .MuiPopover-paper')) return;
+      closeMemberMenu();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') closeMemberMenu();
+    };
+    document.addEventListener('pointerdown', onPointerDownCapture, true);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDownCapture, true);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [memberMenuAnchor, closeMemberMenu]);
 
   const handleDeleteBoard = () => {
     const boardName = board?.name?.trim();
@@ -3044,8 +3069,12 @@ const WorkBoardDetailPage: React.FC = () => {
                         ? { boxShadow: `0 0 0 1px ${alpha(theme.palette.primary.main, 0.45)}` }
                         : {}),
                       '&:hover': {
+                        cursor: 'pointer',
                         zIndex: BOARD_MEMBER_AVATAR_MAX + 2,
                         boxShadow: `0 0 0 2px ${alpha(theme.palette.primary.main, 0.45)}`,
+                      },
+                      '& img': {
+                        cursor: 'pointer',
                       },
                     }}
                   >
@@ -3089,9 +3118,13 @@ const WorkBoardDetailPage: React.FC = () => {
         anchorEl={memberMenuAnchor}
         open={Boolean(memberMenuAnchor && memberMenuTarget)}
         onClose={closeMemberMenu}
+        disableScrollLock
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
         transformOrigin={{ vertical: 'top', horizontal: 'center' }}
         slotProps={{
+          backdrop: {
+            sx: { backgroundColor: 'transparent' },
+          },
           paper: {
             sx: {
               borderRadius: '8px',
