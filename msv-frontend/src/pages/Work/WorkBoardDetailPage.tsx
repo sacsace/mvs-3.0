@@ -15,6 +15,8 @@ import {
   Divider,
   IconButton,
   InputAdornment,
+  ListItemIcon,
+  ListItemText,
   Menu,
   MenuItem,
   Pagination,
@@ -2399,15 +2401,14 @@ const WorkBoardDetailPage: React.FC = () => {
     setMemberMenuTarget(null);
   };
 
-  const openMemberMenu = (event: React.MouseEvent<HTMLElement>, member: any) => {
-    setMemberMenuAnchor(event.currentTarget);
-    setMemberMenuTarget(member);
-  };
-
   const handleRemoveMember = (memberUserId: number, memberName: string) => {
-    if (!menuCanEdit) return;
+    if (!menuCanEdit && Number(memberUserId) !== Number(user?.id)) return;
+    closeMemberMenu();
     showConfirm(
-      `"${memberName}" 님을 이 보드 멤버에서 삭제하시겠습니까?`,
+      txt(
+        `"${memberName}" 님을 이 보드 멤버에서 삭제하시겠습니까?`,
+        `Remove "${memberName}" from this board?`
+      ),
       () => {
         void (async () => {
           setMemberRemovingId(memberUserId);
@@ -2415,10 +2416,12 @@ const WorkBoardDetailPage: React.FC = () => {
             const res = await workBoardService.removeMember(boardId, memberUserId);
             if (res.success) {
               showSuccessToast(txt('멤버가 삭제되었습니다.', 'Member removed.'));
-              closeMemberMenu();
               await loadBoard();
             } else {
-              showErrorPopup(res.message || txt('멤버 삭제 실패', 'Failed to remove member'), txt('작업 보드', 'Work board'));
+              showErrorPopup(
+                res.message || txt('멤버 삭제 실패', 'Failed to remove member'),
+                txt('작업 보드', 'Work board')
+              );
             }
           } catch (e: any) {
             showErrorPopup(e, txt('작업 보드', 'Work board'));
@@ -2430,9 +2433,17 @@ const WorkBoardDetailPage: React.FC = () => {
       {
         title: txt('멤버 삭제', 'Delete member'),
         confirmText: txt('삭제', 'Delete'),
+        cancelText: t('common.cancel'),
         confirmColor: 'error',
       }
     );
+  };
+
+  const openMemberMenu = (event: React.MouseEvent<HTMLElement>, member: any) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setMemberMenuAnchor(event.currentTarget);
+    setMemberMenuTarget(member);
   };
 
   const handleDeleteBoard = () => {
@@ -2977,22 +2988,50 @@ const WorkBoardDetailPage: React.FC = () => {
               const isOwnerMember = m.role === 'owner';
               const roleLabel = isOwnerMember ? txt('소유자', 'Owner') : txt('멤버', 'Member');
               const userid = m.user?.userid ? String(m.user.userid) : '';
+              const menuOpenForThis =
+                Boolean(memberMenuAnchor) &&
+                Number(memberMenuTarget?.user_id) === Number(m.user_id);
               return (
                 <Tooltip
                   key={m.id ?? m.user_id}
                   title={
-                    <Box sx={{ textAlign: 'center' }}>
-                      <Typography variant="caption" display="block" sx={{ fontWeight: 700 }}>
+                    <Box sx={{ textAlign: 'center', color: '#F8FAFC' }}>
+                      <Typography
+                        variant="caption"
+                        display="block"
+                        sx={{ fontWeight: 700, color: '#F8FAFC', lineHeight: 1.35 }}
+                      >
                         {name}
                       </Typography>
-                      <Typography variant="caption" display="block" sx={{ opacity: 0.9 }}>
+                      <Typography
+                        variant="caption"
+                        display="block"
+                        sx={{ color: 'rgba(248, 250, 252, 0.88)', lineHeight: 1.35 }}
+                      >
                         {roleLabel}
                         {userid ? ` · ${userid}` : ''}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        display="block"
+                        sx={{ color: 'rgba(248, 250, 252, 0.72)', mt: 0.35, fontSize: '0.65rem' }}
+                      >
+                        {txt('클릭하여 관리', 'Click to manage')}
                       </Typography>
                     </Box>
                   }
                   arrow
                   placement="top"
+                  disableHoverListener={menuOpenForThis}
+                  slotProps={{
+                    tooltip: {
+                      sx: {
+                        bgcolor: '#1e293b',
+                        color: '#F8FAFC',
+                        '& .MuiTooltip-arrow': { color: '#1e293b' },
+                      },
+                    },
+                  }}
                 >
                   <Avatar
                     component="button"
@@ -3000,16 +3039,20 @@ const WorkBoardDetailPage: React.FC = () => {
                     src={avatarSrc}
                     alt={name}
                     aria-label={`${name}, ${roleLabel}`}
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpenForThis}
                     onClick={(e) => openMemberMenu(e, m)}
                     sx={{
                       width: BOARD_MEMBER_AVATAR_SIZE,
                       height: BOARD_MEMBER_AVATAR_SIZE,
                       fontSize: '0.75rem',
                       fontWeight: 700,
-                      border: '2px solid #FFFFFF',
+                      border: menuOpenForThis
+                        ? `2px solid ${theme.palette.primary.main}`
+                        : '2px solid #FFFFFF',
                       boxSizing: 'border-box',
                       ml: index === 0 ? 0 : `-${BOARD_MEMBER_AVATAR_OVERLAP_PX}px`,
-                      zIndex: index + 1,
+                      zIndex: menuOpenForThis ? BOARD_MEMBER_AVATAR_MAX + 3 : index + 1,
                       cursor: 'pointer',
                       p: 0,
                       bgcolor: avatarSrc
@@ -3074,10 +3117,11 @@ const WorkBoardDetailPage: React.FC = () => {
           paper: {
             sx: {
               borderRadius: '8px',
-              minWidth: 240,
-              mt: 1,
+              minWidth: 248,
+              mt: 0.75,
               border: '1px solid #E2E8F0',
               boxShadow: '0 8px 24px rgba(9, 30, 66, 0.14)',
+              overflow: 'hidden',
             },
           },
         }}
@@ -3092,19 +3136,19 @@ const WorkBoardDetailPage: React.FC = () => {
           const isLastOwner = isOwnerMember && ownerCount <= 1;
           const isSelf = Number(m.user_id) === Number(user?.id || 0);
           const canRemoveMember =
-            menuCanEdit &&
             (canManageMembers || isSelf) &&
+            (menuCanEdit || isSelf) &&
             !isLastOwner;
           return (
-            <Box sx={{ px: 2, py: 1.5, minWidth: 220 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1.5 }}>
+            <Box sx={{ minWidth: 240 }}>
+              <Box sx={{ px: 2, pt: 1.5, pb: 1.25, display: 'flex', alignItems: 'center', gap: 1.25 }}>
                 <Avatar
                   src={avatarSrc}
                   alt={name}
                   sx={{
-                    width: 36,
-                    height: 36,
-                    fontSize: '0.8rem',
+                    width: 40,
+                    height: 40,
+                    fontSize: '0.85rem',
                     fontWeight: 700,
                     bgcolor: avatarSrc
                       ? 'transparent'
@@ -3117,92 +3161,93 @@ const WorkBoardDetailPage: React.FC = () => {
                   {initial}
                 </Avatar>
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography sx={{ fontWeight: 700, fontSize: '0.875rem', lineHeight: 1.3 }} noWrap>
+                  <Typography sx={{ fontWeight: 700, fontSize: '0.875rem', lineHeight: 1.3, color: '#0F172A' }} noWrap>
                     {name}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" noWrap>
+                  <Typography variant="caption" sx={{ color: '#64748B' }} noWrap>
                     {isOwnerMember ? txt('소유자', 'Owner') : txt('멤버', 'Member')}
                     {m.user?.userid ? ` · ${m.user.userid}` : ''}
                   </Typography>
                 </Box>
               </Box>
               {canManageMembers ? (
-                <TextField
-                  select
-                  fullWidth
-                  size="small"
-                  hiddenLabel
-                  value={m.role}
-                  disabled={memberRoleUpdatingId === Number(m.user_id)}
-                  onChange={(e) => {
-                    const nextRole = e.target.value as 'owner' | 'member';
-                    if (nextRole !== m.role) {
-                      void handleChangeMemberRole(Number(m.user_id), nextRole);
-                    }
-                  }}
+                <Box sx={{ px: 2, pb: 1 }}>
+                  <TextField
+                    select
+                    fullWidth
+                    size="small"
+                    hiddenLabel
+                    value={m.role}
+                    disabled={memberRoleUpdatingId === Number(m.user_id)}
+                    onChange={(e) => {
+                      const nextRole = e.target.value as 'owner' | 'member';
+                      if (nextRole !== m.role) {
+                        void handleChangeMemberRole(Number(m.user_id), nextRole);
+                      }
+                    }}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        borderRadius: KANBAN_CHIP_RADIUS,
+                        fontSize: '0.75rem',
+                        minHeight: 34,
+                        bgcolor: '#F4F6FA',
+                      },
+                    }}
+                  >
+                    <MenuItem value="member" dense>
+                      {txt('멤버', 'Member')}
+                    </MenuItem>
+                    <MenuItem value="owner" dense>
+                      {txt('소유자', 'Owner')}
+                    </MenuItem>
+                  </TextField>
+                </Box>
+              ) : null}
+              <Divider />
+              {canRemoveMember ? (
+                <MenuItem
+                  onClick={() => handleRemoveMember(Number(m.user_id), name)}
+                  disabled={memberRemovingId === Number(m.user_id)}
                   sx={{
-                    mb: 0,
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: KANBAN_CHIP_RADIUS,
-                      fontSize: '0.75rem',
-                      minHeight: 34,
-                      bgcolor: '#F4F6FA',
-                    },
+                    py: 1.15,
+                    color: theme.palette.error.main,
+                    '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.08) },
                   }}
                 >
-                  <MenuItem value="member" dense>
-                    {txt('멤버', 'Member')}
-                  </MenuItem>
-                  <MenuItem value="owner" dense>
-                    {txt('소유자', 'Owner')}
-                  </MenuItem>
-                </TextField>
-              ) : null}
-              {canRemoveMember || isLastOwner ? (
-                <>
-                  <Divider sx={{ my: 1.25 }} />
-                  {canRemoveMember ? (
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      size="small"
-                      color="error"
-                      startIcon={
-                        memberRemovingId === Number(m.user_id) ? (
-                          <CircularProgress size={14} color="inherit" />
-                        ) : (
-                          <DeleteIcon fontSize="small" />
-                        )
-                      }
-                      disabled={memberRemovingId === Number(m.user_id)}
-                      onClick={() => {
-                        handleRemoveMember(Number(m.user_id), name);
-                      }}
-                      sx={{
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        borderRadius: KANBAN_CHIP_RADIUS,
-                        borderColor: alpha(theme.palette.error.main, 0.45),
-                      }}
-                    >
-                      {isSelf && !canManageMembers
+                  <ListItemIcon sx={{ minWidth: 36, color: 'inherit' }}>
+                    {memberRemovingId === Number(m.user_id) ? (
+                      <CircularProgress size={16} color="inherit" />
+                    ) : (
+                      <DeleteIcon fontSize="small" />
+                    )}
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={
+                      isSelf && !canManageMembers
                         ? txt('보드 나가기', 'Leave board')
-                        : txt('멤버 삭제', 'Delete member')}
-                    </Button>
-                  ) : (
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ display: 'block', textAlign: 'center', lineHeight: 1.4 }}
-                    >
-                      {txt(
-                        '마지막 소유자는 삭제할 수 없습니다.',
-                        'The last owner cannot be removed.'
-                      )}
-                    </Typography>
-                  )}
-                </>
-              ) : null}
+                        : txt('멤버 삭제', 'Remove member')
+                    }
+                    primaryTypographyProps={{ fontWeight: 600, fontSize: '0.8125rem' }}
+                  />
+                </MenuItem>
+              ) : (
+                <Box sx={{ px: 2, py: 1.25 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ display: 'block', textAlign: 'center', lineHeight: 1.4, color: '#64748B' }}
+                  >
+                    {isLastOwner
+                      ? txt(
+                          '마지막 소유자는 삭제할 수 없습니다.',
+                          'The last owner cannot be removed.'
+                        )
+                      : txt(
+                          '이 멤버를 삭제할 권한이 없습니다.',
+                          'You do not have permission to remove this member.'
+                        )}
+                  </Typography>
+                </Box>
+              )}
             </Box>
           );
         })() : null}
@@ -4542,9 +4587,20 @@ const WorkBoardDetailPage: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={inviteOpen} onClose={() => !inviteLoading && setInviteOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog
+        open={inviteOpen}
+        onClose={() => !inviteLoading && setInviteOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        disableEnforceFocus
+        slotProps={{
+          paper: {
+            sx: { overflow: 'visible' },
+          },
+        }}
+      >
         <DialogTitle>{txt('같은 회사 사용자 초대', 'Invite a user from same company')}</DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
+        <DialogContent sx={{ pt: 2, overflow: 'visible' }}>
           <Typography variant="subtitle2" sx={{ display: 'block', mb: 0.75, fontWeight: 600, fontSize: '0.875rem' }}>
             {txt('사용자 검색', 'Search User')}
           </Typography>
@@ -4555,8 +4611,35 @@ const WorkBoardDetailPage: React.FC = () => {
             value={selectedUsers}
             onChange={(_e, v) => setSelectedUsers(Array.isArray(v) ? v : [])}
             isOptionEqualToValue={(option, value) => Number(option.id) === Number(value.id)}
+            openOnFocus
+            slotProps={{
+              popper: {
+                disablePortal: true,
+                sx: { zIndex: (theme) => theme.zIndex.modal + 2 },
+              },
+              listbox: {
+                // Dialog 안에서 옵션 mousedown 시 input blur로 목록이 먼저 닫히는 것 방지
+                onMouseDown: (e: React.MouseEvent) => {
+                  e.preventDefault();
+                },
+              },
+            }}
+            renderOption={(props, option) => {
+              const { key, ...rest } = props as React.HTMLAttributes<HTMLLIElement> & { key?: React.Key };
+              return (
+                <li key={key ?? option.id} {...rest}>
+                  {option.username} ({option.userid})
+                </li>
+              );
+            }}
             renderInput={(params) => (
-              <TextField {...params} variant="outlined" hiddenLabel placeholder={txt('이름 또는 아이디', 'Name or User ID')} />
+              <TextField
+                {...params}
+                variant="outlined"
+                hiddenLabel
+                placeholder={txt('이름 또는 아이디', 'Name or User ID')}
+                onMouseDown={(e) => e.stopPropagation()}
+              />
             )}
           />
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>

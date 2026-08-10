@@ -629,7 +629,11 @@ const theme = createTheme({
         tooltip: {
           fontSize: '0.75rem',
           backgroundColor: '#1e293b',
+          color: '#F8FAFC',
           borderRadius: 6,
+        },
+        arrow: {
+          color: '#1e293b',
         },
       },
     },
