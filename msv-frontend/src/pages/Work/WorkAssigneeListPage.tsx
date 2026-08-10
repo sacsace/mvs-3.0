@@ -57,7 +57,7 @@ import { findMenuIdByPath } from '../../utils/findMenuByPath';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import { mvsPageRootFullBleedSx } from '../../theme/mvsLayout';
 
 type CompanyUserOption = {
   id: number;
@@ -1045,7 +1045,7 @@ const WorkAssigneeListPage: React.FC = () => {
   };
 
   return (
-    <Box sx={mvsPageRootSx}>
+    <Box sx={mvsPageRootFullBleedSx}>
       <MvsPageHeader
         title={t('workAssigneeList.title')}
         description={t('workAssigneeList.description')}

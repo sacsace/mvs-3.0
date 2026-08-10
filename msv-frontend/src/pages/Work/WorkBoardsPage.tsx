@@ -55,7 +55,7 @@ import { useMenuStore, useStore } from '../../store';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsOutlinedLabelProps, mvsPageRootSx } from '../../theme/mvsLayout';
+import { mvsOutlinedLabelProps, mvsPageRootFullBleedSx } from '../../theme/mvsLayout';
 
 /** 보드 색상 — 채도를 낮춘 시스템 톤에 가깝게 */
 const BOARD_COLOR_OPTIONS = [
@@ -642,7 +642,7 @@ const WorkBoardsPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ ...mvsPageRootSx, flex: 1, border: 'none' }}>
+    <Box sx={{ ...mvsPageRootFullBleedSx, flex: 1, border: 'none' }}>
       <MvsPageHeader
         title={t('workBoards.title')}
         description={t('workBoards.description')}

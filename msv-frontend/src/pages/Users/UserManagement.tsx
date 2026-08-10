@@ -1706,37 +1706,35 @@ const UserManagement: React.FC = () => {
               </Box>
             ) : (
               <>
-                <Box sx={{ px: { xs: 2, sm: 2.5 }, pt: 1.5, pb: 0 }}>
-                  <Box sx={listViewModeBarSx}>
-                    <Button
-                      size="small"
-                      disableElevation
-                      variant={listViewMode === 'all' ? 'contained' : 'outlined'}
-                      onClick={() => setListViewMode('all')}
-                      sx={{
-                        ...listViewModeBtnSx,
-                        ...(listViewMode === 'all'
-                          ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
-                          : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
-                      }}
-                    >
-                      {t('userManagement.listView.viewAll')}
-                    </Button>
-                    <Button
-                      size="small"
-                      disableElevation
-                      variant={listViewMode === 'page' ? 'contained' : 'outlined'}
-                      onClick={() => setListViewMode('page')}
-                      sx={{
-                        ...listViewModeBtnSx,
-                        ...(listViewMode === 'page'
-                          ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
-                          : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
-                      }}
-                    >
-                      {t('userManagement.listView.viewPages')}
-                    </Button>
-                  </Box>
+                <Box sx={listViewModeBarSx}>
+                  <Button
+                    size="small"
+                    disableElevation
+                    variant={listViewMode === 'all' ? 'contained' : 'outlined'}
+                    onClick={() => setListViewMode('all')}
+                    sx={{
+                      ...listViewModeBtnSx,
+                      ...(listViewMode === 'all'
+                        ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                        : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                    }}
+                  >
+                    {t('userManagement.listView.viewAll')}
+                  </Button>
+                  <Button
+                    size="small"
+                    disableElevation
+                    variant={listViewMode === 'page' ? 'contained' : 'outlined'}
+                    onClick={() => setListViewMode('page')}
+                    sx={{
+                      ...listViewModeBtnSx,
+                      ...(listViewMode === 'page'
+                        ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                        : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                    }}
+                  >
+                    {t('userManagement.listView.viewPages')}
+                  </Button>
                 </Box>
                 <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
                   <Table

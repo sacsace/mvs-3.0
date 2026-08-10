@@ -8,7 +8,7 @@ import { useStore, useMenuStore } from '../../store';
 import { userUiPreferencesService } from '../../services/api';
 import { ensureI18nLanguage } from '../../locales/i18n';
 import { useMenuLoader } from '../../hooks/useMenuLoader';
-import { mvsPageShellSx, mvsWorkBoardPageBg } from '../../theme/mvsLayout';
+import { mvsPageShellSx, mvsWorkBoardPageBg, mvsPageContentMaxWidth } from '../../theme/mvsLayout';
 
 /** 서버 prefs의 ko가 클라이언트 영어 선택보다 늦게 도착할 때 UI 언어를 덮어쓰지 않음 */
 function shouldApplyPrefsLanguage(prefsLang: 'ko' | 'en', current: 'ko' | 'en'): boolean {
@@ -35,6 +35,14 @@ const isLegalPublicRoute = (pathname: string): boolean =>
   pathname === '/legal/privacy' ||
   pathname === '/legal/support' ||
   pathname.startsWith('/legal/');
+
+/** 보드·담당 리스트·엑셀형 화면은 body 기본 너비 제한 없이 전체 폭 사용 */
+const isFullBleedBodyRoute = (pathname: string): boolean => {
+  if (pathname === '/work/projects' || pathname.startsWith('/work/projects/')) return true;
+  if (pathname === '/work/assignee-list' || pathname.startsWith('/work/assignee-list/')) return true;
+  if (pathname === '/basic-info/login-info' || pathname.startsWith('/basic-info/login-info/')) return true;
+  return false;
+};
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const theme = useTheme();
@@ -169,6 +177,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   }, [location.pathname, menus, menusLoading, hasMenuPermission, user?.id, user?.role, findMenuByRoute]);
 
   const useChromelessWorkArea = true;
+  const fullBleedBody = isFullBleedBodyRoute(location.pathname);
+  const bodyMaxWidth = fullBleedBody ? '100%' : mvsPageContentMaxWidth;
 
   return (
     <Box
@@ -221,7 +231,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'flex-start',
-            alignItems: 'stretch',
+            alignItems: 'center',
             backgroundColor: useChromelessWorkArea ? 'transparent' : 'bodyArea.main',
             ...(useChromelessWorkArea
               ? { background: mvsWorkBoardPageBg, backgroundColor: 'transparent' }
@@ -236,15 +246,15 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             paddingBottom: { xs: 1.5, sm: 2, md: `${WORK_AREA_OUTSET + 16}px` },
             '& > *': {
               width: '100%',
-              maxWidth: '100%',
+              maxWidth: bodyMaxWidth,
             },
           }}
         >
           <Box
             sx={{
               width: '100%',
-              maxWidth: '100%',
-              mx: 0,
+              maxWidth: bodyMaxWidth,
+              mx: 'auto',
               backgroundColor: useChromelessWorkArea ? 'transparent' : 'workArea.main',
               borderRadius: useChromelessWorkArea ? 0 : { xs: '12px', sm: '18px', md: '24px' },
               boxShadow: useChromelessWorkArea ? 'none' : '0 4px 16px rgba(15, 23, 42, 0.08)',

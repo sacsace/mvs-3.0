@@ -24,7 +24,7 @@ import {
   useMediaQuery } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
-  mvsPageRootSx,
+  mvsPageRootFullBleedSx,
   mvsKpiCardSx,
   mvsSearchFieldSx,
   mvsFilterFieldHeightSx,
@@ -445,7 +445,7 @@ const LoginInfoManagement: React.FC = () => {
   return (
     <Box
       sx={{
-        ...mvsPageRootSx,
+        ...mvsPageRootFullBleedSx,
         color: 'text.primary',
         '& .MuiCard-root': isDark
           ? {

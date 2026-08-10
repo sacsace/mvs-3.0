@@ -252,7 +252,14 @@ const PersonalSettings: React.FC = () => {
     avatarPreviewUrl || (profile.avatar_url ? getUploadUrl(profile.avatar_url) : undefined);
 
   return (
-    <Box sx={mvsPageRootSx}>
+    <Box
+      sx={{
+        ...mvsPageRootSx,
+        maxWidth: 1080,
+        mx: 'auto',
+        width: '100%',
+      }}
+    >
       <MvsPageHeader
         title={t('personalSettings.title')}
         description={t('personalSettings.description')}

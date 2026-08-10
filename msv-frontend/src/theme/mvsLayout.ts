@@ -5,6 +5,10 @@ import type { SystemStyleObject } from '@mui/system';
 export type MvsStyleObject = SystemStyleObject<Theme>;
 
 /** MVS 공통 레이아웃 토큰 — 페이지에서 sx로 재사용 가능 (로직 변경 없음) */
+
+/** Body 영역 기본 최대 너비 (초광폭 모니터에서 가독성 유지) */
+export const mvsPageContentMaxWidth = 1960;
+
 export const mvsPageShellSx: SxProps<Theme> = {
   width: '100%',
   maxWidth: '100%',
@@ -320,11 +324,23 @@ export const mvsPageTitleSx: SxProps<Theme> = {
   marginBottom: 0,
 };
 
-/** 모든 페이지 공통 루트 래퍼 — AppLayout 패딩 안에서 시작 위치 통일 */
+/** 모든 페이지 공통 루트 래퍼 — AppLayout 패딩 안에서 시작 위치·기본 너비 통일 */
 export const mvsPageRootSx: SxProps<Theme> = {
   p: 0,
   width: '100%',
+  maxWidth: mvsPageContentMaxWidth,
+  mx: 'auto',
+  minHeight: '100%',
+  boxSizing: 'border-box',
+  bgcolor: 'transparent',
+};
+
+/** 보드·엑셀 시트 등 브라우저 너비를 쓰는 전체 폭 페이지 */
+export const mvsPageRootFullBleedSx: SxProps<Theme> = {
+  p: 0,
+  width: '100%',
   maxWidth: '100%',
+  mx: 0,
   minHeight: '100%',
   boxSizing: 'border-box',
   bgcolor: 'transparent',

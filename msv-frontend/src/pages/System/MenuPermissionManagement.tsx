@@ -1320,7 +1320,7 @@ const MenuPermissionManagement: React.FC = () => {
           ...newPermissions[menuId]
         }));
         await menuService.setUserPermissions(selectedUserId, permissionData);
-        showSuccessPopup('기본 권한이 적용되었습니다.');
+        showSuccessPopup(t('menuPermissionManagement.defaultPermissionsApplied'));
       } else if (selectedCompanyId) {
         const companyUsers = users.filter(u => u.company_id === selectedCompanyId);
         for (const companyUser of companyUsers) {
@@ -1331,10 +1331,14 @@ const MenuPermissionManagement: React.FC = () => {
           }));
           await menuService.setUserPermissions(companyUser.id, permissionData);
         }
-        showSuccessPopup(`${companyUsers.length}명의 사용자에게 기본 권한이 적용되었습니다.`);
+        showSuccessPopup(
+          t('menuPermissionManagement.defaultPermissionsAppliedToCompany', {
+            count: companyUsers.length,
+          })
+        );
       }
     } catch (error: any) {
-      showErrorPopup(error, '기본 권한 적용 오류');
+      showErrorPopup(error, t('menuPermissionManagement.defaultPermissionsApplyFailed'));
     } finally {
       setSaving(false);
     }
@@ -1408,9 +1412,11 @@ const MenuPermissionManagement: React.FC = () => {
         ...newPermissions[menuId]
       }));
       await menuService.setUserPermissions(selectedUserId, permissionData);
-      showSuccessPopup(`${selectedUser.role} 역할의 기본 권한이 적용되었습니다.`);
+      showSuccessPopup(
+        t('menuPermissionManagement.rolePermissionsApplied', { role: selectedUser.role })
+      );
     } catch (error: any) {
-      showErrorPopup(error, '역할별 기본 권한 적용 오류');
+      showErrorPopup(error, t('menuPermissionManagement.rolePermissionsApplyFailed'));
     } finally {
       setSaving(false);
     }
@@ -1473,7 +1479,7 @@ const MenuPermissionManagement: React.FC = () => {
     return (
       <Box sx={{ p: 0, width: '100%' }}>
         <Alert severity="error" sx={{ borderRadius: '8px' }}>
-          이 페이지는 메뉴 권한 관리 권한이 필요합니다.
+          {t('menuPermissionManagement.accessDenied')}
         </Alert>
       </Box>
     );
@@ -1813,14 +1819,18 @@ const MenuPermissionManagement: React.FC = () => {
                 <Box sx={{ minWidth: 0 }}>
                   <Typography variant="h6" sx={{ fontWeight: 600, mb: 0.5, fontSize: '1.0625rem', letterSpacing: '-0.02em' }}>
                     {selectedUserId
-                      ? `${users.find(u => u.id === selectedUserId)?.name}의 메뉴 권한`
+                      ? t('menuPermissionManagement.userMenuPermissions', {
+                          name: users.find(u => u.id === selectedUserId)?.name ?? '',
+                        })
                       : selectedCompanyId
-                      ? `${companies.find(c => c.id === selectedCompanyId)?.name}의 메뉴 권한`
+                      ? t('menuPermissionManagement.userMenuPermissions', {
+                          name: companies.find(c => c.id === selectedCompanyId)?.name ?? '',
+                        })
                       : t('menuPermissionManagement.selectUserOrCompany')}
                   </Typography>
                   {(selectedUserId || selectedCompanyId) && (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, fontSize: '0.8125rem', lineHeight: 1.55 }}>
-                      각 권한 박스를 클릭하여 설정하세요
+                      {t('menuPermissionManagement.clickPermissionBoxes')}
                     </Typography>
                   )}
                 </Box>
@@ -1932,18 +1942,26 @@ const MenuPermissionManagement: React.FC = () => {
         PaperProps={{ sx: { borderRadius: '8px' } }}
       >
         <DialogTitle sx={{ fontSize: '1.125rem', fontWeight: 700, letterSpacing: '-0.02em', pt: 2.5, px: 3 }}>
-          기본 권한 설정
+          {t('menuPermissionManagement.defaultPermissionsDialogTitle')}
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 3, color: 'text.secondary' }}>
-            {selectedUserId && users.find(u => u.id === selectedUserId)?.name} 사용자에게 기본 권한을 적용합니다.
+            {selectedUserId
+              ? t('menuPermissionManagement.applyDefaultToUser', {
+                  name: users.find(u => u.id === selectedUserId)?.name ?? '',
+                })
+              : selectedCompanyId
+              ? t('menuPermissionManagement.applyDefaultToCompany', {
+                  name: companies.find(c => c.id === selectedCompanyId)?.name ?? '',
+                })
+              : null}
           </Typography>
           
           {/* 역할별 기본 권한 적용 */}
           {selectedUserId && (
             <Box sx={{ mb: 3 }}>
               <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
-                역할별 기본 권한
+                {t('menuPermissionManagement.roleBasedPermissions')}
               </Typography>
               <Button
                 fullWidth
@@ -1958,16 +1976,18 @@ const MenuPermissionManagement: React.FC = () => {
                   borderRadius: '8px',
                   borderColor: alpha(theme.palette.divider, 0.95) }}
               >
-                {users.find(u => u.id === selectedUserId)?.role} 역할 기본 권한 적용
+                {t('menuPermissionManagement.applyRolePermissions', {
+                  role: users.find(u => u.id === selectedUserId)?.role ?? '',
+                })}
               </Button>
               <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                • Admin: 전체 권한 (보기, 등록, 수정, 삭제)
+                {t('menuPermissionManagement.roleLegendAdmin')}
                 <br />
-                • Manager: 읽기/쓰기 권한 (보기, 등록, 수정)
+                {t('menuPermissionManagement.roleLegendManager')}
                 <br />
-                • User: 읽기 전용 (보기만)
+                {t('menuPermissionManagement.roleLegendUser')}
                 <br />
-                • Audit: 읽기 전용 (보기만)
+                {t('menuPermissionManagement.roleLegendAudit')}
               </Typography>
             </Box>
           )}
@@ -1976,7 +1996,7 @@ const MenuPermissionManagement: React.FC = () => {
 
           {/* 템플릿 선택 */}
           <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
-            권한 템플릿
+            {t('menuPermissionManagement.permissionTemplates')}
           </Typography>
           
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -2000,10 +2020,10 @@ const MenuPermissionManagement: React.FC = () => {
             >
               <Box sx={{ flex: 1, textAlign: 'left' }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  보기 전용
+                  {t('menuPermissionManagement.viewOnly')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                  모든 메뉴에 보기 권한만 부여
+                  {t('menuPermissionManagement.viewOnlyDesc')}
                 </Typography>
               </Box>
             </Button>
@@ -2028,10 +2048,10 @@ const MenuPermissionManagement: React.FC = () => {
             >
               <Box sx={{ flex: 1, textAlign: 'left' }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  읽기/쓰기
+                  {t('menuPermissionManagement.readWrite')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                  모든 메뉴에 보기, 등록, 수정 권한 부여
+                  {t('menuPermissionManagement.readWriteDesc')}
                 </Typography>
               </Box>
             </Button>
@@ -2056,10 +2076,10 @@ const MenuPermissionManagement: React.FC = () => {
             >
               <Box sx={{ flex: 1, textAlign: 'left' }}>
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  전체 권한
+                  {t('menuPermissionManagement.full')}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
-                  모든 메뉴에 전체 권한 부여 (보기, 등록, 수정, 삭제)
+                  {t('menuPermissionManagement.fullDesc')}
                 </Typography>
               </Box>
             </Button>
@@ -2067,7 +2087,7 @@ const MenuPermissionManagement: React.FC = () => {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setDefaultPermissionDialogOpen(false)} sx={{ borderRadius: '8px', textTransform: 'none' }}>
-            닫기
+            {t('menuPermissionManagement.close')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -2081,15 +2101,17 @@ const MenuPermissionManagement: React.FC = () => {
         PaperProps={{ sx: { borderRadius: '8px' } }}
       >
         <DialogTitle sx={{ fontSize: '1.125rem', fontWeight: 700, letterSpacing: '-0.02em', pt: 2.5, px: 3 }}>
-          권한 위임
+          {t('menuPermissionManagement.permissionDelegation')}
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>
-            현재 선택된 사용자({users.find(u => u.id === selectedUserId)?.name})의 권한을 다른 사용자에게 위임합니다.
+            {t('menuPermissionManagement.delegationDescription', {
+              name: users.find(u => u.id === selectedUserId)?.name ?? '',
+            })}
           </Typography>
           <FormControl fullWidth>
             <Typography variant="body2" sx={{ mb: 1 }}>
-              위임 대상 사용자
+              {t('menuPermissionManagement.delegationTargetUser')}
             </Typography>
             <Select
               value={delegationTargetId || ''}
@@ -2097,7 +2119,7 @@ const MenuPermissionManagement: React.FC = () => {
               displayEmpty
               sx={{ borderRadius: '8px' }}
             >
-              <MenuItem value="">선택하세요</MenuItem>
+              <MenuItem value="">{t('menuPermissionManagement.pleaseSelect')}</MenuItem>
               {users.filter(u => u.id !== selectedUserId && u.status === 'active').map((u) => (
                 <MenuItem key={u.id} value={u.id}>
                   {u.name} ({u.role}) - {u.company}
@@ -2108,7 +2130,7 @@ const MenuPermissionManagement: React.FC = () => {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
           <Button onClick={() => setDelegationDialogOpen(false)} sx={{ borderRadius: '8px', textTransform: 'none' }}>
-            취소
+            {t('menuPermissionManagement.cancel')}
           </Button>
           <Button
             onClick={handleDelegation}
@@ -2118,7 +2140,7 @@ const MenuPermissionManagement: React.FC = () => {
             startIcon={saving ? <CircularProgress size={16} color="inherit" /> : <PersonAddIcon />}
             sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}
           >
-            {saving ? '위임 중...' : '위임'}
+            {saving ? t('menuPermissionManagement.delegating') : t('menuPermissionManagement.delegate')}
           </Button>
         </DialogActions>
       </Dialog>
