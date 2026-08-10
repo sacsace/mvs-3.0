@@ -15,12 +15,30 @@ interface WorkBoardCardAttributes {
   completed_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
+  deleted_at?: Date | null;
 }
 
 interface WorkBoardCardCreationAttributes
-  extends Optional<WorkBoardCardAttributes, 'id' | 'created_at' | 'updated_at' | 'description' | 'color' | 'assignee_user_id' | 'reference_user_ids' | 'due_date' | 'created_by' | 'completed_at' | 'position'> {}
+  extends Optional<
+    WorkBoardCardAttributes,
+    | 'id'
+    | 'created_at'
+    | 'updated_at'
+    | 'description'
+    | 'color'
+    | 'assignee_user_id'
+    | 'reference_user_ids'
+    | 'due_date'
+    | 'created_by'
+    | 'completed_at'
+    | 'position'
+    | 'deleted_at'
+  > {}
 
-class WorkBoardCard extends Model<WorkBoardCardAttributes, WorkBoardCardCreationAttributes> implements WorkBoardCardAttributes {
+class WorkBoardCard
+  extends Model<WorkBoardCardAttributes, WorkBoardCardCreationAttributes>
+  implements WorkBoardCardAttributes
+{
   public id!: number;
   public list_id!: number;
   public title!: string;
@@ -34,6 +52,7 @@ class WorkBoardCard extends Model<WorkBoardCardAttributes, WorkBoardCardCreation
   public completed_at?: Date | null;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
+  public readonly deleted_at!: Date | null;
 }
 
 WorkBoardCard.init(
@@ -52,13 +71,15 @@ WorkBoardCard.init(
     reference_user_ids: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     due_date: { type: DataTypes.DATEONLY, allowNull: true },
     created_by: { type: DataTypes.INTEGER, allowNull: true },
-    completed_at: { type: DataTypes.DATE, allowNull: true }
+    completed_at: { type: DataTypes.DATE, allowNull: true },
+    deleted_at: { type: DataTypes.DATE, allowNull: true }
   },
   {
     sequelize,
     tableName: 'work_board_cards',
     timestamps: true,
-    underscored: true
+    underscored: true,
+    paranoid: true
   }
 );
 

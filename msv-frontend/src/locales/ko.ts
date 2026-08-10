@@ -1609,7 +1609,8 @@ export default {
       memberCount: '멤버 {{count}}명',
       actions: {
         newBoard: '새 작업 보드',
-        create: '만들기'
+        create: '만들기',
+        deleteBoard: '보드 삭제'
       },
       fields: {
         boardName: '보드 이름',
@@ -1647,6 +1648,14 @@ export default {
         noDeletePermission: '카드를 삭제할 권한이 없습니다.',
         commentPlaceholder: '댓글을 입력하세요',
         noComments: '아직 댓글이 없습니다.'
+      },
+      deleteConfirm: {
+        title: '작업 보드 삭제',
+        message: '「{{name}}」 보드와 모든 목록·카드가 삭제됩니다. 계속할까요?',
+        messageFallback: '이 작업 보드와 모든 목록·카드가 삭제됩니다. 계속할까요?',
+        thisBoard: '이 보드',
+        success: '삭제되었습니다.',
+        failed: '삭제 실패'
       }
     },
     workStatistics: {

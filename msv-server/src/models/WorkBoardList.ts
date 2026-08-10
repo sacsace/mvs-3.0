@@ -10,12 +10,13 @@ interface WorkBoardListAttributes {
   position: number;
   created_at?: Date;
   updated_at?: Date;
+  deleted_at?: Date | null;
 }
 
 interface WorkBoardListCreationAttributes
   extends Optional<
     WorkBoardListAttributes,
-    'id' | 'created_at' | 'updated_at' | 'position' | 'description' | 'assignee_user_id'
+    'id' | 'created_at' | 'updated_at' | 'position' | 'description' | 'assignee_user_id' | 'deleted_at'
   > {}
 
 class WorkBoardList
@@ -30,6 +31,7 @@ class WorkBoardList
   public position!: number;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
+  public readonly deleted_at!: Date | null;
 }
 
 WorkBoardList.init(
@@ -44,12 +46,14 @@ WorkBoardList.init(
     description: { type: DataTypes.STRING(500), allowNull: true, defaultValue: null },
     assignee_user_id: { type: DataTypes.INTEGER, allowNull: true, defaultValue: null },
     position: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    deleted_at: { type: DataTypes.DATE, allowNull: true },
   },
   {
     sequelize,
     tableName: 'work_board_lists',
     timestamps: true,
     underscored: true,
+    paranoid: true,
   }
 );
 

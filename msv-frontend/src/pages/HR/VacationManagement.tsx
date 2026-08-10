@@ -1508,18 +1508,20 @@ const VacationManagement: React.FC = () => {
                 </Typography>
                 <Box sx={{ height: 300 }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
+                    <PieChart margin={{ top: 8, right: 16, bottom: 8, left: 16 }}>
                       <Pie
                         data={[
                           { name: t('vacationManagement.statusPending'), value: totalPending, color: '#ffb74d' },
                           { name: t('vacationManagement.statusApproved'), value: totalApproved, color: '#81c784' },
                           { name: t('vacationManagement.statusRejected'), value: totalRejected, color: '#e57373' },
                           { name: t('vacationManagement.statusCancelled'), value: totalCancelled, color: '#bdbdbd' }
-                        ]}
+                        ].filter((entry) => entry.value > 0)}
                         cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, value, percent }) => `${name} ${value}${t('vacationManagement.casesUnit')} (${(percent * 100).toFixed(0)}%)`}
+                        cy="45%"
+                        labelLine
+                        label={({ name, value, percent }) =>
+                          `${name} ${value}${t('vacationManagement.casesUnit')} (${((percent || 0) * 100).toFixed(0)}%)`
+                        }
                         outerRadius={80}
                         fill="#8884d8"
                         dataKey="value"
@@ -1529,12 +1531,22 @@ const VacationManagement: React.FC = () => {
                           { name: t('vacationManagement.statusApproved'), value: totalApproved, color: '#81c784' },
                           { name: t('vacationManagement.statusRejected'), value: totalRejected, color: '#e57373' },
                           { name: t('vacationManagement.statusCancelled'), value: totalCancelled, color: '#bdbdbd' }
-                        ].map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
+                        ]
+                          .filter((entry) => entry.value > 0)
+                          .map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
                       </Pie>
                       <RechartsTooltip formatter={(value: number) => `${value}${t('vacationManagement.casesUnit')}`} />
-                      <Legend />
+                      <Legend
+                        verticalAlign="bottom"
+                        payload={[
+                          { value: t('vacationManagement.statusPending'), type: 'square', color: '#ffb74d' },
+                          { value: t('vacationManagement.statusApproved'), type: 'square', color: '#81c784' },
+                          { value: t('vacationManagement.statusRejected'), type: 'square', color: '#e57373' },
+                          { value: t('vacationManagement.statusCancelled'), type: 'square', color: '#bdbdbd' }
+                        ]}
+                      />
                     </PieChart>
                   </ResponsiveContainer>
                 </Box>

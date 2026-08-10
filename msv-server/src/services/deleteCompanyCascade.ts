@@ -43,8 +43,10 @@ async function deleteByCompanyId(
 
 async function deleteWorkBoards(ctx: DeleteContext, transaction: Transaction): Promise<void> {
   await runDelete(
-    `DELETE FROM work_board_card_comments
-     WHERE card_id IN (
+    `UPDATE work_board_card_comments
+     SET deleted_at = COALESCE(deleted_at, NOW())
+     WHERE deleted_at IS NULL
+       AND card_id IN (
        SELECT c.id FROM work_board_cards c
        JOIN work_board_lists l ON l.id = c.list_id
        JOIN work_boards b ON b.id = l.board_id
@@ -54,8 +56,10 @@ async function deleteWorkBoards(ctx: DeleteContext, transaction: Transaction): P
     transaction
   );
   await runDelete(
-    `DELETE FROM work_board_cards
-     WHERE list_id IN (
+    `UPDATE work_board_cards
+     SET deleted_at = COALESCE(deleted_at, NOW())
+     WHERE deleted_at IS NULL
+       AND list_id IN (
        SELECT l.id FROM work_board_lists l
        JOIN work_boards b ON b.id = l.board_id
        WHERE b.company_id = :companyId
@@ -64,18 +68,28 @@ async function deleteWorkBoards(ctx: DeleteContext, transaction: Transaction): P
     transaction
   );
   await runDelete(
-    `DELETE FROM work_board_lists
-     WHERE board_id IN (SELECT id FROM work_boards WHERE company_id = :companyId)`,
+    `UPDATE work_board_lists
+     SET deleted_at = COALESCE(deleted_at, NOW())
+     WHERE deleted_at IS NULL
+       AND board_id IN (SELECT id FROM work_boards WHERE company_id = :companyId)`,
     { companyId: ctx.companyId },
     transaction
   );
   await runDelete(
-    `DELETE FROM work_board_members
-     WHERE board_id IN (SELECT id FROM work_boards WHERE company_id = :companyId)`,
+    `UPDATE work_board_members
+     SET deleted_at = COALESCE(deleted_at, NOW())
+     WHERE deleted_at IS NULL
+       AND board_id IN (SELECT id FROM work_boards WHERE company_id = :companyId)`,
     { companyId: ctx.companyId },
     transaction
   );
-  await deleteByCompanyId('work_boards', ctx, transaction);
+  await runDelete(
+    `UPDATE work_boards
+     SET deleted_at = COALESCE(deleted_at, NOW())
+     WHERE deleted_at IS NULL AND company_id = :companyId`,
+    { companyId: ctx.companyId },
+    transaction
+  );
 }
 
 async function deleteEmploymentContracts(ctx: DeleteContext, transaction: Transaction): Promise<void> {

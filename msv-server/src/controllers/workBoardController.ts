@@ -24,6 +24,15 @@ let workBoardSchemaEnsured = false;
 let workBoardListSchemaEnsured = false;
 let workBoardCardSchemaEnsured = false;
 let workBoardCardCommentSchemaEnsured = false;
+let workBoardSoftDeleteSchemaEnsured = false;
+
+const WORK_BOARD_SOFT_DELETE_TABLES = [
+  'work_boards',
+  'work_board_lists',
+  'work_board_cards',
+  'work_board_members',
+  'work_board_card_comments'
+] as const;
 
 const isDuplicateColumnError = (error: unknown): boolean => {
   const err = error as { parent?: { code?: string }; original?: { code?: string }; message?: string };
@@ -46,8 +55,30 @@ const tableColumnExists = async (tableName: string, columnName: string): Promise
   return Array.isArray(rows) && rows.length > 0;
 };
 
+const ensureWorkBoardSoftDeleteSchema = async () => {
+  if (workBoardSoftDeleteSchemaEnsured) return;
+  const queryInterface = sequelize.getQueryInterface();
+  for (const tableName of WORK_BOARD_SOFT_DELETE_TABLES) {
+    try {
+      if (!(await tableColumnExists(tableName, 'deleted_at'))) {
+        await queryInterface.addColumn(tableName, 'deleted_at', {
+          type: DataTypes.DATE,
+          allowNull: true,
+          defaultValue: null
+        });
+      }
+    } catch (error) {
+      if (!isDuplicateColumnError(error)) {
+        console.warn(`ensureWorkBoardSoftDeleteSchema(${tableName}):`, error);
+      }
+    }
+  }
+  workBoardSoftDeleteSchemaEnsured = true;
+};
+
 const ensureWorkBoardSchema = async () => {
   if (workBoardSchemaEnsured) return;
+  await ensureWorkBoardSoftDeleteSchema();
   const queryInterface = sequelize.getQueryInterface();
   const table = await queryInterface.describeTable('work_boards');
   if (!table.board_color) {
@@ -69,6 +100,7 @@ const ensureWorkBoardSchema = async () => {
 
 const ensureWorkBoardListSchema = async () => {
   if (workBoardListSchemaEnsured) return;
+  await ensureWorkBoardSoftDeleteSchema();
   const queryInterface = sequelize.getQueryInterface();
   const table = await queryInterface.describeTable('work_board_lists');
   if (!table.description) {
@@ -97,6 +129,7 @@ const ensureWorkBoardListSchema = async () => {
 
 const ensureWorkBoardCardSchema = async () => {
   if (workBoardCardSchemaEnsured) return;
+  await ensureWorkBoardSoftDeleteSchema();
   const queryInterface = sequelize.getQueryInterface();
 
   if (!(await tableColumnExists('work_board_cards', 'reference_user_ids'))) {
@@ -128,6 +161,7 @@ const ensureWorkBoardCardSchema = async () => {
 const ensureWorkBoardCardCommentSchema = async () => {
   if (workBoardCardCommentSchemaEnsured) return;
   try {
+    await ensureWorkBoardSoftDeleteSchema();
     const queryInterface = sequelize.getQueryInterface();
     const table = await queryInterface.describeTable('work_board_card_comments');
     if (!table.parent_id) {
@@ -386,20 +420,20 @@ async function userCanAccessBoard(
   isMember: boolean,
   forWrite = false
 ): Promise<boolean> {
+  // root: 멤버 여부와 무관하게 같은 테넌트 보드 전체 조회/관리
   if (user.role === 'root') {
-    // root는 같은 테넌트 내 모든 회사 보드 조회/관리 가능
-    return board.tenant_id === user.tenant_id;
+    return Number(board.tenant_id) === Number(user.tenant_id);
   }
   if (user.role === 'audit') {
-    if (board.tenant_id !== user.tenant_id) return false;
+    if (Number(board.tenant_id) !== Number(user.tenant_id)) return false;
     if (forWrite) {
-      return board.company_id === user.company_id;
+      return Number(board.company_id) === Number(user.company_id);
     }
     return true;
   }
   return (
-    board.tenant_id === user.tenant_id &&
-    board.company_id === user.company_id &&
+    Number(board.tenant_id) === Number(user.tenant_id) &&
+    Number(board.company_id) === Number(user.company_id) &&
     isMember
   );
 }
@@ -407,9 +441,16 @@ async function userCanAccessBoard(
 const resolveRootTargetCompanyId = async (
   user: RequestWithUser['user'],
   rawCompanyId: unknown
-): Promise<{ companyId: number | null; error?: string }> => {
-  if (rawCompanyId === undefined || rawCompanyId === null || rawCompanyId === '') {
-    return { companyId: user.company_id != null ? Number(user.company_id) : null };
+): Promise<{ companyId: number | null; allCompanies?: boolean; error?: string }> => {
+  // company_id 미지정 / 'all' → 테넌트 전체 회사 보드
+  if (
+    rawCompanyId === undefined ||
+    rawCompanyId === null ||
+    rawCompanyId === '' ||
+    String(rawCompanyId).toLowerCase() === 'all' ||
+    Number(rawCompanyId) === 0
+  ) {
+    return { companyId: null, allCompanies: true };
   }
   const companyId = Number(rawCompanyId);
   if (!Number.isFinite(companyId) || companyId <= 0) {
@@ -472,10 +513,10 @@ export const getWorkBoards = async (req: RequestWithUser, res: Response) => {
         if (resolved.error) {
           return res.status(400).json({ success: false, message: resolved.error });
         }
-        if (resolved.companyId == null || !Number.isFinite(resolved.companyId)) {
-          return res.status(400).json({ success: false, message: '회사를 선택해주세요.' });
+        // 회사 지정 시에만 필터. 미지정/all 이면 테넌트 전체 보드 (멤버 여부 무관)
+        if (!resolved.allCompanies && resolved.companyId != null && Number.isFinite(resolved.companyId)) {
+          where.company_id = resolved.companyId;
         }
-        where.company_id = resolved.companyId;
       }
       boards = await WorkBoard.findAll({
         where,
@@ -627,9 +668,9 @@ export const getWorkBoardDetail = async (req: RequestWithUser, res: Response) =>
     const { board, member } = await findBoardForUser(boardId, user);
 
     if (!board) {
-      return res.status(404).json({ success: false, message: '보드를 찾을 수 없거나 접근 권한이 없습니다.' });
+      return res.status(404).json({ success: false, message: '보드를 찾을 수 없거나 권한이 없습니다.' });
     }
-
+    // root/audit는 멤버가 아니어도 조회 가능 (findBoardForUser에서 이미 허용)
     if (user.role !== 'root' && user.role !== 'audit' && !member) {
       return res.status(403).json({ success: false, message: '이 보드의 멤버만 볼 수 있습니다.' });
     }
@@ -701,11 +742,18 @@ export const deleteWorkBoard = async (req: RequestWithUser, res: Response) => {
     const user = req.user!;
     const boardId = parseInt(req.params.boardId, 10);
     const { board, member } = await findBoardForUser(boardId, user, true);
-    if (!board || !member) {
+    if (!board) {
       return res.status(404).json({ success: false, message: '보드를 찾을 수 없거나 권한이 없습니다.' });
     }
-    if (member.role !== 'owner') {
-      return res.status(403).json({ success: false, message: '보드 소유자만 삭제할 수 있습니다.' });
+    // 일반 사용자는 멤버여야 하고, root도 생성자만 삭제 가능
+    if (user.role !== 'root' && !member) {
+      return res.status(404).json({ success: false, message: '보드를 찾을 수 없거나 권한이 없습니다.' });
+    }
+    if (Number(board.created_by) !== Number(user.id)) {
+      return res.status(403).json({
+        success: false,
+        message: '보드를 생성한 사람만 삭제할 수 있습니다.'
+      });
     }
 
     const tenantId = board.tenant_id;
@@ -715,6 +763,18 @@ export const deleteWorkBoard = async (req: RequestWithUser, res: Response) => {
       const lists = await WorkBoardList.findAll({ where: { board_id: board.id }, transaction: t });
       const listIds = lists.map((l) => l.id);
       if (listIds.length) {
+        const cards = await WorkBoardCard.findAll({
+          where: { list_id: { [Op.in]: listIds } },
+          attributes: ['id'],
+          transaction: t
+        });
+        const cardIds = cards.map((c) => c.id);
+        if (cardIds.length) {
+          await WorkBoardCardComment.destroy({
+            where: { card_id: { [Op.in]: cardIds } },
+            transaction: t
+          });
+        }
         await WorkBoardCard.destroy({ where: { list_id: { [Op.in]: listIds } }, transaction: t });
       }
       await WorkBoardList.destroy({ where: { board_id: board.id }, transaction: t });
@@ -1073,6 +1133,18 @@ export const deleteWorkBoardList = async (req: RequestWithUser, res: Response) =
     }
 
     await sequelize.transaction(async (transaction) => {
+      const cards = await WorkBoardCard.findAll({
+        where: { list_id: list.id },
+        attributes: ['id'],
+        transaction
+      });
+      const cardIds = cards.map((c) => c.id);
+      if (cardIds.length) {
+        await WorkBoardCardComment.destroy({
+          where: { card_id: { [Op.in]: cardIds } },
+          transaction
+        });
+      }
       await WorkBoardCard.destroy({
         where: { list_id: list.id },
         transaction
@@ -1604,7 +1676,13 @@ export const deleteWorkBoardCard = async (req: RequestWithUser, res: Response) =
     }
 
     const listId = card.list_id;
-    await card.destroy();
+    await sequelize.transaction(async (transaction) => {
+      await WorkBoardCardComment.destroy({
+        where: { card_id: card.id },
+        transaction
+      });
+      await card.destroy({ transaction });
+    });
     await normalizeListPositions(listId);
     res.json({ success: true, message: '삭제되었습니다.' });
   } catch (error: any) {
@@ -1918,18 +1996,26 @@ export const inviteWorkBoardMember = async (req: RequestWithUser, res: Response)
       return res.status(400).json({ success: false, message: '이미 보드에 포함된 계정입니다.' });
     }
 
-    const [row, created] = await WorkBoardMember.findOrCreate({
+    const existing = await WorkBoardMember.findOne({
       where: { board_id: board.id, user_id: target.id },
-      defaults: {
+      paranoid: false
+    });
+
+    let row: WorkBoardMember;
+    if (existing) {
+      if (!existing.deleted_at) {
+        return res.status(400).json({ success: false, message: '이미 초대된 사용자입니다.' });
+      }
+      await existing.restore();
+      await existing.update({ role: 'member', invited_by: user.id });
+      row = existing;
+    } else {
+      row = await WorkBoardMember.create({
         board_id: board.id,
         user_id: target.id,
         role: 'member',
         invited_by: user.id
-      }
-    });
-
-    if (!created) {
-      return res.status(400).json({ success: false, message: '이미 초대된 사용자입니다.' });
+      });
     }
 
     const withUser = await WorkBoardMember.findByPk(row.id, {

@@ -12,10 +12,14 @@ interface WorkBoardAttributes {
   created_by: number;
   created_at?: Date;
   updated_at?: Date;
+  deleted_at?: Date | null;
 }
 
 interface WorkBoardCreationAttributes
-  extends Optional<WorkBoardAttributes, 'id' | 'created_at' | 'updated_at' | 'description' | 'position'> {}
+  extends Optional<
+    WorkBoardAttributes,
+    'id' | 'created_at' | 'updated_at' | 'description' | 'position' | 'deleted_at'
+  > {}
 
 class WorkBoard extends Model<WorkBoardAttributes, WorkBoardCreationAttributes> implements WorkBoardAttributes {
   public id!: number;
@@ -28,6 +32,7 @@ class WorkBoard extends Model<WorkBoardAttributes, WorkBoardCreationAttributes> 
   public created_by!: number;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
+  public readonly deleted_at!: Date | null;
 }
 
 WorkBoard.init(
@@ -43,13 +48,15 @@ WorkBoard.init(
     description: { type: DataTypes.TEXT, allowNull: true },
     board_color: { type: DataTypes.STRING(7), allowNull: true, defaultValue: null },
     position: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
-    created_by: { type: DataTypes.INTEGER, allowNull: false }
+    created_by: { type: DataTypes.INTEGER, allowNull: false },
+    deleted_at: { type: DataTypes.DATE, allowNull: true }
   },
   {
     sequelize,
     tableName: 'work_boards',
     timestamps: true,
-    underscored: true
+    underscored: true,
+    paranoid: true
   }
 );
 

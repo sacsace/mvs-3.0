@@ -391,7 +391,7 @@ const WorkBoardsPage: React.FC = () => {
   const [companies, setCompanies] = useState<any[]>([]);
   const [companiesLoading, setCompaniesLoading] = useState(false);
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(() =>
-    user?.company_id != null && Number(user.company_id) > 0 ? Number(user.company_id) : null
+    user?.company_id != null && Number(user.company_id) > 0 ? Number(user.company_id) : 0
   );
 
   const sensors = useSensors(
@@ -399,9 +399,11 @@ const WorkBoardsPage: React.FC = () => {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  /** root: 0=전체 회사, >0=특정 회사. 그 외: 로그인 회사 */
   const effectiveCompanyId = useMemo(() => {
     if (isRootUser) {
-      return selectedCompanyId != null && Number.isFinite(selectedCompanyId) ? selectedCompanyId : null;
+      if (selectedCompanyId == null || selectedCompanyId === 0) return null;
+      return Number.isFinite(selectedCompanyId) ? selectedCompanyId : null;
     }
     return user?.company_id != null ? Number(user.company_id) : null;
   }, [isRootUser, selectedCompanyId, user?.company_id]);
@@ -434,13 +436,14 @@ const WorkBoardsPage: React.FC = () => {
         if (cancelled) return;
         setCompanies(scoped);
         setSelectedCompanyId((prev) => {
-          if (prev != null && scoped.some((c: any) => Number(c.id) === Number(prev))) {
+          if (prev === 0) return 0;
+          if (prev != null && prev > 0 && scoped.some((c: any) => Number(c.id) === Number(prev))) {
             return Number(prev);
           }
           if (Number.isFinite(userCompanyId) && scoped.some((c: any) => Number(c.id) === userCompanyId)) {
             return userCompanyId;
           }
-          return scoped[0]?.id != null ? Number(scoped[0].id) : prev;
+          return 0;
         });
       } catch (e: any) {
         if (!cancelled) showErrorPopup(e, t('workBoards.title'));
@@ -454,16 +457,11 @@ const WorkBoardsPage: React.FC = () => {
   }, [isRootUser, t, user?.company_id]);
 
   const load = useCallback(async () => {
-    if (isRootUser && (effectiveCompanyId == null || !Number.isFinite(effectiveCompanyId))) {
-      setBoards([]);
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     try {
       const res = await workBoardService.getBoards({
         light: true,
-        ...(effectiveCompanyId != null ? { company_id: effectiveCompanyId } : {}),
+        ...(isRootUser && effectiveCompanyId != null ? { company_id: effectiveCompanyId } : {}),
       });
       if (res.success) {
         setBoards(res.data || []);
@@ -491,8 +489,11 @@ const WorkBoardsPage: React.FC = () => {
       showErrorPopup(isEn ? 'You do not have permission to create boards.' : '보드를 만들 권한이 없습니다.', t('workBoards.title'));
       return;
     }
-    if (!editingBoardId && isRootUser && effectiveCompanyId == null) {
-      showErrorPopup(t('workBoards.errors.companyRequired'), t('workBoards.title'));
+    if (!editingBoardId && isRootUser && (effectiveCompanyId == null || effectiveCompanyId <= 0)) {
+      showErrorPopup(
+        isEn ? 'Select a company before creating a board.' : '보드를 만들려면 회사를 선택해주세요.',
+        t('workBoards.title')
+      );
       return;
     }
     setSaving(true);
@@ -538,8 +539,11 @@ const WorkBoardsPage: React.FC = () => {
   };
 
   const openCreateDialog = () => {
-    if (isRootUser && effectiveCompanyId == null) {
-      showErrorPopup(t('workBoards.errors.companyRequired'), t('workBoards.title'));
+    if (isRootUser && (effectiveCompanyId == null || effectiveCompanyId <= 0)) {
+      showErrorPopup(
+        isEn ? 'Select a company before creating a board.' : '보드를 만들려면 회사를 선택해주세요.',
+        t('workBoards.title')
+      );
       return;
     }
     setEditingBoardId(null);
@@ -550,11 +554,12 @@ const WorkBoardsPage: React.FC = () => {
   };
 
   const selectedCompanyLabel = useMemo(() => {
+    if (selectedCompanyId === 0) return isEn ? 'All companies' : '전체 회사';
     if (selectedCompanyId == null) return '';
     const found = companies.find((c: any) => Number(c.id) === Number(selectedCompanyId));
     const name = String(found?.name || found?.company_name || '').trim();
     return name;
-  }, [companies, selectedCompanyId]);
+  }, [companies, isEn, selectedCompanyId]);
 
   const companySelectField =
     isRootUser ? (
@@ -562,27 +567,18 @@ const WorkBoardsPage: React.FC = () => {
         select
         size="small"
         label={t('workBoards.filters.company')}
-        value={
-          selectedCompanyId != null &&
-          companies.some((c: any) => Number(c.id) === Number(selectedCompanyId))
-            ? selectedCompanyId
-            : ''
-        }
+        value={selectedCompanyId === 0 ? 0 : selectedCompanyId != null && selectedCompanyId > 0 ? selectedCompanyId : 0}
         onChange={(e) => {
           const num = Number(e.target.value);
-          setSelectedCompanyId(Number.isFinite(num) && num > 0 ? num : null);
+          setSelectedCompanyId(Number.isFinite(num) && num >= 0 ? num : 0);
         }}
-        disabled={companiesLoading || companies.length === 0}
+        disabled={companiesLoading}
         {...mvsOutlinedLabelProps}
         SelectProps={{
           displayEmpty: true,
-          renderValue: (selected) => {
+          renderValue: () => {
             if (companiesLoading) return t('common.loading');
-            if (selectedCompanyLabel) return selectedCompanyLabel;
-            if (selected === '' || selected == null) {
-              return t('workBoards.filters.selectCompany');
-            }
-            return selectedCompanyLabel || t('workBoards.filters.selectCompany');
+            return selectedCompanyLabel || (isEn ? 'All companies' : '전체 회사');
           },
         }}
         sx={{
@@ -596,6 +592,7 @@ const WorkBoardsPage: React.FC = () => {
           },
         }}
       >
+        <MenuItem value={0}>{isEn ? 'All companies' : '전체 회사'}</MenuItem>
         {companies.map((company) => (
           <MenuItem key={company.id} value={Number(company.id)}>
             {company.name || company.company_name || `#${company.id}`}
@@ -680,10 +677,6 @@ const WorkBoardsPage: React.FC = () => {
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
             <CircularProgress />
-          </Box>
-        ) : isRootUser && effectiveCompanyId == null ? (
-          <Box sx={{ py: 8, textAlign: 'center' }}>
-            <Typography color="text.secondary">{t('workBoards.empty.selectCompany')}</Typography>
           </Box>
         ) : (
           <DndContext

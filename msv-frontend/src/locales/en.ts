@@ -1541,7 +1541,8 @@ export default {
       memberCount: '{{count}} members',
       actions: {
         newBoard: 'New Work Board',
-        create: 'Create'
+        create: 'Create',
+        deleteBoard: 'Delete Board'
       },
       fields: {
         boardName: 'Board Name',
@@ -1578,6 +1579,14 @@ export default {
         noDeletePermission: 'You do not have permission to delete cards.',
         commentPlaceholder: 'Write a comment',
         noComments: 'No comments yet.'
+      },
+      deleteConfirm: {
+        title: 'Delete Work Board',
+        message: '"{{name}}" and all lists and cards will be deleted. Continue?',
+        messageFallback: 'This work board and all lists and cards will be deleted. Continue?',
+        thisBoard: 'this board',
+        success: 'Deleted.',
+        failed: 'Delete failed'
       }
     },
     workStatistics: {

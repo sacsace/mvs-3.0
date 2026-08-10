@@ -68,6 +68,7 @@ import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import RichTextEditor from '../../components/RichTextEditor/RichTextEditor';
 import { alpha, useTheme } from '@mui/material/styles';
+import { useTranslation } from 'react-i18next';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import { mvsOutlinedLabelProps } from '../../theme/mvsLayout';
 
@@ -1316,7 +1317,14 @@ const WorkBoardDetailPage: React.FC = () => {
   const deepLinkCardHandledRef = useRef<number | null>(null);
   const { user } = useStore();
   const { language, menus, hasMenuPermission } = useMenuStore();
-  const txt = useCallback((ko: string, en: string) => (language === 'en' ? en : ko), [language]);
+  const { t, i18n } = useTranslation();
+  const txt = useCallback(
+    (ko: string, en: string) => {
+      const lang = String(i18n.language || language || 'ko').toLowerCase();
+      return lang.startsWith('en') ? en : ko;
+    },
+    [i18n.language, language]
+  );
   const workProjectsMenuId = useMemo(
     () => findMenuIdByPath(menus, location.pathname),
     [menus, location.pathname]
@@ -2428,31 +2436,45 @@ const WorkBoardDetailPage: React.FC = () => {
   };
 
   const handleDeleteBoard = () => {
+    const boardName = board?.name?.trim();
+    const message = boardName
+      ? t('workBoards.deleteConfirm.message', { name: boardName })
+      : t('workBoards.deleteConfirm.messageFallback');
     showConfirm(
-      '이 작업 보드와 모든 목록·카드가 삭제됩니다. 계속할까요?',
+      message,
       () => {
         void (async () => {
           try {
             const res = await workBoardService.deleteBoard(boardId);
             if (res.success) {
-              showSuccessPopup('삭제되었습니다.');
+              showSuccessPopup(t('workBoards.deleteConfirm.success'));
               navigate('/work/projects');
             } else {
-              showErrorPopup(res.message || '삭제 실패', '작업 보드');
+              showErrorPopup(
+                res.message || t('workBoards.deleteConfirm.failed'),
+                t('workBoards.title')
+              );
             }
           } catch (e: any) {
-            showErrorPopup(e, '작업 보드');
+            showErrorPopup(e, t('workBoards.title'));
           }
         })();
       },
-      { title: '작업 보드 삭제', confirmText: '삭제', confirmColor: 'error' }
+      {
+        title: t('workBoards.deleteConfirm.title'),
+        confirmText: t('common.delete'),
+        cancelText: t('common.cancel'),
+        confirmColor: 'error',
+      }
     );
   };
 
   const myMember = board?.members?.find((m: any) => m.user_id === user?.id);
   const isOwner = myMember?.role === 'owner' || user?.role === 'root';
   const canManageMembers = isOwner && menuCanEdit;
-  const canDeleteBoard = myMember?.role === 'owner' && menuCanDelete;
+  const isBoardCreator =
+    board?.created_by != null && user?.id != null && Number(board.created_by) === Number(user.id);
+  const canDeleteBoard = Boolean(isBoardCreator && menuCanDelete);
   const lists: BoardList[] = [...(board?.lists || [])].sort((a, b) => a.position - b.position);
   /** 「업무 완료」 우선, 없으면 완료/Done 키워드, 그래도 없으면 마지막 열 */
   const completedList = resolveCompletedList(lists);
@@ -2805,18 +2827,23 @@ const WorkBoardDetailPage: React.FC = () => {
         {canDeleteBoard && (
           <Button
             color="error"
-            variant="outlined"
+            variant="contained"
+            disableElevation
             startIcon={<DeleteIcon sx={{ fontSize: 18 }} />}
             onClick={handleDeleteBoard}
             sx={{
               textTransform: 'none',
-              fontWeight: 600,
+              fontWeight: 700,
               borderRadius: '8px',
               px: 2,
-              borderColor: alpha(theme.palette.error.main, 0.4),
+              color: '#FFFFFF',
+              bgcolor: theme.palette.error.main,
+              '&:hover': {
+                bgcolor: theme.palette.error.dark,
+              },
             }}
           >
-            {txt('보드 삭제', 'Delete Board')}
+            {t('workBoards.actions.deleteBoard')}
           </Button>
         )}
           </>

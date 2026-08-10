@@ -9,18 +9,19 @@ interface WorkBoardCardCommentAttributes {
   content: string;
   created_at?: Date;
   updated_at?: Date;
+  deleted_at?: Date | null;
 }
 
 interface WorkBoardCardCommentCreationAttributes
   extends Optional<
     WorkBoardCardCommentAttributes,
-    'id' | 'user_id' | 'parent_id' | 'created_at' | 'updated_at'
+    'id' | 'user_id' | 'parent_id' | 'created_at' | 'updated_at' | 'deleted_at'
   > {}
 
-class WorkBoardCardComment extends Model<
-  WorkBoardCardCommentAttributes,
-  WorkBoardCardCommentCreationAttributes
-> implements WorkBoardCardCommentAttributes {
+class WorkBoardCardComment
+  extends Model<WorkBoardCardCommentAttributes, WorkBoardCardCommentCreationAttributes>
+  implements WorkBoardCardCommentAttributes
+{
   public id!: number;
   public card_id!: number;
   public user_id?: number | null;
@@ -28,6 +29,7 @@ class WorkBoardCardComment extends Model<
   public content!: string;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
+  public readonly deleted_at!: Date | null;
 }
 
 WorkBoardCardComment.init(
@@ -40,13 +42,15 @@ WorkBoardCardComment.init(
     card_id: { type: DataTypes.INTEGER, allowNull: false },
     user_id: { type: DataTypes.INTEGER, allowNull: true },
     parent_id: { type: DataTypes.INTEGER, allowNull: true },
-    content: { type: DataTypes.TEXT, allowNull: false }
+    content: { type: DataTypes.TEXT, allowNull: false },
+    deleted_at: { type: DataTypes.DATE, allowNull: true }
   },
   {
     sequelize,
     tableName: 'work_board_card_comments',
     timestamps: true,
-    underscored: true
+    underscored: true,
+    paranoid: true
   }
 );
 

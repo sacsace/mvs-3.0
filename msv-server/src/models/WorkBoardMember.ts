@@ -9,12 +9,19 @@ interface WorkBoardMemberAttributes {
   invited_by?: number | null;
   created_at?: Date;
   updated_at?: Date;
+  deleted_at?: Date | null;
 }
 
 interface WorkBoardMemberCreationAttributes
-  extends Optional<WorkBoardMemberAttributes, 'id' | 'created_at' | 'updated_at' | 'invited_by' | 'role'> {}
+  extends Optional<
+    WorkBoardMemberAttributes,
+    'id' | 'created_at' | 'updated_at' | 'invited_by' | 'role' | 'deleted_at'
+  > {}
 
-class WorkBoardMember extends Model<WorkBoardMemberAttributes, WorkBoardMemberCreationAttributes> implements WorkBoardMemberAttributes {
+class WorkBoardMember
+  extends Model<WorkBoardMemberAttributes, WorkBoardMemberCreationAttributes>
+  implements WorkBoardMemberAttributes
+{
   public id!: number;
   public board_id!: number;
   public user_id!: number;
@@ -22,6 +29,7 @@ class WorkBoardMember extends Model<WorkBoardMemberAttributes, WorkBoardMemberCr
   public invited_by?: number | null;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
+  public readonly deleted_at!: Date | null;
 }
 
 WorkBoardMember.init(
@@ -38,13 +46,15 @@ WorkBoardMember.init(
       allowNull: false,
       defaultValue: 'member'
     },
-    invited_by: { type: DataTypes.INTEGER, allowNull: true }
+    invited_by: { type: DataTypes.INTEGER, allowNull: true },
+    deleted_at: { type: DataTypes.DATE, allowNull: true }
   },
   {
     sequelize,
     tableName: 'work_board_members',
     timestamps: true,
-    underscored: true
+    underscored: true,
+    paranoid: true
   }
 );
 
