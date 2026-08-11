@@ -1872,6 +1872,7 @@ router.post(
           })(),
           status: (row['상태 (active/inactive/suspended)'] && ['active', 'inactive', 'suspended'].includes(row['상태 (active/inactive/suspended)'].toString().toLowerCase()))
             ? row['상태 (active/inactive/suspended)'].toString().toLowerCase()
+            : 'active'
         });
 
         try {
