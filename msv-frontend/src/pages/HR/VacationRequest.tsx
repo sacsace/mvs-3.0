@@ -228,10 +228,19 @@ const VacationRequest: React.FC = () => {
 
   const calculateDays = (startDate: string, endDate: string): number => {
     if (!startDate || !endDate) return 0;
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    const startYmd = String(startDate).slice(0, 10);
+    const endYmd = String(endDate).slice(0, 10);
+    const startMatch = startYmd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const endMatch = endYmd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!startMatch || !endMatch) return 0;
+    const startUtc = Date.UTC(
+      Number(startMatch[1]),
+      Number(startMatch[2]) - 1,
+      Number(startMatch[3])
+    );
+    const endUtc = Date.UTC(Number(endMatch[1]), Number(endMatch[2]) - 1, Number(endMatch[3]));
+    if (endUtc < startUtc) return 0;
+    return Math.floor((endUtc - startUtc) / (1000 * 60 * 60 * 24)) + 1;
   };
 
   const handleNext = () => {

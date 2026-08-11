@@ -8,6 +8,13 @@ import {
   publishNotice,
   archiveNotice,
 } from '../controllers/noticeController';
+import {
+  listCompanyCalendarSchedules,
+  createCompanyCalendarSchedule,
+  updateCompanyCalendarSchedule,
+  deleteCompanyCalendarSchedule,
+  listPublicPersonalCalendarSchedules,
+} from '../controllers/companyCalendarScheduleController';
 import { authenticateToken, restrictAuditToReadOnly } from '../middleware/auth';
 import { requireMenuPermissionAny } from '../middleware/menuPermission';
 import { validateBody } from '../middleware/validate';
@@ -76,6 +83,38 @@ router.post(
   restrictAuditToReadOnly,
   requireMenuPermissionAny(MENU_NOTICE_ROUTES, 'can_edit'),
   archiveNotice
+);
+
+// 회사 공통 연간 스케줄 (모든 사용자 조회·CRUD)
+router.get(
+  '/company-calendar-schedules',
+  requireMenuPermissionAny(MENU_NOTICE_ROUTES, 'can_view'),
+  listCompanyCalendarSchedules
+);
+router.post(
+  '/company-calendar-schedules',
+  restrictAuditToReadOnly,
+  requireMenuPermissionAny(MENU_NOTICE_ROUTES, 'can_view'),
+  createCompanyCalendarSchedule
+);
+router.put(
+  '/company-calendar-schedules/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermissionAny(MENU_NOTICE_ROUTES, 'can_view'),
+  updateCompanyCalendarSchedule
+);
+router.delete(
+  '/company-calendar-schedules/:id',
+  restrictAuditToReadOnly,
+  requireMenuPermissionAny(MENU_NOTICE_ROUTES, 'can_view'),
+  deleteCompanyCalendarSchedule
+);
+
+// 다른 사용자의 공개 개인 스케줄
+router.get(
+  '/public-personal-calendar-schedules',
+  requireMenuPermissionAny(MENU_NOTICE_ROUTES, 'can_view'),
+  listPublicPersonalCalendarSchedules
 );
 
 export default router;

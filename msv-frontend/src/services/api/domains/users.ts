@@ -91,6 +91,7 @@ export const loginInfoService = {
   getLoginLogs: async (params?: {
     company_id?: number;
     status?: 'success' | 'failure' | '';
+    event_type?: 'login' | 'logout' | 'delete' | 'create' | 'update' | 'security' | '';
     userid?: string;
     start_date?: string;
     end_date?: string;
@@ -136,6 +137,7 @@ export type UserUiCalendarScheduleItem = {
   id: string;
   title: string;
   type?: 'normal' | 'company_holiday';
+  isPublic?: boolean;
 };
 
 export type UserUiPreferencesData = {

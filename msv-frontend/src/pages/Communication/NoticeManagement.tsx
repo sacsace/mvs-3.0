@@ -77,7 +77,15 @@ import {
   PushPin as PushPinIcon
 } from '@mui/icons-material';
 import { useStore } from '../../store';
-import { noticeService, userUiPreferencesService } from '../../services/api';
+import {
+  noticeService,
+  userUiPreferencesService,
+  companyCalendarScheduleService,
+  type CompanyCalendarScheduleItem,
+  type PublicPersonalCalendarScheduleItem
+} from '../../services/api';
+import ConfirmDialog from '../../components/Common/ConfirmDialog';
+import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import { useTranslation } from 'react-i18next';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
@@ -119,7 +127,14 @@ interface CalendarScheduleItem {
   id: string;
   title: string;
   type: 'normal' | 'company_holiday';
+  isPublic?: boolean;
 }
+
+type CalendarDisplayLabel = {
+  id: string;
+  title: string;
+  style: 'company_holiday' | 'company' | 'personal' | 'public_personal';
+};
 
 const CompanyHolidayStarIcon: React.FC<{ color: string }> = ({ color }) => (
   <Box
@@ -193,12 +208,7 @@ const NoticeManagement: React.FC = () => {
   const { user } = useStore();
   const { i18n, t } = useTranslation();
   const noticeMenuFlags = useMenuRoutePermissionFlags(NOTICE_MENU_ROUTES);
-
-  /** 연간 스케줄표: 등록·수정(저장)은 admin/root만 */
-  const canManageYearlySchedule = useMemo(
-    () => user?.role === 'admin' || user?.role === 'root',
-    [user?.role]
-  );
+  const { dialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
 
   /** 메뉴 `수정`(can_edit)이 있을 때만 — 본인 글이어도 등록만 있으면 수정 UI는 숨김(정책). admin/root는 메뉴 수정권한으로 허용 */
   const canUserEditNotice = (n: Notice | null) => {
@@ -232,13 +242,22 @@ const NoticeManagement: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [noticeToDelete, setNoticeToDelete] = useState<Notice | null>(null);
   const [totalPages, setTotalPages] = useState(1);
-  const [activeTab, setActiveTab] = useState(0); // 0: 공지사항, 1: 연간 스케줄표
+  const [activeTab, setActiveTab] = useState(0); // 0: 공지사항, 1: 연간 스케줄표, 2: 연간 스케줄 관리
   const [currentDate, setCurrentDate] = useState(new Date()); // 달력 현재 날짜
   const [customSchedules, setCustomSchedules] = useState<Record<string, CalendarScheduleItem[]>>({});
+  const [companySchedules, setCompanySchedules] = useState<CompanyCalendarScheduleItem[]>([]);
+  const [publicPersonalSchedules, setPublicPersonalSchedules] = useState<PublicPersonalCalendarScheduleItem[]>([]);
+  const [companySchedulesLoading, setCompanySchedulesLoading] = useState(false);
+  const [companyScheduleForm, setCompanyScheduleForm] = useState({
+    scheduleDate: '',
+    title: '',
+    isHoliday: false
+  });
+  const [editingCompanyScheduleId, setEditingCompanyScheduleId] = useState<number | null>(null);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [selectedScheduleDate, setSelectedScheduleDate] = useState<Date | null>(null);
   const [newScheduleTitle, setNewScheduleTitle] = useState('');
-  const [scheduleAsCompanyHoliday, setScheduleAsCompanyHoliday] = useState(false);
+  const [scheduleIsPublic, setScheduleIsPublic] = useState(false);
   const [tableDialogOpen, setTableDialogOpen] = useState(false);
   const [tableRows, setTableRows] = useState(3);
   const [tableCols, setTableCols] = useState(3);
@@ -389,7 +408,8 @@ const NoticeManagement: React.FC = () => {
             .map((item: any) => ({
               id: String(item.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
               title: String(item.title).trim(),
-              type: (item.type === 'company_holiday' ? 'company_holiday' : 'normal') as 'normal' | 'company_holiday'
+              type: (item.type === 'company_holiday' ? 'company_holiday' : 'normal') as 'normal' | 'company_holiday',
+              ...(item.isPublic === true || item.is_public === true ? { isPublic: true } : {})
             }))
             .filter((item) => item.title.length > 0);
           if (list.length > 0) sanitized[dateKey] = list;
@@ -421,17 +441,162 @@ const NoticeManagement: React.FC = () => {
 
   useEffect(() => {
     if (!user?.id || !scheduleStorageReady || skipSchedulePersistRef.current) return;
-    if (!canManageYearlySchedule) return;
     const t = window.setTimeout(() => {
       userUiPreferencesService.patch({ calendarSchedules: customSchedules }).catch(() => {});
     }, 500);
     return () => window.clearTimeout(t);
-  }, [user?.id, customSchedules, scheduleStorageReady, canManageYearlySchedule]);
+  }, [user?.id, customSchedules, scheduleStorageReady]);
+
+  const loadCompanyAndPublicSchedules = useCallback(async () => {
+    if (noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead) {
+      setCompanySchedules([]);
+      setPublicPersonalSchedules([]);
+      return;
+    }
+    setCompanySchedulesLoading(true);
+    try {
+      const [companyRes, publicRes] = await Promise.all([
+        companyCalendarScheduleService.list(),
+        companyCalendarScheduleService.listPublicPersonal()
+      ]);
+      setCompanySchedules(Array.isArray(companyRes?.data) ? companyRes.data : []);
+      setPublicPersonalSchedules(Array.isArray(publicRes?.data) ? publicRes.data : []);
+    } catch {
+      setCompanySchedules([]);
+      setPublicPersonalSchedules([]);
+    } finally {
+      setCompanySchedulesLoading(false);
+    }
+  }, [noticeMenuFlags.canRead, noticeMenuFlags.menusLoading]);
+
+  useEffect(() => {
+    if (noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead) return;
+    void loadCompanyAndPublicSchedules();
+  }, [loadCompanyAndPublicSchedules, noticeMenuFlags.canRead, noticeMenuFlags.menusLoading]);
+
+  useEffect(() => {
+    if ((activeTab === 1 || activeTab === 2) && noticeMenuFlags.canRead && !noticeMenuFlags.menusLoading) {
+      void loadCompanyAndPublicSchedules();
+    }
+  }, [activeTab, loadCompanyAndPublicSchedules, noticeMenuFlags.canRead, noticeMenuFlags.menusLoading]);
+
+  const companySchedulesByDate = useMemo(() => {
+    const map: Record<string, CompanyCalendarScheduleItem[]> = {};
+    companySchedules.forEach((item) => {
+      const key = item.scheduleDate;
+      if (!map[key]) map[key] = [];
+      map[key].push(item);
+    });
+    return map;
+  }, [companySchedules]);
+
+  const publicPersonalByDate = useMemo(() => {
+    const map: Record<string, PublicPersonalCalendarScheduleItem[]> = {};
+    publicPersonalSchedules.forEach((item) => {
+      const key = item.scheduleDate;
+      if (!map[key]) map[key] = [];
+      map[key].push(item);
+    });
+    return map;
+  }, [publicPersonalSchedules]);
+
+  const getCalendarDisplayLabels = useCallback(
+    (dateKey: string): CalendarDisplayLabel[] => {
+      const companyItems = companySchedulesByDate[dateKey] || [];
+      const personalItems = customSchedules[dateKey] || [];
+      const publicItems = publicPersonalByDate[dateKey] || [];
+      const labels: CalendarDisplayLabel[] = [
+        ...companyItems.map((item) => ({
+          id: `co-${item.id}`,
+          title: item.title,
+          style: (item.isHoliday ? 'company_holiday' : 'company') as CalendarDisplayLabel['style']
+        })),
+        ...personalItems.map((item) => ({
+          id: `me-${item.id}`,
+          title: item.title,
+          style: (item.type === 'company_holiday' ? 'company_holiday' : 'personal') as CalendarDisplayLabel['style']
+        })),
+        ...publicItems.map((item) => ({
+          id: item.id,
+          title: `${item.title} (${item.ownerName})`,
+          style: 'public_personal' as const
+        }))
+      ];
+      return labels;
+    },
+    [companySchedulesByDate, customSchedules, publicPersonalByDate]
+  );
+
+  const resetCompanyScheduleForm = () => {
+    setCompanyScheduleForm({ scheduleDate: '', title: '', isHoliday: false });
+    setEditingCompanyScheduleId(null);
+  };
+
+  const handleSaveCompanySchedule = async () => {
+    if (!noticeMenuFlags.canRead) return;
+    const title = companyScheduleForm.title.trim();
+    const scheduleDate = companyScheduleForm.scheduleDate.trim();
+    if (!title || !scheduleDate) {
+      setError(txt('날짜와 내용을 입력하세요.', 'Please enter date and title.'));
+      return;
+    }
+    try {
+      if (editingCompanyScheduleId != null) {
+        await companyCalendarScheduleService.update(editingCompanyScheduleId, {
+          scheduleDate,
+          title,
+          isHoliday: companyScheduleForm.isHoliday
+        });
+        setSuccess(txt('회사 스케줄이 수정되었습니다.', 'Company schedule updated.'));
+      } else {
+        await companyCalendarScheduleService.create({
+          scheduleDate,
+          title,
+          isHoliday: companyScheduleForm.isHoliday
+        });
+        setSuccess(txt('회사 스케줄이 등록되었습니다.', 'Company schedule created.'));
+      }
+      resetCompanyScheduleForm();
+      await loadCompanyAndPublicSchedules();
+    } catch (err: any) {
+      setError(err.response?.data?.message || txt('회사 스케줄 저장에 실패했습니다.', 'Failed to save company schedule.'));
+    }
+  };
+
+  const handleEditCompanySchedule = (item: CompanyCalendarScheduleItem) => {
+    setEditingCompanyScheduleId(item.id);
+    setCompanyScheduleForm({
+      scheduleDate: item.scheduleDate,
+      title: item.title,
+      isHoliday: Boolean(item.isHoliday)
+    });
+  };
+
+  const handleDeleteCompanySchedule = (item: CompanyCalendarScheduleItem) => {
+    showConfirm(
+      txt('이 회사 스케줄을 삭제하시겠습니까?', 'Delete this company schedule?'),
+      async () => {
+        try {
+          await companyCalendarScheduleService.remove(item.id);
+          setSuccess(txt('회사 스케줄이 삭제되었습니다.', 'Company schedule deleted.'));
+          if (editingCompanyScheduleId === item.id) resetCompanyScheduleForm();
+          await loadCompanyAndPublicSchedules();
+        } catch (err: any) {
+          setError(err.response?.data?.message || txt('회사 스케줄 삭제에 실패했습니다.', 'Failed to delete company schedule.'));
+        }
+      },
+      {
+        title: txt('스케줄 삭제', 'Delete Schedule'),
+        confirmColor: 'error',
+        confirmText: txt('삭제', 'Delete')
+      }
+    );
+  };
 
   const openScheduleDialog = (date: Date) => {
     setSelectedScheduleDate(date);
     setNewScheduleTitle('');
-    setScheduleAsCompanyHoliday(false);
+    setScheduleIsPublic(false);
     setScheduleDialogOpen(true);
   };
 
@@ -439,16 +604,12 @@ const NoticeManagement: React.FC = () => {
     setScheduleDialogOpen(false);
     setSelectedScheduleDate(null);
     setNewScheduleTitle('');
-    setScheduleAsCompanyHoliday(false);
+    setScheduleIsPublic(false);
   };
 
   const handleAddSchedule = () => {
-    if (!canManageYearlySchedule) return;
     if (!selectedScheduleDate) return;
-    const rawTitle = newScheduleTitle.trim();
-    const title =
-      rawTitle ||
-      (scheduleAsCompanyHoliday ? txt('회사 휴일', 'Company Holiday') : '');
+    const title = newScheduleTitle.trim();
     if (!title) return;
 
     const dateKey = toDateKey(selectedScheduleDate);
@@ -461,17 +622,17 @@ const NoticeManagement: React.FC = () => {
           {
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             title,
-            type: scheduleAsCompanyHoliday ? 'company_holiday' : 'normal'
+            type: 'normal',
+            ...(scheduleIsPublic ? { isPublic: true } : {})
           }
         ]
       };
     });
     setNewScheduleTitle('');
-    setScheduleAsCompanyHoliday(false);
+    setScheduleIsPublic(false);
   };
 
   const handleDeleteSchedule = (dateKey: string, scheduleId: string) => {
-    if (!canManageYearlySchedule) return;
     setCustomSchedules((prev) => {
       const existing = prev[dateKey] || [];
       const updated = existing.filter((item) => item.id !== scheduleId);
@@ -1103,9 +1264,11 @@ const NoticeManagement: React.FC = () => {
             const isTodayDate = isToday(date);
             const isWeekendDate = isWeekend(date);
             const dateKey = toDateKey(date);
-            const customLabels = customSchedules[dateKey] || [];
+            const displayLabels = getCalendarDisplayLabels(dateKey);
             const complianceLabels = getComplianceLabels(date);
-            const hasCompanyHoliday = customLabels.some((item) => item.type === 'company_holiday');
+            const hasCompanyHoliday =
+              displayLabels.some((item) => item.style === 'company_holiday') ||
+              (companySchedulesByDate[dateKey] || []).some((item) => item.isHoliday);
 
             const isWeekendOnly = isWeekendDate && !isHolidayDate;
 
@@ -1220,38 +1383,42 @@ const NoticeManagement: React.FC = () => {
                       )}
                     </Box>
                   )}
-                  {customLabels.length > 0 && (
+                  {displayLabels.length > 0 && (
                     <Box sx={{ mt: ycsSp(0.3), display: 'flex', flexDirection: 'column', gap: ycsSp(0.2) }}>
-                      {customLabels.slice(0, 2).map((item) => (
+                      {displayLabels.slice(0, 2).map((item) => (
                         <Typography
                           key={`${dateKey}-${item.id}`}
                           variant="caption"
                           sx={{
-                            fontSize: item.type === 'company_holiday' ? ycsRem(0.66) : ycsRem(0.6),
+                            fontSize: item.style === 'company_holiday' ? ycsRem(0.66) : ycsRem(0.6),
                             color: isTodayDate
                               ? 'white'
-                              : item.type === 'company_holiday'
+                              : item.style === 'company_holiday'
                                 ? 'common.white'
-                                : 'primary.main',
+                                : item.style === 'public_personal'
+                                  ? 'secondary.main'
+                                  : item.style === 'company'
+                                    ? 'info.main'
+                                    : 'primary.main',
                             fontWeight: 600,
                             lineHeight: 1.2,
                             letterSpacing: '0.01em',
                             bgcolor:
-                              item.type === 'company_holiday'
+                              item.style === 'company_holiday'
                                 ? isTodayDate
                                   ? alpha('#fff', 0.22)
                                   : alpha(theme.palette.warning.dark, 0.92)
                                 : 'transparent',
-                            px: item.type === 'company_holiday' ? ycsSp(0.35) : 0,
-                            borderRadius: item.type === 'company_holiday' ? '8px' : 0,
+                            px: item.style === 'company_holiday' ? ycsSp(0.35) : 0,
+                            borderRadius: item.style === 'company_holiday' ? '8px' : 0,
                             display: 'inline-flex',
                             alignSelf: 'flex-start'
                           }}
                         >
-                          {item.title || txt('회사 휴일', 'Company Holiday')}
+                          {item.title}
                         </Typography>
                       ))}
-                      {customLabels.length > 2 && (
+                      {displayLabels.length > 2 && (
                         <Typography
                           variant="caption"
                           sx={{
@@ -1259,7 +1426,7 @@ const NoticeManagement: React.FC = () => {
                             color: isTodayDate ? alpha('#fff', 0.95) : alpha(theme.palette.primary.main, 0.9),
                             fontWeight: 600 }}
                         >
-                          +{customLabels.length - 2}
+                          +{displayLabels.length - 2}
                         </Typography>
                       )}
                     </Box>
@@ -1911,6 +2078,10 @@ const NoticeManagement: React.FC = () => {
             label={txt('연간 스케줄표', 'Yearly Schedule')}
             disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
           />
+          <Tab
+            label={txt('연간 스케줄 관리', 'Yearly Schedule Management')}
+            disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
+          />
         </Tabs>
       </Card>
 
@@ -2234,17 +2405,155 @@ const NoticeManagement: React.FC = () => {
                 </Button>
               </Box>
             </Box>
-            {!canManageYearlySchedule && (
-              <Alert severity="info" sx={{ mb: 1.5, borderRadius: '8px' }}>
-                {txt(
-                  '연간 스케줄 등록·수정·삭제는 관리자(admin) 또는 시스템 관리자(root)만 할 수 있습니다. 날짜를 누르면 해당 일의 일정을 볼 수 있습니다.',
-                  'Adding, editing, or deleting yearly schedule entries is limited to admin or root. Click a date to view schedules for that day.'
-                )}
-              </Alert>
-            )}
             {renderCalendar()}
           </CardContent>
         </Card>
+      )}
+
+      {/* 연간 스케줄 관리 탭 */}
+      {activeTab === 2 && (
+        <Box sx={mvsBodyListZoneSx}>
+          <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 2 }}>
+            <CardContent sx={{ py: 2, px: { xs: 2, sm: 2.5 }, '&:last-child': { pb: 2 } }}>
+              <Typography
+                variant="subtitle1"
+                sx={{ fontWeight: 600, fontSize: '1.0625rem', letterSpacing: '-0.015em', color: 'text.primary', mb: 2 }}
+              >
+                {editingCompanyScheduleId != null
+                  ? txt('회사 스케줄 수정', 'Edit Company Schedule')
+                  : txt('회사 스케줄 등록', 'Add Company Schedule')}
+              </Typography>
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', sm: '160px minmax(0, 1fr) auto auto' },
+                  gap: 1.5,
+                  alignItems: 'center',
+                  mb: 2
+                }}
+              >
+                <TextField
+                  type="date"
+                  size="small"
+                  label={txt('날짜', 'Date')}
+                  value={companyScheduleForm.scheduleDate}
+                  onChange={(e) => setCompanyScheduleForm((prev) => ({ ...prev, scheduleDate: e.target.value }))}
+                  disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
+                  sx={filterFieldSx}
+                  {...mvsOutlinedLabelProps}
+                  InputLabelProps={{
+                    ...mvsOutlinedLabelProps.InputLabelProps,
+                    shrink: true,
+                  }}
+                />
+                <TextField
+                  size="small"
+                  label={txt('내용', 'Title / Content')}
+                  value={companyScheduleForm.title}
+                  onChange={(e) => setCompanyScheduleForm((prev) => ({ ...prev, title: e.target.value }))}
+                  disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
+                  sx={filterFieldSx}
+                  {...mvsOutlinedLabelProps}
+                />
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={companyScheduleForm.isHoliday}
+                      onChange={(e) => setCompanyScheduleForm((prev) => ({ ...prev, isHoliday: e.target.checked }))}
+                      color="warning"
+                      disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
+                    />
+                  }
+                  label={txt('휴일', 'Holiday')}
+                />
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  <Button
+                    variant="contained"
+                    disableElevation
+                    onClick={() => void handleSaveCompanySchedule()}
+                    disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
+                    sx={{ ...mvsBodyPrimaryBtnSx, height: 40, whiteSpace: 'nowrap' }}
+                  >
+                    {editingCompanyScheduleId != null ? txt('수정', 'Update') : txt('등록', 'Add')}
+                  </Button>
+                  {editingCompanyScheduleId != null && (
+                    <Button
+                      variant="outlined"
+                      onClick={resetCompanyScheduleForm}
+                      sx={{ ...mvsBodyOutlinedBtnSx, height: 40 }}
+                    >
+                      {txt('취소', 'Cancel')}
+                    </Button>
+                  )}
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+
+          {companySchedulesLoading ? (
+            <Box sx={listStateBoxSx}>
+              <CircularProgress size={36} />
+              <Typography variant="body2" color="text.secondary">
+                {t('common.loading')}
+              </Typography>
+            </Box>
+          ) : companySchedules.length === 0 ? (
+            <Box sx={listStateBoxSx}>
+              <Typography variant="body2" color="text.secondary">
+                {txt('등록된 회사 스케줄이 없습니다.', 'No company schedules found.')}
+              </Typography>
+            </Box>
+          ) : (
+            <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+              <Table size="small" sx={noticeTableSx}>
+                <TableHead sx={mvsTableHeadHighlightSx}>
+                  <TableRow>
+                    <TableCell width="18%">{txt('날짜', 'Date')}</TableCell>
+                    <TableCell width="52%">{txt('내용', 'Title / Content')}</TableCell>
+                    <TableCell width="12%">{txt('휴일', 'Holiday')}</TableCell>
+                    <TableCell width="18%" align="right">{txt('작업', 'Actions')}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody sx={mvsTableBodyRowSx}>
+                  {[...companySchedules]
+                    .sort((a, b) =>
+                      a.scheduleDate === b.scheduleDate
+                        ? a.title.localeCompare(b.title)
+                        : a.scheduleDate.localeCompare(b.scheduleDate)
+                    )
+                    .map((item) => (
+                      <TableRow key={item.id} hover>
+                        <TableCell sx={cellEllipsisSx}>{item.scheduleDate}</TableCell>
+                        <TableCell sx={cellEllipsisSx}>{item.title}</TableCell>
+                        <TableCell sx={cellEllipsisSx}>
+                          {item.isHoliday ? txt('예', 'Yes') : txt('아니오', 'No')}
+                        </TableCell>
+                        <TableCell align="right">
+                          <IconButton
+                            size="small"
+                            aria-label={txt('수정', 'Edit')}
+                            onClick={() => handleEditCompanySchedule(item)}
+                            disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            aria-label={txt('삭제', 'Delete')}
+                            onClick={() => handleDeleteCompanySchedule(item)}
+                            disabled={noticeMenuFlags.menusLoading || !noticeMenuFlags.canRead}
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </Box>
       )}
 
       {/* 공지사항 작성/수정 다이얼로그 */}
@@ -2663,64 +2972,53 @@ const NoticeManagement: React.FC = () => {
           )}
         </DialogTitle>
         <DialogContent dividers>
-          {!canManageYearlySchedule && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              {txt(
-                '일정 등록·삭제는 관리자(admin) 이상만 가능합니다.',
-                'Only admin or root users can add or remove schedule entries.'
-              )}
-            </Alert>
-          )}
-          {canManageYearlySchedule && (
-            <>
-              <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  value={newScheduleTitle}
-                  onChange={(e) => setNewScheduleTitle(e.target.value)}
-                  placeholder={txt('일정을 입력하세요', 'Enter a schedule')}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddSchedule();
-                    }
-                  }}
-                />
-                <Button variant="contained" onClick={handleAddSchedule}>
-                  {txt('추가', 'Add')}
-                </Button>
-              </Box>
-              <FormControlLabel
-                sx={{ mb: 1 }}
-                control={
-                  <Switch
-                    checked={scheduleAsCompanyHoliday}
-                    onChange={(e) => setScheduleAsCompanyHoliday(e.target.checked)}
-                    color="warning"
-                  />
+          <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
+            <TextField
+              fullWidth
+              size="small"
+              value={newScheduleTitle}
+              onChange={(e) => setNewScheduleTitle(e.target.value)}
+              placeholder={txt('일정을 입력하세요', 'Enter a schedule')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddSchedule();
                 }
-                label={txt('회사 휴일로 표시', 'Mark as company holiday')}
+              }}
+            />
+            <Button variant="contained" onClick={handleAddSchedule}>
+              {txt('추가', 'Add')}
+            </Button>
+          </Box>
+          <FormControlLabel
+            sx={{ mb: 1.5 }}
+            control={
+              <Switch
+                checked={scheduleIsPublic}
+                onChange={(e) => setScheduleIsPublic(e.target.checked)}
+                color="primary"
               />
-            </>
-          )}
+            }
+            label={txt('공개 (모든 사용자가 볼 수 있음)', 'Public (visible to all users)')}
+          />
 
-          <List sx={{ p: 0 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+            {txt('내 일정', 'My schedules')}
+          </Typography>
+          <List sx={{ p: 0, mb: 2 }}>
             {selectedScheduleDate && (customSchedules[toDateKey(selectedScheduleDate)] || []).length > 0 ? (
               (customSchedules[toDateKey(selectedScheduleDate)] || []).map((item) => (
                 <ListItem
                   key={item.id}
                   disableGutters
                   secondaryAction={
-                    canManageYearlySchedule ? (
-                      <Button
-                        size="small"
-                        color="error"
-                        onClick={() => handleDeleteSchedule(toDateKey(selectedScheduleDate), item.id)}
-                      >
-                        {txt('삭제', 'Delete')}
-                      </Button>
-                    ) : undefined
+                    <Button
+                      size="small"
+                      color="error"
+                      onClick={() => handleDeleteSchedule(toDateKey(selectedScheduleDate), item.id)}
+                    >
+                      {txt('삭제', 'Delete')}
+                    </Button>
                   }
                   sx={{
                     py: 0.75,
@@ -2731,17 +3029,16 @@ const NoticeManagement: React.FC = () => {
                 >
                   <ListItemText
                     primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {item.type === 'company_holiday' && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        {item.isPublic && (
                           <Chip
                             size="small"
-                            color="warning"
-                            label={txt('회사 휴일', 'Company Holiday')}
+                            label={txt('공개', 'Public')}
                             sx={{ height: 22 }}
                           />
                         )}
                         <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          {item.title || txt('회사 휴일', 'Company Holiday')}
+                          {item.title}
                         </Typography>
                       </Box>
                     }
@@ -2753,13 +3050,88 @@ const NoticeManagement: React.FC = () => {
                 <ListItemText
                   primary={
                     <Typography variant="body2" color="text.secondary">
-                      {txt('등록된 일정이 없습니다.', 'No schedules added for this date.')}
+                      {txt('등록된 개인 일정이 없습니다.', 'No personal schedules for this date.')}
                     </Typography>
                   }
                 />
               </ListItem>
             )}
           </List>
+
+          {selectedScheduleDate && (
+            <>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                {txt('회사 스케줄', 'Company schedules')}
+              </Typography>
+              <List sx={{ p: 0, mb: 2 }}>
+                {(companySchedulesByDate[toDateKey(selectedScheduleDate)] || []).length > 0 ? (
+                  (companySchedulesByDate[toDateKey(selectedScheduleDate)] || []).map((item) => (
+                    <ListItem
+                      key={`co-dialog-${item.id}`}
+                      disableGutters
+                      sx={{ py: 0.75, px: 0.5, borderBottom: '1px solid', borderColor: 'divider' }}
+                    >
+                      <ListItemText
+                        primary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                            {item.isHoliday && (
+                              <Chip size="small" color="warning" label={txt('휴일', 'Holiday')} sx={{ height: 22 }} />
+                            )}
+                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                              {item.title}
+                            </Typography>
+                          </Box>
+                        }
+                      />
+                    </ListItem>
+                  ))
+                ) : (
+                  <ListItem sx={{ px: 0, py: 1 }}>
+                    <ListItemText
+                      primary={
+                        <Typography variant="body2" color="text.secondary">
+                          {txt('회사 스케줄이 없습니다.', 'No company schedules for this date.')}
+                        </Typography>
+                      }
+                    />
+                  </ListItem>
+                )}
+              </List>
+
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                {txt('다른 사용자 공개 일정', 'Other users\' public schedules')}
+              </Typography>
+              <List sx={{ p: 0 }}>
+                {(publicPersonalByDate[toDateKey(selectedScheduleDate)] || []).length > 0 ? (
+                  (publicPersonalByDate[toDateKey(selectedScheduleDate)] || []).map((item) => (
+                    <ListItem
+                      key={item.id}
+                      disableGutters
+                      sx={{ py: 0.75, px: 0.5, borderBottom: '1px solid', borderColor: 'divider' }}
+                    >
+                      <ListItemText
+                        primary={
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {item.title} ({item.ownerName})
+                          </Typography>
+                        }
+                      />
+                    </ListItem>
+                  ))
+                ) : (
+                  <ListItem sx={{ px: 0, py: 1 }}>
+                    <ListItemText
+                      primary={
+                        <Typography variant="body2" color="text.secondary">
+                          {txt('공개된 다른 사용자 일정이 없습니다.', 'No public schedules from other users.')}
+                        </Typography>
+                      }
+                    />
+                  </ListItem>
+                )}
+              </List>
+            </>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={closeScheduleDialog}>
@@ -2854,6 +3226,17 @@ const NoticeManagement: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <ConfirmDialog
+        open={dialogState.open}
+        title={dialogState.title}
+        message={dialogState.message}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+        confirmColor={dialogState.confirmColor}
+        onConfirm={handleConfirm}
+        onCancel={handleCancel}
+      />
 
       <Snackbar
         open={!!success}

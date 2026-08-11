@@ -16,7 +16,8 @@ import {
 } from '@mui/material';
 import {
   Visibility,
-  VisibilityOff
+  VisibilityOff,
+  Fingerprint as FingerprintIcon
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
@@ -24,6 +25,14 @@ import { api, API_BASE_URL } from '../../services/api';
 import { useTranslation } from 'react-i18next';
 import { ensureI18nLanguage, detectOsLanguage } from '../../locales/i18n';
 import { alpha, useTheme } from '@mui/material/styles';
+import {
+  canUsePlatformPasskey,
+  getRememberedUserid,
+  listPasskeyCredentials,
+  loginWithPlatformPasskey,
+  registerPlatformPasskey,
+  rememberUserid,
+} from '../../utils/webauthn';
 
 const Login: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -32,11 +41,15 @@ const Login: React.FC = () => {
   const setMenuLanguage = useMenuStore((s) => s.setLanguage);
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    userid: '',
+    userid: getRememberedUserid(),
     password: '',
     remember: false
   });
   const [loading, setLoading] = useState(false);
+  const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [passkeyAvailable, setPasskeyAvailable] = useState(false);
+  const [registerPasskeyOpen, setRegisterPasskeyOpen] = useState(false);
+  const [registerPasskeyBusy, setRegisterPasskeyBusy] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorTimeout, setErrorTimeout] = useState<NodeJS.Timeout | null>(null);
@@ -71,6 +84,16 @@ const Login: React.FC = () => {
     setMenuLanguage(lang);
     void ensureI18nLanguage(lang);
   }, [setMenuLanguage]);
+
+  useEffect(() => {
+    let active = true;
+    void canUsePlatformPasskey().then((ok) => {
+      if (active) setPasskeyAvailable(ok);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // 컴포넌트 언마운트 시 타이머 정리
   useEffect(() => {
@@ -118,6 +141,83 @@ const Login: React.FC = () => {
     setErrorTimeout(timeout);
   };
 
+  const localizeLoginApiError = (payload: any, fallbackKey = 'login.loginFailed') => {
+    const code = String(payload?.code || '').trim();
+    const codeKeyMap: Record<string, string> = {
+      INVALID_CREDENTIALS: 'login.invalidCredentials',
+      INVALID_INPUT: 'login.invalidInput',
+      SUBSCRIPTION_INACTIVE: 'login.subscriptionInactive',
+      SUBSCRIPTION_NOT_STARTED: 'login.subscriptionNotStarted',
+      SUBSCRIPTION_EXPIRED: 'login.subscriptionExpired',
+      JWT_SECRET_MISSING: 'login.serverError',
+      SERVER_ERROR: 'login.serverError',
+    };
+    if (code && codeKeyMap[code]) return t(codeKeyMap[code]);
+
+    const message = String(payload?.message || '').trim();
+    const messageKeyMap: Record<string, string> = {
+      '사용자 ID 또는 비밀번호가 올바르지 않습니다.': 'login.invalidCredentials',
+      '입력값이 올바르지 않습니다.': 'login.invalidInput',
+      '이용권 상태가 비활성화되어 로그인할 수 없습니다.': 'login.subscriptionInactive',
+      '아직 이용 기간이 시작되지 않았습니다.': 'login.subscriptionNotStarted',
+      '이용 기간이 만료되었습니다. 결제를 갱신해 주세요.': 'login.subscriptionExpired',
+      '서버 JWT 설정이 누락되었습니다.': 'login.serverError',
+      '서버 오류가 발생했습니다.': 'login.serverError',
+      '로그인에 실패했습니다.': 'login.loginFailed',
+    };
+    if (message && messageKeyMap[message]) return t(messageKeyMap[message]);
+    if (message && /[가-힣]/.test(message) && !i18n.language?.startsWith('ko')) {
+      return t(fallbackKey);
+    }
+    return message || t(fallbackKey);
+  };
+
+  const localizeSignupApiError = (payload: any) => {
+    const message = String(payload?.message || '').trim();
+    const messageKeyMap: Record<string, string> = {
+      'GST 번호 형식이 올바르지 않습니다. (15자리)': 'login.signup.invalidGst',
+      '동일한 회사는 무료 이용(3개월)을 1회만 사용할 수 있습니다.': 'login.signup.freeTrialUsed',
+      '이미 사용 중인 관리자 ID입니다.': 'login.signup.adminIdTaken',
+      '이미 사용 중인 이메일입니다.': 'login.signup.emailTaken',
+      '이미 등록된 사업자번호입니다.': 'login.signup.businessNumberTaken',
+      '이미 등록된 GST 번호입니다.': 'login.signup.gstTaken',
+      '가입 처리 중 오류가 발생했습니다.': 'login.signup.registerFailed',
+      '가입에 실패했습니다.': 'login.signup.registerFailed',
+    };
+    if (message && messageKeyMap[message]) return t(messageKeyMap[message]);
+    if (message && /[가-힣]/.test(message) && !i18n.language?.startsWith('ko')) {
+      return t('login.signup.registerFailed');
+    }
+    return message || t('login.signup.registerFailed');
+  };
+
+  const finishLogin = (token: string, user: any) => {
+    rememberUserid(user?.userid || formData.userid);
+    login(token, user);
+    navigate('/dashboard', { replace: true });
+  };
+
+  const offerPasskeyRegistration = async (token: string, user: any) => {
+    rememberUserid(user?.userid || formData.userid);
+    login(token, user);
+
+    const can = await canUsePlatformPasskey();
+    if (!can) {
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+    try {
+      const existing = await listPasskeyCredentials();
+      if (existing.length > 0) {
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+    } catch {
+      /* 목록 실패 시에도 등록 제안 */
+    }
+    setRegisterPasskeyOpen(true);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -135,11 +235,9 @@ const Login: React.FC = () => {
       
       if (response.data.success) {
         const { token, user } = response.data.data;
-        login(token, user);
-        // replace: true를 사용하여 리다이렉트 중복 방지
-        navigate('/dashboard', { replace: true });
+        await offerPasskeyRegistration(token, user);
       } else {
-        showError(response.data.message || t('login.loginFailed'));
+        showError(localizeLoginApiError(response.data));
       }
     } catch (err: any) {
       let errorMessage = '';
@@ -153,13 +251,55 @@ const Login: React.FC = () => {
       } else if (err.response?.status === 0) {
         errorMessage = t('login.corsError');
       } else {
-        errorMessage = err.response?.data?.message || err.message || t('login.loginFailed');
+        errorMessage = localizeLoginApiError(err.response?.data, 'login.loginFailed');
       }
       
       showError(errorMessage);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePasskeyLogin = async () => {
+    setPasskeyLoading(true);
+    setError('');
+    if (errorTimeout) {
+      clearTimeout(errorTimeout);
+      setErrorTimeout(null);
+    }
+    try {
+      const data = await loginWithPlatformPasskey(formData.userid);
+      finishLogin(data.token, data.user);
+    } catch (err: any) {
+      if (err?.name === 'NotAllowedError') {
+        showError(t('login.passkeyCancelled'));
+      } else {
+        showError(localizeLoginApiError(err?.response?.data, 'login.passkeyFailed'));
+      }
+    } finally {
+      setPasskeyLoading(false);
+    }
+  };
+
+  const handleRegisterPasskeyConfirm = async () => {
+    setRegisterPasskeyBusy(true);
+    try {
+      await registerPlatformPasskey(t('login.passkeyThisDevice'));
+    } catch (err: any) {
+      if (err?.name !== 'NotAllowedError') {
+        console.warn('passkey register after login:', err);
+      }
+    } finally {
+      setRegisterPasskeyBusy(false);
+      setRegisterPasskeyOpen(false);
+      navigate('/dashboard', { replace: true });
+    }
+  };
+
+  const handleRegisterPasskeySkip = () => {
+    if (registerPasskeyBusy) return;
+    setRegisterPasskeyOpen(false);
+    navigate('/dashboard', { replace: true });
   };
 
   const handleSignupSubmit = async (e: React.FormEvent) => {
@@ -177,7 +317,7 @@ const Login: React.FC = () => {
     try {
       await submitSignupRegistration();
     } catch (err: any) {
-      setSignupError(err?.response?.data?.message || err?.message || t('login.signup.registerFailed'));
+      setSignupError(localizeSignupApiError(err?.response?.data || { message: err?.message }));
     } finally {
       setSignupLoading(false);
     }
@@ -223,7 +363,7 @@ const Login: React.FC = () => {
         password: signupData.adminPassword
       }));
     } else {
-      setSignupError(response.data?.message || t('login.signup.registerFailed'));
+      setSignupError(localizeSignupApiError(response.data));
     }
   };
 
@@ -519,7 +659,7 @@ const Login: React.FC = () => {
                 variant="contained"
                 color="primary"
                 disableElevation
-                disabled={loading}
+                disabled={loading || passkeyLoading}
                 sx={{
                   py: 1,
                   minHeight: 40,
@@ -533,6 +673,38 @@ const Login: React.FC = () => {
               >
                 {loading ? t('common.loading') : t('login.loginButton')}
               </Button>
+
+              {passkeyAvailable && (
+                <Button
+                  type="button"
+                  fullWidth
+                  variant="outlined"
+                  disableElevation
+                  disabled={loading || passkeyLoading || !formData.userid.trim()}
+                  onClick={() => void handlePasskeyLogin()}
+                  startIcon={<FingerprintIcon sx={{ fontSize: '1.1rem' }} />}
+                  sx={{
+                    mt: 1,
+                    py: 1,
+                    minHeight: 40,
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    borderRadius: '4px',
+                    textTransform: 'none',
+                    borderColor: '#B4B4B4',
+                    color: 'text.primary',
+                    bgcolor: '#FFFFFF',
+                    boxShadow: 'none',
+                    '&:hover': {
+                      borderColor: '#6B7280',
+                      bgcolor: '#F8FAFC',
+                      boxShadow: 'none',
+                    },
+                  }}
+                >
+                  {passkeyLoading ? t('common.loading') : t('login.passkeyLogin')}
+                </Button>
+              )}
 
               <Button
                 fullWidth
@@ -636,6 +808,48 @@ const Login: React.FC = () => {
           </Box>
         </Box>
       </Box>
+
+      <Dialog
+        open={registerPasskeyOpen}
+        onClose={handleRegisterPasskeySkip}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '4px',
+            border: '1px solid #B4B4B4',
+            boxShadow: 'none',
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontSize: '1rem', fontWeight: 700, pb: 1 }}>
+          {t('login.passkeyRegisterTitle')}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            {t('login.passkeyRegisterHint')}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, pb: 2 }}>
+          <Button
+            onClick={handleRegisterPasskeySkip}
+            disabled={registerPasskeyBusy}
+            sx={{ textTransform: 'none' }}
+          >
+            {t('login.passkeyRegisterSkip')}
+          </Button>
+          <Button
+            variant="contained"
+            disableElevation
+            onClick={() => void handleRegisterPasskeyConfirm()}
+            disabled={registerPasskeyBusy}
+            startIcon={<FingerprintIcon />}
+            sx={{ textTransform: 'none', borderRadius: '4px', boxShadow: 'none' }}
+          >
+            {registerPasskeyBusy ? t('common.loading') : t('login.passkeyRegisterConfirm')}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={signupOpen}

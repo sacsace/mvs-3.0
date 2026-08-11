@@ -7,10 +7,23 @@ import {
   validateVacationLeaveRequest,
   DEFAULT_LEAVE_TYPE_DAYS,
   getCompanyLeaveBalances,
+  countInclusiveDateOnlyDays,
+  normalizeDateOnlyYmd,
 } from '../utils/vacationCalculator';
 import * as XLSX from 'xlsx';
 import { pushNotification } from './notificationController';
 import SocketService from '../services/socketService';
+
+/** 응답용: start~end 포함 일수로 days 보정 */
+function withCorrectedVacationDays(vacation: any) {
+  if (!vacation) return vacation;
+  const plain = typeof vacation.toJSON === 'function' ? vacation.toJSON() : { ...vacation };
+  const corrected = countInclusiveDateOnlyDays(plain.start_date, plain.end_date);
+  if (corrected > 0) {
+    plain.days = corrected;
+  }
+  return plain;
+}
 
 // 휴가 목록 조회
 export const getVacations = async (req: AuthRequest, res: Response) => {
@@ -121,7 +134,7 @@ export const getVacations = async (req: AuthRequest, res: Response) => {
 
     res.json({
       success: true,
-      data: vacations
+      data: vacations.map((v: any) => withCorrectedVacationDays(v))
     });
   } catch (error: any) {
     console.error('휴가 목록 조회 오류:', error);
@@ -180,7 +193,7 @@ export const getVacation = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    res.json({ success: true, data: vacation });
+    res.json({ success: true, data: withCorrectedVacationDays(vacation) });
   } catch (error: any) {
     console.error('휴가 상세 조회 오류:', error);
     res.status(500).json({ 
@@ -210,10 +223,28 @@ export const createVacation = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // 날짜 계산
-    const start = new Date(start_date);
-    const end = new Date(end_date);
-    const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    // 날짜 계산 — YYYY-MM-DD 포함 일수 (new Date 파싱 시 타임존으로 1일 누락 방지)
+    const startYmd = normalizeDateOnlyYmd(start_date);
+    const endYmd = normalizeDateOnlyYmd(end_date);
+    if (!startYmd || !endYmd) {
+      return res.status(400).json({
+        success: false,
+        message: '시작일/종료일이 올바르지 않습니다.',
+      });
+    }
+    if (endYmd < startYmd) {
+      return res.status(400).json({
+        success: false,
+        message: '종료일은 시작일 이후여야 합니다.',
+      });
+    }
+    const days = countInclusiveDateOnlyDays(startYmd, endYmd);
+    if (days <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: '휴가 일수가 올바르지 않습니다.',
+      });
+    }
 
     // 휴가 유형별 회계연도 잔여 일수 검증 (이월·누적 없음)
     const leaveValidation = await validateVacationLeaveRequest(targetUserId, vacation_type, days);
@@ -232,8 +263,8 @@ export const createVacation = async (req: AuthRequest, res: Response) => {
         is_active: true,
         status: { [Op.in]: ['pending', 'approved'] },
         [Op.and]: [
-          { start_date: { [Op.lte]: end_date } },
-          { end_date: { [Op.gte]: start_date } }
+          { start_date: { [Op.lte]: endYmd } },
+          { end_date: { [Op.gte]: startYmd } }
         ]
       }
     });
@@ -251,8 +282,8 @@ export const createVacation = async (req: AuthRequest, res: Response) => {
       user_id: targetUserId,
       vacation_type,
       is_active: true,
-      start_date,
-      end_date,
+      start_date: startYmd,
+      end_date: endYmd,
       days,
       reason,
       attachments: attachments ? JSON.stringify(attachments) : null,
@@ -285,7 +316,7 @@ export const createVacation = async (req: AuthRequest, res: Response) => {
       pushNotification(
         {
           title: '휴가 승인 요청',
-          message: `${applicantName}님이 휴가를 신청했습니다. (${start_date} ~ ${end_date})`,
+          message: `${applicantName}님이 휴가를 신청했습니다. (${startYmd} ~ ${endYmd})`,
           type: 'info',
           target_type: 'user',
           target_id: Number(approved_by),
@@ -386,18 +417,34 @@ export const updateVacation = async (req: AuthRequest, res: Response) => {
     const previousApproverId =
       vacation.approved_by != null ? Number(vacation.approved_by) : null;
 
-    // 날짜 재계산
-    let days = vacation.days;
-    if (start_date && end_date) {
-      const start = new Date(start_date);
-      const end = new Date(end_date);
-      days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    // 날짜 재계산 — 한쪽만 바뀌어도 최종 기간으로 포함 일수 재산정
+    const finalStartYmd =
+      normalizeDateOnlyYmd(start_date) || normalizeDateOnlyYmd(vacation.start_date);
+    const finalEndYmd = normalizeDateOnlyYmd(end_date) || normalizeDateOnlyYmd(vacation.end_date);
+    if (!finalStartYmd || !finalEndYmd) {
+      return res.status(400).json({
+        success: false,
+        message: '시작일/종료일이 올바르지 않습니다.',
+      });
+    }
+    if (finalEndYmd < finalStartYmd) {
+      return res.status(400).json({
+        success: false,
+        message: '종료일은 시작일 이후여야 합니다.',
+      });
+    }
+    const days = countInclusiveDateOnlyDays(finalStartYmd, finalEndYmd);
+    if (days <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: '휴가 일수가 올바르지 않습니다.',
+      });
     }
 
     // 연차 유형으로 변경하거나 연차 일수가 변경된 경우 검증
     const finalVacationType = vacation_type || vacation.vacation_type;
-    const finalStartDate = start_date || vacation.start_date;
-    const finalEndDate = end_date || vacation.end_date;
+    const finalStartDate = finalStartYmd;
+    const finalEndDate = finalEndYmd;
     const finalDays = days;
     if (finalVacationType) {
       const validation = await validateVacationLeaveRequest(vacation.user_id, finalVacationType, finalDays, vacation.id);
@@ -610,7 +657,9 @@ export const approveVacation = async (req: AuthRequest, res: Response) => {
     await vacation.update({
       status: 'approved',
       approved_by: userId,
-      approved_date: new Date().toISOString().split('T')[0]
+      approved_date: new Date().toISOString().split('T')[0],
+      // 승인 시 기간 기준 일수 재동기화 (과거 저장 오류 보정)
+      days: countInclusiveDateOnlyDays(vacation.start_date, vacation.end_date) || vacation.days,
     });
 
     // 사용자 정보 포함하여 반환

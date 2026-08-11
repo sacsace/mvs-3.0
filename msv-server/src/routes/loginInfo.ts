@@ -556,7 +556,9 @@ const ensureLoginLogsSchema = async () => {
         user_id: { type: DataTypes.INTEGER, allowNull: true },
         userid: { type: DataTypes.STRING(100), allowNull: true },
         status: { type: DataTypes.ENUM('success', 'failure'), allowNull: false, defaultValue: 'success' },
+        event_type: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'login' },
         reason: { type: DataTypes.STRING(255), allowNull: true },
+        resource: { type: DataTypes.STRING(120), allowNull: true },
         ip_address: { type: DataTypes.STRING(64), allowNull: true },
         user_agent: { type: DataTypes.STRING(500), allowNull: true },
         logged_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
@@ -584,7 +586,13 @@ const ensureLoginLogsSchema = async () => {
     allowNull: false,
     defaultValue: 'success'
   });
+  await ensureColumn('event_type', {
+    type: DataTypes.STRING(32),
+    allowNull: false,
+    defaultValue: 'login'
+  });
   await ensureColumn('reason', { type: DataTypes.STRING(255), allowNull: true });
+  await ensureColumn('resource', { type: DataTypes.STRING(120), allowNull: true });
   await ensureColumn('ip_address', { type: DataTypes.STRING(64), allowNull: true });
   await ensureColumn('user_agent', { type: DataTypes.STRING(500), allowNull: true });
   await ensureColumn('logged_at', { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW });
@@ -944,6 +952,7 @@ router.get('/logs', async (req: AuthRequest, res) => {
     const tenantId = req.user.tenant_id;
     const companyId = req.query.company_id ? Number(req.query.company_id) : null;
     const status = String(req.query.status || '').trim().toLowerCase();
+    const eventType = String(req.query.event_type || '').trim().toLowerCase();
     const userid = String(req.query.userid || '').trim();
     const startDate = String(req.query.start_date || '').trim();
     const endDate = String(req.query.end_date || '').trim();
@@ -964,6 +973,14 @@ router.get('/logs', async (req: AuthRequest, res) => {
       });
     }
 
+    const allowedEventTypes = new Set(['login', 'logout', 'delete', 'create', 'update', 'security']);
+    if (eventType && !allowedEventTypes.has(eventType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'event_type이 올바르지 않습니다.'
+      });
+    }
+
     const whereClause: any = { tenant_id: tenantId };
     if (companyId) {
       const isValidCompany = await ensureCompanyInTenant(companyId, tenantId);
@@ -978,6 +995,10 @@ router.get('/logs', async (req: AuthRequest, res) => {
 
     if (status) {
       whereClause.status = status;
+    }
+
+    if (eventType) {
+      whereClause.event_type = eventType;
     }
 
     if (userid) {

@@ -6,6 +6,7 @@ import { User, Company, LoginLog, Tenant, Menu, UserPermission, CompanyGstNumber
 import { AuthRequest } from '../types';
 import sequelize from '../config/database';
 import { invalidateAuthUser } from '../utils/authCache';
+import { recordActivityLog } from '../services/activityLogService';
 
 const comparePassword = async (password: string, hash: string): Promise<boolean> => {
   return await bcrypt.compare(password, hash);
@@ -55,7 +56,9 @@ const ensureLoginLogSchema = async () => {
         user_id: { type: DataTypes.INTEGER, allowNull: true },
         userid: { type: DataTypes.STRING(100), allowNull: true },
         status: { type: DataTypes.ENUM('success', 'failure'), allowNull: false },
+        event_type: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'login' },
         reason: { type: DataTypes.STRING(255), allowNull: true },
+        resource: { type: DataTypes.STRING(120), allowNull: true },
         ip_address: { type: DataTypes.STRING(64), allowNull: true },
         user_agent: { type: DataTypes.STRING(500), allowNull: true },
         logged_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
@@ -83,7 +86,13 @@ const ensureLoginLogSchema = async () => {
     allowNull: false,
     defaultValue: 'success'
   });
+  await ensureColumn('event_type', {
+    type: DataTypes.STRING(32),
+    allowNull: false,
+    defaultValue: 'login'
+  });
   await ensureColumn('reason', { type: DataTypes.STRING(255), allowNull: true });
+  await ensureColumn('resource', { type: DataTypes.STRING(120), allowNull: true });
   await ensureColumn('ip_address', { type: DataTypes.STRING(64), allowNull: true });
   await ensureColumn('user_agent', { type: DataTypes.STRING(500), allowNull: true });
   await ensureColumn('logged_at', { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW });
@@ -99,7 +108,8 @@ const writeLoginLog = async ({
   status,
   reason,
   ip_address,
-  user_agent
+  user_agent,
+  event_type = 'login'
 }: {
   tenant_id?: number | null;
   company_id?: number | null;
@@ -109,22 +119,24 @@ const writeLoginLog = async ({
   reason?: string | null;
   ip_address?: string | null;
   user_agent?: string | null;
+  event_type?: 'login' | 'logout' | 'security';
 }) => {
   try {
     await ensureLoginLogSchema();
+    // 로그인 경로에서는 기존처럼 await하되, 실패해도 로그인 자체는 계속
     await (LoginLog as any).create({
       tenant_id: tenant_id ?? null,
       company_id: company_id ?? null,
       user_id: user_id ?? null,
       userid: userid ?? null,
       status,
+      event_type,
       reason: reason ?? null,
       ip_address: ip_address ?? null,
       user_agent: user_agent ?? null,
       logged_at: new Date()
     });
   } catch (error) {
-    // 로그인 자체는 실패하지 않도록 로그 기록 오류는 무시
     console.error('로그인 로그 기록 오류:', error);
   }
 };
@@ -468,6 +480,7 @@ export const login = async (req: Request, res: Response) => {
       });
       return res.status(400).json({
         success: false,
+        code: 'INVALID_INPUT',
         message: '입력값이 올바르지 않습니다.'
       });
     }
@@ -483,6 +496,7 @@ export const login = async (req: Request, res: Response) => {
       });
       return res.status(400).json({
         success: false,
+        code: 'INVALID_INPUT',
         message: '입력값이 올바르지 않습니다.'
       });
     }
@@ -496,6 +510,7 @@ export const login = async (req: Request, res: Response) => {
       });
       return res.status(400).json({
         success: false,
+        code: 'INVALID_INPUT',
         message: '입력값이 올바르지 않습니다.'
       });
     }
@@ -520,6 +535,7 @@ export const login = async (req: Request, res: Response) => {
       });
       return res.status(401).json({
         success: false,
+        code: 'INVALID_CREDENTIALS',
         message: '사용자 ID 또는 비밀번호가 올바르지 않습니다.'
       });
     }
@@ -539,6 +555,7 @@ export const login = async (req: Request, res: Response) => {
       });
       return res.status(401).json({
         success: false,
+        code: 'INVALID_CREDENTIALS',
         message: '사용자 ID 또는 비밀번호가 올바르지 않습니다.'
       });
     }
@@ -582,6 +599,7 @@ export const login = async (req: Request, res: Response) => {
       });
       return res.status(403).json({
         success: false,
+        code: 'SUBSCRIPTION_INACTIVE',
         message: '이용권 상태가 비활성화되어 로그인할 수 없습니다.'
       });
     }
@@ -598,6 +616,7 @@ export const login = async (req: Request, res: Response) => {
       });
       return res.status(403).json({
         success: false,
+        code: 'SUBSCRIPTION_NOT_STARTED',
         message: '아직 이용 기간이 시작되지 않았습니다.'
       });
     }
@@ -614,6 +633,7 @@ export const login = async (req: Request, res: Response) => {
       });
       return res.status(403).json({
         success: false,
+        code: 'SUBSCRIPTION_EXPIRED',
         message: '이용 기간이 만료되었습니다. 결제를 갱신해 주세요.'
       });
     }
@@ -833,6 +853,17 @@ export const logout = async (req: AuthRequest, res: Response) => {
         { where: { id: user.id } }
       );
       invalidateAuthUser(user.id);
+      recordActivityLog({
+        tenant_id: user.tenant_id ?? null,
+        company_id: user.company_id ?? null,
+        user_id: user.id,
+        userid: (user as any).userid ?? null,
+        status: 'success',
+        event_type: 'logout',
+        reason: 'user_logout',
+        ip_address: getClientIp(req),
+        user_agent: req.get('user-agent') || null,
+      });
     }
     return res.json({ success: true, message: '로그아웃되었습니다.' });
   } catch (error) {

@@ -66,6 +66,8 @@ import WorkBoardMember from './WorkBoardMember';
 import WorkAssignee from './WorkAssignee';
 import WorkAssigneeItem from './WorkAssigneeItem';
 import ApprovalType from './ApprovalType';
+import CompanyCalendarSchedule from './CompanyCalendarSchedule';
+import WebAuthnCredential from './WebAuthnCredential';
 import EmploymentContractTemplate from './EmploymentContractTemplate';
 import EmploymentContract from './EmploymentContract';
 import EmploymentContractSignature from './EmploymentContractSignature';
@@ -518,6 +520,9 @@ GlVoucherLine.belongsTo(GlAccount, { foreignKey: 'account_id', as: 'account' });
 (User as any).hasMany(EmploymentContractAuditLog, { foreignKey: 'actor_id', as: 'employmentContractAuditActions' });
 (EmploymentContractAuditLog as any).belongsTo(User, { foreignKey: 'actor_id', as: 'actor' });
 
+(User as any).hasMany(WebAuthnCredential, { foreignKey: 'user_id', as: 'webauthnCredentials' });
+(WebAuthnCredential as any).belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
 // 데이터베이스 연결 함수
 const connectDB = async () => {
   const maxRetries = 5;
@@ -614,6 +619,8 @@ export {
   WorkAssignee,
   WorkAssigneeItem,
   ApprovalType,
+  CompanyCalendarSchedule,
+  WebAuthnCredential,
   EmploymentContractTemplate,
   EmploymentContract,
   EmploymentContractSignature,

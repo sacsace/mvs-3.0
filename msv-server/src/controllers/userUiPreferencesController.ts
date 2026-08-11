@@ -6,7 +6,12 @@ import { AuthRequest } from '../types';
 export type UserUiPreferencesPayload = {
   calendarSchedules?: Record<
     string,
-    Array<{ id: string; title: string; type?: 'normal' | 'company_holiday' }>
+    Array<{
+      id: string;
+      title: string;
+      type?: 'normal' | 'company_holiday';
+      isPublic?: boolean;
+    }>
   >;
   dashboardCards?: string[];
   quickActionRoutes?: string[];
@@ -25,7 +30,7 @@ export type UserUiPreferencesPayload = {
     vacation?: boolean;
     expense?: boolean;
     workReport?: boolean;
-    emailDigest?: 'immediate' | 'daily' | 'weekly';
+    emailDigest?: 'realtime' | 'daily' | 'weekly';
   };
   notificationTemplates?: Array<{
     id: string;
@@ -50,7 +55,8 @@ const sanitizeSchedules = (
         title: String(item.title).trim(),
         type: (item.type === 'company_holiday' ? 'company_holiday' : 'normal') as
           | 'normal'
-          | 'company_holiday'
+          | 'company_holiday',
+        isPublic: Boolean(item.isPublic ?? item.is_public),
       }))
       .filter((item) => item.title.length > 0);
     if (list.length > 0) out[dateKey] = list;
@@ -100,9 +106,6 @@ export const getUserUiPreferences = async (req: AuthRequest, res: Response) => {
   }
 };
 
-const canManageYearlyCalendarSchedules = (role?: string) =>
-  role === 'admin' || role === 'root';
-
 export const patchUserUiPreferences = async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;
@@ -119,17 +122,7 @@ export const patchUserUiPreferences = async (req: AuthRequest, res: Response) =>
     }
 
     const patch = (req.body || {}) as UserUiPreferencesPayload;
-    if (
-      Object.prototype.hasOwnProperty.call(patch, 'calendarSchedules') &&
-      patch.calendarSchedules !== undefined &&
-      !canManageYearlyCalendarSchedules(req.user?.role)
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          '연간 스케줄표는 관리자(admin) 또는 시스템 관리자(root)만 저장할 수 있습니다.'
-      });
-    }
+    // 개인 스케줄(calendarSchedules)은 본인 prefs — 모든 로그인 사용자 저장 가능
 
     const existing = (user.settings || {}) as Record<string, any>;
     const existingUi = { ...(existing.ui || {}) } as UserUiPreferencesPayload;

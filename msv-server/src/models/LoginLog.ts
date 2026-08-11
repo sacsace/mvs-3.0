@@ -8,7 +8,9 @@ interface LoginLogAttributes {
   user_id?: number | null;
   userid?: string | null;
   status: 'success' | 'failure';
+  event_type?: string;
   reason?: string | null;
+  resource?: string | null;
   ip_address?: string | null;
   user_agent?: string | null;
   logged_at?: Date;
@@ -17,7 +19,22 @@ interface LoginLogAttributes {
 }
 
 interface LoginLogCreationAttributes
-  extends Optional<LoginLogAttributes, 'id' | 'tenant_id' | 'company_id' | 'user_id' | 'userid' | 'reason' | 'ip_address' | 'user_agent' | 'logged_at' | 'created_at' | 'updated_at'> {}
+  extends Optional<
+    LoginLogAttributes,
+    | 'id'
+    | 'tenant_id'
+    | 'company_id'
+    | 'user_id'
+    | 'userid'
+    | 'event_type'
+    | 'reason'
+    | 'resource'
+    | 'ip_address'
+    | 'user_agent'
+    | 'logged_at'
+    | 'created_at'
+    | 'updated_at'
+  > {}
 
 class LoginLog extends Model<LoginLogAttributes, LoginLogCreationAttributes> implements LoginLogAttributes {
   public id!: number;
@@ -26,7 +43,9 @@ class LoginLog extends Model<LoginLogAttributes, LoginLogCreationAttributes> imp
   public user_id?: number | null;
   public userid?: string | null;
   public status!: 'success' | 'failure';
+  public event_type?: string;
   public reason?: string | null;
+  public resource?: string | null;
   public ip_address?: string | null;
   public user_agent?: string | null;
   public logged_at?: Date;
@@ -61,8 +80,17 @@ LoginLog.init(
       type: DataTypes.ENUM('success', 'failure'),
       allowNull: false
     },
+    event_type: {
+      type: DataTypes.STRING(32),
+      allowNull: false,
+      defaultValue: 'login'
+    },
     reason: {
       type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    resource: {
+      type: DataTypes.STRING(120),
       allowNull: true
     },
     ip_address: {
@@ -82,12 +110,18 @@ LoginLog.init(
   {
     sequelize,
     tableName: 'login_logs',
+    underscored: true,
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
     indexes: [
       { fields: ['tenant_id'] },
       { fields: ['company_id'] },
       { fields: ['user_id'] },
       { fields: ['status'] },
-      { fields: ['logged_at'] }
+      { fields: ['event_type'] },
+      { fields: ['logged_at'] },
+      { fields: ['tenant_id', 'logged_at'] }
     ]
   }
 );

@@ -114,9 +114,57 @@ export const noticeService = {
     return response.data;
   },
 
-  // 공�??�항 보�?
+  // 공지사항 보관
   archiveNotice: async (id: number) => {
     const response = await api.post(`/communication/notices/${id}/archive`);
+    return response.data;
+  },
+};
+
+export type CompanyCalendarScheduleItem = {
+  id: number;
+  scheduleDate: string;
+  title: string;
+  isHoliday: boolean;
+  createdBy?: number | null;
+  updatedBy?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type PublicPersonalCalendarScheduleItem = {
+  id: string;
+  scheduleDate: string;
+  title: string;
+  isHoliday: boolean;
+  ownerId: number;
+  ownerName: string;
+  isPublic: true;
+  source: 'personal_public';
+};
+
+export const companyCalendarScheduleService = {
+  list: async (params?: { from?: string; to?: string }) => {
+    const response = await api.get('/communication/company-calendar-schedules', { params });
+    return response.data;
+  },
+  create: async (data: { scheduleDate: string; title: string; isHoliday?: boolean }) => {
+    const response = await api.post('/communication/company-calendar-schedules', data);
+    return response.data;
+  },
+  update: async (
+    id: number,
+    data: Partial<{ scheduleDate: string; title: string; isHoliday: boolean }>
+  ) => {
+    const response = await api.put(`/communication/company-calendar-schedules/${id}`, data);
+    return response.data;
+  },
+  remove: async (id: number) => {
+    const response = await api.delete(`/communication/company-calendar-schedules/${id}`);
+    return response.data;
+  },
+  listPublicPersonal: async (params?: { from?: string; to?: string }) => {
+    const response = await api.get('/communication/public-personal-calendar-schedules', { params });
     return response.data;
   },
 };

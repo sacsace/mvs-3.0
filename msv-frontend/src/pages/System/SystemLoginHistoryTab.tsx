@@ -73,7 +73,9 @@ interface LoginLog {
   user_id?: number | null;
   userid?: string | null;
   status: 'success' | 'failure';
+  event_type?: string | null;
   reason?: string | null;
+  resource?: string | null;
   ip_address?: string | null;
   user_agent?: string | null;
   logged_at?: string;
@@ -97,6 +99,7 @@ const SystemLoginHistoryTab: React.FC = () => {
   const [logFilters, setLogFilters] = useState({
     userid: '',
     status: '' as '' | 'success' | 'failure',
+    event_type: '' as '' | 'login' | 'logout' | 'delete' | 'create' | 'update' | 'security',
     start_date: '',
     end_date: '',
   });
@@ -122,7 +125,11 @@ const SystemLoginHistoryTab: React.FC = () => {
   );
 
   const hasActiveFilters = Boolean(
-    logFilters.userid.trim() || logFilters.status || logFilters.start_date || logFilters.end_date
+    logFilters.userid.trim() ||
+      logFilters.status ||
+      logFilters.event_type ||
+      logFilters.start_date ||
+      logFilters.end_date
   );
 
   const listStateBoxSx = {
@@ -172,6 +179,7 @@ const SystemLoginHistoryTab: React.FC = () => {
           company_id: companyId,
           userid: filters.userid.trim() || undefined,
           status: filters.status || undefined,
+          event_type: filters.event_type || undefined,
           start_date: filters.start_date || undefined,
           end_date: filters.end_date || undefined,
           limit: 300,
@@ -225,6 +233,7 @@ const SystemLoginHistoryTab: React.FC = () => {
     const nextFilters = {
       userid: '',
       status: '' as '' | 'success' | 'failure',
+      event_type: '' as '' | 'login' | 'logout' | 'delete' | 'create' | 'update' | 'security',
       start_date: '',
       end_date: '',
     };
@@ -243,6 +252,20 @@ const SystemLoginHistoryTab: React.FC = () => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '-';
     return date.toLocaleString(i18n.language === 'en' ? 'en-US' : 'ko-KR', { hour12: false });
+  };
+
+  const formatEventType = (value?: string | null) => {
+    const key = String(value || 'login');
+    const i18nKey = `loginInfoManagement.eventTypes.${key}`;
+    const label = t(i18nKey);
+    return label === i18nKey ? key : label;
+  };
+
+  const formatReason = (value?: string | null) => {
+    if (!value) return '-';
+    const i18nKey = `loginInfoManagement.reasonLabels.${value}`;
+    const label = t(i18nKey);
+    return label === i18nKey ? value : label;
   };
 
   return (
@@ -294,7 +317,7 @@ const SystemLoginHistoryTab: React.FC = () => {
             gridTemplateColumns: {
               xs: '1fr',
               sm: 'repeat(2, minmax(0, 1fr))',
-              lg: 'minmax(280px, 360px) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto auto',
+              lg: 'minmax(220px, 300px) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto auto',
             },
             gap: 2,
             alignItems: 'flex-end',
@@ -354,6 +377,28 @@ const SystemLoginHistoryTab: React.FC = () => {
             <MenuItem value="">{t('loginInfoManagement.filters.all')}</MenuItem>
             <MenuItem value="success">{t('loginInfoManagement.status.success')}</MenuItem>
             <MenuItem value="failure">{t('loginInfoManagement.status.failure')}</MenuItem>
+          </TextField>
+          <TextField
+            fullWidth
+            size="small"
+            select
+            label={t('loginInfoManagement.fields.eventType')}
+            {...LOGIN_FILTER_OUTLINED}
+            value={logFilters.event_type}
+            SelectProps={{ displayEmpty: true }}
+            onChange={(event) =>
+              setLogFilters((prev) => ({
+                ...prev,
+                event_type: event.target.value as typeof logFilters.event_type,
+              }))
+            }
+            sx={loginFilterFieldSx}
+          >
+            <MenuItem value="">{t('loginInfoManagement.eventTypes.all')}</MenuItem>
+            <MenuItem value="login">{t('loginInfoManagement.eventTypes.login')}</MenuItem>
+            <MenuItem value="logout">{t('loginInfoManagement.eventTypes.logout')}</MenuItem>
+            <MenuItem value="delete">{t('loginInfoManagement.eventTypes.delete')}</MenuItem>
+            <MenuItem value="security">{t('loginInfoManagement.eventTypes.security')}</MenuItem>
           </TextField>
           <TextField
             fullWidth
@@ -443,12 +488,14 @@ const SystemLoginHistoryTab: React.FC = () => {
               >
                 <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
-                    <TableCell sx={{ width: 56 }}>No</TableCell>
-                    <TableCell sx={{ width: 170 }}>{t('loginInfoManagement.fields.loginAt')}</TableCell>
-                    <TableCell sx={{ width: 96 }}>{t('loginInfoManagement.fields.result')}</TableCell>
+                    <TableCell sx={{ width: 48 }}>No</TableCell>
+                    <TableCell sx={{ width: 150 }}>{t('loginInfoManagement.fields.loginAt')}</TableCell>
+                    <TableCell sx={{ width: 88 }}>{t('loginInfoManagement.fields.eventType')}</TableCell>
+                    <TableCell sx={{ width: 80 }}>{t('loginInfoManagement.fields.result')}</TableCell>
                     <TableCell>{t('loginInfoManagement.fields.userId')}</TableCell>
                     <TableCell>{t('loginInfoManagement.fields.userName')}</TableCell>
-                    <TableCell sx={{ width: 120 }}>IP</TableCell>
+                    <TableCell sx={{ width: 110 }}>IP</TableCell>
+                    <TableCell sx={{ width: 120 }}>{t('loginInfoManagement.fields.resource')}</TableCell>
                     <TableCell>{t('loginInfoManagement.fields.reason')}</TableCell>
                   </TableRow>
                 </TableHead>
@@ -460,6 +507,20 @@ const SystemLoginHistoryTab: React.FC = () => {
                         <Typography variant="body2" noWrap title={formatDateTime(log.logged_at)}>
                           {formatDateTime(log.logged_at)}
                         </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={formatEventType(log.event_type)}
+                          color={
+                            log.event_type === 'delete'
+                              ? 'error'
+                              : log.event_type === 'logout'
+                                ? 'warning'
+                                : 'default'
+                          }
+                          variant="outlined"
+                        />
                       </TableCell>
                       <TableCell>
                         <Chip
@@ -489,8 +550,13 @@ const SystemLoginHistoryTab: React.FC = () => {
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Typography variant="body2" noWrap title={log.reason || '-'}>
-                          {log.reason || '-'}
+                        <Typography variant="body2" noWrap title={log.resource || '-'}>
+                          {log.resource || '-'}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2" noWrap title={formatReason(log.reason)}>
+                          {formatReason(log.reason)}
                         </Typography>
                       </TableCell>
                     </TableRow>

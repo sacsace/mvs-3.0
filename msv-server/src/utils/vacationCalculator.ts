@@ -46,6 +46,65 @@ function parseDateOnly(value: string): Date {
   return d;
 }
 
+/** DATEONLY / YYYY-MM-DD 기준 포함 일수 (타임존·Date 파싱 오차 방지) */
+export function countInclusiveDateOnlyDays(
+  startInput: string | Date | null | undefined,
+  endInput: string | Date | null | undefined
+): number {
+  const startYmd = normalizeDateOnlyYmd(startInput);
+  const endYmd = normalizeDateOnlyYmd(endInput);
+  if (!startYmd || !endYmd) return 0;
+  const startUtc = Date.UTC(
+    Number(startYmd.slice(0, 4)),
+    Number(startYmd.slice(5, 7)) - 1,
+    Number(startYmd.slice(8, 10))
+  );
+  const endUtc = Date.UTC(
+    Number(endYmd.slice(0, 4)),
+    Number(endYmd.slice(5, 7)) - 1,
+    Number(endYmd.slice(8, 10))
+  );
+  if (!Number.isFinite(startUtc) || !Number.isFinite(endUtc) || endUtc < startUtc) return 0;
+  return Math.floor((endUtc - startUtc) / DAY_MS) + 1;
+}
+
+export function normalizeDateOnlyYmd(value: string | Date | null | undefined): string | null {
+  if (value == null) return null;
+  if (typeof value === 'string') {
+    const m = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return normalizeDateOnlyYmd(parsed);
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const iso = value.toISOString();
+    // Sequelize DATEONLY → UTC 자정 Date 인 경우가 많음
+    if (/T00:00:00(?:\.000)?Z$/.test(iso)) {
+      return iso.slice(0, 10);
+    }
+    return toDateOnlyString(value);
+  }
+  return null;
+}
+
+/** 휴가 기간과 휴가연도의 교집합 포함 일수 */
+export function countVacationDaysInLeaveYear(
+  startInput: string | Date | null | undefined,
+  endInput: string | Date | null | undefined,
+  leaveYear: LeaveYearRange
+): number {
+  const startYmd = normalizeDateOnlyYmd(startInput);
+  const endYmd = normalizeDateOnlyYmd(endInput);
+  if (!startYmd || !endYmd) return 0;
+  const fyStart = toDateOnlyString(leaveYear.start);
+  const fyEnd = toDateOnlyString(leaveYear.end);
+  const overlapStart = startYmd > fyStart ? startYmd : fyStart;
+  const overlapEnd = endYmd < fyEnd ? endYmd : fyEnd;
+  if (overlapStart > overlapEnd) return 0;
+  return countInclusiveDateOnlyDays(overlapStart, overlapEnd);
+}
+
 /** 인도 회계연도(휴가 연도): 4/1 ~ 다음 해 3/31 */
 export function getDefaultIndiaFiscalYearRange(referenceDate: Date = new Date()): LeaveYearRange {
   const ref = new Date(referenceDate);
@@ -296,16 +355,22 @@ async function getUsedDaysInLeaveYear(
   userId: number,
   vacationType: string,
   leaveYear: LeaveYearRange,
-  excludeVacationId?: number
+  excludeVacationId?: number,
+  /** true면 승인대기까지 포함(신청 시 한도 검증용). 잔여 표시는 승인분만. */
+  includePending = false
 ): Promise<number> {
+  const fyStart = toDateOnlyString(leaveYear.start);
+  const fyEnd = toDateOnlyString(leaveYear.end);
   const whereClause: any = {
     user_id: userId,
     vacation_type: vacationType,
-    status: { [Op.in]: ['approved', 'pending'] },
-    is_active: true,
-    start_date: {
-      [Op.between]: [toDateOnlyString(leaveYear.start), toDateOnlyString(leaveYear.end)],
-    },
+    status: includePending
+      ? { [Op.in]: ['approved', 'pending'] }
+      : { [Op.eq]: 'approved' },
+    is_active: { [Op.ne]: false },
+    // 연도 경계에 걸친 휴가 포함 (start만 보던 방식은 차감 누락/오류 가능)
+    start_date: { [Op.lte]: fyEnd },
+    end_date: { [Op.gte]: fyStart },
   };
 
   if (excludeVacationId) {
@@ -314,17 +379,23 @@ async function getUsedDaysInLeaveYear(
 
   const rows = await (Vacation as any).findAll({
     where: whereClause,
-    attributes: ['days'],
+    attributes: ['id', 'start_date', 'end_date', 'days'],
   });
 
-  return rows.reduce((sum: number, row: any) => sum + (row.days || 0), 0);
+  return rows.reduce((sum: number, row: any) => {
+    const fromRange = countVacationDaysInLeaveYear(row.start_date, row.end_date, leaveYear);
+    if (fromRange > 0) return sum + fromRange;
+    // 날짜가 비정상일 때만 저장된 days로 폴백
+    const fallback = Number(row.days);
+    return sum + (Number.isFinite(fallback) && fallback > 0 ? fallback : 0);
+  }, 0);
 }
 
 /**
  * 연차: 인도 회계연도(4/1~3/31) 내 적립·사용 (이월 불가).
  * 사용 가능 시점은 입사일+대기일 기준.
  * 총일수 = (대기일 이후 ~ 오늘까지, 휴가연도 교집합 근무일) / earnDays
- * 사용 = 연차 신청(승인·대기) + 출퇴근 결근 차감
+ * 사용 = 승인된 연차 + 출퇴근 결근 차감 (대기·반려는 잔여 미차감)
  * 잔여 = max(0, 총일수 - 사용일수)
  */
 export async function calculateAnnualLeave(userId: number, excludeVacationId?: number): Promise<AnnualLeaveInfo> {
@@ -460,11 +531,24 @@ export async function validateVacationLeaveRequest(
       };
     }
 
-    if (requestedDays > leaveInfo.availableDays) {
+    // 잔여 표시는 승인분만 차감하지만, 신규 신청 한도는 대기 건도 예약으로 포함
+    const reservedVacationDays = await getUsedDaysInLeaveYear(
+      userId,
+      'annual',
+      leaveYear,
+      excludeVacationId,
+      true
+    );
+    const availableForRequest = Math.max(
+      0,
+      leaveInfo.totalEarnedDays - reservedVacationDays - leaveInfo.absenceUsedDays
+    );
+
+    if (requestedDays > availableForRequest) {
       return {
         valid: false,
-        message: `인도 회계연도(${yearLabel}) 사용 가능 연차(${leaveInfo.availableDays}일)를 초과했습니다. 미사용 연차는 이월되지 않습니다.`,
-        availableDays: leaveInfo.availableDays,
+        message: `인도 회계연도(${yearLabel}) 사용 가능 연차(${availableForRequest}일)를 초과했습니다. 미사용 연차는 이월되지 않습니다.`,
+        availableDays: availableForRequest,
       };
     }
 
@@ -478,7 +562,13 @@ export async function validateVacationLeaveRequest(
     return { valid: true };
   }
 
-  const usedDays = await getUsedDaysInLeaveYear(userId, vacationType, leaveYear, excludeVacationId);
+  const usedDays = await getUsedDaysInLeaveYear(
+    userId,
+    vacationType,
+    leaveYear,
+    excludeVacationId,
+    true
+  );
   const availableDays = Math.max(0, quota - usedDays);
 
   if (requestedDays > availableDays) {

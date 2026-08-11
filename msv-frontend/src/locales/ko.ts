@@ -706,10 +706,22 @@ export default {
       confirmPassword: '새 비밀번호 확인',
       passwordRule: '8자 이상 입력해주세요. 회사 보안 정책이 추가로 적용될 수 있습니다.',
       changePassword: '비밀번호 변경',
+      passkeyTitle: '지문 / Face ID 로그인',
+      passkeyHint:
+        '지원되는 스마트폰·노트북에서 생체 인증으로 로그인할 수 있습니다. 기기마다 따로 등록합니다.',
+      passkeyEmpty: '등록된 기기가 없습니다.',
+      passkeyRegister: '이 기기 등록',
+      passkeyUnavailable: '스마트폰·태블릿에서만 지문 로그인을 등록할 수 있습니다',
+      passkeyRemove: '삭제',
+      passkeyThisDevice: '이 기기',
+      passkeyLastUsed: '최근 사용: {{date}}',
+      passkeyNeverUsed: '아직 사용하지 않음',
       success: {
         profile: '개인정보가 저장되었습니다.',
         password: '비밀번호가 변경되었습니다.',
         photo: '프로필 사진이 저장되었습니다.',
+        passkey: '지문 로그인이 등록되었습니다.',
+        passkeyRemoved: '등록된 기기를 삭제했습니다.',
       },
       errors: {
         load: '개인정보를 불러오지 못했습니다.',
@@ -722,6 +734,9 @@ export default {
         avatarTooLarge: '사진 파일은 5MB 이하여야 합니다.',
         avatarRequired: '저장할 사진을 먼저 선택해주세요.',
         photo: '프로필 사진 저장에 실패했습니다.',
+        passkey: '지문 로그인 등록에 실패했습니다.',
+        passkeyCancelled: '생체 인증이 취소되었습니다.',
+        passkeyRemove: '기기 삭제에 실패했습니다.',
       },
     },
     quotationManagement: {
@@ -1101,6 +1116,8 @@ export default {
         startDate: '시작일',
         endDate: '종료일',
         loginAt: '로그인 시각',
+        eventType: '이벤트',
+        resource: '대상',
         userId: '사용자 ID',
         userName: '사용자명',
         reason: '사유',
@@ -1145,6 +1162,22 @@ export default {
       status: {
         success: '성공',
         failure: '실패'
+      },
+      eventTypes: {
+        all: '전체',
+        login: '로그인',
+        logout: '로그아웃',
+        delete: '삭제',
+        create: '등록',
+        update: '수정',
+        security: '보안'
+      },
+      reasonLabels: {
+        login_replaced_previous_session: '이전 세션 교체 로그인',
+        resource_deleted: '리소스 삭제',
+        user_logout: '사용자 로그아웃',
+        invalid_credentials: '인증 실패',
+        user_not_found: '사용자 없음'
       },
       empty: {
         noData: '데이터가 없습니다.',
@@ -1214,7 +1247,7 @@ export default {
         basic: '기본 설정',
         systemLoginHistory: '시스템 로그인 이력'
       },
-      loginHistoryHint: 'MSV 시스템에 로그인한 사용자·시각·성공 여부 등을 조회합니다.',
+      loginHistoryHint: '로그인·로그아웃·삭제 등 주요 감사 로그를 조회합니다. (조회성 API는 성능상 기록하지 않습니다.)',
       notifications: {
         emailHintTitle: '이메일 알림이 실행되는 화면',
         emailHintIntro:
@@ -3880,8 +3913,22 @@ export default {
       password: '비밀번호',
       rememberMe: 'Remember me',
       loginButton: '로그인',
+      passkeyLogin: '지문으로 로그인',
+      passkeyFailed: '생체 로그인에 실패했습니다.',
+      passkeyCancelled: '생체 인증이 취소되었습니다.',
+      passkeyRegisterTitle: '지문 로그인 등록',
+      passkeyRegisterHint:
+        '이 기기에서 다음부터 지문(또는 Face ID)으로 로그인할 수 있습니다. 지금 등록할까요?',
+      passkeyRegisterConfirm: '등록하기',
+      passkeyRegisterSkip: '나중에',
+      passkeyThisDevice: '이 기기',
       loginFailed: '로그인에 실패했습니다.',
       invalidCredentials: '사용자 ID 또는 비밀번호가 올바르지 않습니다.',
+      invalidInput: '입력값이 올바르지 않습니다.',
+      subscriptionInactive: '이용권 상태가 비활성화되어 로그인할 수 없습니다.',
+      subscriptionNotStarted: '아직 이용 기간이 시작되지 않았습니다.',
+      subscriptionExpired: '이용 기간이 만료되었습니다. 결제를 갱신해 주세요.',
+      serverError: '서버 오류가 발생했습니다.',
       langEn: '영문',
       langKo: '한글',
       languageToggleAria: '표시 언어 선택',
@@ -3941,7 +3988,13 @@ export default {
         processing: '처리 중...',
         finishSignup: '가입 완료',
         passwordMismatch: '비밀번호 확인이 일치하지 않습니다.',
-        registerFailed: '가입에 실패했습니다.'
+        registerFailed: '가입에 실패했습니다.',
+        invalidGst: 'GST 번호 형식이 올바르지 않습니다. (15자리)',
+        freeTrialUsed: '동일한 회사는 무료 이용(3개월)을 1회만 사용할 수 있습니다.',
+        adminIdTaken: '이미 사용 중인 관리자 ID입니다.',
+        emailTaken: '이미 사용 중인 이메일입니다.',
+        businessNumberTaken: '이미 등록된 사업자번호입니다.',
+        gstTaken: '이미 등록된 GST 번호입니다.',
       },
       footerTerms: '이용약관',
       footerPrivacy: '개인정보 처리방침',
@@ -4125,7 +4178,7 @@ export default {
       hireDateRequired: '사용자 관리에서 입사일을 등록해야 잔여일이 계산됩니다.',
       annualNotEligible: '연차 사용 대기 기간입니다. (입사일 + 대기일 이후부터 적립·사용)',
       noLeaveBalances: '표시할 직원 휴가 잔여일이 없습니다.',
-      leaveBalancesHint: '인도 회계연도(4/1~다음 해 3/31) 기준 총 부여 일수에서 사용분(휴가 신청 + 출퇴근 결근)을 뺀 잔여 일수입니다. 「휴가 형태」에서 선택한 유형만 표시되며, 미사용 일수는 이월되지 않습니다. 입사일이 없으면 계산되지 않습니다.',
+      leaveBalancesHint: '인도 회계연도(4/1~다음 해 3/31) 기준 총 부여 일수에서 사용분(승인된 휴가 + 출퇴근 결근)을 뺀 잔여 일수입니다. 승인 대기·반려 건은 잔여에서 차감되지 않습니다. 「휴가 형태」에서 선택한 유형만 표시되며, 미사용 일수는 이월되지 않습니다. 입사일이 없으면 계산되지 않습니다.',
       leaveBalancesSearchPlaceholder: '직원명, 부서, 직책, 입사일 검색...',
       sickOptional: '비의무',
       sickOptionalHint: '병가는 의무 휴가가 아닙니다.',

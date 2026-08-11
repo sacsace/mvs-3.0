@@ -50,6 +50,7 @@
     "health": "node -e \"console.log('Backend is healthy')\""
   },
   "dependencies": {
+    "@simplewebauthn/server": "^13.3.2",
     "@types/bcrypt": "^6.0.0",
     "@types/react-grid-layout": "^1.3.6",
     "@types/socket.io": "^3.0.1",

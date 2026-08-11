@@ -1,5 +1,13 @@
 import express from 'express';
 import { login, getProfile, register, refreshToken, checkSession, logout } from '../controllers/authController';
+import {
+  webauthnRegisterOptions,
+  webauthnRegisterVerify,
+  webauthnLoginOptions,
+  webauthnLoginVerify,
+  webauthnListCredentials,
+  webauthnDeleteCredential,
+} from '../controllers/webauthnController';
 import { authenticateToken } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
 
@@ -10,6 +18,14 @@ router.post('/login', validateBody({
   userid: { required: true, type: 'string', minLength: 2, maxLength: 50 },
   password: { required: true, type: 'string', minLength: 6, maxLength: 128 }
 }), login);
+
+// WebAuthn / 지문·페이스 ID (Passkey)
+router.post('/webauthn/login/options', webauthnLoginOptions);
+router.post('/webauthn/login/verify', webauthnLoginVerify);
+router.post('/webauthn/register/options', authenticateToken, webauthnRegisterOptions);
+router.post('/webauthn/register/verify', authenticateToken, webauthnRegisterVerify);
+router.get('/webauthn/credentials', authenticateToken, webauthnListCredentials);
+router.delete('/webauthn/credentials/:id', authenticateToken, webauthnDeleteCredential);
 
 // 회사+관리자 가입 (3개월 무료)
 router.post('/register', validateBody({

@@ -17,6 +17,8 @@ import {
   PersonOutline as PersonIcon,
   PhotoCameraOutlined as PhotoCameraIcon,
   SaveOutlined as SaveIcon,
+  Fingerprint as FingerprintIcon,
+  DeleteOutline as DeleteIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
@@ -30,6 +32,12 @@ import { userService } from '../../services/api';
 import { useStore } from '../../store';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import { formatPositionLabel } from '../../utils/positionLabels';
+import {
+  canUsePlatformPasskey,
+  deletePasskeyCredential,
+  listPasskeyCredentials,
+  registerPlatformPasskey,
+} from '../../utils/webauthn';
 
 type PersonalProfile = {
   userid: string;
@@ -82,6 +90,29 @@ const PersonalSettings: React.FC = () => {
     newPassword: '',
     confirmPassword: '',
   });
+  const [passkeyAvailable, setPasskeyAvailable] = useState(false);
+  const [passkeys, setPasskeys] = useState<
+    Array<{
+      id: number;
+      deviceName?: string | null;
+      lastUsedAt?: string | null;
+      createdAt?: string;
+    }>
+  >([]);
+  const [passkeysLoading, setPasskeysLoading] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+
+  const loadPasskeys = async () => {
+    setPasskeysLoading(true);
+    try {
+      const rows = await listPasskeyCredentials();
+      setPasskeys(rows);
+    } catch {
+      setPasskeys([]);
+    } finally {
+      setPasskeysLoading(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -107,6 +138,17 @@ const PersonalSettings: React.FC = () => {
       active = false;
     };
   }, [t]);
+
+  useEffect(() => {
+    let active = true;
+    void canUsePlatformPasskey().then((ok) => {
+      if (active) setPasskeyAvailable(ok);
+    });
+    void loadPasskeys();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -232,6 +274,48 @@ const PersonalSettings: React.FC = () => {
       );
     } finally {
       setChangingPassword(false);
+    }
+  };
+
+  const handleRegisterPasskey = async () => {
+    setPasskeyBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await registerPlatformPasskey(t('personalSettings.passkeyThisDevice'));
+      await loadPasskeys();
+      setMessage(t('personalSettings.success.passkey'));
+    } catch (passkeyError: any) {
+      if (passkeyError?.name === 'NotAllowedError') {
+        setError(t('personalSettings.errors.passkeyCancelled'));
+      } else {
+        setError(
+          passkeyError?.response?.data?.message ||
+            passkeyError?.message ||
+            t('personalSettings.errors.passkey')
+        );
+      }
+    } finally {
+      setPasskeyBusy(false);
+    }
+  };
+
+  const handleDeletePasskey = async (id: number) => {
+    setPasskeyBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await deletePasskeyCredential(id);
+      await loadPasskeys();
+      setMessage(t('personalSettings.success.passkeyRemoved'));
+    } catch (passkeyError: any) {
+      setError(
+        passkeyError?.response?.data?.message ||
+          passkeyError?.message ||
+          t('personalSettings.errors.passkeyRemove')
+      );
+    } finally {
+      setPasskeyBusy(false);
     }
   };
 
@@ -559,6 +643,87 @@ const PersonalSettings: React.FC = () => {
                 {t('personalSettings.changePassword')}
               </Button>
             </Box>
+          </CardContent>
+        </Card>
+
+        <Card elevation={0} sx={mvsBodyCardSx}>
+          <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+              <FingerprintIcon color="primary" />
+              <Typography variant="h6" fontWeight={700}>
+                {t('personalSettings.passkeyTitle')}
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              {t('personalSettings.passkeyHint')}
+            </Typography>
+
+            {passkeysLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                <CircularProgress size={22} />
+              </Box>
+            ) : passkeys.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {t('personalSettings.passkeyEmpty')}
+              </Typography>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
+                {passkeys.map((item) => (
+                  <Box
+                    key={item.id}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 1,
+                      px: 1.25,
+                      py: 1,
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '4px',
+                      bgcolor: '#F8FAFC',
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" fontWeight={600} noWrap>
+                        {item.deviceName || t('personalSettings.passkeyThisDevice')}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {item.lastUsedAt
+                          ? t('personalSettings.passkeyLastUsed', {
+                              date: new Date(item.lastUsedAt).toLocaleString(),
+                            })
+                          : t('personalSettings.passkeyNeverUsed')}
+                      </Typography>
+                    </Box>
+                    <Button
+                      size="small"
+                      color="error"
+                      startIcon={<DeleteIcon />}
+                      disabled={passkeyBusy}
+                      onClick={() => void handleDeletePasskey(item.id)}
+                      sx={{ textTransform: 'none', flexShrink: 0 }}
+                    >
+                      {t('personalSettings.passkeyRemove')}
+                    </Button>
+                  </Box>
+                ))}
+              </Box>
+            )}
+
+            <Button
+              variant="contained"
+              disableElevation
+              disabled={!passkeyAvailable || passkeyBusy}
+              startIcon={
+                passkeyBusy ? <CircularProgress size={16} color="inherit" /> : <FingerprintIcon />
+              }
+              onClick={() => void handleRegisterPasskey()}
+              sx={{ ...mvsBodyPrimaryBtnSx, alignSelf: 'flex-start' }}
+            >
+              {passkeyAvailable
+                ? t('personalSettings.passkeyRegister')
+                : t('personalSettings.passkeyUnavailable')}
+            </Button>
           </CardContent>
         </Card>
       </Box>

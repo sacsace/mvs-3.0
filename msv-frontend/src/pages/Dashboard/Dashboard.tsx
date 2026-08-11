@@ -73,7 +73,12 @@ import {
   vacationService,
   projectService,
   userUiPreferencesService,
-  departmentService
+  departmentService,
+  companyCalendarScheduleService
+} from '../../services/api';
+import type {
+  CompanyCalendarScheduleItem,
+  PublicPersonalCalendarScheduleItem
 } from '../../services/api';
 import { showErrorPopup } from '../../utils/errorHandler';
 import { isRemovedNavMenuRoute } from '../../utils/isRemovedNavMenuRoute';
@@ -136,6 +141,7 @@ interface CalendarScheduleItem {
   id: string;
   title: string;
   type: 'normal' | 'company_holiday';
+  isPublic?: boolean;
 }
 
 const CompanyHolidayStarIcon: React.FC<{ color: string }> = ({ color }) => (
@@ -265,6 +271,8 @@ const Dashboard: React.FC = () => {
   const [dashboardCardSearchTerm, setDashboardCardSearchTerm] = useState('');
   const [draggingDashboardCardId, setDraggingDashboardCardId] = useState<string | null>(null);
   const [customCalendarSchedules, setCustomCalendarSchedules] = useState<Record<string, CalendarScheduleItem[]>>({});
+  const [companyCalendarSchedules, setCompanyCalendarSchedules] = useState<CompanyCalendarScheduleItem[]>([]);
+  const [publicPersonalSchedules, setPublicPersonalSchedules] = useState<PublicPersonalCalendarScheduleItem[]>([]);
   const [dashboardLeaveMonth, setDashboardLeaveMonth] = useState(() => new Date());
   const [dashboardLeaveRaw, setDashboardLeaveRaw] = useState<any[]>([]);
   const [dashboardHrDepartmentNames, setDashboardHrDepartmentNames] = useState<string[]>([]);
@@ -272,7 +280,7 @@ const Dashboard: React.FC = () => {
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [scheduleDialogDate, setScheduleDialogDate] = useState<Date | null>(null);
   const [newScheduleTitle, setNewScheduleTitle] = useState('');
-  const [scheduleAsCompanyHoliday, setScheduleAsCompanyHoliday] = useState(false);
+  const [scheduleIsPublic, setScheduleIsPublic] = useState(false);
 
   // 사용자 권한에 따른 탭 필터링
   const isRoot = user?.role === 'root';
@@ -574,7 +582,8 @@ const Dashboard: React.FC = () => {
             .map((item: any) => ({
               id: String(item.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
               title: String(item.title).trim(),
-              type: (item.type === 'company_holiday' ? 'company_holiday' : 'normal') as 'normal' | 'company_holiday'
+              type: (item.type === 'company_holiday' ? 'company_holiday' : 'normal') as 'normal' | 'company_holiday',
+              isPublic: Boolean(item.isPublic ?? item.is_public)
             }))
             .filter((item) => item.title.length > 0);
           if (items.length > 0) sanitizedCal[dateKey] = items;
@@ -667,6 +676,61 @@ const Dashboard: React.FC = () => {
   const formatDateKey = (date: Date) => {
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   };
+
+  const companySchedulesByDate = useMemo(() => {
+    const map: Record<string, CompanyCalendarScheduleItem[]> = {};
+    companyCalendarSchedules.forEach((item) => {
+      const key = item.scheduleDate;
+      if (!map[key]) map[key] = [];
+      map[key].push(item);
+    });
+    return map;
+  }, [companyCalendarSchedules]);
+
+  const publicPersonalSchedulesByDate = useMemo(() => {
+    const map: Record<string, PublicPersonalCalendarScheduleItem[]> = {};
+    publicPersonalSchedules.forEach((item) => {
+      const key = item.scheduleDate;
+      if (!map[key]) map[key] = [];
+      map[key].push(item);
+    });
+    return map;
+  }, [publicPersonalSchedules]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setCompanyCalendarSchedules([]);
+      setPublicPersonalSchedules([]);
+      return;
+    }
+
+    const weekEnd = new Date(currentWeekStart);
+    weekEnd.setDate(currentWeekStart.getDate() + 6);
+    const from = formatDateKey(currentWeekStart);
+    const to = formatDateKey(weekEnd);
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const [companyRes, publicRes] = await Promise.all([
+          companyCalendarScheduleService.list({ from, to }),
+          companyCalendarScheduleService.listPublicPersonal({ from, to })
+        ]);
+        if (cancelled) return;
+        setCompanyCalendarSchedules(Array.isArray(companyRes?.data) ? companyRes.data : []);
+        setPublicPersonalSchedules(Array.isArray(publicRes?.data) ? publicRes.data : []);
+      } catch {
+        if (!cancelled) {
+          setCompanyCalendarSchedules([]);
+          setPublicPersonalSchedules([]);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, currentWeekStart]);
 
   const getGoodFriday = (year: number): Date => {
     const a = year % 19;
@@ -797,7 +861,7 @@ const Dashboard: React.FC = () => {
   const openScheduleDialog = (date: Date) => {
     setScheduleDialogDate(date);
     setNewScheduleTitle('');
-    setScheduleAsCompanyHoliday(false);
+    setScheduleIsPublic(false);
     setScheduleDialogOpen(true);
   };
 
@@ -805,13 +869,12 @@ const Dashboard: React.FC = () => {
     setScheduleDialogOpen(false);
     setScheduleDialogDate(null);
     setNewScheduleTitle('');
-    setScheduleAsCompanyHoliday(false);
+    setScheduleIsPublic(false);
   };
 
   const handleAddCustomSchedule = () => {
     if (!scheduleDialogDate) return;
-    const rawTitle = newScheduleTitle.trim();
-    const title = rawTitle || (scheduleAsCompanyHoliday ? (language === 'en' ? 'Company Holiday' : '회사 휴일') : '');
+    const title = newScheduleTitle.trim();
     if (!title) return;
 
     const dateKey = formatDateKey(scheduleDialogDate);
@@ -824,13 +887,14 @@ const Dashboard: React.FC = () => {
           {
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             title,
-            type: scheduleAsCompanyHoliday ? 'company_holiday' : 'normal'
+            type: 'normal',
+            isPublic: scheduleIsPublic
           }
         ]
       };
     });
     setNewScheduleTitle('');
-    setScheduleAsCompanyHoliday(false);
+    setScheduleIsPublic(false);
   };
 
   const handleDeleteCustomSchedule = (dateKey: string, scheduleId: string) => {
@@ -1773,19 +1837,39 @@ const Dashboard: React.FC = () => {
                     const dateKey = formatDateKey(date);
                     const holidayNames = getHolidayNames(date);
                     const customLabels = customCalendarSchedules[dateKey] || [];
+                    const companyDaySchedules = companySchedulesByDate[dateKey] || [];
+                    const publicDaySchedules = publicPersonalSchedulesByDate[dateKey] || [];
                     const complianceLabels = getComplianceLabels(date);
-                    const hasCompanyHoliday = customLabels.some((item) => item.type === 'company_holiday');
+                    const hasCompanyHoliday =
+                      companyDaySchedules.some((item) => item.isHoliday) ||
+                      customLabels.some((item) => item.type === 'company_holiday');
                     const isHolidayDate = holidayNames.length > 0;
                     const isTodayDate = isToday(date);
                     const isWeekendDate = isWeekend(date);
                     const isWeekendOnly = isWeekendDate && !isHolidayDate;
-                    const hasAnySchedule = holidayNames.length > 0 || customLabels.length > 0 || complianceLabels.length > 0;
+                    const hasAnySchedule =
+                      holidayNames.length > 0 ||
+                      customLabels.length > 0 ||
+                      companyDaySchedules.length > 0 ||
+                      publicDaySchedules.length > 0 ||
+                      complianceLabels.length > 0;
                     const allLabels = [
                       ...holidayNames.map((name) => ({ key: `h-${name}`, label: getHolidayDisplayName(name), type: 'holiday' as const })),
+                      ...companyDaySchedules.map((item) => ({
+                        key: `co-${item.id}`,
+                        label: item.title,
+                        type: item.isHoliday ? ('company_holiday' as const) : ('company' as const)
+                      })),
                       ...customLabels.map((item) => ({
                         key: `c-${item.id}`,
-                        label: item.title || (language === 'en' ? 'Company Holiday' : '회사 휴일'),
-                        type: item.type === 'company_holiday' ? 'company_holiday' as const : 'custom' as const })),
+                        label: item.title,
+                        type: item.type === 'company_holiday' ? ('company_holiday' as const) : ('custom' as const)
+                      })),
+                      ...publicDaySchedules.map((item) => ({
+                        key: `pub-${item.id}`,
+                        label: item.ownerName ? `${item.title} · ${item.ownerName}` : item.title,
+                        type: 'public_personal' as const
+                      })),
                       ...complianceLabels.map((item) => ({ key: `p-${item.id}`, label: item.label, type: 'compliance' as const })),
                     ];
                     const visibleLabels = allLabels.slice(0, 2);
@@ -1825,7 +1909,7 @@ const Dashboard: React.FC = () => {
                           variant="caption"
                           sx={{
                             fontWeight: 700,
-                            color: isTodayDate ? 'common.white' : 'text.secondary',
+                            color: isTodayDate ? 'common.white' : '#334155',
                             mb: 0.25 }}
                         >
                           {dayName}
@@ -1877,7 +1961,9 @@ const Dashboard: React.FC = () => {
                                       ? 'warning.dark'
                                       : item.type === 'compliance'
                                         ? 'info.light'
-                                        : 'primary.light',
+                                        : item.type === 'public_personal'
+                                          ? 'secondary.light'
+                                          : 'primary.light',
                                 color:
                                   item.type === 'holiday'
                                     ? 'error.contrastText'
@@ -1885,7 +1971,9 @@ const Dashboard: React.FC = () => {
                                       ? 'common.white'
                                       : item.type === 'compliance'
                                         ? 'info.dark'
-                                        : 'primary.main' }}
+                                        : item.type === 'public_personal'
+                                          ? 'secondary.dark'
+                                          : 'primary.main' }}
                             />
                           ))}
                           {!hasAnySchedule && (
@@ -1893,8 +1981,10 @@ const Dashboard: React.FC = () => {
                               variant="caption"
                               sx={{
                                 textAlign: 'center',
-                                color: isTodayDate ? 'common.white' : 'text.secondary',
-                                fontWeight: 600 }}
+                                color: isTodayDate ? 'rgba(255,255,255,0.92)' : '#475569',
+                                fontWeight: 700,
+                                fontSize: '0.72rem',
+                              }}
                             >
                               {language === 'en' ? 'No schedules' : '일정 없음'}
                             </Typography>
@@ -3013,10 +3103,10 @@ const Dashboard: React.FC = () => {
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>
+        <DialogTitle sx={{ color: '#0F172A', fontWeight: 700 }}>
           {language === 'en' ? 'Schedule Input' : '스케줄 입력'}
           {scheduleDialogDate && (
-            <Typography variant="caption" sx={{ display: 'block', mt: 0.4, color: 'text.secondary' }}>
+            <Typography variant="body2" sx={{ display: 'block', mt: 0.5, color: '#334155', fontWeight: 600 }}>
               {scheduleDialogDate.toLocaleDateString(language === 'en' ? 'en-US' : 'ko-KR')}
             </Typography>
           )}
@@ -3035,22 +3125,47 @@ const Dashboard: React.FC = () => {
                   handleAddCustomSchedule();
                 }
               }}
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  bgcolor: '#FFFFFF',
+                },
+                '& .MuiOutlinedInput-input': {
+                  color: '#0F172A',
+                  fontWeight: 500,
+                },
+                '& .MuiOutlinedInput-input::placeholder': {
+                  color: '#64748B',
+                  opacity: 1,
+                },
+              }}
             />
             <Button variant="contained" onClick={handleAddCustomSchedule}>
               {language === 'en' ? 'Add' : '추가'}
             </Button>
           </Box>
           <FormControlLabel
-            sx={{ mb: 1 }}
+            sx={{
+              mb: 1,
+              '& .MuiFormControlLabel-label': {
+                color: '#1E293B',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+              },
+            }}
             control={
               <Switch
-                checked={scheduleAsCompanyHoliday}
-                onChange={(e) => setScheduleAsCompanyHoliday(e.target.checked)}
-                color="warning"
+                checked={scheduleIsPublic}
+                onChange={(e) => setScheduleIsPublic(e.target.checked)}
+                color="primary"
               />
             }
-            label={language === 'en' ? 'Mark as company holiday' : '회사 휴일로 표시'}
+            label={language === 'en' ? 'Public' : '공개'}
           />
+          <Typography variant="caption" sx={{ display: 'block', mb: 1, color: '#64748B', fontWeight: 500 }}>
+            {language === 'en'
+              ? 'Public schedules are visible to colleagues on the weekly calendar.'
+              : '공개 일정은 주간 스케줄에서 동료에게 표시됩니다.'}
+          </Typography>
 
           <List sx={{ p: 0 }}>
             {scheduleDialogDate && (customCalendarSchedules[formatDateKey(scheduleDialogDate)] || []).length > 0 ? (
@@ -3063,6 +3178,7 @@ const Dashboard: React.FC = () => {
                       size="small"
                       color="error"
                       onClick={() => handleDeleteCustomSchedule(formatDateKey(scheduleDialogDate), item.id)}
+                      sx={{ fontWeight: 700 }}
                     >
                       {language === 'en' ? 'Delete' : '삭제'}
                     </Button>
@@ -3076,17 +3192,26 @@ const Dashboard: React.FC = () => {
                 >
                   <ListItemText
                     primary={
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                         {item.type === 'company_holiday' && (
                           <Chip
                             size="small"
                             color="warning"
                             label={language === 'en' ? 'Company Holiday' : '회사 휴일'}
-                            sx={{ height: 22 }}
+                            sx={{ height: 22, fontWeight: 700 }}
                           />
                         )}
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                          {item.title || (language === 'en' ? 'Company Holiday' : '회사 휴일')}
+                        {item.isPublic && item.type !== 'company_holiday' && (
+                          <Chip
+                            size="small"
+                            color="primary"
+                            variant="outlined"
+                            label={language === 'en' ? 'Public' : '공개'}
+                            sx={{ height: 22, fontWeight: 700 }}
+                          />
+                        )}
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#0F172A' }}>
+                          {item.title}
                         </Typography>
                       </Box>
                     }
@@ -3097,7 +3222,7 @@ const Dashboard: React.FC = () => {
               <ListItem sx={{ px: 0, py: 1 }}>
                 <ListItemText
                   primary={
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="body2" sx={{ color: '#475569', fontWeight: 600 }}>
                       {language === 'en' ? 'No schedules for this date.' : '이 날짜에 등록된 일정이 없습니다.'}
                     </Typography>
                   }

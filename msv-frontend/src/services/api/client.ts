@@ -169,6 +169,7 @@ const isAuthBypassEndpoint = (url?: string) => {
   return (
     url.includes('/auth/login') ||
     url.includes('/auth/register') ||
+    url.includes('/auth/webauthn/login/') ||
     url.includes('/auth/refresh') ||
     url.includes('/auth/session') ||
     url.includes('/auth/logout')
@@ -454,7 +455,9 @@ api.interceptors.response.use(
 
     // 인증 오류 처리 (401, 403)
     // 로그인 API 호출 시에는 리다이렉트하지 않음 (로그인 페이지에서 오류 메시지 표시)
-    const isLoginEndpoint = error.config?.url?.includes('/auth/login');
+    const isLoginEndpoint =
+      error.config?.url?.includes('/auth/login') ||
+      error.config?.url?.includes('/auth/webauthn/login/');
 
     if (isSessionSupersededError(error)) {
       handleSessionSuperseded();

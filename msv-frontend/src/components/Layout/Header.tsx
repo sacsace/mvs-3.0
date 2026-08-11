@@ -33,7 +33,7 @@ import {
   Inbox as InboxIcon,
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
-import { api, userUiPreferencesService, userService } from '../../services/api';
+import { api, userUiPreferencesService, userService, companyCalendarScheduleService } from '../../services/api';
 import { resolveHeaderCompanyInfo } from '../../store/referenceDataStore';
 import { useTranslation } from 'react-i18next';
 import { ensureI18nLanguage } from '../../locales/i18n';
@@ -238,9 +238,6 @@ const Header: React.FC<HeaderProps> = ({
     const checkCompanyHolidayReminder = async () => {
       try {
         const prefs = await userUiPreferencesService.get();
-        const parsed = prefs.calendarSchedules || {};
-        if (!parsed || typeof parsed !== 'object') return;
-
         const now = new Date();
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const tomorrow = new Date(today);
@@ -249,11 +246,22 @@ const Header: React.FC<HeaderProps> = ({
         const todayKey = toDateKey(today);
         const tomorrowKey = toDateKey(tomorrow);
 
-        const tomorrowSchedules = Array.isArray((parsed as Record<string, unknown>)[tomorrowKey])
-          ? ((parsed as Record<string, unknown>)[tomorrowKey] as CalendarScheduleItem[])
-          : [];
+        let companyHolidays: Array<{ title?: string }> = [];
+        try {
+          const res = await companyCalendarScheduleService.list({
+            from: tomorrowKey,
+            to: tomorrowKey,
+          });
+          const rows = Array.isArray(res?.data) ? res.data : [];
+          companyHolidays = rows.filter((item: any) => item?.isHoliday);
+        } catch {
+          const parsed = prefs.calendarSchedules || {};
+          const tomorrowSchedules = Array.isArray((parsed as Record<string, unknown>)[tomorrowKey])
+            ? ((parsed as Record<string, unknown>)[tomorrowKey] as CalendarScheduleItem[])
+            : [];
+          companyHolidays = tomorrowSchedules.filter((item) => item?.type === 'company_holiday');
+        }
 
-        const companyHolidays = tomorrowSchedules.filter((item) => item?.type === 'company_holiday');
         if (companyHolidays.length === 0) return;
 
         const shownMap = prefs.companyHolidayReminderShown || {};

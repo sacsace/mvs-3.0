@@ -706,10 +706,22 @@ export default {
       confirmPassword: 'Confirm New Password',
       passwordRule: 'Use at least 8 characters. Additional company password policies may apply.',
       changePassword: 'Change Password',
+      passkeyTitle: 'Fingerprint / Face ID sign-in',
+      passkeyHint:
+        'Use biometric sign-in on supported phones and laptops. Register each device separately.',
+      passkeyEmpty: 'No registered devices.',
+      passkeyRegister: 'Register this device',
+      passkeyUnavailable: 'Fingerprint sign-in can only be registered on a phone or tablet',
+      passkeyRemove: 'Remove',
+      passkeyThisDevice: 'This device',
+      passkeyLastUsed: 'Last used: {{date}}',
+      passkeyNeverUsed: 'Not used yet',
       success: {
         profile: 'Personal information saved.',
         password: 'Password changed.',
         photo: 'Profile photo saved.',
+        passkey: 'Biometric sign-in registered.',
+        passkeyRemoved: 'Registered device removed.',
       },
       errors: {
         load: 'Failed to load personal information.',
@@ -722,6 +734,9 @@ export default {
         avatarTooLarge: 'Photo must be 5MB or smaller.',
         avatarRequired: 'Select a photo before saving.',
         photo: 'Failed to save profile photo.',
+        passkey: 'Failed to register biometric sign-in.',
+        passkeyCancelled: 'Biometric authentication was cancelled.',
+        passkeyRemove: 'Failed to remove device.',
       },
     },
     companyManagement: {
@@ -1032,7 +1047,9 @@ export default {
         result: 'Result',
         startDate: 'Start Date',
         endDate: 'End Date',
-        loginAt: 'Login Time',
+        loginAt: 'Time',
+        eventType: 'Event',
+        resource: 'Target',
         userId: 'User ID',
         userName: 'User Name',
         reason: 'Reason',
@@ -1077,6 +1094,22 @@ export default {
       status: {
         success: 'Success',
         failure: 'Failure'
+      },
+      eventTypes: {
+        all: 'All',
+        login: 'Login',
+        logout: 'Logout',
+        delete: 'Delete',
+        create: 'Create',
+        update: 'Update',
+        security: 'Security'
+      },
+      reasonLabels: {
+        login_replaced_previous_session: 'Login replaced previous session',
+        resource_deleted: 'Resource deleted',
+        user_logout: 'User logout',
+        invalid_credentials: 'Invalid credentials',
+        user_not_found: 'User not found'
       },
       empty: {
         noData: 'No data available.',
@@ -1146,7 +1179,7 @@ export default {
         basic: 'General',
         systemLoginHistory: 'System login history'
       },
-      loginHistoryHint: 'View who logged into the MSV system, when, and success or failure.',
+      loginHistoryHint: 'View login, logout, delete, and other audit events. Read-only APIs are not logged for performance.',
       notifications: {
         emailHintTitle: 'Screens that trigger email notifications',
         emailHintIntro:
@@ -3812,8 +3845,22 @@ export default {
       password: 'Password',
       rememberMe: 'Remember me',
       loginButton: 'Sign in',
+      passkeyLogin: 'Sign in with fingerprint',
+      passkeyFailed: 'Biometric sign-in failed.',
+      passkeyCancelled: 'Biometric authentication was cancelled.',
+      passkeyRegisterTitle: 'Enable biometric sign-in',
+      passkeyRegisterHint:
+        'You can sign in on this device with fingerprint or Face ID next time. Register now?',
+      passkeyRegisterConfirm: 'Register',
+      passkeyRegisterSkip: 'Later',
+      passkeyThisDevice: 'This device',
       loginFailed: 'Login failed.',
       invalidCredentials: 'Invalid user ID or password.',
+      invalidInput: 'Invalid input.',
+      subscriptionInactive: 'Your subscription is inactive, so you cannot sign in.',
+      subscriptionNotStarted: 'Your usage period has not started yet.',
+      subscriptionExpired: 'Your usage period has expired. Please renew your subscription.',
+      serverError: 'A server error occurred.',
       langEn: 'English',
       langKo: 'Korean',
       languageToggleAria: 'Choose display language',
@@ -3873,7 +3920,13 @@ export default {
         processing: 'Processing…',
         finishSignup: 'Complete registration',
         passwordMismatch: 'Password and confirmation do not match.',
-        registerFailed: 'Registration failed.'
+        registerFailed: 'Registration failed.',
+        invalidGst: 'Invalid GST number format. (15 characters)',
+        freeTrialUsed: 'Each company can use the free 3-month trial only once.',
+        adminIdTaken: 'This admin ID is already in use.',
+        emailTaken: 'This email is already in use.',
+        businessNumberTaken: 'This business registration number is already registered.',
+        gstTaken: 'This GST number is already registered.',
       },
       footerTerms: 'Terms of Service',
       footerPrivacy: 'Privacy Policy',
@@ -4127,7 +4180,7 @@ export default {
       annualNotEligible: 'Annual leave waiting period. Accrual and use start after hire date + waiting days.',
       noLeaveBalances: 'No employee leave balances to display.',
       leaveBalancesHint:
-        'Remaining days = total entitlement for the India fiscal year (1 Apr – 31 Mar) minus days used (leave requests + attendance absences). Only leave types enabled in Leave Type are shown. Unused days do not carry over. Balances require a join date.',
+        'Remaining days = total entitlement for the India fiscal year (1 Apr – 31 Mar) minus days used (approved leave + attendance absences). Pending or rejected requests are not deducted. Only leave types enabled in Leave Type are shown. Unused days do not carry over. Balances require a join date.',
       leaveBalancesSearchPlaceholder: 'Search by employee, department, position, join date…',
       sickOptional: 'Optional',
       sickOptionalHint: 'Sick leave is not mandatory.',
