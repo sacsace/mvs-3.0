@@ -21,6 +21,7 @@ import path from 'path';
 import fs from 'fs';
 import { randomBytes } from 'crypto';
 import { ensureUploadSubdir } from '../utils/uploadPath';
+import { grantEmployeeSelfServicePermissions } from '../utils/employeeSelfServicePermissions';
 
 let userListHrFieldsAvailable: boolean | null = null;
 
@@ -1073,6 +1074,16 @@ router.post(
 
     const user = await (User as any).create(userData);
 
+    try {
+      await grantEmployeeSelfServicePermissions({
+        userId: Number(user.id),
+        tenantId: Number(user.tenant_id || targetTenantId),
+        role: String(user.role || role || 'user'),
+      });
+    } catch (grantErr) {
+      console.warn('my-workspace default permission grant failed:', grantErr);
+    }
+
     // 비밀번호 해시 제외하고 응답
     const responseData = maskSalaryInUserPayload(user.toJSON());
 
@@ -1341,6 +1352,16 @@ router.put(
     await user.update(updateData);
     if (updateData.password_hash) {
       invalidateAuthUser(Number(id));
+    }
+
+    try {
+      await grantEmployeeSelfServicePermissions({
+        userId: Number(user.id),
+        tenantId: Number(user.tenant_id),
+        role: String(user.role),
+      });
+    } catch (grantErr) {
+      console.warn('my-workspace default permission grant failed (update):', grantErr);
     }
 
     // 업데이트된 사용자 정보 조회 - 기본 필드만 먼저 조회
@@ -1851,8 +1872,17 @@ router.post(
           })(),
           status: (row['상태 (active/inactive/suspended)'] && ['active', 'inactive', 'suspended'].includes(row['상태 (active/inactive/suspended)'].toString().toLowerCase()))
             ? row['상태 (active/inactive/suspended)'].toString().toLowerCase()
-            : 'active'
         });
+
+        try {
+          await grantEmployeeSelfServicePermissions({
+            userId: Number(user.id),
+            tenantId: Number(tenantId),
+            role: String(importRole),
+          });
+        } catch (grantErr) {
+          console.warn('my-workspace default permission grant failed (import):', grantErr);
+        }
 
         results.success.push({
           row: i + 2,

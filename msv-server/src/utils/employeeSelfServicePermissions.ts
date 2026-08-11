@@ -5,16 +5,15 @@ import { EMPLOYEE_SELF_SERVICE_ROUTES } from '../constants/myWorkspaceMenus';
 export { EMPLOYEE_SELF_SERVICE_ROUTES };
 
 /**
- * 신규/기존 user 역할에 「내 정보·업무」+ 공지 보기 기본 권한 부여.
- * 휴가만 can_create 포함. 이미 권한이 있으면 덮어쓰지 않음.
+ * 로그인 사용자에게 「내 정보·업무」(+ 업무 보드 보기) 기본 권한 부여.
+ * 역할 무관. 휴가만 can_create 포함. 이미 있으면 덮어쓰지 않음(단 can_view=false면 복구).
  */
 export async function grantEmployeeSelfServicePermissions(params: {
   userId: number;
   tenantId: number;
   role?: string;
 }): Promise<number> {
-  const { userId, tenantId, role } = params;
-  if (role && role !== 'user') return 0;
+  const { userId, tenantId } = params;
 
   const menus = await (Menu as any).findAll({
     where: {

@@ -347,27 +347,15 @@ async function ensurePermissions(tenantId: number, users: any[]) {
     await syncFullMenuPermissions(tenantId, userIds);
   }
 
-  // admin/root/audit 기본 동기화에서 「내 정보·업무」는 제외(메뉴권한에서 선택 부여)
-  await sequelize.query(
-    `DELETE FROM user_permissions
-     WHERE menu_id IN (
-       SELECT id FROM menus WHERE tenant_id = $1::int AND (route = '/my' OR route LIKE '/my/%')
-     )
-     AND user_id IN (
-       SELECT id FROM users WHERE tenant_id = $1::int AND role IN ('root', 'admin', 'audit')
-     )`,
-    { bind: [tenantId] }
-  );
-
-  // 일반 user — 내 정보·업무 메뉴 기본 보기
+  // 모든 역할 — 「내 정보·업무」기본 보기
   const { grantEmployeeSelfServicePermissions } = await import('../utils/employeeSelfServicePermissions');
-  for (const u of users.filter((x) => x.role === 'user')) {
+  for (const u of users) {
     const n = await grantEmployeeSelfServicePermissions({
       userId: Number(u.id),
       tenantId,
-      role: 'user',
+      role: u.role,
     });
-    console.log(`  ✅ user_id=${u.id} 내 업무 기본 권한 (${n}건 신규)`);
+    console.log(`  ✅ user_id=${u.id} (${u.role}) 내 정보·업무 기본 권한 (${n}건 신규)`);
   }
 }
 
