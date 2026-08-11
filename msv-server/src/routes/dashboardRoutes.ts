@@ -350,6 +350,11 @@ router.get('/my-tasks', async (req: AuthRequest, res) => {
       boardWhere.company_id = user.company_id;
     }
 
+    const limitRaw = Number(req.query.limit);
+    const limit = Number.isFinite(limitRaw)
+      ? Math.min(Math.max(Math.floor(limitRaw), 1), 200)
+      : 5;
+
     const cards = await WorkBoardCard.findAll({
       where: { assignee_user_id: user.id },
       attributes: ['id', 'title', 'due_date', 'list_id'],
@@ -370,7 +375,7 @@ router.get('/my-tasks', async (req: AuthRequest, res) => {
           ],
         },
       ],
-      limit: 50,
+      limit,
     });
 
     const tasks = cards.map((card) => {
@@ -381,6 +386,7 @@ router.get('/my-tasks', async (req: AuthRequest, res) => {
       return {
         id: `${board.id}-${json.id}`,
         boardId: board.id,
+        cardId: Number(json.id) || null,
         boardName: board.name || '-',
         listName: listTitle,
         title: json.title || '제목 없음',
@@ -395,7 +401,7 @@ router.get('/my-tasks', async (req: AuthRequest, res) => {
       return aTime - bTime;
     });
 
-    const payload = { success: true, data: tasks.slice(0, 5) };
+    const payload = { success: true, data: tasks.slice(0, limit) };
     await setCachedJson(cacheKey, payload, DASHBOARD_TASK_CACHE_TTL_SEC);
     res.json(payload);
   } catch (error: any) {

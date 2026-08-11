@@ -1,5 +1,6 @@
 import { env } from '../config/env';
 import SMTPTransport = require('nodemailer/lib/smtp-transport');
+import { parseSettingsBlob } from './settingsBlob';
 
 export type MailTransportResolved = {
   host: string;
@@ -35,16 +36,8 @@ export function buildNodemailerTransportOptions(mailOpts: MailTransportResolved)
 /** DB JSON / 일부 드라이버에서 문자열로 올 때 대비 */
 function parseCompanySettings(settings: unknown): Record<string, unknown> | undefined {
   if (settings == null) return undefined;
-  if (typeof settings === 'string') {
-    try {
-      const o = JSON.parse(settings) as unknown;
-      return typeof o === 'object' && o !== null ? (o as Record<string, unknown>) : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-  if (typeof settings === 'object') return settings as Record<string, unknown>;
-  return undefined;
+  const parsed = parseSettingsBlob(settings);
+  return Object.keys(parsed).length ? parsed : undefined;
 }
 
 /**
@@ -113,7 +106,6 @@ function mailServerFromSettingsBlob(settings: unknown): MailTransportResolved | 
 
 /**
  * 회사 시스템 설정(`Company.settings.mailServer`) → 환경변수 EMAIL_* 순으로 SMTP 해석.
- * 알림·견적·인보이스 등 모든 자동/수동 발송은 이 설정만 사용한다.
  */
 export function getSystemMailTransportOptions(
   company: { settings?: unknown } | null | undefined
@@ -136,12 +128,18 @@ export function getSystemMailTransportOptions(
 }
 
 /**
- * SMTP — 회사 시스템 설정만 사용 (`getSystemMailTransportOptions`).
- * 두 번째 인자(user)는 하위 호환용이며 무시된다.
+ * SMTP 해석: 회사 → (선택) 사용자 개인 SMTP → 환경변수.
+ * 업무 알림 등에서 회사 SMTP가 없을 때 발신자 개인 SMTP를 폴백으로 사용한다.
  */
 export function getResolvedMailTransportOptions(
   company: { settings?: unknown } | null | undefined,
-  _user?: { settings?: unknown; email?: string | null; username?: string | null } | null | undefined
+  user?: { settings?: unknown; email?: string | null; username?: string | null } | null | undefined
 ): MailTransportResolved | null {
-  return getSystemMailTransportOptions(company);
+  const fromCompany = mailServerFromSettingsBlob(company?.settings);
+  if (fromCompany) return fromCompany;
+
+  const fromUser = mailServerFromSettingsBlob(user?.settings);
+  if (fromUser) return fromUser;
+
+  return getSystemMailTransportOptions(null);
 }

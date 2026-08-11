@@ -58,6 +58,12 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, userUiPreferencesService, UserUiPreferencesData } from '../../services/api';
+import { DEFAULT_NOTIFICATION_SETTINGS } from '../../constants/notificationSettings';
+import {
+  enableBrowserNotificationsFromSettings,
+  notifyNotificationPrefsUpdated,
+} from '../../hooks/useBrowserDesktopNotifications';
+import { isBrowserNotificationSupported } from '../../utils/browserNotifications';
 import { useErrorStore } from '../../store/errorStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { useMenuStore, useStore } from '../../store';
@@ -76,17 +82,7 @@ type TabKey = 'history' | 'send' | 'settings' | 'templates';
 
 const CARD_SX = mvsBodyCardSx;
 
-const DEFAULT_SETTINGS: NonNullable<UserUiPreferencesData['notificationSettings']> = {
-  realtime: true,
-  email: false,
-  browser: true,
-  system: true,
-  approval: true,
-  vacation: true,
-  expense: true,
-  workReport: true,
-  emailDigest: 'immediate',
-};
+const DEFAULT_SETTINGS = DEFAULT_NOTIFICATION_SETTINGS;
 
 const TAB_INDEX: Record<TabKey, number> = {
   history: 0,
@@ -234,7 +230,23 @@ const NotificationManagement: React.FC = () => {
   const handleSaveSettings = async () => {
     setSavingSettings(true);
     try {
-      await userUiPreferencesService.patch({ notificationSettings: settings });
+      let next = settings;
+      if (settings.browser) {
+        const granted = await enableBrowserNotificationsFromSettings();
+        if (!granted) {
+          next = { ...settings, browser: false };
+          setSettings(next);
+          setSnackbar({
+            open: true,
+            message: isBrowserNotificationSupported()
+              ? t('notificationManagement.browserPermissionDenied')
+              : t('notificationManagement.browserUnsupported'),
+            severity: 'error',
+          });
+        }
+      }
+      await userUiPreferencesService.patch({ notificationSettings: next });
+      notifyNotificationPrefsUpdated();
       setSnackbar({ open: true, message: t('notificationManagement.settingsSaved'), severity: 'success' });
     } catch {
       setSnackbar({ open: true, message: t('notificationManagement.settingsSaveFailed'), severity: 'error' });
@@ -577,11 +589,18 @@ const NotificationManagement: React.FC = () => {
               control={
                 <Switch
                   checked={Boolean(settings.browser)}
-                  onChange={(e) => setSettings((prev) => ({ ...prev, browser: e.target.checked }))}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setSettings((prev) => ({ ...prev, browser: on }));
+                    if (on) void enableBrowserNotificationsFromSettings();
+                  }}
                 />
               }
               label={t('notificationManagement.browser')}
             />
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ pl: 6, mt: -0.5 }}>
+              {t('notificationManagement.browserHint')}
+            </Typography>
           </Grid>
           <Grid size={{ xs: 12, sm: 4 }}>
             <FormControlLabel
@@ -629,6 +648,7 @@ const NotificationManagement: React.FC = () => {
               ['vacation', t('notificationManagement.catVacation')],
               ['expense', t('notificationManagement.catExpense')],
               ['workReport', t('notificationManagement.catWorkReport')],
+              ['workBoard', t('notificationManagement.catWorkBoard')],
             ] as const
           ).map(([key, label]) => (
             <Grid size={{ xs: 12, sm: 6, md: 4 }} key={key}>

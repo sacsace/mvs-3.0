@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -156,7 +156,7 @@ const LEAVE_BALANCE_TYPE_KEYS: LeaveBalanceTypeKey[] = [
   'bereavement',
 ];
 
-const VACATION_MENU_ROUTES = ['/hr/leave'];
+const VACATION_MENU_ROUTES = ['/hr/leave', '/my/leave'];
 const VACATIONS_PER_PAGE = 10;
 const VACATION_FILTER_OUTLINED = mvsOutlinedLabelProps;
 const vacationFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
@@ -205,6 +205,9 @@ const VacationManagement: React.FC = () => {
   const isCompactToolbar = useMediaQuery(theme.breakpoints.down('md'));
   const { t, i18n } = useTranslation();
   const { user } = useStore();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const leaveBasePath = location.pathname.startsWith('/my/') ? '/my/leave' : '/hr/leave';
   const { menus, hasMenuPermission, loading: menusLoading } = useMenuStore();
   const { dialogState: confirmDialogState, showConfirm, handleConfirm, handleCancel } = useConfirmDialog();
   const {
@@ -641,7 +644,7 @@ const VacationManagement: React.FC = () => {
       setError(t('vacationManagement.noPermissionCreate'));
       return;
     }
-    window.location.href = '/hr/leave/request';
+    navigate(`${leaveBasePath}/request`);
   };
 
   const handleExportExcel = async () => {

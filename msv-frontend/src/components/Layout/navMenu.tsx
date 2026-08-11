@@ -30,6 +30,7 @@ import {
   Hotel,
   UploadFile,
   AssignmentInd,
+  Download,
 } from '@mui/icons-material';
 import type { Menu } from '../../services/menuService';
 import { isRemovedNavMenuRoute } from '../../utils/isRemovedNavMenuRoute';
@@ -49,6 +50,13 @@ export const isMenuRouteActive = (currentPath: string, route?: string) => {
   const routeCandidates = new Set<string>([normalizedRoute]);
   if (normalizedRoute === '/communication/notice') routeCandidates.add('/communication/notices');
   if (normalizedRoute === '/communication/notices') routeCandidates.add('/communication/notice');
+  if (normalizedRoute === '/my/notices') {
+    routeCandidates.add('/communication/notice');
+    routeCandidates.add('/communication/notices');
+  }
+  if (normalizedRoute === '/communication/notice' || normalizedRoute === '/communication/notices') {
+    routeCandidates.add('/my/notices');
+  }
 
   return Array.from(routeCandidates).some(
     (candidate) =>
@@ -232,6 +240,7 @@ const ICON_BY_NAME: Record<string, React.ReactElement> = {
   move_to_inbox: <MoveToInbox />,
   post_add: <PostAdd />,
   qr_code_scanner: <QrCodeScanner />,
+  download: <Download />,
 };
 
 const getIconByRoute = (route: string): React.ReactElement | null => {
@@ -287,7 +296,9 @@ const getIconByRoute = (route: string): React.ReactElement | null => {
 
   if (normalized.includes('/customers/contracts')) return <Description />;
 
-  if (normalized.includes('/communication/notice')) return <Notifications />;
+  if (normalized.includes('/dashboard')) return <Dashboard />;
+  if (normalized.includes('/my/notices') || normalized.includes('/communication/notice')) return <Notifications />;
+  if (normalized.includes('/communication/desktop-notifier')) return <Download />;
   if (normalized.includes('/communication/email')) return <Chat />;
   if (normalized.includes('/communication/sms')) return <Notifications />;
 

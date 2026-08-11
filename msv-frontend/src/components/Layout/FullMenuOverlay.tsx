@@ -273,17 +273,10 @@ const FullMenuOverlay: React.FC<FullMenuOverlayProps> = ({
               <Divider orientation="vertical" flexItem sx={{ mx: 0.5, borderColor: '#E5E7EB' }} />
               <Button
                 size="small"
-                onClick={() => goTo('/communication/notice')}
+                onClick={() => goTo('/communication/desktop-notifier')}
                 sx={{ textTransform: 'none', fontWeight: 500, color: '#4B5563' }}
               >
-                {language === 'en' ? 'Notices' : '공지사항'}
-              </Button>
-              <Button
-                size="small"
-                onClick={() => goTo('/ai')}
-                sx={{ textTransform: 'none', fontWeight: 500, color: '#4B5563' }}
-              >
-                {language === 'en' ? 'Analysis' : '분석'}
+                {language === 'en' ? 'Desktop Notifier' : '알림 프로그램'}
               </Button>
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>

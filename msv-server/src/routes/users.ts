@@ -7,6 +7,11 @@ import { resolvePositionFieldsForUser } from '../controllers/positionController'
 import { authenticateToken } from '../middleware/auth';
 import { requireAdminRootOrUserMenuPermission } from '../middleware/menuPermission';
 import { getUserUiPreferences, patchUserUiPreferences } from '../controllers/userUiPreferencesController';
+import {
+  getMyMailServer,
+  patchMyMailServer,
+  testMyMailServer,
+} from '../controllers/userMailServerController';
 import { validateBody } from '../middleware/validate';
 import { invalidateAuthUser } from '../utils/authCache';
 import multer from 'multer';
@@ -200,8 +205,41 @@ router.use(authenticateToken);
 const SELF_PROFILE_ATTRIBUTES = [
   'id', 'userid', 'username', 'email', 'role', 'department', 'position',
   'employee_number', 'birth_date', 'gender', 'phone', 'address',
-  'emergency_contact', 'emergency_phone', 'avatar_url', 'company_id', 'session_version'
+  'emergency_contact', 'emergency_phone', 'avatar_url', 'company_id', 'session_version',
+  'hire_date', 'employment_type', 'salary', 'bank_name', 'bank_account', 'bank_ifsc',
+  'ot_eligible', 'is_payment_officer', 'career_history', 'created_at', 'tenant_id',
 ];
+
+const maskSalaryInUserPayload = (raw: any) => {
+  if (!raw) return raw;
+  const data = typeof raw.toJSON === 'function' ? raw.toJSON() : { ...raw };
+  const hasSalary = data.salary != null && data.salary !== '';
+  delete data.salary;
+  delete data.password_hash;
+  data.has_salary = Boolean(hasSalary);
+  return data;
+};
+
+const parseSalaryInput = (salary: unknown): number | null => {
+  if (salary === undefined || salary === null || salary === '') return null;
+  const n = typeof salary === 'number' ? salary : parseFloat(String(salary).replace(/,/g, ''));
+  return Number.isFinite(n) ? n : null;
+};
+
+const verifyCurrentUserPassword = async (req: express.Request, password: unknown) => {
+  if (!password || typeof password !== 'string') {
+    return { ok: false as const, status: 400, message: '로그인 비밀번호를 입력해주세요.' };
+  }
+  const self = await findCurrentUser(req, true);
+  if (!self) {
+    return { ok: false as const, status: 404, message: '사용자를 찾을 수 없습니다.' };
+  }
+  const matches = await bcrypt.compare(String(password), self.password_hash);
+  if (!matches) {
+    return { ok: false as const, status: 400, message: '비밀번호가 일치하지 않습니다.' };
+  }
+  return { ok: true as const, self };
+};
 
 const findCurrentUser = async (req: express.Request, includePassword = false) => {
   const authUser = (req as any).user;
@@ -224,12 +262,73 @@ router.get('/me/profile', async (req, res) => {
     if (!user) {
       return res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
     }
-    return res.json({ success: true, data: user });
+    return res.json({ success: true, data: maskSalaryInUserPayload(user) });
   } catch (error: any) {
     console.error('내 개인정보 조회 오류:', error);
     return res.status(500).json({
       success: false,
       message: '개인정보를 불러오지 못했습니다.'
+    });
+  }
+});
+
+/** 내 급여 조회 — 로그인 비밀번호 확인 필수 */
+router.post('/me/salary/reveal', async (req, res) => {
+  try {
+    const verified = await verifyCurrentUserPassword(req, req.body?.password);
+    if (!verified.ok) {
+      return res.status(verified.status).json({ success: false, message: verified.message });
+    }
+    const salary = (verified.self as any).salary;
+    return res.json({
+      success: true,
+      data: { salary: salary == null || salary === '' ? null : salary },
+    });
+  } catch (error: any) {
+    console.error('내 급여 조회 오류:', error);
+    return res.status(500).json({
+      success: false,
+      message: '급여 정보를 불러오지 못했습니다.',
+    });
+  }
+});
+
+/** 타인 급여 조회(인사) — 사용자관리 조회 권한 + 비밀번호 */
+router.post(
+  '/:id/salary/reveal',
+  requireAdminRootOrUserMenuPermission('can_view'),
+  async (req, res) => {
+  try {
+    const verified = await verifyCurrentUserPassword(req, req.body?.password);
+    if (!verified.ok) {
+      return res.status(verified.status).json({ success: false, message: verified.message });
+    }
+    const targetId = parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(targetId)) {
+      return res.status(400).json({ success: false, message: '잘못된 사용자 ID입니다.' });
+    }
+    const authUser = (req as any).user;
+    const where: Record<string, unknown> = { id: targetId, tenant_id: authUser.tenant_id };
+    if (authUser.role !== 'root' && authUser.role !== 'audit') {
+      where.company_id = authUser.company_id;
+    }
+    const target = await (User as any).findOne({
+      where,
+      attributes: ['id', 'salary', 'company_id'],
+    });
+    if (!target) {
+      return res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
+    }
+    const salary = target.salary;
+    return res.json({
+      success: true,
+      data: { salary: salary == null || salary === '' ? null : salary },
+    });
+  } catch (error: any) {
+    console.error('급여 조회 오류:', error);
+    return res.status(500).json({
+      success: false,
+      message: '급여 정보를 불러오지 못했습니다.',
     });
   }
 });
@@ -301,7 +400,7 @@ router.patch('/me/profile', async (req, res) => {
     return res.json({
       success: true,
       message: '개인정보가 저장되었습니다.',
-      data: updated
+      data: maskSalaryInUserPayload(updated)
     });
   } catch (error: any) {
     console.error('내 개인정보 수정 오류:', error);
@@ -546,7 +645,7 @@ router.get('/', async (req, res) => {
       }
     }
 
-    const usersData = users.map((user: any) => user.toJSON ? user.toJSON() : user);
+    const usersData = users.map((user: any) => maskSalaryInUserPayload(user.toJSON ? user.toJSON() : user));
 
     res.json({
       success: true,
@@ -744,7 +843,7 @@ router.get('/:id', async (req, res) => {
       });
     }
 
-    const userData = user.toJSON ? user.toJSON() : user;
+    const userData = maskSalaryInUserPayload(user.toJSON ? user.toJSON() : user);
     res.json({
       success: true,
       data: userData
@@ -955,7 +1054,14 @@ router.post(
     if (hire_date) userData.hire_date = hire_date;
     if (employment_type) userData.employment_type = employment_type;
     if (salary !== undefined && salary !== '') {
-      userData.salary = parseFloat(salary) || null;
+      const verified = await verifyCurrentUserPassword(req, (req.body as any).currentPassword);
+      if (!verified.ok) {
+        return res.status(verified.status).json({
+          success: false,
+          message: verified.message || '급여 변경에는 로그인 비밀번호 확인이 필요합니다.',
+        });
+      }
+      userData.salary = parseSalaryInput(salary);
     }
     if (bank_name !== undefined) userData.bank_name = bank_name || null;
     if (bank_account !== undefined) userData.bank_account = bank_account || null;
@@ -968,8 +1074,7 @@ router.post(
     const user = await (User as any).create(userData);
 
     // 비밀번호 해시 제외하고 응답
-    const responseData = user.toJSON();
-    delete responseData.password_hash;
+    const responseData = maskSalaryInUserPayload(user.toJSON());
 
     res.status(201).json({
       success: true,
@@ -1196,10 +1301,15 @@ router.put(
     if (emergency_phone !== undefined) updateData.emergency_phone = emergency_phone || null;
     if (hire_date !== undefined) updateData.hire_date = hire_date || null;
     if (employment_type !== undefined) updateData.employment_type = employment_type || null;
-    if (salary !== undefined && salary !== '') {
-      updateData.salary = parseFloat(salary) || null;
-    } else if (salary === '') {
-      updateData.salary = null;
+    if (salary !== undefined) {
+      const verified = await verifyCurrentUserPassword(req, (req.body as any).currentPassword);
+      if (!verified.ok) {
+        return res.status(verified.status).json({
+          success: false,
+          message: verified.message || '급여 변경에는 로그인 비밀번호 확인이 필요합니다.',
+        });
+      }
+      updateData.salary = salary === '' ? null : parseSalaryInput(salary);
     }
     if (bank_name !== undefined) updateData.bank_name = bank_name || null;
     if (bank_account !== undefined) updateData.bank_account = bank_account || null;
@@ -1281,7 +1391,7 @@ router.put(
       }
     }
 
-    const userData = updatedUser.toJSON ? updatedUser.toJSON() : updatedUser;
+    const userData = maskSalaryInUserPayload(updatedUser.toJSON ? updatedUser.toJSON() : updatedUser);
     res.json({
       success: true,
       data: userData,
@@ -1445,7 +1555,11 @@ router.get('/excel/sample', authenticateToken, async (req, res) => {
 });
 
 // Excel 파일 내보내기
-router.get('/excel/export', authenticateToken, async (req, res) => {
+router.get(
+  '/excel/export',
+  authenticateToken,
+  requireAdminRootOrUserMenuPermission('can_view'),
+  async (req, res) => {
   try {
     const tenantId = (req as any).user.tenant_id;
     const companyId = (req as any).user.company_id;
@@ -1508,7 +1622,7 @@ router.get('/excel/export', authenticateToken, async (req, res) => {
           ? new Date(userData.hire_date).toISOString().split('T')[0] 
           : '',
         '고용형태 (fulltime/contract/parttime/intern/daily)': userData.employment_type || '',
-        '급여': userData.salary || '',
+        '급여': (userData.salary != null && userData.salary !== '') ? '**' : '',
         '상태 (active/inactive/suspended)': userData.status || 'active'
       };
     });
@@ -1587,6 +1701,20 @@ router.post(
       failed: [] as any[],
       total: data.length
     };
+
+    const hasSalaryInFile = data.some((row: any) => {
+      const v = row['급여'];
+      return v != null && String(v).trim() !== '' && String(v).trim() !== '**';
+    });
+    if (hasSalaryInFile) {
+      const verified = await verifyCurrentUserPassword(req, (req.body as any).currentPassword);
+      if (!verified.ok) {
+        return res.status(verified.status).json({
+          success: false,
+          message: verified.message || '급여가 포함된 Excel 가져오기에는 로그인 비밀번호가 필요합니다.',
+        });
+      }
+    }
 
     // 각 행 처리
     for (let i = 0; i < data.length; i++) {
@@ -1716,7 +1844,11 @@ router.post(
           employment_type: (row['고용형태 (fulltime/contract/parttime/intern/daily)'] && ['fulltime', 'contract', 'parttime', 'intern', 'daily'].includes(row['고용형태 (fulltime/contract/parttime/intern/daily)'].toString().toLowerCase()))
             ? row['고용형태 (fulltime/contract/parttime/intern/daily)'].toString().toLowerCase()
             : null,
-          salary: row['급여'] ? parseFloat(row['급여'].toString().replace(/,/g, '')) : null,
+          salary: (() => {
+            const raw = row['급여'];
+            if (raw == null || String(raw).trim() === '' || String(raw).trim() === '**') return null;
+            return parseSalaryInput(raw);
+          })(),
           status: (row['상태 (active/inactive/suspended)'] && ['active', 'inactive', 'suspended'].includes(row['상태 (active/inactive/suspended)'].toString().toLowerCase()))
             ? row['상태 (active/inactive/suspended)'].toString().toLowerCase()
             : 'active'
@@ -1754,5 +1886,10 @@ router.post(
 // 로그인 사용자 UI 설정 (users.settings.ui JSON)
 router.get('/me/ui-preferences', authenticateToken, getUserUiPreferences);
 router.patch('/me/ui-preferences', authenticateToken, patchUserUiPreferences);
+
+// 로그인 사용자 SMTP 설정
+router.get('/me/mail-server', authenticateToken, getMyMailServer);
+router.patch('/me/mail-server', authenticateToken, patchMyMailServer);
+router.post('/me/mail-server/test', authenticateToken, testMyMailServer);
 
 export default router;

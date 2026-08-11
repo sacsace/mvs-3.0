@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { User, Company } from '../models';
 import { AuthRequest } from '../types';
 import { getCachedAuthUser, setCachedAuthUser, getCachedAuthCompany, setCachedAuthCompany, invalidateAuthUser } from '../utils/authCache';
+import { isMvsNotifierClient, isNotifierApiPathAllowed } from '../constants/authClients';
 
 const AUTH_USER_ATTRIBUTES = [
   'id',
@@ -31,6 +32,7 @@ type JwtAuthClaims = {
   tenantId?: number;
   companyId?: number;
   sv?: number;
+  client?: string;
 };
 
 const getTokenSessionVersion = (decoded: JwtAuthClaims): number => {
@@ -49,6 +51,7 @@ const respondSessionSuperseded = (res: Response) =>
 /**
  * 세션 버전은 매 요청 DB(PK)에서 확인 — 멀티 인스턴스 캐시 불일치 방지.
  * 프로필 필드는 단기 캐시 사용.
+ * 알람(트레이) 앱 토큰은 웹 단일 세션(중복 로그인) 정책에서 제외.
  */
 export const authenticateToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers['authorization'];
@@ -79,6 +82,16 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     }
 
     const tokenSv = getTokenSessionVersion(decoded);
+    const skipSessionKick = isMvsNotifierClient(decoded.client);
+    (req as any).authClient = decoded.client || null;
+
+    if (skipSessionKick && !isNotifierApiPathAllowed(req)) {
+      return res.status(403).json({
+        success: false,
+        message: '알람 앱 토큰으로는 해당 기능을 사용할 수 없습니다.',
+        code: 'NOTIFIER_SCOPE',
+      });
+    }
 
     const sessionRow = await (User as any).findByPk(decoded.userId, {
       attributes: ['id', 'status', 'session_version'],
@@ -93,7 +106,7 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     }
 
     const dbSv = Number(sessionRow.session_version ?? 0);
-    if (dbSv !== tokenSv) {
+    if (!skipSessionKick && dbSv !== tokenSv) {
       invalidateAuthUser(decoded.userId);
       return respondSessionSuperseded(res);
     }
@@ -102,7 +115,7 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     if (
       cached &&
       cached.status === 'active' &&
-      Number(cached.session_version ?? 0) === tokenSv
+      (skipSessionKick || Number(cached.session_version ?? 0) === tokenSv)
     ) {
       req.user = cached as any;
       return next();
@@ -120,7 +133,7 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
       });
     }
 
-    if (Number(user.session_version ?? 0) !== tokenSv) {
+    if (!skipSessionKick && Number(user.session_version ?? 0) !== tokenSv) {
       invalidateAuthUser(decoded.userId);
       return respondSessionSuperseded(res);
     }
@@ -130,13 +143,9 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     setCachedAuthUser(decoded.userId, plain);
     next();
   } catch (error: any) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('토큰 검증 오류:', error?.name, error?.message);
-    }
     return res.status(403).json({
       success: false,
       message: '유효하지 않은 토큰입니다.',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 };

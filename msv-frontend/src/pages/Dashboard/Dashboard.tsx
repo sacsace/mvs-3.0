@@ -163,7 +163,43 @@ const DASHBOARD_CARD_DEFAULT_IDS = [
   'calendar',
   'vacationCalendar',
   'notice'
-];
+] as const;
+
+/** 일반 직원(user): 재고·거래·전자결재 등 비관련 카드 제외 */
+const GENERAL_USER_HIDDEN_CARD_IDS = ['approval', 'lowStock', 'recentTransactions'] as const;
+
+const GENERAL_USER_DEFAULT_CARD_IDS = [
+  'projects',
+  'calendar',
+  'vacationCalendar',
+  'notice',
+] as const;
+
+const isGeneralEmployeeRole = (role?: string | null) => role === 'user';
+
+const getAllowedDashboardCardIds = (role?: string | null): string[] => {
+  if (isGeneralEmployeeRole(role)) {
+    return DASHBOARD_CARD_DEFAULT_IDS.filter(
+      (id) => !(GENERAL_USER_HIDDEN_CARD_IDS as readonly string[]).includes(id)
+    );
+  }
+  return [...DASHBOARD_CARD_DEFAULT_IDS];
+};
+
+const getDefaultDashboardCardIds = (role?: string | null): string[] => {
+  if (isGeneralEmployeeRole(role)) return [...GENERAL_USER_DEFAULT_CARD_IDS];
+  return [...DASHBOARD_CARD_DEFAULT_IDS];
+};
+
+const sanitizeDashboardCardIds = (ids: unknown, role?: string | null): string[] => {
+  const allowed = new Set(getAllowedDashboardCardIds(role));
+  const defaults = getDefaultDashboardCardIds(role);
+  if (!Array.isArray(ids) || ids.length === 0) return defaults;
+  const sanitized = ids
+    .filter((id): id is string => typeof id === 'string')
+    .filter((id) => allowed.has(id));
+  return sanitized.length > 0 ? sanitized : defaults;
+};
 
 const DASHBOARD_CARD_PAD = 2.5;
 const DASHBOARD_CARD_SPACING = 1.5;
@@ -267,7 +303,9 @@ const Dashboard: React.FC = () => {
   const [selectedQuickActionRoutes, setSelectedQuickActionRoutes] = useState<string[]>([]);
   const [quickActionSearchTerm, setQuickActionSearchTerm] = useState('');
   const [dashboardCardDialogOpen, setDashboardCardDialogOpen] = useState(false);
-  const [selectedDashboardCards, setSelectedDashboardCards] = useState<string[]>(DASHBOARD_CARD_DEFAULT_IDS);
+  const [selectedDashboardCards, setSelectedDashboardCards] = useState<string[]>(() =>
+    getDefaultDashboardCardIds(undefined)
+  );
   const [dashboardCardSearchTerm, setDashboardCardSearchTerm] = useState('');
   const [draggingDashboardCardId, setDraggingDashboardCardId] = useState<string | null>(null);
   const [customCalendarSchedules, setCustomCalendarSchedules] = useState<Record<string, CalendarScheduleItem[]>>({});
@@ -447,15 +485,24 @@ const Dashboard: React.FC = () => {
     );
   }, [quickActionCandidates, quickActionSearchTerm]);
 
-  const dashboardCardOptions = useMemo(() => ([
-    { id: 'approval', label: language === 'en' ? 'Electronic Approval' : '전자결재' },
-    { id: 'projects', label: language === 'en' ? 'My Assigned Work' : '내 담당 업무' },
-    { id: 'lowStock', label: language === 'en' ? 'Low Stock Alerts' : '재고 부족 알림' },
-    { id: 'recentTransactions', label: language === 'en' ? 'Recent Transactions' : '최근 거래' },
-    { id: 'calendar', label: language === 'en' ? 'Weekly Schedule' : '주간 스케줄' },
-    { id: 'vacationCalendar', label: language === 'en' ? 'Leave calendar' : '휴가 달력' },
-    { id: 'notice', label: language === 'en' ? 'Notices' : '공지사항' }
-  ]), [language]);
+  const dashboardCardOptions = useMemo(() => {
+    const all = [
+      { id: 'approval', label: language === 'en' ? 'Electronic Approval' : '전자결재' },
+      { id: 'projects', label: language === 'en' ? 'My Assigned Work' : '내 담당 업무' },
+      { id: 'lowStock', label: language === 'en' ? 'Low Stock Alerts' : '재고 부족 알림' },
+      { id: 'recentTransactions', label: language === 'en' ? 'Recent Transactions' : '최근 거래' },
+      { id: 'calendar', label: language === 'en' ? 'Weekly Schedule' : '주간 스케줄' },
+      { id: 'vacationCalendar', label: language === 'en' ? 'Leave calendar' : '휴가 달력' },
+      { id: 'notice', label: language === 'en' ? 'Notices' : '공지사항' },
+    ];
+    const allowed = new Set(getAllowedDashboardCardIds(user?.role));
+    return all.filter((card) => allowed.has(card.id));
+  }, [language, user?.role]);
+
+  const visibleDashboardCards = useMemo(
+    () => sanitizeDashboardCardIds(selectedDashboardCards, user?.role),
+    [selectedDashboardCards, user?.role]
+  );
 
   const dashboardLeaveMapped = useMemo(() => {
     return dashboardLeaveRaw.map((v: any) => ({
@@ -551,7 +598,7 @@ const Dashboard: React.FC = () => {
     if (!user?.id) {
       setUiPrefsReady(false);
       setCustomCalendarSchedules({});
-      setSelectedDashboardCards(DASHBOARD_CARD_DEFAULT_IDS);
+      setSelectedDashboardCards(getDefaultDashboardCardIds(user?.role));
       setSelectedQuickActionRoutes([]);
       return;
     }
@@ -565,13 +612,7 @@ const Dashboard: React.FC = () => {
         const data = await userUiPreferencesService.get();
         if (cancelled) return;
 
-        const validCardSet = new Set(DASHBOARD_CARD_DEFAULT_IDS);
-        if (Array.isArray(data.dashboardCards) && data.dashboardCards.length > 0) {
-          const sanitized = data.dashboardCards.filter((id: string) => validCardSet.has(id));
-          setSelectedDashboardCards(sanitized.length > 0 ? sanitized : DASHBOARD_CARD_DEFAULT_IDS);
-        } else {
-          setSelectedDashboardCards(DASHBOARD_CARD_DEFAULT_IDS);
-        }
+        setSelectedDashboardCards(sanitizeDashboardCardIds(data.dashboardCards, user?.role));
 
         const rawCal = data.calendarSchedules || {};
         const sanitizedCal: Record<string, CalendarScheduleItem[]> = {};
@@ -617,7 +658,7 @@ const Dashboard: React.FC = () => {
         });
       } catch {
         if (!cancelled) {
-          setSelectedDashboardCards(DASHBOARD_CARD_DEFAULT_IDS);
+          setSelectedDashboardCards(getDefaultDashboardCardIds(user?.role));
           setCustomCalendarSchedules({});
           requestAnimationFrame(() => {
             setUiPrefsReady(true);
@@ -632,7 +673,7 @@ const Dashboard: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [user?.id, quickActionCandidates]);
+  }, [user?.id, user?.role, quickActionCandidates]);
 
   /** 메뉴 권한 로딩 후 빠른 액션 경로 보정 */
   useEffect(() => {
@@ -660,10 +701,12 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     if (!uiPrefsReady || !user?.id || skipUiPrefsPersistRef.current) return;
     const t = window.setTimeout(() => {
-      userUiPreferencesService.patch({ dashboardCards: selectedDashboardCards }).catch(() => {});
+      userUiPreferencesService
+        .patch({ dashboardCards: sanitizeDashboardCardIds(selectedDashboardCards, user?.role) })
+        .catch(() => {});
     }, 500);
     return () => window.clearTimeout(t);
-  }, [selectedDashboardCards, uiPrefsReady, user?.id]);
+  }, [selectedDashboardCards, uiPrefsReady, user?.id, user?.role]);
 
   useEffect(() => {
     if (!uiPrefsReady || !user?.id || skipUiPrefsPersistRef.current) return;
@@ -913,12 +956,15 @@ const Dashboard: React.FC = () => {
   };
 
   const toggleDashboardCard = (cardId: string) => {
+    const allowed = new Set(getAllowedDashboardCardIds(user?.role));
+    if (!allowed.has(cardId)) return;
     setSelectedDashboardCards((prev) => {
-      if (prev.includes(cardId)) {
-        if (prev.length === 1) return prev;
-        return prev.filter((id) => id !== cardId);
+      const current = sanitizeDashboardCardIds(prev, user?.role);
+      if (current.includes(cardId)) {
+        if (current.length === 1) return current;
+        return current.filter((id) => id !== cardId);
       }
-      return [...prev, cardId];
+      return [...current, cardId];
     });
   };
 
@@ -927,21 +973,17 @@ const Dashboard: React.FC = () => {
   };
 
   const handleResetDashboardCards = () => {
-    const validDefaultIds = DASHBOARD_CARD_DEFAULT_IDS.filter((id) =>
-      dashboardCardOptions.some((card) => card.id === id)
-    );
-    setSelectedDashboardCards(
-      validDefaultIds.length > 0 ? validDefaultIds : dashboardCardOptions.map((card) => card.id)
-    );
+    setSelectedDashboardCards(getDefaultDashboardCardIds(user?.role));
   };
 
   const handleReorderDashboardCards = (sourceCardId: string, targetCardId: string) => {
     if (!sourceCardId || !targetCardId || sourceCardId === targetCardId) return;
     setSelectedDashboardCards((prev) => {
-      const sourceIndex = prev.indexOf(sourceCardId);
-      const targetIndex = prev.indexOf(targetCardId);
-      if (sourceIndex < 0 || targetIndex < 0) return prev;
-      const next = [...prev];
+      const current = sanitizeDashboardCardIds(prev, user?.role);
+      const sourceIndex = current.indexOf(sourceCardId);
+      const targetIndex = current.indexOf(targetCardId);
+      if (sourceIndex < 0 || targetIndex < 0) return current;
+      const next = [...current];
       const [moved] = next.splice(sourceIndex, 1);
       next.splice(targetIndex, 0, moved);
       return next;
@@ -1247,6 +1289,7 @@ const Dashboard: React.FC = () => {
 
       const uid = user?.id ? Number(user.id) : null;
       const isAdminLeave = user?.role === 'admin' || user?.role === 'root';
+      const isGeneralUser = isGeneralEmployeeRole(user?.role);
 
       const [
         statsResponse,
@@ -1263,8 +1306,8 @@ const Dashboard: React.FC = () => {
         myApprovals,
       ] = await Promise.all([
         api.get('/dashboard/stats').catch(() => null),
-        api.get('/dashboard/revenue-trend').catch(() => null),
-        api.get('/dashboard/inventory-status').catch(() => null),
+        isGeneralUser ? Promise.resolve(null) : api.get('/dashboard/revenue-trend').catch(() => null),
+        isGeneralUser ? Promise.resolve(null) : api.get('/dashboard/inventory-status').catch(() => null),
         noticeService.getNotices({ status: 'published', limit: 5, page: 1 }).catch(() => null),
         vacationService.getVacations({ status: 'pending' }).catch(() => null),
         (isAdminLeave
@@ -1272,13 +1315,21 @@ const Dashboard: React.FC = () => {
           : vacationService.getVacations({ same_department: true })
         ).catch(() => null),
         projectService.getProjects({}).catch(() => null),
-        api.get('/inventory/products', { params: { lowStock: true, limit: 5 } }).catch(() => null),
-        api.get('/accounting/invoices', { params: { limit: 5, orderBy: 'created_at', order: 'DESC' } }).catch(() => null),
+        isGeneralUser
+          ? Promise.resolve(null)
+          : api.get('/inventory/products', { params: { lowStock: true, limit: 5 } }).catch(() => null),
+        isGeneralUser
+          ? Promise.resolve(null)
+          : api
+              .get('/accounting/invoices', { params: { limit: 5, orderBy: 'created_at', order: 'DESC' } })
+              .catch(() => null),
         uid ? api.get('/dashboard/my-tasks').catch(() => null) : Promise.resolve(null),
-        uid
+        uid && !isGeneralUser
           ? approvalService.getApprovals({ current_approver_id: uid, status: 'submitted,in_review' }).catch(() => null)
           : Promise.resolve(null),
-        uid ? approvalService.getApprovals({ requester_id: uid }).catch(() => null) : Promise.resolve(null),
+        uid && !isGeneralUser
+          ? approvalService.getApprovals({ requester_id: uid }).catch(() => null)
+          : Promise.resolve(null),
       ]);
 
       if (statsResponse?.data?.success) {
@@ -1755,7 +1806,7 @@ const Dashboard: React.FC = () => {
         </Box>
       </Card>
 
-      {selectedDashboardCards.includes('calendar') && (
+      {visibleDashboardCards.includes('calendar') && (
         <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 2.5 }}>
           <Box
             sx={{
@@ -2128,8 +2179,8 @@ const Dashboard: React.FC = () => {
           </Typography>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.2 }}>
             {language === 'en'
-              ? `Selected: ${selectedDashboardCards.length}/${dashboardCardOptions.length}`
-              : `선택: ${selectedDashboardCards.length}/${dashboardCardOptions.length}`}
+              ? `Selected: ${visibleDashboardCards.length}/${dashboardCardOptions.length}`
+              : `선택: ${visibleDashboardCards.length}/${dashboardCardOptions.length}`}
           </Typography>
           <TextField
             fullWidth
@@ -2151,7 +2202,7 @@ const Dashboard: React.FC = () => {
             {language === 'en' ? 'Drag selected cards to change order' : '선택된 카드를 드래그해서 순서를 변경하세요'}
           </Typography>
           <List sx={{ p: 0, mb: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
-            {selectedDashboardCards.map((cardId) => {
+            {visibleDashboardCards.map((cardId) => {
               const card = dashboardCardOptions.find((option) => option.id === cardId);
               if (!card) return null;
               return (
@@ -2191,8 +2242,8 @@ const Dashboard: React.FC = () => {
           </List>
           <List sx={{ p: 0 }}>
             {filteredDashboardCardOptions.map((card) => {
-              const checked = selectedDashboardCards.includes(card.id);
-              const disableUncheck = checked && selectedDashboardCards.length === 1;
+              const checked = visibleDashboardCards.includes(card.id);
+              const disableUncheck = checked && visibleDashboardCards.length === 1;
               return (
                 <ListItem
                   key={card.id}
@@ -2589,11 +2640,11 @@ const Dashboard: React.FC = () => {
           alignSelf: 'start'
         }
       }}>
-        {selectedDashboardCards.includes('approval') && (
+        {visibleDashboardCards.includes('approval') && (
         <Card
           elevation={0}
           onClick={() => navigate('/work/approval')}
-          sx={dashboardWidgetCardSx(selectedDashboardCards.indexOf('approval'), {
+          sx={dashboardWidgetCardSx(visibleDashboardCards.indexOf('approval'), {
             cursor: 'pointer' })}
         >
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
@@ -2718,8 +2769,8 @@ const Dashboard: React.FC = () => {
         </Card>
         )}
 
-        {selectedDashboardCards.includes('projects') && (
-        <Card elevation={0} sx={dashboardWidgetCardSx(selectedDashboardCards.indexOf('projects'))}>
+        {visibleDashboardCards.includes('projects') && (
+        <Card elevation={0} sx={dashboardWidgetCardSx(visibleDashboardCards.indexOf('projects'))}>
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>
               <Box sx={dashboardCardTitleBar('primary')}>
@@ -2803,8 +2854,8 @@ const Dashboard: React.FC = () => {
         </Card>
         )}
 
-        {selectedDashboardCards.includes('lowStock') && (
-        <Card elevation={0} sx={dashboardWidgetCardSx(selectedDashboardCards.indexOf('lowStock'))}>
+        {visibleDashboardCards.includes('lowStock') && (
+        <Card elevation={0} sx={dashboardWidgetCardSx(visibleDashboardCards.indexOf('lowStock'))}>
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'hidden', minHeight: 0 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1, flexShrink: 0 }}>
               <Box sx={dashboardCardTitleBar('error')}>
@@ -2875,8 +2926,8 @@ const Dashboard: React.FC = () => {
         </Card>
         )}
 
-        {selectedDashboardCards.includes('recentTransactions') && (
-        <Card elevation={0} sx={dashboardWidgetCardSx(selectedDashboardCards.indexOf('recentTransactions'))}>
+        {visibleDashboardCards.includes('recentTransactions') && (
+        <Card elevation={0} sx={dashboardWidgetCardSx(visibleDashboardCards.indexOf('recentTransactions'))}>
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>
               <Box sx={dashboardCardTitleBar('primary')}>
@@ -2947,11 +2998,11 @@ const Dashboard: React.FC = () => {
         </Card>
         )}
 
-        {selectedDashboardCards.includes('vacationCalendar') && (
+        {visibleDashboardCards.includes('vacationCalendar') && (
         <Card
           elevation={0}
           className="dashboard-vacation-calendar-card"
-          sx={dashboardWidgetCardSx(selectedDashboardCards.indexOf('vacationCalendar'))}
+          sx={dashboardWidgetCardSx(visibleDashboardCards.indexOf('vacationCalendar'))}
         >
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'visible', minHeight: 0 }}>
             <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: DASHBOARD_CARD_SPACING, flexShrink: 0 }}>
@@ -3021,8 +3072,8 @@ const Dashboard: React.FC = () => {
         </Card>
         )}
 
-        {selectedDashboardCards.includes('notice') && (
-        <Card elevation={0} sx={dashboardWidgetCardSx(selectedDashboardCards.indexOf('notice'))}>
+        {visibleDashboardCards.includes('notice') && (
+        <Card elevation={0} sx={dashboardWidgetCardSx(visibleDashboardCards.indexOf('notice'))}>
           <CardContent sx={{ flex: 1, display: 'flex', flexDirection: 'column', p: DASHBOARD_CARD_PAD, overflow: 'auto' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: DASHBOARD_CARD_SPACING, gap: 1 }}>
               <Box sx={dashboardCardTitleBar('primary')}>

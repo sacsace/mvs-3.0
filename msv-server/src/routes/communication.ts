@@ -8,6 +8,7 @@ import {
   publishNotice,
   archiveNotice,
 } from '../controllers/noticeController';
+import { createNoticePoll, voteNoticePoll } from '../controllers/noticePollController';
 import {
   listCompanyCalendarSchedules,
   createCompanyCalendarSchedule,
@@ -26,7 +27,7 @@ const router = Router();
  * - 하위: `/communication/notice`, `/communication/notices`
  * - 일부 구 DB: 상위만 `/communication` 이고 이름만「공지사항」(20260125141000 rename) → 권한 행이 이 id에만 묶임
  */
-const MENU_NOTICE_ROUTES = ['/communication/notice', '/communication/notices', '/communication'];
+const MENU_NOTICE_ROUTES = ['/communication/notice', '/communication/notices', '/communication', '/my/notices'];
 
 // 모든 라우트에 인증 미들웨어 적용
 router.use(authenticateToken);
@@ -83,6 +84,18 @@ router.post(
   restrictAuditToReadOnly,
   requireMenuPermissionAny(MENU_NOTICE_ROUTES, 'can_edit'),
   archiveNotice
+);
+router.post(
+  '/notices/:id/poll',
+  restrictAuditToReadOnly,
+  requireMenuPermissionAny(MENU_NOTICE_ROUTES, 'can_create'),
+  createNoticePoll
+);
+router.post(
+  '/notices/:id/poll/vote',
+  restrictAuditToReadOnly,
+  requireMenuPermissionAny(MENU_NOTICE_ROUTES, 'can_view'),
+  voteNoticePoll
 );
 
 // 회사 공통 연간 스케줄 (모든 사용자 조회·CRUD)

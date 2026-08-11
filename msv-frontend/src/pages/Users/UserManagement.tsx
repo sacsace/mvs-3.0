@@ -34,6 +34,7 @@ import {
   useMediaQuery,
   InputAdornment,
   Avatar,
+  IconButton,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -67,6 +68,9 @@ import {
   MoreHoriz as MoreHorizIcon,
   ArrowBack as ArrowBackIcon,
   PhotoCamera as PhotoCameraIcon,
+  Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
+  Lock as LockOutlinedIcon,
 } from '@mui/icons-material';
 import { useSearchParams } from 'react-router-dom';
 import { useStore, useMenuStore } from '../../store';
@@ -193,6 +197,7 @@ interface User {
   hire_date?: string;
   employment_type?: 'fulltime' | 'contract' | 'parttime' | 'intern' | 'daily';
   salary?: number;
+  has_salary?: boolean;
   ot_eligible?: boolean;
   bank_name?: string;
   bank_account?: string;
@@ -350,6 +355,33 @@ const userFormContainerSx = {
   '& .MuiSelect-select': { display: 'flex', alignItems: 'center' },
 } as const;
 
+type CareerEntry = {
+  company_name: string;
+  position: string;
+  start_date: string;
+  end_date: string;
+  description: string;
+};
+
+const emptyCareerEntry = (): CareerEntry => ({
+  company_name: '',
+  position: '',
+  start_date: '',
+  end_date: '',
+  description: '',
+});
+
+const normalizeCareerForm = (raw: unknown): CareerEntry[] => {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((row: any) => ({
+    company_name: String(row?.company_name ?? '').trim(),
+    position: String(row?.position ?? '').trim(),
+    start_date: String(row?.start_date ?? '').trim(),
+    end_date: String(row?.end_date ?? '').trim(),
+    description: String(row?.description ?? '').trim(),
+  }));
+};
+
 const UserManagement: React.FC = () => {
   const theme = useTheme();
   const isCompactToolbar = useMediaQuery(theme.breakpoints.down('md'));
@@ -406,6 +438,17 @@ const UserManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'create' | 'edit' | 'view'>('list');
   const [openViewDialog, setOpenViewDialog] = useState(false);
+  const [viewSalaryRevealed, setViewSalaryRevealed] = useState<number | string | null>(null);
+  const [salaryUnlockOpen, setSalaryUnlockOpen] = useState(false);
+  const [salaryUnlockMode, setSalaryUnlockMode] = useState<'view' | 'edit'>('view');
+  const [salaryUnlockPassword, setSalaryUnlockPassword] = useState('');
+  const [salaryUnlockError, setSalaryUnlockError] = useState('');
+  const [salaryUnlocking, setSalaryUnlocking] = useState(false);
+  const [salaryUnlocked, setSalaryUnlocked] = useState(false);
+  const [salaryPasswordForSubmit, setSalaryPasswordForSubmit] = useState('');
+  const [salaryBaseline, setSalaryBaseline] = useState('');
+  const [originalHasSalary, setOriginalHasSalary] = useState(false);
+  const [importLoginPassword, setImportLoginPassword] = useState('');
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -457,6 +500,7 @@ const UserManagement: React.FC = () => {
     bank_name: '',
     bank_account: '',
     bank_ifsc: '',
+    career_history: [] as CareerEntry[],
     // 계정 정보
     userid: '',
     password: '',
@@ -485,6 +529,7 @@ const UserManagement: React.FC = () => {
     bank_name: string;
     bank_account: string;
     bank_ifsc: string;
+    career_history: CareerEntry[];
     userid: string;
     password: string;
     role: string;
@@ -742,6 +787,7 @@ const UserManagement: React.FC = () => {
       bank_name: '',
       bank_account: '',
       bank_ifsc: '',
+      career_history: [],
       userid: prefillEmail,
       password: '',
       role: 'user',
@@ -749,6 +795,10 @@ const UserManagement: React.FC = () => {
       is_payment_officer: false,
       company_id: loginUserCompanyId
     } as any);
+    setSalaryUnlocked(false);
+    setSalaryPasswordForSubmit('');
+    setSalaryBaseline('');
+    setOriginalHasSalary(false);
     setPageTab(1);
     setViewMode('create');
     setSuccess(t('userManagement.prefillReady'));
@@ -821,6 +871,7 @@ const UserManagement: React.FC = () => {
       bank_name: '',
       bank_account: '',
       bank_ifsc: '',
+      career_history: [],
       userid: '',
       password: '',
       role: 'user',
@@ -828,6 +879,10 @@ const UserManagement: React.FC = () => {
     is_payment_officer: false,
     company_id: loginUserCompanyId
     } as any);
+    setSalaryUnlocked(false);
+    setSalaryPasswordForSubmit('');
+    setSalaryBaseline('');
+    setOriginalHasSalary(false);
     setPageTab(1);
     setViewMode('create');
   };
@@ -857,11 +912,12 @@ const UserManagement: React.FC = () => {
           ? Number((user as any).position_id)
           : ('' as number | ''),
       employment_type: (user as any).employment_type || 'fulltime',
-      salary: (user as any).salary || '',
+      salary: '',
       ot_eligible: (user as any).ot_eligible !== false,
       bank_name: (user as any).bank_name || '',
       bank_account: normalizeBankAccountDigits((user as any).bank_account || ''),
       bank_ifsc: normalizeIfsc((user as any).bank_ifsc || ''),
+      career_history: normalizeCareerForm((user as any).career_history),
       userid: user.userid,
       password: '',
       role: user.role,
@@ -869,12 +925,17 @@ const UserManagement: React.FC = () => {
       is_payment_officer: (user as any).is_payment_officer || false,
       company_id: undefined
     } as any);
+    setSalaryUnlocked(false);
+    setSalaryPasswordForSubmit('');
+    setSalaryBaseline('');
+    setOriginalHasSalary(Boolean((user as any).has_salary));
     setPageTab(1);
     setViewMode('edit');
   };
 
   const handleViewUser = (user: User) => {
     setSelectedUser(user);
+    setViewSalaryRevealed(null);
     setOpenViewDialog(true);
   };
 
@@ -976,6 +1037,9 @@ const UserManagement: React.FC = () => {
 
     const formData = new FormData();
     formData.append('file', importFile);
+    if (importLoginPassword.trim()) {
+      formData.append('currentPassword', importLoginPassword.trim());
+    }
 
     setImportLoading(true);
     setImportResult(null);
@@ -989,6 +1053,7 @@ const UserManagement: React.FC = () => {
 
       setImportResult(response.data.data);
       setSuccess(response.data.message);
+      setImportLoginPassword('');
       
       // 성공적으로 가져온 경우 사용자 목록 새로고침
       if (response.data.data.success.length > 0) {
@@ -1002,6 +1067,68 @@ const UserManagement: React.FC = () => {
       setError(error.response?.data?.message || t('userManagement.excelImportError'));
     } finally {
       setImportLoading(false);
+    }
+  };
+
+  const openSalaryUnlock = (mode: 'view' | 'edit') => {
+    setSalaryUnlockMode(mode);
+    setSalaryUnlockPassword('');
+    setSalaryUnlockError('');
+    setSalaryUnlockOpen(true);
+  };
+
+  const handleSalaryUnlockConfirm = async () => {
+    if (!salaryUnlockPassword.trim()) {
+      setSalaryUnlockError(t('personalSettings.salaryPasswordRequired'));
+      return;
+    }
+    setSalaryUnlocking(true);
+    setSalaryUnlockError('');
+    try {
+      if (salaryUnlockMode === 'view') {
+        if (!selectedUser?.id) {
+          setSalaryUnlockError(t('personalSettings.salaryRevealFailed'));
+          return;
+        }
+        const res = await userService.revealUserSalary(selectedUser.id, salaryUnlockPassword);
+        if (!res?.success) {
+          setSalaryUnlockError(res?.message || t('personalSettings.salaryRevealFailed'));
+          return;
+        }
+        setViewSalaryRevealed(res.data?.salary ?? null);
+      } else {
+        const targetId = editingUser?.id;
+        if (targetId) {
+          const res = await userService.revealUserSalary(targetId, salaryUnlockPassword);
+          if (!res?.success) {
+            setSalaryUnlockError(res?.message || t('personalSettings.salaryRevealFailed'));
+            return;
+          }
+          setFormData((prev) => ({
+            ...prev,
+            salary: res.data?.salary != null && res.data.salary !== '' ? String(res.data.salary) : '',
+          }));
+          setSalaryBaseline(
+            res.data?.salary != null && res.data.salary !== '' ? String(res.data.salary) : ''
+          );
+        } else {
+          // 신규 등록: 본인 비밀번호만 검증
+          const res = await userService.revealMySalary(salaryUnlockPassword);
+          if (!res?.success) {
+            setSalaryUnlockError(res?.message || t('personalSettings.salaryRevealFailed'));
+            return;
+          }
+          setSalaryBaseline('');
+        }
+        setSalaryUnlocked(true);
+        setSalaryPasswordForSubmit(salaryUnlockPassword);
+      }
+      setSalaryUnlockOpen(false);
+      setSalaryUnlockPassword('');
+    } catch (err: any) {
+      setSalaryUnlockError(err?.response?.data?.message || t('personalSettings.salaryRevealFailed'));
+    } finally {
+      setSalaryUnlocking(false);
     }
   };
 
@@ -1032,6 +1159,10 @@ const UserManagement: React.FC = () => {
         submitData.position_id = Number(submitData.position_id);
       }
 
+      submitData.career_history = normalizeCareerForm(submitData.career_history).filter(
+        (row: CareerEntry) => row.company_name.length > 0
+      );
+
       if (
         submitData.role === 'audit' &&
         user?.role !== 'root' &&
@@ -1039,6 +1170,24 @@ const UserManagement: React.FC = () => {
       ) {
         setError(t('userManagement.auditRoleRootOnly'));
         return;
+      }
+
+      if (salaryUnlocked) {
+        if (!salaryPasswordForSubmit) {
+          openSalaryUnlock('edit');
+          setError(t('userManagement.salaryUnlockHint'));
+          return;
+        }
+        const nextSalary = String(submitData.salary ?? '').trim();
+        const baseline = String(salaryBaseline ?? '').trim();
+        if (nextSalary === baseline) {
+          // 잠금 해제만 하고 값을 바꾸지 않았으면 급여 미전송 (실수 삭제/재저장 방지)
+          delete submitData.salary;
+        } else {
+          submitData.currentPassword = salaryPasswordForSubmit;
+        }
+      } else {
+        delete submitData.salary;
       }
 
       let savedUserId: number;
@@ -1074,6 +1223,10 @@ const UserManagement: React.FC = () => {
       }
 
       resetAvatarInput();
+      setSalaryUnlocked(false);
+      setSalaryPasswordForSubmit('');
+      setSalaryBaseline('');
+      setOriginalHasSalary(false);
       setPageTab(0);
       setViewMode('list');
       fetchUsers();
@@ -2333,12 +2486,47 @@ const UserManagement: React.FC = () => {
                           type="number"
                           label={t('userManagement.salary')}
                           {...OUTLINED_FIELD}
-                          value={formData.salary}
+                          value={salaryUnlocked ? formData.salary : ''}
                           onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-                          placeholder={t('userManagement.placeholderMonthlySalary')}
+                          placeholder={
+                            salaryUnlocked
+                              ? t('userManagement.placeholderMonthlySalary')
+                              : originalHasSalary || formData.salary
+                                ? t('userManagement.salaryMasked')
+                                : t('userManagement.salaryLockedHint')
+                          }
+                          disabled={!salaryUnlocked}
+                          helperText={
+                            salaryUnlocked
+                              ? undefined
+                              : t('userManagement.salaryUnlockHint')
+                          }
                           InputProps={{
                             endAdornment: (
-                              <Typography sx={{ fontSize: '0.75rem', mr: 0.75 }}>INR</Typography>
+                              <InputAdornment position="end">
+                                <Typography sx={{ fontSize: '0.75rem', mr: 0.5 }}>INR</Typography>
+                                <IconButton
+                                  size="small"
+                                  edge="end"
+                                  aria-label={t('userManagement.salaryUnlock')}
+                                  onClick={() => {
+                                    if (salaryUnlocked) {
+                                      setSalaryUnlocked(false);
+                                      setSalaryPasswordForSubmit('');
+                                      setSalaryBaseline('');
+                                      setFormData((prev) => ({ ...prev, salary: '' }));
+                                    } else {
+                                      openSalaryUnlock('edit');
+                                    }
+                                  }}
+                                >
+                                  {salaryUnlocked ? (
+                                    <VisibilityOffIcon fontSize="small" />
+                                  ) : (
+                                    <LockOutlinedIcon fontSize="small" />
+                                  )}
+                                </IconButton>
+                              </InputAdornment>
                             )
                           }}
                         />
@@ -2488,6 +2676,132 @@ const UserManagement: React.FC = () => {
                         label={t('userManagement.otEligible')}
                       />
                     </Box>
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
+
+              {/* 경력 정보 */}
+              <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography component="h3" sx={userFormSectionTitleSx}>
+                    {t('userManagement.sectionCareer')}
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                    {t('userManagement.careerHint')}
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {(formData.career_history || []).map((entry, idx) => (
+                      <Box
+                        key={idx}
+                        sx={{
+                          border: `1px solid ${theme.palette.divider}`,
+                          p: 1.5,
+                          display: 'grid',
+                          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+                          gap: 1.5,
+                        }}
+                      >
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label={t('userManagement.careerCompany')}
+                          {...OUTLINED_FIELD}
+                          value={entry.company_name}
+                          onChange={(e) => {
+                            const next = [...formData.career_history];
+                            next[idx] = { ...next[idx], company_name: e.target.value };
+                            setFormData({ ...formData, career_history: next });
+                          }}
+                        />
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label={t('userManagement.careerPosition')}
+                          {...OUTLINED_FIELD}
+                          value={entry.position}
+                          onChange={(e) => {
+                            const next = [...formData.career_history];
+                            next[idx] = { ...next[idx], position: e.target.value };
+                            setFormData({ ...formData, career_history: next });
+                          }}
+                        />
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type="date"
+                          label={t('userManagement.careerStartDate')}
+                          {...OUTLINED_FIELD}
+                          value={entry.start_date}
+                          onChange={(e) => {
+                            const next = [...formData.career_history];
+                            next[idx] = { ...next[idx], start_date: e.target.value };
+                            setFormData({ ...formData, career_history: next });
+                          }}
+                          InputLabelProps={{ shrink: true }}
+                        />
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type="date"
+                          label={t('userManagement.careerEndDate')}
+                          {...OUTLINED_FIELD}
+                          value={entry.end_date}
+                          onChange={(e) => {
+                            const next = [...formData.career_history];
+                            next[idx] = { ...next[idx], end_date: e.target.value };
+                            setFormData({ ...formData, career_history: next });
+                          }}
+                          InputLabelProps={{ shrink: true }}
+                          helperText={t('userManagement.careerEndDateHint')}
+                        />
+                        <TextField
+                          fullWidth
+                          size="small"
+                          multiline
+                          minRows={2}
+                          label={t('userManagement.careerDescription')}
+                          {...OUTLINED_FIELD}
+                          value={entry.description}
+                          onChange={(e) => {
+                            const next = [...formData.career_history];
+                            next[idx] = { ...next[idx], description: e.target.value };
+                            setFormData({ ...formData, career_history: next });
+                          }}
+                          sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}
+                        />
+                        <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                          <Button
+                            size="small"
+                            color="error"
+                            startIcon={<DeleteIcon fontSize="small" />}
+                            onClick={() =>
+                              setFormData({
+                                ...formData,
+                                career_history: formData.career_history.filter((_, i) => i !== idx),
+                              })
+                            }
+                          >
+                            {t('userManagement.careerRemove')}
+                          </Button>
+                        </Box>
+                      </Box>
+                    ))}
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<AddIcon fontSize="small" />}
+                      onClick={() =>
+                        setFormData({
+                          ...formData,
+                          career_history: [...(formData.career_history || []), emptyCareerEntry()],
+                        })
+                      }
+                      sx={{ alignSelf: 'flex-start', ...mvsBodyOutlinedBtnSx }}
+                    >
+                      {t('userManagement.careerAdd')}
+                    </Button>
                   </Box>
                 </AccordionDetails>
               </Accordion>
@@ -2917,11 +3231,40 @@ const UserManagement: React.FC = () => {
                       <Typography variant="body2" sx={userDetailLabelSx}>
                         {t('userManagement.salary')}
                       </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>
-                        {(selectedUser as any).salary != null && (selectedUser as any).salary !== ''
-                          ? formatSalaryInr((selectedUser as any).salary)
-                          : '-'}
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                        <Typography variant="body1" sx={userDetailValueSx}>
+                          {viewSalaryRevealed != null && viewSalaryRevealed !== ''
+                            ? formatSalaryInr(viewSalaryRevealed)
+                            : selectedUser.has_salary ||
+                                ((selectedUser as any).salary != null &&
+                                  (selectedUser as any).salary !== '')
+                              ? t('userManagement.salaryMasked')
+                              : '-'}
+                        </Typography>
+                        {selectedUser.has_salary ||
+                        ((selectedUser as any).salary != null &&
+                          (selectedUser as any).salary !== '') ? (
+                          viewSalaryRevealed != null && viewSalaryRevealed !== '' ? (
+                            <IconButton
+                              size="small"
+                              aria-label={t('personalSettings.salaryHide')}
+                              onClick={() => setViewSalaryRevealed(null)}
+                              sx={{ p: 0.25 }}
+                            >
+                              <VisibilityOffIcon fontSize="small" />
+                            </IconButton>
+                          ) : (
+                            <IconButton
+                              size="small"
+                              aria-label={t('personalSettings.salaryReveal')}
+                              onClick={() => openSalaryUnlock('view')}
+                              sx={{ p: 0.25 }}
+                            >
+                              <VisibilityIcon fontSize="small" />
+                            </IconButton>
+                          )
+                        ) : null}
+                      </Box>
                     </Box>
                     <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' } }}>
                       <Typography variant="body2" sx={userDetailLabelSx}>
@@ -2934,6 +3277,64 @@ const UserManagement: React.FC = () => {
                       </Typography>
                     </Box>
                   </Box>
+                </AccordionDetails>
+              </Accordion>
+
+              {/* 경력 정보 */}
+              <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography variant="h6" sx={userDetailSectionTitleSx}>
+                    {t('userManagement.sectionCareer')}
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  {(() => {
+                    const careers = normalizeCareerForm((selectedUser as any).career_history).filter(
+                      (c) => c.company_name
+                    );
+                    if (careers.length === 0) {
+                      return (
+                        <Typography variant="body1" sx={userDetailValueSx}>
+                          {t('userManagement.careerEmpty')}
+                        </Typography>
+                      );
+                    }
+                    return (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        {careers.map((c, idx) => (
+                          <Box
+                            key={idx}
+                            sx={{
+                              borderBottom:
+                                idx < careers.length - 1
+                                  ? `1px solid ${theme.palette.divider}`
+                                  : 'none',
+                              pb: idx < careers.length - 1 ? 1.5 : 0,
+                            }}
+                          >
+                            <Typography variant="body1" sx={{ ...userDetailValueSx, fontWeight: 600 }}>
+                              {c.company_name}
+                              {c.position ? ` · ${c.position}` : ''}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                              {(c.start_date
+                                ? new Date(c.start_date).toLocaleDateString(dateLocale)
+                                : '—') +
+                                ' ~ ' +
+                                (c.end_date
+                                  ? new Date(c.end_date).toLocaleDateString(dateLocale)
+                                  : t('userManagement.careerPresent'))}
+                            </Typography>
+                            {c.description ? (
+                              <Typography variant="body2" sx={{ ...userDetailValueSx, mt: 0.75 }}>
+                                {c.description}
+                              </Typography>
+                            ) : null}
+                          </Box>
+                        ))}
+                      </Box>
+                    );
+                  })()}
                 </AccordionDetails>
               </Accordion>
 
@@ -3058,6 +3459,55 @@ const UserManagement: React.FC = () => {
         </DialogActions>
       </Dialog>
 
+      <Dialog
+        open={salaryUnlockOpen}
+        onClose={() => !salaryUnlocking && setSalaryUnlockOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{t('personalSettings.salaryRevealTitle')}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t('userManagement.salaryUnlockHint')}
+          </Typography>
+          {salaryUnlockError ? (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {salaryUnlockError}
+            </Alert>
+          ) : null}
+          <TextField
+            autoFocus
+            fullWidth
+            type="password"
+            size="small"
+            label={t('userManagement.salaryPasswordLabel')}
+            value={salaryUnlockPassword}
+            onChange={(e) => setSalaryUnlockPassword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void handleSalaryUnlockConfirm();
+              }
+            }}
+            disabled={salaryUnlocking}
+            {...OUTLINED_FIELD}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setSalaryUnlockOpen(false)} disabled={salaryUnlocking}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            disableElevation
+            onClick={() => void handleSalaryUnlockConfirm()}
+            disabled={salaryUnlocking}
+          >
+            {salaryUnlocking ? <CircularProgress size={18} color="inherit" /> : t('common.confirm')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* 프로필 사진 확대 보기 */}
       <Dialog
         open={!!photoPreviewUrl}
@@ -3118,6 +3568,7 @@ const UserManagement: React.FC = () => {
           setImportDialogOpen(false);
           setImportFile(null);
           setImportResult(null);
+          setImportLoginPassword('');
         }}
         maxWidth="md"
         fullWidth
@@ -3136,6 +3587,17 @@ const UserManagement: React.FC = () => {
                 {t('userManagement.selectedFile')}: {importFile.name}
               </Alert>
             )}
+            <TextField
+              fullWidth
+              size="small"
+              type="password"
+              label={t('userManagement.salaryPasswordLabel')}
+              helperText={t('userManagement.excelImportSalaryPasswordHint')}
+              value={importLoginPassword}
+              onChange={(e) => setImportLoginPassword(e.target.value)}
+              sx={{ mb: 2 }}
+              {...OUTLINED_FIELD}
+            />
             {importResult && (
               <Box sx={{ mt: 2 }}>
                 <Typography variant="h6" gutterBottom>

@@ -72,6 +72,28 @@ import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionF
 const COMPANY_MENU_ROUTES = ['/basic-info/company', '/basic-info'] as const;
 const COMPANIES_PER_PAGE = 10;
 
+type ListViewMode = 'page' | 'all';
+
+const listViewModeBarSx = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: 0.75,
+  mb: 1.25,
+} as const;
+
+const listViewModeBtnSx = {
+  height: 32,
+  minWidth: 0,
+  px: 1.5,
+  textTransform: 'none' as const,
+  fontWeight: 600,
+  fontSize: '0.75rem',
+  borderRadius: '8px',
+  boxShadow: 'none',
+  whiteSpace: 'nowrap' as const,
+};
+
 const COMP_COL_DEFAULTS: Record<string, number> = {
   select: 48,
   name: 280,
@@ -322,6 +344,7 @@ const CompanyManagement: React.FC = () => {
   });
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>([]);
   const [page, setPage] = useState(1);
+  const [listViewMode, setListViewMode] = useState<ListViewMode>('page');
 
   // 이미지 파일을 Base64로 변환하는 함수
   const convertToBase64 = (file: File): Promise<string> => {
@@ -874,9 +897,11 @@ const CompanyManagement: React.FC = () => {
     [sortedCompanies, page]
   );
 
+  const displayedCompanies = listViewMode === 'all' ? sortedCompanies : paginatedCompanies;
+
   const visibleCompanyIds = useMemo(
-    () => paginatedCompanies.map((company) => company.id),
-    [paginatedCompanies]
+    () => displayedCompanies.map((company) => company.id),
+    [displayedCompanies]
   );
 
   const allVisibleSelected =
@@ -1850,6 +1875,36 @@ const CompanyManagement: React.FC = () => {
               </Box>
             ) : (
               <>
+              <Box sx={listViewModeBarSx}>
+                <Button
+                  size="small"
+                  disableElevation
+                  variant={listViewMode === 'all' ? 'contained' : 'outlined'}
+                  onClick={() => setListViewMode('all')}
+                  sx={{
+                    ...listViewModeBtnSx,
+                    ...(listViewMode === 'all'
+                      ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                      : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                  }}
+                >
+                  {t('companyManagement.listView.viewAll')}
+                </Button>
+                <Button
+                  size="small"
+                  disableElevation
+                  variant={listViewMode === 'page' ? 'contained' : 'outlined'}
+                  onClick={() => setListViewMode('page')}
+                  sx={{
+                    ...listViewModeBtnSx,
+                    ...(listViewMode === 'page'
+                      ? { bgcolor: 'primary.main', color: '#fff', '&:hover': { bgcolor: 'primary.dark' } }
+                      : { borderColor: '#CBD5E1', color: 'text.secondary', bgcolor: '#FFFFFF' }),
+                  }}
+                >
+                  {t('companyManagement.listView.viewPages')}
+                </Button>
+              </Box>
               <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
                 <Table
                   size="small"
@@ -1883,7 +1938,7 @@ const CompanyManagement: React.FC = () => {
                       <TableCell padding="checkbox" align="center" sx={{ ...thSx('select'), ...companyCheckboxColSx }}>
                         <Checkbox
                           size="small"
-                          disabled={menuFlags.menusLoading || !menuFlags.canDelete || paginatedCompanies.length === 0}
+                          disabled={menuFlags.menusLoading || !menuFlags.canDelete || displayedCompanies.length === 0}
                           indeterminate={someVisibleSelected && !allVisibleSelected}
                           checked={allVisibleSelected}
                           onChange={handleSelectAll}
@@ -1914,7 +1969,7 @@ const CompanyManagement: React.FC = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody sx={companyTableBodyRowSx}>
-                    {paginatedCompanies.map((company) => (
+                    {displayedCompanies.map((company) => (
                       <TableRow
                         key={company.id}
                         onClick={() => {
@@ -2045,19 +2100,27 @@ const CompanyManagement: React.FC = () => {
                 </Table>
               </TableContainer>
 
-              <Box sx={mvsBodyPaginationSx}>
-                <Pagination
-                  count={totalPages}
-                  page={page}
-                  onChange={(_, value) => setPage(value)}
-                  color="primary"
-                  shape="rounded"
-                  sx={{
-                    '& .MuiPaginationItem-root': {
-                      borderRadius: '10px',
-                      fontWeight: 500 } }}
-                />
-              </Box>
+              {listViewMode === 'page' ? (
+                <Box sx={mvsBodyPaginationSx}>
+                  <Pagination
+                    count={totalPages}
+                    page={page}
+                    onChange={(_, value) => setPage(value)}
+                    color="primary"
+                    shape="rounded"
+                    sx={{
+                      '& .MuiPaginationItem-root': {
+                        borderRadius: '10px',
+                        fontWeight: 500 } }}
+                  />
+                </Box>
+              ) : (
+                <Box sx={{ ...mvsBodyPaginationSx, py: 1 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                    {t('companyManagement.listView.showingAll', { count: sortedCompanies.length })}
+                  </Typography>
+                </Box>
+              )}
               </>
             )}
           </Box>

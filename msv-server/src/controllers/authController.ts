@@ -1,5 +1,4 @@
 import { Request, Response } from 'express';
-import jwt, { SignOptions } from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import { DataTypes, Op } from 'sequelize';
 import { User, Company, LoginLog, Tenant, Menu, UserPermission, CompanyGstNumber } from '../models';
@@ -7,6 +6,12 @@ import { AuthRequest } from '../types';
 import sequelize from '../config/database';
 import { invalidateAuthUser } from '../utils/authCache';
 import { recordActivityLog } from '../services/activityLogService';
+import { resolveIsNotifierAuth, isMvsNotifierClient } from '../constants/authClients';
+import {
+  buildAuthTokenClaims,
+  nextWebSessionVersion,
+  signAuthToken,
+} from '../services/authSessionService';
 
 const comparePassword = async (password: string, hash: string): Promise<boolean> => {
   return await bcrypt.compare(password, hash);
@@ -466,7 +471,11 @@ export const register = async (req: Request, res: Response) => {
 
 export const login = async (req: Request, res: Response) => {
   try {
-    const { userid, password } = req.body as { userid?: string; password?: string };
+    const { userid, password } = req.body as {
+      userid?: string;
+      password?: string;
+    };
+    const isNotifierLogin = resolveIsNotifierAuth(req);
     const clientIp = getClientIp(req);
     const userAgent = String(req.headers['user-agent'] || '').slice(0, 500) || null;
 
@@ -641,9 +650,6 @@ export const login = async (req: Request, res: Response) => {
     // JWT 토큰 생성 (세션 타임아웃 적용)
     // expiresIn은 숫자(초 단위)로 전달합니다
     const expiresInSeconds = sessionTimeoutMinutes * 60;
-    const signOptions: SignOptions = {
-      expiresIn: expiresInSeconds
-    };
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) {
       return res.status(500).json({
@@ -652,26 +658,23 @@ export const login = async (req: Request, res: Response) => {
       });
     }
 
-    // 단일 동시 로그인: session_version 증가 → 기존 JWT 즉시 무효화
+    // 웹: 단일 동시 로그인 — session_version 증가 → 기존 웹 JWT 무효화
+    // 알람 앱: 별도 클라이언트 — session_version 유지 → 웹과 공존
     const prevSv = Number(user.session_version ?? 0);
-    const nextSv = prevSv + 1;
-    await user.update({
-      last_login: new Date(),
-      session_version: nextSv
-    });
-    invalidateAuthUser(user.id);
+    const tokenSv = isNotifierLogin ? prevSv : nextWebSessionVersion(prevSv);
+    const updatePayload: Record<string, unknown> = { last_login: new Date() };
+    if (!isNotifierLogin) {
+      updatePayload.session_version = tokenSv;
+    }
+    await user.update(updatePayload);
+    if (!isNotifierLogin) {
+      invalidateAuthUser(user.id);
+    }
 
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        userid: user.userid,
-        role: user.role,
-        tenantId: user.tenant_id,
-        companyId: user.company_id,
-        sv: nextSv
-      },
+    const token = signAuthToken(
+      buildAuthTokenClaims(user, { isNotifier: isNotifierLogin, sessionVersion: tokenSv }),
       jwtSecret,
-      signOptions
+      expiresInSeconds
     );
 
     await writeLoginLog({
@@ -680,7 +683,11 @@ export const login = async (req: Request, res: Response) => {
       user_id: user.id,
       userid: user.userid,
       status: 'success',
-      reason: prevSv > 0 ? 'login_replaced_previous_session' : null,
+      reason: isNotifierLogin
+        ? 'desktop_notifier_login'
+        : prevSv > 0
+          ? 'login_replaced_previous_session'
+          : null,
       ip_address: clientIp,
       user_agent: userAgent
     });
@@ -702,7 +709,7 @@ export const login = async (req: Request, res: Response) => {
           is_payment_officer: user.is_payment_officer,
           avatar_url: user.avatar_url || null
         },
-        sessionReplaced: prevSv > 0
+        sessionReplaced: !isNotifierLogin && prevSv > 0
       },
       message: '로그인 성공'
     });
@@ -778,23 +785,17 @@ export const refreshToken = async (req: AuthRequest, res: Response) => {
     }
 
     const expiresInSeconds = sessionTimeoutMinutes * 60;
-    const signOptions: SignOptions = {
-      expiresIn: expiresInSeconds
-    };
-
     const sessionVersion = Number((user as any).session_version ?? 0);
+    const authClient = (req as any).authClient;
+    const isNotifier = isMvsNotifierClient(authClient);
 
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        userid: user.userid,
-        role: user.role,
-        tenantId: user.tenant_id,
-        companyId: user.company_id,
-        sv: sessionVersion
-      },
+    const token = signAuthToken(
+      buildAuthTokenClaims(user as any, {
+        isNotifier,
+        sessionVersion,
+      }),
       jwtSecret,
-      signOptions
+      expiresInSeconds
     );
 
     return res.json({
@@ -842,11 +843,12 @@ export const checkSession = async (req: AuthRequest, res: Response) => {
   }
 };
 
-/** 명시적 로그아웃 — session_version 증가로 현재 JWT 무효화 */
+/** 명시적 로그아웃 — 웹만 session_version 증가. 알람 앱은 웹 세션을 끊지 않음 */
 export const logout = async (req: AuthRequest, res: Response) => {
   try {
     const user = req.user;
-    if (user?.id) {
+    const isNotifier = isMvsNotifierClient((req as any).authClient || (req as any).user?.client);
+    if (user?.id && !isNotifier) {
       const current = Number((user as any).session_version ?? 0);
       await (User as any).update(
         { session_version: current + 1 },
@@ -861,6 +863,18 @@ export const logout = async (req: AuthRequest, res: Response) => {
         status: 'success',
         event_type: 'logout',
         reason: 'user_logout',
+        ip_address: getClientIp(req),
+        user_agent: req.get('user-agent') || null,
+      });
+    } else if (user?.id && isNotifier) {
+      recordActivityLog({
+        tenant_id: user.tenant_id ?? null,
+        company_id: user.company_id ?? null,
+        user_id: user.id,
+        userid: (user as any).userid ?? null,
+        status: 'success',
+        event_type: 'logout',
+        reason: 'notifier_logout',
         ip_address: getClientIp(req),
         user_agent: req.get('user-agent') || null,
       });

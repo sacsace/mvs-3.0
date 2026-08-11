@@ -1,0 +1,27 @@
+---
+description: 비즈니스 데이터는 물리(하드) 삭제 금지 — 소프트 삭제만
+alwaysApply: true
+---
+
+# 데이터 삭제: 물리 삭제 금지
+
+MVS의 **업무/마스터 데이터는 DB에서 직접(하드) 삭제하지 않는다.**  
+삭제 UI·API는 소프트 삭제만 사용한다.
+
+## 해야 할 것
+
+- Sequelize `paranoid: true` + `deleted_at`, 또는 `is_active` / `status: 'inactive'` 등 플래그로 비활성
+- 조회·목록·중복 검사·충돌 검사는 **삭제되지 않은(활성) 행만** 대상으로
+- `Model.destroy()`는 **paranoid 모델**에서만 사용 (→ `deleted_at` 설정). `force: true` 금지
+- 재초대/재사용 시 soft-deleted 행이 있으면 `restore()` 또는 플래그 복구를 우선
+
+## 하면 안 되는 것
+
+- `DELETE FROM ...` 로 업무 데이터 제거 (시드/일회성 정리 스크립트 제외)
+- `destroy({ force: true })`
+- “영구 삭제”를 일반 사용자/관리자 API에 노출
+
+## 예외 (최소화)
+
+- **root 회사 삭제 cascade** (`deleteCompanyCascade`)는 현재 물리 삭제 경로가 남아 있음. 신규 기능에서는 확대하지 말고, 가능하면 soft-delete로 전환을 검토
+- OCR/외부 파서 인스턴스 `destroy()`처럼 DB 행이 아닌 리소스 해제는 해당 없음

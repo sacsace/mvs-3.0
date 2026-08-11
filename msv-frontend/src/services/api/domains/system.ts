@@ -78,45 +78,48 @@ export const heresnowIntegrationService = {
 };
 
 export const noticeService = {
-  // 공�??�항 목록 조회
   getNotices: async (params?: any) => {
     const response = await api.get('/communication/notices', { params });
     return response.data;
   },
 
-  // 공�??�항 ?�세 조회
   getNotice: async (id: number) => {
     const response = await api.get(`/communication/notices/${id}`);
     return response.data;
   },
 
-  // 공�??�항 ?�성
   createNotice: async (data: any) => {
     const response = await api.post('/communication/notices', data);
     return response.data;
   },
 
-  // 공�??�항 ?�정
   updateNotice: async (id: number, data: any) => {
     const response = await api.put(`/communication/notices/${id}`, data);
     return response.data;
   },
 
-  // 공�??�항 ??��
   deleteNotice: async (id: number) => {
     const response = await api.delete(`/communication/notices/${id}`);
     return response.data;
   },
 
-  // 공�??�항 게시
   publishNotice: async (id: number) => {
     const response = await api.post(`/communication/notices/${id}/publish`);
     return response.data;
   },
 
-  // 공지사항 보관
   archiveNotice: async (id: number) => {
     const response = await api.post(`/communication/notices/${id}/archive`);
+    return response.data;
+  },
+
+  createPoll: async (noticeId: number, data: { question: string; options: string[]; closesAt?: string | null }) => {
+    const response = await api.post(`/communication/notices/${noticeId}/poll`, data);
+    return response.data;
+  },
+
+  votePoll: async (noticeId: number, optionId: number) => {
+    const response = await api.post(`/communication/notices/${noticeId}/poll/vote`, { optionId });
     return response.data;
   },
 };

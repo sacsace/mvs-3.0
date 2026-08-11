@@ -24,13 +24,12 @@ import {
   Language as LanguageIcon,
   Check as CheckIcon,
   DeleteSweep as DeleteSweepIcon,
-  Announcement as AnnouncementIcon,
-  AutoAwesome as AutoAwesomeIcon,
   Menu as MenuIcon,
   OpenInNew as OpenInNewIcon,
   AccessTime as AccessTimeIcon,
   ExpandMore as ExpandMoreIcon,
   Inbox as InboxIcon,
+  Download as DownloadIcon,
 } from '@mui/icons-material';
 import { useStore, useMenuStore } from '../../store';
 import { api, userUiPreferencesService, userService, companyCalendarScheduleService } from '../../services/api';
@@ -52,6 +51,7 @@ import {
   getNotificationChipLabel,
   ServerNotificationItem } from '../../utils/notificationFeed';
 import { useNotificationFeed } from '../../hooks/useNotificationFeed';
+import { useBrowserDesktopNotifications } from '../../hooks/useBrowserDesktopNotifications';
 import { getUploadUrl } from '../../utils/uploadUrl';
 
 interface CalendarScheduleItem {
@@ -75,10 +75,7 @@ const Header: React.FC<HeaderProps> = ({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const isNoticeRoute = location.pathname.startsWith('/communication/notice');
-  const isAiRoute =
-    location.pathname.startsWith('/ai') ||
-    /^\/(cost-analysis|efficiency|forecasting|recommendations)(\/|$)/.test(location.pathname);
+  const isDesktopNotifierRoute = location.pathname.startsWith('/communication/desktop-notifier');
   const userAvatarSrc = getUploadUrl(user?.avatar_url) || undefined;
   const { errors, notifications } = useErrorStore();
   const {
@@ -218,6 +215,8 @@ const Header: React.FC<HeaderProps> = ({
     onServerNotifications: setServerNotifications,
     onInboxActions: setInboxActions });
 
+  useBrowserDesktopNotifications(user?.id);
+
   useEffect(() => {
     const merged = buildNotificationsFromSources({
       serverNotifications,
@@ -345,7 +344,8 @@ const Header: React.FC<HeaderProps> = ({
     handleUpdatesClose();
   };
 
-  const isUpdatesActive = isNoticeRoute || isAiRoute || location.pathname.startsWith('/notifications');
+  const isUpdatesActive =
+    isDesktopNotifierRoute || location.pathname.startsWith('/notifications');
 
   return (
     <AppBar 
@@ -521,12 +521,12 @@ const Header: React.FC<HeaderProps> = ({
             ml: { sm: 1 },
           }}
         >
-          {/* 분석 · 공지사항 · 알림을 하나의 드롭다운으로 */}
+          {/* 알림 프로그램 · 알림을 하나의 드롭다운으로 */}
           <Button
             variant="text"
             size="small"
             onClick={handleUpdatesMenu}
-            aria-label={language === 'en' ? 'Updates' : '소식'}
+            aria-label={language === 'en' ? 'Alarms' : '알람'}
             aria-controls={Boolean(updatesAnchorEl) ? 'updates-menu' : undefined}
             aria-haspopup="true"
             aria-expanded={Boolean(updatesAnchorEl) ? 'true' : undefined}
@@ -576,7 +576,7 @@ const Header: React.FC<HeaderProps> = ({
                 sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, whiteSpace: 'nowrap', pr: unreadCount > 0 ? 0.75 : 0 }}
               >
                 <InboxIcon sx={{ fontSize: '1.05rem' }} />
-                {language === 'en' ? 'Updates' : '소식'}
+                {language === 'en' ? 'Alarms' : '알람'}
               </Box>
             </Badge>
           </Button>
@@ -749,34 +749,24 @@ const Header: React.FC<HeaderProps> = ({
 
             <MenuItem
               onClick={() => {
-                navigate('/ai');
+                navigate('/communication/desktop-notifier');
                 handleUpdatesClose();
               }}
-              selected={isAiRoute}
-              sx={{ borderRadius: '6px', mx: 0.5, my: 0.25, py: 1 }}
-            >
-              <ListItemIcon sx={{ minWidth: 36 }}>
-                <AutoAwesomeIcon fontSize="small" color={isAiRoute ? 'primary' : 'inherit'} />
-              </ListItemIcon>
-              <ListItemText
-                primary={language === 'en' ? 'Analysis' : '분석'}
-                primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: isAiRoute ? 600 : 500 }}
-              />
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                navigate('/communication/notice');
-                handleUpdatesClose();
-              }}
-              selected={isNoticeRoute}
+              selected={isDesktopNotifierRoute}
               sx={{ borderRadius: '8px', mx: 0.5, my: 0.25, py: 1 }}
             >
               <ListItemIcon sx={{ minWidth: 36 }}>
-                <AnnouncementIcon fontSize="small" color={isNoticeRoute ? 'primary' : 'inherit'} />
+                <DownloadIcon
+                  fontSize="small"
+                  color={isDesktopNotifierRoute ? 'primary' : 'inherit'}
+                />
               </ListItemIcon>
               <ListItemText
-                primary={language === 'en' ? 'Notices' : '공지사항'}
-                primaryTypographyProps={{ fontSize: '0.875rem', fontWeight: isNoticeRoute ? 600 : 500 }}
+                primary={language === 'en' ? 'Desktop Notifier' : '알림 프로그램'}
+                primaryTypographyProps={{
+                  fontSize: '0.875rem',
+                  fontWeight: isDesktopNotifierRoute ? 600 : 500,
+                }}
               />
             </MenuItem>
             <MenuItem

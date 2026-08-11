@@ -44,9 +44,20 @@ export const userService = {
     });
     return response.data;
   },
+
+  /** 급여 조회 — 로그인 비밀번호 확인 */
+  revealMySalary: async (password: string) => {
+    const response = await api.post('/users/me/salary/reveal', { password });
+    return response.data;
+  },
+
+  revealUserSalary: async (userId: number, password: string) => {
+    const response = await api.post(`/users/${userId}/salary/reveal`, { password });
+    return response.data;
+  },
 };
 
-// 로그???�보 관�?API ?�비??
+/** 로그인 정보 관리 API */
 export const loginInfoService = {
   getLoginInfoTabs: async (companyId: number) => {
     const response = await api.get('/login-info/tabs', { params: { company_id: companyId } });
@@ -81,13 +92,11 @@ export const loginInfoService = {
     return response.data;
   },
 
-  // 로그???�보 목록 조회 (company_id + tab_id ?�수)
   getLoginInfos: async (params: { company_id: number; tab_id: number }) => {
     const response = await api.get('/login-info', { params });
     return response.data;
   },
 
-  // 로그??로그 목록 조회
   getLoginLogs: async (params?: {
     company_id?: number;
     status?: 'success' | 'failure' | '';
@@ -101,83 +110,37 @@ export const loginInfoService = {
     return response.data;
   },
 
-  // 로그???�보 ?�성
   createLoginInfo: async (data: any) => {
     const response = await api.post('/login-info', data);
     return response.data;
   },
 
-  // 로그???�보 ?�정
   updateLoginInfo: async (id: number, data: any) => {
     const response = await api.put(`/login-info/${id}`, data);
     return response.data;
   },
 
-  // 로그???�보 ??��
   deleteLoginInfo: async (id: number) => {
     const response = await api.delete(`/login-info/${id}`);
     return response.data;
   },
 
-  // ?��? 가?�오�?
   importExcel: async (file: File, companyId: number, tabId: number) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('company_id', String(companyId));
     formData.append('tab_id', String(tabId));
     const response = await api.post('/login-info/import', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response.data;
-  }
-};
-
-// ?�계 관�?API ?�비??
-export type UserUiCalendarScheduleItem = {
-  id: string;
-  title: string;
-  type?: 'normal' | 'company_holiday';
-  isPublic?: boolean;
-};
-
-export type UserUiPreferencesData = {
-  calendarSchedules?: Record<string, UserUiCalendarScheduleItem[]>;
-  dashboardCards?: string[];
-  quickActionRoutes?: string[];
-  sidebarWidth?: number;
-  sidebarAutoCollapse?: boolean;
-  language?: 'ko' | 'en';
-  companyHolidayReminderShown?: Record<string, string>;
-  roomInvoiceTaxSnapshot?: Record<string, unknown>;
-  notificationSettings?: {
-    realtime?: boolean;
-    email?: boolean;
-    browser?: boolean;
-    system?: boolean;
-    approval?: boolean;
-    vacation?: boolean;
-    expense?: boolean;
-    workReport?: boolean;
-    emailDigest?: 'immediate' | 'daily' | 'weekly';
-  };
-  notificationTemplates?: Array<{
-    id: string;
-    name: string;
-    title: string;
-    message: string;
-    type: 'info' | 'success' | 'warning' | 'error';
-  }>;
-};
-
-export const userUiPreferencesService = {
-  get: async (): Promise<UserUiPreferencesData> => {
-    const response = await api.get('/users/me/ui-preferences');
-    return response.data?.data || {};
   },
-  patch: async (patch: Partial<UserUiPreferencesData>): Promise<UserUiPreferencesData> => {
-    const response = await api.patch('/users/me/ui-preferences', patch);
-    return response.data?.data || {};
-  }
 };
 
-// 공�??�항 ?�비??
+export type {
+  UserUiCalendarScheduleItem,
+  UserUiPreferencesData,
+} from './userPreferences';
+export { userUiPreferencesService } from './userPreferences';
+export type { UserMailServerData } from './userMailServer';
+export { userMailServerService } from './userMailServer';

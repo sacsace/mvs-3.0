@@ -73,6 +73,29 @@ interface MenuPermission {
   can_delete: boolean;
 }
 
+/** 일반 직원 기본 권한: 「내 정보·업무」+ 대시보드 + 업무보드 (서버 EMPLOYEE_SELF_SERVICE_ROUTES와 동일) */
+const EMPLOYEE_DEFAULT_EXTRA_ROUTES = new Set([
+  '/dashboard',
+  '/work/projects',
+]);
+
+const isEmployeeDefaultMenuRoute = (route?: string | null) => {
+  if (typeof route !== 'string' || !route) return false;
+  if (route === '/my' || route.startsWith('/my/')) return true;
+  if (route === '/dashboard' || route.startsWith('/dashboard/')) return true;
+  return EMPLOYEE_DEFAULT_EXTRA_ROUTES.has(route);
+};
+
+const myWorkspacePermissionFor = (route?: string | null): MenuPermission => {
+  const isLeave = route === '/my/leave';
+  return {
+    can_view: true,
+    can_create: isLeave,
+    can_edit: false,
+    can_delete: false,
+  };
+};
+
 // 메뉴 권한 아이템 컴포넌트
 interface MenuPermissionItemProps {
   menu: Menu;
@@ -1245,20 +1268,33 @@ const MenuPermissionManagement: React.FC = () => {
   };
 
   // 기본 권한 템플릿 적용
-  const applyDefaultPermissions = async (template: 'view_only' | 'read_write' | 'full') => {
+  const applyDefaultPermissions = async (
+    template: 'my_workspace' | 'view_only' | 'read_write' | 'full'
+  ) => {
     if (!menuList || menuList.length === 0) return;
     if (!selectedUserId && !selectedCompanyId) return;
 
     const newPermissions: { [key: string]: MenuPermission } = {};
+    const onlyMyWorkspace = template === 'my_workspace';
     
-    // 모든 메뉴에 기본 권한 적용 (admin 권한 범위 내에서만)
+    // 메뉴에 기본 권한 적용 (admin 권한 범위 내에서만). my_workspace는 「내 정보·업무」만.
     const applyToMenu = (menuList: Menu[]) => {
       menuList.forEach(menu => {
         const menuKey = String(menu.id);
         const adminPerm = user?.role === 'admin' ? adminPermissions[menuKey] : null;
+
+        if (onlyMyWorkspace && !isEmployeeDefaultMenuRoute(menu.route)) {
+          if (menu.children && menu.children.length > 0) {
+            applyToMenu(menu.children);
+          }
+          return;
+        }
         
         let permission: MenuPermission;
         switch (template) {
+          case 'my_workspace':
+            permission = myWorkspacePermissionFor(menu.route);
+            break;
           case 'view_only':
             permission = {
               can_view: true,
@@ -1355,7 +1391,9 @@ const MenuPermissionManagement: React.FC = () => {
 
     const newPermissions: { [key: string]: MenuPermission } = {};
     
-    // 역할별 기본 권한 정의
+    // 역할별 기본 권한 정의 (user는 「내 정보·업무」만 — 아래 applyToMenu에서 필터)
+    const roleKey = selectedUser.role.toLowerCase();
+    const onlyMyWorkspace = roleKey === 'user';
     const rolePermissions: { [key: string]: { view: boolean; create: boolean; edit: boolean; delete: boolean } } = {
       'admin': { view: true, create: true, edit: true, delete: true },
       'manager': { view: true, create: true, edit: true, delete: false },
@@ -1363,20 +1401,29 @@ const MenuPermissionManagement: React.FC = () => {
       'audit': { view: true, create: false, edit: false, delete: false }
     };
     
-    const defaultPerm = rolePermissions[selectedUser.role.toLowerCase()] || rolePermissions['user'];
+    const defaultPerm = rolePermissions[roleKey] || rolePermissions['user'];
     
-    // 모든 메뉴에 역할별 권한 적용 (admin 권한 범위 내에서만)
+    // 역할별 권한 적용 (admin 권한 범위 내에서만). user는 「내 정보·업무」만.
     const applyToMenu = (menuList: Menu[]) => {
       menuList.forEach(menu => {
         const menuKey = String(menu.id);
         const adminPerm = user?.role === 'admin' ? adminPermissions[menuKey] : null;
+
+        if (onlyMyWorkspace && !isEmployeeDefaultMenuRoute(menu.route)) {
+          if (menu.children && menu.children.length > 0) {
+            applyToMenu(menu.children);
+          }
+          return;
+        }
         
-        let permission: MenuPermission = {
-          can_view: defaultPerm.view,
-          can_create: defaultPerm.create,
-          can_edit: defaultPerm.edit,
-          can_delete: defaultPerm.delete
-        };
+        let permission: MenuPermission = onlyMyWorkspace
+          ? myWorkspacePermissionFor(menu.route)
+          : {
+              can_view: defaultPerm.view,
+              can_create: defaultPerm.create,
+              can_edit: defaultPerm.edit,
+              can_delete: defaultPerm.delete
+            };
         
         // Admin인 경우 자신의 권한 범위 내에서만 적용
         if (user?.role === 'admin' && adminPerm) {
@@ -2000,6 +2047,34 @@ const MenuPermissionManagement: React.FC = () => {
           </Typography>
           
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<PersonAddIcon />}
+              onClick={() => applyDefaultPermissions('my_workspace')}
+              sx={{ 
+                justifyContent: 'flex-start',
+                textTransform: 'none',
+                py: 1.5,
+                borderRadius: '8px',
+                borderColor: 'warning.main',
+                color: 'warning.main',
+                '&:hover': {
+                  borderColor: 'warning.dark',
+                  backgroundColor: 'rgba(237, 108, 2, 0.08)'
+                }
+              }}
+            >
+              <Box sx={{ flex: 1, textAlign: 'left' }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  {t('menuPermissionManagement.myWorkspaceOnly')}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+                  {t('menuPermissionManagement.myWorkspaceOnlyDesc')}
+                </Typography>
+              </Box>
+            </Button>
+
             <Button
               fullWidth
               variant="outlined"

@@ -38,7 +38,11 @@ import {
   Tab,
   CircularProgress,
   Switch,
-  FormControlLabel
+  FormControlLabel,
+  Radio,
+  RadioGroup,
+  Checkbox,
+  LinearProgress
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -102,6 +106,25 @@ import { FontFamily } from '@tiptap/extension-font-family';
 import { TextAlign } from '@tiptap/extension-text-align';
 import { Underline } from '@tiptap/extension-underline';
 
+interface NoticePollOption {
+  id: number;
+  label: string;
+  sortOrder: number;
+  voteCount: number;
+}
+
+interface NoticePoll {
+  id: number;
+  noticeId: number;
+  question: string;
+  closesAt: string | null;
+  isClosed: boolean;
+  totalVotes: number;
+  hasVoted: boolean;
+  myVoteOptionId: number | null;
+  options: NoticePollOption[];
+}
+
 interface Notice {
   id: number;
   title: string;
@@ -121,6 +144,8 @@ interface Notice {
   readCount: number;
   views: number;
   isPinned?: boolean;
+  hasPoll?: boolean;
+  poll?: NoticePoll | null;
 }
 
 interface CalendarScheduleItem {
@@ -201,7 +226,7 @@ const stripHtmlTags = (html: string): string => {
   return tmp.textContent || tmp.innerText || '';
 };
 
-const NOTICE_MENU_ROUTES = ['/communication/notice', '/communication/notices', '/communication'];
+const NOTICE_MENU_ROUTES = ['/my/notices', '/communication/notice', '/communication/notices'];
 
 const NoticeManagement: React.FC = () => {
   const theme = useTheme();
@@ -272,6 +297,14 @@ const NoticeManagement: React.FC = () => {
     isPinned: false, // 고정하기
     attachments: [] as string[]
   });
+  const [pollForm, setPollForm] = useState({
+    enabled: false,
+    question: '',
+    options: ['', ''] as string[]
+  });
+  const [selectedPollOptionId, setSelectedPollOptionId] = useState<number | null>(null);
+  const [pollVoting, setPollVoting] = useState(false);
+  const [addPollOnView, setAddPollOnView] = useState(false);
   const skipSchedulePersistRef = useRef(true);
   const [scheduleStorageReady, setScheduleStorageReady] = useState(false);
 
@@ -716,6 +749,9 @@ const NoticeManagement: React.FC = () => {
       const response = await noticeService.getNotice(notice.id);
       if (response.success) {
         setSelectedNotice(response.data);
+        setSelectedPollOptionId(response.data?.poll?.myVoteOptionId ?? null);
+        setAddPollOnView(false);
+        setPollForm({ enabled: false, question: '', options: ['', ''] });
         setViewMode('view');
       } else {
         setError('공지사항을 불러오는데 실패했습니다.');
@@ -822,7 +858,62 @@ const NoticeManagement: React.FC = () => {
       isPinned: false, // 고정하기
       attachments: []
     });
+    setPollForm({ enabled: false, question: '', options: ['', ''] });
     setOpenDialog(true);
+  };
+
+  const handleVotePoll = async () => {
+    if (!selectedNotice || selectedPollOptionId == null) {
+      setError(txt('선택지를 고른 뒤 투표하세요.', 'Select an option before voting.'));
+      return;
+    }
+    try {
+      setPollVoting(true);
+      const response = await noticeService.votePoll(selectedNotice.id, selectedPollOptionId);
+      if (response.success) {
+        setSelectedNotice({
+          ...selectedNotice,
+          hasPoll: true,
+          poll: response.data
+        });
+        setSuccess(txt('투표가 반영되었습니다. 결과는 익명입니다.', 'Your vote was recorded. Results are anonymous.'));
+      } else {
+        setError(response.message || txt('투표에 실패했습니다.', 'Vote failed.'));
+      }
+    } catch (error: any) {
+      setError(error.response?.data?.message || txt('투표에 실패했습니다.', 'Vote failed.'));
+    } finally {
+      setPollVoting(false);
+    }
+  };
+
+  const handleCreatePollOnView = async () => {
+    if (!selectedNotice) return;
+    if (!isNoticeAuthor(selectedNotice) && user?.role !== 'root' && user?.role !== 'admin') {
+      setError(txt('투표를 등록할 권한이 없습니다.', 'You cannot create a poll on this notice.'));
+      return;
+    }
+    const cleaned = pollForm.options.map((o) => o.trim()).filter(Boolean);
+    if (!pollForm.question.trim() || cleaned.length < 2) {
+      setError(txt('질문과 선택지 2개 이상이 필요합니다.', 'Question and at least 2 options are required.'));
+      return;
+    }
+    try {
+      const response = await noticeService.createPoll(selectedNotice.id, {
+        question: pollForm.question.trim(),
+        options: cleaned
+      });
+      if (response.success) {
+        setSelectedNotice({ ...selectedNotice, hasPoll: true, poll: response.data });
+        setAddPollOnView(false);
+        setPollForm({ enabled: false, question: '', options: ['', ''] });
+        setSuccess(txt('투표가 등록되었습니다.', 'Poll created.'));
+      } else {
+        setError(response.message || txt('투표 등록에 실패했습니다.', 'Failed to create poll.'));
+      }
+    } catch (error: any) {
+      setError(error.response?.data?.message || txt('투표 등록에 실패했습니다.', 'Failed to create poll.'));
+    }
   };
 
   const handleSaveNotice = async () => {
@@ -833,7 +924,7 @@ const NoticeManagement: React.FC = () => {
         return;
       }
 
-      const noticeData = {
+      const noticeData: any = {
         title: formData.title,
         content: formData.content,
         status: 'published', // 저장 시 자동으로 게시됨
@@ -842,6 +933,19 @@ const NoticeManagement: React.FC = () => {
         isPinned: formData.isPinned, // 고정하기
         attachments: formData.attachments
       };
+
+      if (!selectedNotice && pollForm.enabled) {
+        const cleaned = pollForm.options.map((o) => o.trim()).filter(Boolean);
+        if (!pollForm.question.trim() || cleaned.length < 2) {
+          setError(txt('투표 질문과 선택지 2개 이상이 필요합니다.', 'Poll needs a question and at least 2 options.'));
+          return;
+        }
+        noticeData.poll = {
+          enabled: true,
+          question: pollForm.question.trim(),
+          options: cleaned
+        };
+      }
 
       if (selectedNotice) {
         if (!canUserEditNotice(selectedNotice)) {
@@ -869,6 +973,7 @@ const NoticeManagement: React.FC = () => {
           setSuccess('공지사항이 작성되었습니다.');
           setOpenDialog(false);
           setSelectedNotice(null);
+          setPollForm({ enabled: false, question: '', options: ['', ''] });
           loadData();
         } else {
           setError(response.message || '작성 중 오류가 발생했습니다.');
@@ -1467,7 +1572,7 @@ const NoticeManagement: React.FC = () => {
     return (
       <Box sx={{ ...mvsPageRootSx }}>
         <MvsPageHeader
-          title={<>공지사항 상세{isEn ? ' Notice Detail' : ''}</>}
+          title={txt('공지사항 상세', 'Notice Detail')}
           actions={
             <Button
               variant="outlined"
@@ -1488,7 +1593,7 @@ const NoticeManagement: React.FC = () => {
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
                 <Box>
                   <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary', fontWeight: 500 }}>
-                    제목 *
+                    {txt('제목 *', 'Title *')}
                   </Typography>
                   <TextField
                     fullWidth
@@ -1496,7 +1601,7 @@ const NoticeManagement: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     required
                     size="small"
-                    placeholder="제목을 입력하세요"
+                    placeholder={txt("제목을 입력하세요", "Enter a title")}
                     sx={{
                       '& .MuiOutlinedInput-root': {
                         borderRadius: 1.5,
@@ -1507,7 +1612,7 @@ const NoticeManagement: React.FC = () => {
                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                   <Box sx={{ flex: 1, minWidth: 200 }}>
                     <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary', fontWeight: 500 }}>
-                      대상 *
+                      {txt('대상 *', 'Audience *')}
                     </Typography>
                     <FormControl fullWidth size="small">
                       <Select
@@ -1517,10 +1622,10 @@ const NoticeManagement: React.FC = () => {
                           borderRadius: 1.5,
                           bgcolor: 'background.paper' }}
                       >
-                        <MenuItem value="all">전체</MenuItem>
-                        <MenuItem value="employees">직원</MenuItem>
-                        <MenuItem value="managers">관리자</MenuItem>
-                        <MenuItem value="specific">특정 대상</MenuItem>
+                        <MenuItem value="all">{txt("전체", "All")}</MenuItem>
+                        <MenuItem value="employees">{txt("직원", "Employees")}</MenuItem>
+                        <MenuItem value="managers">{txt("관리자", "Managers")}</MenuItem>
+                        <MenuItem value="specific">{txt("특정 대상", "Specific")}</MenuItem>
                       </Select>
                     </FormControl>
                   </Box>
@@ -1533,13 +1638,13 @@ const NoticeManagement: React.FC = () => {
                           color="primary"
                         />
                       }
-                      label="고정하기"
+                      label={txt("고정하기", "Pin to top")}
                     />
                   </Box>
                 </Box>
                 <Box>
                   <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary', fontWeight: 500 }}>
-                    내용 *
+                    {txt('내용 *', 'Content *')}
                   </Typography>
                   <Box
                     sx={{
@@ -1553,7 +1658,7 @@ const NoticeManagement: React.FC = () => {
                         padding: 2,
                         outline: 'none',
                         '& p.is-editor-empty:first-child::before': {
-                          content: '"내용을 입력하세요..."',
+                          content: isEn ? '"Enter content..."' : '"내용을 입력하세요..."',
                           float: 'left',
                           color: '#adb5bd',
                           pointerEvents: 'none',
@@ -1835,12 +1940,12 @@ const NoticeManagement: React.FC = () => {
                   <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
                     {getStatusChip(selectedNotice.status)}
                     {(selectedNotice as any).isPinned && (
-                      <Chip label="고정" color="warning" size="small" icon={<PriorityIcon />} />
+                      <Chip label={txt("고정", "Pinned")} color="warning" size="small" icon={<PriorityIcon />} />
                     )}
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 0.5 }}>
                     <Typography variant="body2" color="text.secondary">
-                      대상: {getTargetAudienceLabel(selectedNotice.targetAudience)} •
+                      {txt('대상', 'Audience')}: {getTargetAudienceLabel(selectedNotice.targetAudience)} •
                     </Typography>
                     <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
                       <Avatar
@@ -1851,12 +1956,12 @@ const NoticeManagement: React.FC = () => {
                         {(selectedNotice.author || '?').charAt(0)}
                       </Avatar>
                       <Typography variant="body2" color="text.secondary">
-                        작성자: {selectedNotice.author}
+                        {txt('작성자', 'Author')}: {selectedNotice.author}
                       </Typography>
                     </Box>
                     <Typography variant="body2" color="text.secondary">
-                      • 작성일: {selectedNotice.createdAt}
-                      {selectedNotice.publishedAt && ` • 게시일: ${selectedNotice.publishedAt}`}
+                      • {txt('작성일', 'Created')}: {selectedNotice.createdAt}
+                      {selectedNotice.publishedAt && ` • ${txt('게시일', 'Published')}: ${selectedNotice.publishedAt}`}
                     </Typography>
                   </Box>
                   {isNoticeAuthor(selectedNotice) && !noticeMenuFlags.canEdit && (
@@ -1911,9 +2016,177 @@ const NoticeManagement: React.FC = () => {
               </>
             )}
 
+            {!isEditing && selectedNotice.poll && (
+              <Box
+                sx={{
+                  mt: 3,
+                  mb: 2,
+                  border: '1px solid #B4B4B4',
+                  bgcolor: '#fff',
+                  p: 2
+                }}
+              >
+                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5 }}>
+                  {txt('투표', 'Poll')}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  {txt('익명 · 1인 1표', 'Anonymous · one vote per user')}
+                  {selectedNotice.poll.isClosed ? ` · ${txt('마감', 'Closed')}` : ''}
+                  {` · ${txt('총', 'Total')} ${selectedNotice.poll.totalVotes}${txt('표', ' votes')}`}
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 1.5, fontWeight: 500 }}>
+                  {selectedNotice.poll.question}
+                </Typography>
+
+                {selectedNotice.poll.hasVoted || selectedNotice.poll.isClosed ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                    {selectedNotice.poll.options.map((opt) => {
+                      const pct =
+                        selectedNotice.poll!.totalVotes > 0
+                          ? Math.round((opt.voteCount / selectedNotice.poll!.totalVotes) * 100)
+                          : 0;
+                      const isMine = selectedNotice.poll!.myVoteOptionId === opt.id;
+                      return (
+                        <Box key={opt.id}>
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+                            <Typography variant="body2" sx={{ fontWeight: isMine ? 600 : 400 }}>
+                              {opt.label}
+                              {isMine ? ` (${txt('내 선택', 'Your choice')})` : ''}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {opt.voteCount}
+                              {txt('표', '')} ({pct}%)
+                            </Typography>
+                          </Box>
+                          <LinearProgress
+                            variant="determinate"
+                            value={pct}
+                            sx={{
+                              height: 8,
+                              borderRadius: 0,
+                              bgcolor: '#E8E8E8',
+                              '& .MuiLinearProgress-bar': { bgcolor: isMine ? '#4CAF50' : '#9E9E9E' }
+                            }}
+                          />
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                ) : (
+                  <Box>
+                    <RadioGroup
+                      value={selectedPollOptionId ?? ''}
+                      onChange={(e) => setSelectedPollOptionId(Number(e.target.value))}
+                    >
+                      {selectedNotice.poll.options.map((opt) => (
+                        <FormControlLabel
+                          key={opt.id}
+                          value={opt.id}
+                          control={<Radio size="small" />}
+                          label={opt.label}
+                        />
+                      ))}
+                    </RadioGroup>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      disableElevation
+                      onClick={handleVotePoll}
+                      disabled={pollVoting || selectedPollOptionId == null}
+                      sx={{ ...mvsBodyPrimaryBtnSx, mt: 1 }}
+                    >
+                      {pollVoting ? txt('투표 중…', 'Voting…') : txt('투표하기', 'Vote')}
+                    </Button>
+                  </Box>
+                )}
+              </Box>
+            )}
+
+            {!isEditing &&
+              !selectedNotice.poll &&
+              (isNoticeAuthor(selectedNotice) || user?.role === 'root' || user?.role === 'admin') &&
+              noticeMenuFlags.canCreate && (
+                <Box sx={{ mt: 2, mb: 2, border: '1px dashed #B4B4B4', p: 2 }}>
+                  {!addPollOnView ? (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => {
+                        setAddPollOnView(true);
+                        setPollForm({ enabled: true, question: '', options: ['', ''] });
+                      }}
+                      sx={mvsBodyOutlinedBtnSx}
+                    >
+                      {txt('투표 추가', 'Add poll')}
+                    </Button>
+                  ) : (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                      <Typography variant="subtitle2">{txt('투표 등록', 'Create poll')}</Typography>
+                      <TextField
+                        size="small"
+                        fullWidth
+                        label={txt('질문', 'Question')}
+                        value={pollForm.question}
+                        onChange={(e) => setPollForm({ ...pollForm, question: e.target.value })}
+                      />
+                      {pollForm.options.map((opt, idx) => (
+                        <Box key={idx} sx={{ display: 'flex', gap: 1 }}>
+                          <TextField
+                            size="small"
+                            fullWidth
+                            label={`${txt('선택지', 'Option')} ${idx + 1}`}
+                            value={opt}
+                            onChange={(e) => {
+                              const next = [...pollForm.options];
+                              next[idx] = e.target.value;
+                              setPollForm({ ...pollForm, options: next });
+                            }}
+                          />
+                          {pollForm.options.length > 2 && (
+                            <Button
+                              size="small"
+                              onClick={() =>
+                                setPollForm({
+                                  ...pollForm,
+                                  options: pollForm.options.filter((_, i) => i !== idx)
+                                })
+                              }
+                            >
+                              {txt('삭제', 'Remove')}
+                            </Button>
+                          )}
+                        </Box>
+                      ))}
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button
+                          size="small"
+                          onClick={() =>
+                            setPollForm({ ...pollForm, options: [...pollForm.options, ''] })
+                          }
+                        >
+                          {txt('선택지 추가', 'Add option')}
+                        </Button>
+                        <Button size="small" variant="contained" disableElevation onClick={handleCreatePollOnView}>
+                          {txt('등록', 'Create')}
+                        </Button>
+                        <Button
+                          size="small"
+                          onClick={() => {
+                            setAddPollOnView(false);
+                            setPollForm({ enabled: false, question: '', options: ['', ''] });
+                          }}
+                        >
+                          {txt('취소', 'Cancel')}
+                        </Button>
+                      </Box>
+                    </Box>
+                  )}
+                </Box>
+              )}
+
             {selectedNotice.attachments && selectedNotice.attachments.length > 0 && (
               <Box sx={{ mb: 3 }}>
-                <Typography variant="h6" gutterBottom>첨부파일</Typography>
+                <Typography variant="h6" gutterBottom>{txt("첨부파일", "Attachments")}</Typography>
                 <List>
                   {selectedNotice.attachments.map((attachment, index) => (
                     <ListItem 
@@ -1936,7 +2209,7 @@ const NoticeManagement: React.FC = () => {
                       </ListItemAvatar>
                       <ListItemText 
                         primary={attachment}
-                        secondary="클릭하여 다운로드"
+                        secondary={txt("클릭하여 다운로드", "Click to download")}
                       />
                       <IconButton
                         edge="end"
@@ -1957,10 +2230,10 @@ const NoticeManagement: React.FC = () => {
               {!isEditing && (
                 <Box sx={{ display: 'flex', gap: 2 }}>
                   <Typography variant="body2" color="text.secondary">
-                    조회수: {selectedNotice.views}
+                    {txt('조회수', 'Views')}: {selectedNotice.views}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    읽음: {selectedNotice.readCount}
+                    {txt('읽음', 'Read')}: {selectedNotice.readCount}
                   </Typography>
                 </Box>
               )}
@@ -1971,13 +2244,13 @@ const NoticeManagement: React.FC = () => {
                       variant="outlined"
                       onClick={handleCancelEdit}
                     >
-                      취소
+                      {txt('취소', 'Cancel')}
                     </Button>
                     <Button
                       variant="contained"
                       onClick={handleSaveEdit}
                     >
-                      저장
+                      {txt('저장', 'Save')}
                     </Button>
                   </>
                 ) : (
@@ -1987,7 +2260,7 @@ const NoticeManagement: React.FC = () => {
                       startIcon={<EditIcon />}
                       onClick={() => handleEditNotice(selectedNotice)}
                     >
-                      수정
+                      {txt('수정', 'Edit')}
                     </Button>
                   )
                 )}
@@ -2047,7 +2320,7 @@ const NoticeManagement: React.FC = () => {
   return (
     <Box sx={mvsPageRootSx}>
       <MvsPageHeader
-        title={<>공지사항{isEn ? ' Notice Board' : ''}</>}
+        title={txt('공지사항', 'Notice Board')}
         description={txt('중요한 공지사항과 업무 관련 정보를 확인하는 페이지입니다.', 'This page shows important notices and work-related updates.')}
       />
 
@@ -2240,6 +2513,23 @@ const NoticeManagement: React.FC = () => {
                         <Typography variant="subtitle2" fontWeight={700} noWrap sx={{ minWidth: 0 }}>
                           {stripHtmlTags(notice.title)}
                         </Typography>
+                        {(notice.hasPoll || (notice as any).hasPoll) && (
+                          <Typography
+                            component="span"
+                            variant="caption"
+                            sx={{
+                              flexShrink: 0,
+                              border: '1px solid #B4B4B4',
+                              px: 0.5,
+                              lineHeight: 1.35,
+                              fontWeight: 700,
+                              whiteSpace: 'nowrap',
+                              bgcolor: '#F7FBF7',
+                            }}
+                          >
+                            {txt('투표', 'Poll')}
+                          </Typography>
+                        )}
                         {notice.attachments && notice.attachments.length > 0 && (
                           <Tooltip title={txt(`첨부파일 ${notice.attachments.length}개`, `${notice.attachments.length} attachment(s)`)}>
                             <AttachFileIcon sx={{ fontSize: 16, color: 'text.secondary', flexShrink: 0 }} />
@@ -2568,14 +2858,14 @@ const NoticeManagement: React.FC = () => {
       >
         <DialogTitle sx={{ pb: 2, borderBottom: 1, borderColor: 'divider' }}>
           <Typography variant="h6" fontWeight={600}>
-            {selectedNotice ? '공지사항 수정' : '공지사항 작성'}
+            {selectedNotice ? txt('공지사항 수정', 'Edit Notice') : txt('공지사항 작성', 'New Notice')}
           </Typography>
         </DialogTitle>
         <DialogContent sx={{ pt: 3 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
             <Box>
               <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary', fontWeight: 500 }}>
-                제목 *
+                {txt('제목 *', 'Title *')}
               </Typography>
               <TextField
                 fullWidth
@@ -2583,7 +2873,7 @@ const NoticeManagement: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 required
                 size="small"
-                placeholder="제목을 입력하세요"
+                placeholder={txt("제목을 입력하세요", "Enter a title")}
                 sx={{
                   '& .MuiOutlinedInput-root': {
                     borderRadius: 1.5,
@@ -2594,7 +2884,7 @@ const NoticeManagement: React.FC = () => {
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               <Box sx={{ flex: 1, minWidth: 200 }}>
                 <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary', fontWeight: 500 }}>
-                  대상 *
+                  {txt('대상 *', 'Audience *')}
                 </Typography>
                 <FormControl fullWidth size="small">
                   <Select
@@ -2604,10 +2894,10 @@ const NoticeManagement: React.FC = () => {
                       borderRadius: 1.5,
                       bgcolor: 'background.paper' }}
                   >
-                    <MenuItem value="all">전체</MenuItem>
-                    <MenuItem value="employees">직원</MenuItem>
-                    <MenuItem value="managers">관리자</MenuItem>
-                    <MenuItem value="specific">특정 대상</MenuItem>
+                    <MenuItem value="all">{txt("전체", "All")}</MenuItem>
+                    <MenuItem value="employees">{txt("직원", "Employees")}</MenuItem>
+                    <MenuItem value="managers">{txt("관리자", "Managers")}</MenuItem>
+                    <MenuItem value="specific">{txt("특정 대상", "Specific")}</MenuItem>
                   </Select>
                 </FormControl>
               </Box>
@@ -2620,13 +2910,81 @@ const NoticeManagement: React.FC = () => {
                       color="primary"
                     />
                   }
-                  label="고정하기"
+                  label={txt("고정하기", "Pin to top")}
                 />
               </Box>
             </Box>
+
+            {!selectedNotice && (
+              <Box sx={{ border: '1px solid #B4B4B4', p: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={pollForm.enabled}
+                      onChange={(e) =>
+                        setPollForm({
+                          ...pollForm,
+                          enabled: e.target.checked,
+                          options: pollForm.options.length >= 2 ? pollForm.options : ['', '']
+                        })
+                      }
+                      size="small"
+                    />
+                  }
+                  label={txt('투표 포함 (익명 · 1인 1표)', 'Include poll (anonymous · 1 vote per user)')}
+                />
+                {pollForm.enabled && (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      label={txt('투표 질문', 'Poll question')}
+                      value={pollForm.question}
+                      onChange={(e) => setPollForm({ ...pollForm, question: e.target.value })}
+                    />
+                    {pollForm.options.map((opt, idx) => (
+                      <Box key={idx} sx={{ display: 'flex', gap: 1 }}>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          label={`${txt('선택지', 'Option')} ${idx + 1}`}
+                          value={opt}
+                          onChange={(e) => {
+                            const next = [...pollForm.options];
+                            next[idx] = e.target.value;
+                            setPollForm({ ...pollForm, options: next });
+                          }}
+                        />
+                        {pollForm.options.length > 2 && (
+                          <Button
+                            size="small"
+                            onClick={() =>
+                              setPollForm({
+                                ...pollForm,
+                                options: pollForm.options.filter((_, i) => i !== idx)
+                              })
+                            }
+                          >
+                            {txt('삭제', 'Remove')}
+                          </Button>
+                        )}
+                      </Box>
+                    ))}
+                    <Button
+                      size="small"
+                      onClick={() => setPollForm({ ...pollForm, options: [...pollForm.options, ''] })}
+                      sx={{ alignSelf: 'flex-start' }}
+                    >
+                      {txt('선택지 추가', 'Add option')}
+                    </Button>
+                  </Box>
+                )}
+              </Box>
+            )}
+
             <Box>
               <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary', fontWeight: 500 }}>
-                내용 *
+                {txt('내용 *', 'Content *')}
               </Typography>
               <Box
                 sx={{
@@ -2640,7 +2998,7 @@ const NoticeManagement: React.FC = () => {
                     padding: 2,
                     outline: 'none',
                     '& p.is-editor-empty:first-child::before': {
-                      content: '"내용을 입력하세요..."',
+                      content: isEn ? '"Enter content..."' : '"내용을 입력하세요..."',
                       float: 'left',
                       color: '#adb5bd',
                       pointerEvents: 'none',
@@ -2917,7 +3275,7 @@ const NoticeManagement: React.FC = () => {
                 </Box>
               </DialogContent>
               <DialogActions>
-                <Button onClick={() => setTableDialogOpen(false)}>취소</Button>
+                <Button onClick={() => setTableDialogOpen(false)}>{txt('취소', 'Cancel')}</Button>
                 <Button
                   variant="contained"
                   onClick={() => {
@@ -2945,14 +3303,14 @@ const NoticeManagement: React.FC = () => {
             variant="outlined"
             sx={{ borderRadius: 1.5 }}
           >
-            취소
+            {txt('취소', 'Cancel')}
           </Button>
           <Button 
             onClick={handleSaveNotice}
             variant="contained"
             sx={{ borderRadius: 1.5 }}
           >
-            {selectedNotice ? '수정' : '작성'}
+            {selectedNotice ? txt('수정', 'Save') : txt('작성', 'Create')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -3171,12 +3529,12 @@ const NoticeManagement: React.FC = () => {
         }}>
           <WarningIcon sx={{ color: 'error.main', fontSize: 28 }} />
           <Typography variant="h6" fontWeight={600}>
-            공지사항 삭제 확인
+            {txt('공지사항 삭제 확인', 'Confirm delete notice')}
           </Typography>
         </DialogTitle>
         <DialogContent sx={{ pt: 3 }}>
           <DialogContentText sx={{ mb: 2, fontSize: '1rem' }}>
-            정말로 이 공지사항을 삭제하시겠습니까?
+            {txt('정말로 이 공지사항을 삭제하시겠습니까?', 'Are you sure you want to delete this notice?')}
           </DialogContentText>
           {noticeToDelete && (
             <Box sx={{ 
@@ -3187,13 +3545,13 @@ const NoticeManagement: React.FC = () => {
               borderColor: 'grey.200'
             }}>
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                제목
+                {txt('제목', 'Title')}
               </Typography>
               <Typography variant="body1" fontWeight={500} sx={{ mb: 2 }}>
                 {noticeToDelete.title}
               </Typography>
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                작성자
+                {txt('작성자', 'Author')}
               </Typography>
               <Typography variant="body2">
                 {noticeToDelete.author}
@@ -3201,7 +3559,7 @@ const NoticeManagement: React.FC = () => {
             </Box>
           )}
           <Alert severity="warning" sx={{ mt: 2 }}>
-            이 작업은 되돌릴 수 없습니다. 삭제된 공지사항은 복구할 수 없습니다.
+            {txt('이 작업은 되돌릴 수 없습니다. 삭제된 공지사항은 복구할 수 없습니다.', 'This cannot be undone. Deleted notices cannot be restored.')}
           </Alert>
         </DialogContent>
         <DialogActions sx={{ p: 2.5, borderTop: '1px solid', borderColor: 'divider' }}>
@@ -3213,7 +3571,7 @@ const NoticeManagement: React.FC = () => {
             variant="outlined"
             sx={{ borderRadius: 1.5, textTransform: 'none', px: 3 }}
           >
-            취소
+            {txt('취소', 'Cancel')}
           </Button>
           <Button
             onClick={confirmDeleteNotice}
@@ -3222,7 +3580,7 @@ const NoticeManagement: React.FC = () => {
             startIcon={<DeleteIcon />}
             sx={{ borderRadius: 1.5, textTransform: 'none', px: 3 }}
           >
-            삭제
+            {txt('삭제', 'Delete')}
           </Button>
         </DialogActions>
       </Dialog>

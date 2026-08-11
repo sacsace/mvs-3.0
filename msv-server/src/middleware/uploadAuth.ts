@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { User } from '../models';
 import { AuthRequest } from '../types';
 import { SESSION_SUPERSEDED_CODE } from './auth';
+import { isMvsNotifierClient } from '../constants/authClients';
 
 /** /uploads 정적 파일 — JWT 필요 (쿼리 access_token 또는 Authorization 헤더) */
 export const authenticateUploadAccess = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -20,7 +21,7 @@ export const authenticateUploadAccess = async (req: AuthRequest, res: Response, 
   }
 
   try {
-    const decoded = jwt.verify(token, jwtSecret) as { userId?: number; sv?: number };
+    const decoded = jwt.verify(token, jwtSecret) as { userId?: number; sv?: number; client?: string };
     if (!decoded?.userId) {
       return res.status(403).json({ success: false, message: '유효하지 않은 토큰입니다.' });
     }
@@ -33,6 +34,12 @@ export const authenticateUploadAccess = async (req: AuthRequest, res: Response, 
     }
 
     const tokenSv = Number(decoded.sv ?? 0);
+    if (isMvsNotifierClient(decoded.client)) {
+      return res.status(403).json({
+        success: false,
+        message: '알람 앱 토큰으로는 파일에 접근할 수 없습니다.',
+      });
+    }
     if (Number(user.session_version ?? 0) !== tokenSv) {
       return res.status(401).json({
         success: false,

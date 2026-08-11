@@ -67,6 +67,7 @@ import {
   ArrowBack as ArrowBackIcon
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { useStore } from '../../store';
 import { accountingService, partnerService, companyService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
@@ -219,6 +220,8 @@ const taxSummaryTableSx = {
 const RegularInvoice: React.FC = () => {
   const { user } = useStore();
   const { i18n } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkHandledRef = useRef<string | null>(null);
   const isEnglish = i18n.language === 'en';
   const allowedGstRates = [0, 2.5, 6, 9, 20];
   const allowedIgstRates = [0, 5, 12, 18, 40];
@@ -1480,6 +1483,69 @@ const RegularInvoice: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const raw = searchParams.get('id');
+    if (!raw) {
+      deepLinkHandledRef.current = null;
+      return;
+    }
+    if (deepLinkHandledRef.current === raw) return;
+    const id = Number(raw);
+    if (!Number.isFinite(id) || id <= 0) return;
+    deepLinkHandledRef.current = raw;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const detail = await accountingService.getInvoice(id);
+        if (cancelled || !detail?.success || !detail.data) return;
+        const inv = detail.data;
+        await handleViewInvoice({
+          id: Number(inv.id),
+          invoice_number: String(inv.invoice_number || ''),
+          invoice_date: inv.invoice_date || new Date().toISOString().slice(0, 10),
+          due_date: inv.due_date || new Date().toISOString().slice(0, 10),
+          customer_name: inv.customer?.name || inv.customer_name || '',
+          customer_email: inv.customer?.email || inv.customer_email || '',
+          total_amount: Number(inv.total_amount || 0),
+          tax_amount: Number(inv.tax_amount || 0),
+          sub_total: Number(inv.subtotal ?? inv.sub_total ?? 0),
+          status: inv.status || 'draft',
+          payment_status: inv.payment_status || 'pending',
+          currency: inv.currency || 'INR',
+          notes: inv.notes ?? '',
+          approval_status: inv.approval_status ?? null,
+          approver_user_id: inv.approver_user_id != null ? Number(inv.approver_user_id) : null,
+          created_by: inv.created_by != null ? Number(inv.created_by) : null,
+          items: (inv.items || []).map((it: any) => ({
+            id: it.id,
+            item_name: it.item_name || '',
+            description: it.description || '',
+            quantity: Number(it.quantity || 0),
+            unit_price: Number(it.unit_price || 0),
+            total_price: Number(it.total_price || 0),
+            tax_rate: Number(it.tax_rate || 0),
+            tax_amount: Number(it.tax_amount || 0),
+          })),
+        });
+      } catch {
+        /* ignore deep-link failures */
+      } finally {
+        if (cancelled) return;
+        const next = new URLSearchParams(searchParams);
+        if (next.has('id')) {
+          next.delete('id');
+          setSearchParams(next, { replace: true });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open once per id query
+  }, [searchParams]);
 
   useEffect(() => {
     if (!pendingPrintInvoiceId) return;

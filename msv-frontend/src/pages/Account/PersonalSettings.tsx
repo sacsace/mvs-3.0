@@ -73,6 +73,9 @@ const emptyProfile: PersonalProfile = {
   avatar_url: null,
 };
 
+/** 사용자당 등록 가능한 생체 로그인 기기 최대 개수 (서버와 동일) */
+const MAX_PASSKEY_DEVICES = 4;
+
 const PersonalSettings: React.FC = () => {
   const { t, i18n } = useTranslation();
   const updateUser = useStore((state) => state.updateUser);
@@ -278,6 +281,10 @@ const PersonalSettings: React.FC = () => {
   };
 
   const handleRegisterPasskey = async () => {
+    if (passkeys.length >= MAX_PASSKEY_DEVICES) {
+      setError(t('personalSettings.errors.passkeyLimit', { max: MAX_PASSKEY_DEVICES }));
+      return;
+    }
     setPasskeyBusy(true);
     setError('');
     setMessage('');
@@ -336,14 +343,7 @@ const PersonalSettings: React.FC = () => {
     avatarPreviewUrl || (profile.avatar_url ? getUploadUrl(profile.avatar_url) : undefined);
 
   return (
-    <Box
-      sx={{
-        ...mvsPageRootSx,
-        maxWidth: 1080,
-        mx: 'auto',
-        width: '100%',
-      }}
-    >
+    <Box sx={mvsPageRootSx}>
       <MvsPageHeader
         title={t('personalSettings.title')}
         description={t('personalSettings.description')}
@@ -655,7 +655,7 @@ const PersonalSettings: React.FC = () => {
               </Typography>
             </Box>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {t('personalSettings.passkeyHint')}
+              {t('personalSettings.passkeyHint', { max: MAX_PASSKEY_DEVICES })}
             </Typography>
 
             {passkeysLoading ? (
@@ -668,6 +668,12 @@ const PersonalSettings: React.FC = () => {
               </Typography>
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                  {t('personalSettings.passkeyCount', {
+                    count: passkeys.length,
+                    max: MAX_PASSKEY_DEVICES,
+                  })}
+                </Typography>
                 {passkeys.map((item) => (
                   <Box
                     key={item.id}
@@ -713,16 +719,22 @@ const PersonalSettings: React.FC = () => {
             <Button
               variant="contained"
               disableElevation
-              disabled={!passkeyAvailable || passkeyBusy}
+              disabled={
+                !passkeyAvailable ||
+                passkeyBusy ||
+                passkeys.length >= MAX_PASSKEY_DEVICES
+              }
               startIcon={
                 passkeyBusy ? <CircularProgress size={16} color="inherit" /> : <FingerprintIcon />
               }
               onClick={() => void handleRegisterPasskey()}
               sx={{ ...mvsBodyPrimaryBtnSx, alignSelf: 'flex-start' }}
             >
-              {passkeyAvailable
-                ? t('personalSettings.passkeyRegister')
-                : t('personalSettings.passkeyUnavailable')}
+              {!passkeyAvailable
+                ? t('personalSettings.passkeyUnavailable')
+                : passkeys.length >= MAX_PASSKEY_DEVICES
+                  ? t('personalSettings.passkeyLimitReached', { max: MAX_PASSKEY_DEVICES })
+                  : t('personalSettings.passkeyRegister')}
             </Button>
           </CardContent>
         </Card>

@@ -1,12 +1,37 @@
 import nodemailer from 'nodemailer';
 import { Company, User } from '../models';
-import { buildNodemailerTransportOptions, getSystemMailTransportOptions } from './mailConfig';
+import { buildNodemailerTransportOptions, getResolvedMailTransportOptions } from './mailConfig';
 import { bilingualSubject, buildBilingualHtml, buildBilingualText } from './mailBilingual';
+import { parseSettingsBlob } from './settingsBlob';
 
 function resolveAppBaseUrl(): string {
   const raw = process.env.CORS_ORIGIN || process.env.FRONTEND_URL || '';
   const first = raw.split(',')[0]?.trim();
   return first ? first.replace(/\/$/, '') : '';
+}
+
+const parseUserSettings = parseSettingsBlob;
+
+/** 수신자 알림 메일 수신 허용 여부 */
+function shouldSendEmailForNotification(
+  settings: Record<string, unknown>,
+  feature?: string
+): boolean {
+  const ui = (settings.ui || {}) as Record<string, unknown>;
+  const prefs = (ui.notificationSettings || {}) as Record<string, unknown>;
+  // email 스위치가 명시적으로 false일 때만 차단 (미설정·true는 발송)
+  if (prefs.email === false) return false;
+
+  const f = String(feature || '');
+  if (f === 'work_board' || f === 'work_board_comment' || f === 'work_board_comment_reply') {
+    if (prefs.workBoard === false) return false;
+  }
+  if (f === 'work_report' && prefs.workReport === false) return false;
+  if (f === 'vacation' && prefs.vacation === false) return false;
+  if ((f === 'approval' || f === 'quotation') && prefs.approval === false) return false;
+  if (f === 'expense_report' && prefs.expense === false) return false;
+  if (f === 'system' && prefs.system === false) return false;
+  return true;
 }
 
 export function resolveNotificationLink(data?: Record<string, unknown>): string {
@@ -49,6 +74,7 @@ export function resolveNotificationLink(data?: Record<string, unknown>): string 
 }
 
 const TITLE_EN_BY_KO: Record<string, string> = {
+  '업무 등록': 'Work Task Created',
   '업무 담당자 지정': 'Work Assignee Assignment',
   '댓글 멘션': 'Comment Mention',
   '휴가 승인 요청': 'Leave Approval Request',
@@ -125,6 +151,7 @@ function resolveEnglishMessage(
 /**
  * 사용자 알림(pushNotification)에 대응하는 이메일 발송.
  * 수신 주소는 User.email에서 조회한다. 본문은 한글·영문 병기.
+ * SMTP: 회사 → 발신자(sender) 개인 SMTP → 환경변수.
  */
 export async function sendUserNotificationEmail(params: {
   targetUserId: number;
@@ -133,15 +160,23 @@ export async function sendUserNotificationEmail(params: {
   data?: Record<string, unknown>;
   tenantId?: number;
   companyId?: number;
+  /** 회사 SMTP 없을 때 폴백용 발신자(업무 등록자 등) */
+  senderUserId?: number;
 }): Promise<void> {
   const target = await User.findByPk(params.targetUserId, {
-    attributes: ['id', 'email', 'username', 'tenant_id', 'company_id', 'status']
+    attributes: ['id', 'email', 'username', 'tenant_id', 'company_id', 'status', 'settings']
   });
   if (!target) return;
 
   const to = String((target as any).email || '').trim();
   if (!to) {
     console.warn(`[notifyMail] user ${params.targetUserId} has no email`);
+    return;
+  }
+
+  const targetSettings = parseUserSettings((target as any).settings);
+  const feature = params.data ? String(params.data.feature || '') : '';
+  if (!shouldSendEmailForNotification(targetSettings, feature)) {
     return;
   }
 
@@ -153,9 +188,16 @@ export async function sendUserNotificationEmail(params: {
       ? await Company.findOne({ where: { id: companyId, tenant_id: tenantId } })
       : null;
 
-  const mailOpts = getSystemMailTransportOptions(companyRow);
+  let senderUser: { settings?: unknown } | null = null;
+  if (params.senderUserId) {
+    senderUser = await User.findByPk(params.senderUserId, {
+      attributes: ['id', 'settings'],
+    });
+  }
+
+  const mailOpts = getResolvedMailTransportOptions(companyRow, senderUser);
   if (!mailOpts) {
-    console.warn('[notifyMail] mail transport not configured (system settings)');
+    console.warn('[notifyMail] mail transport not configured (company or personal SMTP)');
     return;
   }
 

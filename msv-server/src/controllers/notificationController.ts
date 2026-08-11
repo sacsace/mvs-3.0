@@ -360,7 +360,8 @@ export const pushNotification = (
       message,
       data: data && typeof data === 'object' ? data : undefined,
       tenantId: tenant_id,
-      companyId: company_id
+      companyId: company_id,
+      senderUserId: sender_user_id != null ? Number(sender_user_id) : undefined,
     }).catch((err) => {
       console.error('[pushNotification] email:', err?.message || err);
     });

@@ -1,7 +1,12 @@
 import { Request, Response } from 'express';
 import { RequestWithUser } from '../types';
-import { Notice, User } from '../models';
+import { Notice, NoticePoll, User } from '../models';
 import { Op } from 'sequelize';
+import {
+  createPollForNotice,
+  getAnonymousPollForNotice,
+  softDeletePollForNotice,
+} from './noticePollController';
 
 // 공지사항 목록 조회
 export const getNotices = async (req: RequestWithUser, res: Response) => {
@@ -44,7 +49,14 @@ export const getNotices = async (req: RequestWithUser, res: Response) => {
           model: User,
           as: 'author',
           attributes: ['id', 'username', 'email', 'avatar_url']
-        }
+        },
+        {
+          model: NoticePoll,
+          as: 'poll',
+          attributes: ['id'],
+          where: { is_active: true },
+          required: false,
+        },
       ],
       limit: Number(limit),
       offset: (Number(page) - 1) * Number(limit),
@@ -69,7 +81,8 @@ export const getNotices = async (req: RequestWithUser, res: Response) => {
       attachments: notice.attachments ? JSON.parse(notice.attachments) : [],
       readCount: notice.read_count,
       views: notice.views,
-      isPinned: notice.is_pinned || false
+      isPinned: notice.is_pinned || false,
+      hasPoll: Boolean(notice.poll?.id),
     }));
 
     res.json({
@@ -96,7 +109,7 @@ export const getNotices = async (req: RequestWithUser, res: Response) => {
 export const getNotice = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id } = req.user;
+    const { tenant_id, company_id, id: user_id } = req.user;
 
     if (!tenant_id || !company_id) {
       return res.status(400).json({ 
@@ -123,6 +136,8 @@ export const getNotice = async (req: RequestWithUser, res: Response) => {
     // 조회수 증가
     await notice.update({ views: notice.views + 1 });
 
+    const poll = await getAnonymousPollForNotice(Number(id), tenant_id, company_id, user_id);
+
     const formattedNotice = {
       id: notice.id,
       title: notice.title,
@@ -141,7 +156,9 @@ export const getNotice = async (req: RequestWithUser, res: Response) => {
       attachments: notice.attachments ? JSON.parse(notice.attachments) : [],
       readCount: notice.read_count,
       views: notice.views + 1,
-      isPinned: notice.is_pinned || false
+      isPinned: notice.is_pinned || false,
+      hasPoll: Boolean(poll),
+      poll,
     };
 
     res.json({ success: true, data: formattedNotice });
@@ -159,7 +176,7 @@ export const getNotice = async (req: RequestWithUser, res: Response) => {
 export const createNotice = async (req: RequestWithUser, res: Response) => {
   try {
     const { tenant_id, company_id, id: user_id } = req.user;
-    const { title, content, category, priority, status, isPublic, targetAudience, expiresAt, attachments, isPinned } = req.body;
+    const { title, content, category, priority, status, isPublic, targetAudience, expiresAt, attachments, isPinned, poll } = req.body;
     const normalizedAttachments = Array.isArray(attachments)
       ? attachments
       : typeof attachments === 'string' && attachments
@@ -207,6 +224,26 @@ export const createNotice = async (req: RequestWithUser, res: Response) => {
     }
 
     const notice = await (Notice as any).create(noticeData);
+
+    if (poll && (poll.enabled || poll.question || (Array.isArray(poll.options) && poll.options.length > 0))) {
+      try {
+        await createPollForNotice({
+          noticeId: notice.id,
+          tenantId: tenant_id,
+          companyId: company_id,
+          question: poll.question,
+          options: Array.isArray(poll.options) ? poll.options : [],
+          closesAt: poll.closesAt || poll.closes_at || null,
+        });
+      } catch (pollErr: any) {
+        await notice.update({ is_active: false });
+        const statusCode = pollErr.status || 400;
+        return res.status(statusCode).json({
+          success: false,
+          message: pollErr.message || '투표 생성에 실패했습니다.',
+        });
+      }
+    }
 
     res.status(201).json({ success: true, data: notice });
   } catch (error: any) {
@@ -300,6 +337,7 @@ export const deleteNotice = async (req: RequestWithUser, res: Response) => {
     }
 
     await notice.update({ is_active: false });
+    await softDeletePollForNotice(Number(id), tenant_id, company_id);
 
     res.json({ success: true, message: '공지사항이 성공적으로 삭제되었습니다.' });
   } catch (error: any) {

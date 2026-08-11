@@ -25,7 +25,9 @@ import {
   TextField,
   Tooltip,
   Typography,
-  Autocomplete
+  Autocomplete,
+  FormControlLabel,
+  Switch
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -1371,6 +1373,8 @@ const WorkBoardDetailPage: React.FC = () => {
   const [completedTaskSearch, setCompletedTaskSearch] = useState('');
   const [completedTaskPage, setCompletedTaskPage] = useState(1);
   const [cardSearch, setCardSearch] = useState('');
+  /** user 역할은 본인 카드만. 그 외는 토글로 전환 */
+  const [onlyMyCards, setOnlyMyCards] = useState(() => user?.role === 'user');
   const [reopeningCardId, setReopeningCardId] = useState<number | null>(null);
 
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -2553,35 +2557,73 @@ const WorkBoardDetailPage: React.FC = () => {
     : lists;
   const normalizedCardSearch = cardSearch.trim().toLowerCase();
   const cardSearchActive = normalizedCardSearch.length > 0;
+  const myUserId = user?.id != null ? Number(user.id) : null;
+  const forceOnlyMyCards = user?.role === 'user';
+  const showOnlyMyCards = forceOnlyMyCards || onlyMyCards;
+
+  const isMyWorkCard = useCallback(
+    (card: BoardCard) => {
+      if (myUserId == null) return false;
+      const assigneeId =
+        card.assignee?.id != null
+          ? Number(card.assignee.id)
+          : card.assignee_user_id != null
+            ? Number(card.assignee_user_id)
+            : null;
+      if (assigneeId === myUserId) return true;
+      if (card.created_by != null && Number(card.created_by) === myUserId) return true;
+      if (
+        Array.isArray(card.reference_user_ids) &&
+        card.reference_user_ids.some((id) => Number(id) === myUserId)
+      ) {
+        return true;
+      }
+      return false;
+    },
+    [myUserId]
+  );
+
   const displayActiveLists = useMemo(() => {
-    if (!cardSearchActive) return activeLists;
     const boardMembers = (board?.members || []) as any[];
-    return activeLists.map((list) => ({
-      ...list,
-      cards: (list.cards || []).filter((card) => {
-        const creator = boardMembers.find(
-          (member: any) => Number(member.user_id) === Number(card.created_by)
-        );
-        const referenceNames = (card.reference_user_ids || []).map((rid) => {
-          const m = boardMembers.find((member: any) => Number(member.user_id) === Number(rid));
-          return m?.user?.username || '';
+    return activeLists.map((list) => {
+      let cards = list.cards || [];
+      if (showOnlyMyCards) {
+        cards = cards.filter((card) => isMyWorkCard(card));
+      }
+      if (cardSearchActive) {
+        cards = cards.filter((card) => {
+          const creator = boardMembers.find(
+            (member: any) => Number(member.user_id) === Number(card.created_by)
+          );
+          const referenceNames = (card.reference_user_ids || []).map((rid) => {
+            const m = boardMembers.find((member: any) => Number(member.user_id) === Number(rid));
+            return m?.user?.username || '';
+          });
+          const searchable = [
+            card.title,
+            getPlainTextFromHtml(card.description),
+            card.assignee?.username,
+            creator?.user?.username,
+            list.title,
+            list.assignee?.username,
+            ...referenceNames,
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
+          return searchable.includes(normalizedCardSearch);
         });
-        const searchable = [
-          card.title,
-          getPlainTextFromHtml(card.description),
-          card.assignee?.username,
-          creator?.user?.username,
-          list.title,
-          list.assignee?.username,
-          ...referenceNames,
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-        return searchable.includes(normalizedCardSearch);
-      }),
-    }));
-  }, [activeLists, board?.members, cardSearchActive, normalizedCardSearch]);
+      }
+      return { ...list, cards };
+    });
+  }, [
+    activeLists,
+    board?.members,
+    cardSearchActive,
+    normalizedCardSearch,
+    showOnlyMyCards,
+    isMyWorkCard,
+  ]);
   const cardSearchMatchCount = useMemo(
     () => displayActiveLists.reduce((sum, list) => sum + (list.cards?.length || 0), 0),
     [displayActiveLists]
@@ -2594,6 +2636,7 @@ const WorkBoardDetailPage: React.FC = () => {
   });
   const normalizedCompletedSearch = completedTaskSearch.trim().toLowerCase();
   const filteredCompletedCards = completedCards.filter((card) => {
+    if (showOnlyMyCards && !isMyWorkCard(card)) return false;
     if (!normalizedCompletedSearch) return true;
     const creator = (board?.members || []).find(
       (member: any) => Number(member.user_id) === Number(card.created_by)
@@ -3005,6 +3048,27 @@ const WorkBoardDetailPage: React.FC = () => {
               justifyContent: { xs: 'flex-start', sm: 'flex-end' },
             }}
           >
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={showOnlyMyCards}
+                  disabled={forceOnlyMyCards}
+                  onChange={(e) => setOnlyMyCards(e.target.checked)}
+                />
+              }
+              label={txt('내 업무만', 'My work only')}
+              sx={{
+                mr: 0.5,
+                ml: 0,
+                '& .MuiFormControlLabel-label': {
+                  fontSize: '0.8125rem',
+                  fontWeight: 600,
+                  color: '#42526E',
+                  whiteSpace: 'nowrap',
+                },
+              }}
+            />
             <TextField
               size="small"
               value={cardSearch}

@@ -30,6 +30,10 @@ const HEADER_LAYOUT_HEIGHT_MOBILE = HEADER_TOP_INSET_PX + 56;
 const isPersonalAccountRoute = (pathname: string): boolean =>
   pathname === '/account/settings' || pathname.startsWith('/account/settings/');
 
+/** 헤더「알림」— 메뉴 트리에 없어도 로그인 사용자는 접근 가능 */
+const isNotificationSelfServiceRoute = (pathname: string): boolean =>
+  pathname === '/notifications' || pathname.startsWith('/notifications/');
+
 /** 이용약관·개인정보·고객센터 — 메뉴 권한 없이 본문 표시 */
 const isLegalPublicRoute = (pathname: string): boolean =>
   pathname === '/legal/terms' ||
@@ -42,6 +46,7 @@ const isFullBleedBodyRoute = (pathname: string): boolean => {
   if (pathname === '/work/projects' || pathname.startsWith('/work/projects/')) return true;
   if (pathname === '/work/assignee-list' || pathname.startsWith('/work/assignee-list/')) return true;
   if (pathname === '/basic-info/login-info' || pathname.startsWith('/basic-info/login-info/')) return true;
+  if (pathname === '/hr/payroll' || pathname.startsWith('/hr/payroll/')) return true;
   return false;
 };
 
@@ -138,6 +143,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       }
 
       if (user?.id && isPersonalAccountRoute(location.pathname)) {
+        setHasAccess(true);
+        return;
+      }
+
+      if (user?.id && isNotificationSelfServiceRoute(location.pathname)) {
         setHasAccess(true);
         return;
       }

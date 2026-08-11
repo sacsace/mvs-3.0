@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { Menu, UserPermission, User } from '../models';
 import { Op } from 'sequelize';
+import { isMyWorkspaceRoute, isDashboardMenuRoute } from '../constants/myWorkspaceMenus';
 
 // 사용자별 메뉴 목록 조회 (권한 기반)
 export const getUserMenus = async (req: Request, res: Response) => {
@@ -85,6 +86,42 @@ export const getUserMenus = async (req: Request, res: Response) => {
           if (!added) break;
         }
         userMenus = collected;
+      }
+    }
+
+    /**
+     * root는 기본적으로 전체 메뉴를 보되, 「내 정보·업무」(/my)만은
+     * 메뉴권한에서 부여된 경우에만 노출한다. (admin/audit는 권한 기반 조회)
+     * 단, 대시보드(/dashboard)는 /my 하위에 있어도 첫 화면용으로 부모와 함께 유지한다.
+     */
+    if (isRoot) {
+      const myMenuIds = userMenus
+        .filter((m: any) => isMyWorkspaceRoute(m.route))
+        .map((m: any) => Number(m.id))
+        .filter((id: number) => Number.isInteger(id) && id > 0);
+
+      if (myMenuIds.length > 0) {
+        const myPermCount = await (UserPermission as any).count({
+          where: {
+            user_id: userId,
+            menu_id: { [Op.in]: myMenuIds },
+            can_view: true,
+          },
+        });
+        if (!myPermCount) {
+          const dashboardParentIds = new Set(
+            userMenus
+              .filter((m: any) => isDashboardMenuRoute(m.route))
+              .map((m: any) => (m.parent_id != null ? Number(m.parent_id) : NaN))
+              .filter((id: number) => Number.isInteger(id) && id > 0)
+          );
+          userMenus = userMenus.filter((m: any) => {
+            const route = String(m.route || '');
+            if (isDashboardMenuRoute(route)) return true;
+            if (route === '/my' && dashboardParentIds.has(Number(m.id))) return true;
+            return !isMyWorkspaceRoute(route);
+          });
+        }
       }
     }
 

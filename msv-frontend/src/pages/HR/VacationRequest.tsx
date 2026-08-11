@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -37,7 +37,7 @@ import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
 import { useTranslation } from 'react-i18next';
 
-const VACATION_MENU_ROUTES = ['/hr/leave'];
+const VACATION_MENU_ROUTES = ['/hr/leave', '/my/leave'];
 
 const VACATION_TYPE_KEYS = [
   'annual',
@@ -73,6 +73,8 @@ interface User {
 const VacationRequest: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
+  const leaveBasePath = location.pathname.startsWith('/my/') ? '/my/leave' : '/hr/leave';
   const { id } = useParams<{ id?: string }>();
   const { user } = useStore();
   const { menus, hasMenuPermission, loading: menusLoading } = useMenuStore();
@@ -180,12 +182,12 @@ const VacationRequest: React.FC = () => {
     const tabIndex = user.role === 'admin' || user.role === 'root' ? 1 : 0;
     if (!id && !hrElevated && !vacationMenuFlags.canCreate) {
       setError(t('vacationManagement.noPermissionCreate'));
-      const tmr = window.setTimeout(() => navigate(`/hr/leave?tab=${tabIndex}`), 2000);
+      const tmr = window.setTimeout(() => navigate(`${leaveBasePath}?tab=${tabIndex}`), 2000);
       return () => window.clearTimeout(tmr);
     }
     if (id && !hrElevated && !vacationMenuFlags.canEdit) {
       setError(t('vacationManagement.noPermissionEditRequest'));
-      const tmr = window.setTimeout(() => navigate(`/hr/leave?tab=${tabIndex}`), 2000);
+      const tmr = window.setTimeout(() => navigate(`${leaveBasePath}?tab=${tabIndex}`), 2000);
       return () => window.clearTimeout(tmr);
     }
   }, [
@@ -335,7 +337,7 @@ const VacationRequest: React.FC = () => {
         );
         setTimeout(() => {
           const tabIndex = user?.role === 'admin' || user?.role === 'root' ? 1 : 0;
-          navigate(`/hr/leave?tab=${tabIndex}`);
+          navigate(`${leaveBasePath}?tab=${tabIndex}`);
         }, 1500);
       } else {
         setError(response.message || t('vacationManagement.request.submitFailed'));
@@ -365,7 +367,7 @@ const VacationRequest: React.FC = () => {
 
   const navigateToList = () => {
     const tabIndex = user?.role === 'admin' || user?.role === 'root' ? 1 : 0;
-    navigate(`/hr/leave?tab=${tabIndex}`);
+    navigate(`${leaveBasePath}?tab=${tabIndex}`);
   };
 
   if (loading) {

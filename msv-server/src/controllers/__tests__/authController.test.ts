@@ -152,8 +152,6 @@ describe('AuthController', () => {
           password: 'password123'
         });
 
-      console.log('Login response:', loginResponse.status, loginResponse.body);
-
       // 로그인이 성공한 경우에만 프로필 조회 테스트
       if (loginResponse.status === 200) {
         const token = loginResponse.body.token;

@@ -3,6 +3,7 @@ import { Server as HTTPServer } from 'http';
 import jwt from 'jsonwebtoken';
 import { User } from '../models';
 import { isCorsAllowLanEnabled, isPrivateLanHttpOrigin } from '../utils/corsPrivateLan';
+import { isMvsNotifierClient } from '../constants/authClients';
 
 interface AuthenticatedSocket extends Socket {
   user?: {
@@ -19,6 +20,7 @@ interface JwtSocketPayload {
   tenantId?: number;
   companyId?: number;
   sv?: number;
+  client?: string;
 }
 
 class SocketService {
@@ -93,7 +95,10 @@ class SocketService {
         if (!user || user.status !== 'active') {
           return next(new Error('유효하지 않은 사용자입니다.'));
         }
-        if (Number(user.session_version ?? 0) !== Number(decoded.sv ?? 0)) {
+        if (
+          !isMvsNotifierClient(decoded.client) &&
+          Number(user.session_version ?? 0) !== Number(decoded.sv ?? 0)
+        ) {
           return next(new Error('SESSION_SUPERSEDED'));
         }
 

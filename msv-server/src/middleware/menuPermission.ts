@@ -147,7 +147,7 @@ export const requireAdminRootOrUserMenuPermission = (flag: MenuPermissionFlag) =
 };
 
 /** 휴가 관리 메뉴 `route` (프론트 `/hr/leave`, `/hr/leave/request` 상위) */
-export const VACATION_MENU_ROUTES = ['/hr/leave'];
+export const VACATION_MENU_ROUTES = ['/hr/leave', '/my/leave'];
 
 /**
  * `admin` / `root`는 즉시 허용.

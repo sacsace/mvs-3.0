@@ -584,11 +584,10 @@ const Login: React.FC = () => {
             flex: 1,
             minHeight: 0,
             display: 'flex',
-            alignItems: { xs: 'flex-start', sm: 'center' },
+            alignItems: 'center',
             justifyContent: 'center',
             px: { xs: 2, sm: 4 },
-            pt: { xs: 5, sm: 5 },
-            pb: { xs: 1, sm: 5 },
+            py: { xs: 2, sm: 5 },
             overflowY: { xs: 'auto', md: 'visible' },
             WebkitOverflowScrolling: 'touch',
           }}

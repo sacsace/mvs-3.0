@@ -30,7 +30,8 @@ export type UserUiPreferencesPayload = {
     vacation?: boolean;
     expense?: boolean;
     workReport?: boolean;
-    emailDigest?: 'realtime' | 'daily' | 'weekly';
+    workBoard?: boolean;
+    emailDigest?: 'realtime' | 'daily' | 'weekly' | 'immediate';
   };
   notificationTemplates?: Array<{
     id: string;

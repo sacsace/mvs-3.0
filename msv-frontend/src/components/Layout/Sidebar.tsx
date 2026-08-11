@@ -44,6 +44,7 @@ import {
   MenuBook,
   Hotel,
   UploadFile,
+  Download,
 } from '@mui/icons-material';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -156,6 +157,13 @@ const isMenuRouteActive = (currentPath: string, route?: string) => {
   const routeCandidates = new Set<string>([normalizedRoute]);
   if (normalizedRoute === '/communication/notice') routeCandidates.add('/communication/notices');
   if (normalizedRoute === '/communication/notices') routeCandidates.add('/communication/notice');
+  if (normalizedRoute === '/my/notices') {
+    routeCandidates.add('/communication/notice');
+    routeCandidates.add('/communication/notices');
+  }
+  if (normalizedRoute === '/communication/notice' || normalizedRoute === '/communication/notices') {
+    routeCandidates.add('/my/notices');
+  }
 
   return Array.from(routeCandidates).some((candidate) => {
     if (!candidate) return false;
@@ -481,7 +489,8 @@ const Sidebar: React.FC<SidebarProps> = ({
       view_kanban: <ViewKanban />,
       move_to_inbox: <MoveToInbox />,
       post_add: <PostAdd />,
-      qr_code_scanner: <QrCodeScanner />
+      qr_code_scanner: <QrCodeScanner />,
+      download: <Download />,
     };
     return iconMap[iconName] || <MenuIcon />;
   };
@@ -538,7 +547,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     if (normalized.includes('/customers/contracts')) return <Description />;
 
-    if (normalized.includes('/communication/notice')) return <Notifications />;
+    if (normalized.includes('/dashboard')) return <Dashboard />;
+    if (normalized.includes('/my/notices') || normalized.includes('/communication/notice')) return <Notifications />;
+    if (normalized.includes('/communication/desktop-notifier')) return <Download />;
     if (normalized.includes('/communication/email')) return <Chat />;
     if (normalized.includes('/communication/sms')) return <Notifications />;
 

@@ -1,5 +1,7 @@
 export * from './domains/company';
 export * from './domains/users';
+export * from './domains/userPreferences';
+export * from './domains/userMailServer';
 export * from './domains/accounting';
 export {
   accountingService,

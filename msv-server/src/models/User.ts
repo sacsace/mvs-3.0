@@ -35,6 +35,8 @@ interface UserAttributes {
   bank_ifsc?: string;
   is_payment_officer?: boolean;
   ot_eligible?: boolean;
+  /** 이전 직장 경력 [{ company_name, position, start_date, end_date, description }] */
+  career_history?: any[] | null;
   settings?: any;
   created_at?: Date;
   updated_at?: Date;
@@ -75,6 +77,7 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   public bank_ifsc?: string;
   public is_payment_officer?: boolean;
   public ot_eligible?: boolean;
+  public career_history?: any[] | null;
   public settings?: any;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
@@ -217,6 +220,10 @@ User.init(
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: true
+    },
+    career_history: {
+      type: DataTypes.JSON,
+      allowNull: true
     },
     settings: {
       type: DataTypes.JSON,

@@ -8,6 +8,10 @@ import {
   Menu,
   Customer,
 } from '../models';
+import {
+  MY_WORKSPACE_CHILDREN,
+  MY_WORKSPACE_PARENT,
+} from '../constants/myWorkspaceMenus';
 
 const TENANT_ID = 1;
 
@@ -30,21 +34,34 @@ export const MINSUB_COMPANY = {
 };
 
 const PARENT_MENUS = [
-  { name_ko: '대시보드', name_en: 'Dashboard', route: '/dashboard', icon: 'Dashboard', order: 1 },
-  { name_ko: '기본정보', name_en: 'Basic Info', route: '/basic-info', icon: 'Info', order: 2 },
-  { name_ko: '인사 관리', name_en: 'HR', route: '/hr', icon: 'People', order: 3 },
-  { name_ko: '업무 관리', name_en: 'Work', route: '/work', icon: 'Work', order: 4 },
-  { name_ko: '매입/매출 관리', name_en: 'Purchase/Sales', route: '/sales', icon: 'trending_up', order: 5 },
-  { name_ko: '재고 관리', name_en: 'Inventory', route: '/inventory', icon: 'Inventory', order: 6 },
-  { name_ko: '회계관리 (Tally)', name_en: 'Accounting (Tally)', route: '/accounting', icon: 'AccountBalance', order: 7 },
-  { name_ko: '커뮤니케이션', name_en: 'Communication', route: '/communication', icon: 'Forum', order: 8 },
-  { name_ko: 'AI 분석', name_en: 'AI', route: '/ai', icon: 'Psychology', order: 9 },
-  { name_ko: '보고서', name_en: 'Reports', route: '/reports', icon: 'Assessment', order: 10 },
-  { name_ko: '호텔', name_en: 'Hotel', route: '/hotel', icon: 'Hotel', order: 11 },
-  { name_ko: '시스템', name_en: 'System', route: '/system', icon: 'Settings', order: 12 },
+  {
+    name_ko: MY_WORKSPACE_PARENT.name_ko,
+    name_en: MY_WORKSPACE_PARENT.name_en,
+    route: MY_WORKSPACE_PARENT.route,
+    icon: MY_WORKSPACE_PARENT.icon,
+    order: MY_WORKSPACE_PARENT.order,
+  },
+  { name_ko: '기본정보', name_en: 'Basic Info', route: '/basic-info', icon: 'Info', order: 3 },
+  { name_ko: '인사 관리', name_en: 'HR', route: '/hr', icon: 'People', order: 4 },
+  { name_ko: '업무 관리', name_en: 'Work', route: '/work', icon: 'Work', order: 5 },
+  { name_ko: '매입/매출 관리', name_en: 'Purchase/Sales', route: '/sales', icon: 'trending_up', order: 6 },
+  { name_ko: '재고 관리', name_en: 'Inventory', route: '/inventory', icon: 'Inventory', order: 7 },
+  { name_ko: '회계관리 (Tally)', name_en: 'Accounting (Tally)', route: '/accounting', icon: 'AccountBalance', order: 8 },
+  { name_ko: '알람', name_en: 'Alarms', route: '/communication', icon: 'Forum', order: 9 },
+  { name_ko: 'AI 분석', name_en: 'AI', route: '/ai', icon: 'Psychology', order: 10 },
+  { name_ko: '보고서', name_en: 'Reports', route: '/reports', icon: 'Assessment', order: 11 },
+  { name_ko: '호텔', name_en: 'Hotel', route: '/hotel', icon: 'Hotel', order: 12 },
+  { name_ko: '시스템', name_en: 'System', route: '/system', icon: 'Settings', order: 13 },
 ];
 
 const SUB_MENUS: Record<string, Array<{ name_ko: string; name_en: string; route: string; icon: string; order: number }>> = {
+  '/my': MY_WORKSPACE_CHILDREN.map((c) => ({
+    name_ko: c.name_ko,
+    name_en: c.name_en,
+    route: c.route,
+    icon: c.icon,
+    order: c.order,
+  })),
   '/basic-info': [
     { name_ko: '회사 정보 관리', name_en: 'Company Information', route: '/basic-info/company', icon: 'business', order: 1 },
     { name_ko: '파트너 업체/고객 관리', name_en: 'Partners / Customers', route: '/basic-info/partners', icon: 'business', order: 2 },
@@ -96,9 +113,15 @@ const SUB_MENUS: Record<string, Array<{ name_ko: string; name_en: string; route:
     { name_ko: '손익계산서', name_en: 'Profit & Loss', route: '/accounting/profit-and-loss', icon: 'trending_up', order: 9 },
   ],
   '/communication': [
-    { name_ko: '공지사항', name_en: 'Notices', route: '/communication/notice', icon: 'campaign', order: 1 },
     { name_ko: '이메일', name_en: 'Email', route: '/communication/email', icon: 'email', order: 2 },
     { name_ko: 'SMS', name_en: 'SMS', route: '/communication/sms', icon: 'sms', order: 3 },
+    {
+      name_ko: '알림 프로그램',
+      name_en: 'Desktop Notifier',
+      route: '/communication/desktop-notifier',
+      icon: 'download',
+      order: 4,
+    },
   ],
   '/ai': [
     { name_ko: '비용 분석', name_en: 'Cost Analysis', route: '/ai/cost-analysis', icon: 'analytics', order: 1 },
@@ -320,10 +343,32 @@ async function ensurePermissions(tenantId: number, users: any[]) {
 
   if (userIds.length === 0) {
     console.warn('  ⚠️  root/admin 사용자 없음 — 메뉴 권한 건너뜀');
-    return;
+  } else {
+    await syncFullMenuPermissions(tenantId, userIds);
   }
 
-  await syncFullMenuPermissions(tenantId, userIds);
+  // admin/root/audit 기본 동기화에서 「내 정보·업무」는 제외(메뉴권한에서 선택 부여)
+  await sequelize.query(
+    `DELETE FROM user_permissions
+     WHERE menu_id IN (
+       SELECT id FROM menus WHERE tenant_id = $1::int AND (route = '/my' OR route LIKE '/my/%')
+     )
+     AND user_id IN (
+       SELECT id FROM users WHERE tenant_id = $1::int AND role IN ('root', 'admin', 'audit')
+     )`,
+    { bind: [tenantId] }
+  );
+
+  // 일반 user — 내 정보·업무 메뉴 기본 보기
+  const { grantEmployeeSelfServicePermissions } = await import('../utils/employeeSelfServicePermissions');
+  for (const u of users.filter((x) => x.role === 'user')) {
+    const n = await grantEmployeeSelfServicePermissions({
+      userId: Number(u.id),
+      tenantId,
+      role: 'user',
+    });
+    console.log(`  ✅ user_id=${u.id} 내 업무 기본 권한 (${n}건 신규)`);
+  }
 }
 
 async function ensureBusinessData(tenantId: number, companyId: number, createdBy: number) {

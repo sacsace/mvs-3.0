@@ -119,10 +119,14 @@ export function getPageIconByRoute(route: string): React.ReactElement | null {
   if (normalized.includes('/company')) return <AccountBalance />;
   if (normalized.includes('/partners')) return <People />;
   if (normalized.includes('/users')) return <Person />;
+  if (normalized.includes('/my/work-list')) return <ViewKanban />;
+  if (normalized.includes('/my/mail-settings')) return <Email />;
+  if (normalized.includes('/my')) return <Person />;
   if (normalized.includes('/attendance')) return <EventAvailable />;
   if (normalized.includes('/notifications')) return <Notifications />;
   if (normalized.includes('/notice')) return <Notifications />;
   if (normalized.includes('/communication')) return <Notifications />;
+  if (normalized.includes('/mail')) return <Email />;
   if (normalized.includes('/ai/')) return <Psychology />;
   if (normalized.includes('/reports/')) return <Assessment />;
   if (normalized.includes('/tasks')) return <ViewKanban />;

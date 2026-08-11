@@ -58,9 +58,14 @@ const SystemSettings = lazyPage(() => import('./pages/System/SystemSettings'));
 const MailSendTest = lazyPage(() => import('./pages/System/MailSendTest'));
 const LoginInfoManagement = lazyPage(() => import('./pages/System/LoginInfoManagement'));
 const NoticeManagement = lazyPage(() => import('./pages/Communication/NoticeManagement'));
+const MyPayslips = lazyPage(() => import('./pages/My/MyPayslips'));
+const MyMailSettings = lazyPage(() => import('./pages/My/MyMailSettings'));
+const MyWorkList = lazyPage(() => import('./pages/My/MyWorkList'));
+const MyPersonalInfo = lazyPage(() => import('./pages/My/MyPersonalInfo'));
 const NotificationManagement = lazyPage(() => import('./pages/Notifications/NotificationManagement'));
 const EmailManagement = lazyPage(() => import('./pages/Communication/EmailManagement'));
 const SMSManagement = lazyPage(() => import('./pages/Communication/SMSManagement'));
+const DesktopNotifierDownload = lazyPage(() => import('./pages/Communication/DesktopNotifierDownload'));
 const PayrollManagement = lazyPage(() => import('./pages/HR/PayrollManagement'));
 const EmploymentContractManagement = lazyPage(() => import('./pages/HR/EmploymentContractManagement'));
 const AttendanceStatistics = lazyPage(() => import('./pages/HR/AttendanceStatistics'));
@@ -231,6 +236,19 @@ function App() {
             <Route path="hr/leave/request" element={<VacationRequest />} />
             <Route path="hr/leave/request/:id" element={<VacationRequest />} />
             <Route path="hr/employment-contracts" element={<EmploymentContractManagement />} />
+
+            {/* 내 정보·업무 (셀프서비스) */}
+            <Route path="my" element={<Navigate to="/my/personal-info" replace />} />
+            <Route path="my/personal-info" element={<MyPersonalInfo />} />
+            <Route path="my/attendance" element={<AttendanceManagement />} />
+            <Route path="my/payslips" element={<MyPayslips />} />
+            <Route path="my/contracts" element={<EmploymentContractManagement />} />
+            <Route path="my/notices" element={<NoticeManagement />} />
+            <Route path="my/leave" element={<VacationManagement />} />
+            <Route path="my/leave/request" element={<VacationRequest />} />
+            <Route path="my/leave/request/:id" element={<VacationRequest />} />
+            <Route path="my/work-list" element={<MyWorkList />} />
+            <Route path="my/mail-settings" element={<MyMailSettings />} />
             
             {/* 업무관리 */}
             <Route path="work" element={<Navigate to="/work/projects" replace />} />
@@ -358,11 +376,13 @@ function App() {
             <Route path="ai/forecasting-data" element={<ForecastingData />} />
             <Route path="ai/recommendation-engine" element={<RecommendationEngine />} />
             
-            {/* 커뮤니케이션 */}
-            <Route path="communication" element={<Navigate to="/communication/notice" replace />} />
-            <Route path="communication/notice" element={<NoticeManagement />} />
+            {/* 알람 (/communication) */}
+            <Route path="communication" element={<Navigate to="/communication/desktop-notifier" replace />} />
+            <Route path="communication/notice" element={<Navigate to="/my/notices" replace />} />
+            <Route path="communication/notices" element={<Navigate to="/my/notices" replace />} />
             <Route path="communication/email" element={<EmailManagement />} />
             <Route path="communication/sms" element={<SMSManagement />} />
+            <Route path="communication/desktop-notifier" element={<DesktopNotifierDownload />} />
             
             {/* 시스템관리 - 제거됨 (기본정보관리의 시스템 설정으로 대체) */}
             

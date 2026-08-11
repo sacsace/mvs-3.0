@@ -321,13 +321,18 @@ const sendCardAssignmentNotification = (
     cardId: number;
     cardTitle: string;
     actorName: string;
+    /** 신규 등록 vs 담당 변경 */
+    isCreate?: boolean;
   }
 ) => {
   const socketService = (req as any).socketService as SocketService | undefined;
+  const isCreate = Boolean(payload.isCreate);
   pushNotification(
     {
-      title: '업무 담당자 지정',
-      message: `${payload.actorName}님이 "${payload.cardTitle}" 카드의 담당자로 지정했습니다.`,
+      title: isCreate ? '업무 등록' : '업무 담당자 지정',
+      message: isCreate
+        ? `${payload.actorName}님이 "${payload.cardTitle}" 업무를 등록하고 담당자로 지정했습니다.`
+        : `${payload.actorName}님이 "${payload.cardTitle}" 카드의 담당자로 지정했습니다.`,
       type: 'info',
       target_type: 'user',
       target_id: payload.targetUserId,
@@ -339,8 +344,10 @@ const sendCardAssignmentNotification = (
         card_title: payload.cardTitle,
         actor_name: payload.actorName,
         href: `/work/projects/${payload.boardId}?card=${payload.cardId}`,
-        title_en: 'Work Assignee Assignment',
-        message_en: `${payload.actorName} assigned you as the assignee of the "${payload.cardTitle}" card.`
+        title_en: isCreate ? 'Work Task Created' : 'Work Assignee Assignment',
+        message_en: isCreate
+          ? `${payload.actorName} created the task "${payload.cardTitle}" and assigned you.`
+          : `${payload.actorName} assigned you as the assignee of the "${payload.cardTitle}" card.`
       },
       tenant_id: req.user?.tenant_id,
       company_id: req.user?.company_id,
@@ -1268,7 +1275,8 @@ export const createWorkBoardCard = async (req: RequestWithUser, res: Response) =
         boardName: board.name,
         cardId: card.id,
         cardTitle: card.title,
-        actorName: user.username || user.userid || '사용자'
+        actorName: user.username || user.userid || '사용자',
+        isCreate: true,
       });
     }
 

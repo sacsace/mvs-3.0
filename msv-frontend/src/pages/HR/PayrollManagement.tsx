@@ -19,7 +19,7 @@ import {
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
-  mvsPageRootSx,
+  mvsPageRootFullBleedSx,
   mvsKpiCardSx,
   mvsBodyCardSx,
   mvsBodyOutlinedBtnSx,
@@ -538,7 +538,7 @@ const PayrollManagement: React.FC = () => {
   };
 
   return (
-    <Box sx={{ ...mvsPageRootSx }}>
+    <Box sx={{ ...mvsPageRootFullBleedSx, flex: 1, minWidth: 0 }}>
       <MvsPageHeader
         title={t('payrollManagement.title')}
         description={t('payrollManagement.description')}

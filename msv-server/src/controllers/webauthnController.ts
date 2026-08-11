@@ -17,6 +17,8 @@ import { recordActivityLog } from '../services/activityLogService';
 const RP_NAME = process.env.WEBAUTHN_RP_NAME || 'MVS';
 const CHALLENGE_TTL_SEC = 300;
 const DEFAULT_SESSION_TIMEOUT_MINUTES = 30;
+/** 사용자당 활성 생체 로그인 기기 최대 개수 */
+export const MAX_WEBAUTHN_CREDENTIALS_PER_USER = 4;
 
 const toBase64Url = (buf: Uint8Array | Buffer | ArrayBuffer): string => {
   const b = Buffer.isBuffer(buf) ? buf : Buffer.from(buf as Uint8Array);
@@ -162,6 +164,16 @@ export const webauthnRegisterOptions = async (req: AuthRequest, res: Response) =
       where: { user_id: user.id, is_active: true },
     });
 
+    if (existing.length >= MAX_WEBAUTHN_CREDENTIALS_PER_USER) {
+      return res.status(400).json({
+        success: false,
+        message: `생체 로그인 기기는 최대 ${MAX_WEBAUTHN_CREDENTIALS_PER_USER}개까지 등록할 수 있습니다. 사용하지 않는 기기를 삭제한 뒤 다시 시도하세요.`,
+        code: 'WEBAUTHN_DEVICE_LIMIT',
+        max: MAX_WEBAUTHN_CREDENTIALS_PER_USER,
+        count: existing.length,
+      });
+    }
+
     const options = await generateRegistrationOptions({
       rpName: RP_NAME,
       rpID: resolveRpId(req),
@@ -244,6 +256,18 @@ export const webauthnRegisterVerify = async (req: AuthRequest, res: Response) =>
       existing.is_active = true;
       await existing.save();
     } else {
+      const activeCount = await WebAuthnCredential.count({
+        where: { user_id: user.id, is_active: true },
+      });
+      if (activeCount >= MAX_WEBAUTHN_CREDENTIALS_PER_USER) {
+        return res.status(400).json({
+          success: false,
+          message: `생체 로그인 기기는 최대 ${MAX_WEBAUTHN_CREDENTIALS_PER_USER}개까지 등록할 수 있습니다. 사용하지 않는 기기를 삭제한 뒤 다시 시도하세요.`,
+          code: 'WEBAUTHN_DEVICE_LIMIT',
+          max: MAX_WEBAUTHN_CREDENTIALS_PER_USER,
+          count: activeCount,
+        });
+      }
       await WebAuthnCredential.create({
         user_id: user.id,
         tenant_id: user.tenant_id,

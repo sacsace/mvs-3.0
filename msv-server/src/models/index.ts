@@ -40,6 +40,9 @@ import WorkReport from './WorkReport';
 import EWayBill from './EWayBill';
 import EWayBillItem from './EWayBillItem';
 import Notice from './Notice';
+import NoticePoll from './NoticePoll';
+import NoticePollOption from './NoticePollOption';
+import NoticePollVote from './NoticePollVote';
 import ExpenseReport from './ExpenseReport';
 import Budget from './Budget';
 import Asset from './Asset';
@@ -364,6 +367,17 @@ Product.hasMany(InventoryTransaction, { foreignKey: 'product_id', as: 'transacti
 (User as any).hasMany(Notice, { foreignKey: 'author_id', as: 'notices' });
 (Notice as any).belongsTo(User, { foreignKey: 'author_id', as: 'author' });
 
+(Notice as any).hasOne(NoticePoll, { foreignKey: 'notice_id', as: 'poll' });
+(NoticePoll as any).belongsTo(Notice, { foreignKey: 'notice_id', as: 'notice' });
+(NoticePoll as any).hasMany(NoticePollOption, { foreignKey: 'poll_id', as: 'options' });
+(NoticePollOption as any).belongsTo(NoticePoll, { foreignKey: 'poll_id', as: 'poll' });
+(NoticePoll as any).hasMany(NoticePollVote, { foreignKey: 'poll_id', as: 'votes' });
+(NoticePollVote as any).belongsTo(NoticePoll, { foreignKey: 'poll_id', as: 'poll' });
+(NoticePollOption as any).hasMany(NoticePollVote, { foreignKey: 'option_id', as: 'votes' });
+(NoticePollVote as any).belongsTo(NoticePollOption, { foreignKey: 'option_id', as: 'option' });
+(User as any).hasMany(NoticePollVote, { foreignKey: 'user_id', as: 'noticePollVotes' });
+(NoticePollVote as any).belongsTo(User, { foreignKey: 'user_id', as: 'voter' });
+
 // 회사와 GST 번호 관계
 (Company as any).hasMany(CompanyGstNumber, { foreignKey: 'company_id', as: 'gstNumbers' });
 CompanyGstNumber.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
@@ -593,6 +607,9 @@ export {
   EWayBill,
   EWayBillItem,
   Notice,
+  NoticePoll,
+  NoticePollOption,
+  NoticePollVote,
   ExpenseReport,
   Budget,
   Asset,
