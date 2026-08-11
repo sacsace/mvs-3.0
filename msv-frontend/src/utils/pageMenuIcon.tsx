@@ -3,7 +3,10 @@ import {
   AccountBalance,
   Assessment,
   AttachMoney,
+  Assignment,
+  BeachAccess,
   Business,
+  Campaign,
   Category,
   Chat,
   Dashboard,
@@ -15,6 +18,7 @@ import {
   Menu as MenuIcon,
   MoveToInbox,
   Notifications,
+  Payments,
   People,
   Person,
   PostAdd,
@@ -22,6 +26,7 @@ import {
   QrCodeScanner,
   Receipt,
   ReceiptLong,
+  Schedule,
   Settings,
   TrendingUp,
   ViewKanban,
@@ -40,12 +45,18 @@ const MENU_ICON_MAP: Record<string, React.ReactElement> = {
   account_balance: <AccountBalance />,
   assessment: <Assessment />,
   person: <Person />,
+  Person: <Person />,
   settings: <Settings />,
   notifications: <Notifications />,
   psychology: <Psychology />,
   chat: <Chat />,
   attach_money: <AttachMoney />,
   event_available: <EventAvailable />,
+  event: <BeachAccess />,
+  schedule: <Schedule />,
+  payments: <Payments />,
+  campaign: <Campaign />,
+  assignment: <Assignment />,
   category: <Category />,
   view_kanban: <ViewKanban />,
   move_to_inbox: <MoveToInbox />,
@@ -57,8 +68,8 @@ const MENU_ICON_MAP: Record<string, React.ReactElement> = {
 };
 
 export function getMenuIconByName(iconName?: string | null): React.ReactElement {
-  const key = String(iconName || '').trim().toLowerCase();
-  return MENU_ICON_MAP[key] || <MenuIcon />;
+  const key = String(iconName || '').trim();
+  return MENU_ICON_MAP[key] || MENU_ICON_MAP[key.toLowerCase()] || <MenuIcon />;
 }
 
 export function getPageIconByRoute(route: string): React.ReactElement | null {
@@ -77,9 +88,9 @@ export function getPageIconByRoute(route: string): React.ReactElement | null {
   if (normalized.includes('/hr/users')) return <Person />;
   if (normalized.includes('/hr/departments')) return <Business />;
   if (normalized.includes('/hr/attendance/statistics')) return <Assessment />;
-  if (normalized.includes('/hr/attendance')) return <EventAvailable />;
-  if (normalized.includes('/hr/payroll')) return <AttachMoney />;
-  if (normalized.includes('/hr/leave') || normalized.includes('/hr/vacation')) return <EventAvailable />;
+  if (normalized.includes('/hr/attendance')) return <Schedule />;
+  if (normalized.includes('/hr/payroll')) return <Payments />;
+  if (normalized.includes('/hr/leave') || normalized.includes('/hr/vacation')) return <BeachAccess />;
   if (normalized.includes('/hr/employment-contracts')) return <Description />;
   if (normalized.includes('/hr')) return <People />;
 
@@ -119,12 +130,17 @@ export function getPageIconByRoute(route: string): React.ReactElement | null {
   if (normalized.includes('/company')) return <AccountBalance />;
   if (normalized.includes('/partners')) return <People />;
   if (normalized.includes('/users')) return <Person />;
-  if (normalized.includes('/my/work-list')) return <ViewKanban />;
-  if (normalized.includes('/my/mail-settings')) return <Email />;
-  if (normalized.includes('/my')) return <Person />;
-  if (normalized.includes('/attendance')) return <EventAvailable />;
+  if (normalized.includes('/my/personal-info')) return <Person />;
+  if (normalized.includes('/my/attendance')) return <Schedule />;
+  if (normalized.includes('/my/leave')) return <BeachAccess />;
+  if (normalized.includes('/my/payslips')) return <Payments />;
+  if (normalized.includes('/my/contracts')) return <Description />;
+  if (normalized.includes('/my/notices') || normalized.includes('/notice')) return <Campaign />;
+  if (normalized.includes('/my/work-list')) return <Assignment />;
+  if (normalized.includes('/my/mail-settings')) return <Settings />;
+  if (normalized === '/my' || normalized.startsWith('/my/')) return <Person />;
+  if (normalized.includes('/attendance')) return <Schedule />;
   if (normalized.includes('/notifications')) return <Notifications />;
-  if (normalized.includes('/notice')) return <Notifications />;
   if (normalized.includes('/communication')) return <Notifications />;
   if (normalized.includes('/mail')) return <Email />;
   if (normalized.includes('/ai/')) return <Psychology />;
@@ -141,13 +157,17 @@ export function resolvePageIcon(route: string, menu?: Menu | null): React.ReactE
 
   const ko = String(menu?.name_ko || '');
   const en = String(menu?.name_en || '').toLowerCase();
+  if (ko.includes('내 정보') || en.includes('my info')) return <Person />;
   if (ko.includes('기초') || en.includes('basic')) return <Settings />;
   if (ko.includes('인사') || en.includes('hr')) return <People />;
   if (ko.includes('업무') || en.includes('work')) return <ViewKanban />;
   if (ko.includes('호텔') || en.includes('hotel')) return <Dashboard />;
   if (ko.includes('재고') || en.includes('inventory')) return <Inventory />;
   if (ko.includes('회계') || en.includes('accounting')) return <AttachMoney />;
-  if (ko.includes('공지') || en.includes('notice')) return <Notifications />;
+  if (ko.includes('출퇴근') || en.includes('attendance')) return <Schedule />;
+  if (ko.includes('휴가') || en.includes('leave') || en.includes('vacation')) return <BeachAccess />;
+  if (ko.includes('급여') || en.includes('payslip') || en.includes('payroll')) return <Payments />;
+  if (ko.includes('공지') || en.includes('notice')) return <Campaign />;
 
   return <MenuIcon />;
 }

@@ -45,6 +45,11 @@ import {
   Hotel,
   UploadFile,
   Download,
+  Schedule,
+  BeachAccess,
+  Payments,
+  Campaign,
+  Assignment,
 } from '@mui/icons-material';
 import { useNavigate, useLocation, Link as RouterLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -468,6 +473,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   // 아이콘 매핑
   const getIcon = (iconName: string) => {
+    const key = String(iconName || '').trim();
     const iconMap: { [key: string]: React.ReactElement } = {
       dashboard: <Dashboard />,
       inventory: <Inventory />,
@@ -479,12 +485,18 @@ const Sidebar: React.FC<SidebarProps> = ({
       account_balance: <AccountBalance />,
       assessment: <Assessment />,
       person: <Person />,
+      Person: <Person />,
       settings: <Settings />,
       notifications: <Notifications />,
       psychology: <Psychology />,
       chat: <Chat />,
       attach_money: <AttachMoney />,
       event_available: <EventAvailable />,
+      event: <BeachAccess />,
+      schedule: <Schedule />,
+      payments: <Payments />,
+      campaign: <Campaign />,
+      assignment: <Assignment />,
       category: <Category />,
       view_kanban: <ViewKanban />,
       move_to_inbox: <MoveToInbox />,
@@ -492,7 +504,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       qr_code_scanner: <QrCodeScanner />,
       download: <Download />,
     };
-    return iconMap[iconName] || <MenuIcon />;
+    return iconMap[key] || iconMap[key.toLowerCase()] || <MenuIcon />;
   };
 
   const getSubmenuIconByRoute = (route: string) => {
@@ -508,9 +520,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (normalized.includes('/hr/users')) return <Person />;
     if (normalized.includes('/hr/departments')) return <Business />;
     if (normalized.includes('/hr/attendance/statistics')) return <Assessment />;
-    if (normalized.includes('/hr/attendance')) return <EventAvailable />;
-    if (normalized.includes('/hr/payroll')) return <AttachMoney />;
-    if (normalized.includes('/hr/leave')) return <EventAvailable />;
+    if (normalized.includes('/hr/attendance')) return <Schedule />;
+    if (normalized.includes('/hr/payroll')) return <Payments />;
+    if (normalized.includes('/hr/leave') || normalized.includes('/hr/vacation')) return <BeachAccess />;
     if (normalized.includes('/hr/employment-contracts')) return <Description />;
 
     if (normalized.includes('/work/projects')) return <ViewKanban />;
@@ -548,7 +560,17 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (normalized.includes('/customers/contracts')) return <Description />;
 
     if (normalized.includes('/dashboard')) return <Dashboard />;
-    if (normalized.includes('/my/notices') || normalized.includes('/communication/notice')) return <Notifications />;
+    if (normalized.includes('/my/personal-info')) return <Person />;
+    if (normalized.includes('/my/attendance')) return <Schedule />;
+    if (normalized.includes('/my/leave')) return <BeachAccess />;
+    if (normalized.includes('/my/payslips')) return <Payments />;
+    if (normalized.includes('/my/contracts')) return <Description />;
+    if (normalized.includes('/my/notices') || normalized.includes('/communication/notice')) {
+      return <Campaign />;
+    }
+    if (normalized.includes('/my/work-list')) return <Assignment />;
+    if (normalized.includes('/my/mail-settings')) return <Settings />;
+    if (normalized === '/my' || normalized.startsWith('/my/')) return <Person />;
     if (normalized.includes('/communication/desktop-notifier')) return <Download />;
     if (normalized.includes('/communication/email')) return <Chat />;
     if (normalized.includes('/communication/sms')) return <Notifications />;
@@ -578,6 +600,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     const ko = String(menu.name_ko || '');
     const en = String(menu.name_en || '').toLowerCase();
+    if (ko.includes('내 정보') || en.includes('my info')) return <Person />;
     if (ko.includes('기초') || en.includes('basic')) return <Settings />;
     if (ko.includes('인사') || en.includes('hr')) return <People />;
     if (ko.includes('업무') || en.includes('work')) return <ViewKanban />;
@@ -591,8 +614,11 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (ko.includes('커뮤니케이션') || en.includes('communication')) return <Notifications />;
     if (ko.includes('ai') || en.includes('ai')) return <Psychology />;
     if (ko.includes('리포트') || en.includes('report')) return <Assessment />;
+    if (ko.includes('출퇴근') || en.includes('attendance')) return <Schedule />;
+    if (ko.includes('휴가') || en.includes('leave') || en.includes('vacation')) return <BeachAccess />;
+    if (ko.includes('급여') || en.includes('payslip') || en.includes('payroll')) return <Payments />;
     if (ko.includes('설정') || en.includes('setting')) return <Settings />;
-    if (ko.includes('공지') || en.includes('notice')) return <Notifications />;
+    if (ko.includes('공지') || en.includes('notice')) return <Campaign />;
     if (level === 0) return defaultIcon;
     return defaultIcon;
   };

@@ -233,6 +233,7 @@ export const createNotice = async (req: RequestWithUser, res: Response) => {
           companyId: company_id,
           question: poll.question,
           options: Array.isArray(poll.options) ? poll.options : [],
+          opensAt: poll.opensAt || poll.opens_at || null,
           closesAt: poll.closesAt || poll.closes_at || null,
         });
       } catch (pollErr: any) {

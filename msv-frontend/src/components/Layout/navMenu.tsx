@@ -31,6 +31,12 @@ import {
   UploadFile,
   AssignmentInd,
   Download,
+  Schedule,
+  BeachAccess,
+  Payments,
+  Campaign,
+  Assignment,
+  ListAlt,
 } from '@mui/icons-material';
 import type { Menu } from '../../services/menuService';
 import { isRemovedNavMenuRoute } from '../../utils/isRemovedNavMenuRoute';
@@ -229,12 +235,19 @@ const ICON_BY_NAME: Record<string, React.ReactElement> = {
   account_balance: <AccountBalance />,
   assessment: <Assessment />,
   person: <Person />,
+  Person: <Person />,
   settings: <Settings />,
   notifications: <Notifications />,
   psychology: <Psychology />,
   chat: <Chat />,
   attach_money: <AttachMoney />,
   event_available: <EventAvailable />,
+  event: <BeachAccess />,
+  schedule: <Schedule />,
+  payments: <Payments />,
+  campaign: <Campaign />,
+  assignment: <Assignment />,
+  list_alt: <ListAlt />,
   category: <Category />,
   view_kanban: <ViewKanban />,
   move_to_inbox: <MoveToInbox />,
@@ -256,9 +269,9 @@ const getIconByRoute = (route: string): React.ReactElement | null => {
   if (normalized.includes('/hr/users')) return <Person />;
   if (normalized.includes('/hr/departments')) return <Business />;
   if (normalized.includes('/hr/attendance/statistics')) return <Assessment />;
-  if (normalized.includes('/hr/attendance')) return <EventAvailable />;
-  if (normalized.includes('/hr/payroll')) return <AttachMoney />;
-  if (normalized.includes('/hr/leave')) return <EventAvailable />;
+  if (normalized.includes('/hr/attendance')) return <Schedule />;
+  if (normalized.includes('/hr/payroll')) return <Payments />;
+  if (normalized.includes('/hr/leave') || normalized.includes('/hr/vacation')) return <BeachAccess />;
   if (normalized.includes('/hr/employment-contracts')) return <Description />;
 
   if (normalized.includes('/work/projects')) return <ViewKanban />;
@@ -297,7 +310,17 @@ const getIconByRoute = (route: string): React.ReactElement | null => {
   if (normalized.includes('/customers/contracts')) return <Description />;
 
   if (normalized.includes('/dashboard')) return <Dashboard />;
-  if (normalized.includes('/my/notices') || normalized.includes('/communication/notice')) return <Notifications />;
+  if (normalized.includes('/my/personal-info')) return <Person />;
+  if (normalized.includes('/my/attendance')) return <Schedule />;
+  if (normalized.includes('/my/leave')) return <BeachAccess />;
+  if (normalized.includes('/my/payslips')) return <Payments />;
+  if (normalized.includes('/my/contracts')) return <Description />;
+  if (normalized.includes('/my/notices') || normalized.includes('/communication/notice')) {
+    return <Campaign />;
+  }
+  if (normalized.includes('/my/work-list')) return <Assignment />;
+  if (normalized.includes('/my/mail-settings')) return <Settings />;
+  if (normalized === '/my' || normalized.startsWith('/my/')) return <Person />;
   if (normalized.includes('/communication/desktop-notifier')) return <Download />;
   if (normalized.includes('/communication/email')) return <Chat />;
   if (normalized.includes('/communication/sms')) return <Notifications />;
@@ -325,6 +348,7 @@ export const getMenuIcon = (menu: Menu): React.ReactElement => {
 
   const ko = String(menu.name_ko || '');
   const en = String(menu.name_en || '').toLowerCase();
+  if (ko.includes('내 정보') || en.includes('my info')) return <Person />;
   if (ko.includes('기초') || en.includes('basic')) return <Settings />;
   if (ko.includes('인사') || en.includes('hr')) return <People />;
   if (ko.includes('업무') || en.includes('work')) return <ViewKanban />;
@@ -338,7 +362,11 @@ export const getMenuIcon = (menu: Menu): React.ReactElement => {
   if (ko.includes('커뮤니케이션') || en.includes('communication')) return <Notifications />;
   if (ko.includes('리포트') || en.includes('report')) return <Assessment />;
   if (ko.includes('설정') || en.includes('setting')) return <Settings />;
-  if (ko.includes('공지') || en.includes('notice')) return <Notifications />;
+  if (ko.includes('공지') || en.includes('notice')) return <Campaign />;
+  if (ko.includes('출퇴근') || en.includes('attendance')) return <Schedule />;
+  if (ko.includes('휴가') || en.includes('leave') || en.includes('vacation')) return <BeachAccess />;
+  if (ko.includes('급여') || en.includes('payslip') || en.includes('payroll')) return <Payments />;
 
-  return ICON_BY_NAME[String(menu.icon || '')] || <MenuIcon />;
+  const iconKey = String(menu.icon || '').trim();
+  return ICON_BY_NAME[iconKey] || ICON_BY_NAME[iconKey.toLowerCase()] || <MenuIcon />;
 };

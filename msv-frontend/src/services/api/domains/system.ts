@@ -113,7 +113,10 @@ export const noticeService = {
     return response.data;
   },
 
-  createPoll: async (noticeId: number, data: { question: string; options: string[]; closesAt?: string | null }) => {
+  createPoll: async (
+    noticeId: number,
+    data: { question: string; options: string[]; opensAt?: string | null; closesAt?: string | null }
+  ) => {
     const response = await api.post(`/communication/notices/${noticeId}/poll`, data);
     return response.data;
   },

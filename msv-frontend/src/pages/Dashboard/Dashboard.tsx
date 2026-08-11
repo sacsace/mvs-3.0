@@ -29,7 +29,10 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  Radio,
+  RadioGroup,
+  LinearProgress,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import type { SxProps, Theme } from '@mui/material/styles';
@@ -291,6 +294,11 @@ const Dashboard: React.FC = () => {
   const [myTasks, setMyTasks] = useState<any[]>([]);
   const [noticeDialogOpen, setNoticeDialogOpen] = useState(false);
   const [selectedNotice, setSelectedNotice] = useState<any | null>(null);
+  const [noticeDetailLoading, setNoticeDetailLoading] = useState(false);
+  const [selectedPollOptionId, setSelectedPollOptionId] = useState<number | null>(null);
+  const [pollVoting, setPollVoting] = useState(false);
+  const [noticePollMessage, setNoticePollMessage] = useState('');
+  const [noticePollError, setNoticePollError] = useState('');
   
 
   const [checkInLoading, setCheckInLoading] = useState(false);
@@ -1609,6 +1617,66 @@ const Dashboard: React.FC = () => {
     </Card>
   );
 
+  const openNoticeDetail = async (notice: any) => {
+    setNoticePollError('');
+    setNoticePollMessage('');
+    setSelectedPollOptionId(null);
+    setSelectedNotice(notice);
+    setNoticeDialogOpen(true);
+    if (!notice?.id) return;
+    try {
+      setNoticeDetailLoading(true);
+      const response = await noticeService.getNotice(notice.id);
+      if (response?.success && response.data) {
+        setSelectedNotice(response.data);
+        setSelectedPollOptionId(response.data?.poll?.myVoteOptionId ?? null);
+      }
+    } catch (err: any) {
+      setNoticePollError(
+        err?.response?.data?.message ||
+          (language === 'en' ? 'Failed to load notice.' : '공지를 불러오지 못했습니다.')
+      );
+    } finally {
+      setNoticeDetailLoading(false);
+    }
+  };
+
+  const handleDashboardVotePoll = async () => {
+    if (!selectedNotice?.id || selectedPollOptionId == null) {
+      setNoticePollError(
+        language === 'en' ? 'Select an option before voting.' : '선택지를 고른 뒤 투표하세요.'
+      );
+      return;
+    }
+    try {
+      setPollVoting(true);
+      setNoticePollError('');
+      const response = await noticeService.votePoll(selectedNotice.id, selectedPollOptionId);
+      if (response?.success) {
+        setSelectedNotice({
+          ...selectedNotice,
+          hasPoll: true,
+          poll: response.data,
+        });
+        setNoticePollMessage(
+          language === 'en'
+            ? 'Your vote was recorded. Results are anonymous.'
+            : '투표가 반영되었습니다. 결과는 익명입니다.'
+        );
+      } else {
+        setNoticePollError(
+          response?.message || (language === 'en' ? 'Vote failed.' : '투표에 실패했습니다.')
+        );
+      }
+    } catch (err: any) {
+      setNoticePollError(
+        err?.response?.data?.message || (language === 'en' ? 'Vote failed.' : '투표에 실패했습니다.')
+      );
+    } finally {
+      setPollVoting(false);
+    }
+  };
+
   return (
     <Box sx={mvsPageRootSx}>
       <MvsPageHeader
@@ -2328,6 +2396,13 @@ const Dashboard: React.FC = () => {
                   {selectedNotice.isPinned && (
                     <Chip label={t('dashboard.pinned')} color="warning" size="small" />
                   )}
+                  {(selectedNotice.hasPoll || selectedNotice.poll) && (
+                    <Chip
+                      label={language === 'en' ? 'Poll' : '투표'}
+                      size="small"
+                      sx={{ borderRadius: 0, bgcolor: '#F9A825', color: '#212121', fontWeight: 700 }}
+                    />
+                  )}
                 </Box>
                 <Typography
                   variant="body2"
@@ -2424,6 +2499,166 @@ const Dashboard: React.FC = () => {
                 dangerouslySetInnerHTML={{ __html: selectedNotice.content }}
               />
 
+              {noticeDetailLoading && (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  {language === 'en' ? 'Loading…' : '불러오는 중…'}
+                </Typography>
+              )}
+
+              {noticePollError ? (
+                <Alert severity="error" sx={{ mb: 2, borderRadius: 0 }}>
+                  {noticePollError}
+                </Alert>
+              ) : null}
+              {noticePollMessage ? (
+                <Alert severity="success" sx={{ mb: 2, borderRadius: 0 }}>
+                  {noticePollMessage}
+                </Alert>
+              ) : null}
+
+              {selectedNotice.poll && (
+                <Box
+                  sx={{
+                    mb: 3,
+                    border: '1px solid #B4B4B4',
+                    borderLeft: '4px solid #F9A825',
+                    bgcolor: '#FFFDF5',
+                    p: 2,
+                  }}
+                >
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
+                    {language === 'en' ? 'Poll' : '투표'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+                    {language === 'en' ? 'Anonymous · one vote per user' : '익명 · 1인 1표'}
+                    {selectedNotice.poll.isNotYetOpen
+                      ? ` · ${language === 'en' ? 'Not started' : '시작 전'}`
+                      : selectedNotice.poll.isClosed
+                        ? ` · ${language === 'en' ? 'Closed' : '마감'}`
+                        : ` · ${language === 'en' ? 'Open' : '진행 중'}`}
+                    {` · ${language === 'en' ? 'Total' : '총'} ${selectedNotice.poll.totalVotes}${
+                      language === 'en' ? ' votes' : '표'
+                    }`}
+                  </Typography>
+                  {(selectedNotice.poll.opensAt || selectedNotice.poll.closesAt) && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                      {language === 'en' ? 'Voting period' : '투표 기간'}:{' '}
+                      {selectedNotice.poll.opensAt
+                        ? new Date(selectedNotice.poll.opensAt).toLocaleString(
+                            language === 'en' ? 'en-US' : 'ko-KR'
+                          )
+                        : language === 'en'
+                          ? 'Immediate'
+                          : '즉시'}
+                      {' ~ '}
+                      {selectedNotice.poll.closesAt
+                        ? new Date(selectedNotice.poll.closesAt).toLocaleString(
+                            language === 'en' ? 'en-US' : 'ko-KR'
+                          )
+                        : language === 'en'
+                          ? 'No end'
+                          : '기한 없음'}
+                    </Typography>
+                  )}
+                  <Typography variant="body1" sx={{ mb: 1.5, fontWeight: 600 }}>
+                    {selectedNotice.poll.question}
+                  </Typography>
+
+                  {(selectedNotice.poll.canVote ??
+                    (!selectedNotice.poll.hasVoted &&
+                      !selectedNotice.poll.isClosed &&
+                      !selectedNotice.poll.isNotYetOpen)) ? (
+                    <Box>
+                      <RadioGroup
+                        value={selectedPollOptionId ?? ''}
+                        onChange={(e) => setSelectedPollOptionId(Number(e.target.value))}
+                      >
+                        {selectedNotice.poll.options?.map((opt: any) => (
+                          <FormControlLabel
+                            key={opt.id}
+                            value={opt.id}
+                            control={<Radio size="small" />}
+                            label={opt.label}
+                          />
+                        ))}
+                      </RadioGroup>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        disableElevation
+                        onClick={() => void handleDashboardVotePoll()}
+                        disabled={pollVoting || selectedPollOptionId == null}
+                        sx={{ mt: 1 }}
+                      >
+                        {pollVoting
+                          ? language === 'en'
+                            ? 'Voting…'
+                            : '투표 중…'
+                          : language === 'en'
+                            ? 'Vote'
+                            : '투표하기'}
+                      </Button>
+                    </Box>
+                  ) : (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                      {selectedNotice.poll.isNotYetOpen && !selectedNotice.poll.hasVoted ? (
+                        <Typography variant="body2" color="text.secondary">
+                          {language === 'en'
+                            ? 'Voting is not available before the start time.'
+                            : '투표 시작 전에는 투표할 수 없습니다.'}
+                        </Typography>
+                      ) : null}
+                      {selectedNotice.poll.isClosed && !selectedNotice.poll.hasVoted ? (
+                        <Typography variant="body2" color="text.secondary">
+                          {language === 'en' ? 'This poll is closed.' : '마감되어 투표할 수 없습니다.'}
+                        </Typography>
+                      ) : null}
+                      {(selectedNotice.poll.hasVoted || selectedNotice.poll.isClosed) &&
+                        selectedNotice.poll.options?.map((opt: any) => {
+                          const total = selectedNotice.poll.totalVotes || 0;
+                          const pct = total > 0 ? Math.round((opt.voteCount / total) * 100) : 0;
+                          const isMine = selectedNotice.poll.myVoteOptionId === opt.id;
+                          return (
+                            <Box key={opt.id}>
+                              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.25 }}>
+                                <Typography variant="body2" sx={{ fontWeight: isMine ? 700 : 400 }}>
+                                  {opt.label}
+                                  {isMine
+                                    ? ` (${language === 'en' ? 'Your choice' : '내 선택'})`
+                                    : ''}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  {opt.voteCount}
+                                  {language === 'en' ? '' : '표'} ({pct}%)
+                                </Typography>
+                              </Box>
+                              <LinearProgress
+                                variant="determinate"
+                                value={pct}
+                                sx={{
+                                  height: 8,
+                                  borderRadius: 0,
+                                  bgcolor: '#E8E8E8',
+                                  '& .MuiLinearProgress-bar': {
+                                    bgcolor: isMine ? '#4CAF50' : '#9E9E9E',
+                                  },
+                                }}
+                              />
+                            </Box>
+                          );
+                        })}
+                      {selectedNotice.poll.isNotYetOpen &&
+                        !selectedNotice.poll.hasVoted &&
+                        selectedNotice.poll.options?.map((opt: any) => (
+                          <Typography key={opt.id} variant="body2" sx={{ pl: 0.5 }}>
+                            · {opt.label}
+                          </Typography>
+                        ))}
+                    </Box>
+                  )}
+                </Box>
+              )}
+
               {selectedNotice.attachments && selectedNotice.attachments.length > 0 && (
                 <Box sx={{ mb: 3 }}>
                   <Typography variant="h6" gutterBottom>{t('dashboard.attachments')}</Typography>
@@ -2468,7 +2703,7 @@ const Dashboard: React.FC = () => {
             onClick={() => {
               setNoticeDialogOpen(false);
               setSelectedNotice(null);
-              navigate('/communication/notice');
+              navigate('/my/notices');
             }}
           >
             {language === 'en' ? 'View all' : '전체 보기'}
@@ -3085,7 +3320,7 @@ const Dashboard: React.FC = () => {
               <Button
                 size="small"
                 variant="text"
-                onClick={() => navigate('/communication/notice')}
+                onClick={() => navigate('/my/notices')}
               >
                 {language === 'en' ? 'View all' : '모두 보기'}
               </Button>
@@ -3097,27 +3332,50 @@ const Dashboard: React.FC = () => {
                     <ListItem
                       key={notice.id}
                       sx={{
-                        px: 0,
-                        py: 0.45,
+                        px: 1,
+                        py: 0.55,
                         cursor: 'pointer',
-                        '&:hover': { bgcolor: 'action.hover' }
+                        borderLeft: notice.hasPoll ? '3px solid #F9A825' : '3px solid transparent',
+                        bgcolor: notice.hasPoll ? '#FFF8E1' : 'transparent',
+                        mb: 0.25,
+                        '&:hover': { bgcolor: notice.hasPoll ? '#FFF3C4' : 'action.hover' },
                       }}
-                      onClick={() => {
-                        setSelectedNotice(notice);
-                        setNoticeDialogOpen(true);
-                      }}
+                      onClick={() => void openNoticeDetail(notice)}
                     >
                       <ListItemText
                         primary={
-                          <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
-                            {notice.title || '—'}
-                          </Typography>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                              {notice.title || '—'}
+                            </Typography>
+                            {notice.hasPoll ? (
+                              <Chip
+                                size="small"
+                                label={language === 'en' ? 'Poll' : '투표'}
+                                sx={{
+                                  height: 18,
+                                  fontSize: '0.65rem',
+                                  fontWeight: 700,
+                                  borderRadius: 0,
+                                  bgcolor: '#F9A825',
+                                  color: '#212121',
+                                  flexShrink: 0,
+                                }}
+                              />
+                            ) : null}
+                          </Box>
                         }
                         secondary={
                           <Typography variant="caption" color="text.secondary">
-                            {notice.published_at || notice.created_at || notice.createdAt
+                            {notice.published_at ||
+                            notice.publishedAt ||
+                            notice.created_at ||
+                            notice.createdAt
                               ? new Date(
-                                  notice.published_at || notice.created_at || notice.createdAt
+                                  notice.published_at ||
+                                    notice.publishedAt ||
+                                    notice.created_at ||
+                                    notice.createdAt
                                 ).toLocaleDateString(language === 'en' ? 'en-US' : 'ko-KR')
                               : ''}
                           </Typography>

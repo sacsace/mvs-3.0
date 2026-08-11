@@ -6,8 +6,11 @@ export type AnonymousPollPayload = {
   id: number;
   noticeId: number;
   question: string;
+  opensAt: string | null;
   closesAt: string | null;
+  isNotYetOpen: boolean;
   isClosed: boolean;
+  canVote: boolean;
   totalVotes: number;
   hasVoted: boolean;
   myVoteOptionId: number | null;
@@ -19,9 +22,37 @@ export type AnonymousPollPayload = {
   }>;
 };
 
-function isPollClosed(closesAt: Date | null | undefined): boolean {
-  if (!closesAt) return false;
-  return new Date(closesAt).getTime() <= Date.now();
+function parseDate(value: Date | string | null | undefined): Date | null {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export function getPollWindowState(opensAt: Date | null | undefined, closesAt: Date | null | undefined) {
+  const now = Date.now();
+  const open = parseDate(opensAt || null);
+  const close = parseDate(closesAt || null);
+  const isNotYetOpen = Boolean(open && open.getTime() > now);
+  const isClosed = Boolean(close && close.getTime() <= now);
+  return {
+    isNotYetOpen,
+    isClosed,
+    canVoteWindow: !isNotYetOpen && !isClosed,
+  };
+}
+
+function assertPollWindow(opensAt?: string | null, closesAt?: string | null) {
+  const open = opensAt ? parseDate(opensAt) : null;
+  const close = closesAt ? parseDate(closesAt) : null;
+  if (opensAt && !open) {
+    throw Object.assign(new Error('투표 시작 시각이 올바르지 않습니다.'), { status: 400 });
+  }
+  if (closesAt && !close) {
+    throw Object.assign(new Error('투표 마감 시각이 올바르지 않습니다.'), { status: 400 });
+  }
+  if (open && close && open.getTime() >= close.getTime()) {
+    throw Object.assign(new Error('투표 시작은 마감보다 이전이어야 합니다.'), { status: 400 });
+  }
 }
 
 /** 투표 결과는 옵션별 집계만 반환. 누가 찍었는지는 노출하지 않음. */
@@ -77,15 +108,20 @@ export async function getAnonymousPollForNotice(
   }));
 
   const totalVotes = optionPayload.reduce((sum: number, o: { voteCount: number }) => sum + o.voteCount, 0);
+  const window = getPollWindowState(poll.opens_at, poll.closes_at);
+  const hasVoted = myVoteOptionId != null;
 
   return {
     id: poll.id,
     noticeId: poll.notice_id,
     question: poll.question,
+    opensAt: poll.opens_at ? new Date(poll.opens_at).toISOString() : null,
     closesAt: poll.closes_at ? new Date(poll.closes_at).toISOString() : null,
-    isClosed: isPollClosed(poll.closes_at),
+    isNotYetOpen: window.isNotYetOpen,
+    isClosed: window.isClosed,
+    canVote: !hasVoted && window.canVoteWindow,
     totalVotes,
-    hasVoted: myVoteOptionId != null,
+    hasVoted,
     myVoteOptionId,
     options: optionPayload,
   };
@@ -97,10 +133,11 @@ export async function createPollForNotice(params: {
   companyId: number;
   question: string;
   options: string[];
+  opensAt?: string | null;
   closesAt?: string | null;
   transaction?: any;
 }) {
-  const { noticeId, tenantId, companyId, question, options, closesAt, transaction } = params;
+  const { noticeId, tenantId, companyId, question, options, opensAt, closesAt, transaction } = params;
   const cleaned = (options || [])
     .map((o) => String(o || '').trim())
     .filter((o) => o.length > 0);
@@ -114,6 +151,8 @@ export async function createPollForNotice(params: {
   if (cleaned.length > 20) {
     throw Object.assign(new Error('투표 선택지는 최대 20개까지입니다.'), { status: 400 });
   }
+
+  assertPollWindow(opensAt, closesAt);
 
   const existing = await (NoticePoll as any).findOne({
     where: { notice_id: noticeId, is_active: true },
@@ -129,6 +168,7 @@ export async function createPollForNotice(params: {
       company_id: companyId,
       notice_id: noticeId,
       question: String(question).trim().slice(0, 500),
+      opens_at: opensAt ? new Date(opensAt) : null,
       closes_at: closesAt ? new Date(closesAt) : null,
       is_active: true,
     },
@@ -170,7 +210,7 @@ export const createNoticePoll = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
     const { tenant_id, company_id, id: user_id, role } = req.user;
-    const { question, options, closesAt } = req.body || {};
+    const { question, options, closesAt, opensAt } = req.body || {};
 
     if (!tenant_id || !company_id || !user_id) {
       return res.status(400).json({ success: false, message: '사용자 정보가 올바르지 않습니다.' });
@@ -195,6 +235,7 @@ export const createNoticePoll = async (req: RequestWithUser, res: Response) => {
       companyId: company_id,
       question,
       options: Array.isArray(options) ? options : [],
+      opensAt: opensAt || null,
       closesAt: closesAt || null,
     });
 
@@ -238,7 +279,12 @@ export const voteNoticePoll = async (req: RequestWithUser, res: Response) => {
     if (!poll) {
       return res.status(404).json({ success: false, message: '투표를 찾을 수 없습니다.' });
     }
-    if (isPollClosed(poll.closes_at)) {
+
+    const window = getPollWindowState(poll.opens_at, poll.closes_at);
+    if (window.isNotYetOpen) {
+      return res.status(400).json({ success: false, message: '투표 기간이 아직 시작되지 않았습니다.' });
+    }
+    if (window.isClosed) {
       return res.status(400).json({ success: false, message: '마감된 투표입니다.' });
     }
 

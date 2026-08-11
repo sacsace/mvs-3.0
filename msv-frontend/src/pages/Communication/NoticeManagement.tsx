@@ -117,8 +117,11 @@ interface NoticePoll {
   id: number;
   noticeId: number;
   question: string;
+  opensAt: string | null;
   closesAt: string | null;
+  isNotYetOpen?: boolean;
   isClosed: boolean;
+  canVote?: boolean;
   totalVotes: number;
   hasVoted: boolean;
   myVoteOptionId: number | null;
@@ -300,7 +303,9 @@ const NoticeManagement: React.FC = () => {
   const [pollForm, setPollForm] = useState({
     enabled: false,
     question: '',
-    options: ['', ''] as string[]
+    options: ['', ''] as string[],
+    opensAt: '',
+    closesAt: '',
   });
   const [selectedPollOptionId, setSelectedPollOptionId] = useState<number | null>(null);
   const [pollVoting, setPollVoting] = useState(false);
@@ -751,7 +756,7 @@ const NoticeManagement: React.FC = () => {
         setSelectedNotice(response.data);
         setSelectedPollOptionId(response.data?.poll?.myVoteOptionId ?? null);
         setAddPollOnView(false);
-        setPollForm({ enabled: false, question: '', options: ['', ''] });
+        setPollForm({ enabled: false, question: '', options: ['', ''], opensAt: '', closesAt: '' });
         setViewMode('view');
       } else {
         setError('공지사항을 불러오는데 실패했습니다.');
@@ -858,7 +863,7 @@ const NoticeManagement: React.FC = () => {
       isPinned: false, // 고정하기
       attachments: []
     });
-    setPollForm({ enabled: false, question: '', options: ['', ''] });
+    setPollForm({ enabled: false, question: '', options: ['', ''], opensAt: '', closesAt: '' });
     setOpenDialog(true);
   };
 
@@ -901,12 +906,14 @@ const NoticeManagement: React.FC = () => {
     try {
       const response = await noticeService.createPoll(selectedNotice.id, {
         question: pollForm.question.trim(),
-        options: cleaned
+        options: cleaned,
+        opensAt: pollForm.opensAt ? new Date(pollForm.opensAt).toISOString() : null,
+        closesAt: pollForm.closesAt ? new Date(pollForm.closesAt).toISOString() : null,
       });
       if (response.success) {
         setSelectedNotice({ ...selectedNotice, hasPoll: true, poll: response.data });
         setAddPollOnView(false);
-        setPollForm({ enabled: false, question: '', options: ['', ''] });
+        setPollForm({ enabled: false, question: '', options: ['', ''], opensAt: '', closesAt: '' });
         setSuccess(txt('투표가 등록되었습니다.', 'Poll created.'));
       } else {
         setError(response.message || txt('투표 등록에 실패했습니다.', 'Failed to create poll.'));
@@ -943,7 +950,9 @@ const NoticeManagement: React.FC = () => {
         noticeData.poll = {
           enabled: true,
           question: pollForm.question.trim(),
-          options: cleaned
+          options: cleaned,
+          opensAt: pollForm.opensAt ? new Date(pollForm.opensAt).toISOString() : null,
+          closesAt: pollForm.closesAt ? new Date(pollForm.closesAt).toISOString() : null,
         };
       }
 
@@ -973,7 +982,7 @@ const NoticeManagement: React.FC = () => {
           setSuccess('공지사항이 작성되었습니다.');
           setOpenDialog(false);
           setSelectedNotice(null);
-          setPollForm({ enabled: false, question: '', options: ['', ''] });
+          setPollForm({ enabled: false, question: '', options: ['', ''], opensAt: '', closesAt: '' });
           loadData();
         } else {
           setError(response.message || '작성 중 오류가 발생했습니다.');
@@ -2022,25 +2031,85 @@ const NoticeManagement: React.FC = () => {
                   mt: 3,
                   mb: 2,
                   border: '1px solid #B4B4B4',
-                  bgcolor: '#fff',
+                  borderLeft: '4px solid #F9A825',
+                  bgcolor: '#FFFDF5',
                   p: 2
                 }}
               >
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 0.5 }}>
                   {txt('투표', 'Poll')}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
                   {txt('익명 · 1인 1표', 'Anonymous · one vote per user')}
-                  {selectedNotice.poll.isClosed ? ` · ${txt('마감', 'Closed')}` : ''}
+                  {selectedNotice.poll.isNotYetOpen
+                    ? ` · ${txt('시작 전', 'Not started')}`
+                    : selectedNotice.poll.isClosed
+                      ? ` · ${txt('마감', 'Closed')}`
+                      : ` · ${txt('진행 중', 'Open')}`}
                   {` · ${txt('총', 'Total')} ${selectedNotice.poll.totalVotes}${txt('표', ' votes')}`}
                 </Typography>
+                {(selectedNotice.poll.opensAt || selectedNotice.poll.closesAt) && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                    {txt('투표 기간', 'Voting period')}:{' '}
+                    {selectedNotice.poll.opensAt
+                      ? new Date(selectedNotice.poll.opensAt).toLocaleString(isEn ? 'en-US' : 'ko-KR')
+                      : txt('즉시', 'Immediate')}
+                    {' ~ '}
+                    {selectedNotice.poll.closesAt
+                      ? new Date(selectedNotice.poll.closesAt).toLocaleString(isEn ? 'en-US' : 'ko-KR')
+                      : txt('기한 없음', 'No end')}
+                  </Typography>
+                )}
                 <Typography variant="body1" sx={{ mb: 1.5, fontWeight: 500 }}>
                   {selectedNotice.poll.question}
                 </Typography>
 
-                {selectedNotice.poll.hasVoted || selectedNotice.poll.isClosed ? (
+                {(selectedNotice.poll.canVote ??
+                  (!selectedNotice.poll.hasVoted &&
+                    !selectedNotice.poll.isClosed &&
+                    !selectedNotice.poll.isNotYetOpen)) ? (
+                  <Box>
+                    <RadioGroup
+                      value={selectedPollOptionId ?? ''}
+                      onChange={(e) => setSelectedPollOptionId(Number(e.target.value))}
+                    >
+                      {selectedNotice.poll.options.map((opt) => (
+                        <FormControlLabel
+                          key={opt.id}
+                          value={opt.id}
+                          control={<Radio size="small" />}
+                          label={opt.label}
+                        />
+                      ))}
+                    </RadioGroup>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      disableElevation
+                      onClick={handleVotePoll}
+                      disabled={pollVoting || selectedPollOptionId == null}
+                      sx={{ ...mvsBodyPrimaryBtnSx, mt: 1 }}
+                    >
+                      {pollVoting ? txt('투표 중…', 'Voting…') : txt('투표하기', 'Vote')}
+                    </Button>
+                  </Box>
+                ) : (
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-                    {selectedNotice.poll.options.map((opt) => {
+                    {selectedNotice.poll.isNotYetOpen && !selectedNotice.poll.hasVoted ? (
+                      <Typography variant="body2" color="text.secondary">
+                        {txt(
+                          '투표 시작 전에는 투표할 수 없습니다.',
+                          'Voting is not available before the start time.'
+                        )}
+                      </Typography>
+                    ) : null}
+                    {selectedNotice.poll.isClosed && !selectedNotice.poll.hasVoted ? (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                        {txt('마감되어 투표할 수 없습니다.', 'This poll is closed.')}
+                      </Typography>
+                    ) : null}
+                    {(selectedNotice.poll.hasVoted || selectedNotice.poll.isClosed) &&
+                      selectedNotice.poll.options.map((opt) => {
                       const pct =
                         selectedNotice.poll!.totalVotes > 0
                           ? Math.round((opt.voteCount / selectedNotice.poll!.totalVotes) * 100)
@@ -2071,32 +2140,13 @@ const NoticeManagement: React.FC = () => {
                         </Box>
                       );
                     })}
-                  </Box>
-                ) : (
-                  <Box>
-                    <RadioGroup
-                      value={selectedPollOptionId ?? ''}
-                      onChange={(e) => setSelectedPollOptionId(Number(e.target.value))}
-                    >
-                      {selectedNotice.poll.options.map((opt) => (
-                        <FormControlLabel
-                          key={opt.id}
-                          value={opt.id}
-                          control={<Radio size="small" />}
-                          label={opt.label}
-                        />
+                    {selectedNotice.poll.isNotYetOpen &&
+                      !selectedNotice.poll.hasVoted &&
+                      selectedNotice.poll.options.map((opt) => (
+                        <Typography key={opt.id} variant="body2" sx={{ pl: 0.5 }}>
+                          · {opt.label}
+                        </Typography>
                       ))}
-                    </RadioGroup>
-                    <Button
-                      variant="contained"
-                      size="small"
-                      disableElevation
-                      onClick={handleVotePoll}
-                      disabled={pollVoting || selectedPollOptionId == null}
-                      sx={{ ...mvsBodyPrimaryBtnSx, mt: 1 }}
-                    >
-                      {pollVoting ? txt('투표 중…', 'Voting…') : txt('투표하기', 'Vote')}
-                    </Button>
                   </Box>
                 )}
               </Box>
@@ -2113,7 +2163,13 @@ const NoticeManagement: React.FC = () => {
                       variant="outlined"
                       onClick={() => {
                         setAddPollOnView(true);
-                        setPollForm({ enabled: true, question: '', options: ['', ''] });
+                        setPollForm({
+                          enabled: true,
+                          question: '',
+                          options: ['', ''],
+                          opensAt: '',
+                          closesAt: '',
+                        });
                       }}
                       sx={mvsBodyOutlinedBtnSx}
                     >
@@ -2129,6 +2185,26 @@ const NoticeManagement: React.FC = () => {
                         value={pollForm.question}
                         onChange={(e) => setPollForm({ ...pollForm, question: e.target.value })}
                       />
+                      <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+                        <TextField
+                          size="small"
+                          type="datetime-local"
+                          label={txt('투표 시작', 'Voting starts')}
+                          value={pollForm.opensAt}
+                          onChange={(e) => setPollForm({ ...pollForm, opensAt: e.target.value })}
+                          InputLabelProps={{ shrink: true }}
+                          sx={{ flex: 1, minWidth: 220 }}
+                        />
+                        <TextField
+                          size="small"
+                          type="datetime-local"
+                          label={txt('투표 마감', 'Voting ends')}
+                          value={pollForm.closesAt}
+                          onChange={(e) => setPollForm({ ...pollForm, closesAt: e.target.value })}
+                          InputLabelProps={{ shrink: true }}
+                          sx={{ flex: 1, minWidth: 220 }}
+                        />
+                      </Box>
                       {pollForm.options.map((opt, idx) => (
                         <Box key={idx} sx={{ display: 'flex', gap: 1 }}>
                           <TextField
@@ -2173,7 +2249,13 @@ const NoticeManagement: React.FC = () => {
                           size="small"
                           onClick={() => {
                             setAddPollOnView(false);
-                            setPollForm({ enabled: false, question: '', options: ['', ''] });
+                            setPollForm({
+                              enabled: false,
+                              question: '',
+                              options: ['', ''],
+                              opensAt: '',
+                              closesAt: '',
+                            });
                           }}
                         >
                           {txt('취소', 'Cancel')}
@@ -2494,7 +2576,16 @@ const NoticeManagement: React.FC = () => {
                   key={notice.id} 
                   hover
                   onClick={() => handleViewNotice(notice)}
-                  sx={{ cursor: 'pointer' }}
+                  sx={{
+                    cursor: 'pointer',
+                    ...(notice.hasPoll || (notice as any).hasPoll
+                      ? {
+                          bgcolor: '#FFF8E1',
+                          borderLeft: '3px solid #F9A825',
+                          '&:hover': { bgcolor: '#FFF3C4' },
+                        }
+                      : {}),
+                  }}
                 >
                   <TableCell sx={cellEllipsisSx}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
@@ -2514,21 +2605,19 @@ const NoticeManagement: React.FC = () => {
                           {stripHtmlTags(notice.title)}
                         </Typography>
                         {(notice.hasPoll || (notice as any).hasPoll) && (
-                          <Typography
-                            component="span"
-                            variant="caption"
+                          <Chip
+                            size="small"
+                            label={txt('투표', 'Poll')}
                             sx={{
                               flexShrink: 0,
-                              border: '1px solid #B4B4B4',
-                              px: 0.5,
-                              lineHeight: 1.35,
+                              height: 20,
+                              fontSize: '0.7rem',
                               fontWeight: 700,
-                              whiteSpace: 'nowrap',
-                              bgcolor: '#F7FBF7',
+                              borderRadius: 0,
+                              bgcolor: '#F9A825',
+                              color: '#212121',
                             }}
-                          >
-                            {txt('투표', 'Poll')}
-                          </Typography>
+                          />
                         )}
                         {notice.attachments && notice.attachments.length > 0 && (
                           <Tooltip title={txt(`첨부파일 ${notice.attachments.length}개`, `${notice.attachments.length} attachment(s)`)}>
@@ -2942,6 +3031,28 @@ const NoticeManagement: React.FC = () => {
                       value={pollForm.question}
                       onChange={(e) => setPollForm({ ...pollForm, question: e.target.value })}
                     />
+                    <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+                      <TextField
+                        size="small"
+                        type="datetime-local"
+                        label={txt('투표 시작', 'Voting starts')}
+                        value={pollForm.opensAt}
+                        onChange={(e) => setPollForm({ ...pollForm, opensAt: e.target.value })}
+                        InputLabelProps={{ shrink: true }}
+                        sx={{ flex: 1, minWidth: 220 }}
+                        helperText={txt('비우면 즉시 시작', 'Empty = start immediately')}
+                      />
+                      <TextField
+                        size="small"
+                        type="datetime-local"
+                        label={txt('투표 마감', 'Voting ends')}
+                        value={pollForm.closesAt}
+                        onChange={(e) => setPollForm({ ...pollForm, closesAt: e.target.value })}
+                        InputLabelProps={{ shrink: true }}
+                        sx={{ flex: 1, minWidth: 220 }}
+                        helperText={txt('비우면 기한 없음', 'Empty = no deadline')}
+                      />
+                    </Box>
                     {pollForm.options.map((opt, idx) => (
                       <Box key={idx} sx={{ display: 'flex', gap: 1 }}>
                         <TextField
