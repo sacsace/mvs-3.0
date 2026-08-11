@@ -464,11 +464,14 @@ const Login: React.FC = () => {
   return (
     <Box
       sx={{
-        minHeight: '100vh',
+        height: { xs: '100dvh', md: 'auto' },
+        minHeight: { xs: '100dvh', md: '100vh' },
+        maxHeight: { xs: '100dvh', md: 'none' },
         display: 'flex',
         flexDirection: { xs: 'column', md: 'row' },
         bgcolor: '#FFFFFF',
         position: 'relative',
+        overflow: { xs: 'hidden', md: 'visible' },
       }}
     >
       <Box
@@ -477,35 +480,42 @@ const Login: React.FC = () => {
           bgcolor: '#163E63',
           color: '#F8FAFC',
           display: 'flex',
-          flexDirection: 'column',
-          justifyContent: { xs: 'center', md: 'flex-end' },
-          px: { xs: 2.5, sm: 4, md: 5 },
-          py: { xs: 2.5, md: 5 },
+          flexDirection: { xs: 'row', md: 'column' },
+          alignItems: { xs: 'center', md: 'stretch' },
+          justifyContent: { xs: 'flex-start', md: 'flex-end' },
+          gap: { xs: 1.25, md: 0 },
+          px: { xs: 2, sm: 4, md: 5 },
+          py: { xs: 1.25, md: 5 },
           borderRight: { md: '1px solid #112F4B' },
           borderBottom: { xs: '1px solid #112F4B', md: 'none' },
-          minHeight: { xs: 120, md: '100vh' },
+          minHeight: { xs: 'auto', md: '100vh' },
         }}
       >
         <Typography
           component="p"
           sx={{
-            fontSize: { xs: '1.75rem', md: '2.75rem' },
+            fontSize: { xs: '1.25rem', md: '2.75rem' },
             fontWeight: 800,
             letterSpacing: '-0.04em',
             lineHeight: 1.05,
             color: '#FFFFFF',
-            mb: 0.75,
+            mb: { xs: 0, md: 0.75 },
+            flexShrink: 0,
           }}
         >
           {t('login.brandName')}
         </Typography>
         <Typography
           sx={{
-            fontSize: { xs: '0.8125rem', md: '0.9375rem' },
+            fontSize: { xs: '0.75rem', md: '0.9375rem' },
             fontWeight: 500,
             color: alpha('#F8FAFC', 0.78),
             letterSpacing: '-0.01em',
-            maxWidth: 280,
+            maxWidth: { xs: 'none', md: 280 },
+            lineHeight: 1.3,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: { xs: 'nowrap', md: 'normal' },
           }}
         >
           {t('login.brandTagline')}
@@ -518,6 +528,7 @@ const Login: React.FC = () => {
           display: 'flex',
           flexDirection: 'column',
           minWidth: 0,
+          minHeight: 0,
           bgcolor: '#F1F5F9',
           position: 'relative',
         }}
@@ -525,8 +536,8 @@ const Login: React.FC = () => {
         <Box
           sx={{
             position: 'absolute',
-            top: { xs: 12, sm: 18 },
-            right: { xs: 12, sm: 18 },
+            top: { xs: 8, sm: 18 },
+            right: { xs: 8, sm: 18 },
             zIndex: 2,
           }}
         >
@@ -537,17 +548,17 @@ const Login: React.FC = () => {
             aria-label={t('login.languageToggleAria')}
             sx={{
               bgcolor: '#FFFFFF',
-              p: 0.25,
+              p: 0.2,
               borderRadius: '4px',
               border: '1px solid #B4B4B4',
               boxShadow: 'none',
               '& .MuiToggleButtonGroup-grouped': {
                 border: 0,
-                mx: 0.15,
+                mx: 0.1,
                 borderRadius: '2px !important',
-                px: 1.5,
-                py: 0.45,
-                fontSize: '0.8125rem',
+                px: { xs: 1.1, sm: 1.5 },
+                py: { xs: 0.3, sm: 0.45 },
+                fontSize: { xs: '0.75rem', sm: '0.8125rem' },
                 fontWeight: 600,
                 textTransform: 'none',
                 color: 'text.secondary',
@@ -571,11 +582,15 @@ const Login: React.FC = () => {
         <Box
           sx={{
             flex: 1,
+            minHeight: 0,
             display: 'flex',
-            alignItems: 'center',
+            alignItems: { xs: 'flex-start', sm: 'center' },
             justifyContent: 'center',
-            px: { xs: 2.5, sm: 4 },
-            py: { xs: 4, sm: 5 },
+            px: { xs: 2, sm: 4 },
+            pt: { xs: 5, sm: 5 },
+            pb: { xs: 1, sm: 5 },
+            overflowY: { xs: 'auto', md: 'visible' },
+            WebkitOverflowScrolling: 'touch',
           }}
         >
           <Box sx={{ width: '100%', maxWidth: controlWidth }}>
@@ -583,26 +598,42 @@ const Login: React.FC = () => {
               component="h1"
               sx={{
                 fontWeight: 700,
-                fontSize: '1.125rem',
+                fontSize: { xs: '1rem', sm: '1.125rem' },
                 color: 'text.primary',
                 letterSpacing: '-0.02em',
                 lineHeight: 1.3,
-                mb: 2.5,
-                pb: 1.25,
+                mb: { xs: 1.5, sm: 2.5 },
+                pb: { xs: 0.85, sm: 1.25 },
                 borderBottom: '1px solid #B4B4B4',
+                pr: 9,
               }}
             >
               {t('login.cardTitle')}
             </Typography>
 
             {error && (
-              <Alert severity="error" sx={{ mb: 2, borderRadius: '4px', fontSize: '0.8125rem', boxShadow: 'none' }}>
+              <Alert
+                severity="error"
+                sx={{
+                  mb: { xs: 1.25, sm: 2 },
+                  borderRadius: '4px',
+                  fontSize: '0.8125rem',
+                  boxShadow: 'none',
+                  py: { xs: 0.35, sm: 0.75 },
+                  '& .MuiAlert-message': {
+                    display: '-webkit-box',
+                    WebkitLineClamp: { xs: 3, sm: 'unset' },
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  },
+                }}
+              >
                 {error}
               </Alert>
             )}
 
             <Box component="form" onSubmit={handleSubmit}>
-              <Box sx={{ mb: 1.5 }}>
+              <Box sx={{ mb: { xs: 1.1, sm: 1.5 } }}>
                 <Typography component="label" htmlFor="userid" sx={loginFieldLabelSx}>
                   {t('login.emailLabel')}
                 </Typography>
@@ -620,7 +651,7 @@ const Login: React.FC = () => {
                 />
               </Box>
 
-              <Box sx={{ mb: 2.25 }}>
+              <Box sx={{ mb: { xs: 1.5, sm: 2.25 } }}>
                 <Typography component="label" htmlFor="password" sx={loginFieldLabelSx}>
                   {t('login.password')}
                 </Typography>
@@ -662,7 +693,7 @@ const Login: React.FC = () => {
                 disabled={loading || passkeyLoading}
                 sx={{
                   py: 1,
-                  minHeight: 40,
+                  minHeight: { xs: 38, sm: 40 },
                   fontSize: '0.875rem',
                   fontWeight: 600,
                   borderRadius: '4px',
@@ -684,9 +715,9 @@ const Login: React.FC = () => {
                   onClick={() => void handlePasskeyLogin()}
                   startIcon={<FingerprintIcon sx={{ fontSize: '1.1rem' }} />}
                   sx={{
-                    mt: 1,
+                    mt: { xs: 0.75, sm: 1 },
                     py: 1,
-                    minHeight: 40,
+                    minHeight: { xs: 38, sm: 40 },
                     fontSize: '0.875rem',
                     fontWeight: 600,
                     borderRadius: '4px',
@@ -717,9 +748,9 @@ const Login: React.FC = () => {
                   setSignupResult(null);
                 }}
                 sx={{
-                  mt: 0.75,
-                  py: 0.75,
-                  minHeight: 36,
+                  mt: { xs: 0.35, sm: 0.75 },
+                  py: { xs: 0.5, sm: 0.75 },
+                  minHeight: { xs: 32, sm: 36 },
                   fontSize: '0.8125rem',
                   fontWeight: 600,
                   color: 'text.secondary',
@@ -736,14 +767,15 @@ const Login: React.FC = () => {
 
         <Box
           sx={{
-            px: { xs: 2.5, sm: 4 },
-            pb: 2,
-            pt: 1,
+            flex: '0 0 auto',
+            px: { xs: 2, sm: 4 },
+            pb: { xs: 1, sm: 2 },
+            pt: { xs: 0.75, sm: 1 },
             borderTop: '1px solid #E2E8F0',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: 0.5,
+            gap: { xs: 0.25, sm: 0.5 },
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, flexWrap: 'wrap' }}>
@@ -776,7 +808,15 @@ const Login: React.FC = () => {
               </React.Fragment>
             ))}
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+          <Box
+            sx={{
+              display: { xs: 'none', sm: 'flex' },
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 0.75,
+              flexWrap: 'wrap',
+            }}
+          >
             <Typography variant="caption" sx={{ color: alpha(theme.palette.text.secondary, 0.7), fontSize: '0.6875rem', whiteSpace: 'nowrap' }}>
               {t('login.footerDevelopedBy')}
             </Typography>

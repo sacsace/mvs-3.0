@@ -12,10 +12,11 @@ export const mvsPageContentMaxWidth = 1764;
 export const mvsPageShellSx: SxProps<Theme> = {
   width: '100%',
   maxWidth: '100%',
+  minWidth: 0,
   margin: 0,
   boxSizing: 'border-box',
-  py: { xs: '16px', sm: '24px', md: '32px' },
-  px: { xs: '12px', sm: '24px', md: '40px' },
+  py: { xs: '12px', sm: '24px', md: '32px' },
+  px: { xs: '8px', sm: '24px', md: '40px' },
 };
 
 export const mvsMainSurfaceSx: SxProps<Theme> = {
@@ -329,10 +330,12 @@ export const mvsPageRootSx: SxProps<Theme> = {
   p: 0,
   width: '100%',
   maxWidth: mvsPageContentMaxWidth,
+  minWidth: 0,
   mx: 'auto',
   minHeight: '100%',
   boxSizing: 'border-box',
   bgcolor: 'transparent',
+  overflowX: 'hidden',
 };
 
 /** 보드·엑셀 시트 등 브라우저 너비를 쓰는 전체 폭 페이지 */
@@ -340,10 +343,12 @@ export const mvsPageRootFullBleedSx: SxProps<Theme> = {
   p: 0,
   width: '100%',
   maxWidth: '100%',
+  minWidth: 0,
   mx: 0,
   minHeight: '100%',
   boxSizing: 'border-box',
   bgcolor: 'transparent',
+  overflowX: 'hidden',
 };
 
 export const mvsPageDescriptionSx: SxProps<Theme> = {

@@ -83,7 +83,14 @@ html,
 body,
 #root {
   min-height: 100%;
+  width: 100%;
+  max-width: 100%;
   background-color: var(--bg-secondary);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -95,6 +102,33 @@ body {
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+#root {
+  overflow-x: hidden;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+/* 좁은 화면: 표는 페이지를 밀지 않고 영역 안에서 가로 스크롤 */
+@media (max-width: 1199.95px) {
+  .MuiTableContainer-root {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .MuiDialog-paper {
+    max-width: calc(100vw - 24px) !important;
+    margin: 12px !important;
+  }
 }
 
 .MuiAppBar-root {

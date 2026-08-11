@@ -23,7 +23,8 @@ interface AppLayoutProps {
 const WORK_AREA_OUTSET = 16;
 const HEADER_MENU_GAP_PX = 8;
 const HEADER_TOP_INSET_PX = 0;
-const HEADER_LAYOUT_HEIGHT = HEADER_TOP_INSET_PX + 60;
+const HEADER_LAYOUT_HEIGHT_DESKTOP = HEADER_TOP_INSET_PX + 60;
+const HEADER_LAYOUT_HEIGHT_MOBILE = HEADER_TOP_INSET_PX + 56;
 
 /** 로그인한 사용자 본인의 계정 설정은 메뉴 권한과 무관한 셀프서비스 경로 */
 const isPersonalAccountRoute = (pathname: string): boolean =>
@@ -46,7 +47,8 @@ const isFullBleedBodyRoute = (pathname: string): boolean => {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const theme = useTheme();
-  const isMobileNav = useMediaQuery(theme.breakpoints.down('md'));
+  // 태블릿(lg 미만)까지 햄버거 메뉴 — PC 와이드만 상단 풀 네비
+  const isMobileNav = useMediaQuery(theme.breakpoints.down('lg'));
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -185,7 +187,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '100vh',
+        minHeight: { xs: '100dvh', md: '100vh' },
+        width: '100%',
+        maxWidth: '100%',
+        overflowX: 'hidden',
         backgroundColor: useChromelessWorkArea ? 'transparent' : 'bodyArea.main',
         ...(useChromelessWorkArea
           ? { background: mvsWorkBoardPageBg, backgroundColor: 'transparent' }
@@ -203,7 +208,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       <Box
         aria-hidden
         sx={{
-          height: HEADER_LAYOUT_HEIGHT,
+          height: {
+            xs: HEADER_LAYOUT_HEIGHT_MOBILE,
+            sm: HEADER_LAYOUT_HEIGHT_DESKTOP,
+          },
           flexShrink: 0,
           width: '100%',
           pointerEvents: 'none',
@@ -214,9 +222,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         sx={{
           position: 'relative',
           flex: 1,
-          minHeight: 'min-content',
+          minHeight: 0,
+          minWidth: 0,
+          width: '100%',
+          maxWidth: '100%',
           display: 'flex',
           flexDirection: 'column',
+          overflowX: 'hidden',
           backgroundColor: useChromelessWorkArea ? 'transparent' : 'bodyArea.main',
           ...(useChromelessWorkArea
             ? { background: mvsWorkBoardPageBg, backgroundColor: 'transparent' }
@@ -226,8 +238,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         <Box
           sx={{
             width: '100%',
+            maxWidth: '100%',
+            minWidth: 0,
             flex: 1,
-            minHeight: 'min-content',
+            minHeight: 0,
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'flex-start',
@@ -240,13 +254,26 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             border: 'none',
             outline: 'none',
             boxShadow: 'none',
-            paddingLeft: { xs: 1, sm: 1.5, md: `${WORK_AREA_OUTSET + 8}px` },
-            paddingRight: { xs: 1, sm: 1.5, md: `${WORK_AREA_OUTSET + 8}px` },
+            paddingLeft: {
+              xs: 'max(8px, env(safe-area-inset-left))',
+              sm: 1.5,
+              md: `${WORK_AREA_OUTSET + 8}px`,
+            },
+            paddingRight: {
+              xs: 'max(8px, env(safe-area-inset-right))',
+              sm: 1.5,
+              md: `${WORK_AREA_OUTSET + 8}px`,
+            },
             paddingTop: { xs: 0.75, sm: `${HEADER_MENU_GAP_PX + 4}px` },
-            paddingBottom: { xs: 1.5, sm: 2, md: `${WORK_AREA_OUTSET + 16}px` },
+            paddingBottom: {
+              xs: 'max(12px, env(safe-area-inset-bottom))',
+              sm: 2,
+              md: `${WORK_AREA_OUTSET + 16}px`,
+            },
             '& > *': {
               width: '100%',
               maxWidth: bodyMaxWidth,
+              minWidth: 0,
             },
           }}
         >
@@ -254,6 +281,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             sx={{
               width: '100%',
               maxWidth: bodyMaxWidth,
+              minWidth: 0,
               mx: 'auto',
               backgroundColor: useChromelessWorkArea ? 'transparent' : 'workArea.main',
               borderRadius: useChromelessWorkArea ? 0 : { xs: '12px', sm: '18px', md: '24px' },
@@ -264,9 +292,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 : {}),
               outline: 'none',
               overflow: 'visible',
+              overflowX: 'hidden',
               position: 'relative',
               flex: 1,
-              minHeight: 'min-content',
+              minHeight: 0,
               display: 'flex',
               flexDirection: 'column',
               backgroundImage: 'none',
@@ -278,11 +307,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             <Box
               sx={{
                 flex: 1,
-                minHeight: 'min-content',
+                minHeight: 0,
+                minWidth: 0,
                 width: '100%',
-                overflow: 'visible',
+                maxWidth: '100%',
+                overflowX: 'hidden',
+                overflowY: 'visible',
                 color: 'text.primary',
-                fontSize: '13.5px',
+                fontSize: { xs: '13px', sm: '13.5px' },
                 lineHeight: 1.6,
                 display: 'flex',
                 flexDirection: 'column',
@@ -292,7 +324,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 ...(useChromelessWorkArea
                   ? {
                       flex: 1,
-                      minHeight: 'min-content',
+                      minHeight: 0,
                       background: mvsWorkBoardPageBg,
                       backgroundColor: 'transparent',
                     }
@@ -303,6 +335,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 '& > *': {
                   width: '100%',
                   maxWidth: '100%',
+                  minWidth: 0,
                 },
                 '& .MuiGrid-container': {
                   width: '100%',
@@ -315,10 +348,18 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 '& .MuiCard-root, & .MuiPaper-root': {
                   width: '100%',
                   maxWidth: '100%',
+                  minWidth: 0,
+                  boxSizing: 'border-box',
                 },
                 '& .MuiTableContainer-root': {
                   width: '100%',
                   maxWidth: '100%',
+                  overflowX: 'auto',
+                  WebkitOverflowScrolling: 'touch',
+                },
+                '& .MuiStack-root': {
+                  maxWidth: '100%',
+                  minWidth: 0,
                 },
                 '& .MuiTypography-colorTextSecondary, & .MuiFormHelperText-root, & .MuiInputBase-input::placeholder, & .MuiTableSortLabel-root, & .MuiInputAdornment-root, & .MuiFormLabel-root':
                   {
