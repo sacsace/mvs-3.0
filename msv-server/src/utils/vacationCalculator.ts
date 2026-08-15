@@ -239,6 +239,13 @@ interface CompanyVacationPolicy {
   availableTypes: string[];
   /** 출퇴근 결근(status=absent)을 연차에서 차감 (기본 true) */
   deductAbsenceFromLeave: boolean;
+  /**
+   * 근속 N년 이상이면 회계연도 연차를 적립식(earnDays) 대신 고정 일수로 강제 부여.
+   * (인도 최소 12일 등)
+   */
+  forceFixedAnnualForTenure: boolean;
+  forceFixedAnnualDays: number;
+  forceFixedAnnualMinYears: number;
 }
 
 const DEFAULT_POLICY: CompanyVacationPolicy = {
@@ -247,7 +254,19 @@ const DEFAULT_POLICY: CompanyVacationPolicy = {
   leaveTypeDays: { ...DEFAULT_LEAVE_TYPE_DAYS },
   availableTypes: [...DEFAULT_AVAILABLE_TYPES],
   deductAbsenceFromLeave: true,
+  forceFixedAnnualForTenure: false,
+  forceFixedAnnualDays: 12,
+  forceFixedAnnualMinYears: 1,
 };
+
+function hasMinServiceYears(hireDate: Date, asOf: Date, years: number): boolean {
+  const y = Math.max(0, Math.floor(years));
+  if (y <= 0) return true;
+  const threshold = new Date(hireDate);
+  threshold.setFullYear(threshold.getFullYear() + y);
+  threshold.setHours(0, 0, 0, 0);
+  return asOf.getTime() >= threshold.getTime();
+}
 
 async function getCompanyVacationPolicy(companyId: number): Promise<CompanyVacationPolicy> {
   try {
@@ -255,13 +274,19 @@ async function getCompanyVacationPolicy(companyId: number): Promise<CompanyVacat
     const company = await (Company as any).findByPk(companyId);
 
     if (!company) {
-      return { ...DEFAULT_POLICY, leaveTypeDays: { ...DEFAULT_LEAVE_TYPE_DAYS }, availableTypes: [...DEFAULT_AVAILABLE_TYPES] };
+      return {
+        ...DEFAULT_POLICY,
+        leaveTypeDays: { ...DEFAULT_LEAVE_TYPE_DAYS },
+        availableTypes: [...DEFAULT_AVAILABLE_TYPES],
+      };
     }
 
     const policy = company.settings?.vacationPolicy;
     const availableTypes = Array.isArray(policy?.availableTypes) && policy.availableTypes.length > 0
       ? policy.availableTypes.map((t: unknown) => String(t))
       : [...DEFAULT_AVAILABLE_TYPES];
+    const forceDays = Number(policy?.forceFixedAnnualDays);
+    const forceYears = Number(policy?.forceFixedAnnualMinYears);
     return {
       annualLeaveStartDays: policy?.annualLeaveStartDays ?? 240,
       annualLeaveEarnDays: policy?.annualLeaveEarnDays ?? 20,
@@ -271,10 +296,19 @@ async function getCompanyVacationPolicy(companyId: number): Promise<CompanyVacat
       },
       availableTypes,
       deductAbsenceFromLeave: policy?.deductAbsenceFromLeave !== false,
+      forceFixedAnnualForTenure: policy?.forceFixedAnnualForTenure === true,
+      forceFixedAnnualDays:
+        Number.isFinite(forceDays) && forceDays > 0 ? Math.floor(forceDays) : 12,
+      forceFixedAnnualMinYears:
+        Number.isFinite(forceYears) && forceYears >= 0 ? Math.floor(forceYears) : 1,
     };
   } catch (error) {
     console.error('휴가 정책 조회 오류:', error);
-    return { ...DEFAULT_POLICY, leaveTypeDays: { ...DEFAULT_LEAVE_TYPE_DAYS }, availableTypes: [...DEFAULT_AVAILABLE_TYPES] };
+    return {
+      ...DEFAULT_POLICY,
+      leaveTypeDays: { ...DEFAULT_LEAVE_TYPE_DAYS },
+      availableTypes: [...DEFAULT_AVAILABLE_TYPES],
+    };
   }
 }
 
@@ -392,9 +426,9 @@ async function getUsedDaysInLeaveYear(
 }
 
 /**
- * 연차: 인도 회계연도(4/1~3/31) 내 적립·사용 (이월 불가).
+ * 연차: 인도 회계연도(4/1~3/31) 예상 부여·사용 (이월 불가).
  * 사용 가능 시점은 입사일+대기일 기준.
- * 총일수 = (대기일 이후 ~ 오늘까지, 휴가연도 교집합 근무일) / earnDays
+ * 총일수(예상) = (대기일 이후 ~ 휴가연도 종료일, 휴가연도 교집합 일수) / earnDays
  * 사용 = 승인된 연차 + 출퇴근 결근 차감 (대기·반려는 잔여 미차감)
  * 잔여 = max(0, 총일수 - 사용일수)
  */
@@ -439,13 +473,25 @@ export async function calculateAnnualLeave(userId: number, excludeVacationId?: n
 
     let totalEarnedDays = 0;
     if (canUseAnnualLeave) {
-      const periodStart = new Date(
-        Math.max(eligibilityDate.getTime(), leaveYear.start.getTime(), hireDate.getTime())
-      );
-      const periodEnd = new Date(Math.min(today.getTime(), leaveYear.end.getTime()));
-      if (periodStart <= periodEnd) {
-        const eligibleDays = Math.floor((periodEnd.getTime() - periodStart.getTime()) / DAY_MS) + 1;
-        totalEarnedDays = Math.floor(eligibleDays / earnDays);
+      const useForcedFixed =
+        policy.forceFixedAnnualForTenure &&
+        hasMinServiceYears(hireDate, today, policy.forceFixedAnnualMinYears);
+
+      if (useForcedFixed) {
+        // 근속 충족 시 회계연도 연차를 고정 일수로 강제 (적립식 무시)
+        totalEarnedDays = Math.max(0, policy.forceFixedAnnualDays);
+      } else {
+        // 회계연도 전체(시작~종료) 기준 예상 부여 — 오늘까지 적립분이 아님
+        const periodStart = new Date(
+          Math.max(eligibilityDate.getTime(), leaveYear.start.getTime(), hireDate.getTime())
+        );
+        periodStart.setHours(0, 0, 0, 0);
+        const periodEndYmd = toDateOnlyString(leaveYear.end);
+        const periodStartYmd = toDateOnlyString(periodStart);
+        const eligibleDays = countInclusiveDateOnlyDays(periodStartYmd, periodEndYmd);
+        if (eligibleDays > 0) {
+          totalEarnedDays = Math.floor(eligibleDays / earnDays);
+        }
       }
     }
 

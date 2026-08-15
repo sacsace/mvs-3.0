@@ -158,6 +158,62 @@ export const mapInboxRowToNotification = (
   };
 };
 
+/** 액션 인박스에 이미 있는 건과 동일 푸시 알림을 걸러내기 위한 ID 집합 */
+function collectInboxEntityIds(inboxActions: ActionInboxRow[]) {
+  const vacationIds = new Set<number>();
+  const expenseIds = new Set<number>();
+  const quotationIds = new Set<number>();
+  const approvalIds = new Set<number>();
+
+  for (const row of inboxActions) {
+    const p = row.payload || {};
+    if (row.kind === 'vacation_pending') {
+      const id = Number(p.vacationId);
+      if (Number.isFinite(id) && id > 0) vacationIds.add(id);
+    } else if (row.kind === 'expense_payment') {
+      const id = Number(p.expenseId);
+      if (Number.isFinite(id) && id > 0) expenseIds.add(id);
+    } else if (row.kind === 'quotation_pending') {
+      const id = Number(p.quotationId);
+      if (Number.isFinite(id) && id > 0) quotationIds.add(id);
+    } else if (row.kind === 'approval_pending') {
+      const id = Number(p.approvalId);
+      if (Number.isFinite(id) && id > 0) approvalIds.add(id);
+    }
+  }
+
+  return { vacationIds, expenseIds, quotationIds, approvalIds };
+}
+
+/** 대기 인박스에 이미 노출 중인 승인 요청이면 서버 푸시는 목록에서 제외 */
+function isServerNotificationCoveredByInbox(
+  item: ServerNotificationItem,
+  ids: ReturnType<typeof collectInboxEntityIds>
+): boolean {
+  const raw = item.data;
+  if (raw == null || typeof raw !== 'object') return false;
+  const d = raw as Record<string, unknown>;
+  const feature = String(d.feature || '');
+
+  if (feature === 'vacation') {
+    const id = Number(d.vacation_id);
+    return Number.isFinite(id) && ids.vacationIds.has(id);
+  }
+  if (feature === 'expense_report') {
+    const id = Number(d.expense_id);
+    return Number.isFinite(id) && ids.expenseIds.has(id);
+  }
+  if (feature === 'quotation') {
+    const id = Number(d.quotation_id);
+    return Number.isFinite(id) && ids.quotationIds.has(id);
+  }
+  if (feature === 'approval') {
+    const id = Number(d.approval_id ?? d.id);
+    return Number.isFinite(id) && ids.approvalIds.has(id);
+  }
+  return false;
+}
+
 export function buildNotificationsFromSources(params: {
   serverNotifications: ServerNotificationItem[];
   clientNotifications: Array<{
@@ -179,12 +235,14 @@ export function buildNotificationsFromSources(params: {
 }): AppNotification[] {
   const { serverNotifications, clientNotifications, errors, inboxActions, t } = params;
   const items: AppNotification[] = [];
+  const inboxEntityIds = collectInboxEntityIds(inboxActions);
 
   inboxActions.forEach((row) => {
     items.push(mapInboxRowToNotification(row, t));
   });
 
   serverNotifications.forEach((item) => {
+    if (isServerNotificationCoveredByInbox(item, inboxEntityIds)) return;
     const href = hrefFromServerNotificationData(item.data);
     items.push({
       id: `server-${item.id}`,

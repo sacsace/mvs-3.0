@@ -143,7 +143,7 @@ export const env = {
   GST_GSP_EWAY_BASE_URL: process.env.GST_GSP_EWAY_BASE_URL || '',
   GST_GSP_EWAY_PATH: process.env.GST_GSP_EWAY_PATH || '/ewaybill/generate',
 
-  /** HeresNow ↔ MVS 근태 연동 */
+  /** HeresNow ↔ MVS 근태 연동 (반드시 https://www.heresnow.in — apex는 API 없음) */
   HERESNOW_API_BASE_URL: process.env.HERESNOW_API_BASE_URL || 'https://www.heresnow.in',
   MVS_INTEGRATION_API_KEY: process.env.MVS_INTEGRATION_API_KEY || process.env.HERESNOW_INTEGRATION_API_KEY || '',
   INTEGRATION_DISPATCH_SECRET: process.env.INTEGRATION_DISPATCH_SECRET || '',

@@ -288,7 +288,11 @@ const theme = createTheme({
           boxShadow: 'none',
           '&:hover': {
             backgroundColor: '#163E63',
+            color: '#FFFFFF',
             boxShadow: 'none',
+          },
+          '&.Mui-disabled': {
+            color: '#FFFFFF',
           },
         },
         sizeSmall: {

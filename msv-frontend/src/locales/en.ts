@@ -1115,11 +1115,13 @@ export default {
         userId: 'User ID',
         userName: 'User Name',
         reason: 'Reason',
+        userAgent: 'User-Agent',
         divisionRequired: 'Division *',
         loginIdRequired: 'Login ID *',
         passwordRequired: 'Password *',
         columnName: 'Column name'
       },
+      detailTitle: 'Login history detail',
       actions: {
         refresh: 'Refresh',
         importExcel: 'Import Excel',
@@ -4242,7 +4244,7 @@ export default {
       annualNotEligible: 'Annual leave waiting period. Accrual and use start after hire date + waiting days.',
       noLeaveBalances: 'No employee leave balances to display.',
       leaveBalancesHint:
-        'Remaining days = total entitlement for the India fiscal year (1 Apr – 31 Mar) minus days used (approved leave + attendance absences). Pending or rejected requests are not deducted. Only leave types enabled in Leave Type are shown. Unused days do not carry over. Balances require a join date.',
+        'Remaining = expected annual leave for the full India fiscal year (1 Apr – 31 Mar) minus days used (approved leave + attendance absences). If “force fixed annual for 1+ year tenure” is on, those employees get the fixed days as the total. Pending or rejected requests are not deducted. Only leave types enabled in Leave Type are shown. Unused days do not carry over. Balances require a join date.',
       leaveBalancesSearchPlaceholder: 'Search by employee, department, position, join date…',
       sickOptional: 'Optional',
       sickOptionalHint: 'Sick leave is not mandatory.',
@@ -4353,7 +4355,13 @@ export default {
       currentSettingImmediate: 'Current setting: Annual leave available from date of join.',
       currentSettingDays: 'Current setting: Annual leave available {{days}} days after date of join.',
       earnedLeaveDesc2: '1 day of annual leave granted for every 20 days worked.',
+      earnedLeaveDesc2Forced:
+        'Employees with {{years}}+ year(s) of service get a fixed {{days}} day(s) of annual leave for the fiscal year (accrual disabled).',
       earnedLeaveDesc3: 'Available annual leave is calculated within the India fiscal year (1 Apr – 31 Mar). Unused days do not carry over.',
+      forceFixedAnnualForTenure: 'Force fixed annual leave for 1+ year tenure',
+      forceFixedAnnualHint:
+        'When enabled, employees with 1+ year of service get the fixed days below as the fiscal-year total instead of 1 day per 20 days. Under 1 year still uses accrual.',
+      forceFixedAnnualDaysLabel: 'Forced annual leave days',
       fiscalYearResetNote: 'All leave balances reset at the end of the India fiscal year (1 April – 31 March). Unused days cannot be accumulated or carried forward.',
       leaveTypeDaysLabel: 'Annual leave days',
       leaveTypeDaysHint: 'Days available per India fiscal year (1 Apr – 31 Mar). 0 = unlimited',

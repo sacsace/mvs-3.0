@@ -3,6 +3,46 @@ import { Op } from 'sequelize';
 
 const TIME_ZONE = 'Asia/Kolkata';
 
+/** Canonical public origin — apex(heresnow.in)는 API/앱이 없어 www로 통일 */
+export const DEFAULT_HERESNOW_ORIGIN = 'https://www.heresnow.in';
+
+/**
+ * HeresNow 베이스 URL 정규화.
+ * - trailing slash 제거
+ * - http → https
+ * - heresnow.in(apex) → www.heresnow.in (apex는 Railway 앱이 아님)
+ */
+export function resolveHeresnowBaseUrl(raw?: string | null): string {
+  const input = String(raw ?? process.env.HERESNOW_API_BASE_URL ?? DEFAULT_HERESNOW_ORIGIN).trim();
+  if (!input) return DEFAULT_HERESNOW_ORIGIN;
+  try {
+    const withScheme = /^https?:\/\//i.test(input) ? input : `https://${input}`;
+    const u = new URL(withScheme);
+    let host = u.hostname.toLowerCase();
+    if (host === 'heresnow.in') host = 'www.heresnow.in';
+    return `https://${host}`;
+  } catch {
+    return DEFAULT_HERESNOW_ORIGIN;
+  }
+}
+
+export function getHeresnowLoginUrl(raw?: string | null): string {
+  return `${resolveHeresnowBaseUrl(raw)}/login`;
+}
+
+async function fetchHeresnowApi(url: string, headers: Record<string, string>): Promise<Response> {
+  // HTML 로그인·도메인 루프를 따라가지 않음 (ERR_TOO_MANY_REDIRECTS / HTML 응답 방지)
+  const response = await fetch(url, { headers, redirect: 'manual' });
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get('location') || '';
+    throw new Error(
+      `HeresNow API redirected (${response.status}${location ? ` → ${location}` : ''}). ` +
+        `Set HERESNOW_API_BASE_URL to ${DEFAULT_HERESNOW_ORIGIN}`
+    );
+  }
+  return response;
+}
+
 export type HeresnowCompanySettings = {
   enabled?: boolean;
   companyId?: string;
@@ -747,7 +787,7 @@ export async function pullHeresnowAttendance(company: Company, options?: { since
     throw new Error('API_KEY_NOT_CONFIGURED');
   }
 
-  const baseUrl = (process.env.HERESNOW_API_BASE_URL || 'https://www.heresnow.in').replace(/\/+$/, '');
+  const baseUrl = resolveHeresnowBaseUrl();
   const url = new URL(`${baseUrl}/api/integrations/mvs/attendance`);
   const companyId = hn.companyId || String(company.id);
   const externalCompanyId = hn.externalCompanyId || String(company.id);
@@ -815,7 +855,7 @@ export async function pullHeresnowAttendance(company: Company, options?: { since
       pageUrl.searchParams.set('limit', '200');
       if (cursor) pageUrl.searchParams.set('cursor', cursor);
 
-      const response = await fetch(pageUrl.toString(), { headers });
+      const response = await fetchHeresnowApi(pageUrl.toString(), headers);
       const payload = (await response.json().catch(() => ({}))) as any;
       debug.fetch[mode.key].statuses.push(response.status);
       if (debug.fetch[mode.key].pages === 0 && payload && typeof payload === 'object' && !Array.isArray(payload)) {
@@ -1018,7 +1058,7 @@ export async function testHeresnowConnection(company: Company) {
     throw new Error('API_KEY_NOT_CONFIGURED');
   }
 
-  const baseUrl = (process.env.HERESNOW_API_BASE_URL || 'https://www.heresnow.in').replace(/\/+$/, '');
+  const baseUrl = resolveHeresnowBaseUrl();
   const url = new URL(`${baseUrl}/api/integrations/mvs/attendance`);
   const companyId = hn.companyId || String(company.id);
   const externalCompanyId = hn.externalCompanyId || String(company.id);
@@ -1032,7 +1072,7 @@ export async function testHeresnowConnection(company: Company) {
     'x-mvs-api-key': apiKey
   };
 
-  const response = await fetch(url.toString(), { headers });
+  const response = await fetchHeresnowApi(url.toString(), headers);
   const payload = (await response.json().catch(() => ({}))) as {
     message?: string;
     error?: unknown;
@@ -1117,7 +1157,8 @@ export async function getHeresnowIntegrationStatus(company: Company) {
     lastSyncAt: hn.lastSyncAt,
     lastSyncError: hn.lastSyncError,
     lastSyncCount: hn.lastSyncCount ?? 0,
-    heresnowUrl: process.env.HERESNOW_API_BASE_URL || 'https://www.heresnow.in',
+    heresnowUrl: resolveHeresnowBaseUrl(),
+    heresnowLoginUrl: getHeresnowLoginUrl(),
     apiConfigured,
     dispatchConfigured,
     webhookPath: '/api/integrations/mvs/dispatch',

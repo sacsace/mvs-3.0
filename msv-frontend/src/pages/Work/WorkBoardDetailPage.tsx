@@ -419,7 +419,8 @@ const cardDetailOutlinedWhiteSx = {
   '& .MuiSelect-select': { py: '10px' },
 } as const;
 
-/** 대분류(열) 기본 너비 — flex-grow 없이 고정해 행에 열이 적어도 카드 너비가 동일하게 유지 */
+/** 카드 세부사항 편집 입력 폭 — 브라우저 전체폭이 아닌 문서형 기본 페이지 */
+const CARD_DETAIL_PAGE_MAX_WIDTH_PX = 960;
 const WORK_BOARD_COLUMN_WIDTH_PX = 272;
 
 const isHexColor = (value?: string | null): value is string => Boolean(value && /^#[0-9a-fA-F]{6}$/.test(value));
@@ -3532,6 +3533,10 @@ const WorkBoardDetailPage: React.FC = () => {
             return {
               mt: 1.5,
               mb: 2,
+              width: '100%',
+              maxWidth: CARD_DETAIL_PAGE_MAX_WIDTH_PX,
+              mx: 'auto',
+              alignSelf: 'center',
               height: 'auto',
               borderRadius: KANBAN_DETAIL_SHELL_RADIUS,
               boxShadow: '0 1px 0 #E2E8F0, 0 1px 2px rgba(15, 23, 42, 0.05)',
@@ -3541,6 +3546,7 @@ const WorkBoardDetailPage: React.FC = () => {
               bgcolor: '#FFFFFF',
               display: 'flex',
               flexDirection: 'column',
+              boxSizing: 'border-box',
             };
           }}
         >

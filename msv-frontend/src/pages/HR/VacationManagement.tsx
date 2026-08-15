@@ -187,6 +187,9 @@ type VacationPolicyState = {
   availableTypes?: string[];
   leaveTypeDays?: Record<string, number>;
   deductAbsenceFromLeave?: boolean;
+  forceFixedAnnualForTenure?: boolean;
+  forceFixedAnnualDays?: number;
+  forceFixedAnnualMinYears?: number;
 };
 
 const vacationTableBodyRowSx: SxProps<Theme> = (theme) => {
@@ -219,6 +222,14 @@ const VacationManagement: React.FC = () => {
 
   const hrElevated = user?.role === 'root' || user?.role === 'admin';
   const isRootUser = user?.role === 'root';
+  /** 직원별 잔여일·휴가 형태 — admin/root 전용 */
+  const canAccessLeaveAdminTabs = hrElevated;
+  const clampLeaveTab = (tab: number) => {
+    if (!Number.isFinite(tab) || tab < 0) return 0;
+    if (canAccessLeaveAdminTabs) return Math.min(Math.floor(tab), 4);
+    // 일반 사용자: 0=내가 신청한 휴가, 1=휴가 결재
+    return Math.min(Math.floor(tab), 1);
+  };
   /** admin/root 또는 해당 건의 지정 결재자만 승인·반려 (서버와 동일) */
   const canApproveVacationRequest = (request: VacationRequest) =>
     hrElevated ||
@@ -246,21 +257,23 @@ const VacationManagement: React.FC = () => {
   
   // URL 파라미터에서 탭 인덱스 가져오기
   const tabParam = searchParams.get('tab');
-  const initialTab = tabParam !== null 
-    ? parseInt(tabParam, 10) 
-    : (user?.role === 'admin' || user?.role === 'root' ? 0 : 1);
+  const initialTab = clampLeaveTab(
+    tabParam !== null ? parseInt(tabParam, 10) : 0
+  );
   
   const [activeTab, setActiveTab] = useState(initialTab);
   
-  // URL 파라미터가 변경되면 탭도 변경
+  // URL 탭 변경 시 admin 전용 탭(잔여일·휴가 형태)은 비관리자 차단
   useEffect(() => {
     if (tabParam !== null) {
       const tabIndex = parseInt(tabParam, 10);
       if (!isNaN(tabIndex)) {
-        setActiveTab(tabIndex);
+        setActiveTab(clampLeaveTab(tabIndex));
       }
+    } else {
+      setActiveTab((prev) => clampLeaveTab(prev));
     }
-  }, [tabParam]);
+  }, [tabParam, canAccessLeaveAdminTabs]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
@@ -292,25 +305,22 @@ const VacationManagement: React.FC = () => {
   const [pendingPage, setPendingPage] = useState(1);
   const [processedPage, setProcessedPage] = useState(1);
   const [toolbarMenuAnchor, setToolbarMenuAnchor] = useState<null | HTMLElement>(null);
-  const canEditPolicy = user?.role === 'admin' || user?.role === 'root';
+  const canEditPolicy = canAccessLeaveAdminTabs;
 
   useEffect(() => {
-    // admin/root만 휴가 현황 탭(0번) 접근 가능
-    // 회사 휴가 현황 탭(0번)은 모든 휴가를 조회해야 함
-    if ((user?.role === 'admin' || user?.role === 'root') && activeTab === 0) {
+    // admin/root: 0=현황, 3=잔여일, 4=휴가 형태
+    if (canAccessLeaveAdminTabs && activeTab === 0) {
       loadAllVacations();
-    } else if (!((user?.role === 'admin' || user?.role === 'root') && (activeTab === 3 || activeTab === 4))) {
+    } else if (!(canAccessLeaveAdminTabs && (activeTab === 3 || activeTab === 4))) {
       loadVacations();
     }
-    
-    // admin: 3=잔여일, 4=휴가 형태
-    if ((user?.role === 'admin' || user?.role === 'root') && activeTab === 3) {
+    if (canAccessLeaveAdminTabs && activeTab === 3) {
       void loadLeaveBalances();
     }
-    if ((user?.role === 'admin' || user?.role === 'root') && activeTab === 4) {
+    if (canAccessLeaveAdminTabs && activeTab === 4) {
       loadVacationPolicy();
     }
-  }, [activeTab, user?.role]);
+  }, [activeTab, canAccessLeaveAdminTabs]);
 
   const loadLeaveBalances = async () => {
     setLeaveBalancesLoading(true);
@@ -405,7 +415,7 @@ const VacationManagement: React.FC = () => {
       
       // 탭에 따라 필터링
       // admin이 아닌 경우 탭 인덱스 조정
-      const adjustedTab = (user?.role === 'admin' || user?.role === 'root') ? activeTab : activeTab + 1;
+      const adjustedTab = canAccessLeaveAdminTabs ? activeTab : activeTab + 1;
       
       if (adjustedTab === 0) {
         // 휴가 현황 (admin만)
@@ -484,6 +494,33 @@ const VacationManagement: React.FC = () => {
     }
   };
 
+  const buildPolicyPayload = (overrides: Partial<{
+    annualLeaveStartDays: number;
+    availableTypes: string[];
+    leaveTypeDays: Record<string, number>;
+    deductAbsenceFromLeave: boolean;
+    forceFixedAnnualForTenure: boolean;
+    forceFixedAnnualDays: number;
+    forceFixedAnnualMinYears: number;
+  }> = {}) => ({
+    annualLeaveStartDays:
+      overrides.annualLeaveStartDays ?? vacationPolicy?.annualLeaveStartDays ?? 240,
+    annualLeaveEarnDays: vacationPolicy?.annualLeaveEarnDays || 20,
+    availableTypes:
+      overrides.availableTypes ?? vacationPolicy?.availableTypes ?? DEFAULT_AVAILABLE_TYPES,
+    leaveTypeDays:
+      overrides.leaveTypeDays ?? vacationPolicy?.leaveTypeDays ?? DEFAULT_LEAVE_TYPE_DAYS,
+    deductAbsenceFromLeave:
+      overrides.deductAbsenceFromLeave ?? vacationPolicy?.deductAbsenceFromLeave !== false,
+    forceFixedAnnualForTenure:
+      overrides.forceFixedAnnualForTenure ??
+      vacationPolicy?.forceFixedAnnualForTenure === true,
+    forceFixedAnnualDays:
+      overrides.forceFixedAnnualDays ?? vacationPolicy?.forceFixedAnnualDays ?? 12,
+    forceFixedAnnualMinYears:
+      overrides.forceFixedAnnualMinYears ?? vacationPolicy?.forceFixedAnnualMinYears ?? 1,
+  });
+
   const handleSavePolicy = async (startDays: number) => {
     if (!canEditPolicy) {
       setError('관리자만 휴가 형태를 수정할 수 있습니다.');
@@ -492,13 +529,9 @@ const VacationManagement: React.FC = () => {
     setSavingPolicy(true);
     setError(null);
     try {
-      const response = await vacationService.updateVacationPolicy({
-        annualLeaveStartDays: startDays,
-        annualLeaveEarnDays: vacationPolicy?.annualLeaveEarnDays || 20,
-        availableTypes: vacationPolicy?.availableTypes || DEFAULT_AVAILABLE_TYPES,
-        leaveTypeDays: vacationPolicy?.leaveTypeDays || DEFAULT_LEAVE_TYPE_DAYS,
-        deductAbsenceFromLeave: vacationPolicy?.deductAbsenceFromLeave !== false,
-      });
+      const response = await vacationService.updateVacationPolicy(
+        buildPolicyPayload({ annualLeaveStartDays: startDays })
+      );
       if (response.success) {
         setSuccess('휴가 정책이 저장되었습니다.');
         setVacationPolicy(response.data);
@@ -520,13 +553,72 @@ const VacationManagement: React.FC = () => {
     setSavingPolicy(true);
     setError(null);
     try {
-      const response = await vacationService.updateVacationPolicy({
-        annualLeaveStartDays: vacationPolicy?.annualLeaveStartDays || 240,
-        annualLeaveEarnDays: vacationPolicy?.annualLeaveEarnDays || 20,
-        availableTypes: vacationPolicy?.availableTypes || DEFAULT_AVAILABLE_TYPES,
-        leaveTypeDays: vacationPolicy?.leaveTypeDays || DEFAULT_LEAVE_TYPE_DAYS,
-        deductAbsenceFromLeave: checked,
-      });
+      const response = await vacationService.updateVacationPolicy(
+        buildPolicyPayload({ deductAbsenceFromLeave: checked })
+      );
+      if (response.success) {
+        setSuccess('휴가 정책이 저장되었습니다.');
+        setVacationPolicy(response.data);
+        if (activeTab === leaveBalanceTab) {
+          void loadLeaveBalances();
+        }
+      } else {
+        setError(response.message || '휴가 정책 저장에 실패했습니다.');
+      }
+    } catch (error: any) {
+      setError(error.response?.data?.message || '휴가 정책 저장 중 오류가 발생했습니다.');
+    } finally {
+      setSavingPolicy(false);
+    }
+  };
+
+  const handleToggleForceFixedAnnual = async (checked: boolean) => {
+    if (!canEditPolicy) {
+      setError('관리자만 휴가 형태를 수정할 수 있습니다.');
+      return;
+    }
+    setSavingPolicy(true);
+    setError(null);
+    try {
+      const response = await vacationService.updateVacationPolicy(
+        buildPolicyPayload({
+          forceFixedAnnualForTenure: checked,
+          forceFixedAnnualDays: vacationPolicy?.forceFixedAnnualDays ?? 12,
+          forceFixedAnnualMinYears: vacationPolicy?.forceFixedAnnualMinYears ?? 1,
+        })
+      );
+      if (response.success) {
+        setSuccess('휴가 정책이 저장되었습니다.');
+        setVacationPolicy(response.data);
+        if (activeTab === leaveBalanceTab) {
+          void loadLeaveBalances();
+        }
+      } else {
+        setError(response.message || '휴가 정책 저장에 실패했습니다.');
+      }
+    } catch (error: any) {
+      setError(error.response?.data?.message || '휴가 정책 저장 중 오류가 발생했습니다.');
+    } finally {
+      setSavingPolicy(false);
+    }
+  };
+
+  const handleSaveForceFixedAnnualDays = async (days: number) => {
+    if (!canEditPolicy) {
+      setError('관리자만 휴가 형태를 수정할 수 있습니다.');
+      return;
+    }
+    const nextDays = Math.max(1, Math.floor(Number(days) || 12));
+    setSavingPolicy(true);
+    setError(null);
+    try {
+      const response = await vacationService.updateVacationPolicy(
+        buildPolicyPayload({
+          forceFixedAnnualForTenure: true,
+          forceFixedAnnualDays: nextDays,
+          forceFixedAnnualMinYears: vacationPolicy?.forceFixedAnnualMinYears ?? 1,
+        })
+      );
       if (response.success) {
         setSuccess('휴가 정책이 저장되었습니다.');
         setVacationPolicy(response.data);
@@ -557,13 +649,9 @@ const VacationManagement: React.FC = () => {
     setSavingPolicy(true);
     setError(null);
     try {
-      const response = await vacationService.updateVacationPolicy({
-        annualLeaveStartDays: vacationPolicy?.annualLeaveStartDays || 240,
-        annualLeaveEarnDays: vacationPolicy?.annualLeaveEarnDays || 20,
-        availableTypes: newTypes,
-        leaveTypeDays: vacationPolicy?.leaveTypeDays || DEFAULT_LEAVE_TYPE_DAYS,
-        deductAbsenceFromLeave: vacationPolicy?.deductAbsenceFromLeave !== false,
-      });
+      const response = await vacationService.updateVacationPolicy(
+        buildPolicyPayload({ availableTypes: newTypes })
+      );
       if (response.success) {
         setSuccess('휴가 정책이 저장되었습니다.');
         setVacationPolicy(response.data);
@@ -586,17 +674,15 @@ const VacationManagement: React.FC = () => {
     setSavingPolicy(true);
     setError(null);
     try {
-      const response = await vacationService.updateVacationPolicy({
-        annualLeaveStartDays: vacationPolicy?.annualLeaveStartDays ?? 240,
-        annualLeaveEarnDays: vacationPolicy?.annualLeaveEarnDays ?? 20,
-        availableTypes: vacationPolicy?.availableTypes || DEFAULT_AVAILABLE_TYPES,
-        leaveTypeDays: {
-          ...DEFAULT_LEAVE_TYPE_DAYS,
-          ...(vacationPolicy?.leaveTypeDays || {}),
-          [vacationType]: days,
-        },
-        deductAbsenceFromLeave: vacationPolicy?.deductAbsenceFromLeave !== false,
-      });
+      const response = await vacationService.updateVacationPolicy(
+        buildPolicyPayload({
+          leaveTypeDays: {
+            ...DEFAULT_LEAVE_TYPE_DAYS,
+            ...(vacationPolicy?.leaveTypeDays || {}),
+            [vacationType]: days,
+          },
+        })
+      );
       if (response.success) {
         setSuccess('휴가 정책이 저장되었습니다.');
         setVacationPolicy(response.data);
@@ -654,7 +740,7 @@ const VacationManagement: React.FC = () => {
     }
     try {
       // 현재 탭과 필터에 맞는 파라미터 구성
-      const adjustedTab = (user?.role === 'admin' || user?.role === 'root') ? activeTab : activeTab + 1;
+      const adjustedTab = canAccessLeaveAdminTabs ? activeTab : activeTab + 1;
       
       let params: any = {};
       
@@ -977,29 +1063,29 @@ const VacationManagement: React.FC = () => {
   }, [vacationRequests, searchTerm, statusFilter, typeFilter, orderBy, order]);
 
   const deptOptionsForCalendar = React.useMemo(() => {
-    if ((user?.role !== 'admin' && user?.role !== 'root') || activeTab !== 0) return [];
+    if (!canAccessLeaveAdminTabs || activeTab !== 0) return [];
     const s = new Set<string>();
     vacationRequests.forEach((r) => {
       const d = r.department?.trim();
       if (d && d !== '-') s.add(d);
     });
     return Array.from(s).sort((a, b) => a.localeCompare(b, 'ko'));
-  }, [vacationRequests, user?.role, activeTab]);
+  }, [vacationRequests, canAccessLeaveAdminTabs, activeTab]);
 
   const calendarVacationsFiltered = React.useMemo(() => {
-    if ((user?.role !== 'admin' && user?.role !== 'root') || activeTab !== 0) return [];
+    if (!canAccessLeaveAdminTabs || activeTab !== 0) return [];
     if (!calendarDept || calendarDept === CALENDAR_DEPARTMENT_ALL_VALUE) return vacationRequests;
     return vacationRequests.filter((r) => r.department === calendarDept);
-  }, [vacationRequests, user?.role, activeTab, calendarDept]);
+  }, [vacationRequests, canAccessLeaveAdminTabs, activeTab, calendarDept]);
 
   useEffect(() => {
-    if ((user?.role !== 'admin' && user?.role !== 'root') || activeTab !== 0) return;
+    if (!canAccessLeaveAdminTabs || activeTab !== 0) return;
     setCalendarDept((prev) => {
       if (prev === CALENDAR_DEPARTMENT_ALL_VALUE) return CALENDAR_DEPARTMENT_ALL_VALUE;
       if (prev && deptOptionsForCalendar.includes(prev)) return prev;
       return CALENDAR_DEPARTMENT_ALL_VALUE;
     });
-  }, [activeTab, user?.role, deptOptionsForCalendar]);
+  }, [activeTab, canAccessLeaveAdminTabs, deptOptionsForCalendar]);
 
   const handleSort = (property: string) => {
     const isAsc = orderBy === property && order === 'asc';
@@ -1013,10 +1099,10 @@ const VacationManagement: React.FC = () => {
     setLeaveBalanceOrderBy(property);
   };
 
-  const adjustedTab = (user?.role === 'admin' || user?.role === 'root') ? activeTab : activeTab + 1;
-  const vacationPolicyTab = (user?.role === 'admin' || user?.role === 'root') ? 4 : 2;
-  const leaveBalanceTab = (user?.role === 'admin' || user?.role === 'root') ? 3 : -1;
-  const showStatusKpi = (user?.role === 'admin' || user?.role === 'root') && activeTab === 0;
+  const adjustedTab = canAccessLeaveAdminTabs ? activeTab : activeTab + 1;
+  const vacationPolicyTab = canAccessLeaveAdminTabs ? 4 : -1;
+  const leaveBalanceTab = canAccessLeaveAdminTabs ? 3 : -1;
+  const showStatusKpi = canAccessLeaveAdminTabs && activeTab === 0;
   const showMyRequestKpi = adjustedTab === 1;
   const showApprovalKpi = adjustedTab === 2;
   const showPolicyKpi = adjustedTab === vacationPolicyTab && canEditPolicy;
@@ -1416,7 +1502,7 @@ const VacationManagement: React.FC = () => {
 
   const getTabContent = () => {
     // admin이 아닌 경우 탭 인덱스 조정
-    const adjustedTab = (user?.role === 'admin' || user?.role === 'root') ? activeTab : activeTab + 1;
+    const adjustedTab = canAccessLeaveAdminTabs ? activeTab : activeTab + 1;
     
     switch (adjustedTab) {
       case 0: {
@@ -1635,7 +1721,7 @@ const VacationManagement: React.FC = () => {
         );
       }
       case 3:
-        if (user?.role === 'admin' || user?.role === 'root') {
+        if (canAccessLeaveAdminTabs) {
           const typeLabel = (key: LeaveBalanceTypeKey) => {
             switch (key) {
               case 'annual':
@@ -1952,7 +2038,7 @@ const VacationManagement: React.FC = () => {
                             {t('vacationManagement.earnedLeave')}
                           </Typography>
                         </Box>
-                        {(user?.role === 'admin' || user?.role === 'root') && (
+                        {canAccessLeaveAdminTabs && (
                           <FormControlLabel
                             control={
                               <Checkbox
@@ -1999,11 +2085,51 @@ const VacationManagement: React.FC = () => {
                       )}
                     </Box>
                     <Typography variant="body2" color="text.secondary" paragraph>
-                      • {t('vacationManagement.earnedLeaveDesc2')}
+                      • {vacationPolicy?.forceFixedAnnualForTenure
+                        ? t('vacationManagement.earnedLeaveDesc2Forced', {
+                            years: vacationPolicy?.forceFixedAnnualMinYears ?? 1,
+                            days: vacationPolicy?.forceFixedAnnualDays ?? 12,
+                          })
+                        : t('vacationManagement.earnedLeaveDesc2')}
                     </Typography>
                     <Typography variant="body2" color="text.secondary" paragraph>
                       • {t('vacationManagement.earnedLeaveDesc3')}
                     </Typography>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={vacationPolicy?.forceFixedAnnualForTenure === true}
+                          onChange={(e) => handleToggleForceFixedAnnual(e.target.checked)}
+                          disabled={savingPolicy || !canEditPolicy}
+                        />
+                      }
+                      label={t('vacationManagement.forceFixedAnnualForTenure')}
+                    />
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ pl: 4, mb: 1 }}>
+                      {t('vacationManagement.forceFixedAnnualHint')}
+                    </Typography>
+                    {vacationPolicy?.forceFixedAnnualForTenure === true && (
+                      <Box sx={{ pl: 4, mb: 2, maxWidth: 280 }}>
+                        <Typography variant="body2" sx={{ mb: 1, fontWeight: 500 }}>
+                          {t('vacationManagement.forceFixedAnnualDaysLabel')}
+                        </Typography>
+                        <TextField
+                          type="number"
+                          size="small"
+                          fullWidth
+                          value={vacationPolicy?.forceFixedAnnualDays ?? 12}
+                          onChange={(e) => {
+                            const v = Math.max(1, Math.floor(Number(e.target.value) || 1));
+                            setVacationPolicy((prev) =>
+                              prev ? { ...prev, forceFixedAnnualDays: v } : prev
+                            );
+                          }}
+                          onBlur={(e) => handleSaveForceFixedAnnualDays(Number(e.target.value))}
+                          disabled={savingPolicy || !canEditPolicy}
+                          inputProps={{ min: 1, max: 365 }}
+                        />
+                      </Box>
+                    )}
                     <FormControlLabel
                       control={
                         <Checkbox
@@ -2033,7 +2159,7 @@ const VacationManagement: React.FC = () => {
                         {t('vacationManagement.sickLeave')}
                       </Typography>
                     </Box>
-                    {(user?.role === 'admin' || user?.role === 'root') && (
+                    {canAccessLeaveAdminTabs && (
                       <FormControlLabel
                         control={
                           <Checkbox
@@ -2074,7 +2200,7 @@ const VacationManagement: React.FC = () => {
                         {t('vacationManagement.casualLeave')}
                       </Typography>
                     </Box>
-                    {(user?.role === 'admin' || user?.role === 'root') && (
+                    {canAccessLeaveAdminTabs && (
                       <FormControlLabel
                         control={
                           <Checkbox
@@ -2115,7 +2241,7 @@ const VacationManagement: React.FC = () => {
                         {t('vacationManagement.studyLeave')}
                       </Typography>
                     </Box>
-                    {(user?.role === 'admin' || user?.role === 'root') && (
+                    {canAccessLeaveAdminTabs && (
                       <FormControlLabel
                         control={
                           <Checkbox
@@ -2153,7 +2279,7 @@ const VacationManagement: React.FC = () => {
                         {t('vacationManagement.maternityLeave')}
                       </Typography>
                     </Box>
-                    {(user?.role === 'admin' || user?.role === 'root') && (
+                    {canAccessLeaveAdminTabs && (
                       <FormControlLabel
                         control={
                           <Checkbox
@@ -2194,7 +2320,7 @@ const VacationManagement: React.FC = () => {
                         {t('vacationManagement.paternityLeave')}
                       </Typography>
                     </Box>
-                    {(user?.role === 'admin' || user?.role === 'root') && (
+                    {canAccessLeaveAdminTabs && (
                       <FormControlLabel
                         control={
                           <Checkbox
@@ -2235,7 +2361,7 @@ const VacationManagement: React.FC = () => {
                         {t('vacationManagement.marriageLeave')}
                       </Typography>
                     </Box>
-                    {(user?.role === 'admin' || user?.role === 'root') && (
+                    {canAccessLeaveAdminTabs && (
                       <FormControlLabel
                         control={
                           <Checkbox
@@ -2276,7 +2402,7 @@ const VacationManagement: React.FC = () => {
                         {t('vacationManagement.bereavementLeave')}
                       </Typography>
                     </Box>
-                    {(user?.role === 'admin' || user?.role === 'root') && (
+                    {canAccessLeaveAdminTabs && (
                       <FormControlLabel
                         control={
                           <Checkbox
@@ -2375,7 +2501,7 @@ const VacationManagement: React.FC = () => {
         >
           <Tabs
             value={activeTab}
-            onChange={(_, newValue) => setActiveTab(newValue)}
+            onChange={(_, newValue) => setActiveTab(clampLeaveTab(newValue))}
             variant="scrollable"
             scrollButtons="auto"
             allowScrollButtonsMobile
@@ -2405,7 +2531,7 @@ const VacationManagement: React.FC = () => {
                 color: 'primary.main',
                 fontWeight: 700 } }}
           >
-            {(user?.role === 'admin' || user?.role === 'root') && (
+            {canAccessLeaveAdminTabs && (
               <Tab
                 icon={<FilterIcon fontSize="small" />}
                 label={t('vacationManagement.leaveStatus')}
@@ -2422,14 +2548,14 @@ const VacationManagement: React.FC = () => {
               label={t('vacationManagement.leaveApproval')}
               iconPosition="start"
             />
-            {(user?.role === 'admin' || user?.role === 'root') && (
+            {canAccessLeaveAdminTabs && (
               <Tab
                 icon={<GroupsIcon fontSize="small" />}
                 label={t('vacationManagement.leaveBalances')}
                 iconPosition="start"
               />
             )}
-            {(user?.role === 'admin' || user?.role === 'root') && (
+            {canAccessLeaveAdminTabs && (
               <Tab
                 icon={<EventIcon fontSize="small" />}
                 label={t('vacationManagement.leaveType')}
@@ -2761,7 +2887,7 @@ const VacationManagement: React.FC = () => {
           </Button>
           {selectedVacation && selectedVacation.status === 'pending' && (() => {
             // 탭 2(받은 휴가 승인)일 때만 승인/반려 버튼 표시
-            const adjustedTab = (user?.role === 'admin' || user?.role === 'root') ? activeTab : activeTab + 1;
+            const adjustedTab = canAccessLeaveAdminTabs ? activeTab : activeTab + 1;
             if (adjustedTab === 2 && canApproveVacationRequest(selectedVacation)) {
               return (
                 <>
@@ -2775,8 +2901,8 @@ const VacationManagement: React.FC = () => {
                   </Button>
                   <Button 
                     onClick={handleApproveFromDialog} 
-                    color="success"
                     variant="contained"
+                    sx={{ color: '#FFFFFF', '&:hover': { color: '#FFFFFF' } }}
                   >
                     {t('vacationManagement.approve')}
                   </Button>

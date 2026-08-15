@@ -249,15 +249,18 @@ const vacationMenuPerm = (flags: ('can_view' | 'can_create' | 'can_edit' | 'can_
 router.get('/vacations', vacationMenuPerm(['can_view', 'can_create']), getVacations);
 router.get('/vacations/excel/export', vacationMenuPerm(['can_view', 'can_edit']), exportVacationsToExcel);
 router.get('/vacations/annual-leave', vacationMenuPerm(['can_view', 'can_create']), getAnnualLeaveInfo);
-router.get('/vacations/leave-balances', vacationMenuPerm(['can_view', 'can_create']), getLeaveBalances);
+router.get('/vacations/leave-balances', requireRole(['admin', 'root']), getLeaveBalances);
 router.get('/vacations/policy', vacationMenuPerm(['can_view', 'can_create']), getVacationPolicy);
 router.put(
   '/vacations/policy',
   restrictAuditToReadOnly,
-  vacationMenuPerm(['can_edit']),
+  requireRole(['admin', 'root']),
   validateBody({
     annualLeaveStartDays: { required: true },
-    annualLeaveEarnDays: { required: false }
+    annualLeaveEarnDays: { required: false },
+    forceFixedAnnualForTenure: { required: false },
+    forceFixedAnnualDays: { required: false, type: 'number' },
+    forceFixedAnnualMinYears: { required: false, type: 'number' },
   }),
   updateVacationPolicy
 );

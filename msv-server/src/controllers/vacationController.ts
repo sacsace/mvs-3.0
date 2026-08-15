@@ -800,6 +800,9 @@ export const getVacationPolicy = async (req: AuthRequest, res: Response) => {
       annualLeaveStartDays: 240,
       annualLeaveEarnDays: 20,
       deductAbsenceFromLeave: true,
+      forceFixedAnnualForTenure: false,
+      forceFixedAnnualDays: 12,
+      forceFixedAnnualMinYears: 1,
       availableTypes: [
         'annual',
         'sick',
@@ -831,6 +834,15 @@ export const getVacationPolicy = async (req: AuthRequest, res: Response) => {
     }
     if (vacationPolicy.deductAbsenceFromLeave === undefined) {
       vacationPolicy.deductAbsenceFromLeave = true;
+    }
+    if (vacationPolicy.forceFixedAnnualForTenure === undefined) {
+      vacationPolicy.forceFixedAnnualForTenure = false;
+    }
+    if (vacationPolicy.forceFixedAnnualDays == null || !(Number(vacationPolicy.forceFixedAnnualDays) > 0)) {
+      vacationPolicy.forceFixedAnnualDays = 12;
+    }
+    if (vacationPolicy.forceFixedAnnualMinYears == null || Number(vacationPolicy.forceFixedAnnualMinYears) < 0) {
+      vacationPolicy.forceFixedAnnualMinYears = 1;
     }
 
     res.json({
@@ -875,12 +887,18 @@ export const updateVacationPolicy = async (req: AuthRequest, res: Response) => {
       availableTypes,
       leaveTypeDays,
       deductAbsenceFromLeave,
+      forceFixedAnnualForTenure,
+      forceFixedAnnualDays,
+      forceFixedAnnualMinYears,
     } = req.body;
 
     if (
       annualLeaveStartDays === undefined &&
       leaveTypeDays === undefined &&
-      deductAbsenceFromLeave === undefined
+      deductAbsenceFromLeave === undefined &&
+      forceFixedAnnualForTenure === undefined &&
+      forceFixedAnnualDays === undefined &&
+      forceFixedAnnualMinYears === undefined
     ) {
       return res.status(400).json({
         success: false,
@@ -906,6 +924,15 @@ export const updateVacationPolicy = async (req: AuthRequest, res: Response) => {
     // 기존 설정 가져오기
     const currentSettings = company.settings || {};
     const currentPolicy = currentSettings.vacationPolicy || {};
+
+    const parsedForceDays =
+      forceFixedAnnualDays !== undefined
+        ? parseInt(String(forceFixedAnnualDays), 10)
+        : undefined;
+    const parsedForceYears =
+      forceFixedAnnualMinYears !== undefined
+        ? parseInt(String(forceFixedAnnualMinYears), 10)
+        : undefined;
     
     // 휴가 정책 업데이트
     const updatedSettings = {
@@ -938,6 +965,18 @@ export const updateVacationPolicy = async (req: AuthRequest, res: Response) => {
           deductAbsenceFromLeave !== undefined
             ? Boolean(deductAbsenceFromLeave)
             : currentPolicy.deductAbsenceFromLeave !== false,
+        forceFixedAnnualForTenure:
+          forceFixedAnnualForTenure !== undefined
+            ? Boolean(forceFixedAnnualForTenure)
+            : currentPolicy.forceFixedAnnualForTenure === true,
+        forceFixedAnnualDays:
+          parsedForceDays != null && Number.isFinite(parsedForceDays) && parsedForceDays > 0
+            ? parsedForceDays
+            : currentPolicy.forceFixedAnnualDays ?? 12,
+        forceFixedAnnualMinYears:
+          parsedForceYears != null && Number.isFinite(parsedForceYears) && parsedForceYears >= 0
+            ? parsedForceYears
+            : currentPolicy.forceFixedAnnualMinYears ?? 1,
       }
     };
 
@@ -967,7 +1006,7 @@ export const getLeaveBalances = async (req: AuthRequest, res: Response) => {
     const companyId = req.user?.company_id;
     const { company_id } = req.query;
 
-    if (userRole !== 'admin' && userRole !== 'root' && userRole !== 'audit') {
+    if (userRole !== 'admin' && userRole !== 'root') {
       return res.status(403).json({
         success: false,
         message: '권한이 없습니다.',

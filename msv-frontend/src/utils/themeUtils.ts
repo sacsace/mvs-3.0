@@ -474,11 +474,16 @@ export const createDynamicTheme = (appearanceSettings: {
             : {},
           contained: {
             background: primaryColors.main,
+            color: '#FFFFFF',
             boxShadow: isLightMode ? containedButtonShadow : 'none',
             '&:hover': {
               background: primaryColors.dark,
+              color: '#FFFFFF',
               boxShadow: isLightMode ? containedButtonShadowHover : 'none',
-            }
+            },
+            '&.Mui-disabled': {
+              color: '#FFFFFF',
+            },
           },
         },
       },

@@ -686,6 +686,20 @@ const AttendanceManagement: React.FC = () => {
         {heresnowManualDisabled
           ? t('attendanceManagement.heresnowManualClockDisabled')
           : t('attendanceManagement.personalViewNotice')}
+        {heresnowManualDisabled && (
+          <Box sx={{ mt: 1 }}>
+            <Button
+              href="https://www.heresnow.in/login"
+              target="_blank"
+              rel="noopener noreferrer"
+              size="small"
+              variant="outlined"
+              sx={{ textTransform: 'none', fontWeight: 600 }}
+            >
+              {t('attendanceManagement.heresnowOpen')}
+            </Button>
+          </Box>
+        )}
       </Alert>
 
       <Box

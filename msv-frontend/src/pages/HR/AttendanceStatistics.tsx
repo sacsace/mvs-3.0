@@ -1093,7 +1093,12 @@ const AttendanceStatistics: React.FC = () => {
               </Button>
             )}
             <Button
-              href="https://www.heresnow.in"
+              href={
+                String(heresnowStatus?.heresnowLoginUrl || '').trim()
+                || (String(heresnowStatus?.heresnowUrl || '').replace(/\/+$/, '')
+                  ? `${String(heresnowStatus.heresnowUrl).replace(/\/+$/, '')}/login`
+                  : 'https://www.heresnow.in/login')
+              }
               target="_blank"
               rel="noopener noreferrer"
               variant="text"

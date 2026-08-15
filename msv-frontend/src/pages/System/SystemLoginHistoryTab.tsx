@@ -19,6 +19,11 @@ import {
   Autocomplete,
   InputAdornment,
   Pagination,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Divider,
 } from '@mui/material';
 import { RestartAlt as ResetIcon, Search as SearchIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
@@ -49,13 +54,15 @@ const loginHistoryTableBodyRowSx: SxProps<Theme> = (theme) => {
   const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
   const hoverBg = theme.palette.mode === 'light' ? '#EFF6FF' : theme.palette.action.hover;
   return {
-    '& .MuiTableRow-root': { bgcolor: rowBg },
+    '& .MuiTableRow-root': { bgcolor: rowBg, cursor: 'pointer' },
     '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
     '& .MuiTableCell-body': {
-      py: 1.5,
-      px: 2,
-      fontSize: '0.875rem',
+      py: 1,
+      px: 1,
+      fontSize: '0.8125rem',
       borderBottom: `1px solid ${theme.palette.mode === 'light' ? '#D1DAE4' : theme.palette.divider}`,
+      whiteSpace: 'nowrap',
+      verticalAlign: 'middle',
     },
     '& .MuiTableRow-root:last-of-type .MuiTableCell-body': { borderBottom: 'none' },
   };
@@ -86,9 +93,21 @@ interface LoginLog {
   } | null;
 }
 
+function pad2(n: number) {
+  return String(n).padStart(2, '0');
+}
+
+/** 목록·상세용 로컬 시각 (초 단위까지, 잘림 없는 고정 포맷) */
+function formatDateTimeExact(value?: string | null) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+}
+
 /** MSV 시스템 로그인 감사 로그 (시스템 설정 탭) */
 const SystemLoginHistoryTab: React.FC = () => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { user } = useStore();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>('');
@@ -96,6 +115,7 @@ const SystemLoginHistoryTab: React.FC = () => {
   const [logLoading, setLogLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [selectedLog, setSelectedLog] = useState<LoginLog | null>(null);
   const [logFilters, setLogFilters] = useState({
     userid: '',
     status: '' as '' | 'success' | 'failure',
@@ -247,13 +267,6 @@ const SystemLoginHistoryTab: React.FC = () => {
     await loadLoginLogs(Number(selectedCompanyId), nextFilters);
   };
 
-  const formatDateTime = (value?: string) => {
-    if (!value) return '-';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return '-';
-    return date.toLocaleString(i18n.language === 'en' ? 'en-US' : 'ko-KR', { hour12: false });
-  };
-
   const formatEventType = (value?: string | null) => {
     const key = String(value || 'login');
     const i18nKey = `loginInfoManagement.eventTypes.${key}`;
@@ -267,6 +280,34 @@ const SystemLoginHistoryTab: React.FC = () => {
     const label = t(i18nKey);
     return label === i18nKey ? value : label;
   };
+
+  const detailRows = useMemo(() => {
+    if (!selectedLog) return [];
+    const log = selectedLog;
+    return [
+      { label: t('loginInfoManagement.fields.loginAt'), value: formatDateTimeExact(log.logged_at) },
+      { label: t('loginInfoManagement.fields.eventType'), value: formatEventType(log.event_type) },
+      {
+        label: t('loginInfoManagement.fields.result'),
+        value:
+          log.status === 'success'
+            ? t('loginInfoManagement.status.success')
+            : t('loginInfoManagement.status.failure'),
+      },
+      { label: t('loginInfoManagement.fields.userId'), value: log.userid || log.user?.userid || '-' },
+      { label: t('loginInfoManagement.fields.userName'), value: log.user?.username || '-' },
+      { label: 'IP', value: log.ip_address || '-' },
+      { label: t('loginInfoManagement.fields.resource'), value: log.resource || '-' },
+      { label: t('loginInfoManagement.fields.reason'), value: formatReason(log.reason) },
+      {
+        label: t('loginInfoManagement.fields.userAgent', { defaultValue: 'User-Agent' }),
+        value: log.user_agent || '-',
+      },
+      { label: 'Log ID', value: String(log.id) },
+      { label: 'User ID (DB)', value: log.user_id != null ? String(log.user_id) : '-' },
+      { label: 'Company ID', value: log.company_id != null ? String(log.company_id) : '-' },
+    ];
+  }, [selectedLog, t]);
 
   return (
     <Box>
@@ -298,7 +339,10 @@ const SystemLoginHistoryTab: React.FC = () => {
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
                 {item.label}
               </Typography>
-              <Typography variant="h5" sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}>
+              <Typography
+                variant="h5"
+                sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}
+              >
                 {item.value}
               </Typography>
             </CardContent>
@@ -484,29 +528,38 @@ const SystemLoginHistoryTab: React.FC = () => {
                     borderRight: 'none',
                     borderTop: 'none',
                   },
+                  '& .MuiTableCell-head': {
+                    px: 1,
+                    py: 1,
+                    whiteSpace: 'nowrap',
+                  },
                 }}
               >
                 <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
-                    <TableCell sx={{ width: 48 }}>No</TableCell>
-                    <TableCell sx={{ width: 150 }}>{t('loginInfoManagement.fields.loginAt')}</TableCell>
-                    <TableCell sx={{ width: 88 }}>{t('loginInfoManagement.fields.eventType')}</TableCell>
-                    <TableCell sx={{ width: 80 }}>{t('loginInfoManagement.fields.result')}</TableCell>
-                    <TableCell>{t('loginInfoManagement.fields.userId')}</TableCell>
-                    <TableCell>{t('loginInfoManagement.fields.userName')}</TableCell>
-                    <TableCell sx={{ width: 110 }}>IP</TableCell>
-                    <TableCell sx={{ width: 120 }}>{t('loginInfoManagement.fields.resource')}</TableCell>
-                    <TableCell>{t('loginInfoManagement.fields.reason')}</TableCell>
+                    <TableCell sx={{ width: 44 }}>No</TableCell>
+                    <TableCell sx={{ width: 158 }}>{t('loginInfoManagement.fields.loginAt')}</TableCell>
+                    <TableCell sx={{ width: 72 }}>{t('loginInfoManagement.fields.eventType')}</TableCell>
+                    <TableCell sx={{ width: 72 }}>{t('loginInfoManagement.fields.result')}</TableCell>
+                    <TableCell sx={{ width: 168 }}>{t('loginInfoManagement.fields.userId')}</TableCell>
+                    <TableCell sx={{ width: 120 }}>{t('loginInfoManagement.fields.userName')}</TableCell>
+                    <TableCell sx={{ width: 118 }}>IP</TableCell>
+                    <TableCell sx={{ width: 88 }}>{t('loginInfoManagement.fields.resource')}</TableCell>
+                    <TableCell sx={{ width: 'auto' }}>{t('loginInfoManagement.fields.reason')}</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody sx={loginHistoryTableBodyRowSx}>
                   {paginatedLogs.map((log, index) => (
-                    <TableRow key={log.id}>
+                    <TableRow key={log.id} hover onClick={() => setSelectedLog(log)}>
                       <TableCell>{(page - 1) * LOGS_PER_PAGE + index + 1}</TableCell>
-                      <TableCell>
-                        <Typography variant="body2" noWrap title={formatDateTime(log.logged_at)}>
-                          {formatDateTime(log.logged_at)}
-                        </Typography>
+                      <TableCell
+                        sx={{
+                          fontVariantNumeric: 'tabular-nums',
+                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                          fontSize: '0.75rem',
+                        }}
+                      >
+                        {formatDateTimeExact(log.logged_at)}
                       </TableCell>
                       <TableCell>
                         <Chip
@@ -520,6 +573,7 @@ const SystemLoginHistoryTab: React.FC = () => {
                                 : 'default'
                           }
                           variant="outlined"
+                          sx={{ height: 22, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
                         />
                       </TableCell>
                       <TableCell>
@@ -532,32 +586,37 @@ const SystemLoginHistoryTab: React.FC = () => {
                           }
                           color={log.status === 'success' ? 'success' : 'error'}
                           variant={log.status === 'success' ? 'filled' : 'outlined'}
+                          sx={{ height: 22, '& .MuiChip-label': { px: 0.75, fontSize: '0.7rem' } }}
                         />
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" noWrap title={log.userid || '-'}>
-                          {log.userid || '-'}
-                        </Typography>
+                      <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={log.userid || '-'}>
+                        {log.userid || '-'}
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" noWrap title={log.user?.username || '-'}>
-                          {log.user?.username || '-'}
-                        </Typography>
+                      <TableCell
+                        sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+                        title={log.user?.username || '-'}
+                      >
+                        {log.user?.username || '-'}
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" noWrap title={log.ip_address || '-'}>
-                          {log.ip_address || '-'}
-                        </Typography>
+                      <TableCell
+                        sx={{
+                          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                          fontSize: '0.75rem',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                        title={log.ip_address || '-'}
+                      >
+                        {log.ip_address || '-'}
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" noWrap title={log.resource || '-'}>
-                          {log.resource || '-'}
-                        </Typography>
+                      <TableCell sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }} title={log.resource || '-'}>
+                        {log.resource || '-'}
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" noWrap title={formatReason(log.reason)}>
-                          {formatReason(log.reason)}
-                        </Typography>
+                      <TableCell
+                        sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+                        title={formatReason(log.reason)}
+                      >
+                        {formatReason(log.reason)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -583,6 +642,57 @@ const SystemLoginHistoryTab: React.FC = () => {
           </>
         )}
       </Box>
+
+      <Dialog
+        open={Boolean(selectedLog)}
+        onClose={() => setSelectedLog(null)}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{ sx: { borderRadius: 2 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, fontSize: '1.05rem' }}>
+          {t('loginInfoManagement.detailTitle', { defaultValue: '로그인 이력 상세' })}
+        </DialogTitle>
+        <DialogContent dividers sx={{ px: 2.5, py: 1.5 }}>
+          {detailRows.map((row, idx) => (
+            <Box key={`${row.label}-${idx}`}>
+              {idx > 0 ? <Divider sx={{ my: 1.25 }} /> : null}
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontWeight: 600, display: 'block', mb: 0.35 }}
+              >
+                {row.label}
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 500,
+                  color: 'text.primary',
+                  wordBreak: 'break-word',
+                  whiteSpace: 'pre-wrap',
+                  fontFamily:
+                    row.label === 'IP' ||
+                    row.label === 'Log ID' ||
+                    row.label === 'User ID (DB)' ||
+                    row.label === 'Company ID'
+                      ? 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+                      : 'inherit',
+                  fontVariantNumeric:
+                    row.label === t('loginInfoManagement.fields.loginAt') ? 'tabular-nums' : undefined,
+                }}
+              >
+                {row.value}
+              </Typography>
+            </Box>
+          ))}
+        </DialogContent>
+        <DialogActions sx={{ px: 2.5, py: 1.5 }}>
+          <Button onClick={() => setSelectedLog(null)} variant="contained" disableElevation>
+            {t('common.close', { defaultValue: '닫기' })}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
