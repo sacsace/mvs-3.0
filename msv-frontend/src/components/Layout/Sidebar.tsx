@@ -521,6 +521,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     if (normalized.includes('/hr/departments')) return <Business />;
     if (normalized.includes('/hr/attendance/statistics')) return <Assessment />;
     if (normalized.includes('/hr/attendance')) return <Schedule />;
+    if (normalized.includes('/hr/payslip-send')) return <Email />;
     if (normalized.includes('/hr/payroll')) return <Payments />;
     if (normalized.includes('/hr/leave') || normalized.includes('/hr/vacation')) return <BeachAccess />;
     if (normalized.includes('/hr/employment-contracts')) return <Description />;

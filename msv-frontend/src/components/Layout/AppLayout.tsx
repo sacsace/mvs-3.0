@@ -7,7 +7,7 @@ import MobileNavDrawer from './MobileNavDrawer';
 import { useStore, useMenuStore } from '../../store';
 import { userUiPreferencesService } from '../../services/api';
 import { ensureI18nLanguage } from '../../locales/i18n';
-import { useMenuLoader } from '../../hooks/useMenuLoader';
+import { useMenuLoader, reloadMenusNow } from '../../hooks/useMenuLoader';
 import { mvsPageShellSx, mvsWorkBoardPageBg, mvsPageContentMaxWidth } from '../../theme/mvsLayout';
 
 /** 서버 prefs의 ko가 클라이언트 영어 선택보다 늦게 도착할 때 UI 언어를 덮어쓰지 않음 */
@@ -47,6 +47,7 @@ const isFullBleedBodyRoute = (pathname: string): boolean => {
   if (pathname === '/work/assignee-list' || pathname.startsWith('/work/assignee-list/')) return true;
   if (pathname === '/basic-info/login-info' || pathname.startsWith('/basic-info/login-info/')) return true;
   if (pathname === '/hr/payroll' || pathname.startsWith('/hr/payroll/')) return true;
+  if (pathname === '/hr/payslip-send' || pathname.startsWith('/hr/payslip-send/')) return true;
   return false;
 };
 
@@ -58,10 +59,17 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useStore();
-  const { menus, hasMenuPermission, setLanguage, loading: menusLoading } = useMenuStore();
+  const {
+    menus,
+    hasMenuPermission,
+    setLanguage,
+    loading: menusLoading,
+    error: menusError,
+  } = useMenuStore();
   const [hasAccess, setHasAccess] = useState<boolean | null>(null);
 
   useMenuLoader();
+  const isElevated = user?.role === 'root' || user?.role === 'admin';
 
   const handleMobileNavToggle = () => {
     if (isMobileNav) setMobileNavOpen((prev) => !prev);
@@ -157,7 +165,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         return;
       }
 
-      if (user?.role === 'root') {
+      // admin/root는 메뉴 트리 누락·로드 실패로도 화면이 막히면 안 됨
+      if (isElevated) {
         setHasAccess(true);
         return;
       }
@@ -169,7 +178,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
       const menuId = findMenuByRoute(location.pathname);
 
+      // 메뉴 API 실패로 트리가 비어 있으면 “권한 없음”으로 오판하지 않음
       if (!menuId) {
+        if (menusLoading) {
+          setHasAccess(null);
+          return;
+        }
+        if (menusError || menus.length === 0) {
+          setHasAccess(null);
+          return;
+        }
         setHasAccess(false);
         return;
       }
@@ -177,16 +195,29 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       setHasAccess(hasMenuPermission(menuId, 'view'));
     };
 
-    if (menus.length > 0) {
-      checkMenuPermission();
-    } else if (menusLoading) {
+    if (menusLoading) {
       setHasAccess(null);
-    } else if (user?.role === 'root') {
+    } else if (isElevated) {
       setHasAccess(true);
+    } else if (menus.length > 0) {
+      checkMenuPermission();
+    } else if (menusError) {
+      // 로드 실패: 차단 대신 재시도 UI (hasAccess null + menusError)
+      setHasAccess(null);
     } else {
       checkMenuPermission();
     }
-  }, [location.pathname, menus, menusLoading, hasMenuPermission, user?.id, user?.role, findMenuByRoute]);
+  }, [
+    location.pathname,
+    menus,
+    menusLoading,
+    menusError,
+    hasMenuPermission,
+    user?.id,
+    user?.role,
+    isElevated,
+    findMenuByRoute,
+  ]);
 
   const useChromelessWorkArea = true;
   const fullBleedBody = isFullBleedBodyRoute(location.pathname);
@@ -408,6 +439,41 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                         onClick={() => navigate('/dashboard')}
                         sx={{ mt: 2 }}
                       >
+                        대시보드로 이동
+                      </Button>
+                    </Box>
+                  </Box>
+                </Box>
+              ) : hasAccess === null && menusError && !menusLoading ? (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: 'calc(100vh - 200px)',
+                    width: '100%',
+                    p: 3,
+                  }}
+                >
+                  <Box sx={{ maxWidth: 500, width: '100%' }}>
+                    <Alert severity="warning" sx={{ mb: 3 }}>
+                      <Typography variant="h6" gutterBottom>
+                        메뉴를 불러오지 못했습니다
+                      </Typography>
+                      <Typography variant="body2">{menusError}</Typography>
+                    </Alert>
+                    <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={() => {
+                          void reloadMenusNow();
+                        }}
+                      >
+                        다시 시도
+                      </Button>
+                      <Button variant="outlined" onClick={() => navigate('/dashboard')}>
                         대시보드로 이동
                       </Button>
                     </Box>

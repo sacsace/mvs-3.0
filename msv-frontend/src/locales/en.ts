@@ -1310,6 +1310,12 @@ export default {
     payrollManagement: {
       title: 'Payroll Management',
       description: 'Manage monthly payroll generation, finalization, payslip delivery, and payroll data.',
+      payslipSendSystem: {
+        title: 'Payslip Delivery System',
+        description: 'Select employees from finalized payroll records and email their payslip PDFs.',
+        completeOnlyHint: 'Only finalized pay months can be sent. Finalize the payroll in Payroll Management, then send each employee’s payslip here.',
+        unfinalizedMonthHint: 'The selected pay month has not been finalized. Complete payroll generation in Payroll Management first.'
+      },
       detailTitle: 'Payroll Details',
       backToList: 'Back to List',
       payInfo: 'Payroll Information',

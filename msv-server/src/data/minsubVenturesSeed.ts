@@ -78,6 +78,7 @@ const SUB_MENUS: Record<string, Array<{ name_ko: string; name_en: string; route:
     { name_ko: '근태 통계', name_en: 'Attendance Statistics', route: '/hr/attendance/statistics', icon: 'assessment', order: 4 },
     { name_ko: '휴가 관리', name_en: 'Leave', route: '/hr/leave', icon: 'event', order: 5 },
     { name_ko: '급여 관리', name_en: 'Payroll', route: '/hr/payroll', icon: 'payments', order: 6 },
+    { name_ko: '급여 명세서 발송 시스템', name_en: 'Payslip Delivery', route: '/hr/payslip-send', icon: 'email', order: 7 },
   ],
   '/work': [
     { name_ko: '업무 관리', name_en: 'Projects', route: '/work/projects', icon: 'view_kanban', order: 1 },

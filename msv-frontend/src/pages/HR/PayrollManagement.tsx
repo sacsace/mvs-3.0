@@ -51,6 +51,7 @@ import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionF
 import { normalizePayMonth, isPayMonthAfterCurrent } from '../../utils/payMonth';
 
 const PAYROLL_MENU_ROUTES = ['/hr/payroll', '/hr'] as const;
+const PAYSLIP_SEND_MENU_ROUTES = ['/hr/payslip-send', '/hr'] as const;
 const PAYROLL_FILTER_OUTLINED = mvsOutlinedLabelProps;
 const payrollFilterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx } as const;
 
@@ -97,11 +98,18 @@ type PayrollBulkPreviewPayload = {
   attendance: PayrollBulkPreviewAttendance | null;
 };
 
-const PayrollManagement: React.FC = () => {
+type PayrollManagementProps = {
+  /** 급여 생성·수정 없이 확정된 급여 목록에서 명세서를 메일 발송하는 전용 화면 */
+  payslipSendOnly?: boolean;
+};
+
+const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly = false }) => {
   const { t } = useTranslation();
   const user = useStore((s) => s.user);
   const isRoot = useStore((s) => s.user?.role === 'root');
-  const menuFlags = useMenuRoutePermissionFlags(PAYROLL_MENU_ROUTES);
+  const menuFlags = useMenuRoutePermissionFlags(
+    payslipSendOnly ? PAYSLIP_SEND_MENU_ROUTES : PAYROLL_MENU_ROUTES
+  );
   const [payrollRecords, setPayrollRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -230,12 +238,14 @@ const PayrollManagement: React.FC = () => {
   /** 목록·요약: 선택 급여월(정규화)과 일치하는 활성 급여만 */
   const payrollRecordsForSelectedMonth = useMemo(() => {
     if (!periodKey) return [];
+    // 발송 전용 화면은 확정된 급여월의 명세서만 노출한다.
+    if (payslipSendOnly && !lockedPeriods.has(periodKey)) return [];
     return payrollRecords.filter((p: any) => {
       const rowMonth = normalizePayMonth(String(p.payroll_period ?? '').trim());
       const active = p.is_active === undefined || p.is_active === true;
       return active && rowMonth === periodKey;
     });
-  }, [payrollRecords, periodKey]);
+  }, [payrollRecords, periodKey, payslipSendOnly, lockedPeriods]);
 
   const filteredRecords = useMemo(() => {
     let list = [...payrollRecordsForSelectedMonth];
@@ -540,8 +550,12 @@ const PayrollManagement: React.FC = () => {
   return (
     <Box sx={{ ...mvsPageRootFullBleedSx, flex: 1, minWidth: 0 }}>
       <MvsPageHeader
-        title={t('payrollManagement.title')}
-        description={t('payrollManagement.description')}
+        title={t(payslipSendOnly ? 'payrollManagement.payslipSendSystem.title' : 'payrollManagement.title')}
+        description={t(
+          payslipSendOnly
+            ? 'payrollManagement.payslipSendSystem.description'
+            : 'payrollManagement.description'
+        )}
       />
 
       {!menuFlags.menusLoading && !menuFlags.canRead && (
@@ -550,46 +564,54 @@ const PayrollManagement: React.FC = () => {
         </Alert>
       )}
 
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-        {periodKey
-          ? t('payrollManagement.summary.scopeForPayMonth', { period: periodKey })
-          : t('payrollManagement.summary.scopeNoMonth')}
-      </Typography>
+      {payslipSendOnly ? (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          {t('payrollManagement.payslipSendSystem.completeOnlyHint')}
+        </Alert>
+      ) : (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+          {periodKey
+            ? t('payrollManagement.summary.scopeForPayMonth', { period: periodKey })
+            : t('payrollManagement.summary.scopeNoMonth')}
+        </Typography>
+      )}
 
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
-          gap: 2.5,
-          mb: 3,
-        }}
-      >
-        {[
-          { key: 'gross', label: t('payrollManagement.summary.totalSalary'), value: `Rs. ${formatPayrollSummaryRupee(summaryStats.gross)}` },
-          { key: 'net', label: t('payrollManagement.summary.netSalary'), value: `Rs. ${formatPayrollSummaryRupee(summaryStats.net)}` },
-          { key: 'tax', label: t('payrollManagement.summary.totalTax'), value: `Rs. ${formatPayrollSummaryRupee(summaryStats.tax)}` },
-          { key: 'pending', label: t('payrollManagement.summary.pendingPayroll'), value: String(summaryStats.pending), valueColor: 'warning.main' as const },
-        ].map((item) => (
-          <Card key={item.key} elevation={0} sx={mvsKpiCardSx}>
-            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
-                {item.label}
-              </Typography>
-              <Typography
-                variant="h5"
-                sx={{
-                  mt: 0.75,
-                  fontWeight: 600,
-                  letterSpacing: '-0.02em',
-                  color: item.valueColor ?? 'text.primary',
-                }}
-              >
-                {item.value}
-              </Typography>
-            </CardContent>
-          </Card>
-        ))}
-      </Box>
+      {!payslipSendOnly && (
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+            gap: 2.5,
+            mb: 3,
+          }}
+        >
+          {[
+            { key: 'gross', label: t('payrollManagement.summary.totalSalary'), value: `Rs. ${formatPayrollSummaryRupee(summaryStats.gross)}` },
+            { key: 'net', label: t('payrollManagement.summary.netSalary'), value: `Rs. ${formatPayrollSummaryRupee(summaryStats.net)}` },
+            { key: 'tax', label: t('payrollManagement.summary.totalTax'), value: `Rs. ${formatPayrollSummaryRupee(summaryStats.tax)}` },
+            { key: 'pending', label: t('payrollManagement.summary.pendingPayroll'), value: String(summaryStats.pending), valueColor: 'warning.main' as const },
+          ].map((item) => (
+            <Card key={item.key} elevation={0} sx={mvsKpiCardSx}>
+              <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, letterSpacing: '0.02em' }}>
+                  {item.label}
+                </Typography>
+                <Typography
+                  variant="h5"
+                  sx={{
+                    mt: 0.75,
+                    fontWeight: 600,
+                    letterSpacing: '-0.02em',
+                    color: item.valueColor ?? 'text.primary',
+                  }}
+                >
+                  {item.value}
+                </Typography>
+              </CardContent>
+            </Card>
+          ))}
+        </Box>
+      )}
 
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
         <Box
@@ -606,20 +628,22 @@ const PayrollManagement: React.FC = () => {
           }}
         >
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
-            <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
-              <span style={{ display: 'inline-flex' }}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<FileDownloadIcon fontSize="small" />}
-                  onClick={handleExportExcel}
-                  disabled={menuFlags.menusLoading || !menuFlags.canRead || loading || gridRows.length === 0}
-                  sx={mvsBodyOutlinedBtnSx}
-                >
-                  {t('payrollManagement.actions.exportExcel')}
-                </Button>
-              </span>
-            </Tooltip>
+            {!payslipSendOnly && (
+              <Tooltip title={t('common.menuNoView')} disableHoverListener={menuFlags.menusLoading || menuFlags.canRead}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<FileDownloadIcon fontSize="small" />}
+                    onClick={handleExportExcel}
+                    disabled={menuFlags.menusLoading || !menuFlags.canRead || loading || gridRows.length === 0}
+                    sx={mvsBodyOutlinedBtnSx}
+                  >
+                    {t('payrollManagement.actions.exportExcel')}
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
             <Tooltip title={payslipSendTooltip} disableHoverListener={!payslipSendTooltip}>
               <span style={{ display: 'inline-flex' }}>
                 <Button
@@ -634,59 +658,63 @@ const PayrollManagement: React.FC = () => {
                 </Button>
               </span>
             </Tooltip>
-            <Tooltip title={completePayrollToolbarTooltip} disableHoverListener={!completePayrollToolbarTooltip}>
-              <span style={{ display: 'inline-flex' }}>
-                <Button
-                  variant="contained"
-                  color="error"
-                  disableElevation
-                  size="small"
-                  startIcon={<TaskAltIcon fontSize="small" />}
-                  onClick={() => setCompleteDialogOpen(true)}
-                  disabled={completePayrollToolbarDisabled}
-                  sx={{
-                    textTransform: 'none',
-                    borderRadius: '10px',
-                    fontWeight: 600,
-                    fontSize: '0.8125rem',
-                    minHeight: 36,
-                    px: 2,
-                    boxShadow: 'none',
-                  }}
-                >
-                  {t('payrollManagement.actions.completePayroll')}
-                </Button>
-              </span>
-            </Tooltip>
+            {!payslipSendOnly && (
+              <Tooltip title={completePayrollToolbarTooltip} disableHoverListener={!completePayrollToolbarTooltip}>
+                <span style={{ display: 'inline-flex' }}>
+                  <Button
+                    variant="contained"
+                    color="error"
+                    disableElevation
+                    size="small"
+                    startIcon={<TaskAltIcon fontSize="small" />}
+                    onClick={() => setCompleteDialogOpen(true)}
+                    disabled={completePayrollToolbarDisabled}
+                    sx={{
+                      textTransform: 'none',
+                      borderRadius: '10px',
+                      fontWeight: 600,
+                      fontSize: '0.8125rem',
+                      minHeight: 36,
+                      px: 2,
+                      boxShadow: 'none',
+                    }}
+                  >
+                    {t('payrollManagement.actions.completePayroll')}
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
           </Box>
-          <Box
-            sx={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: 1,
-              flexShrink: 0,
-              width: { xs: '100%', md: 'auto' },
-              ml: { md: 'auto' },
-            }}
-          >
-            <Tooltip title={bulkCreateHeaderTooltip} disableHoverListener={!bulkCreateHeaderTooltip}>
-              <span style={{ display: 'inline-flex', flexShrink: 0 }}>
-                <Button
-                  variant="contained"
-                  disableElevation
-                  size="small"
-                  startIcon={<AddIcon fontSize="small" />}
-                  disabled={bulkCreateOpenDisabled}
-                  onClick={() => setOpenDialog(true)}
-                  sx={mvsBodyPrimaryBtnSx}
-                >
-                  {t('payrollManagement.actions.createPayroll')}
-                </Button>
-              </span>
-            </Tooltip>
-          </Box>
+          {!payslipSendOnly && (
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: 1,
+                flexShrink: 0,
+                width: { xs: '100%', md: 'auto' },
+                ml: { md: 'auto' },
+              }}
+            >
+              <Tooltip title={bulkCreateHeaderTooltip} disableHoverListener={!bulkCreateHeaderTooltip}>
+                <span style={{ display: 'inline-flex', flexShrink: 0 }}>
+                  <Button
+                    variant="contained"
+                    disableElevation
+                    size="small"
+                    startIcon={<AddIcon fontSize="small" />}
+                    disabled={bulkCreateOpenDisabled}
+                    onClick={() => setOpenDialog(true)}
+                    sx={mvsBodyPrimaryBtnSx}
+                  >
+                    {t('payrollManagement.actions.createPayroll')}
+                  </Button>
+                </span>
+              </Tooltip>
+            </Box>
+          )}
         </Box>
 
         <Box
@@ -789,7 +817,9 @@ const PayrollManagement: React.FC = () => {
                 : t('payrollManagement.empty.noItems')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 420 }}>
-              {hasActiveFilters
+              {payslipSendOnly && periodKey && !selectedPeriodPayrollComplete
+                ? t('payrollManagement.payslipSendSystem.unfinalizedMonthHint')
+                : hasActiveFilters
                 ? t('payrollManagement.empty.noResultsHint')
                 : t('payrollManagement.empty.noItemsHint')}
             </Typography>
@@ -803,7 +833,7 @@ const PayrollManagement: React.FC = () => {
               >
                 {t('payrollManagement.actions.reset')}
               </Button>
-            ) : (
+            ) : !payslipSendOnly ? (
               <Tooltip title={bulkCreateHeaderTooltip} disableHoverListener={!bulkCreateHeaderTooltip}>
                 <span style={{ display: 'inline-flex' }}>
                   <Button
@@ -819,7 +849,7 @@ const PayrollManagement: React.FC = () => {
                   </Button>
                 </span>
               </Tooltip>
-            )}
+            ) : null}
           </Box>
         ) : (
           <Box sx={{ ...mvsBodyListTableSx, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -864,8 +894,8 @@ const PayrollManagement: React.FC = () => {
                 onOpenPayslip={handleOpenPayslip}
                 lockedPeriods={lockedPeriods}
                 isRoot={isRoot}
-                allowCellEdit={!menuFlags.menusLoading && menuFlags.canMutate}
-                allowDelete={!menuFlags.menusLoading && menuFlags.canDelete}
+                allowCellEdit={!payslipSendOnly && !menuFlags.menusLoading && menuFlags.canMutate}
+                allowDelete={!payslipSendOnly && !menuFlags.menusLoading && menuFlags.canDelete}
                 allowOpenPayslip={!menuFlags.menusLoading && menuFlags.canRead}
                 companyStateCode={companyRegisteredStateCode}
                 payrollMonth={payrollRecalcContext.payrollMonth}

@@ -65,4 +65,25 @@ export const useMenuLoader = () => {
   }, [user, language, setMenus, setUserPermissions, setLoading, setError]);
 };
 
+/** 메뉴 로드 실패 후 사용자가 재시도할 때 호출 */
+export const reloadMenusNow = async () => {
+  const { user } = useStore.getState();
+  const { language, setMenus, setUserPermissions, setLoading, setError } = useMenuStore.getState();
+  if (!user) return;
+  setLoading(true);
+  try {
+    const [menusResponse, permissionsResponse] = await Promise.all([
+      menuService.getUserMenus(user.id, user.tenant_id, language),
+      menuService.getUserPermissions(user.id),
+    ]);
+    if (menusResponse.success) setMenus(menusResponse.data);
+    if (permissionsResponse.success) setUserPermissions(permissionsResponse.data);
+    setError(null);
+  } catch {
+    setError('메뉴를 불러오는데 실패했습니다.');
+  } finally {
+    setLoading(false);
+  }
+};
+
 export default useMenuLoader;

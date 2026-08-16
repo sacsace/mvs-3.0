@@ -16,6 +16,7 @@ import PrivacyPolicy from './pages/Legal/PrivacyPolicy';
 import CustomerCenter from './pages/Legal/CustomerCenter';
 import LegalRouteGate from './pages/Legal/LegalRouteGate';
 import ProtectedRoute from './components/Auth/ProtectedRoute';
+import SectionFirstAllowedRedirect from './components/Auth/SectionFirstAllowedRedirect';
 import ErrorDialog from './components/Common/ErrorDialog';
 import NotificationSnackbar from './components/Common/NotificationSnackbar';
 import ErrorBoundary from './components/Common/ErrorBoundary';
@@ -67,6 +68,11 @@ const EmailManagement = lazyPage(() => import('./pages/Communication/EmailManage
 const SMSManagement = lazyPage(() => import('./pages/Communication/SMSManagement'));
 const DesktopNotifierDownload = lazyPage(() => import('./pages/Communication/DesktopNotifierDownload'));
 const PayrollManagement = lazyPage(() => import('./pages/HR/PayrollManagement'));
+const PayrollPayslipSend = lazyPage(() =>
+  import('./pages/HR/PayrollManagement').then(({ default: PayrollManagementPage }) => ({
+    default: () => <PayrollManagementPage payslipSendOnly />
+  }))
+);
 const EmploymentContractManagement = lazyPage(() => import('./pages/HR/EmploymentContractManagement'));
 const AttendanceStatistics = lazyPage(() => import('./pages/HR/AttendanceStatistics'));
 const WorkStatistics = lazyPage(() => import('./pages/Work/WorkStatistics'));
@@ -218,8 +224,23 @@ function App() {
             <Route path="basic-info/system-settings" element={<SystemSettings />} />
             <Route path="basic-info/mail-send-test" element={<MailSendTest />} />
             
-            {/* 인사관리 */}
-            <Route path="hr" element={<Navigate to="/hr/users" replace />} />
+            {/* 인사관리 — 권한 있는 첫 하위 메뉴로 이동 (고정 /hr/users 금지) */}
+            <Route
+              path="hr"
+              element={
+                <SectionFirstAllowedRedirect
+                  candidates={[
+                    '/hr/users',
+                    '/hr/employment-contracts',
+                    '/hr/attendance',
+                    '/hr/attendance/statistics',
+                    '/hr/leave',
+                    '/hr/payroll',
+                    '/hr/payslip-send',
+                  ]}
+                />
+              }
+            />
             <Route path="hr/users" element={<UserManagement />} />
             <Route
               path="hr/departments"
@@ -232,6 +253,7 @@ function App() {
             <Route path="hr/attendance/statistics" element={<AttendanceStatistics />} />
             <Route path="hr/attendance" element={<AttendanceManagement />} />
             <Route path="hr/payroll" element={<PayrollManagement />} />
+            <Route path="hr/payslip-send" element={<PayrollPayslipSend />} />
             <Route path="hr/leave" element={<VacationManagement />} />
             <Route path="hr/leave/request" element={<VacationRequest />} />
             <Route path="hr/leave/request/:id" element={<VacationRequest />} />
@@ -394,9 +416,20 @@ function App() {
             
             {/* 채팅 */}
             <Route path="chat" element={<Chat />} />
+
+            {/* 로그인 후 미등록 경로 — 빈 Outlet/루프 대신 안내 (보호 레이아웃 유지) */}
+            <Route
+              path="*"
+              element={
+                <ComingSoon
+                  pageName="페이지"
+                  description="요청하신 페이지를 찾을 수 없습니다. 메뉴에서 다시 선택하거나 대시보드로 이동해 주세요."
+                />
+              }
+            />
           </Route>
           
-          {/* 404 페이지 - 준비중 표시 */}
+          {/* 보호 라우트 밖 404 */}
           <Route path="*" element={<ComingSoon pageName="페이지" description="요청하신 페이지는 현재 준비 중입니다." />} />
         </Routes>
         </Router>

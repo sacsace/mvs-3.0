@@ -1378,6 +1378,12 @@ export default {
     payrollManagement: {
       title: '급여 관리',
       description: '급여월별 급여 생성·확정, 명세서 발송 및 급여 데이터를 관리합니다.',
+      payslipSendSystem: {
+        title: '급여 명세서 발송 시스템',
+        description: '확정된 급여 목록에서 직원을 선택해 급여 명세서 PDF를 이메일로 발송합니다.',
+        completeOnlyHint: '확정된 급여월만 발송할 수 있습니다. 급여 관리에서 「급여 생성 완료」 후 이 화면에서 직원별 명세서를 발송하세요.',
+        unfinalizedMonthHint: '선택한 급여월은 아직 확정되지 않았습니다. 급여 관리에서 「급여 생성 완료」를 먼저 진행하세요.'
+      },
       detailTitle: '급여 상세 정보',
       backToList: '목록으로',
       payInfo: '급여 정보',
