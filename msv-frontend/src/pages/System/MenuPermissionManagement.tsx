@@ -45,7 +45,6 @@ import {
 import { useStore, useMenuStore } from '../../store';
 import menuService from '../../services/menuService';
 import { Menu } from '../../services/menuService';
-import { reloadMenusNow } from '../../hooks/useMenuLoader';
 import { api } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { showErrorPopup, showSuccessPopup } from '../../utils/errorHandler';
@@ -810,24 +809,26 @@ const MenuPermissionManagement: React.FC = () => {
     loadAdminPermissions();
   }, [user, canManagePermissionPage]);
 
-  // 권한 매트릭스용: 테넌트 전체 메뉴 (getUserMenus/스토어와 무관)
-  useEffect(() => {
-    const loadMenus = async () => {
+  /** 권한 매트릭스용: 테넌트 전체 메뉴 (getUserMenus/스토어와 무관) */
+  const reloadAllMenus = useCallback(
+    async (resetExpanded = false) => {
       if (!user || !canManagePermissionPage) return;
       try {
         const response = await menuService.getAllMenus(user.tenant_id, language);
         if (response.success && response.data) {
-          setExpandedMenus(new Set<number>());
+          if (resetExpanded) setExpandedMenus(new Set<number>());
           setMenuList(response.data);
-          // 네비게이션 스토어도 최신 메뉴로 동기화 (신규 메뉴 반영)
-          void reloadMenusNow();
         }
       } catch {
         /* ignore */
       }
-    };
-    void loadMenus();
-  }, [user, language, canManagePermissionPage]);
+    },
+    [user, language, canManagePermissionPage]
+  );
+
+  useEffect(() => {
+    void reloadAllMenus(true);
+  }, [reloadAllMenus]);
 
   // 메뉴명 변경
   const handleNameChange = async (menuId: number, nameKo: string, nameEn: string) => {
@@ -853,8 +854,8 @@ const MenuPermissionManagement: React.FC = () => {
       // 사이드바 메뉴 즉시 업데이트
       setMenus(newMenuList);
     } catch {
-      // 실패 시 원래 메뉴명으로 복구
-      setMenuList(menus || []);
+      // 실패 시 서버 상태로 복구
+      void reloadAllMenus();
     }
   };
 
@@ -921,8 +922,8 @@ const MenuPermissionManagement: React.FC = () => {
       // 사이드바 메뉴 즉시 업데이트
       setMenus(newMenuList);
     } catch {
-      // 실패 시 원래 순서로 복구
-      setMenuList(menus || []);
+      // 실패 시 서버 상태로 복구
+      void reloadAllMenus();
     }
   };
 

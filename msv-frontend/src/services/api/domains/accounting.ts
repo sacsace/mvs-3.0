@@ -698,6 +698,33 @@ export const payrollService = {
     return response.data;
   },
 
+  /** DB 저장 없이 업로드 급여 리스트의 PDF 명세서를 지정 이메일로 발송 (MVS 사용자면 내 명세서에도 보관) */
+  sendImportedPayslip: async (data: {
+    to: string;
+    employee_name: string;
+    payroll_period: string;
+    emp_id?: string;
+    net_salary?: number;
+    subject: string;
+    message: string;
+    pdf_base64: string;
+  }) => {
+    const response = await api.post('/hr/payslips/send-imported', data);
+    return response.data;
+  },
+
+  getMyPayslips: async (params?: { period?: string; q?: string }) => {
+    const response = await api.get('/hr/my/payslips', { params });
+    return response.data;
+  },
+
+  downloadMyPayslip: async (id: number) => {
+    const response = await api.get(`/hr/my/payslips/${id}/download`, {
+      responseType: 'blob',
+    });
+    return response.data as Blob;
+  },
+
   // 급여 ?�정
   updatePayroll: async (id: number, data: any) => {
     const response = await api.put(`/hr/payrolls/${id}`, data);

@@ -68,11 +68,7 @@ const EmailManagement = lazyPage(() => import('./pages/Communication/EmailManage
 const SMSManagement = lazyPage(() => import('./pages/Communication/SMSManagement'));
 const DesktopNotifierDownload = lazyPage(() => import('./pages/Communication/DesktopNotifierDownload'));
 const PayrollManagement = lazyPage(() => import('./pages/HR/PayrollManagement'));
-const PayrollPayslipSend = lazyPage(() =>
-  import('./pages/HR/PayrollManagement').then(({ default: PayrollManagementPage }) => ({
-    default: () => <PayrollManagementPage payslipSendOnly />
-  }))
-);
+const PayrollPayslipSend = lazyPage(() => import('./pages/HR/PayslipSendSystem'));
 const EmploymentContractManagement = lazyPage(() => import('./pages/HR/EmploymentContractManagement'));
 const AttendanceStatistics = lazyPage(() => import('./pages/HR/AttendanceStatistics'));
 const WorkStatistics = lazyPage(() => import('./pages/Work/WorkStatistics'));

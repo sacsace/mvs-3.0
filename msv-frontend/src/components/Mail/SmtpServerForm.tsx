@@ -3,9 +3,12 @@ import {
   Box,
   Button,
   FormControlLabel,
+  IconButton,
+  InputAdornment,
   Switch,
   TextField,
 } from '@mui/material';
+import { Visibility, VisibilityOff } from '@mui/icons-material';
 import {
   mvsBodyOutlinedBtnSx,
   mvsBodyPrimaryBtnSx,
@@ -59,6 +62,7 @@ const SmtpServerForm: React.FC<Props> = ({
   labels,
 }) => {
   const [passFocused, setPassFocused] = React.useState(false);
+  const [passVisible, setPassVisible] = React.useState(false);
   const showMask = value.authPassConfigured && value.authPass === '' && !passFocused;
 
   const setField = (key: keyof MailServerForm, raw: string | number | boolean) => {
@@ -131,7 +135,7 @@ const SmtpServerForm: React.FC<Props> = ({
         <TextField
           fullWidth
           size="small"
-          type={showMask ? 'text' : 'password'}
+          type={passVisible || showMask ? 'text' : 'password'}
           label={labels.authPass}
           sx={mvsSearchFieldSx}
           {...mvsOutlinedLabelProps}
@@ -142,6 +146,21 @@ const SmtpServerForm: React.FC<Props> = ({
           onBlur={() => setPassFocused(false)}
           autoComplete="new-password"
           helperText={value.authPassConfigured ? labels.authPassHint : undefined}
+          InputProps={{
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  edge="end"
+                  aria-label={passVisible ? 'hide password' : 'show password'}
+                  onClick={() => setPassVisible((v) => !v)}
+                  disabled={disabled}
+                >
+                  {passVisible ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
         />
         <TextField
           fullWidth

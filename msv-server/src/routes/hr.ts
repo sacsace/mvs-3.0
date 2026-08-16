@@ -10,6 +10,9 @@ import {
   approvePayroll,
   payPayroll,
   sendPayrollPayslip,
+  sendImportedPayslip,
+  getMyPayslips,
+  downloadMyPayslip,
   getPayrollPeriodLocks,
   completePayrollPeriod,
 } from '../controllers/hrController';
@@ -164,6 +167,23 @@ router.post(
   }),
   sendPayrollPayslip
 );
+router.post(
+  '/payslips/send-imported',
+  restrictAuditToReadOnly,
+  validateBody({
+    to: { required: true, type: 'string', minLength: 3, maxLength: 254 },
+    employee_name: { type: 'string', maxLength: 120 },
+    payroll_period: { type: 'string', maxLength: 30 },
+    emp_id: { type: 'string', maxLength: 50 },
+    net_salary: { type: 'number' },
+    subject: { type: 'string', maxLength: 200 },
+    message: { type: 'string', maxLength: 5000 },
+    pdf_base64: { required: true, type: 'string', minLength: 20, maxLength: 20 * 1024 * 1024 }
+  }),
+  sendImportedPayslip
+);
+router.get('/my/payslips', getMyPayslips);
+router.get('/my/payslips/:id/download', downloadMyPayslip);
 router.post(
   '/payrolls',
   restrictAuditToReadOnly,

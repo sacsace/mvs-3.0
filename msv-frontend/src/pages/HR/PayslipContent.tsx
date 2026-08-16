@@ -69,6 +69,16 @@ export type PayslipCompanyInfo = {
   email?: string;
 };
 
+/** 표시용 회사명 — Private Limited / Pvt Ltd 등 법적 접미사 제거 */
+export function shortCompanyName(name?: string | null): string {
+  return String(name || '')
+    .replace(/\bprivate\s+limited\b\.?/gi, '')
+    .replace(/\bpvt\.?\s*ltd\.?\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[,\s]+$/g, '')
+    .trim();
+}
+
 type Props = {
   row: PayrollGridRow;
   labels: PayslipLabels;
@@ -81,6 +91,46 @@ type Props = {
 
 const INR = 'en-IN';
 const MVS_ROW_BORDER = '#D1DAE4';
+
+/** 객체/[object Object]는 빈 값으로 — 화면에 그대로 노출하지 않음 */
+function displayText(value: unknown): string {
+  if (value == null || value === '') return '';
+  if (typeof value === 'object') {
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return formatDateOnly(value);
+    }
+    return '';
+  }
+  const s = String(value).trim();
+  if (!s || /^\[object\s+object\]$/i.test(s)) return '';
+  return s;
+}
+
+/** 입사일 등 — YYYY-MM-DD만 */
+function formatDateOnly(value: unknown): string {
+  if (value == null || value === '') return '';
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const d = String(value.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  if (typeof value === 'object') return '';
+  const s = String(value).trim();
+  if (!s || /^\[object\s+object\]$/i.test(s)) return '';
+  const iso = s.match(/^(\d{4})[./-](\d{1,2})[./-](\d{1,2})/);
+  if (iso) {
+    return `${iso[1]}-${iso[2].padStart(2, '0')}-${iso[3].padStart(2, '0')}`;
+  }
+  const parsed = new Date(s);
+  if (!Number.isNaN(parsed.getTime()) && (/\bGMT\b/i.test(s) || /[A-Za-z]{3}/.test(s))) {
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, '0');
+    const d = String(parsed.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  return s;
+}
 
 function parseMoney(v: string | number | undefined | null): number {
   if (v === '' || v == null) return 0;
@@ -99,8 +149,9 @@ function moneyFromField(v: string | number | undefined | null): string {
 }
 
 function statementDateFromPeriod(period: string): string {
-  if (!period || !/^\d{4}-\d{2}$/.test(period)) return '—';
-  const [y, m] = period.split('-').map(Number);
+  const p = displayText(period);
+  if (!p || !/^\d{4}-\d{2}$/.test(p)) return '';
+  const [y, m] = p.split('-').map(Number);
   const last = new Date(y, m, 0);
   return last.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
@@ -133,14 +184,14 @@ function twoDigits(n: number): string {
   if (n < 20) return BELOW_20[n];
   const t = Math.floor(n / 10);
   const o = n % 10;
-  return `${TENS[t]}${o ? ` ${BELOW_20[o]}` : ''}`.trim();
+  return `${TENS[t]}${o ? `-${BELOW_20[o]}` : ''}`.trim();
 }
 
 function threeDigits(n: number): string {
   if (n === 0) return '';
   const h = Math.floor(n / 100);
   const rest = n % 100;
-  if (h) return `${BELOW_20[h]} Hundred${rest ? ` ${twoDigits(rest)}` : ''}`;
+  if (h) return `${BELOW_20[h]} Hundred${rest ? ` and ${twoDigits(rest)}` : ''}`;
   return twoDigits(rest);
 }
 
@@ -164,15 +215,15 @@ export function inrAmountInWords(amount: number): string {
   return `${inrWordsCore(n)} Only`;
 }
 
-function SectionHeading({ children }: { children: React.ReactNode }) {
+function SectionHeading({ children, compact }: { children: React.ReactNode; compact?: boolean }) {
   return (
     <Typography
       sx={{
         fontWeight: 700,
-        fontSize: '0.8125rem',
+        fontSize: compact ? '0.72rem' : '0.8125rem',
         letterSpacing: '0.06em',
         color: 'primary.main',
-        mb: 1.5,
+        mb: compact ? 0.75 : 1.5,
         textTransform: 'uppercase'
       }}
     >
@@ -187,16 +238,26 @@ function EmpField({
   label,
   value,
   link,
-  highlight
+  highlight,
+  dateOnly,
+  compact
 }: {
   label: string;
-  value: string;
+  value: unknown;
   link?: boolean;
   highlight?: boolean;
+  dateOnly?: boolean;
+  compact?: boolean;
 }) {
+  const text = dateOnly ? formatDateOnly(value) : displayText(value);
+  if (!text) return null;
   return (
-    <Box sx={{ py: 0.75 }}>
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontWeight: 600, mb: 0.35 }}>
+    <Box sx={{ py: compact ? 0.35 : 0.75 }}>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ display: 'block', fontWeight: 600, mb: compact ? 0.15 : 0.35, fontSize: compact ? '0.65rem' : undefined }}
+      >
         {label}
       </Typography>
       <Typography
@@ -204,10 +265,12 @@ function EmpField({
         sx={{
           fontWeight: 600,
           color: highlight ? USER_INPUT_COLOR : link ? 'info.main' : 'text.primary',
-          wordBreak: 'break-word'
+          wordBreak: 'break-word',
+          fontSize: compact ? '0.78rem' : undefined,
+          lineHeight: compact ? 1.25 : undefined,
         }}
       >
-        {value || '—'}
+        {text}
       </Typography>
     </Box>
   );
@@ -219,7 +282,8 @@ function LedgerRow({
   total,
   totalTone,
   isLast,
-  highlight
+  highlight,
+  compact
 }: {
   label: string;
   value: string;
@@ -227,6 +291,7 @@ function LedgerRow({
   totalTone?: 'earn' | 'deduct';
   isLast?: boolean;
   highlight?: boolean;
+  compact?: boolean;
 }) {
   const earnTotal = total && totalTone === 'earn';
   const deductTotal = total && totalTone === 'deduct';
@@ -238,9 +303,9 @@ function LedgerRow({
         justifyContent: 'space-between',
         alignItems: 'center',
         gap: 1.5,
-        px: 2,
-        py: 1.25,
-        minHeight: 44,
+        px: compact ? 1.5 : 2,
+        py: compact ? 0.7 : 1.25,
+        minHeight: compact ? 34 : 44,
         borderBottom: isLast ? 'none' : `1px solid ${MVS_ROW_BORDER}`,
         bgcolor: earnTotal ? 'primary.50' : '#FFFFFF'
       }}
@@ -250,7 +315,10 @@ function LedgerRow({
         sx={{
           fontWeight: total ? 700 : 500,
           color: highlightColor ?? (earnTotal ? 'primary.main' : deductTotal ? 'warning.dark' : 'text.secondary'),
-          fontSize: '0.8125rem'
+          fontSize: compact ? '0.75rem' : '0.8125rem',
+          minWidth: 0,
+          flex: 1,
+          pr: 1,
         }}
       >
         {label}
@@ -262,7 +330,11 @@ function LedgerRow({
           fontVariantNumeric: 'tabular-nums',
           color: highlightColor ?? (earnTotal ? 'primary.main' : deductTotal ? 'warning.dark' : 'text.primary'),
           whiteSpace: 'nowrap',
-          fontSize: '0.8125rem'
+          fontSize: compact ? '0.75rem' : '0.8125rem',
+          textAlign: 'right',
+          ml: 'auto',
+          minWidth: compact ? '7.5rem' : '8.5rem',
+          flexShrink: 0,
         }}
       >
         {value}
@@ -337,7 +409,7 @@ function EarningsDeductionsTable({
   const dividerDisplay = forPdf ? 'block' : { xs: 'none', md: 'block' };
 
   return (
-    <Box sx={{ ...mvsBodyTableFrameSx, mb: 2.5, overflow: 'hidden' }}>
+    <Box sx={{ ...mvsBodyTableFrameSx, mb: forPdf ? 1.5 : 2.5, overflow: 'hidden' }}>
       <Box sx={{ display: 'grid', gridTemplateColumns: gridColumns }}>
         <LedgerColumnHeader title={labels.earnings} />
         <Box sx={{ display: dividerDisplay, bgcolor: '#CBD5E1' }} />
@@ -351,13 +423,14 @@ function EarningsDeductionsTable({
               label={line.earn.label}
               value={line.earn.value}
               highlight={line.earn.highlight}
+              compact={forPdf}
             />
           ) : (
             <LedgerSpacer />
           )}
           <Box sx={{ display: dividerDisplay, bgcolor: '#CBD5E1' }} />
           {line.deduct ? (
-            <LedgerRow label={line.deduct.label} value={line.deduct.value} />
+            <LedgerRow label={line.deduct.label} value={line.deduct.value} compact={forPdf} />
           ) : (
             <LedgerSpacer />
           )}
@@ -377,6 +450,7 @@ function EarningsDeductionsTable({
           total
           totalTone="earn"
           isLast
+          compact={forPdf}
         />
         <Box sx={{ display: dividerDisplay, bgcolor: '#CBD5E1' }} />
         <LedgerRow
@@ -385,6 +459,7 @@ function EarningsDeductionsTable({
           total
           totalTone="deduct"
           isLast
+          compact={forPdf}
         />
       </Box>
     </Box>
@@ -394,6 +469,7 @@ function EarningsDeductionsTable({
 function PayslipHeader({
   labels,
   showTitle,
+  employeeName,
   workingMonth,
   paidDays,
   companyName,
@@ -402,6 +478,7 @@ function PayslipHeader({
 }: {
   labels: PayslipLabels;
   showTitle: boolean;
+  employeeName: string;
   workingMonth: string;
   paidDays: string;
   companyName: string;
@@ -409,15 +486,15 @@ function PayslipHeader({
   forPdf?: boolean;
 }) {
   const periodStats = [
-    { label: labels.workingMonth, value: workingMonth },
-    { label: labels.paidDays, value: paidDays }
-  ];
+    { label: labels.workingMonth, value: displayText(workingMonth) },
+    { label: labels.paidDays, value: displayText(paidDays) }
+  ].filter((item) => item.value);
 
   return (
     <Box
       sx={{
         px: { xs: 2, sm: 2.5 },
-        py: 2.5,
+        py: forPdf ? 1.5 : 2.5,
         bgcolor: '#F0F4F8',
         borderBottom: '1px solid #CBD5E1',
         borderTop: '3px solid',
@@ -455,12 +532,26 @@ function PayslipHeader({
             sx={{
               ...mvsPageTitleSx,
               fontSize: { xs: '1.2rem', sm: '1.35rem' },
-              mb: 1.5,
+              mb: employeeName ? 0.5 : 1.5,
               color: 'text.primary'
             }}
           >
             {showTitle ? labels.salaryStatement : labels.title}
           </Typography>
+          {employeeName ? (
+            <Typography
+              sx={{
+                fontWeight: 700,
+                fontSize: forPdf ? '1.15rem' : { xs: '1.2rem', sm: '1.35rem' },
+                color: 'text.primary',
+                lineHeight: 1.25,
+                mb: 1.5,
+                letterSpacing: '-0.01em',
+              }}
+            >
+              {employeeName}
+            </Typography>
+          ) : null}
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
             {periodStats.map((item) => (
               <Box
@@ -542,21 +633,30 @@ const PayslipContent = React.forwardRef<HTMLDivElement, Props>(function PayslipC
   const dayOtLabel =
     dayHours > 0 ? `${labels.dayOt} (${formatOtHourDisplay(dayHours)}h)` : labels.dayOt;
 
-  const companyName = companyInfo?.name || '—';
+  const companyName = shortCompanyName(companyInfo?.name) || '—';
   const companyContact = [companyInfo?.address, companyInfo?.phone, companyInfo?.email]
     .filter((x) => !!String(x || '').trim())
     .join(' · ');
 
-  const earningItems: LedgerLine[] = [
-    { label: labels.basicSalary, value: money(row.basic_salary) },
-    { label: labels.houseRentAllowance, value: money(row.house_rent_allowance) },
-    { label: labels.otherAllowance, value: money(row.other_allowance) }
-  ];
-  if (dayHours > 0) earningItems.push({ label: dayOtLabel, value: money(otPayTotal), highlight: true });
-  if (dayHours === 0 && otPayTotal === 0) {
-    earningItems.push({ label: labels.dayOt, value: money(0), highlight: true });
-  }
-  earningItems.push({ label: labels.extraAllowance, value: money(row.transport_allowance), highlight: true });
+  // 엑셀 등에서 넘어온 수당 행이 있으면 리스트(열) 그대로 표시
+  const customLines = Array.isArray(row.payslip_earning_lines) ? row.payslip_earning_lines : [];
+  const earningItems: LedgerLine[] = customLines.length
+    ? customLines.map((line) => ({
+        label: line.label,
+        value: money(line.amount),
+        highlight: line.highlight,
+      }))
+    : [
+        { label: labels.basicSalary, value: money(row.basic_salary) },
+        { label: labels.houseRentAllowance, value: money(row.house_rent_allowance) },
+        { label: labels.otherAllowance, value: money(row.other_allowance) },
+        ...(dayHours > 0
+          ? [{ label: dayOtLabel, value: money(otPayTotal), highlight: true }]
+          : dayHours === 0 && otPayTotal === 0
+            ? [{ label: labels.dayOt, value: money(0), highlight: true }]
+            : []),
+        { label: labels.extraAllowance, value: money(row.transport_allowance), highlight: true },
+      ];
 
   const deductionItems: LedgerLine[] = [
     { label: labels.pfEmployee, value: moneyFromField(row.pf_employee) },
@@ -585,50 +685,55 @@ const PayslipContent = React.forwardRef<HTMLDivElement, Props>(function PayslipC
         <PayslipHeader
           labels={labels}
           showTitle={showTitle}
-          workingMonth={row.working_month || '—'}
-          paidDays={String(row.days_worked || '—')}
+          employeeName={displayText(row.employee_name)}
+          workingMonth={displayText(row.working_month)}
+          paidDays={displayText(row.days_worked)}
           companyName={companyName}
           companyContact={companyContact}
           forPdf={forPdf}
         />
 
-        <Box sx={{ px: { xs: 2, sm: 2.5 }, pb: 2.5, pt: 2.5 }}>
-          {/* 직원 정보 — Body 테이블 인셋 */}
-          <SectionHeading>{labels.employee}</SectionHeading>
-          <Box sx={{ ...mvsBodyTableInsetSx, mb: 3, borderRadius: '8px', overflow: 'hidden' }}>
+        <Box sx={{ px: { xs: 2, sm: 2.5 }, pb: forPdf ? 1.5 : 2.5, pt: forPdf ? 1.5 : 2.5 }}>
+          {/* 직원 정보 — A4 한 페이지를 위해 3열 */}
+          <SectionHeading compact={forPdf}>{labels.employee}</SectionHeading>
+          <Box sx={{ ...mvsBodyTableInsetSx, mb: forPdf ? 1.5 : 3, borderRadius: '8px', overflow: 'hidden' }}>
             <Box
               sx={{
                 ...mvsBodyTableFrameSx,
-                p: { xs: 1.5, sm: 2 },
+                p: forPdf ? 1.25 : { xs: 1.5, sm: 2 },
                 display: 'grid',
-                gridTemplateColumns: forPdf ? '1fr 1fr' : { xs: '1fr', sm: '1fr 1fr' },
-                columnGap: 3,
+                gridTemplateColumns: forPdf ? '1fr 1fr 1fr' : { xs: '1fr', sm: '1fr 1fr 1fr' },
+                columnGap: forPdf ? 2 : 2.5,
                 rowGap: 0
               }}
             >
-              <EmpField label={labels.workingMonth} value={row.working_month} />
-              <EmpField label={labels.statementDate} value={statementDateFromPeriod(row.working_month)} />
-              <EmpField label={labels.totalDaysInMonth} value={String(row.total_day_of_month || '—')} />
-              <EmpField label={labels.paidDays} value={String(row.days_worked || '—')} />
+              <EmpField compact={forPdf} label={labels.workingMonth} value={row.working_month} />
               <EmpField
+                compact={forPdf}
+                label={labels.statementDate}
+                value={statementDateFromPeriod(displayText(row.working_month))}
+              />
+              <EmpField compact={forPdf} label={labels.totalDaysInMonth} value={row.total_day_of_month} />
+              <EmpField compact={forPdf} label={labels.paidDays} value={row.days_worked} />
+              <EmpField
+                compact={forPdf}
                 label={labels.unpaidLeave}
-                value={String(row.unpaid_leave || '0')}
+                value={displayText(row.unpaid_leave) || '0'}
                 highlight
               />
-              <EmpField label={labels.empId} value={row.emp_id} />
-              <EmpField label={labels.name} value={row.employee_name} />
-              <EmpField label={labels.designation} value={row.position} />
-              <EmpField label={labels.email} value={row.employee_email} link />
-              <EmpField label={labels.dateOfJoin} value={row.joining_date} />
-              <EmpField label={labels.department} value={row.department} />
-              <EmpField label={labels.account} value={row.bank_account} />
-              <EmpField label={labels.bank} value={row.bank_name} />
-              <EmpField label={labels.ifsc} value={row.ifsc} />
+              <EmpField compact={forPdf} label={labels.empId} value={row.emp_id} />
+              <EmpField compact={forPdf} label={labels.designation} value={row.position} />
+              <EmpField compact={forPdf} label={labels.email} value={row.employee_email} link />
+              <EmpField compact={forPdf} label={labels.dateOfJoin} value={row.joining_date} dateOnly />
+              <EmpField compact={forPdf} label={labels.department} value={row.department} />
+              <EmpField compact={forPdf} label={labels.bank} value={row.bank_name} />
+              <EmpField compact={forPdf} label={labels.account} value={row.bank_account} />
+              <EmpField compact={forPdf} label={labels.ifsc} value={row.ifsc} />
             </Box>
           </Box>
 
           {/* 지급 · 공제 — 합계 행 정렬 */}
-          <SectionHeading>{labels.earningsAndDeductions}</SectionHeading>
+          <SectionHeading compact={forPdf}>{labels.earningsAndDeductions}</SectionHeading>
           <EarningsDeductionsTable
             labels={labels}
             earningItems={earningItems}
@@ -642,36 +747,60 @@ const PayslipContent = React.forwardRef<HTMLDivElement, Props>(function PayslipC
           <Box
             sx={{
               ...mvsInnerCardSx,
-              mb: 2,
+              mb: forPdf ? 1 : 2,
               border: '2px solid',
               borderColor: 'primary.light',
               bgcolor: 'primary.50',
               borderRadius: '8px',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              py: forPdf ? 1.25 : undefined,
+              px: forPdf ? 1.5 : undefined,
             }}
           >
-            <Typography sx={{ fontWeight: 700, color: 'primary.main', fontSize: '0.85rem', mb: 0.5 }}>
+            <Typography
+              sx={{
+                fontWeight: 700,
+                color: 'primary.main',
+                fontSize: forPdf ? '0.75rem' : '0.85rem',
+                mb: 0.5,
+              }}
+            >
               {labels.netPay}
             </Typography>
             <Typography
               sx={{
                 fontWeight: 700,
-                fontSize: { xs: '1.65rem', sm: '1.9rem' },
+                fontSize: forPdf ? '1.45rem' : { xs: '1.65rem', sm: '1.9rem' },
                 color: 'text.primary',
                 fontVariantNumeric: 'tabular-nums',
                 lineHeight: 1.15,
-                mb: 1,
+                mb: forPdf ? 0.5 : 1,
                 letterSpacing: '-0.02em'
               }}
             >
               {money(netPay)}
             </Typography>
-            <Typography sx={{ ...mvsPageDescriptionSx, color: 'success.dark', fontWeight: 600 }}>
+            <Typography
+              sx={{
+                ...mvsPageDescriptionSx,
+                color: 'success.dark',
+                fontWeight: 600,
+                fontSize: forPdf ? '0.72rem' : undefined,
+              }}
+            >
               {labels.amountInWords}: {inrAmountInWords(netPay)}
             </Typography>
           </Box>
 
-          <Typography variant="caption" sx={{ ...mvsPageDescriptionSx, display: 'block', textAlign: 'center' }}>
+          <Typography
+            variant="caption"
+            sx={{
+              ...mvsPageDescriptionSx,
+              display: 'block',
+              textAlign: 'center',
+              fontSize: forPdf ? '0.65rem' : undefined,
+            }}
+          >
             {labels.autoGenerated}
           </Typography>
         </Box>

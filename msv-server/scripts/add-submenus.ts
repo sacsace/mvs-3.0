@@ -60,7 +60,6 @@ async function addSubMenus() {
         { name_ko: '메뉴권한관리', name_en: 'Menu Permission Management', route: '/basic-info/menu-permissions', icon: 'lock', order: 4 },
         { name_ko: '로그인 정보 관리', name_en: 'Login Information Management', route: '/basic-info/login-info', icon: 'person', order: 5 },
         { name_ko: '시스템 설정', name_en: 'System Settings', route: '/basic-info/system-settings', icon: 'settings', order: 6 },
-        { name_ko: '메일 발송 테스트', name_en: 'Mail send test', route: '/basic-info/mail-send-test', icon: 'email', order: 7 }
       ];
       
       for (const submenu of basicInfoSubmenus) {

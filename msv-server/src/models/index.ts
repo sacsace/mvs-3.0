@@ -23,6 +23,7 @@ import InventoryLocation from './InventoryLocation';
 import Project from './Project';
 import Payroll from './Payroll';
 import PayrollPeriodLock from './PayrollPeriodLock';
+import PayslipDelivery from './PayslipDelivery';
 import InventoryTransaction from './InventoryTransaction';
 import CompanyGstNumber from './CompanyGstNumber';
 import Partner from './Partner';
@@ -226,6 +227,13 @@ UserPermission.belongsTo(Menu, { foreignKey: 'menu_id', as: 'menu' });
 
 (User as any).hasMany(Payroll, { foreignKey: 'created_by', as: 'createdPayrolls' });
 (Payroll as any).belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+
+// 발송된 급여 명세서 (엑셀 업로드 → 메일, MVS 사용자 매칭 시)
+(User as any).hasMany(PayslipDelivery, { foreignKey: 'user_id', as: 'payslipDeliveries' });
+(PayslipDelivery as any).belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+(PayslipDelivery as any).belongsTo(User, { foreignKey: 'sent_by', as: 'sender' });
+(Company as any).hasMany(PayslipDelivery, { foreignKey: 'company_id', as: 'payslipDeliveries' });
+(PayslipDelivery as any).belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 
 // 근태 관계
 (Tenant as any).hasMany(Attendance, { foreignKey: 'tenant_id', as: 'attendances' });
@@ -590,6 +598,7 @@ export {
   Project,
   Payroll,
   PayrollPeriodLock,
+  PayslipDelivery,
   InventoryTransaction,
   CompanyGstNumber,
   Partner,

@@ -1,9 +1,12 @@
 import { Request, Response } from 'express';
 import nodemailer from 'nodemailer';
 import { RequestWithUser } from '../types';
-import { Payroll, User, PayrollPeriodLock, Company, CompanyGstNumber } from '../models';
+import { Payroll, User, PayrollPeriodLock, Company, CompanyGstNumber, PayslipDelivery } from '../models';
 import { Op, Sequelize } from 'sequelize';
 import sequelize from '../config/database';
+import fs from 'fs';
+import path from 'path';
+import { ensureUploadSubdir } from '../utils/uploadPath';
 import { buildNodemailerTransportOptions, getResolvedMailTransportOptions } from '../utils/mailConfig';
 import {
   parsePayrollPeriod,
@@ -841,7 +844,7 @@ export const sendPayrollPayslip = async (req: RequestWithUser, res: Response) =>
       `,
       attachments: [
         {
-          filename: `payslip_${period}_${id}.pdf`,
+          filename: `Payslip (${period || 'Unknown'}) (${uname})`.replace(/[\\/:*?"<>|]/g, '_') + '.pdf',
           content: pdfBuffer,
           contentType: 'application/pdf'
         }
@@ -852,6 +855,261 @@ export const sendPayrollPayslip = async (req: RequestWithUser, res: Response) =>
   } catch (error) {
     console.error('급여 명세서 메일 오류:', error);
     res.status(500).json({ success: false, message: '메일 발송에 실패했습니다.' });
+  }
+};
+
+/**
+ * 엑셀 업로드 급여 리스트용 명세서 발송.
+ * 엑셀 원본은 저장하지 않음. PDF는 메일로 보내고,
+ * 수신 이메일이 MVS 사용자와 일치하면 내 급여 명세서에서 조회할 수 있게 보관한다.
+ */
+export const sendImportedPayslip = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { tenant_id, company_id, id: senderId } = req.user;
+    const to = String(req.body?.to || '').trim();
+    const employeeName = String(req.body?.employee_name || '').trim().slice(0, 120);
+    const period = String(req.body?.payroll_period || '').trim().slice(0, 30);
+    const empId = String(req.body?.emp_id || '').trim().slice(0, 50);
+    const netSalaryRaw = req.body?.net_salary;
+    const netSalary =
+      netSalaryRaw === undefined || netSalaryRaw === null || netSalaryRaw === ''
+        ? null
+        : Number(netSalaryRaw);
+    const subject = String(req.body?.subject || '').trim().replace(/[\r\n]+/g, ' ').slice(0, 200);
+    const message = String(req.body?.message || '').trim().slice(0, 5000);
+    const pdfBase64 = String(req.body?.pdf_base64 || '');
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      return res.status(400).json({ success: false, message: '유효한 수신 이메일 주소가 필요합니다.' });
+    }
+    if (!pdfBase64 || pdfBase64.length < 20 || pdfBase64.length > 20 * 1024 * 1024) {
+      return res.status(400).json({ success: false, message: '유효한 PDF 데이터가 필요합니다.' });
+    }
+
+    const companyRow = await Company.findOne({ where: { id: company_id, tenant_id } });
+    const senderRow = await User.findOne({
+      where: { id: senderId, tenant_id, company_id },
+      attributes: ['id', 'settings']
+    });
+    const mailOpts = getResolvedMailTransportOptions(companyRow, senderRow);
+    if (!mailOpts) {
+      return res.status(503).json({
+        success: false,
+        message: '메일 서버가 설정되지 않았습니다. 시스템 설정에서 보내는 메일 서버를 입력하세요.'
+      });
+    }
+
+    const safeMessage = message
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br />');
+    const b64 = pdfBase64.includes(',') ? pdfBase64.split(',')[1] : pdfBase64;
+    const pdfBuffer = Buffer.from(b64, 'base64');
+    const filenamePart = `Payslip (${period || 'Unknown'}) (${employeeName || 'Employee'})`
+      .replace(/[\\/:*?"<>|]/g, '_')
+      .slice(0, 120);
+
+    const transporter = nodemailer.createTransport(buildNodemailerTransportOptions(mailOpts));
+    await transporter.sendMail({
+      from: mailOpts.from,
+      to,
+      subject: subject || `[급여 명세서] ${period}`,
+      text: message || `${period} 급여 명세서를 첨부합니다.`,
+      html: `<div style="font-family:Segoe UI,Malgun Gothic,sans-serif;font-size:14px;line-height:1.6;color:#111827;">${safeMessage || `${period} 급여 명세서를 첨부합니다.`}</div>`,
+      attachments: [{ filename: `${filenamePart}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }]
+    });
+
+    // 저장 키 = 수신 메일 + 급여월. user_id는 있으면 보조 연결(필수 아님).
+    const emailLower = to.toLowerCase();
+    let matchedUser =
+      (await (User as any).findOne({
+        where: {
+          tenant_id,
+          company_id,
+          status: 'active',
+          [Op.and]: [Sequelize.where(Sequelize.fn('LOWER', Sequelize.col('email')), emailLower)]
+        },
+        attributes: ['id', 'email', 'username', 'employee_number']
+      })) || null;
+
+    if (!matchedUser && empId) {
+      matchedUser = await (User as any).findOne({
+        where: {
+          tenant_id,
+          company_id,
+          status: 'active',
+          employee_number: empId
+        },
+        attributes: ['id', 'email', 'username', 'employee_number']
+      });
+    }
+
+    const dir = ensureUploadSubdir('payslips', String(tenant_id), String(company_id));
+    const fileName = `payslip-${period || 'na'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
+    const absPath = path.join(dir, fileName);
+    await fs.promises.writeFile(absPath, pdfBuffer);
+    const pdfUrl = `/uploads/payslips/${tenant_id}/${company_id}/${fileName}`;
+
+    // 같은 메일 + 같은 급여월 → 이전 활성 건 소프트 삭제 후 최신만 유지
+    const previousRows = await (PayslipDelivery as any).findAll({
+      where: {
+        tenant_id,
+        company_id,
+        payroll_period: period || '',
+        is_active: true,
+        [Op.and]: [
+          Sequelize.where(Sequelize.fn('LOWER', Sequelize.col('recipient_email')), emailLower)
+        ]
+      }
+    });
+    const oldPaths: string[] = [];
+    for (const prev of previousRows) {
+      const oldPath = String(prev.pdf_path || '');
+      if (oldPath) oldPaths.push(oldPath);
+      await prev.update({ is_active: false });
+    }
+
+    await (PayslipDelivery as any).create({
+      tenant_id,
+      company_id,
+      user_id: matchedUser?.id ?? null,
+      payroll_period: period || '',
+      employee_name: employeeName || matchedUser?.username || null,
+      recipient_email: to,
+      emp_id: empId || matchedUser?.employee_number || null,
+      net_salary: Number.isFinite(netSalary as number) ? netSalary : null,
+      pdf_path: absPath,
+      pdf_url: pdfUrl,
+      sent_by: senderId,
+      sent_at: new Date(),
+      is_active: true
+    });
+
+    for (const oldPath of oldPaths) {
+      if (oldPath === absPath) continue;
+      try {
+        await fs.promises.unlink(oldPath);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: '메일을 발송했고, 급여 명세서에 저장했습니다.',
+      data: { saved_for_user: true }
+    });
+  } catch (error) {
+    console.error('업로드 급여 명세서 메일 오류:', error);
+    return res.status(500).json({ success: false, message: '메일 발송에 실패했습니다.' });
+  }
+};
+
+/** 로그인한 사용자 본인의 발송 급여 명세서 목록 (메일 또는 user_id) */
+export const getMyPayslips = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { tenant_id, company_id, id: userId, email: userEmail } = req.user;
+    const period = String(req.query?.period || '').trim();
+    const q = String(req.query?.q || '').trim();
+    const emailLower = String(userEmail || '').trim().toLowerCase();
+
+    const ownerClause: any[] = [{ user_id: userId }];
+    if (emailLower) {
+      ownerClause.push(
+        Sequelize.where(Sequelize.fn('LOWER', Sequelize.col('recipient_email')), emailLower)
+      );
+    }
+
+    const where: any = {
+      tenant_id,
+      company_id,
+      is_active: true,
+      [Op.or]: ownerClause
+    };
+    if (period) where.payroll_period = period;
+    if (q) {
+      where[Op.and] = [
+        {
+          [Op.or]: [
+            { employee_name: { [Op.iLike]: `%${q}%` } },
+            { payroll_period: { [Op.iLike]: `%${q}%` } },
+            { emp_id: { [Op.iLike]: `%${q}%` } }
+          ]
+        }
+      ];
+    }
+
+    const rows = await (PayslipDelivery as any).findAll({
+      where,
+      order: [
+        ['payroll_period', 'DESC'],
+        ['sent_at', 'DESC'],
+        ['id', 'DESC']
+      ],
+      attributes: [
+        'id',
+        'payroll_period',
+        'employee_name',
+        'recipient_email',
+        'emp_id',
+        'net_salary',
+        'sent_at',
+        'created_at'
+      ]
+    });
+
+    return res.json({ success: true, data: rows });
+  } catch (error) {
+    console.error('내 급여 명세서 목록 오류:', error);
+    return res.status(500).json({ success: false, message: '급여 명세서 목록을 불러오지 못했습니다.' });
+  }
+};
+
+/** 본인 급여 명세서 PDF 다운로드 */
+export const downloadMyPayslip = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { tenant_id, company_id, id: userId, email: userEmail } = req.user;
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ success: false, message: '잘못된 요청입니다.' });
+    }
+
+    const emailLower = String(userEmail || '').trim().toLowerCase();
+    const ownerClause: any[] = [{ user_id: userId }];
+    if (emailLower) {
+      ownerClause.push(
+        Sequelize.where(Sequelize.fn('LOWER', Sequelize.col('recipient_email')), emailLower)
+      );
+    }
+
+    const row = await (PayslipDelivery as any).findOne({
+      where: {
+        id,
+        tenant_id,
+        company_id,
+        is_active: true,
+        [Op.or]: ownerClause
+      }
+    });
+    if (!row) {
+      return res.status(404).json({ success: false, message: '급여 명세서를 찾을 수 없습니다.' });
+    }
+
+    const filePath = String(row.pdf_path || '');
+    if (!filePath || !fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: '명세서 파일이 없습니다.' });
+    }
+
+    const downloadName = `Payslip (${row.payroll_period || 'Unknown'}) (${row.employee_name || 'Employee'})`
+      .replace(/[\\/:*?"<>|]/g, '_')
+      .slice(0, 120) + '.pdf';
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+    return fs.createReadStream(filePath).pipe(res);
+  } catch (error) {
+    console.error('내 급여 명세서 다운로드 오류:', error);
+    return res.status(500).json({ success: false, message: '다운로드에 실패했습니다.' });
   }
 };
 

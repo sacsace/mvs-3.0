@@ -10,6 +10,7 @@ import {
   FormControlLabel,
   Grid,
   InputLabel,
+  Link,
   MenuItem,
   Select,
   Switch,
@@ -66,8 +67,8 @@ const MyMailSettings: React.FC = () => {
         ...mail,
         port: Number(mail.port) || 587,
         secure: Boolean(mail.secure),
-        authPass: '',
-        authPassConfigured: Boolean(mail.authPassConfigured),
+        authPass: String(mail.authPass || ''),
+        authPassConfigured: Boolean(mail.authPassConfigured || mail.authPass),
       });
       setTestTo((prev) => prev || String(mail.fromEmail || ''));
     } catch (error: any) {
@@ -96,8 +97,8 @@ const MyMailSettings: React.FC = () => {
       setMailServer((prev) => ({
         ...prev,
         ...data,
-        authPass: '',
-        authPassConfigured: Boolean(data.authPassConfigured),
+        authPass: String(data.authPass || mailServer.authPass || ''),
+        authPassConfigured: Boolean(data.authPassConfigured || data.authPass),
       }));
       showSuccessPopup(txt('SMTP 설정이 저장되었습니다.', 'SMTP settings saved.'));
     } catch (error: any) {
@@ -182,10 +183,23 @@ const MyMailSettings: React.FC = () => {
             )}
           </Typography>
           <Alert severity="info" sx={{ mb: 2, borderRadius: 0, fontSize: '0.8125rem' }}>
-            {txt(
-              'Gmail: smtp.gmail.com · 포트 587 · SSL/TLS 끄기(STARTTLS). 2단계 인증 시 앱 비밀번호를 사용하세요.',
-              'Gmail: smtp.gmail.com · port 587 · SSL/TLS off (STARTTLS). Use an App Password with 2-Step Verification.'
-            )}
+            <Box component="span" sx={{ display: 'block' }}>
+              {txt(
+                'Gmail: smtp.gmail.com · 포트 587 · SSL/TLS 끄기(STARTTLS). 2단계 인증 시 앱 비밀번호를 사용하세요.',
+                'Gmail: smtp.gmail.com · port 587 · SSL/TLS off (STARTTLS). Use an App Password with 2-Step Verification.'
+              )}
+            </Box>
+            <Link
+              href="https://myaccount.google.com/apppasswords"
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ display: 'inline-block', mt: 0.75, fontWeight: 600 }}
+            >
+              {txt(
+                '보내는 서버 비밀번호(앱 비밀번호) 만들기',
+                'Create outgoing server password (App Password)'
+              )}
+            </Link>
           </Alert>
 
           {loading ? (
@@ -210,8 +224,8 @@ const MyMailSettings: React.FC = () => {
                 authUser: txt('계정 (로그인 ID)', 'Account (login ID)'),
                 authPass: txt('비밀번호', 'Password'),
                 authPassHint: txt(
-                  '저장됨. 변경할 때만 새로 입력하세요.',
-                  'Saved. Enter a new value only to change it.'
+                  '눈 아이콘으로 저장된 비밀번호를 확인할 수 있습니다.',
+                  'Use the eye icon to view the saved password.'
                 ),
                 fromEmail: txt('보내는 주소', 'From email'),
                 fromName: txt('보내는 이름', 'From name'),

@@ -3,6 +3,7 @@ import { User } from '../models';
 import {
   buildNodemailerTransportOptions,
   getResolvedMailTransportOptions,
+  normalizeSmtpPassword,
   resolveSmtpSecure,
 } from '../utils/mailConfig';
 import { parseSettingsBlob } from '../utils/settingsBlob';
@@ -50,12 +51,15 @@ export async function getUserMailServerSafe(params: {
   if (!user) return null;
   const settings = parseSettingsBlob((user as any).settings);
   const mail = (settings.mailServer || {}) as Record<string, unknown>;
-  const { authPass: _omit, ...safe } = mail;
   return {
     ...emptySafe(),
-    ...safe,
+    host: mail.host != null ? String(mail.host).trim() : '',
     port: Number(mail.port) || 587,
     secure: Boolean(mail.secure),
+    authUser: mail.authUser != null ? String(mail.authUser).trim() : '',
+    authPass: mail.authPass != null ? String(mail.authPass) : '',
+    fromEmail: mail.fromEmail != null ? String(mail.fromEmail).trim() : '',
+    fromName: mail.fromName != null ? String(mail.fromName).trim() : '',
     authPassConfigured: Boolean(mail.authPass && String(mail.authPass).trim()),
   };
 }
@@ -85,8 +89,8 @@ export async function patchUserMailServer(params: {
     authUser:
       inc.authUser != null ? String(inc.authUser).trim() : String(prev.authUser || '').trim(),
     authPass: passwordUnchanged
-      ? String(prev.authPass || '').trim()
-      : String(inc.authPass).trim(),
+      ? normalizeSmtpPassword(String(prev.authPass || ''))
+      : normalizeSmtpPassword(String(inc.authPass)),
     fromEmail:
       inc.fromEmail != null ? String(inc.fromEmail).trim() : String(prev.fromEmail || '').trim(),
     fromName:
@@ -96,9 +100,8 @@ export async function patchUserMailServer(params: {
   settings.mailServer = nextMail;
   await (user as any).update({ settings });
 
-  const { authPass: _omit, ...safe } = nextMail;
   return {
-    ...safe,
+    ...nextMail,
     authPassConfigured: Boolean(nextMail.authPass),
   };
 }

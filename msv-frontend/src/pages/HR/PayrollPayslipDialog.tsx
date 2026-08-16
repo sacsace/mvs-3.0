@@ -3,7 +3,7 @@ import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, Circula
 import { useTranslation } from 'react-i18next';
 import PayslipContent, { type PayslipCompanyInfo } from './PayslipContent';
 import type { PayrollGridRow } from './payroll/payrollGridTypes';
-import { buildPayslipLabels, downloadPayslipPdf, generatePayslipPdfBlob } from './payrollPayslipPdf';
+import { buildPayslipLabels, buildPayslipPdfFilename, downloadPayslipPdf, generatePayslipPdfBlob } from './payrollPayslipPdf';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useStore } from '../../store';
 import { mvsBodyOutlinedBtnSx, mvsBodyPrimaryBtnSx } from '../../theme/mvsLayout';
@@ -12,14 +12,16 @@ type Props = {
   open: boolean;
   row: PayrollGridRow | null;
   onClose: () => void;
+  /** 급여발송 등 — UI 언어와 무관하게 영어 명세서 */
+  forceEnglish?: boolean;
 };
 
-const PayrollPayslipDialog: React.FC<Props> = ({ open, row, onClose }) => {
+const PayrollPayslipDialog: React.FC<Props> = ({ open, row, onClose, forceEnglish = false }) => {
   const { t } = useTranslation();
   const user = useStore((s) => s.user);
   const [downloading, setDownloading] = useState(false);
   const [companyInfo, setCompanyInfo] = useState<PayslipCompanyInfo | null>(null);
-  const labels = buildPayslipLabels();
+  const labels = buildPayslipLabels(forceEnglish ? 'en' : undefined);
 
   useEffect(() => {
     let mounted = true;
@@ -51,18 +53,19 @@ const PayrollPayslipDialog: React.FC<Props> = ({ open, row, onClose }) => {
     if (!row) return;
     setDownloading(true);
     try {
-      const blob = await generatePayslipPdfBlob(row, companyInfo);
-      const safe = `${row.working_month || 'payslip'}_${row.employee_name}`.replace(/[\\/:*?"<>|]/g, '_');
-      downloadPayslipPdf(blob, `${safe}.pdf`);
+      const blob = await generatePayslipPdfBlob(row, companyInfo, {
+        locale: forceEnglish ? 'en' : undefined
+      });
+      downloadPayslipPdf(blob, buildPayslipPdfFilename(row.working_month, row.employee_name));
     } finally {
       setDownloading(false);
     }
-  }, [row, companyInfo]);
+  }, [row, companyInfo, forceEnglish]);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth scroll="paper">
       <DialogTitle sx={{ fontWeight: 700, fontSize: '1.1rem', pb: 1 }}>
-        {t('payrollManagement.payslip.title')}
+        {forceEnglish ? labels.title : t('payrollManagement.payslip.title')}
       </DialogTitle>
       <DialogContent dividers sx={{ pt: 2, bgcolor: 'bodyArea.main', px: { xs: 2, sm: 3 } }}>
         {row ? (
@@ -83,7 +86,7 @@ const PayrollPayslipDialog: React.FC<Props> = ({ open, row, onClose }) => {
           startIcon={downloading ? <CircularProgress size={18} color="inherit" /> : undefined}
           sx={mvsBodyPrimaryBtnSx}
         >
-          {t('payrollManagement.payslip.downloadPdf')}
+          {forceEnglish ? 'Download PDF' : t('payrollManagement.payslip.downloadPdf')}
         </Button>
       </DialogActions>
     </Dialog>

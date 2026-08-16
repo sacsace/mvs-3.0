@@ -69,7 +69,6 @@ const SUB_MENUS: Record<string, Array<{ name_ko: string; name_en: string; route:
     { name_ko: '메뉴권한관리', name_en: 'Menu Permissions', route: '/basic-info/menu-permissions', icon: 'lock', order: 4 },
     { name_ko: '로그인 정보 관리', name_en: 'Login Info', route: '/basic-info/login-info', icon: 'person', order: 5 },
     { name_ko: '시스템 설정', name_en: 'System Settings', route: '/basic-info/system-settings', icon: 'settings', order: 6 },
-    { name_ko: '메일 발송 테스트', name_en: 'Mail Send Test', route: '/basic-info/mail-send-test', icon: 'email', order: 7 },
   ],
   '/hr': [
     { name_ko: '사용자 관리', name_en: 'Users', route: '/hr/users', icon: 'people', order: 1 },
@@ -78,7 +77,7 @@ const SUB_MENUS: Record<string, Array<{ name_ko: string; name_en: string; route:
     { name_ko: '근태 통계', name_en: 'Attendance Statistics', route: '/hr/attendance/statistics', icon: 'assessment', order: 4 },
     { name_ko: '휴가 관리', name_en: 'Leave', route: '/hr/leave', icon: 'event', order: 5 },
     { name_ko: '급여 관리', name_en: 'Payroll', route: '/hr/payroll', icon: 'payments', order: 6 },
-    { name_ko: '급여발송', name_en: 'Payslip Send', route: '/hr/payslip-send', icon: 'email', order: 7 },
+    { name_ko: '급여 명세서 발송', name_en: 'Payslip Delivery', route: '/hr/payslip-send', icon: 'email', order: 7 },
   ],
   '/work': [
     { name_ko: '업무 관리', name_en: 'Projects', route: '/work/projects', icon: 'view_kanban', order: 1 },

@@ -1,3 +1,10 @@
+/** 명세서 Earnings에 그대로 그릴 행 (엑셀 열 단위 수당 등) */
+export type PayslipEarningLine = {
+  label: string;
+  amount: number;
+  highlight?: boolean;
+};
+
 export type PayrollGridRow = {
   id: number;
   row_no: number;
@@ -37,5 +44,10 @@ export type PayrollGridRow = {
   /** API deductions — 명세서·저장에 사용 */
   deduct_this_month: number;
   net_salary_payable: number;
+  /**
+   * 엑셀 매핑 열 순서·헤더명 그대로의 수당 행.
+   * 있으면 명세서 Earnings는 이 목록을 사용 (합산 Other Allowance 대신).
+   */
+  payslip_earning_lines?: PayslipEarningLine[];
   actions?: string;
 };

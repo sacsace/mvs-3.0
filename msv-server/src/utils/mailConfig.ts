@@ -62,6 +62,14 @@ type MailServerRaw = {
 };
 
 /**
+ * Gmail 앱 비밀번호는 UI에 `xxxx xxxx xxxx xxxx`로 표시됨.
+ * 공백이 들어가면 535 BadCredentials가 나는 경우가 있어 제거한다.
+ */
+export function normalizeSmtpPassword(pass: string): string {
+  return String(pass || '').replace(/\s+/g, '').trim();
+}
+
+/**
  * `settings.mailServer` 한 덩어리에서 SMTP 연결 정보 해석.
  * 비밀번호가 비어 있으면 호스트·계정이 서버 환경변수(EMAIL_*)와 같을 때만 env 비밀번호 사용.
  */
@@ -71,7 +79,7 @@ function resolveMailServerRecord(raw: MailServerRaw | undefined): MailTransportR
   const authUser = String(raw.authUser).trim();
   if (!host || !authUser) return null;
 
-  let pass = raw.authPass != null ? String(raw.authPass).trim() : '';
+  let pass = raw.authPass != null ? normalizeSmtpPassword(String(raw.authPass)) : '';
   if (
     !pass &&
     env.EMAIL_HOST &&
@@ -80,7 +88,7 @@ function resolveMailServerRecord(raw: MailServerRaw | undefined): MailTransportR
     authUser === String(env.EMAIL_USER).trim() &&
     host === String(env.EMAIL_HOST).trim()
   ) {
-    pass = env.EMAIL_PASS;
+    pass = normalizeSmtpPassword(env.EMAIL_PASS);
   }
   if (!pass) return null;
 
@@ -119,7 +127,7 @@ export function getSystemMailTransportOptions(
       host: env.EMAIL_HOST,
       port,
       secure: resolveSmtpSecure(port, undefined),
-      auth: { user: env.EMAIL_USER, pass: env.EMAIL_PASS },
+      auth: { user: env.EMAIL_USER, pass: normalizeSmtpPassword(env.EMAIL_PASS) },
       from: env.EMAIL_USER
     };
   }

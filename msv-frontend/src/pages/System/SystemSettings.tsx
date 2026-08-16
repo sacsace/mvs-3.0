@@ -19,7 +19,10 @@ import {
   Alert,
   Snackbar,
   Tabs,
-  Tab
+  Tab,
+  IconButton,
+  InputAdornment,
+  Link,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -43,6 +46,9 @@ import {
   Download as DownloadIcon,
   ViewSidebar as ViewSidebarIcon,
   NotificationsOutlined as NotificationsOutlinedIcon,
+  Visibility,
+  VisibilityOff,
+  Send as SendIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { systemSettingsService } from '../../services/api';
@@ -203,6 +209,12 @@ const SystemSettings: React.FC = () => {
   const [previewLogo, setPreviewLogo] = useState<string>('');
   /** 메일 비밀번호: 저장만 되어 있을 때 필드에 마스크 표시, 포커스 시 편집용으로 비움 */
   const [mailAuthPassFocused, setMailAuthPassFocused] = useState(false);
+  const [mailPassVisible, setMailPassVisible] = useState(false);
+  const [savingMail, setSavingMail] = useState(false);
+  const [mailTestOpen, setMailTestOpen] = useState(false);
+  const [mailTestTo, setMailTestTo] = useState('');
+  const [mailTestSubject, setMailTestSubject] = useState('');
+  const [mailTesting, setMailTesting] = useState(false);
   const [backupFiles, setBackupFiles] = useState<BackupFileItem[]>([]);
   const [backupStoragePath, setBackupStoragePath] = useState('');
   const [downloadingBackupName, setDownloadingBackupName] = useState<string | null>(null);
@@ -241,14 +253,15 @@ const SystemSettings: React.FC = () => {
             port: typeof ms.port === 'number' ? ms.port : parseInt(String(ms.port || 587), 10) || 587,
             secure: Boolean(ms.secure),
             authUser: String(ms.authUser || '').trim() || loginEmail,
-            authPass: '',
-            authPassConfigured: Boolean(ms.authPassConfigured),
+            authPass: String(ms.authPass || ''),
+            authPassConfigured: Boolean(ms.authPassConfigured || ms.authPass),
             fromEmail: String(ms.fromEmail || '').trim() || loginEmail,
             fromName: String(ms.fromName || '').trim() || loginName
           }
         };
         setSettings(normalizedSettings);
         setMailAuthPassFocused(false);
+        setMailPassVisible(false);
         if (response.data.general?.companyLogo) {
           setPreviewLogo(response.data.general.companyLogo);
         }
@@ -428,6 +441,96 @@ const SystemSettings: React.FC = () => {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveMailServer = async () => {
+    if (!canManageAll) return;
+    try {
+      setSavingMail(true);
+      let payload: typeof settings = settings;
+      if (!isRoot) {
+        const { backup: _omitBackup, ...withoutBackup } = settings;
+        payload = withoutBackup as typeof settings;
+      }
+      const response = await systemSettingsService.saveSettings(payload);
+      if (response.success) {
+        setSettings((prev) => ({
+          ...prev,
+          mailServer: {
+            ...prev.mailServer,
+            authPassConfigured: Boolean(
+              prev.mailServer.authPass?.trim() || prev.mailServer.authPassConfigured
+            ),
+          },
+        }));
+        setSnackbar({
+          open: true,
+          message: t('systemSettings.mailServer.savedSmtp'),
+          severity: 'success',
+        });
+      }
+    } catch (error: any) {
+      setSnackbar({
+        open: true,
+        message:
+          error?.response?.data?.message ||
+          error?.message ||
+          t('systemSettings.mailServer.testFailed'),
+        severity: 'error',
+      });
+    } finally {
+      setSavingMail(false);
+    }
+  };
+
+  const openMailTestDialog = () => {
+    setMailTestTo((user?.email && String(user.email).trim()) || settings.mailServer.fromEmail || '');
+    setMailTestSubject('');
+    setMailTestOpen(true);
+  };
+
+  const handleSendMailTest = async () => {
+    const to = mailTestTo.trim();
+    if (!to) {
+      setSnackbar({
+        open: true,
+        message: t('systemSettings.mailServer.testToRequired'),
+        severity: 'error',
+      });
+      return;
+    }
+    try {
+      setMailTesting(true);
+      const res = await systemSettingsService.sendTestMail({
+        to,
+        ...(mailTestSubject.trim() ? { subject: mailTestSubject.trim() } : {}),
+      });
+      if (res?.success) {
+        setMailTestOpen(false);
+        setSnackbar({
+          open: true,
+          message: res.message || t('systemSettings.mailServer.testSent'),
+          severity: 'success',
+        });
+      } else {
+        setSnackbar({
+          open: true,
+          message: (res as any)?.message || t('systemSettings.mailServer.testFailed'),
+          severity: 'error',
+        });
+      }
+    } catch (error: any) {
+      setSnackbar({
+        open: true,
+        message:
+          error?.response?.data?.message ||
+          error?.message ||
+          t('systemSettings.mailServer.testFailed'),
+        severity: 'error',
+      });
+    } finally {
+      setMailTesting(false);
     }
   };
 
@@ -1151,7 +1254,17 @@ const SystemSettings: React.FC = () => {
               {t('systemSettings.mailServer.hint')}
             </Typography>
             <Alert severity="info" sx={{ mb: 2, py: 1, fontSize: '0.8125rem', '& .MuiAlert-message': { width: '100%' } }}>
-              {t('systemSettings.mailServer.gmailHint')}
+              <Box component="span" sx={{ display: 'block' }}>
+                {t('systemSettings.mailServer.gmailHint')}
+              </Box>
+              <Link
+                href="https://myaccount.google.com/apppasswords"
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{ display: 'inline-block', mt: 0.75, fontWeight: 600, fontSize: '0.8125rem' }}
+              >
+                {t('systemSettings.mailServer.gmailAppPasswordLink')}
+              </Link>
             </Alert>
             {canManageAll && (
               <Button
@@ -1215,7 +1328,7 @@ const SystemSettings: React.FC = () => {
               <TextField
                 fullWidth
                 size="small"
-                type={showMailPassMask ? 'text' : 'password'}
+                type={mailPassVisible || showMailPassMask ? 'text' : 'password'}
                 label={t('systemSettings.mailServer.authPass')}
                 {...OUTLINED_FIELD}
                 value={showMailPassMask ? MAIL_AUTH_PASS_MASK : settings.mailServer.authPass}
@@ -1224,6 +1337,21 @@ const SystemSettings: React.FC = () => {
                 onBlur={() => setMailAuthPassFocused(false)}
                 disabled={!canManageAll}
                 autoComplete="new-password"
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        edge="end"
+                        aria-label={mailPassVisible ? 'hide password' : 'show password'}
+                        onClick={() => setMailPassVisible((v) => !v)}
+                        disabled={!canManageAll}
+                      >
+                        {mailPassVisible ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
                 sx={
                   showMailPassMask
                     ? {
@@ -1261,6 +1389,45 @@ const SystemSettings: React.FC = () => {
                 placeholder="MVS"
               />
             </Box>
+            {canManageAll && (
+              <Box
+                sx={{
+                  mt: 2.5,
+                  pt: 2,
+                  borderTop: '1px solid',
+                  borderColor: 'divider',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 1.25,
+                }}
+              >
+                <Button
+                  variant="contained"
+                  disableElevation
+                  size="small"
+                  startIcon={
+                    savingMail ? <CircularProgress size={16} color="inherit" /> : <SaveIcon fontSize="small" />
+                  }
+                  onClick={() => void handleSaveMailServer()}
+                  disabled={savingMail || mailTesting}
+                  sx={mvsBodyPrimaryBtnSx}
+                >
+                  {savingMail
+                    ? t('systemSettings.mailServer.savingSmtp')
+                    : t('systemSettings.mailServer.saveSmtp')}
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  startIcon={<SendIcon fontSize="small" />}
+                  onClick={openMailTestDialog}
+                  disabled={savingMail || mailTesting}
+                  sx={mvsBodyOutlinedBtnSx}
+                >
+                  {t('systemSettings.mailServer.testSmtp')}
+                </Button>
+              </Box>
+            )}
           </CardContent>
         </Card>
 
@@ -1438,6 +1605,65 @@ const SystemSettings: React.FC = () => {
       </Box>
       )}
       </Box>
+
+      {/* SMTP 테스트 메일 팝업 */}
+      <Dialog
+        open={mailTestOpen}
+        onClose={() => (!mailTesting ? setMailTestOpen(false) : undefined)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>{t('systemSettings.mailServer.testDialogTitle')}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontSize: '0.8125rem', lineHeight: 1.5 }}>
+            {t('systemSettings.mailServer.testDialogHint')}
+          </Typography>
+          <TextField
+            fullWidth
+            size="small"
+            label={t('systemSettings.mailServer.testTo')}
+            {...OUTLINED_FIELD}
+            value={mailTestTo}
+            onChange={(e) => setMailTestTo(e.target.value)}
+            disabled={mailTesting}
+            autoFocus
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            fullWidth
+            size="small"
+            label={t('systemSettings.mailServer.testSubject')}
+            {...OUTLINED_FIELD}
+            value={mailTestSubject}
+            onChange={(e) => setMailTestSubject(e.target.value)}
+            disabled={mailTesting}
+            helperText={t('systemSettings.mailServer.testSubjectHint')}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            size="small"
+            onClick={() => setMailTestOpen(false)}
+            disabled={mailTesting}
+            sx={mvsBodyOutlinedBtnSx}
+          >
+            {t('systemSettings.mailServer.cancel')}
+          </Button>
+          <Button
+            size="small"
+            variant="contained"
+            disableElevation
+            startIcon={mailTesting ? <CircularProgress size={16} color="inherit" /> : <SendIcon fontSize="small" />}
+            onClick={() => void handleSendMailTest()}
+            disabled={mailTesting}
+            sx={mvsBodyPrimaryBtnSx}
+          >
+            {mailTesting
+              ? t('systemSettings.mailServer.testSending')
+              : t('systemSettings.mailServer.testSend')}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* 다이얼로그 */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>

@@ -3,7 +3,7 @@ import path from 'path';
 import nodemailer from 'nodemailer';
 import { Company, User } from '../models';
 import { authenticateToken, requireRole } from '../middleware/auth';
-import { buildNodemailerTransportOptions, getSystemMailTransportOptions } from '../utils/mailConfig';
+import { buildNodemailerTransportOptions, getSystemMailTransportOptions, normalizeSmtpPassword } from '../utils/mailConfig';
 
 const router = express.Router();
 
@@ -86,20 +86,20 @@ const buildSettingsResponse = (company: Company, user?: User | null) => {
     companyMail.host != null && String(companyMail.host).trim()
       ? companyMail
       : legacyUserMail;
-  const { authPass: _omitPass, ...mailSafe } = sourceMail;
 
   const mergedMail = {
     ...defaultSettings.mailServer,
-    ...mailSafe,
+    host: sourceMail.host != null ? String(sourceMail.host).trim() : '',
     port: sourceMail.port != null ? Number(sourceMail.port) || 587 : defaultSettings.mailServer.port,
     secure:
       sourceMail.secure !== undefined && sourceMail.secure !== null
         ? Boolean(sourceMail.secure)
         : defaultSettings.mailServer.secure,
     authUser: sourceMail.authUser != null ? String(sourceMail.authUser).trim() : '',
+    authPass: sourceMail.authPass != null ? String(sourceMail.authPass) : '',
     fromEmail: sourceMail.fromEmail != null ? String(sourceMail.fromEmail).trim() : '',
     fromName: sourceMail.fromName != null ? String(sourceMail.fromName).trim() : '',
-    authPassConfigured: Boolean(sourceMail.authPass)
+    authPassConfigured: Boolean(sourceMail.authPass && String(sourceMail.authPass).trim())
   };
 
   return {
@@ -329,15 +329,15 @@ router.put('/', authenticateToken, async (req, res) => {
           {}) as Record<string, unknown>;
         const passwordUnchanged = !inc.authPass || String(inc.authPass).trim() === '';
         const effectivePrevPass =
-          (prevCompanyMail.authPass && String(prevCompanyMail.authPass).trim()) ||
-          (prevUserMail.authPass && String(prevUserMail.authPass).trim()) ||
+          (prevCompanyMail.authPass && normalizeSmtpPassword(String(prevCompanyMail.authPass))) ||
+          (prevUserMail.authPass && normalizeSmtpPassword(String(prevUserMail.authPass))) ||
           '';
         settingsToSave.mailServer = {
           host: inc.host != null ? String(inc.host).trim() : prevCompanyMail.host || '',
           port: inc.port != null ? Math.max(1, Number(inc.port) || 587) : prevCompanyMail.port || 587,
           secure: inc.secure != null ? Boolean(inc.secure) : Boolean(prevCompanyMail.secure),
           authUser: inc.authUser != null ? String(inc.authUser).trim() : prevCompanyMail.authUser || '',
-          authPass: passwordUnchanged ? effectivePrevPass : String(inc.authPass).trim(),
+          authPass: passwordUnchanged ? effectivePrevPass : normalizeSmtpPassword(String(inc.authPass)),
           fromEmail: inc.fromEmail != null ? String(inc.fromEmail).trim() : prevCompanyMail.fromEmail || '',
           fromName: inc.fromName != null ? String(inc.fromName).trim() : prevCompanyMail.fromName || ''
         };

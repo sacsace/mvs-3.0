@@ -40,6 +40,7 @@ import { initRedisCache, isRedisCacheReady } from './utils/redisCache';
 import { ensureUploadRoot } from './utils/uploadPath';
 import { requestProfiler } from './middleware/requestProfiler';
 import { activityLogMiddleware } from './middleware/activityLogMiddleware';
+import { startLoginLogRetentionScheduler } from './services/loginLogRetentionService';
 
 // 환경 변수 검증 및 출력
 validateEnv();
@@ -85,6 +86,7 @@ connectDB()
   .then(() => {
     void initRedisCache();
     startAttendanceAutoCheckoutScheduler();
+    startLoginLogRetentionScheduler();
   })
   .catch((error) => {
     console.error('Database connection error:', error);

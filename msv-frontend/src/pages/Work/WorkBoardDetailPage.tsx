@@ -320,11 +320,19 @@ const BOARD_PAN_IGNORE_SELECTOR = [
   'select',
   '[role="button"]',
   '[role="menuitem"]',
+  '[role="option"]',
+  '[role="listbox"]',
+  '[role="presentation"]',
   '[contenteditable="true"]',
   '.MuiButtonBase-root',
   '.MuiChip-root',
   '.MuiInputBase-root',
   '.MuiAutocomplete-root',
+  '.MuiAutocomplete-popper',
+  '.MuiAutocomplete-listbox',
+  '.MuiPopover-root',
+  '.MuiModal-root',
+  '.MuiMenu-root',
 ].join(',');
 
 /** 칸반 — 트렐로형 라운드·라벤더 보드 */
@@ -433,10 +441,22 @@ const hexToRgba = (hex: string, alphaValue: number) => {
   return `rgba(${r}, ${g}, ${b}, ${alphaValue})`;
 };
 
-/** 댓글 본문의 @userid / @이름 을 구분색으로 표시 */
-function renderCommentWithMentions(text: string): React.ReactNode {
+/** 댓글 멘션 토큰: @[표시이름] 또는 @token (레거시 userid 등) */
+const COMMENT_MENTION_TOKEN_RE = /@\[([^\]]+)\]|@([^\s@]+)/g;
+
+const normalizeMentionLookupKey = (value: string): string =>
+  String(value || '')
+    .replace(/\s+/g, '')
+    .trim()
+    .toLowerCase();
+
+/** 댓글 본문의 @멘션을 사용자명 칩으로 표시 */
+function renderCommentWithMentions(
+  text: string,
+  members?: Array<{ id: number; label: string; userid: string }>
+): React.ReactNode {
   if (text == null || text === '') return null;
-  const re = /@[^\s@]+/g;
+  const re = new RegExp(COMMENT_MENTION_TOKEN_RE.source, 'g');
   const out: React.ReactNode[] = [];
   let last = 0;
   let m: RegExpExecArray | null;
@@ -445,7 +465,15 @@ function renderCommentWithMentions(text: string): React.ReactNode {
     if (m.index > last) {
       out.push(text.slice(last, m.index));
     }
-    const token = m[0];
+    const rawToken = String(m[1] || m[2] || '').trim();
+    const lookup = normalizeMentionLookupKey(rawToken);
+    const matched = members?.find((member) => {
+      const byName = normalizeMentionLookupKey(member.label) === lookup;
+      const byUserid = String(member.userid || '').trim().toLowerCase() === rawToken.toLowerCase();
+      const byUseridNorm = normalizeMentionLookupKey(member.userid) === lookup;
+      return byName || byUserid || byUseridNorm;
+    });
+    const displayName = matched?.label || rawToken;
     out.push(
       <Box
         component="span"
@@ -460,10 +488,10 @@ function renderCommentWithMentions(text: string): React.ReactNode {
           border: `1px solid ${alpha('#1D4E7C', 0.28)}`,
         }}
       >
-        {token}
+        @{displayName}
       </Box>
     );
-    last = m.index + token.length;
+    last = m.index + m[0].length;
   }
   if (last < text.length) {
     out.push(text.slice(last));
@@ -1521,6 +1549,8 @@ const WorkBoardDetailPage: React.FC = () => {
 
   const handleBoardPanPointerDown = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
+      // 카드 상세·드롭다운 조작 중에는 보드 팬이 클릭을 가로채지 않도록 한다
+      if (cardDetail) return;
       if (e.button !== 0 || isKanbanDragging) return;
       if (!canStartBoardPan(e.target)) return;
       boardPanRef.current = {
@@ -1535,7 +1565,7 @@ const WorkBoardDetailPage: React.FC = () => {
       document.body.style.cursor = 'grabbing';
       e.currentTarget.setPointerCapture?.(e.pointerId);
     },
-    [canStartBoardPan, isKanbanDragging]
+    [canStartBoardPan, cardDetail, isKanbanDragging]
   );
 
   const handleBoardPanPointerMove = useCallback((e: React.PointerEvent<HTMLElement>) => {
@@ -1567,6 +1597,11 @@ const WorkBoardDetailPage: React.FC = () => {
     if (!isKanbanDragging) return;
     endBoardPan();
   }, [isKanbanDragging, endBoardPan]);
+
+  useEffect(() => {
+    if (!cardDetail) return;
+    endBoardPan();
+  }, [cardDetail, endBoardPan]);
 
   useEffect(() => {
     if (!isKanbanDragging) return;
@@ -2120,11 +2155,14 @@ const WorkBoardDetailPage: React.FC = () => {
     setCommentSaving(true);
     try {
       const content = newComment.trim();
-      const mentionTokens = Array.from(content.matchAll(/@([^\s@]+)/g)).map((match) => match[1].toLowerCase());
+      const mentionTokens = Array.from(content.matchAll(new RegExp(COMMENT_MENTION_TOKEN_RE.source, 'g'))).map(
+        (match) => normalizeMentionLookupKey(String(match[1] || match[2] || ''))
+      );
       const mentionFromText = memberOptions
         .filter((member) => {
-          const usernameToken = member.label.replace(/\s+/g, '').toLowerCase();
-          return mentionTokens.includes(member.userid.toLowerCase()) || mentionTokens.includes(usernameToken);
+          const usernameToken = normalizeMentionLookupKey(member.label);
+          const useridToken = normalizeMentionLookupKey(member.userid);
+          return mentionTokens.includes(usernameToken) || mentionTokens.includes(useridToken);
         })
         .map((member) => member.id);
       const mentionUserIds = Array.from(
@@ -2835,9 +2873,10 @@ const WorkBoardDetailPage: React.FC = () => {
 
   const insertMention = (candidate: { id: number; label: string; userid: string }) => {
     setNewComment((prev) =>
-      prev.replace(/(?:^|\s)@[^\s@]*$/, (token) => {
+      prev.replace(/(?:^|\s)@[^\s@[\]]*$/, (token) => {
         const prefix = token.startsWith(' ') ? ' ' : '';
-        return `${prefix}@${candidate.userid} `;
+        // 표시·매칭 모두 사용자명 기준 (@[이름] — 공백 이름 지원)
+        return `${prefix}@[${candidate.label}] `;
       })
     );
     setMentionedUserIds((prev) => Array.from(new Set([...prev, candidate.id])));
@@ -3540,7 +3579,7 @@ const WorkBoardDetailPage: React.FC = () => {
               height: 'auto',
               borderRadius: KANBAN_DETAIL_SHELL_RADIUS,
               boxShadow: '0 1px 0 #E2E8F0, 0 1px 2px rgba(15, 23, 42, 0.05)',
-              overflow: 'hidden',
+              overflow: 'visible',
               border: '1px solid #E2E8F0',
               borderLeft: `4px solid ${accent}`,
               bgcolor: '#FFFFFF',
@@ -3738,21 +3777,46 @@ const WorkBoardDetailPage: React.FC = () => {
           </Box>
 
           <Box
+            data-board-no-pan=""
             sx={{
               ...cardDetailFormSectionSx,
               py: 0.37,
+              position: 'relative',
+              zIndex: 5,
             }}
           >
             <Autocomplete
               multiple
               disabled={!menuCanEdit}
               options={memberOptions}
+              getOptionLabel={(option) => option.label}
               value={memberOptions.filter((option) => (cardDetail?.referenceUserIds || []).includes(option.id))}
               onChange={(_event, selected) => {
                 const nextIds = selected.map((item) => item.id);
                 setCardDetail((prev) => (prev ? { ...prev, referenceUserIds: nextIds } : prev));
               }}
               isOptionEqualToValue={(option, value) => option.id === value.id}
+              slotProps={{
+                popper: {
+                  sx: { zIndex: 2100 },
+                },
+              }}
+              renderOption={(props, option) => {
+                const { key, ...rest } = props as typeof props & { key?: React.Key };
+                return (
+                  <li
+                    key={key ?? option.id}
+                    {...rest}
+                    onMouseDown={(event) => {
+                      // blur로 목록이 먼저 닫히며 클릭이 씹히는 것 방지
+                      event.preventDefault();
+                      rest.onMouseDown?.(event);
+                    }}
+                  >
+                    {option.label}
+                  </li>
+                );
+              }}
               renderTags={(value, getTagProps) =>
                 value.map((option, index) => (
                   <Chip
@@ -4111,9 +4175,12 @@ const WorkBoardDetailPage: React.FC = () => {
           >
             <TextField
               fullWidth
+              multiline
+              minRows={1}
+              maxRows={6}
               hiddenLabel
               size="small"
-              placeholder={txt('댓글을 입력하세요', 'Write a comment')}
+              placeholder={txt('댓글을 입력하세요 (Alt+Enter 줄바꿈)', 'Write a comment (Alt+Enter for new line)')}
               value={newComment}
               inputRef={commentInputRef}
               onChange={(e) => handleCommentInputChange(e.target.value)}
@@ -4121,7 +4188,8 @@ const WorkBoardDetailPage: React.FC = () => {
               sx={{
                 '& .MuiOutlinedInput-root': {
                   borderRadius: 0,
-                  height: 40,
+                  alignItems: 'flex-start',
+                  minHeight: 40,
                   bgcolor: '#FFFFFF',
                   '& fieldset': {
                     border: 'none',
@@ -4131,6 +4199,7 @@ const WorkBoardDetailPage: React.FC = () => {
                   fontSize: '0.875rem',
                   py: '10px',
                   color: '#1E293B',
+                  lineHeight: 1.45,
                   '&::placeholder': {
                     color: '#94A3B8',
                     opacity: 1,
@@ -4152,7 +4221,7 @@ const WorkBoardDetailPage: React.FC = () => {
                     setMentionHighlightIndex((prev) => (prev - 1 + mentionCandidates.length) % mentionCandidates.length);
                     return;
                   }
-                  if (e.key === 'Enter') {
+                  if (e.key === 'Enter' && !e.altKey && !e.shiftKey) {
                     e.preventDefault();
                     const candidate = mentionCandidates[mentionHighlightIndex] || mentionCandidates[0];
                     if (candidate) {
@@ -4165,7 +4234,11 @@ const WorkBoardDetailPage: React.FC = () => {
                     return;
                   }
                 }
-                if (e.key === 'Enter' && !e.shiftKey) {
+                // Alt+Enter / Shift+Enter → 줄바꿈 (기본 동작 유지)
+                if (e.key === 'Enter' && (e.altKey || e.shiftKey)) {
+                  return;
+                }
+                if (e.key === 'Enter') {
                   e.preventDefault();
                   void submitComment();
                 }
@@ -4190,7 +4263,12 @@ const WorkBoardDetailPage: React.FC = () => {
                       insertMention(candidate);
                     }}
                   >
-                    @{candidate.userid} ({candidate.label})
+                    {candidate.label}
+                    {candidate.userid ? (
+                      <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                        {candidate.userid}
+                      </Typography>
+                    ) : null}
                   </MenuItem>
                 ))}
               </Paper>
@@ -4313,7 +4391,7 @@ const WorkBoardDetailPage: React.FC = () => {
                             color: '#1E293B',
                           }}
                         >
-                          {renderCommentWithMentions(comment.content || '')}
+                          {renderCommentWithMentions(comment.content || '', memberOptions)}
                         </Typography>
                       </Box>
                       <Box sx={{ display: 'flex', flexShrink: 0, alignItems: 'flex-start', gap: 0.25 }}>

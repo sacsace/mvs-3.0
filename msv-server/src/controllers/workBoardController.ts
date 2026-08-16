@@ -1799,8 +1799,13 @@ export const createWorkBoardCardComment = async (req: RequestWithUser, res: Resp
       }
     }
 
-    const mentionTokens = Array.from(String(content).matchAll(/@([^\s@]+)/g)).map((match) =>
-      match[1].trim().toLowerCase()
+    const mentionTokens = Array.from(
+      String(content).matchAll(/@\[([^\]]+)\]|@([^\s@]+)/g)
+    ).map((match) =>
+      String(match[1] || match[2] || '')
+        .replace(/\s+/g, '')
+        .trim()
+        .toLowerCase()
     );
     if (mentionTokens.length > 0) {
       const useridToId = new Map<string, number>();
