@@ -108,7 +108,7 @@ const SETTINGS_RIGHT_CARD_SX = {
   display: 'flex',
   flexDirection: 'column',
   flex: '0 0 auto',
-  overflow: 'visible',
+  overflow: 'hidden',
 } as const;
 
 const SETTINGS_RIGHT_CARD_CONTENT_SX = {

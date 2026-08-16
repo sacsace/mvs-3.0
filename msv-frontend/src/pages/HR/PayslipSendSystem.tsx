@@ -19,7 +19,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { DeleteOutline, Email, FileUpload, Preview } from '@mui/icons-material';
+import { DeleteOutline, Email, ExpandMore, FileUpload, Preview } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
@@ -62,6 +62,7 @@ type Field =
   | 'basic_salary'
   | 'house_rent_allowance'
   | 'other_allowance'
+  | 'food_allowance'
   | 'total_salary'
   | 'total_day_of_month'
   | 'unpaid_leave'
@@ -82,7 +83,12 @@ type Field =
 type ImportRow = PayrollGridRow & { sourceRow: number; issues: string[] };
 
 /** 여러 엑셀 열을 합산해도 되는 필드 (Hyvision: Medical/Meals/Long Service 등) */
-const SUMMABLE_FIELDS = new Set<Field>(['other_allowance', 'transport_allowance', 'deduct_this_month']);
+const SUMMABLE_FIELDS = new Set<Field>([
+  'other_allowance',
+  'food_allowance',
+  'transport_allowance',
+  'deduct_this_month',
+]);
 
 const FIELD_OPTIONS: Array<{ value: Field; aliases: string[] }> = [
   { value: 'emp_id', aliases: ['empid', 'employeeid', 'emp id', 'employee id', 'emp. id'] },
@@ -119,10 +125,6 @@ const FIELD_OPTIONS: Array<{ value: Field; aliases: string[] }> = [
       'korean',
       'koeran',
       'medical allowance',
-      'meals allowance',
-      'meals allowanc', // Hyvision 잘림 (Allowance → Allowanc)
-      'meals',
-      'food allowance',
       'night shift allowance',
       'day shift allowance',
       'special allowance',
@@ -131,6 +133,18 @@ const FIELD_OPTIONS: Array<{ value: Field; aliases: string[] }> = [
       'other (site) allowance',
       'other allowances',
       'other allowance',
+    ],
+  },
+  {
+    value: 'food_allowance',
+    aliases: [
+      'food allowance',
+      'food allwance', // 오타
+      'meals allowance',
+      'meals allowanc', // Hyvision 잘림
+      'meals',
+      'meal allowance',
+      'food',
     ],
   },
   { value: 'total_salary', aliases: ['total salary'] },
@@ -504,6 +518,7 @@ const EARNING_LINE_FIELDS = new Set<Field>([
   'basic_salary',
   'house_rent_allowance',
   'other_allowance',
+  'food_allowance',
   'transport_allowance',
   'overtime_pay',
 ]);
@@ -518,9 +533,10 @@ const makePayrollRow = (
   const basic = sumMappedNumbers(source, mapping, 'basic_salary');
   const hra = sumMappedNumbers(source, mapping, 'house_rent_allowance');
   const other = sumMappedNumbers(source, mapping, 'other_allowance');
+  const food = sumMappedNumbers(source, mapping, 'food_allowance');
   const transport = sumMappedNumbers(source, mapping, 'transport_allowance');
   const totalSalary =
-    sumMappedNumbers(source, mapping, 'total_salary') || basic + hra + other + transport;
+    sumMappedNumbers(source, mapping, 'total_salary') || basic + hra + other + food + transport;
   const dayOt = sumMappedNumbers(source, mapping, 'day_ot_hour');
   const nightOt = sumMappedNumbers(source, mapping, 'night_ot_hour');
   const otRate = sumMappedNumbers(source, mapping, 'ot_rate');
@@ -610,6 +626,7 @@ const makePayrollRow = (
     basic_salary: Math.round(basic),
     house_rent_allowance: Math.round(hra),
     other_allowance: Math.round(other),
+    food_allowance: Math.round(food),
     total_salary: Math.round(totalSalary),
     total_day_of_month: firstMappedText(source, mapping, 'total_day_of_month'),
     unpaid_leave: firstMappedText(source, mapping, 'unpaid_leave'),
@@ -652,6 +669,7 @@ const PayslipSendSystem: React.FC = () => {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [payrollPeriod, setPayrollPeriod] = useState('');
+  const [mappingSectionOpen, setMappingSectionOpen] = useState(false);
   const [mail, setMail] = useState({
     subject: '[{{company}}] {{month}} Payslip Attached ({{name}})',
     message:
@@ -948,56 +966,83 @@ const PayslipSendSystem: React.FC = () => {
 
       {headers.length > 0 && (
         <Box sx={{ ...mvsBodyCardSx, mb: 2.5 }}>
-          <Box sx={mvsBodySectionHeaderSx}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-              {t(`${p}.mappingSection`)}
-            </Typography>
-          </Box>
           <Box
+            role="button"
+            tabIndex={0}
+            aria-expanded={mappingSectionOpen}
+            onClick={() => setMappingSectionOpen((open) => !open)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                setMappingSectionOpen((open) => !open);
+              }
+            }}
             sx={{
-              px: { xs: 2, sm: 2.5 },
-              py: 2,
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-              gap: 1.5,
+              ...mvsBodySectionHeaderSx,
+              cursor: 'pointer',
+              userSelect: 'none',
+              '&:hover': { bgcolor: 'action.hover' },
             }}
           >
-            {headers.map((header, index) => (
-              <FormControl key={`${header}-${index}`} size="small" sx={filterFieldSx}>
-                <InputLabel shrink>{header}</InputLabel>
-                <Select
-                  label={header}
-                  notched
-                  value={mapping[index] || ''}
-                  onChange={(event) => updateMapping(index, event.target.value as Field | '')}
-                >
-                  <MenuItem value="">{t(`${p}.unused`)}</MenuItem>
-                  {FIELD_OPTIONS.map((option) => (
-                    <MenuItem key={option.value} value={option.value}>
-                      {t(`${p}.fields.${option.value}`)}
-                    </MenuItem>
-                  ))}
-                </Select>
-                {columnFormulas[index] ? (
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{
-                      mt: 0.5,
-                      display: 'block',
-                      fontFamily: 'ui-monospace, Consolas, monospace',
-                      fontSize: '0.7rem',
-                      lineHeight: 1.35,
-                      wordBreak: 'break-all',
-                    }}
-                    title={columnFormulas[index]}
-                  >
-                    {t(`${p}.formulaSample`)}: {columnFormulas[index]}
-                  </Typography>
-                ) : null}
-              </FormControl>
-            ))}
+            <Typography variant="subtitle1" sx={{ fontWeight: 700, flex: 1 }}>
+              {t(`${p}.mappingSection`)}
+            </Typography>
+            <ExpandMore
+              sx={{
+                fontSize: 22,
+                color: 'text.secondary',
+                transform: mappingSectionOpen ? 'rotate(0deg)' : 'rotate(-90deg)',
+                transition: 'transform 0.15s ease',
+              }}
+            />
           </Box>
+          {mappingSectionOpen && (
+            <Box
+              sx={{
+                px: { xs: 2, sm: 2.5 },
+                py: 2,
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                gap: 1.5,
+              }}
+            >
+              {headers.map((header, index) => (
+                <FormControl key={`${header}-${index}`} size="small" sx={filterFieldSx}>
+                  <InputLabel shrink>{header}</InputLabel>
+                  <Select
+                    label={header}
+                    notched
+                    value={mapping[index] || ''}
+                    onChange={(event) => updateMapping(index, event.target.value as Field | '')}
+                  >
+                    <MenuItem value="">{t(`${p}.unused`)}</MenuItem>
+                    {FIELD_OPTIONS.map((option) => (
+                      <MenuItem key={option.value} value={option.value}>
+                        {t(`${p}.fields.${option.value}`)}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  {columnFormulas[index] ? (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{
+                        mt: 0.5,
+                        display: 'block',
+                        fontFamily: 'ui-monospace, Consolas, monospace',
+                        fontSize: '0.7rem',
+                        lineHeight: 1.35,
+                        wordBreak: 'break-all',
+                      }}
+                      title={columnFormulas[index]}
+                    >
+                      {t(`${p}.formulaSample`)}: {columnFormulas[index]}
+                    </Typography>
+                  ) : null}
+                </FormControl>
+              ))}
+            </Box>
+          )}
         </Box>
       )}
 

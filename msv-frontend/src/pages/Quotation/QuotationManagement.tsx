@@ -40,6 +40,8 @@ import {
   mvsBodyListZoneSx,
   mvsBodyListTableSx,
   mvsBodyPaginationSx,
+  mvsBodySectionPanelSx,
+  mvsBodySectionPanelTitleSx,
   mvsSearchFieldSx,
   mvsFilterFieldHeightSx,
   mvsTableScrollSx,
@@ -53,6 +55,7 @@ import {
   Print as PrintIcon,
   PictureAsPdf as PictureAsPdfIcon,
   Email as EmailIcon,
+  Edit as EditIcon,
   CheckCircle as ApprovedIcon,
   Cancel as RejectedIcon
 } from '@mui/icons-material';
@@ -63,7 +66,7 @@ import AuthMedia from '../../components/Common/AuthMedia';
 import { useTranslation } from 'react-i18next';
 import { companyService, quotationService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
-import { downloadQuotationPdf } from '../../utils/quotationPdf';
+import { downloadQuotationPdf, buildQuotationPdfFilename, formatAddressTwoLines } from '../../utils/quotationPdf';
 import { parseEmailRecipientsList } from '../../utils/emailRecipients';
 
 interface QuotationItem {
@@ -127,7 +130,7 @@ function normalizeItems(raw: unknown): QuotationItem[] {
 }
 
 function mapQuotationFromApi(row: any): Quotation {
-  const statusRaw = row.status as string;
+  const statusRaw = String(row.status || '').toLowerCase();
   const status: Quotation['status'] =
     statusRaw === 'accepted'
       ? 'approved'
@@ -212,8 +215,18 @@ interface CompanyInfo {
   phone?: string;
   email?: string;
   business_number?: string;
+  /** GSTIN 목록 (회사 등록값) */
+  gst_numbers?: string[];
   /** 시스템 설정 등에서 등록한 로고(data URL 또는 URL) */
   company_logo?: string;
+  /** 회사 등록 서명/직인 (PDF 서명란) */
+  ceo_signature?: string;
+  account_holder_name?: string;
+  bank_name?: string;
+  bank_address?: string;
+  account_number?: string;
+  ifsc_code?: string;
+  swift_code?: string;
 }
 
 const QuotationManagement: React.FC = () => {
@@ -230,6 +243,8 @@ const QuotationManagement: React.FC = () => {
   const [selectedQuotation, setSelectedQuotation] = useState<Quotation | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  /** 승인·발송 견적: 설명/만료일/품목만 수정하는 모드 */
+  const [contentEditMode, setContentEditMode] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [customerFilter, setCustomerFilter] = useState('');
@@ -309,9 +324,29 @@ const QuotationManagement: React.FC = () => {
         setIssuingCompany(null);
         return;
       }
-      const response = await companyService.getCompany(Number(user.company_id));
+      const companyId = Number(user.company_id);
+      const response = await companyService.getCompany(companyId);
       if (response?.success) {
         const data = response.data;
+        let gstNumbers: string[] = [];
+        if (Array.isArray(data.gst_numbers)) {
+          gstNumbers = data.gst_numbers.filter((g: string) => g && String(g).trim() !== '');
+        } else if (Array.isArray(data.gstNumbers)) {
+          gstNumbers = data.gstNumbers.filter((g: string) => g && String(g).trim() !== '');
+        } else if (data.gst_number || data.gstin) {
+          gstNumbers = [String(data.gst_number || data.gstin)].filter((g) => g.trim() !== '');
+        }
+        if (!gstNumbers.length) {
+          try {
+            const gstRes = await companyService.getCompanyGstNumbers(companyId);
+            const list = gstRes?.data?.gst_numbers ?? gstRes?.gst_numbers;
+            if (Array.isArray(list)) {
+              gstNumbers = list.filter((g: string) => g && String(g).trim() !== '');
+            }
+          } catch {
+            /* ignore */
+          }
+        }
         setIssuingCompany({
           id: data.id,
           name: data.name || '',
@@ -319,7 +354,20 @@ const QuotationManagement: React.FC = () => {
           phone: data.phone || '',
           email: data.email || '',
           business_number: data.business_number || '',
-          company_logo: typeof data.company_logo === 'string' ? data.company_logo : ''
+          gst_numbers: gstNumbers,
+          company_logo: typeof data.company_logo === 'string' ? data.company_logo : '',
+          ceo_signature:
+            typeof data.ceo_signature === 'string'
+              ? data.ceo_signature
+              : typeof data.company_seal === 'string'
+                ? data.company_seal
+                : '',
+          account_holder_name: data.account_holder_name || data.accountHolderName || '',
+          bank_name: data.bank_name || data.bankName || '',
+          bank_address: data.bank_address || data.bankAddress || '',
+          account_number: data.account_number || data.accountNumber || '',
+          ifsc_code: data.ifsc_code || data.ifscCode || '',
+          swift_code: data.swift_code || data.swiftCode || ''
         });
       }
     } catch {
@@ -331,11 +379,18 @@ const QuotationManagement: React.FC = () => {
     let filtered = quotations;
 
     if (searchTerm) {
-      filtered = filtered.filter(quotation =>
-        quotation.quotationNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        quotation.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        quotation.customerEmail.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      const q = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter((quotation) => {
+        if (quotation.quotationNumber.toLowerCase().includes(q)) return true;
+        if (quotation.customerName.toLowerCase().includes(q)) return true;
+        if (quotation.customerEmail.toLowerCase().includes(q)) return true;
+        if ((quotation.notes || '').toLowerCase().includes(q)) return true;
+        return (quotation.items || []).some((item) => {
+          const name = String(item.productName || '').toLowerCase();
+          const desc = String(item.description || '').toLowerCase();
+          return name.includes(q) || desc.includes(q);
+        });
+      });
     }
 
     if (statusFilter) {
@@ -443,6 +498,7 @@ const QuotationManagement: React.FC = () => {
     setSelectedQuotation(null);
     setIsCreating(true);
     setIsEditing(false);
+    setContentEditMode(false);
   };
 
   /** 목록 행 클릭 → 상세(보기). 수정 가능한 상태는 폼에서 편집 후 하단 저장 */
@@ -450,6 +506,7 @@ const QuotationManagement: React.FC = () => {
     setSelectedQuotation(quotation);
     setIsEditing(true);
     setIsCreating(false);
+    setContentEditMode(false);
   };
 
   const handleDeleteQuotation = async (id: number) => {
@@ -476,14 +533,47 @@ const QuotationManagement: React.FC = () => {
     quotationData: Partial<Quotation> & { quotationNumber?: string; approverUserId?: number }
   ) => {
     try {
+      const isPartialContentSave =
+        !!selectedQuotation &&
+        contentEditMode &&
+        ['approved', 'sent'].includes(selectedQuotation.status);
+
       if (
         selectedQuotation &&
-        ['approved', 'sent', 'rejected', 'expired'].includes(selectedQuotation.status)
+        ['approved', 'sent', 'rejected', 'expired'].includes(selectedQuotation.status) &&
+        !isPartialContentSave
       ) {
         setError(t('quotationManagement.editLocked'));
         return;
       }
       setLoading(true);
+
+      if (isPartialContentSave && selectedQuotation) {
+        const res = await quotationService.updateQuotation(selectedQuotation.id, {
+          items: quotationData.items,
+          subtotal: quotationData.subtotal,
+          tax_rate: quotationData.taxRate,
+          tax_amount: quotationData.taxAmount,
+          discount: quotationData.discount,
+          total_amount: quotationData.totalAmount,
+          valid_until: quotationData.validUntil,
+          notes: quotationData.notes,
+          approver_user_id: quotationData.approverUserId
+        });
+        if ((res as any)?.success) {
+          setSuccess(t('quotationManagement.updatedNeedsReapproval'));
+          setContentEditMode(false);
+          await loadQuotationData();
+          // 수정 직후 상세에 승인/반려가 뜨지 않도록 목록으로 복귀
+          setIsCreating(false);
+          setIsEditing(false);
+          setSelectedQuotation(null);
+        } else {
+          setError(t('quotationManagement.saveFailed'));
+        }
+        return;
+      }
+
       const payload = {
         customer_name: quotationData.customerName,
         customer_email: quotationData.customerEmail,
@@ -651,7 +741,24 @@ const QuotationManagement: React.FC = () => {
     setIsCreating(false);
     setIsEditing(false);
     setSelectedQuotation(null);
+    setContentEditMode(false);
   };
+
+  const canPartialContentEdit = (q: Quotation | null | undefined) =>
+    !!q && (q.status === 'approved' || q.status === 'sent');
+
+  const quotationCustomerLocked =
+    !!selectedQuotation &&
+    ['approved', 'sent', 'rejected', 'expired'].includes(selectedQuotation.status);
+
+  const quotationContentLocked =
+    !!selectedQuotation &&
+    (['rejected', 'expired'].includes(selectedQuotation.status) ||
+      (canPartialContentEdit(selectedQuotation) && !contentEditMode));
+
+  /** 전체 보기 전용(저장 버튼 숨김 등) — 부분 수정 모드면 false */
+  const quotationFormReadOnly =
+    quotationCustomerLocked && quotationContentLocked;
 
   const handlePrintQuotation = (quotation: Quotation) => {
     if (!canShareApprovedQuotation(quotation)) {
@@ -674,8 +781,12 @@ const QuotationManagement: React.FC = () => {
     }
     try {
       setPdfSaving(true);
-      const safe = String(quotation.quotationNumber || 'quotation').replace(/[\\/:*?"<>|]+/g, '_');
-      await downloadQuotationPdf(el, `${safe}.pdf`);
+      const filename = buildQuotationPdfFilename({
+        companyName: quotation.customerName,
+        items: quotation.items,
+        quotationNumber: quotation.quotationNumber,
+      });
+      await downloadQuotationPdf(el, filename);
       setSuccess(t('quotationManagement.pdfSaved'));
     } catch {
       setError(t('quotationManagement.pdfSaveFailed'));
@@ -684,11 +795,7 @@ const QuotationManagement: React.FC = () => {
     }
   };
 
-  const handleEmailQuotation = async (quotation: Quotation) => {
-    if (!canShareApprovedQuotation(quotation)) {
-      setError(t('quotationManagement.emailAfterApproval'));
-      return;
-    }
+  const sendQuotationEmailNow = async (quotation: Quotation) => {
     const el = quotationPrintRef.current;
     if (!el) {
       setError(t('quotationManagement.emailPdfNeedDetail'));
@@ -702,6 +809,7 @@ const QuotationManagement: React.FC = () => {
       if ((res as any)?.success) {
         setSuccess(t('quotationManagement.emailed'));
         await loadQuotationData();
+        handleCancelForm();
       } else {
         setError(t('quotationManagement.saveFailed'));
       }
@@ -712,9 +820,19 @@ const QuotationManagement: React.FC = () => {
     }
   };
 
-  const quotationFormReadOnly =
-    !!selectedQuotation &&
-    ['approved', 'sent', 'rejected', 'expired'].includes(selectedQuotation.status);
+  const handleEmailQuotation = async (quotation: Quotation) => {
+    if (!canShareApprovedQuotation(quotation)) {
+      setError(t('quotationManagement.emailAfterApproval'));
+      return;
+    }
+    if (quotation.status === 'sent') {
+      showConfirm(t('quotationManagement.confirmResendEmail'), () => {
+        void sendQuotationEmailNow(quotation);
+      });
+      return;
+    }
+    await sendQuotationEmailNow(quotation);
+  };
 
   /**
    * 통계 카드
@@ -753,10 +871,12 @@ const QuotationManagement: React.FC = () => {
     page * itemsPerPage
   );
 
-  /** 상세 화면 하단: 승인 대기이면서 지정 승인자 또는 root/admin */
+  /** 상세 하단 승인/반려: 승인 대기 + 지정 승인자(또는 root/admin). 요청자 본인에게는 미표시 */
   const showDetailApproverToolbar = useMemo(() => {
     if (!selectedQuotation || selectedQuotation.status !== 'pending_approval') return false;
     const uid = Number(user?.id);
+    const creatorId = Number(selectedQuotation.createdByUserId);
+    if (creatorId === uid) return false;
     const approverId = Number(selectedQuotation.approverUserId);
     const role = user?.role;
     return approverId === uid || role === 'root' || role === 'admin';
@@ -847,13 +967,15 @@ const QuotationManagement: React.FC = () => {
             <QuotationForm
               key={
                 selectedQuotation
-                  ? `q-${selectedQuotation.id}`
+                  ? `q-${selectedQuotation.id}-${contentEditMode ? 'edit' : 'view'}`
                   : suggestedQuotationNumber
                     ? `new-${suggestedQuotationNumber}`
                     : 'new'
               }
               quotation={selectedQuotation}
               readOnly={quotationFormReadOnly}
+              customerLocked={quotationCustomerLocked}
+              contentLocked={quotationContentLocked}
               formId={selectedQuotation ? 'quotation-detail-form' : undefined}
               hideFooterButtons={!!selectedQuotation}
               onSave={handleSaveQuotation}
@@ -894,7 +1016,21 @@ const QuotationManagement: React.FC = () => {
                   borderColor: 'divider'
                 }}
               >
-                <Button variant="outlined" onClick={handleCancelForm} sx={mvsBodyOutlinedBtnSx}>
+                <Button
+                  variant="outlined"
+                  onClick={handleCancelForm}
+                  sx={{
+                    ...mvsBodyOutlinedBtnSx,
+                    bgcolor: '#F1F5F9',
+                    borderColor: '#64748B',
+                    color: '#0F172A',
+                    '&:hover': {
+                      bgcolor: '#E2E8F0',
+                      borderColor: '#475569',
+                      color: '#020617'
+                    }
+                  }}
+                >
                   {t('quotationManagement.backToList')}
                 </Button>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: 'flex-end' }}>
@@ -918,7 +1054,7 @@ const QuotationManagement: React.FC = () => {
                       </Button>
                     </>
                   )}
-                  {canShareApprovedQuotation(selectedQuotation) && (
+                  {canShareApprovedQuotation(selectedQuotation) && !contentEditMode && (
                     <>
                       <Button
                         variant="outlined"
@@ -948,7 +1084,39 @@ const QuotationManagement: React.FC = () => {
                       </Button>
                     </>
                   )}
-                  {!quotationFormReadOnly && (
+                  {canPartialContentEdit(selectedQuotation) && !contentEditMode && (
+                    <Button
+                      variant="contained"
+                      disableElevation
+                      startIcon={<EditIcon />}
+                      onClick={() => setContentEditMode(true)}
+                      sx={mvsBodyPrimaryBtnSx}
+                    >
+                      {t('quotationManagement.edit')}
+                    </Button>
+                  )}
+                  {contentEditMode && canPartialContentEdit(selectedQuotation) && (
+                    <>
+                      <Button
+                        variant="outlined"
+                        onClick={() => setContentEditMode(false)}
+                        sx={mvsBodyOutlinedBtnSx}
+                      >
+                        {t('quotationManagement.cancel')}
+                      </Button>
+                      <Button
+                        type="submit"
+                        form="quotation-detail-form"
+                        variant="contained"
+                        color="primary"
+                        disableElevation
+                        sx={mvsBodyPrimaryBtnSx}
+                      >
+                        {t('quotationManagement.save')}
+                      </Button>
+                    </>
+                  )}
+                  {!quotationFormReadOnly && !canPartialContentEdit(selectedQuotation) && (
                     <Button type="submit" form="quotation-detail-form" variant="contained" color="primary" disableElevation sx={mvsBodyPrimaryBtnSx}>
                       {t('quotationManagement.save')}
                     </Button>
@@ -1335,7 +1503,7 @@ const QuotationManagement: React.FC = () => {
   );
 };
 
-/** ITEMIZED 행 — QTY·UNIT PRICE·DESCRIPTION Outlined 입력 높이 통일 (MUI small ≈ 40px) */
+/** ITEMIZED 행 — QTY·Unit price·DESCRIPTION Outlined 입력 높이 통일 (MUI small ≈ 40px) */
 const ITEM_ROW_QTY_UNIT_SX = {
   '& .MuiOutlinedInput-root': {
     minHeight: 40,
@@ -1371,7 +1539,12 @@ const ITEM_ROW_DESCRIPTION_SX = {
 // 견적서 폼 컴포넌트
 interface QuotationFormProps {
   quotation: Quotation | null;
+  /** 전체 잠금(반려·만료 또는 승인·발송 보기 모드) */
   readOnly?: boolean;
+  /** 받는 회사(고객) 필드 잠금 */
+  customerLocked?: boolean;
+  /** 설명·만료일·품목 잠금 */
+  contentLocked?: boolean;
   /** 목록에서 연 상세에서 하단 툴바로 저장 시 외부 submit 버튼과 연결 */
   formId?: string;
   /** true면 폼 하단 취소/저장 버튼 숨김(상세 툴바 사용) */
@@ -1396,6 +1569,8 @@ interface QuotationFormProps {
 const QuotationForm: React.FC<QuotationFormProps> = ({ 
   quotation, 
   readOnly = false,
+  customerLocked = false,
+  contentLocked = false,
   formId,
   hideFooterButtons = false,
   printAreaRef,
@@ -1408,6 +1583,10 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
   onValidationMessage
 }) => {
   const { t } = useTranslation();
+  const lockCustomer = readOnly || customerLocked;
+  const lockContent = readOnly || contentLocked;
+  const lockTax = lockCustomer; // 승인·발송 후에는 세율/할인 UI도 잠금
+  const isPartialContentEdit = lockCustomer && !lockContent;
   const productNameRefs = useRef<Array<HTMLInputElement | null>>([]);
   const [pendingFocusIndex, setPendingFocusIndex] = useState<number | null>(null);
   const [formData, setFormData] = useState({
@@ -1442,6 +1621,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
   );
 
   const handleItemChange = (index: number, field: keyof QuotationItem, value: any) => {
+    if (lockContent) return;
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
     
@@ -1461,6 +1641,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
 
   /** DESCRIPTION 단일 입력: 본문은 productName에 두고, 구버전 description은 표시만 병합 후 비움 */
   const handleItemDescriptionCombinedChange = (index: number, value: string) => {
+    if (lockContent) return;
     setItems((prev) => {
       const newItems = [...prev];
       newItems[index] = { ...newItems[index], productName: value, description: '' };
@@ -1469,6 +1650,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
   };
 
   const addItem = () => {
+    if (lockContent) return;
     const nextId = items.length ? Math.max(...items.map(i => i.id)) + 1 : 1;
     const newItem: QuotationItem = {
       id: nextId,
@@ -1484,6 +1666,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
   };
 
   const addItemAndFocus = () => {
+    if (lockContent) return;
     setItems(prev => {
       const nextId = prev.length ? Math.max(...prev.map(i => i.id)) + 1 : 1;
       const newItem: QuotationItem = {
@@ -1502,6 +1685,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
   };
 
   const removeItem = (index: number) => {
+    if (lockContent) return;
     if (items.length > 1) {
       setItems(items.filter((_, i) => i !== index));
     }
@@ -1529,14 +1713,27 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
 
   const selectedCustomer = customers.find(customer => customer.name === formData.customerName);
   const quoteNumber = quotation?.quotationNumber || nextQuotationNumber;
+  const metaCustomerName = selectedCustomer?.name || formData.customerName || '-';
+  /** 메타 박스 전 행 동일 칸 비율 — 고객명이 길수록 왼쪽 칸 확대 */
+  const metaGridColumns = (() => {
+    const len = String(metaCustomerName).trim().length;
+    if (len <= 14) return 'minmax(0, 1fr) minmax(0, 1fr)';
+    if (len <= 22) return 'minmax(0, 1.2fr) minmax(0, 0.9fr)';
+    if (len <= 32) return 'minmax(0, 1.4fr) minmax(0, 0.8fr)';
+    if (len <= 44) return 'minmax(0, 1.6fr) minmax(0, 0.7fr)';
+    return 'minmax(0, 1.75fr) minmax(0, 0.65fr)';
+  })();
 
-  /** 승인·발송 완료 견적은 고객에게 제출하므로 승인자(내부) 필드 미표시 */
+  /** 승인·발송 보기 모드에서는 승인자 숨김. 수정 모드에서는 재선택 가능 */
   const hideApproverForCustomerView =
-    !!quotation && readOnly && ['approved', 'sent'].includes(quotation.status);
+    !!quotation &&
+    lockCustomer &&
+    lockContent &&
+    ['approved', 'sent'].includes(quotation.status);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (readOnly) return;
+    if (lockContent) return;
     if (formData.approverUserId === '') {
       setApproverSubmitAttempted(true);
       onValidationMessage?.(t('quotationManagement.selectApprover'));
@@ -1589,6 +1786,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
   const { subtotal, totalAmount, cgstRate, sgstRate, igstRate } = calculateTotals();
 
   const handleCustomerSelect = (name: string) => {
+    if (lockCustomer) return;
     const selected = customers.find(customer => customer.name === name);
     if (!selected) {
       setFormData(prev => ({
@@ -1616,7 +1814,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
       >
       <Box
         component="fieldset"
-        disabled={readOnly}
+        disabled={lockCustomer && lockContent}
         sx={{
           border: '1px solid #cfcfcf',
           borderRadius: 2,
@@ -1626,8 +1824,19 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
           minWidth: 0
         }}
       >
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, mb: 3 }}>
-          <Box sx={{ minWidth: 220 }}>
+        <Box
+          sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch', gap: 3, mb: 3 }}
+          className="quotation-pdf-header"
+        >
+          <Box
+            sx={{
+              minWidth: 220,
+              flex: '1 1 auto',
+              '& .MuiTypography-caption': { fontSize: '0.825rem', lineHeight: 1.4 },
+              '& .MuiTypography-subtitle2': { fontSize: '1.0125rem', lineHeight: 1.35 }
+            }}
+            className="quotation-pdf-company"
+          >
             {issuingCompany?.company_logo ? (
               <AuthMedia
                 src={issuingCompany.company_logo}
@@ -1642,12 +1851,20 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                   mb: 1 }}
               />
             ) : null}
-            <Typography variant="caption" color="text.secondary">Company Name</Typography>
+            <Typography variant="caption" color="text.secondary" className="quotation-pdf-hide">
+              Company name
+            </Typography>
             <Typography variant="subtitle2" sx={{ mt: 0.5, mb: 1 }}>
               {issuingCompany?.name || '-'}
             </Typography>
-            <Typography variant="caption" color="text.secondary" display="block">
-              {issuingCompany?.address || '-'}
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              display="block"
+              className="quotation-pdf-company-address"
+              sx={{ whiteSpace: 'pre-line', maxWidth: 360 }}
+            >
+              {formatAddressTwoLines(issuingCompany?.address || '-')}
             </Typography>
             <Typography variant="caption" color="text.secondary" display="block">
               Phone: {issuingCompany?.phone || '-'}
@@ -1655,31 +1872,79 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
             <Typography variant="caption" color="text.secondary" display="block">
               E-mail: {issuingCompany?.email || '-'}
             </Typography>
+            {issuingCompany?.gst_numbers && issuingCompany.gst_numbers.length > 0 ? (
+              <Typography variant="caption" color="text.secondary" display="block">
+                GST: {issuingCompany.gst_numbers.join(', ')}
+              </Typography>
+            ) : null}
           </Box>
-          <Box sx={{ textAlign: 'right' }}>
-            <Typography sx={{ letterSpacing: 1, fontWeight: 700, fontSize: '22px' }}>QUOTATION</Typography>
-            <Box sx={{ mt: 1, border: '1px solid #cfcfcf', borderRadius: 1, overflow: 'hidden', minWidth: 220 }}>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', bgcolor: '#f5f5f5' }}>
-                <Box sx={{ p: 1, borderRight: '1px solid #cfcfcf' }}><Typography variant="caption">QUOTE #</Typography></Box>
-                <Box sx={{ p: 1 }}><Typography variant="caption">DATE</Typography></Box>
+          <Box
+            className="quotation-pdf-header-right"
+            sx={{
+              textAlign: 'right',
+              flex: '0 0 auto',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'stretch',
+              alignSelf: 'stretch',
+              minHeight: '100%'
+            }}
+          >
+            <Typography className="quotation-pdf-title" sx={{ letterSpacing: 0.3, fontWeight: 700, fontSize: '22px' }}>
+              Quotation
+            </Typography>
+            <Box
+              className="quotation-pdf-meta"
+              sx={{
+                mt: 1,
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                border: '1px solid #cfcfcf',
+                borderRadius: 0,
+                overflow: 'hidden',
+                minWidth: 340,
+                textAlign: 'center',
+                // 행마다 독립 grid여도 동일 비율 + minmax(0)로 세로 구분선 정렬
+                '--quotation-meta-cols': metaGridColumns,
+                '& > .MuiBox-root': {
+                  display: 'grid',
+                  gridTemplateColumns: 'var(--quotation-meta-cols)',
+                  minWidth: 0,
+                },
+                '& > .MuiBox-root > .MuiBox-root': {
+                  minWidth: 0,
+                },
+                '& .MuiTypography-root': { textAlign: 'center', width: '100%' },
+                '& .MuiTypography-body2': {
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  fontSize: '0.8125rem'
+                }
+              }}
+            >
+              <Box sx={{ bgcolor: '#f5f5f5' }}>
+                <Box sx={{ p: 1, borderRight: '1px solid #cfcfcf' }}><Typography variant="caption">Quote #</Typography></Box>
+                <Box sx={{ p: 1 }}><Typography variant="caption">Date</Typography></Box>
               </Box>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: '1px solid #cfcfcf' }}>
-                <Box sx={{ p: 1, borderRight: '1px solid #cfcfcf' }}>
+              <Box sx={{ borderTop: '1px solid #cfcfcf', flex: 1 }}>
+                <Box sx={{ p: 1, borderRight: '1px solid #cfcfcf', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Typography variant="body2">{quoteNumber}</Typography>
                 </Box>
-                <Box sx={{ p: 1 }}>
+                <Box sx={{ p: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Typography variant="body2">{new Date().toISOString().split('T')[0]}</Typography>
                 </Box>
               </Box>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: '1px solid #cfcfcf', bgcolor: '#f5f5f5' }}>
-                <Box sx={{ p: 1, borderRight: '1px solid #cfcfcf' }}><Typography variant="caption">CUSTOMER</Typography></Box>
-                <Box sx={{ p: 1 }}><Typography variant="caption">VALID UNTIL</Typography></Box>
+              <Box sx={{ borderTop: '1px solid #cfcfcf', bgcolor: '#f5f5f5' }}>
+                <Box sx={{ p: 1, borderRight: '1px solid #cfcfcf' }}><Typography variant="caption">Customer</Typography></Box>
+                <Box sx={{ p: 1 }}><Typography variant="caption">Valid until</Typography></Box>
               </Box>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: '1px solid #cfcfcf' }}>
-                <Box sx={{ p: 1, borderRight: '1px solid #cfcfcf' }}>
-                  <Typography variant="body2">{selectedCustomer?.name || '-'}</Typography>
+              <Box sx={{ borderTop: '1px solid #cfcfcf', flex: 1 }}>
+                <Box sx={{ p: 1, borderRight: '1px solid #cfcfcf', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Typography variant="body2">{metaCustomerName}</Typography>
                 </Box>
-                <Box sx={{ p: 1 }}>
+                <Box sx={{ p: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Typography variant="body2">{formData.validUntil || '-'}</Typography>
                 </Box>
               </Box>
@@ -1687,16 +1952,30 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
           </Box>
         </Box>
 
-        <Box sx={{ border: '1px solid #cfcfcf', borderRadius: 1, mb: 3 }}>
-          <Box sx={{ bgcolor: '#f0f0f0', px: 2, py: 1 }}>
-            <Typography variant="subtitle2">CUSTOMER INFO</Typography>
+        <Box className="quotation-pdf-section quotation-pdf-section-customer" sx={mvsBodySectionPanelSx}>
+          <Box sx={mvsBodySectionPanelTitleSx} className="quotation-pdf-section-title">
+            <Typography variant="subtitle2">Customer info</Typography>
           </Box>
-          <Box sx={{ p: 2, display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' }, gap: 2 }}>
+          <Box
+            sx={{
+              px: 1.5,
+              py: 1,
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+              columnGap: 1.5,
+              rowGap: 0.75,
+              alignItems: 'start',
+              '& .MuiFormHelperText-root': { mt: 0.25, mb: 0, lineHeight: 1.3 },
+              '& .MuiTypography-caption': { display: 'block', mb: 0.25, lineHeight: 1.2 }
+            }}
+            className="quotation-pdf-section-body"
+          >
             <Box>
               <Typography variant="caption" color="text.secondary">Name *</Typography>
-              <FormControl fullWidth size="small">
+              <FormControl fullWidth size="small" disabled={lockCustomer}>
                 <Select
                   displayEmpty
+                  disabled={lockCustomer}
                   value={formData.customerName}
                   onChange={(e) => handleCustomerSelect(e.target.value)}
                   renderValue={(selected) => selected || '고객 회사 선택'}
@@ -1718,11 +1997,12 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                 fullWidth
                 size="small"
                 type="email"
+                disabled={lockCustomer}
                 inputProps={{ multiple: true }}
                 value={formData.customerEmail}
                 onChange={(e) => setFormData({ ...formData, customerEmail: e.target.value })}
                 required
-                helperText={t('quotationManagement.customerEmailMultipleHint')}
+                helperText={lockCustomer ? undefined : t('quotationManagement.customerEmailMultipleHint')}
               />
             </Box>
             <Box>
@@ -1730,6 +2010,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
               <TextField
                 fullWidth
                 size="small"
+                disabled={lockCustomer}
                 value={formData.customerPhone}
                 onChange={(e) => setFormData({ ...formData, customerPhone: e.target.value })}
               />
@@ -1740,27 +2021,30 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                 fullWidth
                 size="small"
                 type="date"
+                disabled={lockContent}
                 value={formData.validUntil}
                 onChange={(e) => setFormData({ ...formData, validUntil: e.target.value })}
                 required
               />
             </Box>
-            <Box sx={{ gridColumn: { xs: '1', md: '1 / -1' } }}>
+            <Box sx={{ gridColumn: { xs: '1', md: hideApproverForCustomerView ? '1 / -1' : 'auto' } }}>
               <Typography variant="caption" color="text.secondary">Address</Typography>
               <TextField
                 fullWidth
                 size="small"
+                disabled={lockCustomer}
                 value={formData.customerAddress}
                 onChange={(e) => setFormData({ ...formData, customerAddress: e.target.value })}
               />
             </Box>
             {!hideApproverForCustomerView && (
-              <Box sx={{ gridColumn: { xs: '1', md: '1 / -1' } }}>
+              <Box className="quotation-pdf-hide">
                 <Typography variant="caption" color="text.secondary">{t('quotationManagement.approver')} *</Typography>
                 <Autocomplete
                   options={companyUsers}
                   size="small"
                   fullWidth
+                  disabled={lockContent}
                   autoHighlight
                   clearOnBlur={false}
                   isOptionEqualToValue={(option, value) => option.id === value.id}
@@ -1782,6 +2066,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                       : companyUsers.find((u) => u.id === formData.approverUserId) || null
                   }
                   onChange={(_event, newValue) => {
+                    if (lockContent) return;
                     setApproverSubmitAttempted(false);
                     setFormData({
                       ...formData,
@@ -1805,6 +2090,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                     <TextField
                       {...params}
                       required
+                      disabled={lockContent}
                       placeholder={t('quotationManagement.selectApprover')}
                       error={approverSubmitAttempted && formData.approverUserId === ''}
                     />
@@ -1816,7 +2102,18 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
           </Box>
         </Box>
 
-        {readOnly && quotation?.status === 'rejected' && !!quotation.rejectionReason?.trim() && (
+        {lockCustomer && lockContent && ['approved', 'sent'].includes(quotation?.status || '') && (
+          <Alert severity="info" className="quotation-pdf-hide" sx={{ mb: 2 }}>
+            {t('quotationManagement.editLocked')}
+          </Alert>
+        )}
+        {isPartialContentEdit && (
+          <Alert severity="info" className="quotation-pdf-hide" sx={{ mb: 2 }}>
+            {t('quotationManagement.partialEditHint')}
+          </Alert>
+        )}
+
+        {lockCustomer && lockContent && quotation?.status === 'rejected' && !!quotation.rejectionReason?.trim() && (
           <Alert severity="warning" sx={{ mb: 2 }}>
             <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
               {t('quotationManagement.rejectionReason')}
@@ -1827,28 +2124,34 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
           </Alert>
         )}
 
-        <Box sx={{ border: '1px solid #cfcfcf', borderRadius: 1, mb: 3 }}>
-          <Box sx={{ bgcolor: '#f0f0f0', px: 2, py: 1 }}>
-            <Typography variant="subtitle2">DESCRIPTION OF WORK</Typography>
+        <Box className="quotation-pdf-section quotation-pdf-section-notes" sx={mvsBodySectionPanelSx}>
+          <Box sx={mvsBodySectionPanelTitleSx} className="quotation-pdf-section-title">
+            <Typography variant="subtitle2">Description of work</Typography>
           </Box>
-          <Box sx={{ p: 2 }}>
+          <Box sx={{ p: 1.5 }} className="quotation-pdf-section-body quotation-pdf-notes-body">
             <TextField
               fullWidth
               multiline
-              rows={4}
+              rows={3}
+              disabled={lockContent}
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              sx={{ '& textarea': { resize: 'vertical' } }}
+              sx={{ '& textarea': { resize: lockContent ? 'none' : 'vertical' } }}
             />
           </Box>
         </Box>
 
-        <Box sx={{ border: '1px solid #cfcfcf', borderRadius: 1, mb: 3 }}>
-          <Box sx={{ bgcolor: '#f0f0f0', px: 2, py: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="subtitle2">ITEMIZED COSTS</Typography>
-            <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={addItem}>
-              상품 추가
-            </Button>
+        <Box className="quotation-pdf-section" sx={mvsBodySectionPanelSx}>
+          <Box
+            sx={{ ...mvsBodySectionPanelTitleSx, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+            className="quotation-pdf-section-title quotation-pdf-hide"
+          >
+            <Typography variant="subtitle2">Itemized costs</Typography>
+            {!lockContent && (
+              <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={addItem}>
+                상품 추가
+              </Button>
+            )}
           </Box>
           <Box sx={{ overflow: 'auto', width: '100%' }}>
           <Table
@@ -1880,19 +2183,21 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
               }}
             >
               <TableRow>
-                <TableCell sx={{ width: '60%' }}>DESCRIPTION</TableCell>
+                <TableCell sx={{ width: '60%' }}>Description</TableCell>
                 <TableCell align="right" sx={{ width: '13%' }}>
-                  QTY
+                  Qty
                 </TableCell>
                 <TableCell align="right" sx={{ width: '13%' }}>
-                  UNIT PRICE
+                  Unit price
                 </TableCell>
                 <TableCell align="right" sx={{ width: '10%' }}>
-                  AMOUNT
+                  Amount
                 </TableCell>
-                <TableCell align="center" sx={{ width: '4%', minWidth: 44 }}>
-                  -
-                </TableCell>
+                {!lockContent && (
+                  <TableCell align="center" sx={{ width: '4%', minWidth: 44 }}>
+                    -
+                  </TableCell>
+                )}
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1911,10 +2216,12 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                       size="small"
                       multiline
                       minRows={1}
+                      disabled={lockContent}
                       placeholder="품목 및 설명"
                       value={[item.productName, item.description].filter((s) => String(s).trim()).join('\n')}
                       onChange={(e) => handleItemDescriptionCombinedChange(index, e.target.value)}
                       onKeyDown={(e) => {
+                        if (lockContent) return;
                         if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                           e.preventDefault();
                           addItemAndFocus();
@@ -1932,9 +2239,11 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                       fullWidth
                       size="small"
                       type="number"
+                      disabled={lockContent}
                       value={item.quantity}
                       onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value) || 0)}
                       onKeyDown={(e) => {
+                        if (lockContent) return;
                         if (e.key === 'Enter') {
                           e.preventDefault();
                           addItemAndFocus();
@@ -1949,9 +2258,11 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                       fullWidth
                       size="small"
                       type="number"
+                      disabled={lockContent}
                       value={item.unitPrice}
                       onChange={(e) => handleItemChange(index, 'unitPrice', parseInt(e.target.value) || 0)}
                       onKeyDown={(e) => {
+                        if (lockContent) return;
                         if (e.key === 'Enter') {
                           e.preventDefault();
                           addItemAndFocus();
@@ -1966,13 +2277,15 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                       Rs. {item.finalPrice.toLocaleString()}
                     </Typography>
                   </TableCell>
-                  <TableCell align="center" sx={{ width: '4%', minWidth: 44, verticalAlign: 'middle' }}>
-                    {items.length > 1 && (
-                      <IconButton onClick={() => removeItem(index)} color="error" size="small">
-                        <DeleteIcon />
-                      </IconButton>
-                    )}
-                  </TableCell>
+                  {!lockContent && (
+                    <TableCell align="center" sx={{ width: '4%', minWidth: 44, verticalAlign: 'middle' }}>
+                      {items.length > 1 && (
+                        <IconButton onClick={() => removeItem(index)} color="error" size="small">
+                          <DeleteIcon />
+                        </IconButton>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -1980,14 +2293,19 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
           </Box>
         </Box>
 
-        <Box sx={{ border: '1px solid #cfcfcf', borderRadius: 1, p: 2, mb: 2 }}>
+        <Box
+          className="quotation-pdf-hide"
+          sx={{ ...mvsBodySectionPanelSx, p: 2 }}
+        >
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(5, 1fr)' }, gap: 2 }}>
             <Box>
-              <Typography variant="caption" color="text.secondary">TAX TYPE</Typography>
-              <FormControl fullWidth size="small" sx={{ mt: 0.5 }}>
+              <Typography variant="caption" color="text.secondary">Tax type</Typography>
+              <FormControl fullWidth size="small" sx={{ mt: 0.5 }} disabled={lockTax}>
                 <Select
+                  disabled={lockTax}
                   value={formData.taxType}
                   onChange={(e) => {
+                    if (lockTax) return;
                     const nextType = e.target.value;
                     if (nextType === 'igst') {
                       setFormData(prev => ({
@@ -2017,7 +2335,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                 size="small"
                 type="number"
                 value={formData.cgstRate}
-                disabled={formData.taxType === 'igst'}
+                disabled={lockTax || formData.taxType === 'igst'}
                 onChange={(e) => setFormData({
                   ...formData,
                   cgstRate: parseInt(e.target.value) || 0,
@@ -2032,7 +2350,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                 size="small"
                 type="number"
                 value={formData.sgstRate}
-                disabled={formData.taxType === 'igst'}
+                disabled={lockTax || formData.taxType === 'igst'}
                 onChange={(e) => setFormData({
                   ...formData,
                   sgstRate: parseInt(e.target.value) || 0,
@@ -2047,7 +2365,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                 size="small"
                 type="number"
                 value={formData.igstRate}
-                disabled={formData.taxType !== 'igst'}
+                disabled={lockTax || formData.taxType !== 'igst'}
                 onChange={(e) => setFormData({
                   ...formData,
                   igstRate: parseInt(e.target.value) || 0,
@@ -2057,11 +2375,12 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
               />
             </Box>
             <Box>
-              <Typography variant="caption" color="text.secondary">DISCOUNT</Typography>
+              <Typography variant="caption" color="text.secondary">Discount</Typography>
               <TextField
                 fullWidth
                 size="small"
                 type="number"
+                disabled={lockTax}
                 value={formData.discount}
                 onChange={(e) => setFormData({ ...formData, discount: parseInt(e.target.value) || 0 })}
               />
@@ -2069,51 +2388,191 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
           </Box>
         </Box>
 
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-          <Box sx={{ width: 260, border: '1px solid #cfcfcf', borderRadius: 1 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #cfcfcf' }}>
-              <Typography variant="body2">SUBTOTAL</Typography>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 260px',
+            gap: 2,
+            alignItems: 'stretch',
+            mb: 2,
+            width: '100%'
+          }}
+          className="quotation-pdf-totals-wrap"
+        >
+          <Box
+            className="quotation-pdf-bank"
+            sx={{
+              minWidth: 0,
+              height: '100%',
+              boxSizing: 'border-box',
+              border: '1px solid #000',
+              borderRadius: '4px',
+              overflow: 'hidden',
+              px: 1.5,
+              py: 1,
+              visibility:
+                issuingCompany?.bank_name ||
+                issuingCompany?.account_number ||
+                issuingCompany?.ifsc_code ||
+                issuingCompany?.account_holder_name ||
+                issuingCompany?.swift_code
+                  ? 'visible'
+                  : 'hidden'
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ mb: 0.5, fontWeight: 700 }}>
+              Bank details
+            </Typography>
+            {issuingCompany?.account_holder_name ? (
+              <Typography variant="caption" color="text.secondary" display="block">
+                Account holder: {issuingCompany.account_holder_name}
+              </Typography>
+            ) : null}
+            {issuingCompany?.bank_name ? (
+              <Typography variant="caption" color="text.secondary" display="block">
+                Bank name: {issuingCompany.bank_name}
+              </Typography>
+            ) : null}
+            {issuingCompany?.account_number ? (
+              <Typography variant="caption" color="text.secondary" display="block">
+                Account number: {issuingCompany.account_number}
+              </Typography>
+            ) : null}
+            {issuingCompany?.ifsc_code ? (
+              <Typography variant="caption" color="text.secondary" display="block">
+                IFSC: {issuingCompany.ifsc_code}
+              </Typography>
+            ) : null}
+            {issuingCompany?.swift_code ? (
+              <Typography variant="caption" color="text.secondary" display="block">
+                SWIFT: {issuingCompany.swift_code}
+              </Typography>
+            ) : null}
+            {issuingCompany?.bank_address ? (
+              <Typography variant="caption" color="text.secondary" display="block">
+                Bank address: {issuingCompany.bank_address}
+              </Typography>
+            ) : null}
+          </Box>
+          <Box
+            sx={{
+              width: 260,
+              maxWidth: '100%',
+              height: '100%',
+              boxSizing: 'border-box',
+              display: 'flex',
+              flexDirection: 'column',
+              border: '1px solid #000',
+              borderRadius: '4px',
+              overflow: 'hidden',
+              '& .MuiTypography-body2': { fontSize: '0.825rem', lineHeight: 1.35 },
+              '& .MuiTypography-subtitle2': { fontSize: '0.88rem', lineHeight: 1.35, fontWeight: 700 }
+            }}
+            className="quotation-pdf-totals"
+          >
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #e0e0e0' }}>
+              <Typography variant="body2">Subtotal</Typography>
               <Typography variant="body2">Rs. {subtotal.toLocaleString()}</Typography>
             </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #cfcfcf' }}>
-              <Typography variant="body2">CGST ({cgstRate}%)</Typography>
-              <Typography variant="body2">Rs. {(subtotal * (cgstRate / 100)).toLocaleString()}</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #cfcfcf' }}>
-              <Typography variant="body2">SGST ({sgstRate}%)</Typography>
-              <Typography variant="body2">Rs. {(subtotal * (sgstRate / 100)).toLocaleString()}</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #cfcfcf' }}>
-              <Typography variant="body2">IGST ({igstRate}%)</Typography>
-              <Typography variant="body2">Rs. {(subtotal * (igstRate / 100)).toLocaleString()}</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #cfcfcf' }}>
-              <Typography variant="body2">DISCOUNT</Typography>
-              <Typography variant="body2">-Rs. {formData.discount.toLocaleString()}</Typography>
-            </Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1 }}>
-              <Typography variant="subtitle2">TOTAL QUOTE</Typography>
+            {subtotal * (cgstRate / 100) > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #e0e0e0' }}>
+                <Typography variant="body2">CGST ({cgstRate}%)</Typography>
+                <Typography variant="body2">Rs. {(subtotal * (cgstRate / 100)).toLocaleString()}</Typography>
+              </Box>
+            )}
+            {subtotal * (sgstRate / 100) > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #e0e0e0' }}>
+                <Typography variant="body2">SGST ({sgstRate}%)</Typography>
+                <Typography variant="body2">Rs. {(subtotal * (sgstRate / 100)).toLocaleString()}</Typography>
+              </Box>
+            )}
+            {subtotal * (igstRate / 100) > 0 && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #e0e0e0' }}>
+                <Typography variant="body2">IGST ({igstRate}%)</Typography>
+                <Typography variant="body2">Rs. {(subtotal * (igstRate / 100)).toLocaleString()}</Typography>
+              </Box>
+            )}
+            {!!formData.discount && (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #e0e0e0' }}>
+                <Typography variant="body2">Discount</Typography>
+                <Typography variant="body2">-Rs. {formData.discount.toLocaleString()}</Typography>
+              </Box>
+            )}
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                px: 2,
+                py: 1,
+                mt: 'auto',
+                borderTop: '1px solid #000',
+                bgcolor: '#f0f0f0'
+              }}
+            >
+              <Typography variant="subtitle2">Total quote</Typography>
               <Typography variant="subtitle2">Rs. {totalAmount.toLocaleString()}</Typography>
             </Box>
           </Box>
         </Box>
 
-        <Box sx={{ border: '1px solid #cfcfcf', borderRadius: 1, mb: 2 }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', borderBottom: '1px solid #cfcfcf' }}>
-            <Box sx={{ p: 1 }}>
-              <Typography variant="caption" color="text.secondary">Customer Acceptance</Typography>
-            </Box>
-            <Box sx={{ p: 1, borderLeft: '1px solid #cfcfcf' }}>
-              <Typography variant="caption" color="text.secondary">Printed Name</Typography>
-            </Box>
-            <Box sx={{ p: 1, borderLeft: '1px solid #cfcfcf' }}>
-              <Typography variant="caption" color="text.secondary">Date</Typography>
-            </Box>
+        <Box
+          className="quotation-pdf-signature"
+          sx={{
+            mt: 3,
+            pt: 2,
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+            gap: 3,
+            borderTop: '1px solid #e0e0e0'
+          }}
+        >
+          <Box>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ fontWeight: 600 }}>
+              For {issuingCompany?.name || 'Company'}
+            </Typography>
+            {issuingCompany?.ceo_signature ? (
+              <AuthMedia
+                src={issuingCompany.ceo_signature}
+                alt="Authorized signature"
+                className="quotation-pdf-stamp"
+                sx={{
+                  display: 'block',
+                  mt: 1,
+                  mb: 0.5,
+                  width: '3.5cm',
+                  maxWidth: '3.5cm',
+                  height: 'auto',
+                  objectFit: 'contain'
+                }}
+              />
+            ) : (
+              <Box
+                className="quotation-pdf-sign-line"
+                sx={{ mt: 4, mb: 0.5, width: 180, height: 36, borderBottom: '1px solid #999' }}
+              />
+            )}
+            <Typography variant="caption" display="block" color="text.secondary">
+              Authorized signatory
+            </Typography>
           </Box>
-          <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', height: 48 }}>
-            <Box sx={{ borderRight: '1px solid #cfcfcf' }} />
-            <Box sx={{ borderRight: '1px solid #cfcfcf' }} />
-            <Box />
+          <Box sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ fontWeight: 600 }}>
+              Received by
+            </Typography>
+            <Box
+              className="quotation-pdf-sign-line"
+              sx={{
+                mt: 4,
+                mb: 0.5,
+                width: 180,
+                height: 36,
+                borderBottom: '1px solid #999',
+                ml: { xs: 0, sm: 'auto' }
+              }}
+            />
+            <Typography variant="caption" display="block" color="text.secondary">
+              Name & date
+            </Typography>
           </Box>
         </Box>
 
@@ -2122,9 +2581,9 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
         {!hideFooterButtons && (
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 2 }}>
             <Button onClick={onCancel} variant="outlined">
-              {readOnly ? t('common.close') : t('quotationManagement.cancel')}
+              {lockCustomer && lockContent ? t('common.close') : t('quotationManagement.cancel')}
             </Button>
-            {!readOnly && (
+            {!lockContent && (
               <Button type="submit" variant="contained">
                 {t('common.save')}
               </Button>

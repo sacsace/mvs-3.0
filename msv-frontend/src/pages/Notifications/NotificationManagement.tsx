@@ -344,7 +344,7 @@ const NotificationManagement: React.FC = () => {
 
   const renderHistoryTab = () => (
     <Box>
-      <Card elevation={0} sx={{ ...mvsBodyCardSx, overflow: 'visible' }}>
+      <Card elevation={0} sx={mvsBodyCardSx}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 1, p: 2, flexWrap: 'wrap' }}>
         <ToggleButtonGroup
           size="small"

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { PayrollGridRow } from './payroll/payrollGridTypes';
-import type { PayslipCompanyInfo } from './PayslipContent';
+import type { PayslipCompanyInfo, PayslipHeaderLayout } from './PayslipContent';
 import { generatePayslipPdfBlob, payslipBlobToBase64 } from './payrollPayslipPdf';
 import { payrollService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
@@ -27,18 +27,31 @@ import { useStore } from '../../store';
 type Props = {
   open: boolean;
   rows: PayrollGridRow[];
+  /** 급여 확정 직후에는 이메일이 등록된 직원 전체에 즉시 발송 */
+  autoSend?: boolean;
+  headerLayout?: PayslipHeaderLayout;
   onClose: () => void;
   onSent: (message: string) => void;
   onError: (message: string) => void;
 };
 
-const PayrollSendPayslipsDialog: React.FC<Props> = ({ open, rows, onClose, onSent, onError }) => {
+const PayrollSendPayslipsDialog: React.FC<Props> = ({
+  open,
+  rows,
+  autoSend = false,
+  headerLayout = 'standard',
+  onClose,
+  onSent,
+  onError
+}) => {
   const { t } = useTranslation();
   const user = useStore((s) => s.user);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [companyInfo, setCompanyInfo] = useState<PayslipCompanyInfo | null>(null);
+  const [companyInfoLoaded, setCompanyInfoLoaded] = useState(false);
+  const autoSendStarted = useRef(false);
 
   useEffect(() => {
     if (open && rows.length) {
@@ -49,8 +62,10 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({ open, rows, onClose, onSen
   useEffect(() => {
     let mounted = true;
     const loadCompanyInfo = async () => {
+      setCompanyInfoLoaded(false);
       if (!open || !user?.company_id) {
         if (mounted) setCompanyInfo(null);
+        if (mounted) setCompanyInfoLoaded(true);
         return;
       }
       try {
@@ -64,6 +79,8 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({ open, rows, onClose, onSen
         });
       } catch {
         if (mounted) setCompanyInfo(null);
+      } finally {
+        if (mounted) setCompanyInfoLoaded(true);
       }
     };
     void loadCompanyInfo();
@@ -99,8 +116,10 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({ open, rows, onClose, onSen
     }
   }, [rowsWithEmail, selected.size]);
 
-  const handleSend = async () => {
-    const toSend = rowsWithEmail.filter((x) => x.hasEmail && selected.has(x.row.id));
+  const handleSend = useCallback(async (sendAllWithEmail = false) => {
+    const toSend = rowsWithEmail.filter(
+      (x) => x.hasEmail && (sendAllWithEmail || selected.has(x.row.id))
+    );
     if (toSend.length === 0) {
       onError(t('payrollManagement.payslip.sendNoSelection'));
       return;
@@ -115,7 +134,11 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({ open, rows, onClose, onSen
       for (let i = 0; i < toSend.length; i++) {
         const { row } = toSend[i];
         try {
-          const blob = await generatePayslipPdfBlob(row, companyInfo);
+          const blob = await generatePayslipPdfBlob(row, companyInfo, {
+            locale: 'en',
+            headerLayout,
+            companyId: user?.company_id ?? null
+          });
           const b64 = await payslipBlobToBase64(blob);
           const res = await payrollService.sendPayrollPayslip(row.id, b64);
           if (res.success) ok += 1;
@@ -132,7 +155,27 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({ open, rows, onClose, onSen
     } finally {
       setSending(false);
     }
-  };
+  }, [
+    companyInfo,
+    headerLayout,
+    onClose,
+    onError,
+    onSent,
+    rowsWithEmail,
+    selected,
+    t,
+    user?.company_id
+  ]);
+
+  useEffect(() => {
+    if (!open) {
+      autoSendStarted.current = false;
+      return;
+    }
+    if (!autoSend || sending || !companyInfoLoaded || autoSendStarted.current) return;
+    autoSendStarted.current = true;
+    void handleSend(true);
+  }, [autoSend, companyInfoLoaded, handleSend, open, sending]);
 
   return (
     <Dialog open={open} onClose={sending ? undefined : onClose} maxWidth="md" fullWidth>
@@ -195,7 +238,11 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({ open, rows, onClose, onSen
         <Button onClick={onClose} disabled={sending}>
           {t('common.cancel')}
         </Button>
-        <Button variant="contained" onClick={handleSend} disabled={sending || rows.length === 0}>
+        <Button
+          variant="contained"
+          onClick={() => void handleSend(false)}
+          disabled={sending || rows.length === 0}
+        >
           {t('payrollManagement.payslip.sendAction')}
         </Button>
       </DialogActions>

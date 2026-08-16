@@ -279,7 +279,7 @@ function getAccordionFormSx(_theme: Theme) {
     borderRadius: '8px',
     mb: 2,
     bgcolor: '#FFFFFF',
-    overflow: 'visible' as const,
+    overflow: 'hidden' as const,
     '&:last-of-type': { mb: 0 },
     '& .MuiAccordionSummary-root': {
       minHeight: 44,
@@ -496,7 +496,7 @@ const UserManagement: React.FC = () => {
     position_id: '' as number | '',
     employment_type: 'fulltime',
     salary: '',
-    ot_eligible: true,
+    ot_eligible: false,
     bank_name: '',
     bank_account: '',
     bank_ifsc: '',
@@ -783,7 +783,7 @@ const UserManagement: React.FC = () => {
       position_id: '' as number | '',
       employment_type: 'fulltime',
       salary: '',
-      ot_eligible: true,
+      ot_eligible: false,
       bank_name: '',
       bank_account: '',
       bank_ifsc: '',
@@ -867,7 +867,7 @@ const UserManagement: React.FC = () => {
       position_id: '' as number | '',
       employment_type: 'fulltime',
       salary: '',
-      ot_eligible: true,
+      ot_eligible: false,
       bank_name: '',
       bank_account: '',
       bank_ifsc: '',
@@ -2237,7 +2237,8 @@ const UserManagement: React.FC = () => {
               sx={{
                 ...mvsBodyListTableSx,
                 p: { xs: 2, sm: 2.5 },
-                overflow: 'visible',
+                overflow: 'hidden',
+                overflowX: 'auto',
               }}
             >
               <form onSubmit={handleSubmit}>

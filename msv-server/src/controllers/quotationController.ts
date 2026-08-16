@@ -525,12 +525,79 @@ export const updateQuotation = async (req: RequestWithUser, res: Response) => {
       });
     }
 
-    /** 승인(accepted)·발송·반려·만료·취소 등 확정된 견적은 수정 불가 */
-    const nonEditableStatuses = ['accepted', 'sent', 'rejected', 'expired', 'cancelled'];
-    if (nonEditableStatuses.includes(String(quotation.status))) {
+    /** 반려·만료·취소는 수정 불가. 승인·발송은 설명/만료일/품목만 제한 수정 */
+    const currentStatus = String(quotation.status);
+    const fullyLocked = ['rejected', 'expired', 'cancelled'].includes(currentStatus);
+    const partialEditable = currentStatus === 'accepted' || currentStatus === 'sent';
+
+    if (fullyLocked) {
       return res.status(400).json({
         success: false,
-        message: '승인·발송·반려된 견적서는 수정할 수 없습니다.'
+        message: '반려·만료된 견적서는 수정할 수 없습니다.'
+      });
+    }
+
+    if (partialEditable) {
+      const itemsPayload =
+        items !== undefined ? (Array.isArray(items) ? items : quotation.items) : quotation.items;
+      const lineErr = validateQuotationLineItems(itemsPayload);
+      if (lineErr) {
+        return res.status(400).json({ success: false, message: lineErr });
+      }
+
+      // 고객(받는 회사) 정보는 유지 — 요청 값 무시. 수정 시 재승인 필요
+      let nextApproverId = quotation.approver_user_id;
+      if (approver_user_id !== undefined && approver_user_id !== null) {
+        const ok = await assertUserInCompany(Number(approver_user_id), tenantId, companyId);
+        if (!ok) {
+          return res.status(400).json({
+            success: false,
+            message: '승인자를 찾을 수 없거나 같은 회사 소속이 아닙니다.'
+          });
+        }
+        nextApproverId = Number(approver_user_id);
+      }
+
+      await quotation.update({
+        items: itemsPayload,
+        subtotal: subtotal !== undefined ? subtotal : quotation.subtotal,
+        tax_rate: tax_rate !== undefined ? tax_rate : quotation.tax_rate,
+        tax_amount: tax_amount !== undefined ? tax_amount : quotation.tax_amount,
+        discount: discount !== undefined ? discount : quotation.discount,
+        total_amount: total_amount !== undefined ? total_amount : quotation.total_amount,
+        valid_until: valid_until !== undefined ? valid_until : quotation.valid_until,
+        notes: notes !== undefined ? notes : quotation.notes,
+        approver_user_id: nextApproverId,
+        status: 'pending_approval',
+        rejection_reason: null
+      });
+
+      const quotationWithRelations = await (Quotation as any).findByPk(quotation.id, {
+        include: [
+          {
+            model: Customer,
+            as: 'customer',
+            attributes: ['id', 'name', 'email', 'phone'],
+            required: false
+          },
+          {
+            model: User,
+            as: 'creator',
+            attributes: ['id', 'username', 'email'],
+            required: false
+          },
+          {
+            model: User,
+            as: 'approver',
+            attributes: ['id', 'username', 'email'],
+            required: false
+          }
+        ]
+      });
+
+      return res.json({
+        success: true,
+        data: quotationWithRelations
       });
     }
 
@@ -618,6 +685,7 @@ export const updateQuotation = async (req: RequestWithUser, res: Response) => {
       success: true, 
       data: quotationWithRelations 
     });
+    return;
   } catch (error: any) {
     console.error('견적서 수정 오류:', error);
     res.status(500).json({ 

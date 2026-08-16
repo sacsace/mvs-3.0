@@ -27,6 +27,52 @@ import {
 } from '../services/indianStatutoryPayroll';
 import { resolveCompanyRegisteredStateCode } from '../utils/indianProfessionalTax';
 
+const MONTH_NAMES_EN = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December'
+] as const;
+
+/** 「급여 명세서 발송」페이지 기본 메일과 동일 (영문 전용) */
+const DEFAULT_PAYSLIP_MAIL_SUBJECT = '[{{company}}] {{month}} Payslip Attached ({{name}})';
+const DEFAULT_PAYSLIP_MAIL_BODY =
+  'Dear {{name}},\n\nI hope you are doing well.\n\nPlease find attached your payslip for {{month}} {{year}} for your reference.\nKindly review it at your convenience, and please feel free to contact us if you have any questions or require further clarification.\nThank you for your continued dedication and contribution to the company.\nBest regards,\n{{company}}';
+
+function shortCompanyNameForMail(name?: string | null): string {
+  return String(name || '')
+    .replace(/\bprivate\s+limited\b\.?/gi, '')
+    .replace(/\bpvt\.?\s*ltd\.?\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[,\s]+$/g, '')
+    .trim();
+}
+
+function fillPayslipMailTemplate(
+  template: string,
+  vars: { name: string; company: string; period: string }
+): string {
+  const period = String(vars.period || '').trim();
+  const ym = period.match(/^(20\d{2})-(\d{1,2})$/);
+  const year = ym ? ym[1] : period.match(/^(20\d{2})/)?.[1] || '';
+  const monthLabel = ym
+    ? MONTH_NAMES_EN[Math.max(0, Number(ym[2]) - 1)] || period
+    : period;
+  return template
+    .replace(/\{\{name\}\}/g, vars.name || '')
+    .replace(/\{\{month\}\}/g, monthLabel)
+    .replace(/\{\{year\}\}/g, year)
+    .replace(/\{\{company\}\}/g, vars.company || '');
+}
+
 const PAYROLL_MUTABLE_FIELDS = [
   'employee_id',
   'payroll_period',
@@ -247,7 +293,8 @@ export const createPayroll = async (req: RequestWithUser, res: Response) => {
 };
 
 /** 현재 로그인 회사의 활성 사용자 기준으로 급여 행 일괄 생성.
- *  동일 급여월에 활성 급여가 이미 있으면 거절(재생성 불가). 확정(잠금)된 월은 root 포함 일괄 생성 불가.
+ *  확정(잠금)된 월은 root 포함 일괄 생성 불가.
+ *  미확정 월에 활성 급여가 있으면 soft-delete(is_active=false) 후 재생성.
  *  전자근로계약(해당 월 유효·서명/활성)의 기본급·상여 유형을 우선 반영하고, 근태(해당 월)로 근무일·연장시간을 채웁니다. */
 export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) => {
   try {
@@ -282,195 +329,205 @@ export const bulkGeneratePayrolls = async (req: RequestWithUser, res: Response) 
       });
     }
 
-    const existingActive = await (Payroll as any).count({
-      where: {
-        tenant_id,
-        company_id,
-        is_active: true,
-        ...sameMonthPayrollPeriodWhere(payroll_period)
-      }
-    });
-    if (existingActive > 0) {
-      return res.status(409).json({
-        success: false,
-        message: '이미 해당 급여 월에 생성된 급여가 있습니다. 동일 월로 일괄 생성을 다시 실행할 수 없습니다.'
-      });
-    }
-
-    const employees = await (User as any).findAll({
-      where: { tenant_id, company_id, status: 'active' },
-      attributes: [
-        'id',
-        'username',
-        'department',
-        'position',
-        'birth_date',
-        'hire_date',
-        'salary',
-        'bank_name',
-        'bank_account',
-        'bank_ifsc',
-        'employment_type',
-        'ot_eligible'
-      ]
-    });
-
-    let created = 0;
-    const registeredStateCode = await resolveCompanyRegisteredStateCode(company_id, {
-      Company,
-      CompanyGstNumber
-    });
-
-    for (const emp of employees) {
-      const contract = await findEffectiveEmploymentContract(tenant_id, company_id, emp.id, bounds);
-      const profileSalary = parseFloat(String(emp.salary ?? 0)) || 0;
-      const contractSalary =
-        contract && contract.salary != null ? parseFloat(String(contract.salary)) || 0 : 0;
-      const useContractSalary = contract && contractSalary > 0;
-      const basic_salary = useContractSalary ? contractSalary : profileSalary;
-
-      const isDaily = String((emp as any).employment_type || '').toLowerCase() === 'daily';
-
-      /** 일용직: 급여 필드는 일당. 상여·연장 산정용 월 환산 = 일당 × 해당월 일수 */
-      const monthlyEquivForDaily = basic_salary * bounds.daysInMonth;
-
-      const att = await aggregateAttendanceForPeriod(tenant_id, company_id, emp.id, bounds);
-      const rawOtEligible = (emp as any).ot_eligible ?? (emp as any).get?.('ot_eligible');
-      const otEligible = !(
-        rawOtEligible === false ||
-        rawOtEligible === 0 ||
-        rawOtEligible === '0' ||
-        rawOtEligible === 'false'
+    // 미확정 월 재생성: 기존 활성 급여는 soft-delete 후 새로 생성
+    const { created, deactivatedCount } = await sequelize.transaction(async (transaction) => {
+      const [deactivated] = await (Payroll as any).update(
+        { is_active: false },
+        {
+          where: {
+            tenant_id,
+            company_id,
+            is_active: true,
+            ...sameMonthPayrollPeriodWhere(payroll_period)
+          },
+          transaction
+        }
       );
-      const dayOtHours = otEligible ? att.dayOtHours : 0;
-      const nightOtHours = otEligible ? att.nightOtHours : 0;
-      const overtimeHoursForPay = otEligible ? att.overtimeHours : 0;
 
-      const bonus =
-        isDaily && att.recordCount === 0
-          ? 0
-          : computeBonusFromContract(
-              isDaily ? monthlyEquivForDaily : basic_salary,
-              contract && typeof (contract as any).toJSON === 'function'
-                ? (contract as any).toJSON()
-                : contract
+      const employees = await (User as any).findAll({
+        where: { tenant_id, company_id, status: 'active' },
+        attributes: [
+          'id',
+          'username',
+          'department',
+          'position',
+          'birth_date',
+          'hire_date',
+          'salary',
+          'bank_name',
+          'bank_account',
+          'bank_ifsc',
+          'employment_type',
+          'ot_eligible'
+        ],
+        transaction
+      });
+
+      let createdCount = 0;
+      const registeredStateCode = await resolveCompanyRegisteredStateCode(company_id, {
+        Company,
+        CompanyGstNumber
+      });
+
+      for (const emp of employees) {
+        const contract = await findEffectiveEmploymentContract(tenant_id, company_id, emp.id, bounds);
+        const profileSalary = parseFloat(String(emp.salary ?? 0)) || 0;
+        const contractSalary =
+          contract && contract.salary != null ? parseFloat(String(contract.salary)) || 0 : 0;
+        const useContractSalary = contract && contractSalary > 0;
+        const basic_salary = useContractSalary ? contractSalary : profileSalary;
+
+        const isDaily = String((emp as any).employment_type || '').toLowerCase() === 'daily';
+
+        /** 일용직: 급여 필드는 일당. 상여·연장 산정용 월 환산 = 일당 × 해당월 일수 */
+        const monthlyEquivForDaily = basic_salary * bounds.daysInMonth;
+
+        const att = await aggregateAttendanceForPeriod(tenant_id, company_id, emp.id, bounds);
+        const rawOtEligible = (emp as any).ot_eligible ?? (emp as any).get?.('ot_eligible');
+        const otEligible = !(
+          rawOtEligible === false ||
+          rawOtEligible === 0 ||
+          rawOtEligible === '0' ||
+          rawOtEligible === 'false'
+        );
+        const dayOtHours = otEligible ? att.dayOtHours : 0;
+        const nightOtHours = otEligible ? att.nightOtHours : 0;
+        const overtimeHoursForPay = otEligible ? att.overtimeHours : 0;
+
+        const bonus =
+          isDaily && att.recordCount === 0
+            ? 0
+            : computeBonusFromContract(
+                isDaily ? monthlyEquivForDaily : basic_salary,
+                contract && typeof (contract as any).toJSON === 'function'
+                  ? (contract as any).toJSON()
+                  : contract
+              );
+        const overtime_pay = computeOvertimePay(
+          isDaily ? monthlyEquivForDaily : basic_salary,
+          overtimeHoursForPay
+        );
+
+        const pr = isDaily
+          ? computeDailyWorkerSumTotal(
+              basic_salary,
+              overtime_pay,
+              bonus,
+              bounds.daysInMonth,
+              att.daysWorked,
+              att.recordCount
+            )
+          : computeProratedSumTotal(
+              basic_salary,
+              overtime_pay,
+              bonus,
+              bounds.daysInMonth,
+              att.daysWorked,
+              att.recordCount
             );
-      const overtime_pay = computeOvertimePay(
-        isDaily ? monthlyEquivForDaily : basic_salary,
-        overtimeHoursForPay
-      );
+        const gross_salary = pr.sumTotal;
 
-      const pr = isDaily
-        ? computeDailyWorkerSumTotal(
+        const bodyOpts = (req.body || {}) as Record<string, unknown>;
+        const statutoryApplicable = bodyOpts.statutory_india !== false;
+        const pfCapAt1800 = bodyOpts.pf_cap_1800 !== false;
+        const estimateTds = bodyOpts.estimate_tds !== false;
+        const pfMode: PfMode =
+          bodyOpts.pf_mode === 'gross_6pct'
+            ? 'gross_6pct'
+            : bodyOpts.pf_mode === 'epf_12pct_half'
+              ? 'epf_12pct_half'
+              : 'basic_12pct';
+
+        const stat = computeIndianStatutoryPayroll(gross_salary, {
+          statutoryApplicable,
+          pfMode,
+          pfCapAt1800,
+          estimateTds,
+          basicSalary: isDaily ? monthlyEquivForDaily : basic_salary,
+          registeredStateCode,
+          payrollMonth: payroll_period
+        });
+        const statExtra = breakdownToExtraFields(stat);
+
+        const birth = emp.birth_date ? String(emp.birth_date).split('T')[0] : '';
+        const hire = emp.hire_date ? String(emp.hire_date).split('T')[0] : '';
+
+        const bankAccount = emp.bank_account != null ? String(emp.bank_account).trim() : '';
+        const bankIfsc = emp.bank_ifsc != null ? String(emp.bank_ifsc).trim() : '';
+        const bankName = emp.bank_name != null ? String(emp.bank_name).trim() : '';
+
+        const extra_fields = {
+          bank_account: bankAccount,
+          ifsc: bankIfsc,
+          bank_name: bankName,
+          department: emp.department || '',
+          employee_name: emp.username || '',
+          position: emp.position || '',
+          birth_date: birth,
+          joining_date: hire,
+          working_month: payroll_period,
+          total_day_of_month: String(bounds.daysInMonth),
+          unpaid_leave: String(
+            isDaily && att.recordCount === 0 ? bounds.daysInMonth : att.absentDays
+          ),
+          days_worked: String(pr.effectiveDaysWorked),
+          prorated_basic: String(pr.proratedBasic),
+          ...statExtra,
+          account_cash: '',
+          salary_source: isDaily
+            ? 'daily_wage'
+            : useContractSalary
+              ? 'employment_contract'
+              : 'user_profile',
+          employment_type: String((emp as any).employment_type || ''),
+          employment_contract_id: contract ? contract.id : null,
+          working_days_contract: contract?.working_days ?? '',
+          attendance_records: String(att.recordCount),
+          attendance_overtime_hours: String(overtimeHoursForPay),
+          attendance_day_ot_hours: String(dayOtHours),
+          attendance_night_ot_hours: String(nightOtHours),
+          attendance_holiday_work_hours: String(att.holidayWorkHours),
+          day_ot_hour: String(dayOtHours),
+          night_ot_hour: String(nightOtHours),
+          ot_eligible: String(otEligible),
+          indian_pf_mode: statutoryApplicable ? pfMode : '',
+          indian_statutory_version: 'sheet_ref_6pct_prorate_v2'
+        };
+
+        await (Payroll as any).create(
+          {
+            tenant_id,
+            company_id,
+            employee_id: emp.id,
+            payroll_period,
             basic_salary,
             overtime_pay,
             bonus,
-            bounds.daysInMonth,
-            att.daysWorked,
-            att.recordCount
-          )
-        : computeProratedSumTotal(
-            basic_salary,
-            overtime_pay,
-            bonus,
-            bounds.daysInMonth,
-            att.daysWorked,
-            att.recordCount
-          );
-      const gross_salary = pr.sumTotal;
+            allowances: 0,
+            deductions: 0,
+            gross_salary,
+            net_salary: stat.net_payable,
+            tax_amount: stat.tds,
+            status: 'pending',
+            created_by: user_id,
+            is_active: true,
+            extra_fields
+          },
+          { transaction }
+        );
+        createdCount += 1;
+      }
 
-      const bodyOpts = (req.body || {}) as Record<string, unknown>;
-      const statutoryApplicable = bodyOpts.statutory_india !== false;
-      const pfCapAt1800 = bodyOpts.pf_cap_1800 !== false;
-      const estimateTds = bodyOpts.estimate_tds !== false;
-      const pfMode: PfMode =
-        bodyOpts.pf_mode === 'gross_6pct'
-          ? 'gross_6pct'
-          : bodyOpts.pf_mode === 'epf_12pct_half'
-            ? 'epf_12pct_half'
-            : 'basic_12pct';
-
-      const stat = computeIndianStatutoryPayroll(gross_salary, {
-        statutoryApplicable,
-        pfMode,
-        pfCapAt1800,
-        estimateTds,
-        basicSalary: isDaily ? monthlyEquivForDaily : basic_salary,
-        registeredStateCode,
-        payrollMonth: payroll_period
-      });
-      const statExtra = breakdownToExtraFields(stat);
-
-      const birth = emp.birth_date ? String(emp.birth_date).split('T')[0] : '';
-      const hire = emp.hire_date ? String(emp.hire_date).split('T')[0] : '';
-
-      const bankAccount = emp.bank_account != null ? String(emp.bank_account).trim() : '';
-      const bankIfsc = emp.bank_ifsc != null ? String(emp.bank_ifsc).trim() : '';
-      const bankName = emp.bank_name != null ? String(emp.bank_name).trim() : '';
-
-      const extra_fields = {
-        bank_account: bankAccount,
-        ifsc: bankIfsc,
-        bank_name: bankName,
-        department: emp.department || '',
-        employee_name: emp.username || '',
-        position: emp.position || '',
-        birth_date: birth,
-        joining_date: hire,
-        working_month: payroll_period,
-        total_day_of_month: String(bounds.daysInMonth),
-        unpaid_leave: String(
-          isDaily && att.recordCount === 0 ? bounds.daysInMonth : att.absentDays
-        ),
-        days_worked: String(pr.effectiveDaysWorked),
-        prorated_basic: String(pr.proratedBasic),
-        ...statExtra,
-        account_cash: '',
-        salary_source: isDaily
-          ? 'daily_wage'
-          : useContractSalary
-            ? 'employment_contract'
-            : 'user_profile',
-        employment_type: String((emp as any).employment_type || ''),
-        employment_contract_id: contract ? contract.id : null,
-        working_days_contract: contract?.working_days ?? '',
-        attendance_records: String(att.recordCount),
-        attendance_overtime_hours: String(overtimeHoursForPay),
-        attendance_day_ot_hours: String(dayOtHours),
-        attendance_night_ot_hours: String(nightOtHours),
-        attendance_holiday_work_hours: String(att.holidayWorkHours),
-        day_ot_hour: String(dayOtHours),
-        night_ot_hour: String(nightOtHours),
-        ot_eligible: String(otEligible),
-        indian_pf_mode: statutoryApplicable ? pfMode : '',
-        indian_statutory_version: 'sheet_ref_6pct_prorate_v2'
-      };
-
-      await (Payroll as any).create({
-        tenant_id,
-        company_id,
-        employee_id: emp.id,
-        payroll_period,
-        basic_salary,
-        overtime_pay,
-        bonus,
-        allowances: 0,
-        deductions: 0,
-        gross_salary,
-        net_salary: stat.net_payable,
-        tax_amount: stat.tds,
-        status: 'pending',
-        created_by: user_id,
-        is_active: true,
-        extra_fields
-      });
-      created += 1;
-    }
+      return { created: createdCount, deactivatedCount: Number(deactivated) || 0 };
+    });
 
     res.status(201).json({
       success: true,
-      message: `급여 ${created}건이 생성되었습니다. 전자근로계약·근태를 반영했습니다.`,
-      data: { created }
+      message:
+        deactivatedCount > 0
+          ? `기존 ${deactivatedCount}건을 비활성화한 뒤 급여 ${created}건을 다시 생성했습니다. 전자근로계약·근태를 반영했습니다.`
+          : `급여 ${created}건이 생성되었습니다. 전자근로계약·근태를 반영했습니다.`,
+      data: { created, replaced: deactivatedCount }
     });
   } catch (error) {
     console.error('급여 일괄 생성 오류:', error);
@@ -520,20 +577,6 @@ export const previewBulkPayrollGeneration = async (req: RequestWithUser, res: Re
       }
     });
 
-    if (existingActive > 0) {
-      return res.json({
-        success: true,
-        data: {
-          payroll_period,
-          can_generate: false,
-          block_reason: 'already_exists' as const,
-          existing_active_count: existingActive,
-          employee_total: 0,
-          attendance: null
-        }
-      });
-    }
-
     const employees = await (User as any).findAll({
       where: { tenant_id, company_id, status: 'active' },
       attributes: ['id', 'username', 'employment_type']
@@ -567,7 +610,8 @@ export const previewBulkPayrollGeneration = async (req: RequestWithUser, res: Re
         payroll_period,
         can_generate: true,
         block_reason: null,
-        existing_active_count: 0,
+        will_replace: existingActive > 0,
+        existing_active_count: existingActive,
         employee_total: employees.length,
         attendance: {
           with_attendance,
@@ -821,25 +865,32 @@ export const sendPayrollPayslip = async (req: RequestWithUser, res: Response) =>
     const transporter = nodemailer.createTransport(buildNodemailerTransportOptions(mailOpts));
 
     const period = String((payroll as any).payroll_period || '');
-    const uname = String(emp?.username || 'employee');
-    const subjectKo = `[급여 명세서] ${period} ${uname}`;
-    const subjectEn = `[Payslip] ${period} ${uname}`;
-    const bodyKo = `${period} 급여 명세서 PDF를 첨부합니다.`;
-    const bodyEn = `Please find the attached payslip PDF for ${period}.`;
+    const extra =
+      (payroll as any).extra_fields && typeof (payroll as any).extra_fields === 'object'
+        ? ((payroll as any).extra_fields as Record<string, unknown>)
+        : {};
+    const uname =
+      String(extra.employee_name || '').trim() ||
+      String(emp?.username || '').trim() ||
+      'Employee';
+    const companyLabel = shortCompanyNameForMail((companyRow as any)?.name);
+    const mailVars = { name: uname, company: companyLabel, period };
+    const subject = fillPayslipMailTemplate(DEFAULT_PAYSLIP_MAIL_SUBJECT, mailVars);
+    const bodyText = fillPayslipMailTemplate(DEFAULT_PAYSLIP_MAIL_BODY, mailVars);
+    const bodyHtml = bodyText
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br />');
 
     await transporter.sendMail({
       from: mailOpts.from,
       to,
-      subject: `${subjectKo} / ${subjectEn}`,
-      text: `[KO]\n${bodyKo}\n\n[EN]\n${bodyEn}\n\n본 메일은 MVS 알림입니다. / This is an MVS notification.`,
+      subject,
+      text: bodyText,
       html: `
-        <div style="font-family:Segoe UI,Malgun Gothic,sans-serif;font-size:14px;color:#111827;line-height:1.55;max-width:640px;">
-          <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#6b7280;">한국어</p>
-          <p style="margin:0 0 16px;">${bodyKo}</p>
-          <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
-          <p style="margin:0 0 4px;font-size:12px;font-weight:700;color:#6b7280;">English</p>
-          <p style="margin:0 0 16px;">${bodyEn}</p>
-          <p style="margin-top:20px;font-size:12px;color:#9ca3af;">본 메일은 MVS 알림입니다. / This is an MVS notification.</p>
+        <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#111827;line-height:1.55;max-width:640px;">
+          ${bodyHtml}
         </div>
       `,
       attachments: [
@@ -910,13 +961,28 @@ export const sendImportedPayslip = async (req: RequestWithUser, res: Response) =
       .replace(/[\\/:*?"<>|]/g, '_')
       .slice(0, 120);
 
+    const mailVars = {
+      name: employeeName || 'Employee',
+      company: shortCompanyNameForMail((companyRow as any)?.name),
+      period
+    };
+    const fallbackSubject = fillPayslipMailTemplate(DEFAULT_PAYSLIP_MAIL_SUBJECT, mailVars);
+    const fallbackBody = fillPayslipMailTemplate(DEFAULT_PAYSLIP_MAIL_BODY, mailVars);
+    const fallbackHtml = fallbackBody
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br />');
+
     const transporter = nodemailer.createTransport(buildNodemailerTransportOptions(mailOpts));
     await transporter.sendMail({
       from: mailOpts.from,
       to,
-      subject: subject || `[급여 명세서] ${period}`,
-      text: message || `${period} 급여 명세서를 첨부합니다.`,
-      html: `<div style="font-family:Segoe UI,Malgun Gothic,sans-serif;font-size:14px;line-height:1.6;color:#111827;">${safeMessage || `${period} 급여 명세서를 첨부합니다.`}</div>`,
+      subject: subject || fallbackSubject,
+      text: message || fallbackBody,
+      html: `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;line-height:1.6;color:#111827;">${
+        safeMessage || fallbackHtml
+      }</div>`,
       attachments: [{ filename: `${filenamePart}.pdf`, content: pdfBuffer, contentType: 'application/pdf' }]
     });
 

@@ -207,6 +207,7 @@ const MyPersonalInfo: React.FC = () => {
     borderColor: 'divider',
     borderRadius: '4px !important',
     boxShadow: 'none',
+    overflow: 'hidden',
     '&:before': { display: 'none' },
   };
 

@@ -3579,7 +3579,7 @@ const WorkBoardDetailPage: React.FC = () => {
               height: 'auto',
               borderRadius: KANBAN_DETAIL_SHELL_RADIUS,
               boxShadow: '0 1px 0 #E2E8F0, 0 1px 2px rgba(15, 23, 42, 0.05)',
-              overflow: 'visible',
+              overflow: 'hidden',
               border: '1px solid #E2E8F0',
               borderLeft: `4px solid ${accent}`,
               bgcolor: '#FFFFFF',

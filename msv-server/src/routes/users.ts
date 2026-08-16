@@ -227,6 +227,26 @@ const parseSalaryInput = (salary: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+/** 경력 배열 정규화 — 회사명이 있는 항목만 저장 */
+const sanitizeCareerHistory = (raw: unknown): Array<{
+  company_name: string;
+  position: string;
+  start_date: string;
+  end_date: string;
+  description: string;
+}> => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((row: any) => ({
+      company_name: String(row?.company_name ?? '').trim(),
+      position: String(row?.position ?? '').trim(),
+      start_date: String(row?.start_date ?? '').trim(),
+      end_date: String(row?.end_date ?? '').trim(),
+      description: String(row?.description ?? '').trim(),
+    }))
+    .filter((row) => row.company_name.length > 0);
+};
+
 const verifyCurrentUserPassword = async (req: express.Request, password: unknown) => {
   if (!password || typeof password !== 'string') {
     return { ok: false as const, status: 400, message: '로그인 비밀번호를 입력해주세요.' };
@@ -597,7 +617,7 @@ router.get('/', async (req, res) => {
       ...baseAttributes,
       'employee_number', 'birth_date', 'gender', 'phone', 'address',
       'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-      'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible'
+      'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'career_history'
     ];
 
     let users: any[];
@@ -807,7 +827,7 @@ router.get('/:id', async (req, res) => {
             ...baseAttributes,
             'employee_number', 'birth_date', 'gender', 'phone', 'address', 
             'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-            'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible'
+            'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'career_history'
           ]
         });
         if (userWithHrFields) {
@@ -883,7 +903,8 @@ router.post(
       emergency_contact, emergency_phone, hire_date, employment_type, salary,
       bank_name, bank_account, bank_ifsc,
       is_payment_officer,
-      ot_eligible
+      ot_eligible,
+      career_history
     } = req.body;
 
     // 필수 필드 검증
@@ -1070,7 +1091,10 @@ router.post(
     if (is_payment_officer !== undefined) {
       userData.is_payment_officer = Boolean(is_payment_officer);
     }
-    userData.ot_eligible = ot_eligible !== undefined ? Boolean(ot_eligible) : true;
+    userData.ot_eligible = ot_eligible !== undefined ? Boolean(ot_eligible) : false;
+    if (career_history !== undefined) {
+      userData.career_history = sanitizeCareerHistory(career_history);
+    }
 
     const user = await (User as any).create(userData);
 
@@ -1130,7 +1154,8 @@ router.put(
       emergency_contact, emergency_phone, hire_date, employment_type, salary,
       bank_name, bank_account, bank_ifsc,
       is_payment_officer,
-      ot_eligible
+      ot_eligible,
+      career_history
     } = req.body;
 
     // root나 audit 권한이면 모든 사용자 조회 가능, 아니면 자신의 회사 사용자만
@@ -1162,7 +1187,7 @@ router.put(
               ...baseAttributes,
               'employee_number', 'birth_date', 'gender', 'phone', 'address', 
               'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-              'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible'
+              'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'career_history'
             ]
           });
           if (userWithHrFields) {
@@ -1331,6 +1356,9 @@ router.put(
     if (ot_eligible !== undefined) {
       updateData.ot_eligible = Boolean(ot_eligible);
     }
+    if (career_history !== undefined) {
+      updateData.career_history = sanitizeCareerHistory(career_history);
+    }
 
     // 비밀번호 변경 (있는 경우만)
     if (password) {
@@ -1383,7 +1411,7 @@ router.put(
             ...responseBaseAttributes,
             'employee_number', 'birth_date', 'gender', 'phone', 'address', 
             'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-            'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible'
+            'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'career_history'
           ]
         });
         if (userWithHrFields) {

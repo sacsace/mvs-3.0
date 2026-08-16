@@ -36,6 +36,7 @@ export const PAYSLIP_LABELS_EN: PayslipLabels = {
   basicSalary: 'Basic Salary',
   houseRentAllowance: 'House Rent Allowance',
   otherAllowance: 'Other Allowances',
+  foodAllowance: 'Food Allowance',
   totalSalary: 'Total Salary',
   dayOt: 'Overtime',
   otRate: 'Overtime Rate',

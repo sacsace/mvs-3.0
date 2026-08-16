@@ -1265,8 +1265,6 @@ const FrontDesk: React.FC = () => {
             sx={{
               ...mvsBodyListTableSx,
               ...mvsTableScrollSx,
-              overflowX: 'hidden',
-              overflowY: 'visible',
             }}
           >
             <Table size="small" sx={frontDeskTableSx}>

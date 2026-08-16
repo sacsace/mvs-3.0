@@ -2,6 +2,9 @@ import React from 'react';
 import { Box, Typography } from '@mui/material';
 import type { PayrollGridRow } from './payroll/payrollGridTypes';
 import { formatOtHourDisplay } from './payroll/payrollGridUtils';
+import { loadPayrollColumnPrefs } from './payroll/payrollColumnPrefs';
+import { loadPayrollSalaryRatios } from './payroll/payrollSalaryRatios';
+import { formatPositionLabel } from '../../utils/positionLabels';
 import {
   mvsBodyCardSx,
   mvsBodyTableFrameSx,
@@ -43,6 +46,7 @@ export type PayslipLabels = {
   basicSalary: string;
   houseRentAllowance: string;
   otherAllowance: string;
+  foodAllowance: string;
   totalSalary: string;
   dayOt: string;
   otRate: string;
@@ -69,6 +73,9 @@ export type PayslipCompanyInfo = {
   email?: string;
 };
 
+/** 회사별 명세서에서 선택 가능한 기본 헤더 배치 */
+export type PayslipHeaderLayout = 'standard' | 'compact' | 'companyFirst';
+
 /** 표시용 회사명 — Private Limited / Pvt Ltd 등 법적 접미사 제거 */
 export function shortCompanyName(name?: string | null): string {
   return String(name || '')
@@ -83,10 +90,13 @@ type Props = {
   row: PayrollGridRow;
   labels: PayslipLabels;
   companyInfo?: PayslipCompanyInfo | null;
+  /** 회사별 상수 영역·커스텀 컬럼 설정을 읽기 위한 회사 ID */
+  companyId?: string | number | null;
   showTitle?: boolean;
   wide?: boolean;
   /** PDF 캡처용 — 2열 레이아웃 강제 (스타일은 미리보기와 동일) */
   forPdf?: boolean;
+  headerLayout?: PayslipHeaderLayout;
 };
 
 const INR = 'en-IN';
@@ -474,7 +484,8 @@ function PayslipHeader({
   paidDays,
   companyName,
   companyContact,
-  forPdf
+  forPdf,
+  layout = 'standard'
 }: {
   labels: PayslipLabels;
   showTitle: boolean;
@@ -484,6 +495,7 @@ function PayslipHeader({
   companyName: string;
   companyContact: string;
   forPdf?: boolean;
+  layout?: PayslipHeaderLayout;
 }) {
   const periodStats = [
     { label: labels.workingMonth, value: displayText(workingMonth) },
@@ -512,6 +524,7 @@ function PayslipHeader({
       >
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Box
+            order={layout === 'companyFirst' ? 2 : 1}
             component="span"
             sx={{
               display: 'inline-block',
@@ -526,7 +539,7 @@ function PayslipHeader({
               letterSpacing: '0.14em'
             }}
           >
-            {labels.payrollBadge}
+            {layout !== 'compact' ? labels.payrollBadge : ''}
           </Box>
           <Typography
             sx={{
@@ -580,8 +593,9 @@ function PayslipHeader({
           </Box>
         </Box>
 
-        {companyName !== '—' ? (
+        {layout !== 'compact' && companyName !== '—' ? (
           <Box
+            order={layout === 'companyFirst' ? 1 : 2}
             sx={{
               ...mvsInnerCardSx,
               flex: forPdf ? '0 1 340px' : { md: '0 1 340px' },
@@ -611,7 +625,16 @@ function PayslipHeader({
 }
 
 const PayslipContent = React.forwardRef<HTMLDivElement, Props>(function PayslipContent(
-  { row, labels, companyInfo, showTitle = true, wide = false, forPdf = false },
+  {
+    row,
+    labels,
+    companyInfo,
+    companyId,
+    showTitle = true,
+    wide = false,
+    forPdf = false,
+    headerLayout = 'standard'
+  },
   ref
 ) {
   const dayHours = parseMoney(row.day_ot_hour);
@@ -647,15 +670,44 @@ const PayslipContent = React.forwardRef<HTMLDivElement, Props>(function PayslipC
         highlight: line.highlight,
       }))
     : [
-        { label: labels.basicSalary, value: money(row.basic_salary) },
-        { label: labels.houseRentAllowance, value: money(row.house_rent_allowance) },
-        { label: labels.otherAllowance, value: money(row.other_allowance) },
+        ...(() => {
+          const ratios = loadPayrollSalaryRatios(companyId);
+          const lines = ratios.parts.map((part) => {
+            let amount = 0;
+            if (part.id === 'basic_salary') amount = Number(row.basic_salary) || 0;
+            else if (part.id === 'house_rent_allowance') amount = Number(row.house_rent_allowance) || 0;
+            else if (part.id === 'other_allowance') amount = Number(row.other_allowance) || 0;
+            else amount = Number(row.constant_parts?.[part.id]) || 0;
+            return { label: part.label, value: money(amount) };
+          });
+          // 설정에 없는 상수 항목도 금액이 있으면 누락 없이 표시
+          const known = new Set(ratios.parts.map((p) => p.id));
+          Object.entries(row.constant_parts || {}).forEach(([id, amount]) => {
+            if (known.has(id) || !(Number(amount) > 0)) return;
+            lines.push({ label: id.replace(/_/g, ' '), value: money(amount) });
+          });
+          return lines;
+        })(),
+        ...(Number(row.food_allowance) > 0
+          ? [{ label: labels.foodAllowance, value: money(row.food_allowance) }]
+          : []),
         ...(dayHours > 0
           ? [{ label: dayOtLabel, value: money(otPayTotal), highlight: true }]
           : dayHours === 0 && otPayTotal === 0
             ? [{ label: labels.dayOt, value: money(0), highlight: true }]
             : []),
         { label: labels.extraAllowance, value: money(row.transport_allowance), highlight: true },
+        ...(() => {
+          const prefs = loadPayrollColumnPrefs(companyId);
+          return Object.entries(row.custom_allowances || {})
+            .filter(([, amount]) => Number(amount) > 0)
+            .map(([key, amount]) => {
+              const label =
+                prefs.customColumns.find((c) => c.id === key)?.label ||
+                key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+              return { label, value: money(amount), highlight: true };
+            });
+        })(),
       ];
 
   const deductionItems: LedgerLine[] = [
@@ -691,6 +743,7 @@ const PayslipContent = React.forwardRef<HTMLDivElement, Props>(function PayslipC
           companyName={companyName}
           companyContact={companyContact}
           forPdf={forPdf}
+          layout={headerLayout}
         />
 
         <Box sx={{ px: { xs: 2, sm: 2.5 }, pb: forPdf ? 1.5 : 2.5, pt: forPdf ? 1.5 : 2.5 }}>
@@ -722,7 +775,11 @@ const PayslipContent = React.forwardRef<HTMLDivElement, Props>(function PayslipC
                 highlight
               />
               <EmpField compact={forPdf} label={labels.empId} value={row.emp_id} />
-              <EmpField compact={forPdf} label={labels.designation} value={row.position} />
+              <EmpField
+                compact={forPdf}
+                label={labels.designation}
+                value={formatPositionLabel(row.position, 'en', false)}
+              />
               <EmpField compact={forPdf} label={labels.email} value={row.employee_email} link />
               <EmpField compact={forPdf} label={labels.dateOfJoin} value={row.joining_date} dateOnly />
               <EmpField compact={forPdf} label={labels.department} value={row.department} />

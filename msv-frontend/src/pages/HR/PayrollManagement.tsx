@@ -45,6 +45,7 @@ import { useStore } from '../../store';
 import PayrollExcelGrid, { payrollRecordToGridRow, type PayrollGridRow } from './PayrollExcelGrid';
 import PayrollPayslipDialog from './PayrollPayslipDialog';
 import PayrollSendPayslipsDialog from './PayrollSendPayslipsDialog';
+import type { PayslipHeaderLayout } from './PayslipContent';
 import { exportPayrollGridToExcel } from './payroll/exportPayrollGridToExcel';
 import { resolveRegisteredStateCodeFromCompanyLike } from './payroll/indianProfessionalTax';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
@@ -93,6 +94,7 @@ type PayrollBulkPreviewPayload = {
   payroll_period: string;
   can_generate: boolean;
   block_reason?: string | null;
+  will_replace?: boolean;
   existing_active_count?: number;
   employee_total: number;
   attendance: PayrollBulkPreviewAttendance | null;
@@ -124,9 +126,15 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
   const [creating, setCreating] = useState(false);
   const [payslipOpen, setPayslipOpen] = useState(false);
   const [payslipRow, setPayslipRow] = useState<PayrollGridRow | null>(null);
+  const [payslipHeaderLayout, setPayslipHeaderLayout] = useState<PayslipHeaderLayout>(() => {
+    const saved = localStorage.getItem('mvs.payslipHeaderLayout');
+    return saved === 'compact' || saved === 'companyFirst' ? saved : 'standard';
+  });
   const [sendDialogOpen, setSendDialogOpen] = useState(false);
   const [lockedPeriods, setLockedPeriods] = useState<Set<string>>(new Set());
   const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
+  const [sendAfterCompleteOpen, setSendAfterCompleteOpen] = useState(false);
+  const [sendAutomatically, setSendAutomatically] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [payrollPreviewOpen, setPayrollPreviewOpen] = useState(false);
   const [payrollPreviewPayload, setPayrollPreviewPayload] = useState<PayrollBulkPreviewPayload | null>(null);
@@ -177,9 +185,10 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
   const payrollRecalcContext = useMemo(
     () => ({
       companyStateCode: companyRegisteredStateCode,
-      payrollMonth: normalizePayMonth(payrollPeriod.trim()) || payrollPeriod.trim()
+      payrollMonth: normalizePayMonth(payrollPeriod.trim()) || payrollPeriod.trim(),
+      companyId: user?.company_id ?? null,
     }),
-    [companyRegisteredStateCode, payrollPeriod]
+    [companyRegisteredStateCode, payrollPeriod, user?.company_id]
   );
 
   const loadLocks = useCallback(async () => {
@@ -325,6 +334,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
       const data = (res as any).data as PayrollBulkPreviewPayload;
       if (!data.can_generate) {
         if (data.block_reason === 'already_exists') {
+          // 하위 호환: 예전 API가 차단해도 미확정 월이면 재생성 확인으로 진행
           setError(t('payrollManagement.preview.blockedAlreadyExists'));
         } else {
           setError(t('payrollManagement.errors.bulkCreateFailed'));
@@ -409,6 +419,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
         setCompleteDialogOpen(false);
         await loadLocks();
         await loadPayrollData();
+        setSendAfterCompleteOpen(true);
       } else {
         setError((res as any).message || t('payrollManagement.errors.periodCompleteFailed'));
       }
@@ -430,9 +441,15 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
 
   const handleExportExcel = useCallback(() => {
     if (menuFlags.menusLoading || !menuFlags.canRead || !gridRows.length) return;
-    exportPayrollGridToExcel(gridRows, t);
-    setSuccess(t('payrollManagement.success.exportedExcel'));
-  }, [gridRows, menuFlags.canRead, menuFlags.menusLoading, t]);
+    void (async () => {
+      try {
+        await exportPayrollGridToExcel(gridRows, t, user?.company_id ?? null);
+        setSuccess(t('payrollManagement.success.exportedExcel'));
+      } catch {
+        setError(t('payrollManagement.errors.exportFailed'));
+      }
+    })();
+  }, [gridRows, menuFlags.canRead, menuFlags.menusLoading, t, user?.company_id]);
 
   /** 급여 생성 완료(잠금)된 월 — 명세서 발송 허용·「급여 생성 완료」재실행 비활성 */
   const selectedPeriodPayrollComplete = !!periodKey && lockedPeriods.has(periodKey);
@@ -458,13 +475,15 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
           : t('payrollManagement.payslip.sendNoRowsForPayMonth')
     : '';
 
-  /** 상단 버튼: 월별 차단 없이 열기 — 대화상자에서 2·3월 등 다른 급여월 선택 가능 */
+  /** 상단「+ 급여 생성」: 확정(생성 완료)된 월은 열 수 없음 */
   const bulkCreateOpenDisabled =
-    menuFlags.menusLoading || !menuFlags.canCreate || creating;
+    menuFlags.menusLoading ||
+    !menuFlags.canCreate ||
+    creating ||
+    bulkCreateBlockedByLock;
   /** 대화상자「생성」: 확정·미래 월 비활성(미생성 과거·당월은 미리보기로 판별) */
   const bulkCreateDisabled =
     bulkCreateOpenDisabled ||
-    bulkCreateBlockedByLock ||
     previewAttendanceLoading ||
     isFuturePayMonth;
   const bulkCreateDialogTooltip = bulkCreateDisabled
@@ -479,16 +498,21 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
             : ''
     : '';
   const bulkCreateHeaderTooltip = bulkCreateOpenDisabled
-    ? bulkCreateDialogTooltip
-    : bulkCreateBlockedByLock
-      ? t('payrollManagement.hints.createChooseOtherMonth')
-      : '';
+    ? creating || menuFlags.menusLoading
+      ? ''
+      : !menuFlags.canCreate
+        ? t('common.menuNoCreate')
+        : bulkCreateBlockedByLock
+          ? t('payrollManagement.errors.periodLocked')
+          : ''
+    : '';
 
   const completePayrollToolbarDisabled =
     menuFlags.menusLoading ||
     !menuFlags.canMutate ||
     completing ||
     !periodKey ||
+    payrollRecordsForSelectedMonth.length === 0 ||
     selectedPeriodPayrollComplete ||
     isFuturePayMonth;
   const completePayrollToolbarTooltip = completePayrollToolbarDisabled
@@ -498,6 +522,8 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
         ? t('common.menuNoMutate')
         : !periodKey
           ? t('payrollManagement.errors.periodRequired')
+          : payrollRecordsForSelectedMonth.length === 0
+            ? '먼저 해당 급여월의 급여를 생성하세요.'
           : isFuturePayMonth
             ? t('payrollManagement.errors.futurePayMonthNotAllowed')
             : selectedPeriodPayrollComplete
@@ -510,6 +536,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
     !menuFlags.canMutate ||
     completing ||
     !periodKey ||
+    payrollRecordsForSelectedMonth.length === 0 ||
     lockedPeriods.has(periodKey) ||
     isFuturePayMonth;
   const completeDialogConfirmTooltip = completeDialogConfirmDisabled
@@ -519,6 +546,8 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
         ? t('common.menuNoMutate')
         : !periodKey
           ? t('payrollManagement.errors.periodRequired')
+          : payrollRecordsForSelectedMonth.length === 0
+            ? '먼저 해당 급여월의 급여를 생성하세요.'
           : isFuturePayMonth
             ? t('payrollManagement.errors.futurePayMonthNotAllowed')
             : lockedPeriods.has(periodKey)
@@ -658,6 +687,23 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
                 </Button>
               </span>
             </Tooltip>
+            <TextField
+              select
+              size="small"
+              label="명세서 헤더"
+              value={payslipHeaderLayout}
+              onChange={(event) => {
+                const layout = event.target.value as PayslipHeaderLayout;
+                setPayslipHeaderLayout(layout);
+                localStorage.setItem('mvs.payslipHeaderLayout', layout);
+              }}
+              sx={{ minWidth: 150 }}
+              SelectProps={{ native: false }}
+            >
+              <MenuItem value="standard">기본형</MenuItem>
+              <MenuItem value="compact">간단형</MenuItem>
+              <MenuItem value="companyFirst">회사 우선형</MenuItem>
+            </TextField>
             {!payslipSendOnly && (
               <Tooltip title={completePayrollToolbarTooltip} disableHoverListener={!completePayrollToolbarTooltip}>
                 <span style={{ display: 'inline-flex' }}>
@@ -871,20 +917,11 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
                   ? t('payrollManagement.listSummary', { period: periodKey, count: gridRows.length })
                   : t('payrollManagement.listSummaryNoMonth', { count: gridRows.length })}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{ color: 'error.main', fontWeight: 700 }}>
                 {t('payrollManagement.gridHint')}
               </Typography>
             </Box>
-            <Box
-              sx={{
-                width: '100%',
-                minWidth: 0,
-                overflowX: 'auto',
-                overflowY: 'hidden',
-                WebkitOverflowScrolling: 'touch',
-                flex: '0 0 auto',
-              }}
-            >
+            <Box sx={{ width: '100%', minWidth: 0, flex: '0 0 auto' }}>
               <PayrollExcelGrid
                 rows={gridRows}
                 loading={loading}
@@ -897,6 +934,7 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
                 allowCellEdit={!payslipSendOnly && !menuFlags.menusLoading && menuFlags.canMutate}
                 allowDelete={!payslipSendOnly && !menuFlags.menusLoading && menuFlags.canDelete}
                 allowOpenPayslip={!menuFlags.menusLoading && menuFlags.canRead}
+                companyId={user?.company_id}
                 companyStateCode={companyRegisteredStateCode}
                 payrollMonth={payrollRecalcContext.payrollMonth}
               />
@@ -912,12 +950,18 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
           setPayslipOpen(false);
           setPayslipRow(null);
         }}
+        headerLayout={payslipHeaderLayout}
       />
 
       <PayrollSendPayslipsDialog
         open={sendDialogOpen}
         rows={gridRowsForPayslipSend}
-        onClose={() => setSendDialogOpen(false)}
+        autoSend={sendAutomatically}
+        headerLayout={payslipHeaderLayout}
+        onClose={() => {
+          setSendDialogOpen(false);
+          setSendAutomatically(false);
+        }}
         onSent={(msg) => setSuccess(msg)}
         onError={(msg) => setError(msg)}
       />
@@ -974,39 +1018,59 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
       >
         <DialogTitle>{t('payrollManagement.preview.title')}</DialogTitle>
         <DialogContent>
-          {payrollPreviewPayload?.attendance && (
+          {payrollPreviewPayload && (
             <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-              <Typography variant="body2">
-                {t('payrollManagement.preview.summary', {
-                  period: payrollPreviewPayload.payroll_period,
-                  total: payrollPreviewPayload.employee_total
-                })}
-              </Typography>
-              <Typography variant="body2" color="success.main">
-                {t('payrollManagement.preview.withAttendance', {
-                  count: payrollPreviewPayload.attendance.with_attendance
-                })}
-              </Typography>
-              <Typography variant="body2" color={payrollPreviewPayload.attendance.without_attendance > 0 ? 'warning.main' : 'text.secondary'}>
-                {t('payrollManagement.preview.withoutAttendance', {
-                  count: payrollPreviewPayload.attendance.without_attendance
-                })}
-              </Typography>
-              {payrollPreviewPayload.attendance.without_attendance_usernames.length > 0 && (
-                <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word' }}>
-                  {t('payrollManagement.preview.withoutNames', {
-                    names: payrollPreviewPayload.attendance.without_attendance_usernames.join(', ')
+              {(payrollPreviewPayload.will_replace ||
+                (payrollPreviewPayload.existing_active_count || 0) > 0) && (
+                <Alert severity="warning">
+                  {t('payrollManagement.preview.replaceWarning', {
+                    count: payrollPreviewPayload.existing_active_count || 0,
+                    period: payrollPreviewPayload.payroll_period
                   })}
-                </Typography>
-              )}
-              {payrollPreviewPayload.attendance.daily_without_records.length > 0 && (
-                <Alert severity="info" sx={{ mt: 0.5 }}>
-                  {t('payrollManagement.preview.dailyNote')}
                 </Alert>
               )}
-              <Typography variant="caption" color="text.secondary">
-                {t('payrollManagement.preview.footnote')}
-              </Typography>
+              {payrollPreviewPayload.attendance && (
+                <>
+                  <Typography variant="body2">
+                    {t('payrollManagement.preview.summary', {
+                      period: payrollPreviewPayload.payroll_period,
+                      total: payrollPreviewPayload.employee_total
+                    })}
+                  </Typography>
+                  <Typography variant="body2" color="success.main">
+                    {t('payrollManagement.preview.withAttendance', {
+                      count: payrollPreviewPayload.attendance.with_attendance
+                    })}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color={
+                      payrollPreviewPayload.attendance.without_attendance > 0
+                        ? 'warning.main'
+                        : 'text.secondary'
+                    }
+                  >
+                    {t('payrollManagement.preview.withoutAttendance', {
+                      count: payrollPreviewPayload.attendance.without_attendance
+                    })}
+                  </Typography>
+                  {payrollPreviewPayload.attendance.without_attendance_usernames.length > 0 && (
+                    <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-word' }}>
+                      {t('payrollManagement.preview.withoutNames', {
+                        names: payrollPreviewPayload.attendance.without_attendance_usernames.join(', ')
+                      })}
+                    </Typography>
+                  )}
+                  {payrollPreviewPayload.attendance.daily_without_records.length > 0 && (
+                    <Alert severity="info" sx={{ mt: 0.5 }}>
+                      {t('payrollManagement.preview.dailyNote')}
+                    </Alert>
+                  )}
+                  <Typography variant="caption" color="text.secondary">
+                    {t('payrollManagement.preview.footnote')}
+                  </Typography>
+                </>
+              )}
             </Box>
           )}
         </DialogContent>
@@ -1052,6 +1116,9 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
               }}
               disabled={menuFlags.menusLoading || !menuFlags.canMutate}
             />
+            <Alert severity="warning" sx={{ mb: 1.5 }}>
+              확정 후에는 해당 급여월의 내용을 수정할 수 없습니다.
+            </Alert>
             <Typography variant="body2" color="text.secondary">
               {t('payrollManagement.dialog.completeMessage', {
                 period: payrollPeriod.trim() || '—'
@@ -1075,6 +1142,34 @@ const PayrollManagement: React.FC<PayrollManagementProps> = ({ payslipSendOnly =
               </Button>
             </span>
           </Tooltip>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={sendAfterCompleteOpen}
+        onClose={() => setSendAfterCompleteOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>급여 명세서 메일 발송</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            급여 명세서를 이메일로 보내겠습니까? 이메일이 등록된 직원에게 PDF 명세서를 발송합니다.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSendAfterCompleteOpen(false)}>아니요</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => {
+              setSendAfterCompleteOpen(false);
+              setSendAutomatically(true);
+              setSendDialogOpen(true);
+            }}
+          >
+            예, 메일 발송
+          </Button>
         </DialogActions>
       </Dialog>
 

@@ -185,11 +185,11 @@ export const mvsBodyFrameBorder = '1px solid #E2E8F0';
 export const mvsBodyFrameShadow = '0 1px 2px rgba(15, 23, 42, 0.06)';
 export const mvsBodyFrameRadius = '8px';
 
-/** Body 리스트 테이블 래퍼 — 컨트롤 카드와 동일 외곽 톤 */
+/** Body 리스트 테이블 래퍼 — 컨트롤 카드와 동일 외곽 톤 (코너에서 헤더/셀 배경이 잘리도록 clip) */
 export const mvsBodyListTableSx: MvsStyleObject = {
   width: '100%',
   maxWidth: '100%',
-  overflow: 'auto',
+  overflow: 'hidden',
   overflowX: 'auto',
   WebkitOverflowScrolling: 'touch',
   bgcolor: '#FFFFFF',
@@ -209,6 +209,25 @@ export const mvsBodyCardSx: MvsStyleObject = {
   overflow: 'hidden',
 };
 
+/**
+ * Body 섹션 패널 — 회색 타이틀 바 + 본문 (견적/폼 섹션 등).
+ * 부모 overflow:hidden 으로 헤더 배경이 둥근 테두리에 맞게 잘림.
+ */
+export const mvsBodySectionPanelSx: MvsStyleObject = {
+  border: '1px solid #CFCFCF',
+  borderRadius: mvsBodyFrameRadius,
+  overflow: 'hidden',
+  bgcolor: '#FFFFFF',
+  mb: 2,
+};
+
+/** Body 섹션 패널 타이틀 바 */
+export const mvsBodySectionPanelTitleSx: MvsStyleObject = {
+  bgcolor: '#F0F0F0',
+  px: 2,
+  py: 0.75,
+};
+
 /** Body 섹션 헤더 — 제목 + 주요 액션 */
 export const mvsBodySectionHeaderSx: MvsStyleObject = {
   display: 'flex',
@@ -222,7 +241,7 @@ export const mvsBodySectionHeaderSx: MvsStyleObject = {
   bgcolor: '#FFFFFF',
 };
 
-/** Body 보조 도구 버튼 줄 */
+/** Body 보조 도구 버튼 줄 — 카드 상단일 때 둥근 모서리와 맞춤 */
 export const mvsBodyToolbarSx: MvsStyleObject = {
   display: 'flex',
   flexWrap: 'wrap',
@@ -232,6 +251,8 @@ export const mvsBodyToolbarSx: MvsStyleObject = {
   py: 1.5,
   bgcolor: '#F8FAFC',
   borderBottom: '1px solid #E2E8F0',
+  borderTopLeftRadius: mvsBodyFrameRadius,
+  borderTopRightRadius: mvsBodyFrameRadius,
 };
 
 /** Body 보조 outlined 버튼 — primary(추가)와 구분되는 연한 슬레이트 톤 */
@@ -266,11 +287,13 @@ export const mvsBodyPrimaryBtnSx: MvsStyleObject = {
   boxShadow: 'none',
 };
 
-/** Body 필터 래퍼 — 툴바와 동일 톤(배경 단계 최소화) */
+/** Body 필터 래퍼 — 툴바와 동일 톤(배경 단계 최소화). 카드 첫 자식일 때 상단 코너 맞춤 */
 export const mvsBodyFilterWrapSx: MvsStyleObject = {
   px: { xs: 2, sm: 2.5 },
   py: 2,
   bgcolor: '#F8FAFC',
+  borderTopLeftRadius: mvsBodyFrameRadius,
+  borderTopRightRadius: mvsBodyFrameRadius,
 };
 
 /** Body 테이블 인셋 — 배경 없이 여백만 (카드 안 카드 중첩 방지) */

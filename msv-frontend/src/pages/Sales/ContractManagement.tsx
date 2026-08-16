@@ -27,7 +27,8 @@ import {
   Avatar,
   Tooltip,
   Alert,
-  Snackbar
+  Snackbar,
+  Autocomplete
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -86,11 +87,37 @@ interface Customer {
   ceo_name?: string;
   phone?: string;
   email?: string;
+  address?: string;
   industry?: string;
 }
 
 /** DB `menus.route` — `App.tsx`의 `/customers/contracts` */
 const CONTRACT_MENU_ROUTES = ['/customers/contracts', '/sales', '/customers'];
+
+function normalizeCustomerMatchKey(value: string): string {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\bprivate\s+limited\b\.?/g, '')
+    .replace(/\bpvt\.?\s*ltd\.?\b/g, '')
+    .replace(/[,\s]+$/g, '')
+    .trim();
+}
+
+function findCustomerByName(customers: Customer[], rawName: string): Customer | null {
+  const key = normalizeCustomerMatchKey(rawName);
+  if (!key) return null;
+  const exact = customers.find((c) => normalizeCustomerMatchKey(c.name) === key);
+  if (exact) return exact;
+  const starts = customers.filter((c) => normalizeCustomerMatchKey(c.name).startsWith(key));
+  if (starts.length === 1) return starts[0];
+  const includes = customers.filter((c) => {
+    const n = normalizeCustomerMatchKey(c.name);
+    return n.includes(key) || key.includes(n);
+  });
+  return includes.length === 1 ? includes[0] : null;
+}
 
 const ContractManagement: React.FC = () => {
   const theme = useTheme();
@@ -235,6 +262,57 @@ const ContractManagement: React.FC = () => {
     
     return matchesSearch && matchesStatus && matchesType && matchesDate;
   });
+
+  const selectedCustomer = useMemo(
+    () => customers.find((c) => c.id.toString() === String(formData.customer_id)) || null,
+    [customers, formData.customer_id]
+  );
+
+  const applyCustomerToForm = useCallback(
+    (customer: Customer | null, nextTitle?: string) => {
+      setFormData((prev) => ({
+        ...prev,
+        title: nextTitle !== undefined ? nextTitle : prev.title,
+        customer_id: customer ? customer.id.toString() : '',
+      }));
+    },
+    []
+  );
+
+  const handleContractTitleInput = useCallback(
+    (rawTitle: string) => {
+      const matched = findCustomerByName(customers, rawTitle);
+      setFormData((prev) => ({
+        ...prev,
+        title: rawTitle,
+        // 계약명으로 고객이 확정되면 자동 연결. 매칭이 없으면 기존 선택을 유지(수동 선택 가능).
+        customer_id: matched ? matched.id.toString() : prev.customer_id,
+      }));
+    },
+    [customers]
+  );
+
+  const handleCustomerSelect = useCallback(
+    (customerId: string) => {
+      const customer = customers.find((c) => c.id.toString() === customerId) || null;
+      setFormData((prev) => {
+        const prevCustomer = customers.find((c) => c.id.toString() === String(prev.customer_id));
+        const titleLooksLikePrevCustomer =
+          !prev.title.trim() ||
+          (!!prevCustomer &&
+            normalizeCustomerMatchKey(prev.title) === normalizeCustomerMatchKey(prevCustomer.name));
+        return {
+          ...prev,
+          customer_id: customerId,
+          title:
+            customer && titleLooksLikePrevCustomer
+              ? customer.name
+              : prev.title,
+        };
+      });
+    },
+    [customers]
+  );
 
   const handleCreateContract = () => {
     if (!contractMenuFlags.canCreate) {
@@ -931,13 +1009,65 @@ const ContractManagement: React.FC = () => {
             spacing={{ xs: 2.25, sm: 2.75 }}
             sx={{ mt: 0, pt: 0.5, width: '100%', ...contractDialogFormSx }}
           >
+            <Grid size={{ xs: 12 }}>
+              <Autocomplete
+                freeSolo
+                options={customers}
+                getOptionLabel={(option) => (typeof option === 'string' ? option : option.name)}
+                filterOptions={(options, state) => {
+                  const q = normalizeCustomerMatchKey(state.inputValue);
+                  if (!q) return options.slice(0, 40);
+                  return options
+                    .filter((opt) => normalizeCustomerMatchKey(opt.name).includes(q))
+                    .slice(0, 40);
+                }}
+                value={selectedCustomer}
+                inputValue={formData.title}
+                onInputChange={(_event, value, reason) => {
+                  if (reason === 'reset' && dialogMode === 'view') return;
+                  if (reason === 'input' || reason === 'clear') {
+                    handleContractTitleInput(value);
+                  }
+                }}
+                onChange={(_event, value) => {
+                  if (typeof value === 'string') {
+                    handleContractTitleInput(value);
+                    return;
+                  }
+                  if (value) {
+                    applyCustomerToForm(value, value.name);
+                    return;
+                  }
+                  applyCustomerToForm(null, '');
+                }}
+                disabled={dialogMode === 'view'}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label={txt('계약명', 'Title')}
+                    required
+                    placeholder={txt(
+                      '계약명 입력 또는 고객사명 선택',
+                      'Enter title or pick a customer'
+                    )}
+                    helperText={txt(
+                      '고객사명을 입력·선택하면 아래 고객 정보가 자동으로 채워집니다.',
+                      'Typing or selecting a customer name auto-fills customer details below.'
+                    )}
+                    InputLabelProps={{ ...params.InputLabelProps, shrink: true }}
+                  />
+                )}
+              />
+            </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl fullWidth>
-                <InputLabel>{txt('고객(선택)', 'Customer (optional)')}</InputLabel>
+                <InputLabel shrink>{txt('고객(선택)', 'Customer (optional)')}</InputLabel>
                 <Select
                   value={formData.customer_id}
-                  onChange={(e) => setFormData({ ...formData, customer_id: e.target.value })}
+                  onChange={(e) => handleCustomerSelect(String(e.target.value))}
                   label={txt('고객(선택)', 'Customer (optional)')}
+                  notched
+                  displayEmpty
                   disabled={dialogMode === 'view'}
                 >
                   <MenuItem value="">
@@ -951,16 +1081,40 @@ const ContractManagement: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid size={{ xs: 12 }}>
-              <TextField
-                fullWidth
-                label={txt('계약명', 'Title')}
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                disabled={dialogMode === 'view'}
-                required
-              />
-            </Grid>
+            {selectedCustomer ? (
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Box
+                  sx={{
+                    height: '100%',
+                    minHeight: 56,
+                    px: 1.5,
+                    py: 1.25,
+                    borderRadius: '8px',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    bgcolor: alpha(theme.palette.grey[500], theme.palette.mode === 'dark' ? 0.08 : 0.04),
+                  }}
+                >
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                    {txt('고객사 정보', 'Customer details')}
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.25 }}>
+                    {selectedCustomer.name}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.25 }}>
+                    {[
+                      selectedCustomer.ceo_name
+                        ? `${txt('대표', 'CEO')}: ${selectedCustomer.ceo_name}`
+                        : '',
+                      selectedCustomer.phone || '',
+                      selectedCustomer.email || '',
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || txt('등록된 연락처 없음', 'No contact on file')}
+                  </Typography>
+                </Box>
+              </Grid>
+            ) : null}
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
                 fullWidth
@@ -970,15 +1124,17 @@ const ContractManagement: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, contract_value: e.target.value })}
                 disabled={dialogMode === 'view'}
                 required
+                InputLabelProps={{ shrink: true }}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <FormControl fullWidth>
-                <InputLabel>{txt('계약 구분', 'Contract type')}</InputLabel>
+                <InputLabel shrink>{txt('계약 구분', 'Contract type')}</InputLabel>
                 <Select
                   value={formData.contract_type}
                   onChange={(e) => setFormData({ ...formData, contract_type: e.target.value })}
                   label={txt('계약 구분', 'Contract type')}
+                  notched
                   disabled={dialogMode === 'view'}
                 >
                   <MenuItem value="sales">{txt('매출 계약', 'Sales contract')}</MenuItem>
@@ -1012,11 +1168,12 @@ const ContractManagement: React.FC = () => {
             </Grid>
             <Grid size={{ xs: 12 }}>
               <FormControl fullWidth>
-                <InputLabel>{txt('상태', 'Status')}</InputLabel>
+                <InputLabel shrink>{txt('상태', 'Status')}</InputLabel>
                 <Select
                   value={formData.status}
                   onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                   label={txt('상태', 'Status')}
+                  notched
                   disabled={dialogMode === 'view'}
                 >
                   <MenuItem value="active">{txt('활성', 'Active')}</MenuItem>
@@ -1035,6 +1192,7 @@ const ContractManagement: React.FC = () => {
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 disabled={dialogMode === 'view'}
+                InputLabelProps={{ shrink: true }}
               />
             </Grid>
             <Grid size={{ xs: 12 }}>

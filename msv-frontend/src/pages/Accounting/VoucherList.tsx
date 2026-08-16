@@ -19,7 +19,7 @@ import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import AccountingCompanyBar from '../../components/Accounting/AccountingCompanyBar';
 import { useAccountingCompany } from '../../hooks/useAccountingCompany';
 import { accountingService } from '../../services/api';
-import { mvsPageRootSx } from '../../theme/mvsLayout';
+import { mvsBodyListTableSx, mvsPageRootSx, mvsTableHeadHighlightSx } from '../../theme/mvsLayout';
 import { formatInr } from '../../utils/formatInr';
 
 const STATUS_COLOR: Record<string, 'default' | 'warning' | 'success' | 'error' | 'info'> = {
@@ -70,9 +70,9 @@ const VoucherList: React.FC = () => {
             <MenuItem key={s} value={s}>{t(`voucherList.statuses.${s}`, s)}</MenuItem>
           ))}
         </TextField>
-        <TableContainer sx={{ bgcolor: '#fff', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+        <TableContainer sx={mvsBodyListTableSx}>
           <Table size="small">
-            <TableHead>
+            <TableHead sx={mvsTableHeadHighlightSx}>
               <TableRow>
                 <TableCell>{t('voucherList.date')}</TableCell>
                 <TableCell>{t('voucherList.number')}</TableCell>

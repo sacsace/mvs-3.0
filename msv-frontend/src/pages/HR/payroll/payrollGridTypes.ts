@@ -23,6 +23,13 @@ export type PayrollGridRow = {
   basic_salary: number;
   house_rent_allowance: number;
   other_allowance: number;
+  /** Food / Meals allowance — 급여 패키지 구성 */
+  food_allowance: number;
+  /**
+   * 상수 영역 사용자 추가 항목 (id → 금액).
+   * basic_salary / house_rent_allowance / other_allowance 는 전용 필드 사용.
+   */
+  constant_parts?: Record<string, number>;
   total_salary: number;
   total_day_of_month: string;
   unpaid_leave: string;
@@ -30,9 +37,15 @@ export type PayrollGridRow = {
   ot_rate: number;
   day_ot_hour: number;
   night_ot_hour: number;
+  /** 인사정보 OT 적용 대상 (false면 자동 OT 미반영) */
+  ot_eligible?: boolean;
+  /** 그리드에서 OT 시간을 수동 입력한 경우 — 미적용 직원이어도 OT 계산 허용 */
+  ot_manual?: boolean;
   transport_allowance: number;
   overtime: number;
   sum_total: number;
+  /** 사용자 추가 수당 컬럼 값 (컬럼 id → 금액) */
+  custom_allowances?: Record<string, number>;
   /** extra_fields.indian_pf_mode — 기본 basic_12pct */
   indian_pf_mode?: 'basic_12pct' | 'gross_6pct' | 'epf_12pct_half';
   pf_employee: string;

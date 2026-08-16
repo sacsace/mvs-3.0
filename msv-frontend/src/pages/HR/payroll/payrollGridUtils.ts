@@ -1,11 +1,25 @@
 import type { PayrollGridRow } from './payrollGridTypes';
 import { computeProfessionalTaxByState } from './indianProfessionalTax';
+import {
+  DEFAULT_SALARY_RATIOS,
+  isSystemConstantId,
+  loadPayrollSalaryRatios,
+  splitPackageByRatios,
+  type PayrollSalaryRatios,
+} from './payrollSalaryRatios';
+
+export type { PayrollSalaryRatios };
+export { DEFAULT_SALARY_RATIOS, loadPayrollSalaryRatios, splitPackageByRatios };
 
 export type PayrollRecalcContext = {
   /** 회사 등록 주 GST code (예: 29) */
   companyStateCode?: string | null;
   /** YYYY-MM */
   payrollMonth?: string | null;
+  /** 회사별 상수·컬럼 설정용 */
+  companyId?: string | number | null;
+  /** 적용 중인 상수 % (있으면 localStorage보다 우선) */
+  salaryRatios?: PayrollSalaryRatios;
 };
 
 /** ESIC: 지급합계(Q) ≤ 21,000 이면 Q×0.75% / Q×3.25%, 초과 시 0 */
@@ -40,8 +54,6 @@ export function computeEsicContributions(
 
 const PF_BASIC_RATE = 0.12;
 const PF_CAP_INR = 1800;
-const BASIC_RATIO = 0.5;
-const HRA_RATIO = 0.3;
 const LEGACY_DAY_SHIFT_RATE_INR = 50;
 
 function num(v: unknown, fallback = 0): number {
@@ -78,16 +90,85 @@ export function defaultOtRateFromBasic(basicSalary: number): number {
   return roundInr((basic / 26 / 8) * 2);
 }
 
-function splitSalaryComponentsFromTotal(totalSalary: number): {
+function splitSalaryComponentsFromTotal(
+  totalSalary: number,
+  ratios?: PayrollSalaryRatios
+): {
   basic: number;
   hra: number;
   other: number;
 } {
-  const total = Math.max(0, num(totalSalary));
-  const basic = roundInr(total * BASIC_RATIO);
-  const hra = roundInr(total * HRA_RATIO);
-  const other = roundInr(total - basic - hra);
-  return { basic, hra, other };
+  const m = splitPackageByRatios(totalSalary, ratios || loadPayrollSalaryRatios());
+  return {
+    basic: m.basic_salary ?? 0,
+    hra: m.house_rent_allowance ?? 0,
+    other: m.other_allowance ?? 0,
+  };
+}
+
+function readConstantPartsMap(row: PayrollGridRow): Record<string, number> {
+  const raw = row.constant_parts && typeof row.constant_parts === 'object' ? row.constant_parts : {};
+  const out: Record<string, number> = {};
+  for (const [key, val] of Object.entries(raw)) {
+    if (isSystemConstantId(key)) continue;
+    out[key] = Math.max(0, num(val));
+  }
+  return out;
+}
+
+function sumActiveConstantParts(
+  row: PayrollGridRow,
+  ratios: PayrollSalaryRatios
+): {
+  basic: number;
+  hra: number;
+  other: number;
+  constant_parts: Record<string, number>;
+  packageSum: number;
+} {
+  const constant_parts: Record<string, number> = {};
+  let basic = 0;
+  let hra = 0;
+  let other = 0;
+  let packageSum = 0;
+  const existingExtra = readConstantPartsMap(row);
+  for (const part of ratios.parts) {
+    let amount = 0;
+    if (part.id === 'basic_salary') amount = Math.max(0, num(row.basic_salary));
+    else if (part.id === 'house_rent_allowance') amount = Math.max(0, num(row.house_rent_allowance));
+    else if (part.id === 'other_allowance') amount = Math.max(0, num(row.other_allowance));
+    else amount = Math.max(0, num(existingExtra[part.id]));
+
+    if (part.id === 'basic_salary') basic = amount;
+    else if (part.id === 'house_rent_allowance') hra = amount;
+    else if (part.id === 'other_allowance') other = amount;
+    else constant_parts[part.id] = amount;
+    packageSum += amount;
+  }
+  return { basic, hra, other, constant_parts, packageSum };
+}
+
+function applySplitMapToComponents(
+  split: Record<string, number>,
+  ratios: PayrollSalaryRatios
+): {
+  basic: number;
+  hra: number;
+  other: number;
+  constant_parts: Record<string, number>;
+} {
+  const constant_parts: Record<string, number> = {};
+  let basic = 0;
+  let hra = 0;
+  let other = 0;
+  for (const part of ratios.parts) {
+    const amount = Math.max(0, num(split[part.id]));
+    if (part.id === 'basic_salary') basic = amount;
+    else if (part.id === 'house_rent_allowance') hra = amount;
+    else if (part.id === 'other_allowance') other = amount;
+    else constant_parts[part.id] = amount;
+  }
+  return { basic, hra, other, constant_parts };
 }
 
 function computeOvertimePay(
@@ -131,16 +212,40 @@ export function isOtEligible(
   return true;
 }
 
+/** 수동 OT 입력 플래그 (extra_fields.ot_manual) */
+export function isOtManualOverride(extra?: Record<string, unknown> | null): boolean {
+  if (!extra) return false;
+  const v = extra.ot_manual;
+  return v === true || v === 'true' || v === 1 || v === '1';
+}
+
+/** OT 적용: 대상이거나, 미대상이어도 수동 입력이 있으면 true */
+export function shouldApplyOtPay(otEligible: boolean, otManual: boolean): boolean {
+  return otEligible || otManual;
+}
+
 /** extra_fields → OT Rate / OT 시간 */
 function resolveOtInputsFromExtra(
   x: Record<string, unknown>,
   basic: number,
   overtimePayFromApi: number,
-  otEligible = true
+  otEligible = true,
+  otManual = false
 ): { ot_rate: number; day_ot_hour: number; night_ot_hour: number } {
+  const defaultRate = basic > 0 ? defaultOtRateFromBasic(basic) : 0;
+
+  // 미적용: 자동(근태) OT는 무시. 수동 입력이 있을 때만 day_ot_hour 사용.
   if (!otEligible) {
-    const otRate = basic > 0 ? defaultOtRateFromBasic(basic) : 0;
-    return { ot_rate: otRate, day_ot_hour: 0, night_ot_hour: 0 };
+    if (!otManual) {
+      return { ot_rate: defaultRate, day_ot_hour: 0, night_ot_hour: 0 };
+    }
+    let otRate = num(x.ot_rate);
+    if (otRate <= 0) otRate = defaultRate;
+    return {
+      ot_rate: otRate,
+      day_ot_hour: mergeOtHours(x.day_ot_hour, x.night_ot_hour),
+      night_ot_hour: 0,
+    };
   }
 
   const hasHourFields =
@@ -239,7 +344,6 @@ function resolveOtInputsFromExtra(
   }
 
   const apiOt = Math.max(0, num(overtimePayFromApi));
-  const defaultRate = basic > 0 ? defaultOtRateFromBasic(basic) : 0;
   return {
     ot_rate: defaultRate,
     day_ot_hour: defaultRate > 0 ? roundOtHour(apiOt / defaultRate) : 0,
@@ -309,47 +413,135 @@ export function computeMonthlyTdsFromSumTotal(monthlySumTotal: number): number {
   return Math.round((taxAfterRelief * 1.04) / 12);
 }
 
-export function recalculatePayrollRow(
+export type PayrollRecalcOptions = {
+  /**
+   * true: 급여 합계 셀을 편집한 경우.
+   * 합계 전체를 저장된 % 비율로 상수 항목에 분배.
+   */
+  preferTotalSplit?: boolean;
+  /** 분배에 사용할 비율 (미지정 시 localStorage) */
+  salaryRatios?: PayrollSalaryRatios;
+};
+
+/** 셀 편집 후: 합계만 바뀌었으면 preferTotalSplit */
+export function shouldPreferTotalSplit(
+  oldRow: PayrollGridRow,
+  newRow: PayrollGridRow
+): boolean {
+  const totalChanged = num(oldRow.total_salary) !== num(newRow.total_salary);
+  if (!totalChanged) return false;
+  const oldExtra = readConstantPartsMap(oldRow);
+  const newExtra = readConstantPartsMap(newRow);
+  const extraKeys: string[] = Object.keys(oldExtra);
+  const newKeys = Object.keys(newExtra);
+  for (let i = 0; i < newKeys.length; i += 1) {
+    if (extraKeys.indexOf(newKeys[i]) < 0) extraKeys.push(newKeys[i]);
+  }
+  let extraChanged = false;
+  for (let i = 0; i < extraKeys.length; i += 1) {
+    const k = extraKeys[i];
+    if (num(oldExtra[k]) !== num(newExtra[k])) {
+      extraChanged = true;
+      break;
+    }
+  }
+  const componentChanged =
+    num(oldRow.basic_salary) !== num(newRow.basic_salary) ||
+    num(oldRow.house_rent_allowance) !== num(newRow.house_rent_allowance) ||
+    num(oldRow.other_allowance) !== num(newRow.other_allowance) ||
+    extraChanged;
+  return !componentChanged;
+}
+
+/** 급여 합계에 % 비율을 적용한 행 */
+export function applySalaryRatiosToRow(
   row: PayrollGridRow,
+  ratios: PayrollSalaryRatios,
   ctx: PayrollRecalcContext = {}
 ): PayrollGridRow {
-  let basic = num(row.basic_salary);
-  let hra = num(row.house_rent_allowance);
-  let otherAllowance = num(row.other_allowance);
   const totalSalaryInput = num(row.total_salary);
-  const sumParts = roundInr(basic + hra + otherAllowance);
+  const current = sumActiveConstantParts(row, ratios);
+  const packageBase = totalSalaryInput > 0 ? totalSalaryInput : current.packageSum;
+  const split = splitPackageByRatios(packageBase, ratios);
+  const applied = applySplitMapToComponents(split, ratios);
+  return recalculatePayrollRow(
+    {
+      ...row,
+      basic_salary: applied.basic,
+      house_rent_allowance: applied.hra,
+      other_allowance: applied.other,
+      constant_parts: applied.constant_parts,
+      food_allowance: 0,
+      total_salary: packageBase,
+    },
+    ctx,
+    { preferTotalSplit: false, salaryRatios: ratios }
+  );
+}
 
-  let totalSalary = totalSalaryInput;
-
-  if (totalSalaryInput > 0 && Math.abs(totalSalaryInput - sumParts) > 0.01) {
-    const split = splitSalaryComponentsFromTotal(totalSalaryInput);
-    basic = split.basic;
-    hra = split.hra;
-    otherAllowance = split.other;
-    totalSalary = totalSalaryInput;
-  } else if (sumParts > 0) {
-    totalSalary = sumParts;
-  } else if (totalSalaryInput > 0) {
-    const split = splitSalaryComponentsFromTotal(totalSalaryInput);
-    basic = split.basic;
-    hra = split.hra;
-    otherAllowance = split.other;
-    totalSalary = totalSalaryInput;
+export function recalculatePayrollRow(
+  row: PayrollGridRow,
+  ctx: PayrollRecalcContext = {},
+  opts: PayrollRecalcOptions = {}
+): PayrollGridRow {
+  const ratios =
+    opts.salaryRatios ||
+    ctx.salaryRatios ||
+    loadPayrollSalaryRatios(ctx.companyId);
+  const customAllowances: Record<string, number> = {};
+  const rawCustom = row.custom_allowances && typeof row.custom_allowances === 'object' ? row.custom_allowances : {};
+  let customSum = 0;
+  for (const [key, val] of Object.entries(rawCustom)) {
+    const amount = Math.max(0, num(val));
+    customAllowances[key] = amount;
+    customSum += amount;
   }
+  const totalSalaryInput = num(row.total_salary);
+
+  let basic: number;
+  let hra: number;
+  let otherAllowance: number;
+  let constant_parts: Record<string, number>;
+
+  if (opts.preferTotalSplit && totalSalaryInput > 0) {
+    const packageBase = Math.max(0, roundInr(totalSalaryInput));
+    const split = splitPackageByRatios(packageBase, ratios);
+    const applied = applySplitMapToComponents(split, ratios);
+    basic = applied.basic;
+    hra = applied.hra;
+    otherAllowance = applied.other;
+    constant_parts = applied.constant_parts;
+  } else {
+    const current = sumActiveConstantParts(row, ratios);
+    basic = current.basic;
+    hra = current.hra;
+    otherAllowance = current.other;
+    constant_parts = current.constant_parts;
+  }
+
+  // 급여 합계 = 상수 영역(기본급·주거·기타·추가 상수) 금액의 합. 식대 컬럼/추가수당 제외.
+  const foodAllowance = 0;
+  const packageSum = roundInr(
+    basic + hra + otherAllowance + Object.values(constant_parts).reduce((s, v) => s + num(v), 0)
+  );
+  const totalSalary = packageSum;
 
   const calendarDays = Math.max(1, num(row.total_day_of_month) || 30);
   const worked = derivedDaysWorkedFromCalendarAndUnpaid(row.total_day_of_month, row.unpaid_leave);
   const days_worked = String(worked);
 
   const otRate = basic > 0 ? defaultOtRateFromBasic(basic) : 0;
-  const dayOtHour = roundOtHour(num(row.day_ot_hour));
+  const otEligible = row.ot_eligible !== false;
+  const otManual = Boolean(row.ot_manual);
+  const applyOt = shouldApplyOtPay(otEligible, otManual);
+  const dayOtHour = applyOt ? roundOtHour(num(row.day_ot_hour)) : 0;
   const overtime = computeOvertimePay({
     ot_rate: otRate,
     day_ot_hour: dayOtHour
   });
   const transport = Math.max(0, num(row.transport_allowance));
   const proratedPackage = roundInr((totalSalary * worked) / calendarDays);
-  const sum_total = roundInr(proratedPackage + overtime + transport);
+  const sum_total = roundInr(proratedPackage + overtime + transport + customSum);
 
   const pf = computePfContributions(basic);
   const pfEmployeeStr = String(pf.pf_employee);
@@ -375,11 +567,16 @@ export function recalculatePayrollRow(
     basic_salary: basic,
     house_rent_allowance: hra,
     other_allowance: otherAllowance,
+    food_allowance: foodAllowance,
+    constant_parts,
+    custom_allowances: customAllowances,
     total_salary: totalSalary,
     days_worked,
     ot_rate: otRate,
     day_ot_hour: dayOtHour,
     night_ot_hour: 0,
+    ot_eligible: otEligible,
+    ot_manual: otManual && dayOtHour > 0,
     overtime,
     sum_total,
     pf_employee: pfEmployeeStr,
@@ -498,36 +695,80 @@ export function payrollRecordToGridRow(
     ex(x, 'joining_date') || (emp.hire_date ? String(emp.hire_date).split('T')[0] : '');
   const workingMonth = ex(x, 'working_month') || str(p.payroll_period);
 
-  const basicInitial = num(p.basic_salary);
-  const hraInitial = num(ex(x, 'house_rent_allowance'));
-  let otherAllowance = num(ex(x, 'other_allowance'));
-  let basic = basicInitial;
-  let hra = hraInitial;
-  let totalSalary = num(ex(x, 'total_salary'));
-  if (totalSalary <= 0) {
-    const partsSum = roundInr(basic + hra + otherAllowance);
-    totalSalary =
-      partsSum > 0 ? partsSum : basic > 0 ? roundInr(basic / BASIC_RATIO) : 0;
-  }
-  if (otherAllowance <= 0 && totalSalary > 0 && (basic > 0 || hra > 0)) {
-    otherAllowance = roundInr(Math.max(0, totalSalary - basic - hra));
-  }
-  if (basic <= 0 && hra <= 0 && otherAllowance <= 0 && totalSalary > 0) {
-    const split = splitSalaryComponentsFromTotal(totalSalary);
-    basic = split.basic;
-    hra = split.hra;
-    otherAllowance = split.other;
-  } else if (otherAllowance <= 0 && totalSalary > 0) {
-    const split = splitSalaryComponentsFromTotal(totalSalary);
-    if (basic <= 0) basic = split.basic;
-    if (hra <= 0) hra = split.hra;
-    otherAllowance = split.other;
+  const ratios = loadPayrollSalaryRatios(ctx.companyId);
+  const constRaw = x.constant_parts;
+  const constant_parts: Record<string, number> = {};
+  if (constRaw && typeof constRaw === 'object' && !Array.isArray(constRaw)) {
+    for (const [key, val] of Object.entries(constRaw as Record<string, unknown>)) {
+      if (isSystemConstantId(key)) continue;
+      constant_parts[key] = Math.max(0, num(val));
+    }
   }
 
-  const { ot_rate: otRateInitial, day_ot_hour: dayOtHour } =
-    resolveOtInputsFromExtra(x, basic, num(p.overtime_pay), isOtEligible(x, emp));
+  /**
+   * 급여 생성 시 DB basic_salary = 패키지 전체(프로필/계약 급여).
+   * extra에 상수 분해(total_salary / HRA / 기타 / constant_parts)가 있으면 그 값을 쓰고,
+   * 없으면 패키지 전체를 회사 상수 %로 분배한다.
+   */
+  const packageFromDb = num(p.basic_salary);
+  const storedTotal = num(ex(x, 'total_salary'));
+  const hraInitial = num(ex(x, 'house_rent_allowance'));
+  let otherAllowance = num(ex(x, 'other_allowance'));
+  const legacyFood = Math.max(0, num(ex(x, 'food_allowance')));
+  if (legacyFood > 0) otherAllowance = roundInr(otherAllowance + legacyFood);
+
+  const hasSavedBreakdown =
+    storedTotal > 0 ||
+    hraInitial > 0 ||
+    otherAllowance > 0 ||
+    Object.keys(constant_parts).length > 0;
+
+  let basic: number;
+  let hra: number;
+  let totalSalary: number;
+
+  if (!hasSavedBreakdown && packageFromDb > 0) {
+    // 신규/미분해: DB basic_salary = 패키지 전체 → 상수 %로 분배. 급여 합계 = 패키지.
+    totalSalary = packageFromDb;
+    const split = splitPackageByRatios(totalSalary, ratios);
+    const applied = applySplitMapToComponents(split, ratios);
+    basic = applied.basic;
+    hra = applied.hra;
+    otherAllowance = applied.other;
+    Object.assign(constant_parts, applied.constant_parts);
+  } else {
+    // 이미 상수 분해가 저장된 경우: 급여 합계 = 상수 항목 합
+    basic = packageFromDb;
+    hra = hraInitial;
+    const partsSum = roundInr(
+      basic +
+        hra +
+        otherAllowance +
+        Object.values(constant_parts).reduce((s, v) => s + num(v), 0)
+    );
+    totalSalary = partsSum > 0 ? partsSum : storedTotal > 0 ? storedTotal : packageFromDb;
+  }
+
+  const foodAllowance = 0;
+
+  const otEligible = isOtEligible(x, emp);
+  const otManual = isOtManualOverride(x);
+  const { ot_rate: otRateInitial, day_ot_hour: dayOtHour } = resolveOtInputsFromExtra(
+    x,
+    basic,
+    num(p.overtime_pay),
+    otEligible,
+    otManual
+  );
   const transport = num(ex(x, 'transport_allowance'));
   const indianPfMode = resolvePfModeFromExtra(x);
+  const customRaw = x.custom_allowances;
+  const custom_allowances: Record<string, number> = {};
+  if (customRaw && typeof customRaw === 'object' && !Array.isArray(customRaw)) {
+    for (const [key, val] of Object.entries(customRaw as Record<string, unknown>)) {
+      custom_allowances[key] = Math.max(0, num(val));
+    }
+  }
 
   const advance = num(p.deductions);
 
@@ -548,6 +789,9 @@ export function payrollRecordToGridRow(
     basic_salary: basic,
     house_rent_allowance: hra,
     other_allowance: otherAllowance,
+    food_allowance: foodAllowance,
+    constant_parts,
+    custom_allowances,
     total_salary: totalSalary,
     total_day_of_month: ex(x, 'total_day_of_month'),
     unpaid_leave: ex(x, 'unpaid_leave'),
@@ -555,6 +799,8 @@ export function payrollRecordToGridRow(
     ot_rate: otRateInitial,
     day_ot_hour: dayOtHour,
     night_ot_hour: 0,
+    ot_eligible: otEligible,
+    ot_manual: otManual && dayOtHour > 0,
     transport_allowance: transport,
     overtime: 0,
     sum_total: num(p.gross_salary),
@@ -577,7 +823,9 @@ export function gridRowToPayload(
   row: PayrollGridRow,
   ctx: PayrollRecalcContext = {}
 ): Record<string, unknown> {
-  const recalculated = recalculatePayrollRow(row, ctx);
+  const recalculated = recalculatePayrollRow(row, ctx, {
+    salaryRatios: ctx.salaryRatios,
+  });
   const otPay = computeOtPayParts(
     recalculated.ot_rate,
     recalculated.day_ot_hour
@@ -595,6 +843,9 @@ export function gridRowToPayload(
     working_month: recalculated.working_month,
     house_rent_allowance: recalculated.house_rent_allowance,
     other_allowance: recalculated.other_allowance,
+    food_allowance: recalculated.food_allowance,
+    constant_parts: recalculated.constant_parts || {},
+    custom_allowances: recalculated.custom_allowances || {},
     total_salary: recalculated.total_salary,
     total_day_of_month: stripCommaField(recalculated.total_day_of_month),
     unpaid_leave: stripCommaField(recalculated.unpaid_leave),
@@ -602,6 +853,8 @@ export function gridRowToPayload(
     ot_rate: recalculated.ot_rate,
     day_ot_hour: recalculated.day_ot_hour,
     night_ot_hour: 0,
+    ot_eligible: recalculated.ot_eligible !== false,
+    ot_manual: Boolean(recalculated.ot_manual),
     day_ot: otPay.day_ot_pay,
     night_ot: 0,
     transport_allowance: recalculated.transport_allowance,
@@ -620,6 +873,8 @@ export function gridRowToPayload(
     allowances:
       num(recalculated.house_rent_allowance) +
       num(recalculated.other_allowance) +
+      Object.values(recalculated.constant_parts || {}).reduce((s, v) => s + num(v), 0) +
+      Object.values(recalculated.custom_allowances || {}).reduce((s, v) => s + num(v), 0) +
       num(recalculated.transport_allowance),
     gross_salary: num(recalculated.sum_total),
     net_salary: num(recalculated.net_salary_payable),

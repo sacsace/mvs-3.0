@@ -1151,7 +1151,7 @@ const GeneralLedger: React.FC = () => {
 
       {tab === 0 && (
         <>
-          <Card elevation={0} sx={{ ...mvsBodyCardSx, mt: 2.5, mb: 0, overflow: 'visible' }}>
+          <Card elevation={0} sx={{ ...mvsBodyCardSx, mt: 2.5, mb: 0 }}>
             <Box sx={mvsBodyFilterWrapSx}>
               <Box sx={filterToolbarRowSx}>
                 <TextField
@@ -1486,7 +1486,7 @@ const GeneralLedger: React.FC = () => {
 
       {tab === 1 && (
         <>
-          <Card elevation={0} sx={{ ...mvsBodyCardSx, mt: 2.5, mb: 0, overflow: 'visible' }}>
+          <Card elevation={0} sx={{ ...mvsBodyCardSx, mt: 2.5, mb: 0 }}>
             <Box sx={mvsBodyFilterWrapSx}>
               <Box sx={filterToolbarRowSx}>
                 <Autocomplete
@@ -1819,7 +1819,7 @@ const GeneralLedger: React.FC = () => {
 
       {tab === 2 && (
         <>
-          <Card elevation={0} sx={{ ...mvsBodyCardSx, mt: 2.5, mb: 0, overflow: 'visible' }}>
+          <Card elevation={0} sx={{ ...mvsBodyCardSx, mt: 2.5, mb: 0 }}>
             <Box sx={mvsBodyFilterWrapSx}>
               <Box sx={filterToolbarRowSx}>
                 <TextField
@@ -2137,12 +2137,7 @@ const GeneralLedger: React.FC = () => {
                     ...mvsTableScrollSx,
                     ...(accountViewMode === 'page'
                       ? { maxHeight: { xs: '50vh', md: 560 } }
-                      : {
-                          maxHeight: 'none',
-                          overflow: 'visible',
-                          overflowX: 'auto',
-                          overflowY: 'visible',
-                        }),
+                      : { maxHeight: 'none' }),
                   }}
                 >
                 <Table size="small" stickyHeader={accountViewMode === 'page'} sx={tableSx}>

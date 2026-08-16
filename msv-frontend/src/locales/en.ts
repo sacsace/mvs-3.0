@@ -1392,6 +1392,7 @@ export default {
           basic_salary: 'Basic',
           house_rent_allowance: 'HRA',
           other_allowance: 'Other allowance (sum columns)',
+          food_allowance: 'Food allowance',
           total_salary: 'Total salary',
           total_day_of_month: 'Days in month',
           unpaid_leave: 'Unpaid leave',
@@ -1443,6 +1444,7 @@ export default {
         basicSalary: 'Basic\nSalary',
         houseRentAllowance: 'House Rent\nAllowance',
         otherAllowance: 'Other\nAllowance',
+        foodAllowance: 'Food\nAllowance',
         totalSalary: 'Total\nSalary',
         totalDayOfMonth: 'Days in\nMonth',
         unpaidLeave: 'Unpaid\nLeave',
@@ -1510,6 +1512,7 @@ export default {
         basicSalary: 'Basic salary',
         houseRentAllowance: 'House rent allowance',
         otherAllowance: 'Other Allowances',
+        foodAllowance: 'Food Allowance',
         totalSalary: 'Total salary',
         dayOt: 'OT',
         otRate: 'OT rate',
@@ -1567,9 +1570,24 @@ export default {
         createPayroll: 'Create Payroll',
         completePayroll: 'Finalize payroll',
         exportExcel: 'Export to Excel',
+        addColumn: 'Add column',
+        reorderColumns: 'Column order',
+        resetColumnOrder: 'Reset order',
+        editConstants: 'Constant area',
+        saveRatios: 'Save ratios',
+        applyRatiosToList: 'Apply to list',
+        resetRatios: 'Default (50/30/20)',
+        addConstantPart: 'Add constant item',
         reset: 'Reset',
         create: 'Create'
       },
+      columnToolbarHint: 'You can add headers or change their order.',
+      columnAdded: 'Column 「{{name}}」 was added.',
+      customColumnBadge: 'Custom column',
+      salaryRatiosShort: 'Constants {{summary}}',
+      salaryRatiosSaved: 'Constant area ratios saved.',
+      salaryRatiosApplied: 'Applied constant ratios to {{count}} row(s).',
+      salaryRatiosApplyPartial: 'Ratio apply: {{ok}} ok, {{fail}} failed',
       empty: {
         loading: 'Loading payroll data…',
         noItems: 'No payroll data to display.',
@@ -1586,7 +1604,25 @@ export default {
         underDevelopment: 'Payroll creation is under development.',
         completeTitle: 'Finalize payroll month',
         completeMessage:
-          'Finalize payroll for {{period}}. After this, non‑root users cannot edit, delete, approve, or mark as paid for that month. (root is exempt.) Continue?'
+          'Finalize payroll for {{period}}. After this, non‑root users cannot edit, delete, approve, or mark as paid for that month. (root is exempt.) Continue?',
+        addColumnTitle: 'Add column',
+        columnNameLabel: 'Column name (header)',
+        addColumnHint:
+          'New columns appear next to Additional Allowance and are included in payment total.',
+        reorderColumnsTitle: 'Reorder columns',
+        reorderColumnsHint: 'Use ↑↓ to move headers. Custom columns can be deleted.',
+        salaryRatiosTitle: 'Constant area (% of salary)',
+        salaryRatiosHint:
+          'Constant items appear next to Other Allowance and are included in total salary.「Save ratios」or「Apply to list」updates the grid immediately.',
+        constantNameLabel: 'Name',
+        constantPctLabel: 'Ratio',
+        newConstantPartLabel: 'New constant',
+        basicPctLabel: 'Basic salary %',
+        hraPctLabel: 'HRA %',
+        otherPctLabel: 'Other allowance %',
+        otherPctHelper: 'Auto-calculated as the remaining share.',
+        ratioSumLabel: 'Total {{sum}}% (must be 100%)',
+        allowConstantsCellEdit: 'Allow editing constant cells in the grid'
       },
       hints: {
         createChooseOtherMonth:
@@ -1595,6 +1631,8 @@ export default {
       preview: {
         title: 'Before bulk payroll',
         blockedAlreadyExists: 'Payroll already exists for this month. Bulk generation cannot run again.',
+        replaceWarning:
+          '{{count}} payroll record(s) already exist for {{period}}. Because the month is not finalized, they will be deactivated and regenerated.',
         summary: 'Pay month {{period}} · active employees {{total}}',
         withAttendance: 'Employees with attendance records this month: {{count}}',
         withoutAttendance: 'Employees with no attendance records this month: {{count}}',
@@ -1618,7 +1656,8 @@ export default {
         saveFailed: 'Failed to save.',
         periodRequired: 'Please select a payroll period.',
         periodLocked: 'This payroll month is already finalized; bulk generation is not allowed.',
-        alreadyGenerated: 'Payroll for this month already exists. Bulk generation cannot be run again for the same month.',
+        alreadyGenerated:
+          'This payroll month is finalized, so bulk generation cannot run again. Before finalization, existing rows are deactivated and regenerated.',
         periodAlreadyFinalized: 'This payroll month is already finalized.',
         periodCompleteFailed: 'Failed to finalize payroll month.',
         futurePayMonthNotAllowed: 'Payroll cannot be created or finalized for a future month.',
@@ -1628,7 +1667,8 @@ export default {
         approveFailed: 'Failed to approve payroll.',
         approveError: 'An error occurred while approving payroll.',
         payFailed: 'Failed to pay payroll.',
-        payError: 'An error occurred while paying payroll.'
+        payError: 'An error occurred while paying payroll.',
+        exportFailed: 'Failed to export Excel.'
       }
     },
     departmentManagement: {
@@ -4256,6 +4296,7 @@ export default {
       detailTitle: 'Quotation detail',
       backToList: 'Back to list',
       sendEmail: 'Send email',
+      confirmResendEmail: 'This quotation was already emailed. Send it again?',
       delete: 'Delete',
       save: 'Save',
       cancel: 'Cancel',
@@ -4280,8 +4321,10 @@ export default {
       rejectDialogTitle: 'Reject quotation',
       approveSuccess: 'Quotation approved.',
       rejectSuccess: 'Quotation rejected.',
-      editLocked: 'Approved, sent, or rejected quotations cannot be edited.',
-      searchPlaceholder: 'Search by quotation number, customer name, email',
+      editLocked: 'For approved or sent quotations, use Edit to change description, expiry, and line items only. The customer cannot be changed. Saving requires re-approval.',
+      partialEditHint: 'The receiving company cannot be changed. You can edit description, expiry, items, and the approver. After save, the quotation returns to pending approval. Email and PDF are available again only after approval.',
+      updatedNeedsReapproval: 'Saved. Re-approval is required before email or PDF export.',
+      searchPlaceholder: 'Search by quotation number, customer name, email, items',
       customerSearchPlaceholder: 'Search by customer name',
       customerEmailMultipleHint: 'Separate multiple addresses with commas (,) or semicolons (;).',
       invalidEmailInList: 'Invalid email in the list: {{part}}',

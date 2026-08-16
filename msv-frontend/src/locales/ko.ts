@@ -801,6 +801,7 @@ export default {
       detailTitle: '견적서 상세',
       backToList: '목록으로',
       sendEmail: '메일 보내기',
+      confirmResendEmail: '이미 메일을 보낸 견적서입니다. 다시 보내시겠습니까?',
       delete: '삭제',
       save: '저장',
       cancel: '취소',
@@ -825,8 +826,10 @@ export default {
       rejectDialogTitle: '견적서 반려',
       approveSuccess: '견적서가 승인되었습니다.',
       rejectSuccess: '견적서가 반려되었습니다.',
-      editLocked: '승인·발송·반려된 견적서는 수정할 수 없습니다.',
-      searchPlaceholder: '견적서 번호, 고객명, 이메일 검색',
+      editLocked: '승인·발송된 견적서는 「수정」으로 설명·만료일·품목만 변경할 수 있습니다. 받는 회사는 변경할 수 없습니다. 수정 후 재승인이 필요합니다.',
+      partialEditHint: '받는 회사는 변경할 수 없습니다. 설명·만료일·품목·승인자를 수정할 수 있으며, 저장하면 승인 대기로 돌아가 메일·PDF는 재승인 후 사용할 수 있습니다.',
+      updatedNeedsReapproval: '수정되었습니다. 재승인 후 메일 보내기·PDF 저장이 가능합니다.',
+      searchPlaceholder: '견적서 번호, 고객명, 이메일, 항목 검색',
       customerSearchPlaceholder: '고객명 검색',
       customerEmailMultipleHint: '여러 명은 쉼표(,) 또는 세미콜론(;)으로 구분합니다.',
       invalidEmailInList: '유효하지 않은 이메일이 포함되어 있습니다: {{part}}',
@@ -1459,6 +1462,7 @@ export default {
           basic_salary: '기본급',
           house_rent_allowance: 'HRA',
           other_allowance: '기타 수당 (여러 열 합산)',
+          food_allowance: '식대 수당',
           total_salary: '급여 합계',
           total_day_of_month: '월 총일수',
           unpaid_leave: '무급휴가',
@@ -1510,6 +1514,7 @@ export default {
         basicSalary: '기본급',
         houseRentAllowance: '주거\n수당',
         otherAllowance: '기타\n수당',
+        foodAllowance: '식대\n수당',
         totalSalary: '급여\n합계',
         totalDayOfMonth: '월\n총일수',
         unpaidLeave: '무급\n휴가',
@@ -1577,6 +1582,7 @@ export default {
         basicSalary: '기본급',
         houseRentAllowance: '주거 수당',
         otherAllowance: '기타 수당',
+        foodAllowance: '식대 수당',
         totalSalary: '급여 합계',
         dayOt: 'OT',
         otRate: 'OT 요율',
@@ -1634,9 +1640,24 @@ export default {
         createPayroll: '급여 생성',
         completePayroll: '급여 생성 완료',
         exportExcel: '엑셀로 내보내기',
+        addColumn: '컬럼 추가하기',
+        reorderColumns: '컬럼 순서',
+        resetColumnOrder: '순서 초기화',
+        editConstants: '상수 영역 설정',
+        saveRatios: '비율 저장',
+        applyRatiosToList: '목록에 적용',
+        resetRatios: '기본 비율(50/30/20)',
+        addConstantPart: '상수 항목 추가',
         reset: '초기화',
         create: '생성'
       },
+      columnToolbarHint: '헤더를 추가하거나 순서를 바꿀 수 있습니다.',
+      columnAdded: '「{{name}}」 컬럼이 추가되었습니다.',
+      customColumnBadge: '사용자 추가 컬럼',
+      salaryRatiosShort: '상수 {{summary}}',
+      salaryRatiosSaved: '상수 영역 비율을 저장했습니다.',
+      salaryRatiosApplied: '상수 비율을 {{count}}건에 적용했습니다.',
+      salaryRatiosApplyPartial: '상수 비율 적용: 성공 {{ok}}건, 실패 {{fail}}건',
       empty: {
         loading: '급여 데이터를 불러오는 중입니다.',
         noItems: '표시할 급여 데이터가 없습니다.',
@@ -1653,7 +1674,25 @@ export default {
         underDevelopment: '급여 생성 기능은 개발 중입니다.',
         completeTitle: '급여 월 확정',
         completeMessage:
-          '{{period}} 급여를 확정합니다. 확정 후에는 일반 사용자가 해당 월 데이터를 수정·삭제·승인·지급 처리할 수 없습니다. (root는 예외) 계속하시겠습니까?'
+          '{{period}} 급여를 확정합니다. 확정 후에는 일반 사용자가 해당 월 데이터를 수정·삭제·승인·지급 처리할 수 없습니다. (root는 예외) 계속하시겠습니까?',
+        addColumnTitle: '컬럼 추가',
+        columnNameLabel: '컬럼명 (헤더)',
+        addColumnHint:
+          '추가한 컬럼은 「추가 수당」 옆에 붙고, 지급 합계에 포함됩니다.',
+        reorderColumnsTitle: '컬럼 순서 변경',
+        reorderColumnsHint: '↑↓로 헤더 위치를 바꿉니다. 사용자 추가 컬럼은 삭제할 수 있습니다.',
+        salaryRatiosTitle: '상수 영역 설정 (급여 %)',
+        salaryRatiosHint:
+          '상수 항목은 「기타 수당」 옆에 붙고 급여 합계에 포함됩니다. 「비율 저장」또는「목록에 적용」으로 그리드에 바로 반영됩니다.',
+        constantNameLabel: '항목명',
+        constantPctLabel: '비율',
+        newConstantPartLabel: '새 상수 항목',
+        basicPctLabel: '기본급 비율',
+        hraPctLabel: '주거 수당 비율',
+        otherPctLabel: '기타 수당 비율',
+        otherPctHelper: '나머지 비율로 자동 계산됩니다.',
+        ratioSumLabel: '합계 {{sum}}% (100%여야 합니다)',
+        allowConstantsCellEdit: '그리드에서 상수 셀 직접 수정 허용'
       },
       hints: {
         createChooseOtherMonth:
@@ -1662,6 +1701,8 @@ export default {
       preview: {
         title: '급여 생성 전 확인',
         blockedAlreadyExists: '이미 해당 급여월에 생성된 급여가 있어 일괄 생성할 수 없습니다.',
+        replaceWarning:
+          '{{period}}에 이미 생성된 급여 {{count}}건이 있습니다. 확정 전이므로 기존 데이터를 비활성화한 뒤 다시 생성합니다.',
         summary: '급여월 {{period}} · 재직 직원 {{total}}명',
         withAttendance: '해당 월 출퇴근 기록이 있는 직원: {{count}}명',
         withoutAttendance: '해당 월 출퇴근 기록이 없는 직원: {{count}}명',
@@ -1685,7 +1726,8 @@ export default {
         saveFailed: '저장에 실패했습니다.',
         periodRequired: '급여 기간을 선택해주세요.',
         periodLocked: '해당 급여 월은 이미 확정되어 일괄 생성할 수 없습니다.',
-        alreadyGenerated: '이미 해당 급여 월에 생성된 급여가 있습니다. 동일 월로 다시 일괄 생성할 수 없습니다.',
+        alreadyGenerated:
+          '이미 해당 급여 월이 확정되어 다시 일괄 생성할 수 없습니다. 확정 전에는 기존 데이터를 비활성화한 뒤 재생성됩니다.',
         periodAlreadyFinalized: '이미 확정된 급여 월입니다. 다시 확정할 필요가 없습니다.',
         periodCompleteFailed: '급여 월 확정에 실패했습니다.',
         futurePayMonthNotAllowed: '아직 도래하지 않은 급여 월은 생성·확정할 수 없습니다.',
@@ -1695,7 +1737,8 @@ export default {
         approveFailed: '급여 승인에 실패했습니다.',
         approveError: '급여 승인 중 오류가 발생했습니다.',
         payFailed: '급여 지급에 실패했습니다.',
-        payError: '급여 지급 중 오류가 발생했습니다.'
+        payError: '급여 지급 중 오류가 발생했습니다.',
+        exportFailed: '엑셀 내보내기에 실패했습니다.'
       }
     },
     departmentManagement: {

@@ -617,8 +617,8 @@ const VoucherEntry: React.FC = () => {
             ) : null}
           </Box>
           <Box sx={{ px: { xs: 2, sm: 2.5 }, pb: 2 }}>
-            <TableContainer sx={mvsTableScrollSx}>
-              <Table size="small" sx={mvsBodyListTableSx}>
+            <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+              <Table size="small">
                 <TableHead sx={mvsTableHeadHighlightSx}>
                   <TableRow>
                     <TableCell>{t('voucherEntry.preview.category')}</TableCell>

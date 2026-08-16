@@ -78,8 +78,27 @@ export const payrollDataGridSx: SxProps<Theme> = (theme) => {
     '& .MuiDataGrid-row': { maxHeight: 'none' },
     '& .MuiDataGrid-row:nth-of-type(odd)': { backgroundColor: '#FFFFFF' },
     '& .MuiDataGrid-row:nth-of-type(even)': { backgroundColor: '#FFFFFF' },
+    /* 호버 시 한 줄 전체가 선택된 것처럼 선명하게 (컬럼 배경보다 우선) */
     '& .MuiDataGrid-row:hover': {
-      backgroundColor: light ? '#F4F7FB' : theme.palette.action.hover
+      backgroundColor: light ? '#DCEEFF' : theme.palette.action.selected,
+      outline: light ? '1px solid #7EB6E8' : `1px solid ${theme.palette.primary.main}`,
+      outlineOffset: '-1px',
+      zIndex: 1,
+      '& .MuiDataGrid-cell': {
+        backgroundColor: `${light ? '#DCEEFF' : theme.palette.action.selected} !important`
+      }
+    },
+    '& .MuiDataGrid-row.Mui-hovered': {
+      backgroundColor: light ? '#DCEEFF' : theme.palette.action.selected,
+      '& .MuiDataGrid-cell': {
+        backgroundColor: `${light ? '#DCEEFF' : theme.palette.action.selected} !important`
+      }
+    },
+    '& .MuiDataGrid-row.Mui-selected, & .MuiDataGrid-row.Mui-selected:hover': {
+      backgroundColor: light ? '#C8E4FF' : theme.palette.action.selected,
+      '& .MuiDataGrid-cell': {
+        backgroundColor: `${light ? '#C8E4FF' : theme.palette.action.selected} !important`
+      }
     },
     '& .MuiDataGrid-row:last-child .MuiDataGrid-cell:first-of-type': {
       borderBottomLeftRadius: { xs: '12px', sm: '18px' }

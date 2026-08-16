@@ -2870,8 +2870,6 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
             sx={{
               ...mvsBodyListTableSx,
               ...mvsTableScrollSx,
-              overflowX: 'auto',
-              overflowY: 'visible',
             }}
           >
             <Table size="small" sx={bookingTableSx}>

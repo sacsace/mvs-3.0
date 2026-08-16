@@ -219,7 +219,7 @@ User.init(
     ot_eligible: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
-      defaultValue: true
+      defaultValue: false
     },
     career_history: {
       type: DataTypes.JSON,

@@ -25,6 +25,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TableSortLabel,
   TextField,
   Typography
 } from '@mui/material';
@@ -93,12 +94,13 @@ const listViewModeBtnSx = {
   whiteSpace: 'nowrap' as const,
 };
 
-/** 통계 표: 줄바꿈 없이 한 줄 유지, 좁으면 말줄임 + 가로 스크롤 */
+/** 통계 표: 가로 스크롤 없이 컨테이너 너비에 균등 맞춤 */
 const statsTableSx = {
   borderCollapse: 'collapse' as const,
   bgcolor: 'transparent',
-  minWidth: 960,
-  tableLayout: 'auto' as const,
+  width: '100%',
+  minWidth: 0,
+  tableLayout: 'fixed' as const,
   '& .MuiTableCell-root': {
     whiteSpace: 'nowrap' as const,
     overflow: 'hidden',
@@ -107,29 +109,50 @@ const statsTableSx = {
     borderLeft: 'none',
     borderRight: 'none',
     borderTop: 'none',
+    px: 0.75,
+    py: 0.75,
+    fontSize: '0.75rem',
   },
   '& .MuiTableCell-head': {
     whiteSpace: 'nowrap' as const,
+    fontSize: '0.6875rem',
+    px: 0.5,
+    py: 0.75,
   },
 };
 
+/** 담당자별 카드 통계 12열 비율 */
+const assigneeColWidth: Record<string, string> = {
+  employeeName: '14%',
+  period: '7%',
+  tasksAssigned: '7%',
+  tasksInProgress: '6%',
+  tasksCompleted: '7%',
+  avgCompletedProcessingHours: '9%',
+  avgOpenElapsedHours: '9%',
+  personalEfficiencyScore: '8%',
+  productivity: '7%',
+  onTimeRate: '8%',
+  overdueCount: '7%',
+  monthlyCompleted: '8%',
+};
+
 const statsEmployeeCellSx = {
-  maxWidth: 168,
-  minWidth: 120,
+  width: '14%',
 };
 
 const statsChipSx = {
-  height: 26,
+  height: 22,
   maxWidth: '100%',
-  borderRadius: '8px',
+  borderRadius: '6px',
   fontWeight: 600,
-  fontSize: '0.6875rem',
+  fontSize: '0.625rem',
   border: '1px solid',
   '& .MuiChip-label': {
     whiteSpace: 'nowrap' as const,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    px: 1,
+    px: 0.75,
   },
 };
 
@@ -152,6 +175,70 @@ const cardListDialogTableSx = {
 };
 
 type ListViewMode = 'page' | 'all';
+
+type AssigneeSortKey =
+  | 'employeeName'
+  | 'period'
+  | 'tasksAssigned'
+  | 'tasksInProgress'
+  | 'tasksCompleted'
+  | 'avgCompletedProcessingHours'
+  | 'avgOpenElapsedHours'
+  | 'personalEfficiencyScore'
+  | 'productivity'
+  | 'onTimeRate'
+  | 'overdueCount'
+  | 'monthlyCompleted';
+
+type ProcessingTimeSortKey =
+  | 'employeeName'
+  | 'sampleCompleted'
+  | 'medianHours'
+  | 'avgHours'
+  | 'minHours'
+  | 'maxHours'
+  | 'stdDevHours'
+  | 'openElapsedHours';
+
+type EfficiencySortKey =
+  | 'employeeName'
+  | 'personalEfficiencyScore'
+  | 'productivity'
+  | 'onTimeRate'
+  | 'monthlyCompleted'
+  | 'overdueCount'
+  | 'avgCompletedProcessingHours';
+
+type SortDir = 'asc' | 'desc';
+
+const statsSortLabelSx = {
+  color: 'inherit',
+  maxWidth: '100%',
+  overflow: 'hidden',
+  '& .MuiTableSortLabel-icon': {
+    color: 'inherit !important',
+    opacity: 0,
+    width: 0,
+    margin: 0,
+    flexShrink: 0,
+  },
+  '&.Mui-active': {
+    color: 'inherit',
+    '& .MuiTableSortLabel-icon': {
+      opacity: 1,
+      width: '0.9rem',
+      marginLeft: '2px',
+    },
+  },
+  '&:hover': {
+    color: 'inherit',
+    '& .MuiTableSortLabel-icon': {
+      opacity: 0.55,
+      width: '0.9rem',
+      marginLeft: '2px',
+    },
+  },
+} as const;
 
 const TEAM_STATS_ROLES = new Set(['root', 'audit', 'admin', 'manager']);
 
@@ -210,6 +297,65 @@ interface WorkStatistic {
   completedDuration: ProcessingDurationStats;
   openDuration: ProcessingDurationStats;
 }
+
+const compareAssigneeSort = (
+  a: WorkStatistic,
+  b: WorkStatistic,
+  key: AssigneeSortKey,
+  dir: SortDir
+): number => {
+  const mul = dir === 'asc' ? 1 : -1;
+  const av = a[key];
+  const bv = b[key];
+  if (typeof av === 'string' || typeof bv === 'string') {
+    return mul * String(av ?? '').localeCompare(String(bv ?? ''), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  }
+  return mul * ((Number(av) || 0) - (Number(bv) || 0));
+};
+
+const processingTimeSortValue = (stat: WorkStatistic, key: ProcessingTimeSortKey): string | number => {
+  switch (key) {
+    case 'employeeName':
+      return stat.employeeName;
+    case 'sampleCompleted':
+      return stat.completedDuration.count;
+    case 'medianHours':
+      return stat.completedDuration.medianHours;
+    case 'avgHours':
+      return stat.completedDuration.avgHours;
+    case 'minHours':
+      return stat.completedDuration.minHours;
+    case 'maxHours':
+      return stat.completedDuration.maxHours;
+    case 'stdDevHours':
+      return stat.completedDuration.stdDevHours;
+    case 'openElapsedHours':
+      return stat.openDuration.medianHours;
+    default:
+      return 0;
+  }
+};
+
+const compareProcessingTimeSort = (
+  a: WorkStatistic,
+  b: WorkStatistic,
+  key: ProcessingTimeSortKey,
+  dir: SortDir
+): number => {
+  const mul = dir === 'asc' ? 1 : -1;
+  const av = processingTimeSortValue(a, key);
+  const bv = processingTimeSortValue(b, key);
+  if (typeof av === 'string' || typeof bv === 'string') {
+    return mul * String(av ?? '').localeCompare(String(bv ?? ''), undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  }
+  return mul * ((Number(av) || 0) - (Number(bv) || 0));
+};
 
 interface UserWorkCardItem {
   id: number;
@@ -513,6 +659,12 @@ const WorkStatistics: React.FC = () => {
   const [page, setPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [listViewMode, setListViewMode] = useState<ListViewMode>('page');
+  const [assigneeSortBy, setAssigneeSortBy] = useState<AssigneeSortKey>('employeeName');
+  const [assigneeSortDir, setAssigneeSortDir] = useState<SortDir>('asc');
+  const [processingSortBy, setProcessingSortBy] = useState<ProcessingTimeSortKey>('medianHours');
+  const [processingSortDir, setProcessingSortDir] = useState<SortDir>('desc');
+  const [efficiencySortBy, setEfficiencySortBy] = useState<EfficiencySortKey>('personalEfficiencyScore');
+  const [efficiencySortDir, setEfficiencySortDir] = useState<SortDir>('desc');
   const [tabValue, setTabValue] = useState(0);
   const [processingTimeMetric, setProcessingTimeMetric] = useState<ProcessingTimeMetric>('median');
   const [completedDurationSamples, setCompletedDurationSamples] = useState<number[]>([]);
@@ -820,6 +972,34 @@ const WorkStatistics: React.FC = () => {
     setPage(1);
   };
 
+  const handleAssigneeSort = (key: AssigneeSortKey) => {
+    setPage(1);
+    if (assigneeSortBy === key) {
+      setAssigneeSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setAssigneeSortBy(key);
+    setAssigneeSortDir(key === 'employeeName' || key === 'period' ? 'asc' : 'desc');
+  };
+
+  const handleProcessingSort = (key: ProcessingTimeSortKey) => {
+    if (processingSortBy === key) {
+      setProcessingSortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setProcessingSortBy(key);
+    setProcessingSortDir(key === 'employeeName' ? 'asc' : 'desc');
+  };
+
+  const handleEfficiencySort = (key: EfficiencySortKey) => {
+    if (efficiencySortBy === key) {
+      setEfficiencySortDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
+    setEfficiencySortBy(key);
+    setEfficiencySortDir(key === 'employeeName' ? 'asc' : 'desc');
+  };
+
   useEffect(() => {
     loadStatisticsData();
   }, [loadStatisticsData]);
@@ -902,10 +1082,16 @@ const WorkStatistics: React.FC = () => {
     totalTasksCompleted > 0 ? totalCompletedProcessingHours / totalTasksCompleted : 0;
   const completionRate = totalAssigned > 0 ? (totalTasksCompleted / totalAssigned) * 100 : 0;
 
+  const sortedFilteredStatistics = useMemo(() => {
+    const next = [...filteredStatistics];
+    next.sort((a, b) => compareAssigneeSort(a, b, assigneeSortBy, assigneeSortDir));
+    return next;
+  }, [filteredStatistics, assigneeSortBy, assigneeSortDir]);
+
   const displayedStatistics =
     listViewMode === 'all'
-      ? filteredStatistics
-      : filteredStatistics.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+      ? sortedFilteredStatistics
+      : sortedFilteredStatistics.slice((page - 1) * itemsPerPage, page * itemsPerPage);
   const departments = Array.from(new Set(statistics.map((stat) => stat.department))).filter(Boolean);
   const periods = Array.from(new Set(statistics.map((stat) => stat.period))).filter(Boolean);
 
@@ -984,17 +1170,19 @@ const WorkStatistics: React.FC = () => {
       }));
   }, [statistics, processingTimeMetric]);
 
-  const processingTimeDetailRows = useMemo(
-    () =>
-      statistics
-        .filter((s) => s.completedDuration.count > 0 || s.openDuration.count > 0)
-        .sort((a, b) => b.completedDuration.medianHours - a.completedDuration.medianHours),
-    [statistics]
-  );
+  const processingTimeDetailRows = useMemo(() => {
+    const rows = statistics.filter(
+      (s) => s.completedDuration.count > 0 || s.openDuration.count > 0
+    );
+    rows.sort((a, b) => compareProcessingTimeSort(a, b, processingSortBy, processingSortDir));
+    return rows;
+  }, [statistics, processingSortBy, processingSortDir]);
 
-  const personalEfficiencyRows = statistics
-    .filter((s) => s.tasksAssigned > 0)
-    .sort((a, b) => b.personalEfficiencyScore - a.personalEfficiencyScore);
+  const personalEfficiencyRows = useMemo(() => {
+    const rows = statistics.filter((s) => s.tasksAssigned > 0);
+    rows.sort((a, b) => compareAssigneeSort(a, b, efficiencySortBy, efficiencySortDir));
+    return rows;
+  }, [statistics, efficiencySortBy, efficiencySortDir]);
 
   const TabPanel = ({ children, value, index, ...other }: any) => (
     <div role="tabpanel" hidden={value !== index} id={`tabpanel-${index}`} aria-labelledby={`tab-${index}`} {...other}>
@@ -1247,7 +1435,9 @@ const WorkStatistics: React.FC = () => {
           <TableContainer
             sx={{
               ...mvsBodyListTableSx,
-              ...mvsTableScrollSx,
+              width: '100%',
+              maxWidth: '100%',
+              overflowX: 'hidden',
               // 전체보기: 표 하단 선과 카드 외곽선이 붙지 않도록 여백
               mb: listViewMode === 'all' ? 2.5 : 0,
             }}
@@ -1255,18 +1445,51 @@ const WorkStatistics: React.FC = () => {
             <Table size="small" sx={statsTableSx}>
               <TableHead sx={mvsTableHeadHighlightSx}>
                 <TableRow>
-                  <TableCell sx={statsEmployeeCellSx}>{t('workStatistics.columns.employeeInfo')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.period')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.totalAssignedCards')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.inProgress')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.completedCards')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.avgProcessingTime')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.avgElapsedTime')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.personalEfficiency')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.completionRate')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.onTimeRate')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.overdueCards')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.monthlyCompleted')}</TableCell>
+                  {(
+                    [
+                      ['employeeName', t('workStatistics.columns.employeeInfo')],
+                      ['period', t('workStatistics.columns.period')],
+                      ['tasksAssigned', t('workStatistics.columns.totalAssignedCards')],
+                      ['tasksInProgress', t('workStatistics.columns.inProgress')],
+                      ['tasksCompleted', t('workStatistics.columns.completedCards')],
+                      ['avgCompletedProcessingHours', t('workStatistics.columns.avgProcessingTime')],
+                      ['avgOpenElapsedHours', t('workStatistics.columns.avgElapsedTime')],
+                      ['personalEfficiencyScore', t('workStatistics.columns.personalEfficiency')],
+                      ['productivity', t('workStatistics.columns.completionRate')],
+                      ['onTimeRate', t('workStatistics.columns.onTimeRate')],
+                      ['overdueCount', t('workStatistics.columns.overdueCards')],
+                      ['monthlyCompleted', t('workStatistics.columns.monthlyCompleted')],
+                    ] as Array<[AssigneeSortKey, string]>
+                  ).map(([key, label]) => (
+                    <TableCell
+                      key={key}
+                      sx={{
+                        width: assigneeColWidth[key],
+                        ...(key === 'employeeName' ? statsEmployeeCellSx : null),
+                      }}
+                      sortDirection={assigneeSortBy === key ? assigneeSortDir : false}
+                    >
+                      <TableSortLabel
+                        active={assigneeSortBy === key}
+                        direction={assigneeSortBy === key ? assigneeSortDir : 'asc'}
+                        onClick={() => handleAssigneeSort(key)}
+                        sx={statsSortLabelSx}
+                        title={label}
+                      >
+                        <Box
+                          component="span"
+                          sx={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            minWidth: 0,
+                          }}
+                        >
+                          {label}
+                        </Box>
+                      </TableSortLabel>
+                    </TableCell>
+                  ))}
                 </TableRow>
               </TableHead>
               <TableBody sx={mvsTableBodyRowSx}>
@@ -1297,9 +1520,9 @@ const WorkStatistics: React.FC = () => {
                       >
                         <Avatar
                           sx={{
-                            mr: 1.25,
-                            width: 34,
-                            height: 34,
+                            mr: 0.75,
+                            width: 28,
+                            height: 28,
                             flexShrink: 0,
                             bgcolor: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.08)' : alpha(theme.palette.common.white, 0.12),
                             color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.55)' : theme.palette.grey[300],
@@ -1418,7 +1641,7 @@ const WorkStatistics: React.FC = () => {
           {listViewMode === 'page' && (
             <Box sx={mvsBodyPaginationSx}>
               <Pagination
-                count={Math.max(1, Math.ceil(filteredStatistics.length / itemsPerPage))}
+                count={Math.max(1, Math.ceil(sortedFilteredStatistics.length / itemsPerPage))}
                 page={page}
                 onChange={(_, value) => setPage(value)}
                 shape="rounded"
@@ -1521,17 +1744,47 @@ const WorkStatistics: React.FC = () => {
           <Typography variant="subtitle1" sx={{ color: 'text.primary', fontWeight: 600, mb: 1.5 }}>
             {t('workStatistics.sections.personalEfficiencyDetail')}
           </Typography>
-          <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx, mb: 2 }}>
+          <TableContainer sx={{ ...mvsBodyListTableSx, width: '100%', maxWidth: '100%', overflowX: 'hidden', mb: 2 }}>
             <Table size="small" sx={statsTableSx}>
               <TableHead sx={mvsTableHeadHighlightSx}>
                 <TableRow>
-                  <TableCell sx={statsEmployeeCellSx}>{t('workStatistics.columns.employeeInfo')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.personalEfficiency')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.completionRate')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.onTimeRate')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.monthlyCompleted')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.overdueCards')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.avgProcessingTime')}</TableCell>
+                  {(
+                    [
+                      ['employeeName', t('workStatistics.columns.employeeInfo'), '22%'],
+                      ['personalEfficiencyScore', t('workStatistics.columns.personalEfficiency'), '13%'],
+                      ['productivity', t('workStatistics.columns.completionRate'), '12%'],
+                      ['onTimeRate', t('workStatistics.columns.onTimeRate'), '13%'],
+                      ['monthlyCompleted', t('workStatistics.columns.monthlyCompleted'), '12%'],
+                      ['overdueCount', t('workStatistics.columns.overdueCards'), '12%'],
+                      ['avgCompletedProcessingHours', t('workStatistics.columns.avgProcessingTime'), '16%'],
+                    ] as Array<[EfficiencySortKey, string, string]>
+                  ).map(([key, label, width]) => (
+                    <TableCell
+                      key={key}
+                      sx={{ width, ...(key === 'employeeName' ? statsEmployeeCellSx : null) }}
+                      sortDirection={efficiencySortBy === key ? efficiencySortDir : false}
+                    >
+                      <TableSortLabel
+                        active={efficiencySortBy === key}
+                        direction={efficiencySortBy === key ? efficiencySortDir : 'asc'}
+                        onClick={() => handleEfficiencySort(key)}
+                        sx={statsSortLabelSx}
+                        title={label}
+                      >
+                        <Box
+                          component="span"
+                          sx={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            minWidth: 0,
+                          }}
+                        >
+                          {label}
+                        </Box>
+                      </TableSortLabel>
+                    </TableCell>
+                  ))}
                 </TableRow>
               </TableHead>
               <TableBody sx={mvsTableBodyRowSx}>
@@ -1780,14 +2033,33 @@ const WorkStatistics: React.FC = () => {
             <Table size="small" sx={statsTableSx}>
               <TableHead sx={mvsTableHeadHighlightSx}>
                 <TableRow>
-                  <TableCell sx={statsEmployeeCellSx}>{t('workStatistics.columns.employeeInfo')}</TableCell>
-                  <TableCell>{t('workStatistics.processingTime.sampleSize')}</TableCell>
-                  <TableCell>{t('workStatistics.processingTime.median')}</TableCell>
-                  <TableCell>{t('workStatistics.processingTime.average')}</TableCell>
-                  <TableCell>{t('workStatistics.processingTime.min')}</TableCell>
-                  <TableCell>{t('workStatistics.processingTime.max')}</TableCell>
-                  <TableCell>{t('workStatistics.processingTime.stdDev')}</TableCell>
-                  <TableCell>{t('workStatistics.columns.avgElapsedTime')}</TableCell>
+                  {(
+                    [
+                      ['employeeName', t('workStatistics.columns.employeeInfo'), statsEmployeeCellSx],
+                      ['sampleCompleted', t('workStatistics.processingTime.sampleSize'), undefined],
+                      ['medianHours', t('workStatistics.processingTime.median'), undefined],
+                      ['avgHours', t('workStatistics.processingTime.average'), undefined],
+                      ['minHours', t('workStatistics.processingTime.min'), undefined],
+                      ['maxHours', t('workStatistics.processingTime.max'), undefined],
+                      ['stdDevHours', t('workStatistics.processingTime.stdDev'), undefined],
+                      ['openElapsedHours', t('workStatistics.columns.avgElapsedTime'), undefined],
+                    ] as Array<[ProcessingTimeSortKey, string, object | undefined]>
+                  ).map(([key, label, cellSx]) => (
+                    <TableCell
+                      key={key}
+                      sx={cellSx}
+                      sortDirection={processingSortBy === key ? processingSortDir : false}
+                    >
+                      <TableSortLabel
+                        active={processingSortBy === key}
+                        direction={processingSortBy === key ? processingSortDir : 'asc'}
+                        onClick={() => handleProcessingSort(key)}
+                        sx={statsSortLabelSx}
+                      >
+                        {label}
+                      </TableSortLabel>
+                    </TableCell>
+                  ))}
                 </TableRow>
               </TableHead>
               <TableBody sx={mvsTableBodyRowSx}>
