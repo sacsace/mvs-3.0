@@ -25,7 +25,7 @@ export const rememberUserid = (userid: string) => {
   }
 };
 
-/** 스마트폰·태블릿만 (PC/노트북 Windows Hello 등은 제외) */
+/** 스마트폰·태블릿 UA 감지 (참고용). 생체 로그인 가능 여부는 canUsePlatformPasskey 사용. */
 export const isMobileOrTabletDevice = (): boolean => {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent || '';
@@ -43,9 +43,9 @@ export const isMobileOrTabletDevice = (): boolean => {
   return false;
 };
 
+/** PC(Windows Hello·Touch ID 등) 포함, 플랫폼 생체 인증기가 있으면 true */
 export const canUsePlatformPasskey = async (): Promise<boolean> => {
   if (typeof window === 'undefined') return false;
-  if (!isMobileOrTabletDevice()) return false;
   if (!window.isSecureContext && window.location.hostname !== 'localhost') return false;
   if (!browserSupportsWebAuthn()) return false;
   try {

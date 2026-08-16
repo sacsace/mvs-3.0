@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * 인사 관리 > 급여 명세서 발송 시스템
+ * 인사 관리 > 급여발송 (/hr/payslip-send)
  * - 확정된 급여 목록에서 PDF 명세서를 직원 이메일로 보내는 전용 화면
  * - 관리자/root에 조회·발송(create/edit) 권한 부여
  */
@@ -39,8 +39,8 @@ module.exports = {
             bind: [
               menuId,
               parent.id,
-              '급여 명세서 발송 시스템',
-              'Payslip Delivery',
+              '급여발송',
+              'Payslip Send',
               'email',
               '확정된 급여 목록에서 직원별 급여 명세서 PDF를 이메일로 발송합니다.'
             ]
@@ -61,8 +61,8 @@ module.exports = {
             bind: [
               parent.tenant_id,
               parent.id,
-              '급여 명세서 발송 시스템',
-              'Payslip Delivery',
+              '급여발송',
+              'Payslip Send',
               'email',
               '확정된 급여 목록에서 직원별 급여 명세서 PDF를 이메일로 발송합니다.'
             ]

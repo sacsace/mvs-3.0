@@ -45,6 +45,7 @@ import {
 import { useStore, useMenuStore } from '../../store';
 import menuService from '../../services/menuService';
 import { Menu } from '../../services/menuService';
+import { reloadMenusNow } from '../../hooks/useMenuLoader';
 import { api } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { showErrorPopup, showSuccessPopup } from '../../utils/errorHandler';
@@ -509,7 +510,8 @@ const MenuPermissionManagement: React.FC = () => {
   const [expandedMenus, setExpandedMenus] = useState<Set<number>>(new Set());
   const [permissions, setPermissions] = useState<{ [key: string]: MenuPermission }>({});
   const [adminPermissions, setAdminPermissions] = useState<{ [key: string]: MenuPermission }>({});
-  const [menuList, setMenuList] = useState<Menu[]>(menus || []);
+  /** 권한 편집용 전체 메뉴(네비용 user menus와 분리 — 스토어로 덮어쓰지 않음) */
+  const [menuList, setMenuList] = useState<Menu[]>([]);
   const { setMenus } = useMenuStore();
   const [delegationTargetId, setDelegationTargetId] = useState<number | null>(null);
   const [delegationDialogOpen, setDelegationDialogOpen] = useState(false);
@@ -808,30 +810,24 @@ const MenuPermissionManagement: React.FC = () => {
     loadAdminPermissions();
   }, [user, canManagePermissionPage]);
 
-  // 메뉴 로드 및 초기화
+  // 권한 매트릭스용: 테넌트 전체 메뉴 (getUserMenus/스토어와 무관)
   useEffect(() => {
     const loadMenus = async () => {
       if (!user || !canManagePermissionPage) return;
       try {
         const response = await menuService.getAllMenus(user.tenant_id, language);
         if (response.success && response.data) {
-          // 기본적으로 모든 메뉴를 펼치지 않도록 빈 Set으로 초기화
           setExpandedMenus(new Set<number>());
           setMenuList(response.data);
+          // 네비게이션 스토어도 최신 메뉴로 동기화 (신규 메뉴 반영)
+          void reloadMenusNow();
         }
       } catch {
-      /* ignore */
-    }
+        /* ignore */
+      }
     };
-    loadMenus();
+    void loadMenus();
   }, [user, language, canManagePermissionPage]);
-
-  // menus가 변경되면 menuList 업데이트
-  useEffect(() => {
-    if (menus && menus.length > 0) {
-      setMenuList(menus);
-    }
-  }, [menus]);
 
   // 메뉴명 변경
   const handleNameChange = async (menuId: number, nameKo: string, nameEn: string) => {
