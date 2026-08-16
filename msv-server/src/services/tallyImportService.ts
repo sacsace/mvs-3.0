@@ -21,6 +21,7 @@ import { LEDGER_NAME_ALIASES, resolveLedgerStrict } from '../utils/accountResolu
 import { ensureAccountingMasters } from './voucherMasterService';
 import { normalizePartnerCompanyName } from '../utils/partnerCompanyName';
 import { referenceCacheDel } from '../utils/redisCache';
+import { toSentenceCase } from '../utils/textCase';
 
 export type TallyNature = 'asset' | 'liability' | 'income' | 'expense' | 'equity';
 
@@ -336,13 +337,11 @@ const parseTallyDate = (raw: string): string => {
   return new Date().toISOString().slice(0, 10);
 };
 
-export const natureFromParent = (parent?: string): TallyNature => {
-  const p = normalizeName(parent);
-  if (!p) return 'expense';
-  for (const row of PARENT_NATURE) {
-    if (row.match.test(p)) return row.nature;
-  }
-  return 'expense';
+/** 거래처(업체명)처럼 보이는지 — 부모 그룹 없을 때 BS(채권/채무)로 분류 */
+const isLikelyPartyName = (name?: string | null) => {
+  const n = normalizeName(name);
+  if (!n) return false;
+  return /\b(pvt\.?\s*ltd\.?|private\s+limited|ltd\.?|llc|inc\.?|limited|llp)\b/i.test(n);
 };
 
 const isPartyParent = (parent?: string) => {
@@ -350,6 +349,94 @@ const isPartyParent = (parent?: string) => {
   return /sundry debtors|sundry creditors|\bdebtors\b|\bcreditors\b|accounts?\s*receivable|accounts?\s*payable/.test(
     p
   );
+};
+
+export const natureFromParent = (parent?: string, name?: string): TallyNature =>
+  inferTallyNature({ parent, name });
+
+/**
+ * 부모 그룹이 비어 있을 때 원장명으로 성격 추정.
+ * Tally 마스터에 PARENT가 빠져 전부 expense로 들어가는 문제를 보완한다.
+ */
+const natureFromLedgerName = (name?: string | null): TallyNature | null => {
+  const n = normalizeName(name);
+  if (!n) return null;
+
+  if (/\b(capital account|capital|drawings|reserves?\b|surplus)\b/i.test(n)) return 'equity';
+
+  // 명확한 수익 (호텔·서비스·매출)
+  if (/^(sales|sale)$/i.test(n)) return 'income';
+  if (
+    /\b(food sales|card sales|online food sales|swiggy sales|opera sales|kripara sales)\b/i.test(n)
+  ) {
+    return 'income';
+  }
+  if (
+    /\b(room rent|room rental|car rent|office rent|store room rent|chef room rent|house rent|generator rent|md house rent|staff house rent|lotus hotel rent|samsung rent)\b/i.test(
+      n
+    )
+  ) {
+    return 'income';
+  }
+  if (
+    /\b(professional service fee|prior period income|driver service income|service fee)\b/i.test(n)
+  ) {
+    return 'income';
+  }
+  if (/\b(indirect incomes?|direct incomes?|other income|interest (received|income)|discount received)\b/i.test(n)) {
+    return 'income';
+  }
+
+  // GST / Duties
+  if (/\boutput\s*(cgst|sgst|igst|gst)\b|\b(cgst|sgst|igst)\s*output\b/i.test(n)) return 'liability';
+  if (/\binput\s*(cgst|sgst|igst|gst)\b|\b(cgst|sgst|igst)\s*input\b/i.test(n)) return 'asset';
+  if (/\bduties\s*&?\s*taxes\b/i.test(n)) return 'liability';
+
+  // 은행·현금 (수수료 제외)
+  if (/\bbank charges?\b|\binterest (paid|on)\b/i.test(n)) return 'expense';
+  if (/\bbank\b|cash[- ]?in[- ]?hand|^cash$|petty cash/i.test(n)) return 'asset';
+
+  // 대출·미결
+  if (/\bloan\b/i.test(n)) return 'liability';
+  if (/\bsuspense\b/i.test(n)) return 'asset';
+  if (/\bcredit card\b/i.test(n)) return 'liability';
+
+  // 비용·매입
+  if (
+    /\b(purchase|expenses?|travelling|office expenses|medical expenses|software expenses|gst expenses|consumable|groceries|gas purchase|water purchase|salary|wages|freight|postage|printing|stationery|repairs?|maintenance|depreciation|discount allowed|round off)\b/i.test(
+      n
+    )
+  ) {
+    return 'expense';
+  }
+
+  // 거래처명은 아래에서 잔액으로 분류
+  if (isLikelyPartyName(n)) return null;
+
+  // 일반 sales/income 키워드 (거래처명 제외 후)
+  if (/\b(sales|income|revenue)\b/i.test(n)) return 'income';
+  if (/\bexpenses?\b/i.test(n)) return 'expense';
+
+  return null;
+};
+
+/** 부모 그룹 → 원장명 순으로 계정 성격 결정 */
+export const inferTallyNature = (opts: {
+  parent?: string | null;
+  name?: string | null;
+}): TallyNature => {
+  const parent = normalizeName(opts.parent);
+  if (parent) {
+    for (const row of PARENT_NATURE) {
+      if (row.match.test(parent)) return row.nature;
+    }
+    if (isPartyParent(parent)) {
+      return /creditor|payable/i.test(parent) ? 'liability' : 'asset';
+    }
+  }
+  const fromName = natureFromLedgerName(opts.name);
+  if (fromName) return fromName;
+  return 'expense';
 };
 
 const isCashOrBankParent = (parent?: string, name?: string) => {
@@ -1074,6 +1161,12 @@ export const importTallyExport = async (
       // Enrich aliases / flags when importing masters
       if (!dryRun && !ledger.isGroup) {
         const patch: any = {};
+        if (ledger.name) {
+          const nextName = toSentenceCase(ledger.name);
+          if (nextName && nextName !== existing.name) patch.name = nextName;
+          const nextNameEn = toSentenceCase(ledger.mailingName || ledger.name);
+          if (nextNameEn && nextNameEn !== existing.name_en) patch.name_en = nextNameEn;
+        }
         if (ledger.alias && !String(existing.search_aliases || '').includes(ledger.alias)) {
           patch.search_aliases = [existing.search_aliases, ledger.alias, ledger.name]
             .filter(Boolean)
@@ -1081,6 +1174,16 @@ export const importTallyExport = async (
             .slice(0, 2000);
         }
         if (ledger.parent && !existing.account_group) patch.account_group = ledger.parent;
+        const nextNature = inferTallyNature({
+          parent: ledger.parent || existing.account_group,
+          name: ledger.name || existing.name,
+        });
+        if (nextNature && nextNature !== existing.nature) {
+          // 부모가 채워지거나 이름 휴리스틱이 더 정확할 때만 갱신
+          if (ledger.parent || existing.account_group || nextNature !== 'expense') {
+            patch.nature = nextNature;
+          }
+        }
         if (isCashOrBankParent(ledger.parent, ledger.name) && !existing.is_cash_or_bank) {
           patch.is_cash_or_bank = true;
         }
@@ -1168,7 +1271,10 @@ export const importTallyExport = async (
 
     const prefix = ledger.isGroup ? 'TLYG' : 'TLY';
     const code = await nextCode(tenantId, companyId, prefix);
-    const nature = natureFromParent(ledger.parent || (ledger.isGroup ? ledger.name : undefined));
+    const nature = inferTallyNature({
+      parent: ledger.parent || (ledger.isGroup ? ledger.name : undefined),
+      name: ledger.name,
+    });
     const opening = round2(ledger.openingBalance || 0);
     const aliases = [ledger.alias, ledger.mailingName, ledger.guid ? `guid:${ledger.guid}` : '']
       .filter(Boolean)
@@ -1179,8 +1285,8 @@ export const importTallyExport = async (
       company_id: companyId,
       parent_id: parentId,
       code,
-      name: ledger.name,
-      name_en: ledger.mailingName || ledger.name,
+      name: toSentenceCase(ledger.name),
+      name_en: toSentenceCase(ledger.mailingName || ledger.name),
       account_type: ledger.isGroup ? 'group' : 'ledger',
       nature,
       opening_balance: opening,
@@ -1225,6 +1331,17 @@ export const importTallyExport = async (
     const leafLedgers = parsed.ledgers.filter((l) => !l.isGroup);
     for (const g of groups) await ensureAccount(g);
     for (const ledger of leafLedgers) await ensureAccount(ledger);
+  }
+
+  if (!dryRun && importLedgers) {
+    try {
+      await reclassifyTallyAccountNatures({ tenantId, companyId });
+    } catch (e: any) {
+      issues.push({
+        level: 'warn',
+        message: `계정 성격 재분류 실패: ${e?.message || e}`,
+      });
+    }
   }
 
   // Enrich partners from voucher-level party GSTIN/address (masters often omit these)
@@ -1680,15 +1797,95 @@ export const importTallyExport = async (
     ledgers: { matched, created, skipped: ledgerSkipped, groupsCreated },
     parties: { matched: partiesMatched, created: partiesCreated },
     vouchers: { created: vouchersCreated, skipped: vouchersSkipped, failed: vouchersFailed },
-    // 실패·경고를 먼저 남겨 로그 상한에 info(계정 생성)만 남는 문제 방지
+    // 실패·경고를 먼저, 이어서 정보 — 전체 반환(리포트 탭에서 모두 확인)
     issues: (() => {
       const errors = issues.filter((i) => i.level === 'error');
       const warns = issues.filter((i) => i.level === 'warn');
       const infos = issues.filter((i) => i.level === 'info');
-      return [...errors, ...warns, ...infos].slice(0, 800);
+      return [...errors, ...warns, ...infos];
     })(),
     createdVoucherIds,
     createdAccountCodes,
     mapping: mapping.slice(0, 500),
   };
+};
+
+/**
+ * Tally 임포트 계정 성격(nature) 보정.
+ * PARENT/그룹이 비어 전부 expense로 들어간 경우 손익·재무상태표가 비는 문제를 고친다.
+ */
+export const reclassifyTallyAccountNatures = async (params: {
+  tenantId: number;
+  companyId: number;
+}): Promise<{ updated: number; byNature: Record<string, number> }> => {
+  const { tenantId, companyId } = params;
+  const accounts = await (GlAccount as any).findAll({
+    where: {
+      tenant_id: tenantId,
+      company_id: companyId,
+      is_active: true,
+      account_type: 'ledger',
+      [Op.or]: [{ code: { [Op.iLike]: 'TLY%' } }, { search_aliases: { [Op.iLike]: '%guid:%' } }],
+    },
+  });
+
+  const sequelize = (GlAccount as any).sequelize;
+  const [balanceRows] = await sequelize.query(
+    `SELECT l.account_id AS id,
+            COALESCE(SUM(l.debit::numeric) - SUM(l.credit::numeric), 0)::float AS net
+     FROM gl_voucher_lines l
+     INNER JOIN gl_vouchers v ON v.id = l.voucher_id
+     WHERE v.tenant_id = :tenantId
+       AND v.company_id = :companyId
+       AND v.is_active = true
+       AND v.input_mode = 'tally_import'
+     GROUP BY l.account_id`,
+    { replacements: { tenantId, companyId } }
+  );
+  const netByAccount = new Map<number, number>();
+  for (const row of balanceRows as Array<{ id: number; net: number }>) {
+    netByAccount.set(Number(row.id), Number(row.net) || 0);
+  }
+
+  let updated = 0;
+  const byNature: Record<string, number> = {
+    asset: 0,
+    liability: 0,
+    income: 0,
+    expense: 0,
+    equity: 0,
+  };
+
+  for (const account of accounts) {
+    const parent = account.account_group || null;
+    let nature = inferTallyNature({ parent, name: account.name });
+
+    // 부모 그룹 없는 거래처명: 순차변→자산(채권), 순대변→부채(채무)
+    if (isLikelyPartyName(account.name) && !normalizeName(parent)) {
+      const opening = parseAmount(account.opening_balance);
+      const net = opening + (netByAccount.get(Number(account.id)) || 0);
+      nature = net >= 0 ? 'asset' : 'liability';
+    }
+
+    byNature[nature] = (byNature[nature] || 0) + 1;
+
+    const patch: Record<string, unknown> = {};
+    if (account.nature !== nature) patch.nature = nature;
+
+    const cashOrBank = isCashOrBankParent(parent, account.name);
+    if (!!account.is_cash_or_bank !== cashOrBank) patch.is_cash_or_bank = cashOrBank;
+
+    const arAp = isPartyParent(parent) || isLikelyPartyName(account.name);
+    if (!!account.is_ar_ap !== arAp) {
+      patch.is_ar_ap = arAp;
+      patch.party_required = arAp;
+    }
+
+    if (Object.keys(patch).length) {
+      await account.update(patch);
+      updated += 1;
+    }
+  }
+
+  return { updated, byNature };
 };

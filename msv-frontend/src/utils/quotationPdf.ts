@@ -58,8 +58,16 @@ export { formatAddressTwoLines };
 /**
  * html2canvas 클론에서 입력 UI 제거 + PDF 전용 모던 레이아웃.
  */
+/** 캡처 전용 오프스크린 복제본 표시 */
+const PDF_CAPTURE_ROOT_ATTR = 'data-quotation-pdf-root';
+
+function resolvePdfCaptureRoot(doc: Document): HTMLElement | null {
+  return (doc.querySelector(`[${PDF_CAPTURE_ROOT_ATTR}]`) ||
+    doc.querySelector('.quotation-print-area')) as HTMLElement | null;
+}
+
 function sanitizeQuotationCloneForPdf(clonedDoc: Document): void {
-  const area = clonedDoc.querySelector('.quotation-print-area') as HTMLElement | null;
+  const area = resolvePdfCaptureRoot(clonedDoc);
   if (!area) return;
 
   // Tax type 입력 UI 등 화면 전용 영역만 숨김 (합계의 세금 행은 유지)
@@ -303,19 +311,21 @@ function sanitizeQuotationCloneForPdf(clonedDoc: Document): void {
     .quotation-print-area .quotation-pdf-totals-wrap {
       margin: 8px 0 0 0 !important;
       display: grid !important;
-      grid-template-columns: 1fr 220px !important;
+      grid-template-columns: minmax(0, 1fr) max-content !important;
       gap: 12px !important;
       align-items: stretch !important;
       width: 100% !important;
     }
     .quotation-print-area .quotation-pdf-totals {
-      width: 220px !important;
-      max-width: 220px !important;
+      width: auto !important;
+      min-width: 264px !important;
+      max-width: none !important;
       border: 1px solid #000000 !important;
       border-radius: 0 !important;
       overflow: hidden !important;
       background: #fff !important;
       margin: 0 !important;
+      flex-shrink: 0 !important;
     }
     .quotation-print-area .quotation-pdf-totals > * {
       border-color: #000000 !important;
@@ -364,12 +374,19 @@ function sanitizeQuotationCloneForPdf(clonedDoc: Document): void {
       padding: 6px 8px !important;
       background: #fff !important;
       box-sizing: border-box !important;
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: center !important;
+      align-items: flex-start !important;
+      text-align: left !important;
     }
     .quotation-print-area .quotation-pdf-bank .MuiTypography-subtitle2 {
       font-size: 8.36pt !important;
       font-weight: 700 !important;
       margin: 0 0 3px 0 !important;
       color: #000000 !important;
+      text-align: left !important;
+      width: 100% !important;
     }
     .quotation-print-area .quotation-pdf-bank .MuiTypography-caption {
       font-size: 7.84pt !important;
@@ -377,6 +394,8 @@ function sanitizeQuotationCloneForPdf(clonedDoc: Document): void {
       color: #000000 !important;
       -webkit-text-fill-color: #000000 !important;
       display: block !important;
+      text-align: left !important;
+      width: 100% !important;
     }
 
     .quotation-print-area .quotation-pdf-signature .MuiTypography-caption {
@@ -403,41 +422,38 @@ function sanitizeQuotationCloneForPdf(clonedDoc: Document): void {
       margin: 0 !important;
       padding: 0 !important;
       overflow: hidden !important;
+      box-sizing: border-box !important;
+      width: 100% !important;
     }
     .quotation-print-area .quotation-pdf-item-box-head {
       display: grid !important;
-      /* Amount 열 = 합계 박스(220)와 동일 폭 → 우측 끝(빨간선) 정렬 */
-      grid-template-columns: 1fr 56px 72px 220px !important;
+      grid-template-columns: minmax(0, 1fr) 52px 70px minmax(100px, max-content) !important;
       background: #F0F0F0 !important;
-      padding: 3px 0 3px 10px !important;
+      padding: 4px 8px !important;
       font-size: 6.65pt !important;
       font-weight: 700 !important;
       letter-spacing: 0.04em !important;
       color: #000000 !important;
-      line-height: 1.2 !important;
+      line-height: 1.25 !important;
       text-transform: none !important;
       border-bottom: 1px solid #000000 !important;
       box-sizing: border-box !important;
     }
     .quotation-print-area .quotation-pdf-item-box-head span:nth-child(2),
-    .quotation-print-area .quotation-pdf-item-box-head span:nth-child(3) {
-      text-align: right !important;
-      padding-right: 8px !important;
-    }
+    .quotation-print-area .quotation-pdf-item-box-head span:nth-child(3),
     .quotation-print-area .quotation-pdf-item-box-head span:nth-child(4) {
       text-align: right !important;
-      padding-right: 10px !important;
-      box-sizing: border-box !important;
     }
     .quotation-print-area .quotation-pdf-item-box-row {
       display: grid !important;
-      grid-template-columns: 1fr 56px 72px 220px !important;
+      grid-template-columns: minmax(0, 1fr) 52px 70px minmax(100px, max-content) !important;
       align-items: center !important;
-      padding: 2px 0 2px 10px !important;
+      padding: 4px 8px !important;
+      min-height: 18px !important;
       font-size: 8.55pt !important;
-      line-height: 1.15 !important;
+      line-height: 1.25 !important;
       color: #000000 !important;
-      border-bottom: 1px solid #E0E0E0 !important;
+      border-bottom: none !important;
       box-sizing: border-box !important;
     }
     .quotation-print-area .quotation-pdf-item-box-row:last-child {
@@ -447,22 +463,19 @@ function sanitizeQuotationCloneForPdf(clonedDoc: Document): void {
       font-weight: 500 !important;
       min-width: 0 !important;
       word-break: break-word !important;
-      padding-right: 6px !important;
+      padding-right: 8px !important;
     }
     .quotation-print-area .quotation-pdf-item-box-meta {
       white-space: nowrap !important;
       font-size: 8.08pt !important;
       color: #000000 !important;
       text-align: right !important;
-      padding-right: 8px !important;
     }
     .quotation-print-area .quotation-pdf-item-box-amount {
       white-space: nowrap !important;
       font-size: 8.08pt !important;
       color: #000000 !important;
       text-align: right !important;
-      padding-right: 10px !important;
-      box-sizing: border-box !important;
     }
     .quotation-print-area table.quotation-itemized-costs-table {
       display: none !important;
@@ -525,11 +538,14 @@ function sanitizeQuotationCloneForPdf(clonedDoc: Document): void {
     el.style.setProperty('border-color', '#000000', 'important');
     el.style.setProperty('border-radius', '0', 'important');
     el.style.setProperty('margin', '0', 'important');
+    el.style.setProperty('width', 'auto', 'important');
+    el.style.setProperty('min-width', '264px', 'important');
+    el.style.setProperty('max-width', 'none', 'important');
   });
 
   area.querySelectorAll<HTMLElement>('.quotation-pdf-totals-wrap').forEach((el) => {
     el.style.setProperty('display', 'grid', 'important');
-    el.style.setProperty('grid-template-columns', '1fr 220px', 'important');
+    el.style.setProperty('grid-template-columns', 'minmax(0, 1fr) max-content', 'important');
     el.style.setProperty('gap', '12px', 'important');
     el.style.setProperty('align-items', 'stretch', 'important');
     el.style.setProperty('width', '100%', 'important');
@@ -538,6 +554,11 @@ function sanitizeQuotationCloneForPdf(clonedDoc: Document): void {
   area.querySelectorAll<HTMLElement>('.quotation-pdf-bank').forEach((el) => {
     el.style.setProperty('margin', '0', 'important');
     el.style.setProperty('max-width', 'none', 'important');
+    el.style.setProperty('display', 'flex', 'important');
+    el.style.setProperty('flex-direction', 'column', 'important');
+    el.style.setProperty('justify-content', 'center', 'important');
+    el.style.setProperty('align-items', 'flex-start', 'important');
+    el.style.setProperty('text-align', 'left', 'important');
     if (getComputedStyle(el).visibility === 'hidden') {
       el.style.setProperty('visibility', 'hidden', 'important');
     }
@@ -603,12 +624,22 @@ function sanitizeQuotationCloneForPdf(clonedDoc: Document): void {
       });
       wrap.insertBefore(boxes, itemized);
       if (section) {
+        section.style.setProperty('border', 'none', 'important');
+        section.style.setProperty('padding', '0', 'important');
+        section.style.setProperty('background', 'transparent', 'important');
+      }
+      if (wrap) {
         wrap.style.setProperty('border', 'none', 'important');
         wrap.style.setProperty('overflow', 'visible', 'important');
+        wrap.style.setProperty('padding', '0', 'important');
+        wrap.style.setProperty('margin', '0', 'important');
       }
       boxes.style.setProperty('border', '1px solid #000000', 'important');
       boxes.style.setProperty('overflow', 'hidden', 'important');
       boxes.style.setProperty('background', '#ffffff', 'important');
+      boxes.style.setProperty('padding', '0', 'important');
+      boxes.style.setProperty('width', '100%', 'important');
+      boxes.style.setProperty('box-sizing', 'border-box', 'important');
     }
     itemized.remove();
   }
@@ -619,8 +650,13 @@ function sanitizeQuotationCloneForPdf(clonedDoc: Document): void {
     const ta = fc.querySelector('textarea') as HTMLTextAreaElement | null;
     const inp = fc.querySelector('input:not([type="hidden"])') as HTMLInputElement | null;
     let val = '';
-    if (combobox) val = combobox.innerText?.trim() ?? combobox.textContent?.trim() ?? '';
-    else if (ta) val = ta.value;
+    // Autocomplete: role=combobox 가 <input> 이라 innerText는 비고 value에 표시명이 있다.
+    // Select: role=combobox 가 <div> 라 보이는 텍스트는 innerText에 있다.
+    if (combobox instanceof HTMLInputElement || combobox instanceof HTMLTextAreaElement) {
+      val = combobox.value;
+    } else if (combobox) {
+      val = combobox.innerText?.trim() ?? combobox.textContent?.trim() ?? '';
+    } else if (ta) val = ta.value;
     else if (inp) val = inp.value;
     else return;
     const div = clonedDoc.createElement('div');
@@ -742,7 +778,7 @@ function buildHtml2CanvasOptions(scale: number) {
     backgroundColor: '#ffffff',
     logging: false,
     onclone: (clonedDoc: Document) => {
-      const area = clonedDoc.querySelector('.quotation-print-area');
+      const area = resolvePdfCaptureRoot(clonedDoc);
       if (area) {
         const fs = area.querySelector('fieldset');
         if (fs) {
@@ -752,6 +788,77 @@ function buildHtml2CanvasOptions(scale: number) {
       sanitizeQuotationCloneForPdf(clonedDoc);
     }
   };
+}
+
+/**
+ * 화면 레이아웃을 흔들지 않도록, A4 인쇄 폭을 적용한 복제본을 화면 밖에 만들어 캡처한다.
+ * cloneNode는 input/textarea/select의 현재 값을 복사하지 않으므로 직접 옮겨준다.
+ */
+function createOffscreenCaptureClone(
+  element: HTMLElement,
+  widthCss: string
+): { host: HTMLElement; clone: HTMLElement } {
+  const clone = element.cloneNode(true) as HTMLElement;
+  clone.setAttribute(PDF_CAPTURE_ROOT_ATTR, 'true');
+  clone.style.boxSizing = 'border-box';
+  clone.style.width = widthCss;
+  clone.style.maxWidth = widthCss;
+
+  const sources = element.querySelectorAll<HTMLElement>('input, textarea, select');
+  const targets = clone.querySelectorAll<HTMLElement>('input, textarea, select');
+  sources.forEach((src, index) => {
+    const dst = targets[index];
+    if (!dst) return;
+    if (src instanceof HTMLInputElement && dst instanceof HTMLInputElement) {
+      dst.value = src.value;
+      dst.setAttribute('value', src.value);
+      dst.checked = src.checked;
+    } else if (src instanceof HTMLTextAreaElement && dst instanceof HTMLTextAreaElement) {
+      dst.value = src.value;
+      dst.textContent = src.value;
+    } else if (src instanceof HTMLSelectElement && dst instanceof HTMLSelectElement) {
+      dst.value = src.value;
+    }
+  });
+
+  // fixed + 화면 밖 좌표: 스크롤 영역·레이아웃에 영향을 주지 않아 화면이 흔들리지 않는다
+  const host = document.createElement('div');
+  host.setAttribute('aria-hidden', 'true');
+  host.style.cssText = [
+    'position:fixed',
+    'left:-10000px',
+    'top:0',
+    'z-index:-1',
+    'pointer-events:none',
+    'background:#ffffff',
+    `width:${widthCss}`,
+  ].join(';');
+  host.appendChild(clone);
+  document.body.appendChild(host);
+  return { host, clone };
+}
+
+/** 축소 샘플링으로 전부 흰색인지 확인 (오프스크린 캡처 실패 감지용) */
+function isBlankCanvas(canvas: HTMLCanvasElement): boolean {
+  if (!canvas.width || !canvas.height) return true;
+  try {
+    const probeSize = 40;
+    const probe = document.createElement('canvas');
+    probe.width = probeSize;
+    probe.height = probeSize;
+    const ctx = probe.getContext('2d');
+    if (!ctx) return false;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, probeSize, probeSize);
+    ctx.drawImage(canvas, 0, 0, probeSize, probeSize);
+    const { data } = ctx.getImageData(0, 0, probeSize, probeSize);
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] < 245 || data[i + 1] < 245 || data[i + 2] < 245) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function quotationElementToJsPdf(
@@ -776,21 +883,36 @@ async function quotationElementToJsPdf(
 
   const itemCount = countItemizedRows(element);
 
-  const prevWidth = element.style.width;
-  const prevMaxWidth = element.style.maxWidth;
-  const prevBoxSizing = element.style.boxSizing;
-  element.style.boxSizing = 'border-box';
-  element.style.width = `${printableWidthMm}mm`;
-  element.style.maxWidth = `${printableWidthMm}mm`;
+  const captureOffscreen = async (): Promise<HTMLCanvasElement | null> => {
+    const capture = createOffscreenCaptureClone(element, `${printableWidthMm}mm`);
+    try {
+      const captured = await html2canvas(capture.clone, buildHtml2CanvasOptions(scale));
+      return isBlankCanvas(captured) ? null : captured;
+    } catch {
+      return null;
+    } finally {
+      capture.host.remove();
+    }
+  };
 
-  let canvas: HTMLCanvasElement;
-  try {
-    canvas = await html2canvas(element, buildHtml2CanvasOptions(scale));
-  } finally {
-    element.style.width = prevWidth;
-    element.style.maxWidth = prevMaxWidth;
-    element.style.boxSizing = prevBoxSizing;
-  }
+  // 오프스크린 캡처가 실패했을 때만 사용 (캡처 동안 화면 레이아웃이 잠시 변한다)
+  const captureFromScreen = async (): Promise<HTMLCanvasElement> => {
+    const prevWidth = element.style.width;
+    const prevMaxWidth = element.style.maxWidth;
+    const prevBoxSizing = element.style.boxSizing;
+    element.style.boxSizing = 'border-box';
+    element.style.width = `${printableWidthMm}mm`;
+    element.style.maxWidth = `${printableWidthMm}mm`;
+    try {
+      return await html2canvas(element, buildHtml2CanvasOptions(scale));
+    } finally {
+      element.style.width = prevWidth;
+      element.style.maxWidth = prevMaxWidth;
+      element.style.boxSizing = prevBoxSizing;
+    }
+  };
+
+  const canvas: HTMLCanvasElement = (await captureOffscreen()) ?? (await captureFromScreen());
 
   const imgData = isEmail
     ? canvas.toDataURL('image/jpeg', 0.87)

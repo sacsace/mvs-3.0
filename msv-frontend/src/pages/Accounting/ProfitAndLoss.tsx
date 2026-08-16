@@ -31,7 +31,7 @@ import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import AccountingCompanyBar from '../../components/Accounting/AccountingCompanyBar';
 import { useAccountingCompany } from '../../hooks/useAccountingCompany';
 import { accountingService } from '../../services/api';
-import { getGlAccountLabel } from '../../utils/glAccountLabel';
+import { getGlAccountName } from '../../utils/glAccountLabel';
 import { formatInr } from '../../utils/formatInr';
 import { exportProfitAndLossExcel } from '../../utils/exportFinancialStatementExcel';
 import {
@@ -363,7 +363,12 @@ const ProfitAndLoss: React.FC = () => {
             {rows.map((row) => (
               <TableRow key={row.accountId} hover>
                 <TableCell sx={cellEllipsisSx}>{row.code}</TableCell>
-                <TableCell sx={cellEllipsisSx}>{getGlAccountLabel(row, i18n.language)}</TableCell>
+                <TableCell sx={cellEllipsisSx}>
+                  {getGlAccountName(
+                    { code: row.code, name: row.name, name_en: row.nameEn },
+                    i18n.language
+                  )}
+                </TableCell>
                 <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                   {formatInr(row.amount)}
                 </TableCell>

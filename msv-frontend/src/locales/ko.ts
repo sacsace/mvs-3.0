@@ -813,6 +813,7 @@ export default {
       tabPendingApproval: '승인 대기',
       approver: '승인자',
       selectApprover: '승인자 선택',
+      itemDescriptionRequired: '품목 및 설명을 입력해 주세요.',
       itemQtyUnitRequired: '각 품목의 수량(QTY)은 1 이상, 단가(Unit Price)는 0보다 큰 값을 입력해 주세요.',
       exportAfterApproval: '승인된 견적서만 인쇄·PDF로 저장할 수 있습니다.',
       emailAfterApproval: '승인된 견적서만 이메일로 보낼 수 있습니다.',
@@ -3215,14 +3216,21 @@ export default {
       preview: '파싱 미리보기',
       dryRun: '시뮬레이션',
       import: '임포트 실행',
+      previewTab: '파싱 미리보기',
+      reportTab: '리포트',
       previewTitle: '파싱된 전표 미리보기',
       resultTitle: '임포트 결과',
       resultDryRun: '시뮬레이션 (DB 미반영)',
+      reportSource: {
+        preview: '미리보기',
+        dryRun: '시뮬레이션',
+        import: '임포트',
+      },
       empty: {
         loading: '불러오는 중...',
         noItems: 'Tally Export 파일(.xml / .json)을 선택해 주세요.',
         fileReady: '선택됨: {{name}}',
-        fileReadyHint: '위에서 파싱 미리보기 · 시뮬레이션 · 임포트 실행을 진행하세요.',
+        fileReadyHint: '위에서 파싱 미리보기 · 시뮬레이션 · 임포트 실행을 진행하세요. 이슈는 리포트 탭에 모두 기록됩니다.',
       },
       emptyVouchers: '파일에서 전표를 찾지 못했습니다. Ledger만 포함된 Export일 수 있습니다.',
       emptyIssues: '이슈 없음',
@@ -3234,14 +3242,14 @@ export default {
         warn: '경고',
         info: '정보',
       },
-      downloadLog: '로그 다운로드',
+      downloadLog: '리포트 다운로드',
       issueLevel: {
         error: '실패',
         warn: '경고',
         info: '정보',
       },
       hint:
-        'Tally: Gateway of Tally → Export → XML (Masters / Vouchers 또는 Day Book). 이미 임포트된 전표(번호·GUID·Tally 전표번호+일자)와 파일 내 중복은 자동으로 건너뜁니다. 계정·거래처도 이름/GUID·GSTIN으로 재사용합니다. 장부 반영은 회계장부에서 Post 하세요.',
+        'Tally: Gateway of Tally → Export → XML (Masters / Vouchers 또는 Day Book). 이미 임포트된 전표(번호·GUID·Tally 전표번호+일자)와 파일 내 중복은 자동으로 건너뜁니다. 계정·거래처도 이름/GUID·GSTIN으로 재사용합니다. 장부 반영은 회계장부에서 Post 하세요. 임포트·시뮬레이션·미리보기에서 발생한 이슈는 리포트 탭에 누적 기록됩니다.',
       options: {
         importLedgers: 'Ledger(계정) 임포트',
         importVouchers: 'Voucher(전표) 임포트',
@@ -3264,6 +3272,7 @@ export default {
         debit: '차변',
         credit: '대변',
         level: '수준',
+        source: '출처',
         message: '메시지',
         context: '사유·상세',
       },
@@ -3273,7 +3282,7 @@ export default {
         preview: '파일 파싱이 완료되었습니다.',
         dryRun: '시뮬레이션이 완료되었습니다.',
         import: '임포트가 완료되었습니다. 전표는 임시 상태입니다.',
-        logDownloaded: '임포트 로그를 다운로드했습니다.',
+        logDownloaded: '임포트 리포트를 다운로드했습니다.',
       },
       errors: {
         noFile: '파일을 선택해 주세요.',
@@ -3281,7 +3290,7 @@ export default {
         preview: '미리보기에 실패했습니다.',
         import: '임포트에 실패했습니다.',
         fileTooLarge: '파일이 너무 큽니다. 최대 2GB까지 업로드할 수 있습니다.',
-        noLogToDownload: '다운로드할 로그가 없습니다.',
+        noLogToDownload: '다운로드할 리포트가 없습니다.',
       },
     },
     generalLedger: {
@@ -3688,8 +3697,8 @@ export default {
       }
     },
     balanceSheet: {
-      title: '재무상태표',
-      description: 'Tally에서 불러온 데이터로 자산·부채·자본을 집계하여 재무 상태를 확인합니다.',
+      title: '재무제표',
+      description: 'SEDA 엑셀과 동일한 시트(BS·PL·Capital·스케줄·시산표·GST 등)로 Tally 집계를 조회합니다. 스케줄 합계가 본표에 반영됩니다.',
       from: '시작일',
       asOf: '기준일',
       search: '조회',
@@ -3702,10 +3711,23 @@ export default {
         q4: '4분기',
         fiscalYear: '회계년도'
       },
-      hint: 'Tally Data 불러오기로 가져온 기초잔액·전표만 집계합니다. 임포트 직후(draft) 전표도 포함되며, 당기손익은 자본에 반영됩니다. 수동 전표는 제외됩니다.',
+      hint: '시트 금액은 동일 MVS 집계(BS / 손익 / 시산표)에서 계산됩니다. 스케줄 합계가 본표(BS·PL)와 맞춰집니다.',
       unbalancedHint: '자산과 부채+자본이 일치하지 않습니다. Tally 계정 매핑·전표를 확인해 주세요.',
       formula: '자산 {{assets}} = 부채+자본 {{liabilityEquity}}',
+      sheets: {
+        bs: 'BS',
+        pl: 'P&L',
+        capital: 'Capital A/c',
+        schBs: 'BS Schedules',
+        schPl: 'P&L Schedules',
+        trialBalance: 'Trial Balance',
+        tradePayable: 'Trade Payables',
+        outputGst: 'Output GST',
+        inputGst: 'Input GST',
+        otherExpenses: 'Other Expense'
+      },
       tabs: {
+        statement: '재무상태표',
         assets: '자산',
         liabilities: '부채',
         equity: '자본',
@@ -3715,25 +3737,44 @@ export default {
         totalAssets: '총 자산',
         totalLiabilities: '총 부채',
         totalEquity: '총 자본',
+        netProfit: '당기순이익',
         liabilitiesAndEquity: '부채 + 자본'
       },
       sections: {
         equation: '대차 검증'
       },
+      statement: {
+        particulars: 'Particulars',
+        previousPeriod: '전기',
+        note: 'Note',
+        noteNo: 'Note No.',
+        amountRs: 'Amount (Rs.)',
+        periodRange: '(From {{from}} to {{to}})',
+        forPeriod: 'For the period from {{range}}'
+      },
       columns: {
         code: '코드',
         account: '계정과목',
-        amount: '금액'
+        amount: '금액',
+        group: '그룹',
+        debit: '차변',
+        credit: '대변',
+        closing: '잔액'
       },
       empty: {
         assets: '해당 기간에 자산 계정 내역이 없습니다.',
         liabilities: '해당 기간에 부채 계정 내역이 없습니다.',
         equity: '해당 기간에 자본 계정 내역이 없습니다.',
+        trialBalance: '해당 기간에 시산표 내역이 없습니다.',
+        tradePayable: '해당 기간에 매입채무 내역이 없습니다.',
+        outputGst: '해당 기간에 Output GST 내역이 없습니다.',
+        inputGst: '해당 기간에 Input GST 내역이 없습니다.',
+        otherExpenses: '해당 기간에 Other Expenses 내역이 없습니다.',
         hint: 'Tally 기초잔액·전표가 없습니다. 기간·회사를 확인하거나 Tally Data 불러오기를 실행해 주세요.',
         draftHint: ''
       },
       errors: {
-        load: '재무상태표 조회에 실패했습니다.',
+        load: '재무제표 조회에 실패했습니다.',
         noDataForExport: '내보낼 재무상태표 데이터가 없습니다. 먼저 조회해 주세요.',
         exportFailed: '엑셀 다운로드에 실패했습니다.'
       }

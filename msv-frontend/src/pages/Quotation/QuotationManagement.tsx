@@ -87,6 +87,7 @@ interface Quotation {
   customerEmail: string;
   customerPhone: string;
   customerAddress: string;
+  customerGst: string;
   issueDate: string;
   validUntil: string;
   status: 'draft' | 'sent' | 'pending_approval' | 'approved' | 'rejected' | 'expired';
@@ -150,6 +151,7 @@ function mapQuotationFromApi(row: any): Quotation {
     customerEmail: row.customer_email || '',
     customerPhone: row.customer_phone || '',
     customerAddress: row.customer_address || '',
+    customerGst: row.customer_gst || '',
     issueDate: created,
     validUntil: row.valid_until ? String(row.valid_until).split('T')[0] : '',
     status,
@@ -204,8 +206,33 @@ interface PartnerCustomer {
   email: string;
   phone: string;
   address: string;
+  /** 파트너에 등록된 GSTIN 목록 (복수 가능) */
+  gstNumbers?: string[];
   status?: string;
   businessType?: string;
+}
+
+function normalizeGstList(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return Array.from(
+      new Set(raw.map((g) => String(g || '').trim()).filter(Boolean))
+    );
+  }
+  const s = String(raw || '').trim();
+  if (!s) return [];
+  return Array.from(
+    new Set(s.split(',').map((g) => g.trim()).filter(Boolean))
+  );
+}
+
+/** 1개면 그 값, 2개 이상이면 첫 번째를 기본값으로 (항상 단일 GSTIN만 반환) */
+function defaultCustomerGst(gstNumbers: string[] | undefined, preferred?: string): string {
+  const list = gstNumbers || [];
+  const preferredList = normalizeGstList(preferred);
+  const pref = preferredList[0] || '';
+  if (pref && list.includes(pref)) return pref;
+  if (list.length >= 1) return list[0];
+  return pref;
 }
 
 interface CompanyInfo {
@@ -302,14 +329,24 @@ const QuotationManagement: React.FC = () => {
   const loadPartners = useCallback(async () => {
     try {
       const data = await useReferenceDataStore.getState().fetchPartners();
-      const mapped = data.map((p: any) => ({
-          name: p.company_name || p.companyName || '',
-          email: p.email || '',
-          phone: p.phone || '',
-          address: p.address || '',
-          status: p.status,
-          businessType: p.business_type || p.businessType
-        }));
+      const mapped = data.map((p: any) => {
+          const gstNumbers = normalizeGstList(
+            Array.isArray(p.gstNumbers)
+              ? p.gstNumbers
+              : Array.isArray(p.gst_numbers)
+                ? p.gst_numbers
+                : []
+          );
+          return {
+            name: p.company_name || p.companyName || '',
+            email: p.email || '',
+            phone: p.phone || '',
+            address: p.address || '',
+            gstNumbers,
+            status: p.status,
+            businessType: p.business_type || p.businessType
+          };
+        });
         setPartners(
           mapped.filter((p: PartnerCustomer) => p.name && p.name.toLowerCase() !== 'test industries')
         );
@@ -579,6 +616,7 @@ const QuotationManagement: React.FC = () => {
         customer_email: quotationData.customerEmail,
         customer_phone: quotationData.customerPhone,
         customer_address: quotationData.customerAddress,
+        customer_gst: quotationData.customerGst,
         items: quotationData.items,
         subtotal: quotationData.subtotal,
         tax_rate: quotationData.taxRate,
@@ -598,6 +636,7 @@ const QuotationManagement: React.FC = () => {
           customer_email: payload.customer_email,
           customer_phone: payload.customer_phone,
           customer_address: payload.customer_address,
+          customer_gst: payload.customer_gst,
           items: payload.items,
           subtotal: payload.subtotal,
           tax_rate: payload.tax_rate,
@@ -992,7 +1031,9 @@ const QuotationManagement: React.FC = () => {
                             name: quotation.customerName,
                             email: quotation.customerEmail,
                             phone: quotation.customerPhone,
-                            address: quotation.customerAddress },
+                            address: quotation.customerAddress,
+                            gstNumbers: normalizeGstList(quotation.customerGst),
+                          },
                         ])
                       ).values()
                     )
@@ -1503,33 +1544,35 @@ const QuotationManagement: React.FC = () => {
   );
 };
 
-/** ITEMIZED 행 — QTY·Unit price·DESCRIPTION Outlined 입력 높이 통일 (MUI small ≈ 40px) */
+/** ITEMIZED 행 — QTY·Unit price·DESCRIPTION Outlined 입력 높이 통일 */
 const ITEM_ROW_QTY_UNIT_SX = {
+  display: 'block',
   '& .MuiOutlinedInput-root': {
-    minHeight: 40,
-    maxHeight: 40,
+    minHeight: 36,
+    maxHeight: 36,
     boxSizing: 'border-box'
   },
   '& .MuiOutlinedInput-input': {
-    py: '8.5px',
-    px: '14px',
+    py: '6px',
+    px: '10px',
     boxSizing: 'border-box'
   }
 } as const;
 
 const ITEM_ROW_DESCRIPTION_SX = {
+  display: 'block',
   '& .MuiOutlinedInput-root': {
-    minHeight: 40,
+    minHeight: 36,
     boxSizing: 'border-box'
   },
   '& .MuiOutlinedInput-root.MuiInputBase-multiline': {
-    minHeight: 40,
-    padding: '8.5px 14px'
+    minHeight: 36,
+    padding: '6px 10px'
   },
   '& textarea.MuiOutlinedInput-input': {
-    resize: 'both',
-    minHeight: '23px',
-    lineHeight: '23px',
+    resize: 'vertical',
+    minHeight: '22px',
+    lineHeight: '22px',
     padding: 0,
     overflow: 'auto',
     boxSizing: 'border-box'
@@ -1559,6 +1602,7 @@ interface QuotationFormProps {
     email: string;
     phone: string;
     address: string;
+    gstNumbers?: string[];
   }>;
   issuingCompany: CompanyInfo | null;
   nextQuotationNumber: string;
@@ -1588,12 +1632,19 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
   const lockTax = lockCustomer; // 승인·발송 후에는 세율/할인 UI도 잠금
   const isPartialContentEdit = lockCustomer && !lockContent;
   const productNameRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const qtyRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const unitPriceRefs = useRef<Array<HTMLInputElement | null>>([]);
   const [pendingFocusIndex, setPendingFocusIndex] = useState<number | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => {
+    const matched = quotation?.customerName
+      ? customers.find((c) => c.name === quotation.customerName)
+      : undefined;
+    return {
     customerName: quotation?.customerName || '',
     customerEmail: quotation?.customerEmail || '',
     customerPhone: quotation?.customerPhone || '',
     customerAddress: quotation?.customerAddress || '',
+    customerGst: defaultCustomerGst(matched?.gstNumbers, quotation?.customerGst),
     validUntil: quotation?.validUntil || addDaysLocalIso(15),
     notes: quotation?.notes || '',
     taxType: 'cgst_sgst',
@@ -1602,6 +1653,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
     igstRate: 0,
     discount: quotation?.discount || 0,
     approverUserId: quotation?.approverUserId != null ? quotation.approverUserId : ('' as const)
+    };
   });
   const [approverSubmitAttempted, setApproverSubmitAttempted] = useState(false);
 
@@ -1693,12 +1745,40 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
 
   useEffect(() => {
     if (pendingFocusIndex === null) return;
-    const target = productNameRefs.current[pendingFocusIndex];
-    if (target) {
-      target.focus();
-    }
+    const index = pendingFocusIndex;
     setPendingFocusIndex(null);
+    const focusNewRow = () => {
+      const target = productNameRefs.current[index];
+      if (target) {
+        target.focus();
+        target.select?.();
+      }
+    };
+    requestAnimationFrame(() => {
+      focusNewRow();
+      // 렌더 직후 ref가 아직 비어 있을 수 있음
+      setTimeout(focusNewRow, 0);
+    });
   }, [items.length, pendingFocusIndex]);
+
+  const focusItemField = (
+    refs: React.MutableRefObject<Array<HTMLInputElement | null>>,
+    index: number
+  ) => {
+    const el = refs.current[index];
+    if (!el) return;
+    el.focus();
+    if (typeof el.select === 'function') el.select();
+  };
+
+  const getItemDescriptionText = (item: QuotationItem) =>
+    [item.productName, item.description].filter((s) => String(s).trim()).join('\n').trim();
+
+  const parsePositiveInt = (raw: string, fallback: number) => {
+    if (raw === '') return fallback;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? n : fallback;
+  };
 
   const calculateTotals = () => {
     const subtotal = items.reduce((sum, item) => sum + item.finalPrice, 0);
@@ -1770,6 +1850,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
       customerEmail: formData.customerEmail || selectedCustomer?.email || '',
       customerPhone: formData.customerPhone || selectedCustomer?.phone || '',
       customerAddress: formData.customerAddress || selectedCustomer?.address || '',
+      customerGst: formData.customerGst || defaultCustomerGst(selectedCustomer?.gstNumbers),
       validUntil: formData.validUntil || fallbackValidUntil,
       notes: formData.notes || '견적 기본 사항 자동 입력',
       subtotal,
@@ -1794,7 +1875,8 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
         customerName: '',
         customerEmail: '',
         customerPhone: '',
-        customerAddress: '' }));
+        customerAddress: '',
+        customerGst: '' }));
       return;
     }
     setFormData(prev => ({
@@ -1802,8 +1884,14 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
       customerName: selected.name,
       customerEmail: selected.email,
       customerPhone: selected.phone,
-      customerAddress: selected.address }));
+      customerAddress: selected.address,
+      customerGst: defaultCustomerGst(selected.gstNumbers) }));
   };
+
+  const customerGstOptions = selectedCustomer?.gstNumbers?.length
+    ? selectedCustomer.gstNumbers
+    : normalizeGstList(formData.customerGst);
+  const showCustomerGstSelect = !lockCustomer && customerGstOptions.length > 1;
 
   return (
     <Box component="form" id={formId} onSubmit={handleSubmit} sx={{ mt: 2 }}>
@@ -1972,24 +2060,64 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
           >
             <Box>
               <Typography variant="caption" color="text.secondary">Name *</Typography>
-              <FormControl fullWidth size="small" disabled={lockCustomer}>
-                <Select
-                  displayEmpty
-                  disabled={lockCustomer}
-                  value={formData.customerName}
-                  onChange={(e) => handleCustomerSelect(e.target.value)}
-                  renderValue={(selected) => selected || '고객 회사 선택'}
-                >
-                  <MenuItem value="">
-                    <Typography color="text.secondary">고객 회사 선택</Typography>
-                  </MenuItem>
-                  {customers.map(customer => (
-                    <MenuItem key={customer.name} value={customer.name}>
-                      {customer.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                options={customers}
+                size="small"
+                fullWidth
+                disabled={lockCustomer}
+                autoHighlight
+                clearOnBlur={false}
+                isOptionEqualToValue={(option, value) => option.name === value.name}
+                getOptionLabel={(option) => option.name || ''}
+                filterOptions={(options, { inputValue }) => {
+                  const q = inputValue.trim().toLowerCase();
+                  if (!q) return options;
+                  return options.filter((c) => {
+                    const name = String(c.name || '').toLowerCase();
+                    const email = String(c.email || '').toLowerCase();
+                    const phone = String(c.phone || '').toLowerCase();
+                    return name.includes(q) || email.includes(q) || phone.includes(q);
+                  });
+                }}
+                value={
+                  customers.find((c) => c.name === formData.customerName) ||
+                  (formData.customerName
+                    ? {
+                        name: formData.customerName,
+                        email: formData.customerEmail || '',
+                        phone: formData.customerPhone || '',
+                        address: formData.customerAddress || '',
+                        gstNumbers: normalizeGstList(formData.customerGst),
+                      }
+                    : null)
+                }
+                onChange={(_event, newValue) => {
+                  handleCustomerSelect(newValue?.name || '');
+                }}
+                renderOption={(props, option) => (
+                  <Box component="li" {...props} key={option.name}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', py: 0.25, minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                        {option.name}
+                      </Typography>
+                      {(option.email || option.phone) && (
+                        <Typography variant="caption" color="text.secondary" noWrap>
+                          {[option.email, option.phone].filter(Boolean).join(' · ')}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                )}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    required
+                    disabled={lockCustomer}
+                    placeholder={t('quotationManagement.customerSearchPlaceholder')}
+                  />
+                )}
+                noOptionsText={t('common.noResults', { defaultValue: '검색 결과가 없습니다.' })}
+              />
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">Email *</Typography>
@@ -2027,7 +2155,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                 required
               />
             </Box>
-            <Box sx={{ gridColumn: { xs: '1', md: hideApproverForCustomerView ? '1 / -1' : 'auto' } }}>
+            <Box>
               <Typography variant="caption" color="text.secondary">Address</Typography>
               <TextField
                 fullWidth
@@ -2036,6 +2164,38 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                 value={formData.customerAddress}
                 onChange={(e) => setFormData({ ...formData, customerAddress: e.target.value })}
               />
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">GST</Typography>
+              {showCustomerGstSelect ? (
+                <FormControl fullWidth size="small" disabled={lockCustomer}>
+                  <Select
+                    displayEmpty
+                    value={formData.customerGst || ''}
+                    onChange={(e) =>
+                      setFormData({ ...formData, customerGst: String(e.target.value || '') })
+                    }
+                    renderValue={(selected) =>
+                      selected ? String(selected) : 'GSTIN 선택'
+                    }
+                  >
+                    {customerGstOptions.map((gst) => (
+                      <MenuItem key={gst} value={gst}>
+                        {gst}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              ) : (
+                <TextField
+                  fullWidth
+                  size="small"
+                  disabled={lockCustomer}
+                  value={formData.customerGst}
+                  onChange={(e) => setFormData({ ...formData, customerGst: e.target.value })}
+                  placeholder="GSTIN"
+                />
+              )}
             </Box>
             {!hideApproverForCustomerView && (
               <Box className="quotation-pdf-hide">
@@ -2141,26 +2301,67 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
           </Box>
         </Box>
 
-        <Box className="quotation-pdf-section" sx={mvsBodySectionPanelSx}>
+        <Box
+          className="quotation-pdf-section quotation-pdf-section-items"
+          sx={{ ...mvsBodySectionPanelSx, border: '1px solid #000' }}
+        >
           <Box
-            sx={{ ...mvsBodySectionPanelTitleSx, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+            sx={{
+              ...mvsBodySectionPanelTitleSx,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              py: 0.5,
+              borderBottom: '1px solid #000',
+            }}
             className="quotation-pdf-section-title quotation-pdf-hide"
           >
             <Typography variant="subtitle2">Itemized costs</Typography>
             {!lockContent && (
-              <Button size="small" variant="outlined" startIcon={<AddIcon />} onClick={addItem}>
+              <Button
+                size="small"
+                variant="contained"
+                disableElevation
+                startIcon={<AddIcon />}
+                onClick={addItem}
+                sx={{
+                  ...mvsBodyPrimaryBtnSx,
+                  minHeight: 32,
+                  px: 1.5,
+                  bgcolor: '#0F766E',
+                  color: '#FFFFFF',
+                  '& .MuiButton-startIcon': { mr: '4px', color: '#FFFFFF' },
+                  '&:hover': {
+                    bgcolor: '#0D9488',
+                  },
+                }}
+              >
                 상품 추가
               </Button>
             )}
           </Box>
-          <Box sx={{ overflow: 'auto', width: '100%' }}>
+          <Box sx={{ overflow: 'auto', width: '100%', px: 1, pb: 1, pt: 0.5 }}>
           <Table
             className="quotation-itemized-costs-table"
             size="small"
             sx={{
               tableLayout: 'fixed',
               width: '100%',
-              minWidth: 560
+              minWidth: 560,
+              borderCollapse: 'collapse',
+              borderSpacing: 0,
+              '& .MuiTableRow-root': {
+                height: 'auto',
+              },
+              '& .MuiTableCell-head': {
+                py: 0.5,
+              },
+              '& .MuiTableCell-body': {
+                borderBottom: 'none',
+                py: 0.65,
+                px: 0.5,
+                lineHeight: 1.25,
+              },
             }}
           >
             <TableHead
@@ -2173,9 +2374,9 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                   fontSize: '0.875rem',
                   textTransform: 'none',
                   letterSpacing: 'normal',
-                  borderBottom: '2px solid',
-                  borderColor: 'primary.main',
-                  py: 1.25
+                  borderBottom: 'none',
+                  borderColor: 'transparent',
+                  py: 0.5
                 },
                 '& .MuiTableCell-head:last-of-type': {
                   textAlign: 'center'
@@ -2222,10 +2423,15 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                       onChange={(e) => handleItemDescriptionCombinedChange(index, e.target.value)}
                       onKeyDown={(e) => {
                         if (lockContent) return;
-                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                          e.preventDefault();
-                          addItemAndFocus();
+                        if (e.key !== 'Enter') return;
+                        // Shift+Enter: 설명 줄바꿈 유지
+                        if (e.shiftKey) return;
+                        e.preventDefault();
+                        if (!getItemDescriptionText(item)) {
+                          onValidationMessage?.(t('quotationManagement.itemDescriptionRequired'));
+                          return;
                         }
+                        focusItemField(qtyRefs, index);
                       }}
                       inputRef={(el) => {
                         productNameRefs.current[index] = el;
@@ -2241,15 +2447,29 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                       type="number"
                       disabled={lockContent}
                       value={item.quantity}
-                      onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value) || 0)}
-                      onKeyDown={(e) => {
+                      onChange={(e) =>
+                        handleItemChange(index, 'quantity', parsePositiveInt(e.target.value, 0))
+                      }
+                      onBlur={() => {
                         if (lockContent) return;
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addItemAndFocus();
+                        if (Number(item.quantity) < 1) {
+                          handleItemChange(index, 'quantity', 1);
                         }
                       }}
-                      inputProps={{ min: 0 }}
+                      onKeyDown={(e) => {
+                        if (lockContent) return;
+                        if (e.key !== 'Enter') return;
+                        e.preventDefault();
+                        if (Number(item.quantity) < 1) {
+                          onValidationMessage?.(t('quotationManagement.itemQtyUnitRequired'));
+                          return;
+                        }
+                        focusItemField(unitPriceRefs, index);
+                      }}
+                      inputRef={(el) => {
+                        qtyRefs.current[index] = el;
+                      }}
+                      inputProps={{ min: 1 }}
                       sx={ITEM_ROW_QTY_UNIT_SX}
                     />
                   </TableCell>
@@ -2260,20 +2480,42 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                       type="number"
                       disabled={lockContent}
                       value={item.unitPrice}
-                      onChange={(e) => handleItemChange(index, 'unitPrice', parseInt(e.target.value) || 0)}
-                      onKeyDown={(e) => {
+                      onChange={(e) =>
+                        handleItemChange(index, 'unitPrice', parsePositiveInt(e.target.value, 0))
+                      }
+                      onBlur={() => {
                         if (lockContent) return;
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addItemAndFocus();
+                        if (Number(item.unitPrice) <= 0) {
+                          onValidationMessage?.(t('quotationManagement.itemQtyUnitRequired'));
                         }
                       }}
-                      inputProps={{ min: 0 }}
+                      onKeyDown={(e) => {
+                        if (lockContent) return;
+                        if (e.key !== 'Enter') return;
+                        e.preventDefault();
+                        if (!getItemDescriptionText(item)) {
+                          onValidationMessage?.(t('quotationManagement.itemDescriptionRequired'));
+                          focusItemField(productNameRefs, index);
+                          return;
+                        }
+                        if (Number(item.quantity) < 1 || Number(item.unitPrice) <= 0) {
+                          onValidationMessage?.(t('quotationManagement.itemQtyUnitRequired'));
+                          return;
+                        }
+                        addItemAndFocus();
+                      }}
+                      inputRef={(el) => {
+                        unitPriceRefs.current[index] = el;
+                      }}
+                      inputProps={{ min: 1 }}
                       sx={ITEM_ROW_QTY_UNIT_SX}
                     />
                   </TableCell>
                   <TableCell align="right" sx={{ width: '10%', verticalAlign: 'middle' }}>
-                    <Typography variant="body2" sx={{ minHeight: 40, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                    <Typography
+                      variant="body2"
+                      sx={{ minHeight: 36, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', lineHeight: 1 }}
+                    >
                       Rs. {item.finalPrice.toLocaleString()}
                     </Typography>
                   </TableCell>
@@ -2312,7 +2554,9 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                         ...prev,
                         taxType: 'igst',
                         cgstRate: 0,
-                        sgstRate: 0 }));
+                        sgstRate: 0,
+                        igstRate: 18
+                      }));
                     } else {
                       setFormData(prev => ({
                         ...prev,
@@ -2391,7 +2635,7 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: '1fr 260px',
+            gridTemplateColumns: 'minmax(0, 1fr) auto',
             gap: 2,
             alignItems: 'stretch',
             mb: 2,
@@ -2410,6 +2654,11 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
               overflow: 'hidden',
               px: 1.5,
               py: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'flex-start',
+              textAlign: 'left',
               visibility:
                 issuingCompany?.bank_name ||
                 issuingCompany?.account_number ||
@@ -2456,7 +2705,8 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
           </Box>
           <Box
             sx={{
-              width: 260,
+              width: 'auto',
+              minWidth: 312,
               maxWidth: '100%',
               height: '100%',
               boxSizing: 'border-box',
@@ -2465,43 +2715,46 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
               border: '1px solid #000',
               borderRadius: '4px',
               overflow: 'hidden',
+              flexShrink: 0,
               '& .MuiTypography-body2': { fontSize: '0.825rem', lineHeight: 1.35 },
               '& .MuiTypography-subtitle2': { fontSize: '0.88rem', lineHeight: 1.35, fontWeight: 700 }
             }}
             className="quotation-pdf-totals"
           >
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #e0e0e0' }}>
-              <Typography variant="body2">Subtotal</Typography>
-              <Typography variant="body2">Rs. {subtotal.toLocaleString()}</Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1.5, px: 2, py: 1, borderBottom: '1px solid #e0e0e0' }}>
+              <Typography variant="body2" sx={{ flexShrink: 0 }}>Subtotal</Typography>
+              <Typography variant="body2" sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}>Rs. {subtotal.toLocaleString()}</Typography>
             </Box>
             {subtotal * (cgstRate / 100) > 0 && (
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #e0e0e0' }}>
-                <Typography variant="body2">CGST ({cgstRate}%)</Typography>
-                <Typography variant="body2">Rs. {(subtotal * (cgstRate / 100)).toLocaleString()}</Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1.5, px: 2, py: 1, borderBottom: '1px solid #e0e0e0' }}>
+                <Typography variant="body2" sx={{ flexShrink: 0 }}>CGST ({cgstRate}%)</Typography>
+                <Typography variant="body2" sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}>Rs. {(subtotal * (cgstRate / 100)).toLocaleString()}</Typography>
               </Box>
             )}
             {subtotal * (sgstRate / 100) > 0 && (
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #e0e0e0' }}>
-                <Typography variant="body2">SGST ({sgstRate}%)</Typography>
-                <Typography variant="body2">Rs. {(subtotal * (sgstRate / 100)).toLocaleString()}</Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1.5, px: 2, py: 1, borderBottom: '1px solid #e0e0e0' }}>
+                <Typography variant="body2" sx={{ flexShrink: 0 }}>SGST ({sgstRate}%)</Typography>
+                <Typography variant="body2" sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}>Rs. {(subtotal * (sgstRate / 100)).toLocaleString()}</Typography>
               </Box>
             )}
             {subtotal * (igstRate / 100) > 0 && (
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #e0e0e0' }}>
-                <Typography variant="body2">IGST ({igstRate}%)</Typography>
-                <Typography variant="body2">Rs. {(subtotal * (igstRate / 100)).toLocaleString()}</Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1.5, px: 2, py: 1, borderBottom: '1px solid #e0e0e0' }}>
+                <Typography variant="body2" sx={{ flexShrink: 0 }}>IGST ({igstRate}%)</Typography>
+                <Typography variant="body2" sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}>Rs. {(subtotal * (igstRate / 100)).toLocaleString()}</Typography>
               </Box>
             )}
             {!!formData.discount && (
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', px: 2, py: 1, borderBottom: '1px solid #e0e0e0' }}>
-                <Typography variant="body2">Discount</Typography>
-                <Typography variant="body2">-Rs. {formData.discount.toLocaleString()}</Typography>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1.5, px: 2, py: 1, borderBottom: '1px solid #e0e0e0' }}>
+                <Typography variant="body2" sx={{ flexShrink: 0 }}>Discount</Typography>
+                <Typography variant="body2" sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}>-Rs. {formData.discount.toLocaleString()}</Typography>
               </Box>
             )}
             <Box
               sx={{
                 display: 'flex',
                 justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 1.5,
                 px: 2,
                 py: 1,
                 mt: 'auto',
@@ -2509,8 +2762,8 @@ const QuotationForm: React.FC<QuotationFormProps> = ({
                 bgcolor: '#f0f0f0'
               }}
             >
-              <Typography variant="subtitle2">Total quote</Typography>
-              <Typography variant="subtitle2">Rs. {totalAmount.toLocaleString()}</Typography>
+              <Typography variant="subtitle2" sx={{ flexShrink: 0 }}>Total quote</Typography>
+              <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap', flexShrink: 0 }}>Rs. {totalAmount.toLocaleString()}</Typography>
             </Box>
           </Box>
         </Box>

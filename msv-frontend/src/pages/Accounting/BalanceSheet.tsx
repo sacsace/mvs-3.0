@@ -6,6 +6,7 @@ import {
   Card,
   CardContent,
   CircularProgress,
+  Link,
   Snackbar,
   Tab,
   Table,
@@ -19,21 +20,34 @@ import {
   Typography,
 } from '@mui/material';
 import {
-  AccountBalance as EquityIcon,
   RestartAlt as ResetIcon,
   Search as SearchIcon,
   FileDownload as DownloadIcon,
-  AccountBalanceWallet as AssetIcon,
-  CreditCard as LiabilityIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import AccountingCompanyBar from '../../components/Accounting/AccountingCompanyBar';
 import { useAccountingCompany } from '../../hooks/useAccountingCompany';
 import { accountingService } from '../../services/api';
-import { getGlAccountLabel } from '../../utils/glAccountLabel';
+import { getGlAccountName } from '../../utils/glAccountLabel';
 import { formatInr } from '../../utils/formatInr';
 import { exportBalanceSheetExcel } from '../../utils/exportFinancialStatementExcel';
+import {
+  AmountRow,
+  BsBundle,
+  ComparativeLine,
+  PlBundle,
+  TbRow,
+  buildBsSheet,
+  buildCapitalSheet,
+  buildGstRows,
+  buildOtherExpenseRows,
+  buildPlSheet,
+  buildSchBsSheet,
+  buildSchPlSheet,
+  buildTradePayableRows,
+  sumAmounts,
+} from '../../utils/financialStatementSheets';
 import {
   mvsBodyCardSx,
   mvsBodyFilterWrapSx,
@@ -51,29 +65,17 @@ import {
   mvsTableScrollSx,
 } from '../../theme/mvsLayout';
 
-type BsRow = {
-  accountId: number;
-  code: string;
-  name: string;
-  nameEn?: string | null;
-  amount: number;
-  synthetic?: boolean;
-};
-
-type BsData = {
+type BsData = BsBundle & {
   asOf: string | null;
   from: string | null;
-  assetRows: BsRow[];
-  liabilityRows: BsRow[];
-  equityRows: BsRow[];
-  totalAssets: number;
-  totalLiabilities: number;
-  totalEquity: number;
-  totalLiabilitiesAndEquity: number;
-  netProfit: number;
   balanced: boolean;
   source?: string;
   tallyVoucherCount?: number;
+};
+
+type PlData = PlBundle & {
+  from: string | null;
+  to: string | null;
 };
 
 type FinancialYearRow = {
@@ -86,7 +88,46 @@ type FinancialYearRow = {
 
 type BsPeriodKey = 'q1' | 'q2' | 'q3' | 'q4' | 'fiscalYear';
 
+type SheetKey =
+  | 'bs'
+  | 'pl'
+  | 'capital'
+  | 'schBs'
+  | 'schPl'
+  | 'trialBalance'
+  | 'tradePayable'
+  | 'outputGst'
+  | 'inputGst'
+  | 'otherExpenses';
+
 const BS_PERIOD_KEYS: BsPeriodKey[] = ['q1', 'q2', 'q3', 'q4', 'fiscalYear'];
+
+const SHEET_KEYS: SheetKey[] = [
+  'bs',
+  'pl',
+  'capital',
+  'schBs',
+  'schPl',
+  'trialBalance',
+  'tradePayable',
+  'outputGst',
+  'inputGst',
+  'otherExpenses',
+];
+
+/** Note No. → 이동 탭 (SEDA 스케줄 매핑) */
+const NOTE_SHEET_MAP: Record<string, SheetKey> = {
+  '1': 'capital',
+  '2': 'capital',
+  '3': 'capital',
+  '4': 'schBs',
+  '5': 'schBs',
+  '6': 'schBs',
+  '7': 'schBs',
+  '8': 'schPl',
+  '9': 'schPl',
+  '10': 'schPl',
+};
 
 const toYmdLocal = (d: Date) => {
   const y = d.getFullYear();
@@ -108,7 +149,6 @@ const resolveCurrentFinancialYear = (
   return rows[0];
 };
 
-/** 회계연도 마스터 없거나 폴백: 인도식 FY (4/1 ~ 익년 3/31) */
 const fallbackIndiaFiscalYear = (now = new Date()): { start_date: string; end_date: string } => {
   const y = now.getFullYear();
   const startYear = now.getMonth() + 1 >= 4 ? y : y - 1;
@@ -124,9 +164,10 @@ const getBalanceSheetPeriodRange = (
   key: BsPeriodKey,
   fiscalYear?: FinancialYearRow | null
 ): { from: string; asOf: string } => {
-  const fy = fiscalYear?.start_date && fiscalYear?.end_date
-    ? { start_date: fiscalYear.start_date, end_date: fiscalYear.end_date }
-    : fallbackIndiaFiscalYear();
+  const fy =
+    fiscalYear?.start_date && fiscalYear?.end_date
+      ? { start_date: fiscalYear.start_date, end_date: fiscalYear.end_date }
+      : fallbackIndiaFiscalYear();
 
   if (key === 'fiscalYear') {
     return { from: fy.start_date, asOf: fy.end_date };
@@ -135,7 +176,11 @@ const getBalanceSheetPeriodRange = (
   const quarterIndex = ({ q1: 0, q2: 1, q3: 2, q4: 3 } as const)[key];
   const fyStart = parseYmdLocal(fy.start_date);
   const qStart = new Date(fyStart.getFullYear(), fyStart.getMonth() + quarterIndex * 3, fyStart.getDate());
-  const qEndExclusive = new Date(fyStart.getFullYear(), fyStart.getMonth() + (quarterIndex + 1) * 3, fyStart.getDate());
+  const qEndExclusive = new Date(
+    fyStart.getFullYear(),
+    fyStart.getMonth() + (quarterIndex + 1) * 3,
+    fyStart.getDate()
+  );
   const qEnd = new Date(qEndExclusive);
   qEnd.setDate(qEnd.getDate() - 1);
 
@@ -144,6 +189,13 @@ const getBalanceSheetPeriodRange = (
   if (asOf > fy.end_date) asOf = fy.end_date;
   if (from < fy.start_date) return { from: fy.start_date, asOf };
   return { from, asOf };
+};
+
+const dateOneYearEarlier = (ymd: string) => {
+  if (!ymd) return '';
+  const [year, month, day] = ymd.split('-').map(Number);
+  if (!year || !month || !day) return '';
+  return `${year - 1}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 };
 
 const periodToggleGroupSx = {
@@ -186,6 +238,48 @@ const tableSx = {
   },
 } as const;
 
+const compactTableSx = {
+  ...tableSx,
+  '& .MuiTableCell-root': {
+    borderLeft: 'none',
+    borderRight: 'none',
+    borderTop: 'none',
+    py: 0.45,
+    lineHeight: 1.25,
+  },
+} as const;
+
+const compactHeadSx = {
+  '& .MuiTableCell-head': {
+    py: 0.85,
+    lineHeight: 1.25,
+  },
+} as const;
+
+/** 비교표 전기 열 연한 강조 */
+const excelPrevColBg = '#F3FAF4';
+
+const MONTH_SHORT = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+
+const formatExcelMonthYear = (ymd: string) => {
+  if (!ymd) return '';
+  const [y, m] = ymd.split('-').map(Number);
+  if (!y || !m) return '';
+  return `${MONTH_SHORT[m - 1]}'${String(y).slice(-2)}`;
+};
+
+const formatExcelPeriodRange = (fromYmd: string, toYmd: string) => {
+  const a = formatExcelMonthYear(fromYmd);
+  const b = formatExcelMonthYear(toYmd);
+  if (!a || !b) return '';
+  return `${a}~${b}`;
+};
+
+const totalRowSx = {
+  bgcolor: '#F8FAFC !important',
+  '& .MuiTableCell-root': { fontWeight: 700 },
+} as const;
+
 const BalanceSheet: React.FC = () => {
   const { t, i18n } = useTranslation();
   const {
@@ -198,12 +292,17 @@ const BalanceSheet: React.FC = () => {
     changeCompany,
   } = useAccountingCompany();
 
-  const [from, setFrom] = useState('');
-  const [asOf, setAsOf] = useState('');
-  const [periodKey, setPeriodKey] = useState<BsPeriodKey | null>(null);
+  const [from, setFrom] = useState(() => fallbackIndiaFiscalYear().start_date);
+  const [asOf, setAsOf] = useState(() => fallbackIndiaFiscalYear().end_date);
+  const [periodKey, setPeriodKey] = useState<BsPeriodKey | null>('fiscalYear');
   const [financialYears, setFinancialYears] = useState<FinancialYearRow[]>([]);
-  const [tab, setTab] = useState(0);
-  const [data, setData] = useState<BsData | null>(null);
+  const [sheet, setSheet] = useState<SheetKey>('bs');
+  const [bsCurrent, setBsCurrent] = useState<BsData | null>(null);
+  const [bsPrevious, setBsPrevious] = useState<BsData | null>(null);
+  const [plCurrent, setPlCurrent] = useState<PlData | null>(null);
+  const [plPrevious, setPlPrevious] = useState<PlData | null>(null);
+  const [trialRows, setTrialRows] = useState<TbRow[]>([]);
+  const [trialTotals, setTrialTotals] = useState({ debit: 0, credit: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -239,15 +338,66 @@ const BalanceSheet: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const response = await accountingService.getBalanceSheet({
-        from: from || undefined,
-        asOf: asOf || undefined,
-        ...companyQuery,
+      const prevFrom = dateOneYearEarlier(from);
+      const prevAsOf = dateOneYearEarlier(asOf);
+      const [
+        bsRes,
+        bsPrevRes,
+        plRes,
+        plPrevRes,
+        tbRes,
+      ] = await Promise.all([
+        accountingService.getBalanceSheet({
+          from: from || undefined,
+          asOf: asOf || undefined,
+          ...companyQuery,
+        }),
+        prevAsOf
+          ? accountingService.getBalanceSheet({
+              from: prevFrom || undefined,
+              asOf: prevAsOf,
+              ...companyQuery,
+            })
+          : Promise.resolve(null),
+        accountingService.getProfitAndLoss({
+          from: from || undefined,
+          to: asOf || undefined,
+          ...companyQuery,
+        }),
+        prevAsOf
+          ? accountingService.getProfitAndLoss({
+              from: prevFrom || undefined,
+              to: prevAsOf,
+              ...companyQuery,
+            })
+          : Promise.resolve(null),
+        accountingService.getTrialBalance({
+          from: from || undefined,
+          to: asOf || undefined,
+          ...companyQuery,
+        }),
+      ]);
+
+      setBsCurrent(bsRes?.data || null);
+      setBsPrevious(bsPrevRes?.data || null);
+      setPlCurrent(plRes?.data || null);
+      setPlPrevious(plPrevRes?.data || null);
+
+      const tbData = tbRes?.data;
+      const rows: TbRow[] = Array.isArray(tbData?.rows) ? tbData.rows : [];
+      setTrialRows(rows);
+      setTrialTotals({
+        debit: Number(tbData?.totalDebit || 0),
+        credit: Number(tbData?.totalCredit || 0),
       });
-      setData(response?.data || null);
     } catch (err: any) {
       setError(err?.response?.data?.message || t('balanceSheet.errors.load'));
-      setData(null);
+      setBsCurrent(null);
+      setBsPrevious(null);
+      setPlCurrent(null);
+      setPlPrevious(null);
+      setTrialRows([]);
+      setTrialTotals({ debit: 0, credit: 0 });
     } finally {
       setLoading(false);
     }
@@ -265,21 +415,22 @@ const BalanceSheet: React.FC = () => {
   };
 
   const handleReset = () => {
-    setFrom('');
-    setAsOf('');
-    setPeriodKey(null);
-    setTab(0);
+    const range = getBalanceSheetPeriodRange('fiscalYear', currentFinancialYear);
+    setFrom(range.from);
+    setAsOf(range.asOf);
+    setPeriodKey('fiscalYear');
+    setSheet('bs');
   };
 
   const handleExcelDownload = async () => {
-    if (!data) {
+    if (!bsCurrent) {
       setError(t('balanceSheet.errors.noDataForExport'));
       return;
     }
     try {
       setExporting(true);
       await exportBalanceSheetExcel({
-        data,
+        data: bsCurrent,
         companyName: selectedCompanyName || undefined,
         language: i18n.language,
         filePrefix: i18n.language?.startsWith('en') ? 'Balance_Sheet' : '재무상태표',
@@ -291,28 +442,61 @@ const BalanceSheet: React.FC = () => {
     }
   };
 
+  const currentPeriodLabel = asOf || bsCurrent?.asOf || '-';
+  const previousPeriodLabel = dateOneYearEarlier(asOf || bsCurrent?.asOf || '');
+  const currentPeriodCaption = formatExcelPeriodRange(from, asOf);
+  const previousPeriodCaption = formatExcelPeriodRange(dateOneYearEarlier(from), dateOneYearEarlier(asOf));
+
+  const comparativeSheets = useMemo(() => {
+    return {
+      bs: buildBsSheet(bsCurrent, bsPrevious),
+      pl: buildPlSheet(plCurrent, plPrevious),
+      capital: buildCapitalSheet(bsCurrent, bsPrevious),
+      schBs: buildSchBsSheet(bsCurrent, bsPrevious),
+      schPl: buildSchPlSheet(plCurrent, plPrevious),
+    };
+  }, [bsCurrent, bsPrevious, plCurrent, plPrevious]);
+
+  const detailSheets = useMemo(() => {
+    const liabilities = (bsCurrent?.liabilityRows || []) as AmountRow[];
+    const assets = (bsCurrent?.assetRows || []) as AmountRow[];
+    const expenses = (plCurrent?.expenseRows || []) as AmountRow[];
+    return {
+      tradePayable: buildTradePayableRows(liabilities),
+      outputGst: buildGstRows([...liabilities, ...assets], 'output'),
+      inputGst: buildGstRows([...assets, ...liabilities], 'input'),
+      otherExpenses: buildOtherExpenseRows(expenses),
+    };
+  }, [bsCurrent, plCurrent]);
+
   const kpis = useMemo(
     () => [
       {
         key: 'assets',
         label: t('balanceSheet.kpi.totalAssets'),
-        value: data?.totalAssets ?? 0,
+        value: bsCurrent?.totalAssets ?? 0,
         color: 'primary.main',
       },
       {
         key: 'liab',
         label: t('balanceSheet.kpi.totalLiabilities'),
-        value: data?.totalLiabilities ?? 0,
+        value: bsCurrent?.totalLiabilities ?? 0,
         color: 'warning.main',
       },
       {
         key: 'equity',
         label: t('balanceSheet.kpi.totalEquity'),
-        value: data?.totalEquity ?? 0,
+        value: bsCurrent?.totalEquity ?? 0,
         color: 'success.main',
       },
+      {
+        key: 'profit',
+        label: t('balanceSheet.kpi.netProfit'),
+        value: plCurrent?.netProfit ?? bsCurrent?.netProfit ?? 0,
+        color: (plCurrent?.netProfit ?? bsCurrent?.netProfit ?? 0) >= 0 ? 'success.main' : 'error.main',
+      },
     ],
-    [data, t]
+    [bsCurrent, plCurrent, t]
   );
 
   const listStateBoxSx = {
@@ -329,7 +513,154 @@ const BalanceSheet: React.FC = () => {
 
   const filterFieldSx = { ...mvsSearchFieldSx, ...mvsFilterFieldHeightSx };
 
-  const renderAmountTable = (rows: BsRow[], total: number, emptyKey: string, totalColor: string) => {
+  const renderComparative = (lines: ComparativeLine[]) => {
+    if (loading) {
+      return (
+        <Box sx={listStateBoxSx}>
+          <CircularProgress size={36} />
+          <Typography variant="body2" color="text.secondary">
+            {t('common.loading')}
+          </Typography>
+        </Box>
+      );
+    }
+
+    if (!lines.length) {
+      return (
+        <Box sx={listStateBoxSx}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+            {t('balanceSheet.empty.hint')}
+          </Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+        <Table size="small" sx={{ ...compactTableSx, minWidth: 860 }}>
+          <TableHead sx={[mvsTableHeadHighlightSx, compactHeadSx] as any}>
+            <TableRow>
+              <TableCell width="6%" />
+              <TableCell width="44%">{t('balanceSheet.statement.particulars')}</TableCell>
+              <TableCell width="8%" align="center">
+                {t('balanceSheet.statement.noteNo')}
+              </TableCell>
+              <TableCell width="21%" align="right">
+                <Box component="span" sx={{ display: 'block', fontWeight: 600 }}>
+                  {t('balanceSheet.statement.forPeriod', {
+                    range: currentPeriodCaption || currentPeriodLabel,
+                  })}
+                </Box>
+                <Box component="span" sx={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'text.secondary' }}>
+                  {t('balanceSheet.statement.amountRs')}
+                </Box>
+              </TableCell>
+              <TableCell
+                width="21%"
+                align="right"
+                sx={{ bgcolor: `${excelPrevColBg} !important` }}
+              >
+                <Box component="span" sx={{ display: 'block', fontWeight: 600 }}>
+                  {t('balanceSheet.statement.forPeriod', {
+                    range:
+                      previousPeriodCaption ||
+                      previousPeriodLabel ||
+                      t('balanceSheet.statement.previousPeriod'),
+                  })}
+                </Box>
+                <Box component="span" sx={{ display: 'block', fontSize: '0.75rem', fontWeight: 500, color: 'text.secondary' }}>
+                  {t('balanceSheet.statement.amountRs')}
+                </Box>
+              </TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody sx={mvsTableBodyRowSx}>
+            {lines.map((row, idx) => {
+              const isSection = Boolean(row.section);
+              const isTotal = Boolean(row.total);
+              const isCategory = !isSection && !isTotal && row.indent === 0 && row.current === null;
+              const showAmount = row.current !== null || row.previous !== null;
+              const bold = isSection || isTotal || isCategory;
+              const labelIndent = isTotal || isSection || isCategory ? 0 : row.indent ?? 1;
+              const noteKey = String(row.note || '').trim();
+              const noteTarget = noteKey ? NOTE_SHEET_MAP[noteKey] : undefined;
+
+              return (
+                <TableRow
+                  key={`${row.index || ''}-${row.label}-${idx}`}
+                  hover={!isSection && !isTotal}
+                  sx={isTotal ? totalRowSx : undefined}
+                >
+                  <TableCell
+                    align="center"
+                    sx={{ fontWeight: bold ? 700 : 400, whiteSpace: 'nowrap', color: 'text.secondary' }}
+                  >
+                    {isTotal ? '' : row.index || ''}
+                  </TableCell>
+                  <TableCell
+                    sx={{
+                      fontWeight: bold ? 700 : 400,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      ...(isTotal ? { textAlign: 'center', pl: 1.5 } : { pl: 1.5 + labelIndent * 1.75 }),
+                    }}
+                  >
+                    {row.label}
+                  </TableCell>
+                  <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
+                    {isSection || isCategory || isTotal || !noteKey ? (
+                      ''
+                    ) : noteTarget ? (
+                      <Link
+                        component="button"
+                        type="button"
+                        underline="hover"
+                        onClick={() => setSheet(noteTarget)}
+                        sx={{
+                          fontWeight: 600,
+                          fontSize: '0.8125rem',
+                          cursor: 'pointer',
+                          border: 0,
+                          background: 'none',
+                          p: 0,
+                          color: 'primary.main',
+                        }}
+                      >
+                        {noteKey}
+                      </Link>
+                    ) : (
+                      <Box component="span" sx={{ color: 'text.secondary' }}>
+                        {noteKey}
+                      </Box>
+                    )}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: isTotal ? 700 : 400 }}
+                  >
+                    {showAmount && row.current !== null ? formatInr(row.current) : ''}
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{
+                      fontVariantNumeric: 'tabular-nums',
+                      fontWeight: isTotal ? 700 : 400,
+                      bgcolor: `${excelPrevColBg} !important`,
+                    }}
+                  >
+                    {showAmount && row.previous !== null ? formatInr(row.previous) : ''}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    );
+  };
+
+  const renderLedgerList = (rows: AmountRow[], emptyKey: string) => {
     if (loading) {
       return (
         <Box sx={listStateBoxSx}>
@@ -344,7 +675,7 @@ const BalanceSheet: React.FC = () => {
     if (!rows.length) {
       return (
         <Box sx={listStateBoxSx}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em', color: 'text.primary' }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
             {t(emptyKey)}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 480 }}>
@@ -354,10 +685,11 @@ const BalanceSheet: React.FC = () => {
       );
     }
 
+    const total = sumAmounts(rows);
     return (
       <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
-        <Table size="small" sx={tableSx}>
-          <TableHead sx={mvsTableHeadHighlightSx}>
+        <Table size="small" sx={compactTableSx}>
+          <TableHead sx={[mvsTableHeadHighlightSx, compactHeadSx] as any}>
             <TableRow>
               <TableCell width="18%">{t('balanceSheet.columns.code')}</TableCell>
               <TableCell width="52%">{t('balanceSheet.columns.account')}</TableCell>
@@ -368,21 +700,24 @@ const BalanceSheet: React.FC = () => {
           </TableHead>
           <TableBody sx={mvsTableBodyRowSx}>
             {rows.map((row) => (
-              <TableRow key={`${row.accountId}-${row.code}`} hover>
-                <TableCell sx={cellEllipsisSx}>{row.code}</TableCell>
+              <TableRow key={`${row.accountId}-${row.code || row.name}`} hover>
+                <TableCell sx={cellEllipsisSx}>{row.code || ''}</TableCell>
                 <TableCell sx={cellEllipsisSx}>
-                  {row.synthetic ? row.name : getGlAccountLabel(row, i18n.language)}
+                  {row.synthetic
+                    ? row.name
+                    : getGlAccountName(
+                        { code: row.code, name: row.name, name_en: row.nameEn },
+                        i18n.language
+                      )}
                 </TableCell>
                 <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                   {formatInr(row.amount)}
                 </TableCell>
               </TableRow>
             ))}
-            <TableRow sx={{ bgcolor: '#F8FAFC !important' }}>
-              <TableCell colSpan={2} sx={{ fontWeight: 700 }}>
-                {t('balanceSheet.total')}
-              </TableCell>
-              <TableCell align="right" sx={{ fontWeight: 700, color: totalColor, fontVariantNumeric: 'tabular-nums' }}>
+            <TableRow sx={totalRowSx}>
+              <TableCell colSpan={2}>{t('balanceSheet.total')}</TableCell>
+              <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                 {formatInr(total)}
               </TableCell>
             </TableRow>
@@ -390,6 +725,112 @@ const BalanceSheet: React.FC = () => {
         </Table>
       </TableContainer>
     );
+  };
+
+  const renderTrialBalance = () => {
+    if (loading) {
+      return (
+        <Box sx={listStateBoxSx}>
+          <CircularProgress size={36} />
+          <Typography variant="body2" color="text.secondary">
+            {t('common.loading')}
+          </Typography>
+        </Box>
+      );
+    }
+
+    if (!trialRows.length) {
+      return (
+        <Box sx={listStateBoxSx}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, letterSpacing: '-0.01em' }}>
+            {t('balanceSheet.empty.trialBalance')}
+          </Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+        <Table size="small" sx={{ ...compactTableSx, minWidth: 880 }}>
+          <TableHead sx={[mvsTableHeadHighlightSx, compactHeadSx] as any}>
+            <TableRow>
+              <TableCell width="12%">{t('balanceSheet.columns.code')}</TableCell>
+              <TableCell width="36%">{t('balanceSheet.statement.particulars')}</TableCell>
+              <TableCell width="12%">{t('balanceSheet.columns.group')}</TableCell>
+              <TableCell width="13%" align="right">
+                {t('balanceSheet.columns.debit')}
+              </TableCell>
+              <TableCell width="13%" align="right">
+                {t('balanceSheet.columns.credit')}
+              </TableCell>
+              <TableCell width="14%" align="right">
+                {t('balanceSheet.columns.closing')}
+              </TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody sx={mvsTableBodyRowSx}>
+            {trialRows.map((row) => (
+              <TableRow key={row.accountId} hover>
+                <TableCell sx={cellEllipsisSx}>{row.code}</TableCell>
+                <TableCell sx={cellEllipsisSx}>
+                  {getGlAccountName(
+                    { code: row.code, name: row.name, name_en: (row as any).nameEn ?? (row as any).name_en },
+                    i18n.language
+                  )}
+                </TableCell>
+                <TableCell sx={cellEllipsisSx}>{row.nature || ''}</TableCell>
+                <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {formatInr(row.debit)}
+                </TableCell>
+                <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {formatInr(row.credit)}
+                </TableCell>
+                <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {formatInr(row.balance)}
+                </TableCell>
+              </TableRow>
+            ))}
+            <TableRow sx={totalRowSx}>
+              <TableCell colSpan={3}>{t('balanceSheet.total')}</TableCell>
+              <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                {formatInr(trialTotals.debit)}
+              </TableCell>
+              <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                {formatInr(trialTotals.credit)}
+              </TableCell>
+              <TableCell />
+            </TableRow>
+          </TableBody>
+        </Table>
+      </TableContainer>
+    );
+  };
+
+  const renderSheet = () => {
+    switch (sheet) {
+      case 'bs':
+        return renderComparative(comparativeSheets.bs);
+      case 'pl':
+        return renderComparative(comparativeSheets.pl);
+      case 'capital':
+        return renderComparative(comparativeSheets.capital);
+      case 'schBs':
+        return renderComparative(comparativeSheets.schBs);
+      case 'schPl':
+        return renderComparative(comparativeSheets.schPl);
+      case 'trialBalance':
+        return renderTrialBalance();
+      case 'tradePayable':
+        return renderLedgerList(detailSheets.tradePayable, 'balanceSheet.empty.tradePayable');
+      case 'outputGst':
+        return renderLedgerList(detailSheets.outputGst, 'balanceSheet.empty.outputGst');
+      case 'inputGst':
+        return renderLedgerList(detailSheets.inputGst, 'balanceSheet.empty.inputGst');
+      case 'otherExpenses':
+        return renderLedgerList(detailSheets.otherExpenses, 'balanceSheet.empty.otherExpenses');
+      default:
+        return null;
+    }
   };
 
   return (
@@ -404,7 +845,14 @@ const BalanceSheet: React.FC = () => {
         onChangeCompany={changeCompany}
       />
 
-      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2.5, mb: 3 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+          gap: 2.5,
+          mb: 3,
+        }}
+      >
         {kpis.map((kpi) => (
           <Card key={kpi.key} elevation={0} sx={mvsKpiCardSx}>
             <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
@@ -422,8 +870,8 @@ const BalanceSheet: React.FC = () => {
         ))}
       </Box>
 
-      <Alert severity={data?.balanced === false ? 'warning' : 'info'} sx={{ mb: 2 }}>
-        {data?.balanced === false ? t('balanceSheet.unbalancedHint') : t('balanceSheet.hint')}
+      <Alert severity={bsCurrent?.balanced === false ? 'warning' : 'info'} sx={{ mb: 2 }}>
+        {bsCurrent?.balanced === false ? t('balanceSheet.unbalancedHint') : t('balanceSheet.hint')}
       </Alert>
 
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 2 }}>
@@ -484,7 +932,6 @@ const BalanceSheet: React.FC = () => {
                   setPeriodKey(null);
                   setFrom(e.target.value);
                 }}
-                disabled={loading}
                 sx={filterFieldSx}
                 {...mvsOutlinedLabelProps}
               />
@@ -498,7 +945,6 @@ const BalanceSheet: React.FC = () => {
                   setPeriodKey(null);
                   setAsOf(e.target.value);
                 }}
-                disabled={loading}
                 sx={filterFieldSx}
                 {...mvsOutlinedLabelProps}
               />
@@ -506,27 +952,27 @@ const BalanceSheet: React.FC = () => {
                 variant="contained"
                 disableElevation
                 startIcon={<SearchIcon fontSize="small" />}
-                sx={{ ...mvsBodyPrimaryBtnSx, height: 40, whiteSpace: 'nowrap' }}
                 onClick={() => void load()}
                 disabled={loading}
+                sx={{ ...mvsBodyPrimaryBtnSx, height: 40, whiteSpace: 'nowrap' }}
               >
                 {t('balanceSheet.search')}
               </Button>
               <Button
                 variant="outlined"
                 startIcon={<ResetIcon fontSize="small" />}
-                sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
                 onClick={handleReset}
                 disabled={loading}
+                sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
               >
                 {t('common.reset')}
               </Button>
               <Button
                 variant="outlined"
                 startIcon={<DownloadIcon fontSize="small" />}
+                onClick={() => void handleExcelDownload()}
+                disabled={loading || exporting || !bsCurrent}
                 sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
-                onClick={handleExcelDownload}
-                disabled={loading || exporting || !data}
               >
                 {t('balanceSheet.excelDownload')}
               </Button>
@@ -537,102 +983,29 @@ const BalanceSheet: React.FC = () => {
 
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 0 }}>
         <Tabs
-          value={tab}
-          onChange={(_, v) => setTab(v)}
+          value={sheet}
+          onChange={(_, value: SheetKey) => setSheet(value)}
           variant="scrollable"
           scrollButtons="auto"
-          sx={{ px: 1, minHeight: 48, '& .MuiTab-root': { py: 1.5, textTransform: 'none', fontWeight: 600 } }}
+          sx={{
+            px: 1,
+            minHeight: 48,
+            '& .MuiTab-root': { py: 1.5, textTransform: 'none', fontWeight: 600 },
+          }}
         >
-          <Tab icon={<AssetIcon fontSize="small" />} iconPosition="start" label={t('balanceSheet.tabs.assets')} />
-          <Tab
-            icon={<LiabilityIcon fontSize="small" />}
-            iconPosition="start"
-            label={t('balanceSheet.tabs.liabilities')}
-          />
-          <Tab icon={<EquityIcon fontSize="small" />} iconPosition="start" label={t('balanceSheet.tabs.equity')} />
-          <Tab label={t('balanceSheet.tabs.summary')} />
+          {SHEET_KEYS.map((key) => (
+            <Tab key={key} value={key} label={t(`balanceSheet.sheets.${key}`)} />
+          ))}
         </Tabs>
       </Card>
 
-      <Box sx={mvsBodyListZoneSx}>
-        {tab === 0 &&
-          renderAmountTable(data?.assetRows || [], data?.totalAssets ?? 0, 'balanceSheet.empty.assets', 'primary.main')}
-        {tab === 1 &&
-          renderAmountTable(
-            data?.liabilityRows || [],
-            data?.totalLiabilities ?? 0,
-            'balanceSheet.empty.liabilities',
-            'warning.main'
-          )}
-        {tab === 2 &&
-          renderAmountTable(data?.equityRows || [], data?.totalEquity ?? 0, 'balanceSheet.empty.equity', 'success.main')}
-        {tab === 3 &&
-          (loading ? (
-            <Box sx={listStateBoxSx}>
-              <CircularProgress size={36} />
-              <Typography variant="body2" color="text.secondary">
-                {t('common.loading')}
-              </Typography>
-            </Box>
-          ) : (
-            <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
-              <Table size="small" sx={tableSx}>
-                <TableHead sx={mvsTableHeadHighlightSx}>
-                  <TableRow>
-                    <TableCell width="60%">{t('balanceSheet.sections.equation')}</TableCell>
-                    <TableCell width="40%" align="right">
-                      {t('balanceSheet.columns.amount')}
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody sx={mvsTableBodyRowSx}>
-                  <TableRow hover>
-                    <TableCell>{t('balanceSheet.kpi.totalAssets')}</TableCell>
-                    <TableCell align="right" sx={{ color: 'primary.main', fontVariantNumeric: 'tabular-nums' }}>
-                      {formatInr(data?.totalAssets ?? 0)}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow hover>
-                    <TableCell>{t('balanceSheet.kpi.totalLiabilities')}</TableCell>
-                    <TableCell align="right" sx={{ color: 'warning.main', fontVariantNumeric: 'tabular-nums' }}>
-                      {formatInr(data?.totalLiabilities ?? 0)}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow hover>
-                    <TableCell>{t('balanceSheet.kpi.totalEquity')}</TableCell>
-                    <TableCell align="right" sx={{ color: 'success.main', fontVariantNumeric: 'tabular-nums' }}>
-                      {formatInr(data?.totalEquity ?? 0)}
-                    </TableCell>
-                  </TableRow>
-                  <TableRow sx={{ bgcolor: '#F8FAFC !important' }}>
-                    <TableCell sx={{ fontWeight: 700 }}>{t('balanceSheet.kpi.liabilitiesAndEquity')}</TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        fontWeight: 800,
-                        fontSize: '1.05rem',
-                        color: data?.balanced ? 'success.main' : 'error.main',
-                        fontVariantNumeric: 'tabular-nums',
-                      }}
-                    >
-                      {formatInr(data?.totalLiabilitiesAndEquity ?? 0)}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </TableContainer>
-          ))}
-        {!loading && tab === 3 && (
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
-            {t('balanceSheet.formula', {
-              assets: formatInr(data?.totalAssets ?? 0),
-              liabilityEquity: formatInr(data?.totalLiabilitiesAndEquity ?? 0),
-            })}
-          </Typography>
-        )}
-      </Box>
+      <Box sx={mvsBodyListZoneSx}>{renderSheet()}</Box>
 
-      <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError('')} message={error} />
+      <Snackbar open={Boolean(error)} autoHideDuration={5000} onClose={() => setError('')}>
+        <Alert severity="error" onClose={() => setError('')} sx={{ width: '100%' }}>
+          {error}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

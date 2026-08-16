@@ -15,6 +15,8 @@ import {
   Pagination,
   Snackbar,
   Stack,
+  Tab,
+  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -27,6 +29,7 @@ import {
 } from '@mui/material';
 import { useTheme, type SxProps, type Theme } from '@mui/material/styles';
 import {
+  Assessment as ReportIcon,
   CloudUpload as UploadIcon,
   Download as DownloadIcon,
   MenuBook as BooksIcon,
@@ -131,6 +134,18 @@ type ImportResult = {
   createdAccountCodes: string[];
 };
 
+type ReportIssueSource = 'preview' | 'dryRun' | 'import';
+
+type ReportIssue = {
+  level: string;
+  message: string;
+  context?: string;
+  source: ReportIssueSource;
+  at: string;
+};
+
+type ListTab = 'preview' | 'report';
+
 type IssueLevelFilter = 'all' | 'error' | 'warn' | 'info';
 
 const ISSUE_LEVEL_ORDER: Record<string, number> = { error: 0, warn: 1, info: 2 };
@@ -190,6 +205,8 @@ const TallyImport: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [reportIssues, setReportIssues] = useState<ReportIssue[]>([]);
+  const [listTab, setListTab] = useState<ListTab>('preview');
   const [previewPage, setPreviewPage] = useState(1);
   const [issuesPage, setIssuesPage] = useState(1);
   const [issueLevelFilter, setIssueLevelFilter] = useState<IssueLevelFilter>('all');
@@ -237,21 +254,25 @@ const TallyImport: React.FC = () => {
   const pagedPreview = previewRows.slice((previewPage - 1) * ROWS_PER_PAGE, previewPage * ROWS_PER_PAGE);
 
   const issueCounts = useMemo(() => {
-    const all = result?.issues || [];
+    const all = reportIssues;
     return {
       all: all.length,
       error: all.filter((i) => i.level === 'error').length,
       warn: all.filter((i) => i.level === 'warn').length,
       info: all.filter((i) => i.level === 'info').length,
     };
-  }, [result?.issues]);
+  }, [reportIssues]);
 
   const issueRows = useMemo(() => {
-    const all = [...(result?.issues || [])];
-    all.sort((a, b) => (ISSUE_LEVEL_ORDER[a.level] ?? 9) - (ISSUE_LEVEL_ORDER[b.level] ?? 9));
+    const all = [...reportIssues];
+    all.sort((a, b) => {
+      const levelDiff = (ISSUE_LEVEL_ORDER[a.level] ?? 9) - (ISSUE_LEVEL_ORDER[b.level] ?? 9);
+      if (levelDiff !== 0) return levelDiff;
+      return String(a.at).localeCompare(String(b.at));
+    });
     if (issueLevelFilter === 'all') return all;
     return all.filter((i) => i.level === issueLevelFilter);
-  }, [result?.issues, issueLevelFilter]);
+  }, [reportIssues, issueLevelFilter]);
 
   const issuesPageCount = Math.max(1, Math.ceil(issueRows.length / ROWS_PER_PAGE));
   const pagedIssues = issueRows.slice((issuesPage - 1) * ROWS_PER_PAGE, issuesPage * ROWS_PER_PAGE);
@@ -263,10 +284,47 @@ const TallyImport: React.FC = () => {
     return level;
   };
 
+  const issueSourceLabel = (source: ReportIssueSource) => {
+    if (source === 'preview') return t('tallyImport.reportSource.preview');
+    if (source === 'dryRun') return t('tallyImport.reportSource.dryRun');
+    return t('tallyImport.reportSource.import');
+  };
+
+  const appendReportIssues = (
+    source: ReportIssueSource,
+    issues: Array<{ level: string; message: string; context?: string }> | undefined,
+    opts?: { switchToReport?: boolean }
+  ) => {
+    const at = new Date().toISOString();
+    const rows = (issues || []).map((issue) => ({
+      level: issue.level || 'info',
+      message: issue.message || '',
+      context: issue.context,
+      source,
+      at,
+    }));
+    if (!rows.length) return;
+    setReportIssues((prev) => [...prev, ...rows]);
+    setIssuesPage(1);
+    if (opts?.switchToReport !== false) {
+      setListTab('report');
+      const failed = rows.some((r) => r.level === 'error');
+      setIssueLevelFilter(failed ? 'error' : 'all');
+    }
+  };
+
+  const clearSessionResults = () => {
+    setPreview(null);
+    setResult(null);
+    setReportIssues([]);
+    setPreviewPage(1);
+    setIssuesPage(1);
+    setIssueLevelFilter('all');
+    setListTab('preview');
+  };
+
   const handleDownloadImportLog = async () => {
-    if (!result) return;
-    const allIssues = result.issues || [];
-    if (allIssues.length === 0) {
+    if (reportIssues.length === 0) {
       setError(t('tallyImport.errors.noLogToDownload'));
       return;
     }
@@ -285,48 +343,43 @@ const TallyImport: React.FC = () => {
       } = await import('../../utils/tallyImportLogEn');
 
       const workbook = new ExcelJS.Workbook();
-      const header = ['Level', 'Message', 'Reason / Detail'];
+      const header = ['Level', 'Source', 'Time', 'Message', 'Reason / Detail'];
 
-      const toEnRows = (issues: typeof allIssues) =>
+      const toEnRows = (issues: ReportIssue[]) =>
         issues.map((issue) => [
           tallyIssueLevelToEn(issue.level),
+          issue.source,
+          issue.at,
           tallyIssueMessageToEn(issue.message),
           tallyIssueContextToEn(issue.context),
         ]);
 
-      const failed = allIssues.filter((i) => i.level === 'error');
-      const warnings = allIssues.filter((i) => i.level === 'warn');
-      const infos = allIssues.filter((i) => i.level === 'info');
+      const failed = reportIssues.filter((i) => i.level === 'error');
+      const warnings = reportIssues.filter((i) => i.level === 'warn');
+      const infos = reportIssues.filter((i) => i.level === 'info');
 
       addSheetFromAoA(workbook, 'Summary', [
-        ['Tally Import Result' + (result.dryRun ? ' (Simulation — no DB write)' : '')],
-        [
-          `Accounts matched ${result.ledgers.matched} · Accounts created ${result.ledgers.created} · Vouchers created ${result.vouchers.created} · Skipped ${result.vouchers.skipped} · Failed ${result.vouchers.failed}`,
-        ],
-        [`Failed ${failed.length} · Warning ${warnings.length} · Info ${infos.length} · Total ${allIssues.length}`],
+        ['Tally Import Report'],
+        result
+          ? [
+              `Accounts matched ${result.ledgers.matched} · Accounts created ${result.ledgers.created} · Vouchers created ${result.vouchers.created} · Skipped ${result.vouchers.skipped} · Failed ${result.vouchers.failed}`,
+            ]
+          : ['No import result summary (preview / accumulated issues only)'],
+        [`Failed ${failed.length} · Warning ${warnings.length} · Info ${infos.length} · Total ${reportIssues.length}`],
         ...(file?.name ? [[`File: ${file.name}`]] : []),
         [],
         ['Sheet', 'Rows'],
-        ['Failed', failed.length],
-        ['Warning', warnings.length],
-        ['Info', infos.length],
+        ['All', String(reportIssues.length)],
+        ['Failed', String(failed.length)],
+        ['Warnings', String(warnings.length)],
+        ['Info', String(infos.length)],
       ]);
+      addSheetFromAoA(workbook, 'All', [header, ...toEnRows(reportIssues)]);
+      addSheetFromAoA(workbook, 'Failed', [header, ...toEnRows(failed)]);
+      addSheetFromAoA(workbook, 'Warnings', [header, ...toEnRows(warnings)]);
+      addSheetFromAoA(workbook, 'Info', [header, ...toEnRows(infos)]);
 
-      addSheetFromAoA(
-        workbook,
-        'Failed',
-        failed.length ? [header, ...toEnRows(failed)] : [header, ['-', 'No failed logs', '-']]
-      );
-      addSheetFromAoA(
-        workbook,
-        'Warning',
-        warnings.length ? [header, ...toEnRows(warnings)] : [header, ['-', 'No warning logs', '-']]
-      );
-      if (infos.length > 0) {
-        addSheetFromAoA(workbook, 'Info', [header, ...toEnRows(infos)]);
-      }
-
-      await downloadExcelWorkbook(workbook, `tally-import-log-${fileStamp}.xlsx`, { rowHeight: 20 });
+      await downloadExcelWorkbook(workbook, `Tally_Import_Report_${fileStamp}.xlsx`);
       setSuccess(t('tallyImport.success.logDownloaded'));
     } catch (err: any) {
       setError(err?.message || t('tallyImport.errors.import'));
@@ -341,11 +394,7 @@ const TallyImport: React.FC = () => {
     setImportVouchers(true);
     setCreateMissingLedgers(true);
     setCreateMissingParties(true);
-    setPreview(null);
-    setResult(null);
-    setPreviewPage(1);
-    setIssuesPage(1);
-    setIssueLevelFilter('all');
+    clearSessionResults();
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -378,9 +427,26 @@ const TallyImport: React.FC = () => {
       const res = await accountingService.previewTallyImport(fd, effectiveCompanyId);
       setPreview(res?.data || null);
       setPreviewPage(1);
+      setListTab('preview');
+      const data = res?.data;
+      appendReportIssues(
+        'preview',
+        [
+          {
+            level: 'info',
+            message: t('tallyImport.success.preview'),
+            context: data
+              ? `ledgers=${data.totals?.ledgers ?? 0}, vouchers=${data.totals?.vouchers ?? 0}, format=${data.format || '-'}`
+              : undefined,
+          },
+        ],
+        { switchToReport: false }
+      );
       setSuccess(t('tallyImport.success.preview'));
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || t('tallyImport.errors.preview'));
+      const message = err?.response?.data?.message || err?.message || t('tallyImport.errors.preview');
+      appendReportIssues('preview', [{ level: 'error', message }]);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -401,12 +467,12 @@ const TallyImport: React.FC = () => {
       const fd = buildFormData(dryRun);
       const res = await accountingService.importTallyExport(fd, effectiveCompanyId);
       setResult(res?.data || null);
-      setIssuesPage(1);
-      const failed = res?.data?.vouchers?.failed ?? 0;
-      setIssueLevelFilter(failed > 0 ? 'error' : 'all');
+      appendReportIssues(dryRun ? 'dryRun' : 'import', res?.data?.issues || []);
       setSuccess(res?.message || (dryRun ? t('tallyImport.success.dryRun') : t('tallyImport.success.import')));
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || t('tallyImport.errors.import'));
+      const message = err?.response?.data?.message || err?.message || t('tallyImport.errors.import');
+      appendReportIssues(dryRun ? 'dryRun' : 'import', [{ level: 'error', message }]);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -443,10 +509,24 @@ const TallyImport: React.FC = () => {
       >
         {t('tallyImport.preview')}
       </Button>
+      <Button
+        variant={listTab === 'report' ? 'contained' : 'outlined'}
+        size="small"
+        startIcon={<ReportIcon fontSize="small" />}
+        sx={{
+          ...mvsBodyOutlinedBtnSx,
+          ...(listTab === 'report' ? { boxShadow: 'none', color: '#fff' } : {}),
+        }}
+        disabled={reportIssues.length === 0 && !result}
+        onClick={() => setListTab('report')}
+      >
+        {t('tallyImport.reportTab')}
+        {reportIssues.length > 0 ? ` (${reportIssues.length})` : ''}
+      </Button>
     </>
   );
 
-  const showList = Boolean(preview || result);
+  const showList = Boolean(preview || result || reportIssues.length > 0);
 
   return (
     <Box sx={mvsPageRootSx}>
@@ -568,6 +648,19 @@ const TallyImport: React.FC = () => {
                     </ListItemIcon>
                     {t('tallyImport.preview')}
                   </MenuItem>
+                  <MenuItem
+                    disabled={reportIssues.length === 0 && !result}
+                    onClick={() => {
+                      closeToolbarMenu();
+                      setListTab('report');
+                    }}
+                  >
+                    <ListItemIcon>
+                      <ReportIcon fontSize="small" />
+                    </ListItemIcon>
+                    {t('tallyImport.reportTab')}
+                    {reportIssues.length > 0 ? ` (${reportIssues.length})` : ''}
+                  </MenuItem>
                 </Menu>
               </>
             ) : (
@@ -611,10 +704,7 @@ const TallyImport: React.FC = () => {
             onChange={(e) => {
               const next = e.target.files?.[0] || null;
               setFile(next);
-              setPreview(null);
-              setResult(null);
-              setPreviewPage(1);
-              setIssuesPage(1);
+              clearSessionResults();
             }}
           />
           <Box
@@ -770,8 +860,34 @@ const TallyImport: React.FC = () => {
           </Box>
         ) : (
           <>
-            {preview && (
-              <Box sx={{ mb: result ? 2.5 : 0 }}>
+            <Box sx={{ borderBottom: '1px solid #CBD5E1', bgcolor: '#fff', px: { xs: 1, sm: 1.5 } }}>
+              <Tabs
+                value={listTab}
+                onChange={(_e, v: ListTab) => setListTab(v)}
+                variant="scrollable"
+                scrollButtons="auto"
+                sx={{
+                  minHeight: 42,
+                  '& .MuiTab-root': { minHeight: 42, textTransform: 'none', fontWeight: 600 },
+                }}
+              >
+                <Tab
+                  value="preview"
+                  label={t('tallyImport.previewTab')}
+                  disabled={!preview}
+                />
+                <Tab
+                  value="report"
+                  label={`${t('tallyImport.reportTab')}${
+                    reportIssues.length > 0 ? ` (${reportIssues.length})` : ''
+                  }`}
+                  disabled={reportIssues.length === 0 && !result}
+                />
+              </Tabs>
+            </Box>
+
+            {listTab === 'preview' && preview && (
+              <Box sx={{ mb: 0 }}>
                 {previewRows.length === 0 ? (
                   <Box sx={listStateBoxSx}>
                     <Typography variant="body2" color="text.secondary">
@@ -780,7 +896,7 @@ const TallyImport: React.FC = () => {
                   </Box>
                 ) : (
                   <>
-                    <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+                    <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
                       <Table size="small" sx={tableSx}>
                         <TableHead sx={mvsTableHeadHighlightSx}>
                           <TableRow>
@@ -831,32 +947,42 @@ const TallyImport: React.FC = () => {
               </Box>
             )}
 
-            {result && (
+            {listTab === 'report' && (
               <Box>
-                <Alert
-                  severity={result.vouchers.failed > 0 ? 'warning' : 'success'}
-                  sx={{
-                    mb: 1.5,
-                    borderRadius: '8px',
-                    border: '1px solid #CBD5E1',
-                    boxShadow: 'none',
-                  }}
-                >
-                  {t('tallyImport.resultSummary', {
-                    matched: result.ledgers.matched,
-                    createdAcc: result.ledgers.created,
-                    createdVch: result.vouchers.created,
-                    skipped: result.vouchers.skipped,
-                    failed: result.vouchers.failed,
-                  })}
-                  {result.dryRun ? ` · ${t('tallyImport.resultDryRun')}` : ''}
-                </Alert>
+                {result && (
+                  <Alert
+                    severity={result.vouchers.failed > 0 ? 'warning' : 'success'}
+                    sx={{
+                      mb: 1.5,
+                      mt: 1.5,
+                      mx: { xs: 1.5, sm: 2 },
+                      borderRadius: '8px',
+                      border: '1px solid #CBD5E1',
+                      boxShadow: 'none',
+                    }}
+                  >
+                    {t('tallyImport.resultSummary', {
+                      matched: result.ledgers.matched,
+                      createdAcc: result.ledgers.created,
+                      createdVch: result.vouchers.created,
+                      skipped: result.vouchers.skipped,
+                      failed: result.vouchers.failed,
+                    })}
+                    {result.dryRun ? ` · ${t('tallyImport.resultDryRun')}` : ''}
+                  </Alert>
+                )}
                 <Stack
                   direction="row"
                   flexWrap="wrap"
                   useFlexGap
                   spacing={1}
-                  sx={{ mb: 1.5, alignItems: 'center', justifyContent: 'space-between' }}
+                  sx={{
+                    mb: 1.5,
+                    mt: result ? 0 : 1.5,
+                    px: { xs: 1.5, sm: 2 },
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
                 >
                   <Stack direction="row" flexWrap="wrap" useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
                     <Typography variant="body2" color="text.secondary" sx={{ mr: 0.5 }}>
@@ -912,20 +1038,24 @@ const TallyImport: React.FC = () => {
                     {t('tallyImport.downloadLog')}
                   </Button>
                 </Stack>
-                <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx }}>
+                <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
                   <Table size="small" sx={tableSx}>
                     <TableHead sx={mvsTableHeadHighlightSx}>
                       <TableRow>
-                        <TableCell sx={{ width: '12%' }}>{renderEllipsis(t('tallyImport.columns.level'))}</TableCell>
-                        <TableCell sx={{ width: '48%' }}>{renderEllipsis(t('tallyImport.columns.message'))}</TableCell>
-                        <TableCell sx={{ width: '40%' }}>{renderEllipsis(t('tallyImport.columns.context'))}</TableCell>
+                        <TableCell sx={{ width: '10%' }}>{renderEllipsis(t('tallyImport.columns.level'))}</TableCell>
+                        <TableCell sx={{ width: '12%' }}>{renderEllipsis(t('tallyImport.columns.source'))}</TableCell>
+                        <TableCell sx={{ width: '40%' }}>{renderEllipsis(t('tallyImport.columns.message'))}</TableCell>
+                        <TableCell sx={{ width: '38%' }}>{renderEllipsis(t('tallyImport.columns.context'))}</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody sx={tableBodyRowSx}>
                       {pagedIssues.map((issue, idx) => (
-                        <TableRow key={`${issue.level}-${issue.message}-${idx}`}>
+                        <TableRow key={`${issue.source}-${issue.level}-${issue.message}-${idx}`}>
                           <TableCell>
                             <IssueLevelChip level={issue.level} label={issueLevelLabel(issue.level)} />
+                          </TableCell>
+                          <TableCell sx={cellEllipsisSx}>
+                            {renderEllipsis(issueSourceLabel(issue.source))}
                           </TableCell>
                           <TableCell sx={cellEllipsisSx}>{renderEllipsis(issue.message)}</TableCell>
                           <TableCell sx={cellEllipsisSx}>{renderEllipsis(issue.context || '-')}</TableCell>

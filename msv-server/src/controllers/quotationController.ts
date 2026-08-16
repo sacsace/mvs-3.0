@@ -342,7 +342,7 @@ export const createQuotation = async (req: RequestWithUser, res: Response) => {
     const companyId = req.user?.company_id;
     const userId = req.user?.id;
     const { quotation_number, customer_id, customer_name, customer_email, customer_phone, 
-            customer_address, items, subtotal, tax_rate, tax_amount, discount, total_amount, 
+            customer_address, customer_gst, items, subtotal, tax_rate, tax_amount, discount, total_amount, 
             currency, valid_until, notes, terms, approver_user_id, status: bodyStatus } = req.body;
 
     const qn = String(quotation_number ?? '').trim();
@@ -409,6 +409,7 @@ export const createQuotation = async (req: RequestWithUser, res: Response) => {
       customer_email: resolvedCustomerEmail,
       customer_phone: customer_phone || null,
       customer_address: customer_address || null,
+      customer_gst: customer_gst ? String(customer_gst).trim() || null : null,
       items: itemsPayload,
       subtotal: subtotal || 0,
       tax_rate: tax_rate || 0,
@@ -504,7 +505,7 @@ export const updateQuotation = async (req: RequestWithUser, res: Response) => {
     const companyId = req.user?.company_id;
     const userRole = req.user?.role;
     const { customer_id, customer_name, customer_email, customer_phone, customer_address,
-            items, subtotal, tax_rate, tax_amount, discount, total_amount, currency, 
+            customer_gst, items, subtotal, tax_rate, tax_amount, discount, total_amount, currency, 
             valid_until, status, notes, terms, approver_user_id } = req.body;
 
     const whereClause: any = { id, is_active: true };
@@ -640,6 +641,10 @@ export const updateQuotation = async (req: RequestWithUser, res: Response) => {
         resolvedUpdateEmail !== undefined ? resolvedUpdateEmail : quotation.customer_email,
       customer_phone: customer_phone !== undefined ? customer_phone : quotation.customer_phone,
       customer_address: customer_address !== undefined ? customer_address : quotation.customer_address,
+      customer_gst:
+        customer_gst !== undefined
+          ? (customer_gst ? String(customer_gst).trim() || null : null)
+          : quotation.customer_gst,
       items: itemsPayload,
       subtotal: subtotal !== undefined ? subtotal : quotation.subtotal,
       tax_rate: tax_rate !== undefined ? tax_rate : quotation.tax_rate,
@@ -932,6 +937,7 @@ export const sendQuotation = async (req: RequestWithUser, res: Response) => {
         customer_email: quotation.customer_email,
         customer_phone: quotation.customer_phone,
         customer_address: quotation.customer_address,
+        customer_gst: quotation.customer_gst,
         items: quotation.items,
         subtotal: Number(quotation.subtotal) || 0,
         tax_rate: Number(quotation.tax_rate) || 0,

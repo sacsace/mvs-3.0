@@ -344,18 +344,18 @@ const GeneralLedger: React.FC = () => {
   const [vouchers, setVouchers] = useState<any[]>([]);
   const [selectedVoucher, setSelectedVoucher] = useState<any | null>(null);
   const [voucherSearch, setVoucherSearch] = useState('');
-  const [voucherPeriod, setVoucherPeriod] = useState<LedgerPeriodKey>('all');
-  const [voucherFrom, setVoucherFrom] = useState('');
-  const [voucherTo, setVoucherTo] = useState('');
+  const [voucherPeriod, setVoucherPeriod] = useState<LedgerPeriodKey>('fiscalYear');
+  const [voucherFrom, setVoucherFrom] = useState(() => getLedgerPeriodRange('fiscalYear').from);
+  const [voucherTo, setVoucherTo] = useState(() => getLedgerPeriodRange('fiscalYear').to);
   const [voucherSortBy, setVoucherSortBy] = useState<VoucherSortKey>('date');
   const [voucherSortDir, setVoucherSortDir] = useState<'asc' | 'desc'>('desc');
   const [voucherPage, setVoucherPage] = useState(1);
   const [voucherViewMode, setVoucherViewMode] = useState<ListViewMode>('page');
 
   const [ledgerAccountId, setLedgerAccountId] = useState<number | ''>('');
-  const [ledgerPeriod, setLedgerPeriod] = useState<LedgerPeriodKey>('all');
-  const [ledgerFrom, setLedgerFrom] = useState('');
-  const [ledgerTo, setLedgerTo] = useState('');
+  const [ledgerPeriod, setLedgerPeriod] = useState<LedgerPeriodKey>('fiscalYear');
+  const [ledgerFrom, setLedgerFrom] = useState(() => getLedgerPeriodRange('fiscalYear').from);
+  const [ledgerTo, setLedgerTo] = useState(() => getLedgerPeriodRange('fiscalYear').to);
   const [ledgerData, setLedgerData] = useState<any>(null);
   const [ledgerExporting, setLedgerExporting] = useState(false);
   const [ledgerSortBy, setLedgerSortBy] = useState<LedgerSortKey>('date');
@@ -363,9 +363,9 @@ const GeneralLedger: React.FC = () => {
   const [ledgerPage, setLedgerPage] = useState(1);
   const [ledgerViewMode, setLedgerViewMode] = useState<ListViewMode>('page');
 
-  const [trialPeriod, setTrialPeriod] = useState<LedgerPeriodKey>('all');
-  const [trialFrom, setTrialFrom] = useState('');
-  const [trialTo, setTrialTo] = useState('');
+  const [trialPeriod, setTrialPeriod] = useState<LedgerPeriodKey>('fiscalYear');
+  const [trialFrom, setTrialFrom] = useState(() => getLedgerPeriodRange('fiscalYear').from);
+  const [trialTo, setTrialTo] = useState(() => getLedgerPeriodRange('fiscalYear').to);
   const [trialData, setTrialData] = useState<any>(null);
   const [trialExporting, setTrialExporting] = useState(false);
   const [trialSearch, setTrialSearch] = useState('');
@@ -400,6 +400,8 @@ const GeneralLedger: React.FC = () => {
   const ledgerToRef = useRef(ledgerTo);
   ledgerFromRef.current = ledgerFrom;
   ledgerToRef.current = ledgerTo;
+
+  const appliedFyKeyRef = useRef<string>('');
 
   const trialFromRef = useRef(trialFrom);
   const trialToRef = useRef(trialTo);
@@ -741,14 +743,20 @@ const GeneralLedger: React.FC = () => {
       setFinancialYears([]);
       return;
     }
+    let cancelled = false;
     void (async () => {
       try {
         const res = await accountingService.getFinancialYears(effectiveCompanyId);
-        setFinancialYears(Array.isArray(res?.data) ? res.data : []);
+        if (!cancelled) {
+          setFinancialYears(Array.isArray(res?.data) ? res.data : []);
+        }
       } catch {
-        setFinancialYears([]);
+        if (!cancelled) setFinancialYears([]);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [effectiveCompanyId]);
 
   useEffect(() => {
@@ -758,20 +766,51 @@ const GeneralLedger: React.FC = () => {
     setLedgerAccountId('');
     setAccountSearch('');
     setVoucherSearch('');
-    setVoucherPeriod('all');
-    setVoucherFrom('');
-    setVoucherTo('');
-    setLedgerPeriod('all');
-    setLedgerFrom('');
-    setLedgerTo('');
-    setTrialPeriod('all');
-    setTrialFrom('');
-    setTrialTo('');
+    appliedFyKeyRef.current = '';
+    const range = getLedgerPeriodRange('fiscalYear');
+    setVoucherPeriod('fiscalYear');
+    setVoucherFrom(range.from);
+    setVoucherTo(range.to);
+    setLedgerPeriod('fiscalYear');
+    setLedgerFrom(range.from);
+    setLedgerTo(range.to);
+    setTrialPeriod('fiscalYear');
+    setTrialFrom(range.from);
+    setTrialTo(range.to);
     setTrialSearch('');
     setDetailOpen(false);
-    loadVouchers();
+    void loadVouchers({ from: range.from, to: range.to });
     reloadAccounts();
   }, [effectiveCompanyId, loadVouchers, reloadAccounts]);
+
+  // 회계연도 마스터 로드 후 기간이 '현재 회계년도'이면 날짜를 마스터 FY에 맞춤
+  useEffect(() => {
+    if (!currentFinancialYear?.start_date || !currentFinancialYear?.end_date) return;
+    const fyKey = `${effectiveCompanyId}:${currentFinancialYear.id}:${currentFinancialYear.start_date}:${currentFinancialYear.end_date}`;
+    if (appliedFyKeyRef.current === fyKey) return;
+    appliedFyKeyRef.current = fyKey;
+    const range = getLedgerPeriodRange('fiscalYear', { fiscalYear: currentFinancialYear });
+    if (voucherPeriod === 'fiscalYear') {
+      setVoucherFrom(range.from);
+      setVoucherTo(range.to);
+      void loadVouchers({ from: range.from, to: range.to });
+    }
+    if (ledgerPeriod === 'fiscalYear') {
+      setLedgerFrom(range.from);
+      setLedgerTo(range.to);
+    }
+    if (trialPeriod === 'fiscalYear') {
+      setTrialFrom(range.from);
+      setTrialTo(range.to);
+    }
+  }, [
+    currentFinancialYear,
+    effectiveCompanyId,
+    voucherPeriod,
+    ledgerPeriod,
+    trialPeriod,
+    loadVouchers,
+  ]);
 
   useEffect(() => {
     if (ledgerAccounts.length && !ledgerAccountId) {

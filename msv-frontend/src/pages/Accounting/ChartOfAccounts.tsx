@@ -46,6 +46,7 @@ import { useAccountingCompany } from '../../hooks/useAccountingCompany';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { useStore } from '../../store';
 import { getGlAccountName } from '../../utils/glAccountLabel';
+import { toSentenceCase } from '../../utils/textCase';
 import {
   mvsBodyCardSx,
   mvsBodyListTableSx,
@@ -269,8 +270,8 @@ const ChartOfAccounts: React.FC = () => {
       setSaving(true);
       const payload = {
         code: form.code.trim(),
-        name: form.name.trim(),
-        nameEn: form.nameEn.trim() || undefined,
+        name: toSentenceCase(form.name),
+        nameEn: form.nameEn.trim() ? toSentenceCase(form.nameEn) : undefined,
         nature: form.nature,
         accountType: 'ledger',
       };
@@ -593,11 +594,13 @@ const ChartOfAccounts: React.FC = () => {
             label={t('chartOfAccounts.dialog.name')}
             value={form.name}
             onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+            onBlur={() => setForm((p) => ({ ...p, name: toSentenceCase(p.name) }))}
           />
           <TextField
             label={t('chartOfAccounts.dialog.nameEn')}
             value={form.nameEn}
             onChange={(e) => setForm((p) => ({ ...p, nameEn: e.target.value }))}
+            onBlur={() => setForm((p) => ({ ...p, nameEn: p.nameEn ? toSentenceCase(p.nameEn) : '' }))}
           />
           <FormControl fullWidth>
             <InputLabel>{t('chartOfAccounts.dialog.nature')}</InputLabel>

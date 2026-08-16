@@ -3144,14 +3144,22 @@ export default {
       preview: 'Parse preview',
       dryRun: 'Simulate',
       import: 'Run import',
+      previewTab: 'Parse preview',
+      reportTab: 'Report',
       previewTitle: 'Parsed voucher preview',
       resultTitle: 'Import result',
       resultDryRun: 'Simulation (no DB write)',
+      reportSource: {
+        preview: 'Preview',
+        dryRun: 'Simulate',
+        import: 'Import',
+      },
       empty: {
         loading: 'Loading...',
         noItems: 'Please select a Tally Export file (.xml / .json).',
         fileReady: 'Selected: {{name}}',
-        fileReadyHint: 'Use Parse preview, Simulate, or Run import above.',
+        fileReadyHint:
+          'Use Parse preview, Simulate, or Run import above. All issues are recorded in the Report tab.',
       },
       emptyVouchers: 'No vouchers found. The file may contain masters only.',
       emptyIssues: 'No issues',
@@ -3163,14 +3171,14 @@ export default {
         warn: 'Warning',
         info: 'Info',
       },
-      downloadLog: 'Download log',
+      downloadLog: 'Download report',
       issueLevel: {
         error: 'Failed',
         warn: 'Warning',
         info: 'Info',
       },
       hint:
-        'Tally: Gateway of Tally → Export → XML (Masters / Vouchers or Day Book). Already-imported vouchers (MSV no., GUID, Tally no.+date) and in-file duplicates are skipped. Accounts/parties are reused by name/GUID/GSTIN. Post from General Ledger.',
+        'Tally: Gateway of Tally → Export → XML (Masters / Vouchers or Day Book). Already-imported vouchers (MSV no., GUID, Tally no.+date) and in-file duplicates are skipped. Accounts/parties are reused by name/GUID/GSTIN. Post from General Ledger. Issues from import, simulate, and preview are accumulated in the Report tab.',
       options: {
         importLedgers: 'Import ledgers',
         importVouchers: 'Import vouchers',
@@ -3193,6 +3201,7 @@ export default {
         debit: 'Debit',
         credit: 'Credit',
         level: 'Level',
+        source: 'Source',
         message: 'Message',
         context: 'Reason / detail',
       },
@@ -3202,7 +3211,7 @@ export default {
         preview: 'File parsed successfully.',
         dryRun: 'Simulation completed.',
         import: 'Import completed. Vouchers are in draft status.',
-        logDownloaded: 'Import log downloaded.',
+        logDownloaded: 'Import report downloaded.',
       },
       errors: {
         noFile: 'Please select a file.',
@@ -3210,7 +3219,7 @@ export default {
         preview: 'Preview failed.',
         import: 'Import failed.',
         fileTooLarge: 'File is too large. Maximum upload size is 2GB.',
-        noLogToDownload: 'There is no log to download.',
+        noLogToDownload: 'There is no report to download.',
       },
     },
     generalLedger: {
@@ -3617,8 +3626,8 @@ export default {
       }
     },
     balanceSheet: {
-      title: 'Balance Sheet',
-      description: 'View assets, liabilities and equity from imported Tally data.',
+      title: 'Financial Statements',
+      description: 'SEDA-style workbook: Balance Sheet, P&L, capital notes, schedules, trial balance and GST/expense details from Tally data.',
       from: 'From',
       asOf: 'As of',
       search: 'Search',
@@ -3631,10 +3640,23 @@ export default {
         q4: 'Q4',
         fiscalYear: 'Fiscal Year'
       },
-      hint: 'Only opening balances and vouchers from Load Tally Data are included. Draft imports count immediately; current-period P&L is plugged into equity. Manually entered vouchers are excluded.',
+      hint: 'Sheet totals are calculated from the same MVS aggregates (BS / P&L / Trial Balance). Schedules feed the main statements like the SEDA Excel workbook.',
       unbalancedHint: 'Assets do not equal liabilities + equity. Check Tally account mapping and vouchers.',
       formula: 'Assets {{assets}} = Liabilities + Equity {{liabilityEquity}}',
+      sheets: {
+        bs: 'BS',
+        pl: 'P&L',
+        capital: 'Capital A/c',
+        schBs: 'BS Schedules',
+        schPl: 'P&L Schedules',
+        trialBalance: 'Trial Balance',
+        tradePayable: 'Trade Payables',
+        outputGst: 'Output GST',
+        inputGst: 'Input GST',
+        otherExpenses: 'Other Expense'
+      },
       tabs: {
+        statement: 'Balance Sheet',
         assets: 'Assets',
         liabilities: 'Liabilities',
         equity: 'Equity',
@@ -3644,25 +3666,44 @@ export default {
         totalAssets: 'Total Assets',
         totalLiabilities: 'Total Liabilities',
         totalEquity: 'Total Equity',
+        netProfit: 'Net Profit / (Loss)',
         liabilitiesAndEquity: 'Liabilities + Equity'
       },
       sections: {
         equation: 'Balance check'
       },
+      statement: {
+        particulars: 'Particulars',
+        previousPeriod: 'Previous period',
+        note: 'Note',
+        noteNo: 'Note No.',
+        amountRs: 'Amount (Rs.)',
+        periodRange: '(From {{from}} to {{to}})',
+        forPeriod: 'For the period from {{range}}'
+      },
       columns: {
         code: 'Code',
         account: 'Account',
-        amount: 'Amount'
+        amount: 'Amount',
+        group: 'Group',
+        debit: 'Debit',
+        credit: 'Credit',
+        closing: 'Closing'
       },
       empty: {
         assets: 'No asset accounts for this period.',
         liabilities: 'No liability accounts for this period.',
         equity: 'No equity accounts for this period.',
+        trialBalance: 'No trial balance rows for this period.',
+        tradePayable: 'No trade payable accounts for this period.',
+        outputGst: 'No output GST accounts for this period.',
+        inputGst: 'No input GST accounts for this period.',
+        otherExpenses: 'No other expense accounts for this period.',
         hint: 'No Tally opening balances or vouchers. Check dates/company, or run Load Tally Data.',
         draftHint: ''
       },
       errors: {
-        load: 'Failed to load balance sheet.',
+        load: 'Failed to load financial statements.',
         noDataForExport: 'No balance sheet data to export. Search first.',
         exportFailed: 'Excel download failed.'
       }
@@ -4308,6 +4349,7 @@ export default {
       tabPendingApproval: 'Pending approval',
       approver: 'Approver',
       selectApprover: 'Select approver',
+      itemDescriptionRequired: 'Please enter the item description.',
       itemQtyUnitRequired: 'For each line item, enter quantity (QTY) of at least 1 and a unit price greater than 0.',
       exportAfterApproval: 'Print/PDF is available only after approval.',
       emailAfterApproval: 'Email can be sent only after approval.',

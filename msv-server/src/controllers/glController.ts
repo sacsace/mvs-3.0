@@ -9,7 +9,9 @@ import {
   ensureDefaultChartOfAccounts,
   postVoucherToLedger,
 } from '../services/glPostingService';
+import { reclassifyTallyAccountNatures } from '../services/tallyImportService';
 import { resolveCompanyScope } from '../utils/companyScope';
+import { toSentenceCase } from '../utils/textCase';
 
 const parseAmount = (value: unknown) => {
   if (value == null) return 0;
@@ -125,7 +127,7 @@ export const createGlAccount = async (req: RequestWithUser, res: Response) => {
     }
 
     const code = String(req.body?.code || '').trim();
-    const name = String(req.body?.name || '').trim();
+    const name = toSentenceCase(req.body?.name);
     if (!code || !name) {
       return res.status(400).json({ success: false, message: '계정코드와 계정명은 필수입니다.' });
     }
@@ -136,7 +138,7 @@ export const createGlAccount = async (req: RequestWithUser, res: Response) => {
       parent_id: req.body?.parentId ?? null,
       code,
       name,
-      name_en: req.body?.nameEn ? String(req.body.nameEn) : null,
+      name_en: req.body?.nameEn ? toSentenceCase(req.body.nameEn) : null,
       account_type: req.body?.accountType === 'group' ? 'group' : 'ledger',
       nature: req.body?.nature || 'expense',
       opening_balance: parseAmount(req.body?.openingBalance),
@@ -173,8 +175,8 @@ export const updateGlAccount = async (req: RequestWithUser, res: Response) => {
     await row.update({
       parent_id: req.body?.parentId ?? row.parent_id,
       code: req.body?.code != null ? String(req.body.code).trim() : row.code,
-      name: req.body?.name != null ? String(req.body.name).trim() : row.name,
-      name_en: req.body?.nameEn != null ? String(req.body.nameEn) : row.name_en,
+      name: req.body?.name != null ? toSentenceCase(req.body.name) : row.name,
+      name_en: req.body?.nameEn != null ? (String(req.body.nameEn).trim() ? toSentenceCase(req.body.nameEn) : null) : row.name_en,
       account_type: req.body?.accountType === 'group' ? 'group' : row.account_type,
       nature: req.body?.nature || row.nature,
       opening_balance: opening,
@@ -551,6 +553,20 @@ export const getProfitAndLoss = async (req: RequestWithUser, res: Response) => {
     const to = req.query.to ? String(req.query.to) : undefined;
 
     await ensureDefaultChartOfAccounts({ tenantId, companyId, userId: req.user.id });
+    // Tally 계정 nature 보정 (부모 그룹 누락으로 전부 expense인 경우 손익이 비는 문제)
+    const incomeLedgerCount = await (GlAccount as any).count({
+      where: {
+        tenant_id: tenantId,
+        company_id: companyId,
+        is_active: true,
+        account_type: 'ledger',
+        nature: 'income',
+        ...tallyAccountWhereExtra,
+      },
+    });
+    if (incomeLedgerCount === 0) {
+      await reclassifyTallyAccountNatures({ tenantId, companyId });
+    }
 
     const accounts = await (GlAccount as any).findAll({
       where: {
@@ -607,6 +623,10 @@ export const getProfitAndLoss = async (req: RequestWithUser, res: Response) => {
       }
     }
 
+    // 금액 큰 순 (가독성)
+    incomeRows.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+    expenseRows.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+
     totalIncome = Number(totalIncome.toFixed(2));
     totalExpense = Number(totalExpense.toFixed(2));
     const netProfit = Number((totalIncome - totalExpense).toFixed(2));
@@ -649,6 +669,19 @@ export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
     const from = req.query.from ? String(req.query.from) : undefined;
 
     await ensureDefaultChartOfAccounts({ tenantId, companyId, userId: req.user.id });
+    const bsIncomeCount = await (GlAccount as any).count({
+      where: {
+        tenant_id: tenantId,
+        company_id: companyId,
+        is_active: true,
+        account_type: 'ledger',
+        nature: { [Op.in]: ['asset', 'liability', 'equity'] },
+        ...tallyAccountWhereExtra,
+      },
+    });
+    if (bsIncomeCount === 0) {
+      await reclassifyTallyAccountNatures({ tenantId, companyId });
+    }
 
     const accounts = await (GlAccount as any).findAll({
       where: {

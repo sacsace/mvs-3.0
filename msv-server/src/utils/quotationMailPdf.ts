@@ -87,6 +87,7 @@ export async function buildQuotationPdfBuffer(quotation: {
   customer_email?: string;
   customer_phone?: string;
   customer_address?: string;
+  customer_gst?: string;
   items?: unknown;
   subtotal: number;
   tax_rate: number;
@@ -135,6 +136,7 @@ export async function buildQuotationPdfBuffer(quotation: {
     if (quotation.customer_address) doc.text(String(quotation.customer_address));
     if (quotation.customer_email) doc.text(`Email: ${quotation.customer_email}`);
     if (quotation.customer_phone) doc.text(`Phone: ${quotation.customer_phone}`);
+    if (quotation.customer_gst) doc.text(`GST: ${quotation.customer_gst}`);
     doc.moveDown(0.9);
 
     doc.fontSize(12).text('Line items', { underline: true });

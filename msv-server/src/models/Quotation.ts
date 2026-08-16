@@ -12,6 +12,8 @@ interface QuotationAttributes {
   customer_email?: string;
   customer_phone?: string;
   customer_address?: string;
+  /** 고객 GSTIN (작성 시점 스냅샷) */
+  customer_gst?: string;
   items?: any; // JSON
   subtotal: number;
   tax_rate: number;
@@ -48,6 +50,7 @@ class Quotation extends Model<QuotationAttributes, QuotationCreationAttributes> 
   public customer_email?: string;
   public customer_phone?: string;
   public customer_address?: string;
+  public customer_gst?: string;
   public items?: any;
   public subtotal!: number;
   public tax_rate!: number;
@@ -112,6 +115,10 @@ Quotation.init(
     },
     customer_address: {
       type: DataTypes.TEXT,
+      allowNull: true
+    },
+    customer_gst: {
+      type: DataTypes.STRING(255),
       allowNull: true
     },
     items: {
