@@ -408,6 +408,7 @@ export default {
       search: 'Search by name, email, employee number...',
       company: 'Company',
       allCompanies: 'All',
+      searchCompany: 'Search company',
       includeInactive: 'Include inactive users',
       noSearchResults: 'No search results.',
       noUsersToDisplay: 'No users to display.',
@@ -3119,6 +3120,7 @@ export default {
     },
     accountingScope: {
       company: 'Company',
+      searchCompany: 'Search company',
       hint: 'In this multi-tenant system, only the selected company\'s ledger, vouchers, and accounts are shown.',
     },
     chartOfAccounts: {

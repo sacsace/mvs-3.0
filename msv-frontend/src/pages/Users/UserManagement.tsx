@@ -35,6 +35,7 @@ import {
   InputAdornment,
   Avatar,
   IconButton,
+  Autocomplete,
 } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
@@ -210,6 +211,81 @@ interface Company {
   id: number;
   name: string;
 }
+
+type CompanyPickOption = { id: number | ''; name: string };
+
+type CompanySearchSelectProps = {
+  companies: Company[];
+  value: number | '';
+  onChange: (companyId: number | '') => void;
+  label: string;
+  placeholder?: string;
+  allowAll?: boolean;
+  allLabel?: string;
+  disabled?: boolean;
+  required?: boolean;
+  fullWidth?: boolean;
+  textFieldSx?: object;
+  outlinedProps?: object;
+  sx?: object;
+};
+
+const CompanySearchSelect: React.FC<CompanySearchSelectProps> = ({
+  companies,
+  value,
+  onChange,
+  label,
+  placeholder,
+  allowAll = false,
+  allLabel = '',
+  disabled,
+  required,
+  fullWidth = true,
+  textFieldSx,
+  outlinedProps,
+  sx,
+}) => {
+  const options = useMemo<CompanyPickOption[]>(() => {
+    const list = companies.map((company) => ({ id: company.id, name: company.name }));
+    if (allowAll) return [{ id: '', name: allLabel }, ...list];
+    return list;
+  }, [allowAll, allLabel, companies]);
+
+  const selected = useMemo(() => {
+    if (value === '' || value == null) {
+      return allowAll ? options.find((o) => o.id === '') ?? null : null;
+    }
+    return options.find((o) => o.id === Number(value)) ?? null;
+  }, [allowAll, options, value]);
+
+  return (
+    <Autocomplete
+      options={options}
+      value={selected}
+      onChange={(_, next) => {
+        if (!next || next.id === '') onChange('');
+        else onChange(Number(next.id));
+      }}
+      getOptionLabel={(option) => option.name}
+      isOptionEqualToValue={(a, b) => a.id === b.id}
+      disabled={disabled}
+      fullWidth={fullWidth}
+      disableClearable={allowAll ? Boolean(selected) : false}
+      sx={sx}
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          size="small"
+          label={label}
+          required={required}
+          placeholder={placeholder}
+          {...(outlinedProps as object)}
+          sx={textFieldSx}
+        />
+      )}
+    />
+  );
+};
 
 /** 급여(INR): 소수 미표시, 천 단위 콤마 (예: ₹100,000) */
 function formatSalaryInr(value: unknown): string {
@@ -1912,28 +1988,18 @@ const UserManagement: React.FC = () => {
                 }}
               />
               {user?.role === 'root' && (
-                <TextField
-                  fullWidth
-                  size="small"
-                  select
-                  label={t('userManagement.company')}
-                  {...USER_FILTER_OUTLINED}
+                <CompanySearchSelect
+                  companies={companies}
                   value={selectedCompanyId === '' ? '' : selectedCompanyId}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setSelectedCompanyId(v === '' ? '' : Number(v));
-                  }}
+                  onChange={setSelectedCompanyId}
+                  label={t('userManagement.company')}
+                  placeholder={t('userManagement.searchCompany')}
+                  allowAll
+                  allLabel={t('userManagement.allCompanies')}
                   disabled={menusLoading || !(hrElevated || userMgmtMenuFlags.canView)}
-                  SelectProps={{ displayEmpty: true }}
-                  sx={userFilterFieldSx}
-                >
-                  <MenuItem value="">{t('userManagement.allCompanies')}</MenuItem>
-                  {companies.map((company) => (
-                    <MenuItem key={company.id} value={company.id}>
-                      {company.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                  outlinedProps={USER_FILTER_OUTLINED}
+                  textFieldSx={userFilterFieldSx}
+                />
               )}
               <FormControlLabel
                 control={
@@ -2265,27 +2331,15 @@ const UserManagement: React.FC = () => {
           {(user?.role === 'root' || user?.role === 'audit') && (
             <Card elevation={0} sx={mvsBodyCardSx}>
               <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2, maxWidth: 420 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  select
-                  label={t('userManagement.company')}
-                  {...USER_FILTER_OUTLINED}
+                <CompanySearchSelect
+                  companies={companies}
                   value={selectedCompanyId === '' ? '' : selectedCompanyId}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setSelectedCompanyId(v === '' ? '' : Number(v));
-                  }}
-                  SelectProps={{ displayEmpty: true }}
-                  sx={userFilterFieldSx}
-                >
-                  <MenuItem value="">{t('departmentManagement.selectCompanyFirst')}</MenuItem>
-                  {companies.map((company) => (
-                    <MenuItem key={company.id} value={company.id}>
-                      {company.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                  onChange={setSelectedCompanyId}
+                  label={t('userManagement.company')}
+                  placeholder={t('departmentManagement.selectCompanyFirst')}
+                  outlinedProps={USER_FILTER_OUTLINED}
+                  textFieldSx={userFilterFieldSx}
+                />
               </Box>
             </Card>
           )}
@@ -2313,27 +2367,15 @@ const UserManagement: React.FC = () => {
           {(user?.role === 'root' || user?.role === 'audit') && (
             <Card elevation={0} sx={mvsBodyCardSx}>
               <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2, maxWidth: 420 }}>
-                <TextField
-                  fullWidth
-                  size="small"
-                  select
-                  label={t('userManagement.company')}
-                  {...USER_FILTER_OUTLINED}
+                <CompanySearchSelect
+                  companies={companies}
                   value={selectedCompanyId === '' ? '' : selectedCompanyId}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setSelectedCompanyId(v === '' ? '' : Number(v));
-                  }}
-                  SelectProps={{ displayEmpty: true }}
-                  sx={userFilterFieldSx}
-                >
-                  <MenuItem value="">{t('positionManagement.selectCompanyFirst')}</MenuItem>
-                  {companies.map((company) => (
-                    <MenuItem key={company.id} value={company.id}>
-                      {company.name}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                  onChange={setSelectedCompanyId}
+                  label={t('userManagement.company')}
+                  placeholder={t('positionManagement.selectCompanyFirst')}
+                  outlinedProps={USER_FILTER_OUTLINED}
+                  textFieldSx={userFilterFieldSx}
+                />
               </Box>
             </Card>
           )}
@@ -3363,33 +3405,25 @@ const UserManagement: React.FC = () => {
                     gap: 1.5,
                   }}>
                     {user?.role === 'root' && !editingUser && (
-                      <TextField
-                        sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}
-                        fullWidth
-                        size="small"
-                        select
-                        label={t('userManagement.companySelect')}
-                        {...OUTLINED_FIELD}
-                        value={(formData as any).company_id || ''}
-                        onChange={(e) => {
-                          const company_id = Number(e.target.value);
+                      <CompanySearchSelect
+                        companies={companies}
+                        value={(formData as { company_id?: number }).company_id || ''}
+                        onChange={(company_id) => {
                           setFormData({
                             ...formData,
-                            company_id,
+                            company_id: company_id === '' ? undefined : company_id,
                             department_id: '',
                             department: '',
                             position_id: '',
                             position: '',
-                          });
+                          } as typeof formData);
                         }}
+                        label={t('userManagement.companySelect')}
+                        placeholder={t('userManagement.searchCompany')}
                         required
-                      >
-                        {companies.map((company) => (
-                          <MenuItem key={company.id} value={company.id}>
-                            {company.name}
-                          </MenuItem>
-                        ))}
-                      </TextField>
+                        outlinedProps={OUTLINED_FIELD}
+                        sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}
+                      />
                     )}
                     <TextField
                       fullWidth

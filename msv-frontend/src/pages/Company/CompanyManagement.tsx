@@ -649,14 +649,6 @@ const CompanyManagement: React.FC = () => {
         setLoading(false);
         return;
       }
-
-      // GST 번호 필수 검증 (최소 1개 이상 입력되어야 함)
-      const validGstNumbers = (formData.gst_numbers || []).filter((gst: string) => gst && gst.trim() !== '');
-      if (validGstNumbers.length === 0) {
-                setError('GST 번호는 필수 입력 항목입니다. 최소 1개 이상 입력해주세요.');
-        setLoading(false);
-        return;
-      }
     }
 
     try {
@@ -1365,7 +1357,7 @@ const CompanyManagement: React.FC = () => {
             {/* GST 번호 (최대 10개) */}
             <Box>
               <Typography variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary', fontSize: '0.75rem' }}>
-                <span style={{ color: 'red' }}>*</span> GST 번호 (최대 10개)
+                GST 번호 (최대 10개)
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 {(() => {

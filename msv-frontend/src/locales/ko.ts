@@ -408,6 +408,7 @@ export default {
       search: '사용자명, 이메일, 사원번호 검색...',
       company: '회사',
       allCompanies: '전체',
+      searchCompany: '회사명 검색',
       includeInactive: '비활성 사용자 포함',
       noSearchResults: '검색 결과가 없습니다.',
       noUsersToDisplay: '표시할 사용자가 없습니다.',
@@ -3191,6 +3192,7 @@ export default {
     },
     accountingScope: {
       company: '회사',
+      searchCompany: '회사명 검색',
       hint: '멀티 테넌트 환경에서 선택한 회사의 장부·전표·계정과목만 표시됩니다.',
     },
     chartOfAccounts: {
