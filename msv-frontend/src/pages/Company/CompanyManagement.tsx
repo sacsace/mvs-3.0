@@ -860,15 +860,23 @@ const CompanyManagement: React.FC = () => {
   };
 
   // 필터링된 회사 목록 - MVS 시스템을 사용할 수 있는 회사들 (활성 상태)
-  const filteredCompanies = companies.filter(company => {
-    const matchesSearch = company.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          company.business_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          company.ceo_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (company.industry && company.industry.toLowerCase().includes(searchTerm.toLowerCase()));
-    // MVS 시스템을 사용할 수 있는 회사만 표시 (활성 상태)
-    const isActive = company.subscription_status === 'active';
-    return matchesSearch && isActive;
-  });
+  const filteredCompanies = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return companies.filter((company) => {
+      const isActive = company.subscription_status === 'active';
+      if (!isActive) return false;
+      if (!q) return true;
+      const haystack = [
+        company.name,
+        company.business_number,
+        company.ceo_name,
+        company.industry,
+      ]
+        .map((v) => String(v ?? '').toLowerCase())
+        .join('\n');
+      return haystack.includes(q);
+    });
+  }, [companies, searchTerm]);
 
   const handleRequestSort = (property: CompanySortKey) => {
     const isAsc = orderBy === property && order === 'asc';
@@ -2003,7 +2011,7 @@ const CompanyManagement: React.FC = () => {
                                     : alpha(theme.palette.common.white, 0.12),
                                 color: theme.palette.mode === 'light' ? 'rgba(15, 23, 42, 0.75)' : theme.palette.grey[200] }}
                             >
-                              {company.name.charAt(0)}
+                              {String(company.name ?? '').charAt(0) || '?'}
                             </Avatar>
                             <Typography
                               component="span"
@@ -2023,8 +2031,8 @@ const CompanyManagement: React.FC = () => {
                           </Box>
                         </TableCell>
                         <TableCell align={compColTableAlign('ceo_name')} sx={tdSx('ceo_name')}>
-                          <Typography component="span" noWrap title={company.ceo_name} sx={{ ...companyListTextSx, fontWeight: 600, display: 'block' }}>
-                            {company.ceo_name}
+                          <Typography component="span" noWrap title={company.ceo_name || '-'} sx={{ ...companyListTextSx, fontWeight: 600, display: 'block' }}>
+                            {company.ceo_name || '-'}
                           </Typography>
                         </TableCell>
                         <TableCell align={compColTableAlign('industry')} sx={tdSx('industry')}>

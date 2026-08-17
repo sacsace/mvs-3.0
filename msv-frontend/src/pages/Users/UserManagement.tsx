@@ -1087,7 +1087,10 @@ const UserManagement: React.FC = () => {
       role: user.role,
       status: (user as any).status || 'active',
       is_payment_officer: (user as any).is_payment_officer || false,
-      company_id: undefined
+      company_id:
+        user.company_id != null && Number(user.company_id) > 0
+          ? Number(user.company_id)
+          : undefined
     } as any);
     setSalaryUnlocked(false);
     setSalaryPasswordForSubmit('');
@@ -1299,8 +1302,8 @@ const UserManagement: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // root가 회사를 선택하지 않은 경우 검증
-      if (!editingUser && user?.role === 'root' && !(formData as any).company_id) {
+      // root: 등록·수정 모두 회사 필수
+      if (user?.role === 'root' && !(formData as { company_id?: number }).company_id) {
         setError(t('userManagement.selectCompany'));
         return;
       }
@@ -1366,13 +1369,18 @@ const UserManagement: React.FC = () => {
         if (!submitData.password) {
           delete submitData.password;
         }
+        if (user?.role === 'root' && (formData as { company_id?: number }).company_id) {
+          submitData.company_id = Number((formData as { company_id?: number }).company_id);
+        } else {
+          delete submitData.company_id;
+        }
         await api.put(`/users/${editingUser.id}`, submitData);
         savedUserId = editingUser.id;
         setSuccess(t('userManagement.userUpdated'));
       } else {
         // root가 다른 회사에 사용자를 등록하는 경우
-        if (user?.role === 'root' && (formData as any).company_id) {
-          submitData.company_id = (formData as any).company_id;
+        if (user?.role === 'root' && (formData as { company_id?: number }).company_id) {
+          submitData.company_id = (formData as { company_id?: number }).company_id;
         }
         submitData.employee_number = '';
         const createResponse = await api.post('/users', submitData);
@@ -3404,7 +3412,7 @@ const UserManagement: React.FC = () => {
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
                     gap: 1.5,
                   }}>
-                    {user?.role === 'root' && !editingUser && (
+                    {user?.role === 'root' && (
                       <CompanySearchSelect
                         companies={companies}
                         value={(formData as { company_id?: number }).company_id || ''}

@@ -1312,7 +1312,8 @@ router.put(
       ot_eligible,
       career_history,
       education_history,
-      certificate_history
+      certificate_history,
+      company_id: bodyCompanyId
     } = req.body;
 
     // root나 audit 권한이면 모든 사용자 조회 가능, 아니면 자신의 회사 사용자만
@@ -1448,6 +1449,31 @@ router.put(
     // 업데이트 데이터 구성
     const updateData: any = {};
 
+    // root만 소속 회사 변경 가능 (tenant_id도 대상 회사에 맞춤)
+    let effectiveCompanyId = user.company_id;
+    if (bodyCompanyId !== undefined && currentUserRole === 'root') {
+      const nextCompanyId = parseInt(String(bodyCompanyId), 10);
+      if (!Number.isFinite(nextCompanyId) || nextCompanyId <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: '유효한 회사를 선택해주세요.'
+        });
+      }
+      const selectedCompany = await (Company as any).findOne({
+        where: { id: nextCompanyId },
+        attributes: ['id', 'name', 'tenant_id']
+      });
+      if (!selectedCompany) {
+        return res.status(404).json({
+          success: false,
+          message: '선택한 회사를 찾을 수 없습니다.'
+        });
+      }
+      updateData.company_id = nextCompanyId;
+      updateData.tenant_id = selectedCompany.tenant_id;
+      effectiveCompanyId = nextCompanyId;
+    }
+
     if (username !== undefined) updateData.username = username;
     if (email !== undefined) updateData.email = email;
     if (userid !== undefined && currentUserRole === 'root') {
@@ -1459,7 +1485,7 @@ router.put(
     const deptRes = await resolveDepartmentFieldsForUser(
       tenantId,
       (req.body as any).department_id,
-      user.company_id
+      effectiveCompanyId
     );
     if (deptRes.kind === 'err') {
       return res.status(400).json({ success: false, message: deptRes.message });
@@ -1474,7 +1500,7 @@ router.put(
     const posRes = await resolvePositionFieldsForUser(
       tenantId,
       (req.body as any).position_id,
-      user.company_id
+      effectiveCompanyId
     );
     if (posRes.kind === 'err') {
       return res.status(400).json({ success: false, message: posRes.message });
