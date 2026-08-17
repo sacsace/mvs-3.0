@@ -126,12 +126,25 @@ type PreviewData = {
 type ImportResult = {
   dryRun: boolean;
   format: string;
+  batchId?: number | null;
   parsed: { ledgers: number; vouchers: number };
   ledgers: { matched: number; created: number; skipped: number };
   vouchers: { created: number; skipped: number; failed: number };
   issues: Array<{ level: string; message: string; context?: string }>;
   createdVoucherIds: number[];
   createdAccountCodes: string[];
+};
+
+type ReconciliationData = {
+  status: 'PASS' | 'FAIL';
+  scope: string;
+  note: string;
+  checks: {
+    voucherCount: { status: string; source: number; mvs: number };
+    debitTotal: { status: string; source: string; mvs: string; difference: string };
+    creditTotal: { status: string; source: string; mvs: string; difference: string };
+    ledgerMovements: { status: string; differenceCount: number };
+  };
 };
 
 type ReportIssueSource = 'preview' | 'dryRun' | 'import';
@@ -205,6 +218,7 @@ const TallyImport: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [reconciliation, setReconciliation] = useState<ReconciliationData | null>(null);
   const [reportIssues, setReportIssues] = useState<ReportIssue[]>([]);
   const [listTab, setListTab] = useState<ListTab>('preview');
   const [previewPage, setPreviewPage] = useState(1);
@@ -316,6 +330,7 @@ const TallyImport: React.FC = () => {
   const clearSessionResults = () => {
     setPreview(null);
     setResult(null);
+    setReconciliation(null);
     setReportIssues([]);
     setPreviewPage(1);
     setIssuesPage(1);
@@ -466,13 +481,30 @@ const TallyImport: React.FC = () => {
       setError('');
       const fd = buildFormData(dryRun);
       const res = await accountingService.importTallyExport(fd, effectiveCompanyId);
-      setResult(res?.data || null);
-      appendReportIssues(dryRun ? 'dryRun' : 'import', res?.data?.issues || []);
+      const importResult = res?.data || null;
+      setResult(importResult);
+      setReconciliation(null);
+      appendReportIssues(dryRun ? 'dryRun' : 'import', importResult?.issues || []);
       setSuccess(res?.message || (dryRun ? t('tallyImport.success.dryRun') : t('tallyImport.success.import')));
     } catch (err: any) {
       const message = err?.response?.data?.message || err?.message || t('tallyImport.errors.import');
       appendReportIssues(dryRun ? 'dryRun' : 'import', [{ level: 'error', message }]);
       setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReconciliation = async () => {
+    if (!effectiveCompanyId || !result?.batchId) return;
+    try {
+      setLoading(true);
+      setError('');
+      const res = await accountingService.getTallyImportReconciliation(result.batchId, effectiveCompanyId);
+      setReconciliation(res?.data || null);
+      setSuccess(t('tallyImport.success.reconciliation'));
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || t('tallyImport.errors.reconciliation'));
     } finally {
       setLoading(false);
     }
@@ -523,6 +555,16 @@ const TallyImport: React.FC = () => {
         {t('tallyImport.reportTab')}
         {reportIssues.length > 0 ? ` (${reportIssues.length})` : ''}
       </Button>
+      <Button
+        variant="outlined"
+        size="small"
+        startIcon={<ReportIcon fontSize="small" />}
+        sx={mvsBodyOutlinedBtnSx}
+        disabled={!result?.batchId || loading}
+        onClick={() => void handleReconciliation()}
+      >
+        {t('tallyImport.reconciliation')}
+      </Button>
     </>
   );
 
@@ -568,6 +610,66 @@ const TallyImport: React.FC = () => {
           </Card>
         ))}
       </Box>
+
+      {reconciliation && (
+        <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 2 }}>
+          <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
+            <Stack spacing={1.25}>
+              <Alert severity={reconciliation.status === 'PASS' ? 'success' : 'warning'} variant="outlined">
+                {reconciliation.status === 'PASS'
+                  ? t('tallyImport.reconciliationPass')
+                  : t('tallyImport.reconciliationFail')}
+              </Alert>
+              <Typography variant="body2" color="text.secondary">
+                {reconciliation.note}
+              </Typography>
+              <TableContainer sx={{ border: '1px solid #D1D5DB' }}>
+                <Table size="small" sx={tableSx}>
+                  <TableHead sx={mvsTableHeadHighlightSx}>
+                    <TableRow>
+                      <TableCell>{t('tallyImport.reconciliationColumns.check')}</TableCell>
+                      <TableCell align="right">{t('tallyImport.reconciliationColumns.source')}</TableCell>
+                      <TableCell align="right">{t('tallyImport.reconciliationColumns.mvs')}</TableCell>
+                      <TableCell align="right">{t('tallyImport.reconciliationColumns.difference')}</TableCell>
+                      <TableCell>{t('tallyImport.reconciliationColumns.status')}</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    <TableRow sx={tableBodyRowSx}>
+                      <TableCell>{t('tallyImport.reconciliationChecks.voucherCount')}</TableCell>
+                      <TableCell align="right">{reconciliation.checks.voucherCount.source}</TableCell>
+                      <TableCell align="right">{reconciliation.checks.voucherCount.mvs}</TableCell>
+                      <TableCell align="right">-</TableCell>
+                      <TableCell>{reconciliation.checks.voucherCount.status}</TableCell>
+                    </TableRow>
+                    <TableRow sx={tableBodyRowSx}>
+                      <TableCell>{t('tallyImport.reconciliationChecks.debitTotal')}</TableCell>
+                      <TableCell align="right">{reconciliation.checks.debitTotal.source}</TableCell>
+                      <TableCell align="right">{reconciliation.checks.debitTotal.mvs}</TableCell>
+                      <TableCell align="right">{reconciliation.checks.debitTotal.difference}</TableCell>
+                      <TableCell>{reconciliation.checks.debitTotal.status}</TableCell>
+                    </TableRow>
+                    <TableRow sx={tableBodyRowSx}>
+                      <TableCell>{t('tallyImport.reconciliationChecks.creditTotal')}</TableCell>
+                      <TableCell align="right">{reconciliation.checks.creditTotal.source}</TableCell>
+                      <TableCell align="right">{reconciliation.checks.creditTotal.mvs}</TableCell>
+                      <TableCell align="right">{reconciliation.checks.creditTotal.difference}</TableCell>
+                      <TableCell>{reconciliation.checks.creditTotal.status}</TableCell>
+                    </TableRow>
+                    <TableRow sx={tableBodyRowSx}>
+                      <TableCell>{t('tallyImport.reconciliationChecks.ledgerMovements')}</TableCell>
+                      <TableCell align="right">-</TableCell>
+                      <TableCell align="right">-</TableCell>
+                      <TableCell align="right">{reconciliation.checks.ledgerMovements.differenceCount}</TableCell>
+                      <TableCell>{reconciliation.checks.ledgerMovements.status}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
 
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 0 }}>
         <Box
@@ -660,6 +762,18 @@ const TallyImport: React.FC = () => {
                     </ListItemIcon>
                     {t('tallyImport.reportTab')}
                     {reportIssues.length > 0 ? ` (${reportIssues.length})` : ''}
+                  </MenuItem>
+                  <MenuItem
+                    disabled={!result?.batchId || loading}
+                    onClick={() => {
+                      closeToolbarMenu();
+                      void handleReconciliation();
+                    }}
+                  >
+                    <ListItemIcon>
+                      <ReportIcon fontSize="small" />
+                    </ListItemIcon>
+                    {t('tallyImport.reconciliation')}
                   </MenuItem>
                 </Menu>
               </>

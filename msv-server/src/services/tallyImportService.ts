@@ -151,7 +151,7 @@ const round2 = (n: number) => Number((Number(n) || 0).toFixed(2));
 
 const parseAmount = (value: unknown) => {
   if (value == null) return 0;
-  const raw = String(value).replace(/,/g, '').replace(/[^\d.\-]/g, '');
+  const raw = String(value).replace(/,/g, '').replace(/[^\d.-]/g, '');
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : 0;
 };
@@ -787,8 +787,12 @@ export const readTallyFileText = (filePath: string): { content: string; encoding
 
   let utf8 = buf.toString('utf8');
   // Strip accidental NULs if someone saved UTF-16 as bytes into mixed stream
-  if (utf8.includes('\u0000') && /<\0?[A-Za-z]/.test(utf8)) {
-    utf8 = utf8.replace(/\u0000/g, '');
+  const nulSegments = utf8.split('\u0000');
+  const hasXmlNulPrefix = nulSegments.some(
+    (segment, index) => index > 0 && nulSegments[index - 1].endsWith('<') && /^[A-Za-z]/.test(segment)
+  );
+  if (utf8.includes('\u0000') && hasXmlNulPrefix) {
+    utf8 = utf8.split('\u0000').join('');
     return { content: utf8, encoding: 'utf8-stripped-nul' };
   }
   return { content: utf8, encoding: 'utf8' };
@@ -882,7 +886,10 @@ const buildImportVoucherNo = (v: ParsedTallyVoucher) => {
   const base = normalizeName(v.voucherNumber || v.guid || 'X')
     .replace(/[^a-zA-Z0-9\-_/]/g, '')
     .slice(0, 28);
-  return `TLY-${base || Date.now()}`.slice(0, 50);
+  const type = normalizeName(v.voucherType || 'VOUCHER')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .slice(0, 12);
+  return `TLY-${type || 'VOUCHER'}-${base || Date.now()}`.slice(0, 50);
 };
 
 const ensurePartnerGstNumber = async (partnerId: number, gstin: string) => {
@@ -1444,7 +1451,11 @@ export const importTallyExport = async (
               status: { [Op.ne]: 'cancelled' },
               voucher_date: v.date,
               amount_details: {
-                [Op.contains]: { source: 'tally_import', tallyVoucherNumber: v.voucherNumber },
+                [Op.contains]: {
+                  source: 'tally_import',
+                  tallyVoucherType: v.voucherType,
+                  tallyVoucherNumber: v.voucherNumber,
+                },
               },
             },
           });
@@ -1462,7 +1473,9 @@ export const importTallyExport = async (
       const inFileKeys = [
         `no:${voucherNo}`,
         v.guid ? `guid:${v.guid}` : '',
-        v.voucherNumber ? `tno:${normalizeName(v.voucherNumber).toLowerCase()}|${v.date}` : '',
+        v.voucherNumber
+          ? `tno:${normalizeName(v.voucherType).toLowerCase()}|${normalizeName(v.voucherNumber).toLowerCase()}|${v.date}`
+          : '',
       ].filter(Boolean);
 
       const duplicateInFile = inFileKeys.find((k) => seenInFile.has(k));
@@ -1643,6 +1656,10 @@ export const importTallyExport = async (
           })),
           postImmediately: false,
           voucherNo,
+          sourceType: 'tally_import',
+          sourceCorrelationId: String(
+            v.guid || `TLY-${v.voucherType || 'VOUCHER'}-${v.voucherNumber || voucherNo}-${v.date || ''}`
+          ).slice(0, 80),
         });
 
         const amountDetails = {
@@ -1671,7 +1688,7 @@ export const importTallyExport = async (
           currency_code: v.currencyCode || 'INR',
           exchange_rate: v.exchangeRate || 1,
           amount_details: amountDetails,
-          source_type: 'manual',
+          source_type: 'tally_import',
         });
 
         const savedLines = await (GlVoucherLine as any).findAll({ where: { voucher_id: voucher.id } });

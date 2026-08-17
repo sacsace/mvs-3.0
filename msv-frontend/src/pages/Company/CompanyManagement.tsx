@@ -63,11 +63,19 @@ import { api } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import AuthMedia from '../../components/Common/AuthMedia';
 import { getUploadUrl } from '../../utils/uploadUrl';
+import { normalizePartnerCompanyName } from '../../utils/partnerCompanyName';
 import { useTranslation } from 'react-i18next';
 import { alpha, useTheme, type SxProps, type Theme } from '@mui/material/styles';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+
+/** 입력 중 회사명: 단어별 첫 글자 대문자·나머지 소문자 (공백·커서 유지) */
+function formatCompanyNameWhileTyping(raw: string): string {
+  return String(raw ?? '').replace(/[A-Za-zÀ-ÿ]+/g, (word) => {
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
+}
 
 const COMPANY_MENU_ROUTES = ['/basic-info/company', '/basic-info'] as const;
 const COMPANIES_PER_PAGE = 10;
@@ -656,6 +664,7 @@ const CompanyManagement: React.FC = () => {
                 // 회사 등록 시 MVS 시스템 사용 가능하도록 설정
         const companyData = {
           ...formData,
+          name: normalizePartnerCompanyName(formData.name),
           subscription_status: 'active',
           status: 'active' // 백엔드에서 사용하는 status 필드
         };
@@ -673,7 +682,10 @@ const CompanyManagement: React.FC = () => {
         }
       } else if (dialogMode === 'edit' && selectedCompany) {
         // 수정 시 이미지 처리: 새로 업로드한 이미지만 전송
-        const updateData: any = { ...formData };
+        const updateData: any = {
+          ...formData,
+          name: normalizePartnerCompanyName(formData.name),
+        };
         
         // 이미지 필드 처리: 새로 업로드한 이미지(파일이 있는 경우)만 전송
         const imageFields: (keyof CompanyImages)[] = ['company_logo', 'company_seal', 'ceo_signature'];
@@ -1197,7 +1209,18 @@ const CompanyManagement: React.FC = () => {
                   <TextField
                     fullWidth
                     value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        name: formatCompanyNameWhileTyping(e.target.value),
+                      })
+                    }
+                    onBlur={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        name: normalizePartnerCompanyName(prev.name),
+                      }))
+                    }
                     required
                     disabled={dialogMode === 'view'}
                     placeholder="회사명을 입력하세요"
@@ -1998,6 +2021,12 @@ const CompanyManagement: React.FC = () => {
                         <TableCell align={compColTableAlign('name')} sx={tdSx('name')}>
                           <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'hidden' }}>
                             <Avatar
+                              src={
+                                company.company_logo
+                                  ? getUploadUrl(company.company_logo) || undefined
+                                  : undefined
+                              }
+                              imgProps={{ style: { objectFit: 'contain' } }}
                               sx={{
                                 mr: 1.25,
                                 width: 32,

@@ -62,6 +62,12 @@ import AcTdsCode from './AcTdsCode';
 import AcBankAccount from './AcBankAccount';
 import AcFinancialYear from './AcFinancialYear';
 import AcVoucherAuditLog from './AcVoucherAuditLog';
+import AcImportTemplate from './AcImportTemplate';
+import AcImportBatch from './AcImportBatch';
+import AcImportSourceDocument from './AcImportSourceDocument';
+import AcImportBatchDocument from './AcImportBatchDocument';
+import AcImportMapping from './AcImportMapping';
+import AcImportIssue from './AcImportIssue';
 import WorkBoard from './WorkBoard';
 import WorkBoardList from './WorkBoardList';
 import WorkBoardCard from './WorkBoardCard';
@@ -464,6 +470,35 @@ GlVoucherLine.belongsTo(GlVoucher, { foreignKey: 'voucher_id', as: 'voucher' });
 (GlAccount as any).hasMany(GlVoucherLine, { foreignKey: 'account_id', as: 'voucherLines' });
 GlVoucherLine.belongsTo(GlAccount, { foreignKey: 'account_id', as: 'account' });
 
+// 외부 회계 Import (SAP 등) — 원본과 배치를 분리해 재검증에도 생성 전표를 중복하지 않는다.
+(Tenant as any).hasMany(AcImportTemplate, { foreignKey: 'tenant_id', as: 'accountingImportTemplates' });
+AcImportTemplate.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(Company as any).hasMany(AcImportTemplate, { foreignKey: 'company_id', as: 'accountingImportTemplates' });
+AcImportTemplate.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+(Tenant as any).hasMany(AcImportBatch, { foreignKey: 'tenant_id', as: 'accountingImportBatches' });
+AcImportBatch.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(Company as any).hasMany(AcImportBatch, { foreignKey: 'company_id', as: 'accountingImportBatches' });
+AcImportBatch.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+AcImportBatch.belongsTo(AcImportTemplate, { foreignKey: 'template_id', as: 'template' });
+AcImportTemplate.hasMany(AcImportBatch, { foreignKey: 'template_id', as: 'batches' });
+(Tenant as any).hasMany(AcImportSourceDocument, { foreignKey: 'tenant_id', as: 'accountingImportSourceDocuments' });
+AcImportSourceDocument.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(Company as any).hasMany(AcImportSourceDocument, { foreignKey: 'company_id', as: 'accountingImportSourceDocuments' });
+AcImportSourceDocument.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+AcImportSourceDocument.belongsTo(GlVoucher, { foreignKey: 'voucher_id', as: 'voucher' });
+AcImportBatch.hasMany(AcImportBatchDocument, { foreignKey: 'batch_id', as: 'documents' });
+AcImportBatchDocument.belongsTo(AcImportBatch, { foreignKey: 'batch_id', as: 'batch' });
+AcImportSourceDocument.hasMany(AcImportBatchDocument, { foreignKey: 'source_document_id', as: 'batchLinks' });
+AcImportBatchDocument.belongsTo(AcImportSourceDocument, { foreignKey: 'source_document_id', as: 'sourceDocument' });
+(Tenant as any).hasMany(AcImportMapping, { foreignKey: 'tenant_id', as: 'accountingImportMappings' });
+AcImportMapping.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+(Company as any).hasMany(AcImportMapping, { foreignKey: 'company_id', as: 'accountingImportMappings' });
+AcImportMapping.belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
+AcImportBatch.hasMany(AcImportIssue, { foreignKey: 'batch_id', as: 'issues' });
+AcImportIssue.belongsTo(AcImportBatch, { foreignKey: 'batch_id', as: 'batch' });
+AcImportSourceDocument.hasMany(AcImportIssue, { foreignKey: 'source_document_id', as: 'issues' });
+AcImportIssue.belongsTo(AcImportSourceDocument, { foreignKey: 'source_document_id', as: 'sourceDocument' });
+
 // 작업 보드 (트렐로형)
 (Tenant as any).hasMany(WorkBoard, { foreignKey: 'tenant_id', as: 'workBoards' });
 (WorkBoard as any).belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
@@ -637,6 +672,12 @@ export {
   AcBankAccount,
   AcFinancialYear,
   AcVoucherAuditLog,
+  AcImportTemplate,
+  AcImportBatch,
+  AcImportSourceDocument,
+  AcImportBatchDocument,
+  AcImportMapping,
+  AcImportIssue,
   WorkBoard,
   WorkBoardList,
   WorkBoardCard,

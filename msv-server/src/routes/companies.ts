@@ -521,9 +521,7 @@ router.post(
         );
         gstWarning = `회사는 생성되었지만 GST 번호 저장에 실패했습니다. ${gstReason}`;
       }
-    } else {
-          }
-    
+    }
     // 이미지 필드가 있으면 별도로 업데이트
     if (Object.keys(imageData).length > 0) {
             for (const [field, value] of Object.entries(imageData)) {
@@ -1005,12 +1003,12 @@ router.put(
             }));
             await (CompanyGstNumber as any).bulkCreate(gstEntries);
           }
-                  } else {
-                  }
+        }
       } catch (gstError: any) {
         // 테이블이 없는 경우 등 에러는 무시하고 계속 진행
         if (gstError.code === '42P01') {
-                  } else {
+          // GST 테이블이 아직 생성되지 않은 개발 환경에서는 회사 수정을 계속한다.
+        } else {
           console.error('GST 번호 업데이트 오류:', gstError.message);
         }
       }

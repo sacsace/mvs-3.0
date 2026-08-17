@@ -228,6 +228,8 @@ type CompanySearchSelectProps = {
   textFieldSx?: object;
   outlinedProps?: object;
   sx?: object;
+  helperText?: React.ReactNode;
+  error?: boolean;
 };
 
 const CompanySearchSelect: React.FC<CompanySearchSelectProps> = ({
@@ -244,6 +246,8 @@ const CompanySearchSelect: React.FC<CompanySearchSelectProps> = ({
   textFieldSx,
   outlinedProps,
   sx,
+  helperText,
+  error,
 }) => {
   const options = useMemo<CompanyPickOption[]>(() => {
     const list = companies.map((company) => ({ id: company.id, name: company.name }));
@@ -279,6 +283,8 @@ const CompanySearchSelect: React.FC<CompanySearchSelectProps> = ({
           label={label}
           required={required}
           placeholder={placeholder}
+          error={error}
+          helperText={helperText}
           {...(outlinedProps as object)}
           sx={textFieldSx}
         />
@@ -2467,48 +2473,109 @@ const UserManagement: React.FC = () => {
                       sx={{
                         gridColumn: '1 / -1',
                         display: 'flex',
-                        alignItems: 'center',
+                        flexDirection: { xs: 'column', sm: 'row' },
+                        alignItems: { xs: 'stretch', sm: 'center' },
                         gap: 1.5,
                         p: 1,
                         border: `1px dashed ${theme.palette.divider}`,
                         borderRadius: 2,
                       }}
                     >
-                      <Avatar
-                        src={
-                          avatarPreviewUrl ||
-                          (existingAvatarUrl ? getUploadUrl(existingAvatarUrl) : undefined)
-                        }
-                        alt={formData.username}
-                        sx={{ width: 88, height: 88, bgcolor: 'action.selected' }}
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1.5,
+                          flexShrink: 0,
+                        }}
                       >
-                        <PersonIcon sx={{ fontSize: 44 }} />
-                      </Avatar>
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-                        <Typography variant="subtitle2">
-                          {t('userManagement.profilePhoto')}
-                        </Typography>
-                        <Button
-                          component="label"
-                          variant="outlined"
-                          size="small"
-                          startIcon={<PhotoCameraIcon />}
-                          sx={{ alignSelf: 'flex-start' }}
+                        <Avatar
+                          src={
+                            avatarPreviewUrl ||
+                            (existingAvatarUrl ? getUploadUrl(existingAvatarUrl) : undefined)
+                          }
+                          alt={formData.username}
+                          sx={{ width: 88, height: 88, bgcolor: 'action.selected' }}
                         >
-                          {avatarFile
-                            ? t('userManagement.changePhoto')
-                            : t('userManagement.selectPhoto')}
-                          <input
-                            hidden
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,image/gif"
-                            onChange={handleAvatarSelect}
-                          />
-                        </Button>
-                        <Typography variant="caption" color="text.secondary">
-                          {avatarFile?.name || t('userManagement.avatarHelper')}
-                        </Typography>
+                          <PersonIcon sx={{ fontSize: 44 }} />
+                        </Avatar>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+                          <Typography variant="subtitle2">
+                            {t('userManagement.profilePhoto')}
+                          </Typography>
+                          <Button
+                            component="label"
+                            variant="outlined"
+                            size="small"
+                            startIcon={<PhotoCameraIcon />}
+                            sx={{ alignSelf: 'flex-start' }}
+                          >
+                            {avatarFile
+                              ? t('userManagement.changePhoto')
+                              : t('userManagement.selectPhoto')}
+                            <input
+                              hidden
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp,image/gif"
+                              onChange={handleAvatarSelect}
+                            />
+                          </Button>
+                          <Typography variant="caption" color="text.secondary">
+                            {avatarFile?.name || t('userManagement.avatarHelper')}
+                          </Typography>
+                        </Box>
                       </Box>
+                      {user?.role === 'root' ? (
+                        <Box
+                          sx={{
+                            flex: 1,
+                            minWidth: 0,
+                            width: '100%',
+                            p: 1,
+                            borderRadius: 1,
+                            border: '2px solid',
+                            borderColor: 'error.main',
+                            bgcolor: (t) =>
+                              t.palette.mode === 'light' ? 'rgba(211, 47, 47, 0.06)' : 'rgba(211, 47, 47, 0.16)',
+                          }}
+                        >
+                          <CompanySearchSelect
+                            companies={companies}
+                            value={(formData as { company_id?: number }).company_id || ''}
+                            onChange={(company_id) => {
+                              setFormData({
+                                ...formData,
+                                company_id: company_id === '' ? undefined : company_id,
+                                department_id: '',
+                                department: '',
+                                position_id: '',
+                                position: '',
+                              } as typeof formData);
+                            }}
+                            label={t('userManagement.companySelect')}
+                            placeholder={t('userManagement.searchCompany')}
+                            required
+                            error
+                            helperText={t('userManagement.companySelectRootHint')}
+                            outlinedProps={OUTLINED_FIELD}
+                            textFieldSx={{
+                              '& .MuiOutlinedInput-root': {
+                                '& fieldset': { borderColor: 'error.main', borderWidth: 1.5 },
+                                '&:hover fieldset': { borderColor: 'error.dark' },
+                                '&.Mui-focused fieldset': { borderColor: 'error.main' },
+                              },
+                              '& .MuiInputLabel-root': { color: 'error.main' },
+                              '& .MuiInputLabel-root.Mui-focused': { color: 'error.main' },
+                              '& .MuiFormHelperText-root': {
+                                color: 'error.main',
+                                mx: 0,
+                                mt: 0.75,
+                                fontWeight: 600,
+                              },
+                            }}
+                          />
+                        </Box>
+                      ) : null}
                     </Box>
                     <TextField
                       fullWidth
@@ -3423,27 +3490,6 @@ const UserManagement: React.FC = () => {
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
                     gap: 1.5,
                   }}>
-                    {user?.role === 'root' && (
-                      <CompanySearchSelect
-                        companies={companies}
-                        value={(formData as { company_id?: number }).company_id || ''}
-                        onChange={(company_id) => {
-                          setFormData({
-                            ...formData,
-                            company_id: company_id === '' ? undefined : company_id,
-                            department_id: '',
-                            department: '',
-                            position_id: '',
-                            position: '',
-                          } as typeof formData);
-                        }}
-                        label={t('userManagement.companySelect')}
-                        placeholder={t('userManagement.searchCompany')}
-                        required
-                        outlinedProps={OUTLINED_FIELD}
-                        sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}
-                      />
-                    )}
                     <TextField
                       fullWidth
                       size="small"

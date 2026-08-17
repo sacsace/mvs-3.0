@@ -175,6 +175,7 @@ export const createGlVoucherWithLines = async ({
   lines,
   sourceType,
   sourceId,
+  sourceCorrelationId,
   postImmediately = false,
   voucherNo: customVoucherNo,
 }: {
@@ -185,8 +186,9 @@ export const createGlVoucherWithLines = async ({
   voucherDate: string;
   narration?: string;
   lines: VoucherLineInput[];
-  sourceType?: 'manual' | 'auto_voucher';
+  sourceType?: 'manual' | 'auto_voucher' | 'sap_import' | 'tally_import' | 'bank_import' | 'ocr' | 'api';
   sourceId?: number;
+  sourceCorrelationId?: string;
   postImmediately?: boolean;
   voucherNo?: string;
 }) => {
@@ -231,6 +233,7 @@ export const createGlVoucherWithLines = async ({
         status: 'draft',
         source_type: sourceType || null,
         source_id: sourceId || null,
+        source_correlation_id: sourceCorrelationId || null,
         total_debit: totalDebit,
         total_credit: totalCredit,
         created_by: userId,

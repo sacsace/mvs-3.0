@@ -8,7 +8,6 @@ import {
   ensureDefaultChartOfAccounts,
   postVoucherToLedger,
 } from '../services/glPostingService';
-import { reclassifyTallyAccountNatures } from '../services/tallyImportService';
 import { resolveCompanyScope } from '../utils/companyScope';
 import { toSentenceCase } from '../utils/textCase';
 
@@ -26,7 +25,23 @@ const tallyAccountWhereExtra = {
   ],
 };
 
-type LedgerMovement = { accountId: number; debit: number; credit: number };
+const BOOK_VOUCHER_STATUSES = ['draft', 'posted', 'approved', 'review_required'] as const;
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const parseIsoDateQuery = (value: unknown): { ok: true; value?: string } | { ok: false } => {
+  if (value == null || value === '') return { ok: true, value: undefined };
+  const text = String(value).trim().slice(0, 10);
+  if (!ISO_DATE_RE.test(text)) return { ok: false };
+  return { ok: true, value: text };
+};
+
+type LedgerMovement = {
+  accountId: number;
+  debit: number;
+  credit: number;
+  periodDebit: number;
+  periodCredit: number;
+};
 
 /**
  * 전표 라인을 계정별로 한 번에 합산한다.
@@ -37,8 +52,15 @@ const getLedgerMovements = async (params: {
   companyId: number;
   from?: string;
   to?: string;
+  /** voucher_date < before (기간 시작 전 이동) */
+  before?: string;
+  accountId?: number;
+  natures?: string[];
+  /** from~to 기간 합계를 같은 스캔에서 추가로 계산 */
+  periodFrom?: string;
   tallyOnly?: boolean;
   postedOnly?: boolean;
+  bookStatuses?: boolean;
 }): Promise<Map<number, LedgerMovement>> => {
   const replacements: Record<string, unknown> = {
     tenantId: params.tenantId,
@@ -55,6 +77,8 @@ const getLedgerMovements = async (params: {
     clauses.push("v.status IN ('draft', 'posted', 'approved', 'review_required')");
   } else if (params.postedOnly) {
     clauses.push("v.status = 'posted'");
+  } else {
+    clauses.push("v.status IN ('draft', 'posted', 'approved', 'review_required')");
   }
   if (params.from) {
     clauses.push('v.voucher_date >= :from');
@@ -64,14 +88,39 @@ const getLedgerMovements = async (params: {
     clauses.push('v.voucher_date <= :to');
     replacements.to = params.to;
   }
+  if (params.before) {
+    clauses.push('v.voucher_date < :before');
+    replacements.before = params.before;
+  }
+  if (params.accountId) {
+    clauses.push('l.account_id = :accountId');
+    replacements.accountId = params.accountId;
+  }
+
+  const joinAccount = Boolean(params.natures?.length);
+  if (joinAccount && params.natures?.length) {
+    clauses.push('a.tenant_id = :tenantId');
+    clauses.push('a.company_id = :companyId');
+    clauses.push('a.nature IN (:natures)');
+    replacements.natures = params.natures;
+  }
+
+  const periodSelect = params.periodFrom
+    ? `,
+       COALESCE(SUM(CASE WHEN v.voucher_date >= :periodFrom THEN l.debit ELSE 0 END), 0) AS "periodDebit",
+       COALESCE(SUM(CASE WHEN v.voucher_date >= :periodFrom THEN l.credit ELSE 0 END), 0) AS "periodCredit"`
+    : '';
+  if (params.periodFrom) replacements.periodFrom = params.periodFrom;
 
   const [rows] = await (GlVoucherLine as any).sequelize.query(
     `SELECT
        l.account_id AS "accountId",
        COALESCE(SUM(l.debit), 0) AS debit,
        COALESCE(SUM(l.credit), 0) AS credit
+       ${periodSelect}
      FROM gl_voucher_lines l
      INNER JOIN gl_vouchers v ON v.id = l.voucher_id
+     ${joinAccount ? 'INNER JOIN gl_accounts a ON a.id = l.account_id' : ''}
      WHERE ${clauses.join(' AND ')}
      GROUP BY l.account_id`,
     { replacements }
@@ -80,9 +129,17 @@ const getLedgerMovements = async (params: {
   return new Map(
     (rows as any[]).map((row) => {
       const accountId = Number(row.accountId);
+      const debit = parseAmount(row.debit);
+      const credit = parseAmount(row.credit);
       return [
         accountId,
-        { accountId, debit: parseAmount(row.debit), credit: parseAmount(row.credit) },
+        {
+          accountId,
+          debit,
+          credit,
+          periodDebit: params.periodFrom ? parseAmount(row.periodDebit) : debit,
+          periodCredit: params.periodFrom ? parseAmount(row.periodCredit) : credit,
+        },
       ];
     })
   );
@@ -133,6 +190,20 @@ export const getGlAccounts = async (req: RequestWithUser, res: Response) => {
 
     const rows = await (GlAccount as any).findAll({
       where,
+      attributes: [
+        'id',
+        'parent_id',
+        'code',
+        'name',
+        'name_en',
+        'account_type',
+        'nature',
+        'opening_balance',
+        'current_balance',
+        'account_group',
+        'is_cash_or_bank',
+        'is_ar_ap',
+      ],
       order: [
         ['code', 'ASC'],
         ['id', 'ASC'],
@@ -261,8 +332,13 @@ export const getGlVouchers = async (req: RequestWithUser, res: Response) => {
   try {
     const { tenantId, companyId } = resolveCompanyScope(req);
     const status = req.query.status ? String(req.query.status) : undefined;
-    const from = req.query.from ? String(req.query.from) : undefined;
-    const to = req.query.to ? String(req.query.to) : undefined;
+    const fromParsed = parseIsoDateQuery(req.query.from);
+    const toParsed = parseIsoDateQuery(req.query.to);
+    if (!fromParsed.ok || !toParsed.ok) {
+      return res.status(400).json({ success: false, message: '조회 기간 형식이 올바르지 않습니다.' });
+    }
+    const from = fromParsed.value;
+    const to = toParsed.value;
 
     const where: any = { tenant_id: tenantId, company_id: companyId, is_active: true };
     if (status) where.status = status;
@@ -274,6 +350,18 @@ export const getGlVouchers = async (req: RequestWithUser, res: Response) => {
 
     const rows = await (GlVoucher as any).findAll({
       where,
+      attributes: [
+        'id',
+        'voucher_no',
+        'voucher_type',
+        'voucher_date',
+        'narration',
+        'status',
+        'total_debit',
+        'total_credit',
+        'input_mode',
+        'source_type',
+      ],
       order: [
         ['voucher_date', 'DESC'],
         ['id', 'DESC'],
@@ -292,13 +380,40 @@ export const getGlVoucherById = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
     const { tenantId, companyId } = resolveCompanyScope(req);
+    const voucherId = Number(id);
+    if (!Number.isFinite(voucherId) || voucherId <= 0) {
+      return res.status(400).json({ success: false, message: '전표 ID가 올바르지 않습니다.' });
+    }
     const row = await (GlVoucher as any).findOne({
-      where: { id, tenant_id: tenantId, company_id: companyId, is_active: true },
+      where: { id: voucherId, tenant_id: tenantId, company_id: companyId, is_active: true },
+      attributes: [
+        'id',
+        'voucher_no',
+        'voucher_type',
+        'voucher_date',
+        'narration',
+        'status',
+        'total_debit',
+        'total_credit',
+        'input_mode',
+        'source_type',
+        'currency_code',
+      ],
       include: [
         {
           model: GlVoucherLine,
           as: 'lines',
           required: false,
+          attributes: [
+            'id',
+            'voucher_id',
+            'line_no',
+            'account_id',
+            'account_name',
+            'debit',
+            'credit',
+            'narration',
+          ],
         },
       ],
       order: [[{ model: GlVoucherLine, as: 'lines' }, 'line_no', 'ASC']],
@@ -340,8 +455,10 @@ export const createGlVoucher = async (req: RequestWithUser, res: Response) => {
     return res.status(201).json({ success: true, data: detail });
   } catch (error: any) {
     console.error('전표 생성 오류:', error);
-    const statusCode = String(error.message || '').includes('복식부기') ? 400 : 500;
-    return res.status(statusCode).json({ success: false, message: error.message || '전표 생성에 실패했습니다.' });
+    if (String(error.message || '').includes('복식부기')) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    return res.status(500).json({ success: false, message: '전표 생성에 실패했습니다.' });
   }
 };
 
@@ -350,20 +467,26 @@ export const postGlVoucher = async (req: RequestWithUser, res: Response) => {
     const { id } = req.params;
     const { tenantId, companyId } = resolveCompanyScope(req);
     const { id: userId, role } = req.user;
+    const voucherId = Number(id);
+    if (!Number.isFinite(voucherId) || voucherId <= 0) {
+      return res.status(400).json({ success: false, message: '전표 ID가 올바르지 않습니다.' });
+    }
     if (!(role === 'root' || role === 'admin')) {
       return res.status(403).json({ success: false, message: '장부 반영 권한이 없습니다.' });
     }
 
-    await postVoucherToLedger({ voucherId: Number(id), tenantId, companyId, userId });
+    await postVoucherToLedger({ voucherId, tenantId, companyId, userId });
     const detail = await (GlVoucher as any).findOne({
-      where: { id, tenant_id: tenantId, company_id: companyId },
+      where: { id: voucherId, tenant_id: tenantId, company_id: companyId },
       include: [{ model: GlVoucherLine, as: 'lines' }],
     });
     return res.json({ success: true, data: detail, message: '장부에 반영되었습니다.' });
   } catch (error: any) {
     console.error('전표 장부 반영 오류:', error);
-    const statusCode = String(error.message || '').includes('이미') ? 400 : 500;
-    return res.status(statusCode).json({ success: false, message: error.message || '장부 반영에 실패했습니다.' });
+    if (String(error.message || '').includes('이미')) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    return res.status(500).json({ success: false, message: '장부 반영에 실패했습니다.' });
   }
 };
 
@@ -433,7 +556,7 @@ export const bulkPostGlVouchers = async (req: RequestWithUser, res: Response) =>
     });
   } catch (error: any) {
     console.error('전표 일괄 장부 반영 오류:', error);
-    return res.status(500).json({ success: false, message: error.message || '일괄 장부 반영에 실패했습니다.' });
+    return res.status(500).json({ success: false, message: '일괄 장부 반영에 실패했습니다.' });
   }
 };
 
@@ -441,23 +564,49 @@ export const getAccountLedger = async (req: RequestWithUser, res: Response) => {
   try {
     const { tenantId, companyId } = resolveCompanyScope(req);
     const accountId = Number(req.query.accountId);
-    const from = req.query.from ? String(req.query.from) : undefined;
-    const to = req.query.to ? String(req.query.to) : undefined;
+    const fromParsed = parseIsoDateQuery(req.query.from);
+    const toParsed = parseIsoDateQuery(req.query.to);
+    if (!fromParsed.ok || !toParsed.ok) {
+      return res.status(400).json({ success: false, message: '조회 기간 형식이 올바르지 않습니다.' });
+    }
+    const from = fromParsed.value;
+    const to = toParsed.value;
 
-    if (!accountId) {
+    if (!Number.isFinite(accountId) || accountId <= 0) {
       return res.status(400).json({ success: false, message: 'accountId가 필요합니다.' });
     }
 
     const account = await (GlAccount as any).findOne({
       where: { id: accountId, tenant_id: tenantId, company_id: companyId, is_active: true },
+      attributes: ['id', 'code', 'name', 'name_en', 'nature', 'opening_balance', 'current_balance'],
     });
     if (!account) return res.status(404).json({ success: false, message: '계정과목을 찾을 수 없습니다.' });
+
+    const applyDelta = (nature: string, debit: number, credit: number) =>
+      nature === 'asset' || nature === 'expense' ? debit - credit : credit - debit;
+
+    let opening = parseAmount(account.opening_balance);
+    if (from) {
+      const prior = await getLedgerMovements({
+        tenantId,
+        companyId,
+        accountId,
+        before: from,
+      });
+      const movement = prior.get(accountId);
+      opening = Number(
+        (
+          opening +
+          applyDelta(String(account.nature), movement?.debit || 0, movement?.credit || 0)
+        ).toFixed(2)
+      );
+    }
 
     const voucherWhere: any = {
       tenant_id: tenantId,
       company_id: companyId,
-      status: 'posted',
       is_active: true,
+      status: { [Op.in]: [...BOOK_VOUCHER_STATUSES] },
     };
     if (from || to) {
       voucherWhere.voucher_date = {};
@@ -467,11 +616,13 @@ export const getAccountLedger = async (req: RequestWithUser, res: Response) => {
 
     const lines = await (GlVoucherLine as any).findAll({
       where: { account_id: accountId },
+      attributes: ['id', 'voucher_id', 'line_no', 'debit', 'credit', 'narration'],
       include: [
         {
           model: GlVoucher,
           as: 'voucher',
           required: true,
+          attributes: ['id', 'voucher_no', 'voucher_date', 'narration', 'status'],
           where: voucherWhere,
         },
       ],
@@ -482,13 +633,11 @@ export const getAccountLedger = async (req: RequestWithUser, res: Response) => {
       ],
     });
 
-    let running = parseAmount(account.opening_balance);
+    let running = opening;
     const entries = lines.map((line: any) => {
       const debit = parseAmount(line.debit);
       const credit = parseAmount(line.credit);
-      const delta =
-        account.nature === 'asset' || account.nature === 'expense' ? debit - credit : credit - debit;
-      running = Number((running + delta).toFixed(2));
+      running = Number((running + applyDelta(String(account.nature), debit, credit)).toFixed(2));
       return {
         id: line.id,
         voucherId: line.voucher_id,
@@ -504,8 +653,14 @@ export const getAccountLedger = async (req: RequestWithUser, res: Response) => {
     return res.json({
       success: true,
       data: {
-        account,
-        openingBalance: parseAmount(account.opening_balance),
+        account: {
+          id: account.id,
+          code: account.code,
+          name: account.name,
+          name_en: account.name_en,
+          nature: account.nature,
+        },
+        openingBalance: opening,
         currentBalance: parseAmount(account.current_balance),
         entries,
         closingBalance: running,
@@ -520,13 +675,24 @@ export const getAccountLedger = async (req: RequestWithUser, res: Response) => {
 export const getTrialBalance = async (req: RequestWithUser, res: Response) => {
   try {
     const { tenantId, companyId } = resolveCompanyScope(req);
-    const from = req.query.from ? String(req.query.from) : undefined;
-    const to = req.query.to ? String(req.query.to) : undefined;
+    const fromParsed = parseIsoDateQuery(req.query.from);
+    const toParsed = parseIsoDateQuery(req.query.to);
+    if (!fromParsed.ok || !toParsed.ok) {
+      return res.status(400).json({ success: false, message: '조회 기간 형식이 올바르지 않습니다.' });
+    }
+    const from = fromParsed.value;
+    const to = toParsed.value;
 
-    await ensureDefaultChartOfAccounts({ tenantId, companyId, userId: req.user.id });
-
+    const tallyOnly = req.query.tallyOnly === '1' || req.query.tallyOnly === 'true';
     const accounts = await (GlAccount as any).findAll({
-      where: { tenant_id: tenantId, company_id: companyId, is_active: true, account_type: 'ledger' },
+      where: {
+        tenant_id: tenantId,
+        company_id: companyId,
+        is_active: true,
+        account_type: 'ledger',
+        ...(tallyOnly ? tallyAccountWhereExtra : {}),
+      },
+      attributes: ['id', 'code', 'name', 'name_en', 'nature', 'current_balance'],
       order: [['code', 'ASC']],
     });
 
@@ -535,7 +701,8 @@ export const getTrialBalance = async (req: RequestWithUser, res: Response) => {
       companyId,
       from,
       to,
-      postedOnly: true,
+      tallyOnly: tallyOnly || undefined,
+      postedOnly: tallyOnly ? undefined : true,
     });
 
     const rows = [];
@@ -546,13 +713,16 @@ export const getTrialBalance = async (req: RequestWithUser, res: Response) => {
       const movement = movements.get(Number(account.id));
       const debit = movement?.debit || 0;
       const credit = movement?.credit || 0;
-      if (debit === 0 && credit === 0 && parseAmount(account.current_balance) === 0) continue;
+      if (debit === 0 && credit === 0) {
+        if (tallyOnly || parseAmount(account.current_balance) === 0) continue;
+      }
       totalDebit += debit;
       totalCredit += credit;
       rows.push({
         accountId: account.id,
         code: account.code,
         name: account.name,
+        nameEn: account.name_en,
         nature: account.nature,
         debit: Number(debit.toFixed(2)),
         credit: Number(credit.toFixed(2)),
@@ -578,24 +748,13 @@ export const getTrialBalance = async (req: RequestWithUser, res: Response) => {
 export const getProfitAndLoss = async (req: RequestWithUser, res: Response) => {
   try {
     const { tenantId, companyId } = resolveCompanyScope(req);
-    const from = req.query.from ? String(req.query.from) : undefined;
-    const to = req.query.to ? String(req.query.to) : undefined;
-
-    await ensureDefaultChartOfAccounts({ tenantId, companyId, userId: req.user.id });
-    // Tally 계정 nature 보정 (부모 그룹 누락으로 전부 expense인 경우 손익이 비는 문제)
-    const incomeLedgerCount = await (GlAccount as any).count({
-      where: {
-        tenant_id: tenantId,
-        company_id: companyId,
-        is_active: true,
-        account_type: 'ledger',
-        nature: 'income',
-        ...tallyAccountWhereExtra,
-      },
-    });
-    if (incomeLedgerCount === 0) {
-      await reclassifyTallyAccountNatures({ tenantId, companyId });
+    const fromParsed = parseIsoDateQuery(req.query.from);
+    const toParsed = parseIsoDateQuery(req.query.to);
+    if (!fromParsed.ok || !toParsed.ok) {
+      return res.status(400).json({ success: false, message: '조회 기간 형식이 올바르지 않습니다.' });
     }
+    const from = fromParsed.value;
+    const to = toParsed.value;
 
     const accounts = await (GlAccount as any).findAll({
       where: {
@@ -606,6 +765,7 @@ export const getProfitAndLoss = async (req: RequestWithUser, res: Response) => {
         nature: { [Op.in]: ['income', 'expense'] },
         ...tallyAccountWhereExtra,
       },
+      attributes: ['id', 'code', 'name', 'name_en', 'nature'],
       order: [['code', 'ASC']],
     });
 
@@ -615,6 +775,7 @@ export const getProfitAndLoss = async (req: RequestWithUser, res: Response) => {
       from,
       to,
       tallyOnly: true,
+      natures: ['income', 'expense'],
     });
 
     const incomeRows: any[] = [];
@@ -650,23 +811,12 @@ export const getProfitAndLoss = async (req: RequestWithUser, res: Response) => {
       }
     }
 
-    // 금액 큰 순 (가독성)
     incomeRows.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
     expenseRows.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
 
     totalIncome = Number(totalIncome.toFixed(2));
     totalExpense = Number(totalExpense.toFixed(2));
     const netProfit = Number((totalIncome - totalExpense).toFixed(2));
-
-    const tallyVoucherCount = await (GlVoucher as any).count({
-      where: {
-        tenant_id: tenantId,
-        company_id: companyId,
-        is_active: true,
-        input_mode: 'tally_import',
-        status: { [Op.in]: ['draft', 'posted', 'approved', 'review_required'] },
-      },
-    });
 
     return res.json({
       success: true,
@@ -680,7 +830,6 @@ export const getProfitAndLoss = async (req: RequestWithUser, res: Response) => {
         netProfit,
         grossProfit: totalIncome,
         source: 'tally_import',
-        tallyVoucherCount,
       },
     });
   } catch (error: any) {
@@ -692,23 +841,13 @@ export const getProfitAndLoss = async (req: RequestWithUser, res: Response) => {
 export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
   try {
     const { tenantId, companyId } = resolveCompanyScope(req);
-    const asOf = req.query.asOf ? String(req.query.asOf) : undefined;
-    const from = req.query.from ? String(req.query.from) : undefined;
-
-    await ensureDefaultChartOfAccounts({ tenantId, companyId, userId: req.user.id });
-    const bsIncomeCount = await (GlAccount as any).count({
-      where: {
-        tenant_id: tenantId,
-        company_id: companyId,
-        is_active: true,
-        account_type: 'ledger',
-        nature: { [Op.in]: ['asset', 'liability', 'equity'] },
-        ...tallyAccountWhereExtra,
-      },
-    });
-    if (bsIncomeCount === 0) {
-      await reclassifyTallyAccountNatures({ tenantId, companyId });
+    const asOfParsed = parseIsoDateQuery(req.query.asOf);
+    const fromParsed = parseIsoDateQuery(req.query.from);
+    if (!asOfParsed.ok || !fromParsed.ok) {
+      return res.status(400).json({ success: false, message: '조회 기간 형식이 올바르지 않습니다.' });
     }
+    const asOf = asOfParsed.value;
+    const from = fromParsed.value;
 
     const accounts = await (GlAccount as any).findAll({
       where: {
@@ -716,27 +855,19 @@ export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
         company_id: companyId,
         is_active: true,
         account_type: 'ledger',
-        nature: { [Op.in]: ['asset', 'liability', 'equity'] },
+        nature: { [Op.in]: ['asset', 'liability', 'equity', 'income', 'expense'] },
         ...tallyAccountWhereExtra,
       },
+      attributes: ['id', 'code', 'name', 'name_en', 'nature', 'opening_balance'],
       order: [['code', 'ASC']],
     });
 
-    // 재무상태표: Tally 기초잔액 + Tally 전표(draft 포함) 이동
-    const positionMovements = await getLedgerMovements({
+    const movements = await getLedgerMovements({
       tenantId,
       companyId,
       to: asOf,
       tallyOnly: true,
-    });
-
-    // 당기손익(자본 반영)용 기간 — from~asOf
-    const pnlMovements = await getLedgerMovements({
-      tenantId,
-      companyId,
-      from,
-      to: asOf,
-      tallyOnly: true,
+      periodFrom: from,
     });
 
     const applyDelta = (nature: string, debit: number, credit: number) =>
@@ -748,13 +879,25 @@ export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
     let totalAssets = 0;
     let totalLiabilities = 0;
     let totalEquity = 0;
+    let periodIncome = 0;
+    let periodExpense = 0;
 
     for (const account of accounts) {
-      const movement = positionMovements.get(Number(account.id));
+      const movement = movements.get(Number(account.id));
       const debit = movement?.debit || 0;
       const credit = movement?.credit || 0;
+      const nature = String(account.nature);
+
+      if (nature === 'income' || nature === 'expense') {
+        const periodDebit = movement?.periodDebit || 0;
+        const periodCredit = movement?.periodCredit || 0;
+        if (nature === 'income') periodIncome += periodCredit - periodDebit;
+        else periodExpense += periodDebit - periodCredit;
+        continue;
+      }
+
       const opening = parseAmount(account.opening_balance);
-      const amount = Number((opening + applyDelta(String(account.nature), debit, credit)).toFixed(2));
+      const amount = Number((opening + applyDelta(nature, debit, credit)).toFixed(2));
       if (amount === 0) continue;
 
       const rowBase = {
@@ -762,17 +905,17 @@ export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
         code: account.code,
         name: account.name,
         nameEn: account.name_en,
-        nature: account.nature,
+        nature,
         debit: Number(debit.toFixed(2)),
         credit: Number(credit.toFixed(2)),
         opening: Number(opening.toFixed(2)),
         amount,
       };
 
-      if (account.nature === 'asset') {
+      if (nature === 'asset') {
         totalAssets += amount;
         assetRows.push(rowBase);
-      } else if (account.nature === 'liability') {
+      } else if (nature === 'liability') {
         totalLiabilities += amount;
         liabilityRows.push(rowBase);
       } else {
@@ -781,26 +924,6 @@ export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
       }
     }
 
-    // Period P&L plugged into equity (Tally vouchers only)
-    const pnlAccounts = await (GlAccount as any).findAll({
-      where: {
-        tenant_id: tenantId,
-        company_id: companyId,
-        is_active: true,
-        account_type: 'ledger',
-        nature: { [Op.in]: ['income', 'expense'] },
-        ...tallyAccountWhereExtra,
-      },
-    });
-    let periodIncome = 0;
-    let periodExpense = 0;
-    for (const account of pnlAccounts) {
-      const movement = pnlMovements.get(Number(account.id));
-      const debit = movement?.debit || 0;
-      const credit = movement?.credit || 0;
-      if (account.nature === 'income') periodIncome += credit - debit;
-      else periodExpense += debit - credit;
-    }
     const netProfit = Number((periodIncome - periodExpense).toFixed(2));
     if (netProfit !== 0) {
       equityRows.push({
@@ -824,16 +947,6 @@ export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
     const totalLiabilitiesAndEquity = Number((totalLiabilities + totalEquity).toFixed(2));
     const balanced = Math.abs(totalAssets - totalLiabilitiesAndEquity) <= 0.05;
 
-    const tallyVoucherCount = await (GlVoucher as any).count({
-      where: {
-        tenant_id: tenantId,
-        company_id: companyId,
-        is_active: true,
-        input_mode: 'tally_import',
-        status: { [Op.in]: ['draft', 'posted', 'approved', 'review_required'] },
-      },
-    });
-
     return res.json({
       success: true,
       data: {
@@ -850,7 +963,6 @@ export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
         balanced,
         draftCount: 0,
         source: 'tally_import',
-        tallyVoucherCount,
       },
     });
   } catch (error: any) {

@@ -54,15 +54,15 @@ const readTextFromUploadedFile = async (absolutePath: string, mimetype?: string)
 const extractStructuredFields = (rawText: string, fallbackFileName: string) => {
   const text = String(rawText || '');
   const pick = (regex: RegExp) => text.match(regex)?.[1]?.trim() || '';
-  const invoiceNumber = pick(/(?:invoice\s*(?:no|number)|bill\s*(?:no|number)|inv#)\s*[:\-]?\s*([A-Za-z0-9\-\/]+)/i);
-  const gstin = pick(/GSTIN\s*[:\-]?\s*([A-Z0-9]{10,15})/i);
-  const pan = pick(/\bPAN\s*[:\-]?\s*([A-Z]{5}[0-9]{4}[A-Z])\b/i);
+  const invoiceNumber = pick(/(?:invoice\s*(?:no|number)|bill\s*(?:no|number)|inv#)\s*[:-]?\s*([A-Za-z0-9/-]+)/i);
+  const gstin = pick(/GSTIN\s*[:-]?\s*([A-Z0-9]{10,15})/i);
+  const pan = pick(/\bPAN\s*[:-]?\s*([A-Z]{5}[0-9]{4}[A-Z])\b/i);
   const transactionDate =
-    pick(/(?:date|invoice\s*date|txn\s*date)\s*[:\-]?\s*([0-9]{4}[\/\-][0-9]{2}[\/\-][0-9]{2})/i) ||
+    pick(/(?:date|invoice\s*date|txn\s*date)\s*[:-]?\s*([0-9]{4}[/-][0-9]{2}[/-][0-9]{2})/i) ||
     new Date().toISOString().slice(0, 10);
-  const vendor = pick(/(?:vendor|supplier|party|merchant)\s*[:\-]?\s*([^\n\r,]+)/i);
-  const customer = pick(/(?:customer|buyer)\s*[:\-]?\s*([^\n\r,]+)/i);
-  const totalRaw = pick(/(?:total|grand\s*total|amount\s*due|net\s*amount)\s*[:\-]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i);
+  const vendor = pick(/(?:vendor|supplier|party|merchant)\s*[:-]?\s*([^\n\r,]+)/i);
+  const customer = pick(/(?:customer|buyer)\s*[:-]?\s*([^\n\r,]+)/i);
+  const totalRaw = pick(/(?:total|grand\s*total|amount\s*due|net\s*amount)\s*[:-]?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i);
   const totalAmount = parseAmount(totalRaw);
   const currency = pick(/\b(INR|KRW|USD|EUR|JPY)\b/i) || 'INR';
 

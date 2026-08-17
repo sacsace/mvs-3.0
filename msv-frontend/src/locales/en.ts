@@ -92,7 +92,7 @@ export default {
       selectPlaceholder: 'Select'
     },
     app: {
-      accountingTitle: 'Accounting (Tally)',
+      accountingTitle: 'Accounting',
       accountingDesc: 'This page provides comprehensive accounting and financial management features.',
       accountingFeature1: 'Debit/Credit management',
       accountingFeature2: 'Chart of accounts setup',
@@ -543,6 +543,7 @@ export default {
       ifscCode: 'IFSC Code',
       ifscPlaceholder: 'e.g. HDFC0001234',
       companySelect: 'Company',
+      companySelectRootHint: 'As root, you must select the correct company carefully.',
       userId: 'User ID',
       password: 'Password',
       passwordPlaceholderEdit: 'Only when changing password',
@@ -3175,6 +3176,9 @@ export default {
       preview: 'Parse preview',
       dryRun: 'Simulate',
       import: 'Run import',
+      reconciliation: 'Check migration reconciliation',
+      reconciliationPass: 'The current migrated voucher movements match between Tally source and MVS draft vouchers.',
+      reconciliationFail: 'Reconciliation differences were found. Review the report and source vouchers before proceeding.',
       previewTab: 'Parse preview',
       reportTab: 'Report',
       previewTitle: 'Parsed voucher preview',
@@ -3236,12 +3240,26 @@ export default {
         message: 'Message',
         context: 'Reason / detail',
       },
+      reconciliationColumns: {
+        check: 'Check',
+        source: 'Tally source',
+        mvs: 'MVS',
+        difference: 'Difference',
+        status: 'Status',
+      },
+      reconciliationChecks: {
+        voucherCount: 'Voucher count',
+        debitTotal: 'Debit total',
+        creditTotal: 'Credit total',
+        ledgerMovements: 'Ledger movements',
+      },
       resultSummary:
         'Matched {{matched}} · Accounts created {{createdAcc}} · Vouchers created {{createdVch}} · Skipped {{skipped}} · Failed {{failed}}',
       success: {
         preview: 'File parsed successfully.',
         dryRun: 'Simulation completed.',
         import: 'Import completed. Vouchers are in draft status.',
+        reconciliation: 'Migration reconciliation completed.',
         logDownloaded: 'Import report downloaded.',
       },
       errors: {
@@ -3249,6 +3267,7 @@ export default {
         noCompany: 'Please select a company.',
         preview: 'Preview failed.',
         import: 'Import failed.',
+        reconciliation: 'Migration reconciliation failed.',
         fileTooLarge: 'File is too large. Maximum upload size is 2GB.',
         noLogToDownload: 'There is no report to download.',
       },
@@ -3755,22 +3774,44 @@ export default {
     },
     balanceSheet: {
       title: 'Financial Statements',
-      description: 'SEDA-style workbook: Balance Sheet, P&L, capital notes, schedules, trial balance and GST/expense details from Tally data.',
+      description: 'View Tally aggregates as Balance Sheet, P&L, capital notes, schedules, trial balance and GST/expense details.',
       from: 'From',
-      asOf: 'As of',
+      asOf: 'To',
       search: 'Search',
       total: 'Total',
       excelDownload: 'Download Excel',
+      fiscalYear: 'Fiscal Year',
+      currentFy: 'Current',
       periods: {
         q1: 'Q1',
         q2: 'Q2',
         q3: 'Q3',
         q4: 'Q4',
-        fiscalYear: 'Fiscal Year'
+        fiscalYear: 'Full Fiscal Year'
       },
-      hint: 'Sheet totals are calculated from the same MVS aggregates (BS / P&L / Trial Balance). Schedules feed the main statements like the SEDA Excel workbook.',
+      hint: 'Sheet totals are calculated from the same MVS aggregates (BS / P&L / Trial Balance). Schedule totals feed the main statements.',
       unbalancedHint: 'Assets do not equal liabilities + equity. Check Tally account mapping and vouchers.',
       formula: 'Assets {{assets}} = Liabilities + Equity {{liabilityEquity}}',
+      imbalancePanel: {
+        title: 'Likely cause accounts (Trial Balance Top {{n}})',
+        warning: 'Warning',
+        difference: 'Difference (Assets − Liab. & Equity)',
+        openTrialBalance: 'Open Trial Balance tab',
+        empty: 'No Trial Balance / BS accounts to review. Search a period first.',
+        columns: {
+          rank: '#',
+          reason: 'Reason',
+          periodNet: 'Net',
+          bsAmount: 'BS'
+        },
+        reasons: {
+          atypical_asset: 'Asset credit/−',
+          atypical_liability: 'Liability debit/−',
+          atypical_equity: 'Equity debit/−',
+          large_bs: 'Large BS',
+          large_tb: 'Large TB'
+        }
+      },
       sheets: {
         bs: 'BS',
         pl: 'P&L',
@@ -3781,7 +3822,21 @@ export default {
         tradePayable: 'Trade Payables',
         outputGst: 'Output GST',
         inputGst: 'Input GST',
-        otherExpenses: 'Other Expense'
+        otherExpenses: 'Other Expense',
+        cashBank: 'Cash & Bank',
+        tradeReceivable: 'Trade Receivables',
+        inventory: 'Inventory',
+        investments: 'Investments',
+        loansAdvances: 'Loans & Advances',
+        borrowings: 'Borrowings',
+        provisions: 'Provisions',
+        tds: 'TDS',
+        revenue: 'Revenue',
+        otherIncome: 'Other Income',
+        purchases: 'Purchases',
+        employeeCost: 'Employee Cost',
+        financeCost: 'Finance Cost',
+        depreciation: 'Depreciation'
       },
       tabs: {
         statement: 'Balance Sheet',
@@ -3827,6 +3882,7 @@ export default {
         outputGst: 'No output GST accounts for this period.',
         inputGst: 'No input GST accounts for this period.',
         otherExpenses: 'No other expense accounts for this period.',
+        schedule: 'No accounts to show for this schedule in the selected period.',
         hint: 'No Tally opening balances or vouchers. Check dates/company, or run Load Tally Data.',
         draftHint: ''
       },

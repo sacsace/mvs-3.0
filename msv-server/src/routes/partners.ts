@@ -1,6 +1,7 @@
 import express from 'express';
 import { Request, Response } from 'express';
 import { Partner, PartnerGstNumber } from '../models';
+import sequelize from '../config/database';
 import { authenticateToken } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
 import multer from 'multer';
@@ -222,7 +223,9 @@ router.post(
       include: [{
         model: PartnerGstNumber,
         as: 'gstNumbers',
-        attributes: ['id', 'gst_number']
+        attributes: ['id', 'gst_number'],
+        where: { is_active: true },
+        required: false,
       }]
     });
 
@@ -309,19 +312,44 @@ router.put(
         });
       }
 
-      // 기존 GST 번호 삭제
-      await (PartnerGstNumber as any).destroy({
-        where: { partner_id: id }
-      });
-
-      // 새로운 GST 번호 저장
-      const validGstNumbers = gstNumbers.filter((gst: string) => gst && gst.trim() !== '');
-      for (const gstNumber of validGstNumbers) {
-        await (PartnerGstNumber as any).create({
-          partner_id: id,
-          gst_number: gstNumber.trim()
+      const validGstNumbers = [...new Set(
+        gstNumbers
+          .filter((gst: string) => gst && gst.trim() !== '')
+          .map((gst: string) => gst.trim().toUpperCase())
+      )];
+      if (validGstNumbers.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'GST 번호를 최소 1개 이상 입력해주세요.'
         });
       }
+
+      await sequelize.transaction(async (transaction) => {
+        const existingNumbers = await (PartnerGstNumber as any).findAll({
+          where: { partner_id: id },
+          transaction,
+        });
+        const existingByNumber = new Map<string, any>(
+          existingNumbers.map((record: any) => [String(record.gst_number).trim().toUpperCase(), record])
+        );
+
+        await (PartnerGstNumber as any).update(
+          { is_active: false },
+          { where: { partner_id: id, is_active: true }, transaction }
+        );
+        for (const gstNumber of validGstNumbers) {
+          const existing = existingByNumber.get(gstNumber);
+          if (existing) {
+            await existing.update({ is_active: true }, { transaction });
+          } else {
+            await (PartnerGstNumber as any).create({
+              partner_id: id,
+              gst_number: gstNumber,
+              is_active: true,
+            }, { transaction });
+          }
+        }
+      });
     }
 
     // 파트너 정보 업데이트
@@ -353,7 +381,9 @@ router.put(
       include: [{
         model: PartnerGstNumber,
         as: 'gstNumbers',
-        attributes: ['id', 'gst_number']
+        attributes: ['id', 'gst_number'],
+        where: { is_active: true },
+        required: false,
       }]
     });
 

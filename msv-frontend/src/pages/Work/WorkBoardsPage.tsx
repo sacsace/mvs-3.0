@@ -584,8 +584,16 @@ const WorkBoardsPage: React.FC = () => {
         sx={{
           minWidth: { xs: '100%', sm: 220 },
           maxWidth: { xs: '100%', sm: 280 },
-          alignSelf: 'center',
+          alignSelf: { xs: 'stretch', sm: 'center' },
           bgcolor: '#FFFFFF',
+          overflow: 'visible',
+          // shrink 라벨이 헤더 overflow에 잘리지 않도록 상단 여유
+          pt: 1,
+          mt: -0.5,
+          '& .MuiFormLabel-root': {
+            overflow: 'visible',
+            maxWidth: 'none',
+          },
           '& .MuiOutlinedInput-root': {
             borderRadius: '8px',
             height: 40,

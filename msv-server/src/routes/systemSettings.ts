@@ -373,7 +373,7 @@ router.put('/', authenticateToken, async (req, res) => {
     await company.reload();
 
     const existingUserSettings = (user.settings || {}) as Record<string, unknown>;
-    let nextUserSettings = { ...existingUserSettings };
+    const nextUserSettings = { ...existingUserSettings };
 
     if (settings.appearance && typeof settings.appearance === 'object') {
       nextUserSettings.appearance = {

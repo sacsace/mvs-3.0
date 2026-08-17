@@ -545,6 +545,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
     if (normalized.includes('/accounting/books')) return <MenuBook />;
     if (normalized.includes('/accounting/tally-import')) return <UploadFile />;
+    if (normalized.includes('/accounting/sap-import')) return <UploadFile />;
     if (normalized.includes('/accounting/chart-of-accounts')) return <AccountBalance />;
     if (normalized.includes('/accounting/vouchers')) return <ReceiptLong />;
     if (normalized.includes('/accounting/ledger')) return <Description />;

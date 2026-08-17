@@ -84,6 +84,19 @@ import {
   getBalanceSheet,
 } from '../controllers/glController';
 import { previewTallyImport, runTallyImport } from '../controllers/tallyImportController';
+import { getTallyImportBatch, getTallyImportReconciliation } from '../controllers/tallyMigrationController';
+import {
+  createSapImportTemplate,
+  inspectSapImportFile,
+  listSapImportTemplates,
+  previewSapImport,
+} from '../controllers/sapImportController';
+import {
+  approveSapImportMapping,
+  createSapImportMapping,
+  deactivateSapImportMapping,
+  listSapImportMappings,
+} from '../controllers/sapImportMappingController';
 import {
   seedAccountingMasters,
   getVoucherTypes,
@@ -117,6 +130,7 @@ import {
   deleteEWayBill,
 } from '../controllers/ewayBillController';
 import { authenticateToken, restrictAuditToReadOnly } from '../middleware/auth';
+import { requireAdminRootOrMenuPermissionAnyOf } from '../middleware/menuPermission';
 import { validateBody } from '../middleware/validate';
 
 const router = Router();
@@ -204,6 +218,47 @@ const tallyImportUpload = multer({
   },
 });
 
+const sapImportPath = ensureUploadSubdir('sap-imports');
+const sapImportStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, sapImportPath),
+  filename: (_req, file, cb) => {
+    const safeName = (file.originalname || 'sap-import').replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    cb(null, `${Date.now()}_${safeName}`);
+  },
+});
+const SAP_IMPORT_MAX_BYTES =
+  Math.max(1, Number(process.env.SAP_IMPORT_MAX_MB) || 100) * 1024 * 1024;
+const sapImportUpload = multer({
+  storage: sapImportStorage,
+  limits: { fileSize: SAP_IMPORT_MAX_BYTES },
+  fileFilter: (_req, file, cb) => {
+    const extension = path.extname(String(file.originalname || '')).toLowerCase();
+    const allowedExtensions = new Set(['.xlsx', '.xls', '.csv']);
+    const allowedMimes = new Set([
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+      'text/csv',
+      'application/csv',
+      'text/plain',
+      'application/octet-stream',
+    ]);
+    if (allowedExtensions.has(extension) && allowedMimes.has(String(file.mimetype || '').toLowerCase())) {
+      return cb(null, true);
+    }
+    return cb(new Error('SAP Import는 XLSX, XLS 또는 CSV 파일만 지원합니다.'));
+  },
+});
+
+const SAP_IMPORT_MENU_ROUTE = '/accounting/sap-import';
+const sapImportViewPermission = requireAdminRootOrMenuPermissionAnyOf(
+  [SAP_IMPORT_MENU_ROUTE],
+  ['can_view']
+);
+const sapImportCreatePermission = requireAdminRootOrMenuPermissionAnyOf(
+  [SAP_IMPORT_MENU_ROUTE],
+  ['can_create']
+);
+
 // 토큰으로 영수증 업로드 (인증 미들웨어 없음 - 휴대폰에서 QR 스캔 후 호출)
 router.post('/expenses/upload-receipt', receiptUpload.single('file'), uploadExpenseReceiptByToken);
 
@@ -249,6 +304,35 @@ router.get('/gl/balance-sheet', getBalanceSheet);
 // Tally Export → MSV Import (XML/JSON, draft vouchers only)
 router.post('/tally/preview', restrictAuditToReadOnly, tallyImportUpload.single('file'), previewTallyImport);
 router.post('/tally/import', restrictAuditToReadOnly, tallyImportUpload.single('file'), runTallyImport);
+router.get('/tally/batches/:id', getTallyImportBatch);
+router.get('/tally/batches/:id/reconciliation', getTallyImportReconciliation);
+
+// SAP Excel / CSV → MVS Draft Voucher (Phase 3: Template 및 읽기 전용 미리보기)
+router.get('/sap/templates', sapImportViewPermission, listSapImportTemplates);
+router.post(
+  '/sap/templates',
+  restrictAuditToReadOnly,
+  sapImportCreatePermission,
+  createSapImportTemplate
+);
+router.post(
+  '/sap/inspect',
+  restrictAuditToReadOnly,
+  sapImportCreatePermission,
+  sapImportUpload.single('file'),
+  inspectSapImportFile
+);
+router.post(
+  '/sap/preview',
+  restrictAuditToReadOnly,
+  sapImportCreatePermission,
+  sapImportUpload.single('file'),
+  previewSapImport
+);
+router.get('/sap/mappings', sapImportViewPermission, listSapImportMappings);
+router.post('/sap/mappings', restrictAuditToReadOnly, sapImportCreatePermission, createSapImportMapping);
+router.post('/sap/mappings/:id/approve', restrictAuditToReadOnly, sapImportCreatePermission, approveSapImportMapping);
+router.post('/sap/mappings/:id/deactivate', restrictAuditToReadOnly, sapImportCreatePermission, deactivateSapImportMapping);
 
 // 전표 입력 마스터 & 직관적 전표 API
 router.post('/masters/seed', restrictAuditToReadOnly, seedAccountingMasters);

@@ -46,7 +46,7 @@ const PARENT_MENUS = [
   { name_ko: '업무 관리', name_en: 'Work', route: '/work', icon: 'Work', order: 5 },
   { name_ko: '매입/매출 관리', name_en: 'Purchase/Sales', route: '/sales', icon: 'trending_up', order: 6 },
   { name_ko: '재고 관리', name_en: 'Inventory', route: '/inventory', icon: 'Inventory', order: 7 },
-  { name_ko: '회계관리 (Tally)', name_en: 'Accounting (Tally)', route: '/accounting', icon: 'AccountBalance', order: 8 },
+  { name_ko: '회계관리', name_en: 'Accounting', route: '/accounting', icon: 'AccountBalance', order: 8 },
   { name_ko: '알람', name_en: 'Alarms', route: '/communication', icon: 'Forum', order: 9 },
   { name_ko: 'AI 분석', name_en: 'AI', route: '/ai', icon: 'Psychology', order: 10 },
   { name_ko: '보고서', name_en: 'Reports', route: '/reports', icon: 'Assessment', order: 11 },

@@ -181,7 +181,6 @@ const ChartOfAccounts: React.FC = () => {
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      await accountingService.seedGlAccounts(effectiveCompanyId).catch(() => undefined);
       const response = await accountingService.getGlAccounts({
         ledgerOnly: true,
         company_id: effectiveCompanyId,

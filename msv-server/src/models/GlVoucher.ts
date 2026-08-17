@@ -10,8 +10,9 @@ interface GlVoucherAttributes {
   voucher_date: string;
   narration?: string | null;
   status: 'draft' | 'posted' | 'cancelled' | 'review_required' | 'approved' | 'rejected' | 'reversed';
-  source_type?: 'manual' | 'auto_voucher' | null;
+  source_type?: 'manual' | 'auto_voucher' | 'sap_import' | 'tally_import' | 'bank_import' | 'ocr' | 'api' | null;
   source_id?: number | null;
+  source_correlation_id?: string | null;
   total_debit: number;
   total_credit: number;
   party_id?: number | null;
@@ -41,6 +42,7 @@ interface GlVoucherCreationAttributes
     | 'status'
     | 'source_type'
     | 'source_id'
+    | 'source_correlation_id'
     | 'total_debit'
     | 'total_credit'
     | 'party_id'
@@ -71,8 +73,9 @@ class GlVoucher extends Model<GlVoucherAttributes, GlVoucherCreationAttributes> 
   public voucher_date!: string;
   public narration?: string | null;
   public status!: 'draft' | 'posted' | 'cancelled' | 'review_required' | 'approved' | 'rejected' | 'reversed';
-  public source_type?: 'manual' | 'auto_voucher' | null;
+  public source_type?: 'manual' | 'auto_voucher' | 'sap_import' | 'tally_import' | 'bank_import' | 'ocr' | 'api' | null;
   public source_id?: number | null;
+  public source_correlation_id?: string | null;
   public total_debit!: number;
   public total_credit!: number;
   public party_id?: number | null;
@@ -112,8 +115,12 @@ GlVoucher.init(
       allowNull: false,
       defaultValue: 'draft',
     },
-    source_type: { type: DataTypes.ENUM('manual', 'auto_voucher'), allowNull: true },
+    source_type: {
+      type: DataTypes.ENUM('manual', 'auto_voucher', 'sap_import', 'tally_import', 'bank_import', 'ocr', 'api'),
+      allowNull: true,
+    },
     source_id: { type: DataTypes.INTEGER, allowNull: true },
+    source_correlation_id: { type: DataTypes.STRING(80), allowNull: true },
     total_debit: { type: DataTypes.DECIMAL(15, 2), allowNull: false, defaultValue: 0 },
     total_credit: { type: DataTypes.DECIMAL(15, 2), allowNull: false, defaultValue: 0 },
     party_id: { type: DataTypes.INTEGER, allowNull: true },

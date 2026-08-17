@@ -639,7 +639,15 @@ export const PositionManagementPanel: React.FC<{
         >
           {t('positionManagement.dialogHint')}
         </Typography>
-        <DialogContent sx={{ px: 3, pt: 0.5, pb: 1, ...POS_FORM_FIELD_SX }}>
+        <DialogContent
+          sx={{
+            px: 3,
+            pb: 1,
+            overflow: 'visible',
+            pt: '16px !important',
+            ...POS_FORM_FIELD_SX,
+          }}
+        >
           <TextField
             autoFocus
             margin="dense"
@@ -650,7 +658,7 @@ export const PositionManagementPanel: React.FC<{
             {...mvsOutlinedLabelProps}
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            sx={{ mb: 2, mt: 0.5 }}
+            sx={{ mb: 2, mt: 0.5, overflow: 'visible' }}
           />
           <TextField
             margin="dense"

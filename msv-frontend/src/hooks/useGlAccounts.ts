@@ -21,7 +21,6 @@ export const useGlAccounts = (ledgerOnly = false, companyId?: number | '') => {
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      await accountingService.seedGlAccounts(resolvedCompanyId).catch(() => undefined);
       const response = await accountingService.getGlAccounts({
         ledgerOnly,
         company_id: resolvedCompanyId,

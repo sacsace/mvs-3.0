@@ -502,7 +502,16 @@ export const DepartmentManagementPanel: React.FC<{
         <DialogTitle sx={{ pt: 2.5, px: 3, pb: 1, fontSize: '1.125rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
           {editingId != null ? t('departmentManagement.edit') : t('departmentManagement.add')}
         </DialogTitle>
-        <DialogContent sx={{ px: 3, pb: 1, ...DEPT_FORM_FIELD_SX }}>
+        <DialogContent
+          sx={{
+            px: 3,
+            pb: 1,
+            overflow: 'visible',
+            // DialogTitle 바로 아래면 MUI 기본 pt:0 이라 shrink 라벨이 잘림
+            pt: '20px !important',
+            ...DEPT_FORM_FIELD_SX,
+          }}
+        >
           <TextField
             autoFocus
             margin="dense"
@@ -512,7 +521,7 @@ export const DepartmentManagementPanel: React.FC<{
             {...mvsOutlinedLabelProps}
             value={form.name}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-            sx={{ mb: 2.5, mt: 0.5 }}
+            sx={{ mb: 2.5, mt: 0.5, overflow: 'visible' }}
           />
           <TextField
             margin="dense"
@@ -523,7 +532,7 @@ export const DepartmentManagementPanel: React.FC<{
             {...mvsOutlinedLabelProps}
             value={form.sort_order}
             onChange={(e) => setForm((f) => ({ ...f, sort_order: parseInt(e.target.value, 10) || 0 }))}
-            sx={{ mb: 2 }}
+            sx={{ mb: 2, overflow: 'visible' }}
           />
           <FormControlLabel
             control={

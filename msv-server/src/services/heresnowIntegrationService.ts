@@ -600,7 +600,7 @@ async function upsertAttendanceRecord(
   }
 ) {
   const date = input.date.slice(0, 10);
-  let attendance = await Attendance.findOne({
+  const attendance = await Attendance.findOne({
     where: {
       user_id: user.id,
       date,

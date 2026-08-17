@@ -5,16 +5,18 @@ interface PartnerGstNumberAttributes {
   id: number;
   partner_id: number;
   gst_number: string;
+  is_active: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
 
-interface PartnerGstNumberCreationAttributes extends Optional<PartnerGstNumberAttributes, 'id' | 'created_at' | 'updated_at'> {}
+interface PartnerGstNumberCreationAttributes extends Optional<PartnerGstNumberAttributes, 'id' | 'is_active' | 'created_at' | 'updated_at'> {}
 
 class PartnerGstNumber extends Model<PartnerGstNumberAttributes, PartnerGstNumberCreationAttributes> implements PartnerGstNumberAttributes {
   public id!: number;
   public partner_id!: number;
   public gst_number!: string;
+  public is_active!: boolean;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
 }
@@ -38,7 +40,8 @@ PartnerGstNumber.init(
     gst_number: {
       type: DataTypes.STRING(50),
       allowNull: false
-    }
+    },
+    is_active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
   },
   {
     sequelize,

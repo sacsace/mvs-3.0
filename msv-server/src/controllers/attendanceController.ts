@@ -1103,8 +1103,6 @@ export const runAutoCheckoutOpenAttendances = async (): Promise<number> => {
     }
   }
 
-  if (updated > 0) {
-      }
   return updated;
 };
 

@@ -76,7 +76,7 @@ import RichTextEditor from '../../components/RichTextEditor/RichTextEditor';
 import { alpha, useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsOutlinedLabelProps } from '../../theme/mvsLayout';
+import { mvsOutlinedLabelProps, mvsPageContentMaxWidth } from '../../theme/mvsLayout';
 
 const CARD_DETAIL_OUTLINED = mvsOutlinedLabelProps;
 
@@ -427,8 +427,6 @@ const cardDetailOutlinedWhiteSx = {
   '& .MuiSelect-select': { py: '10px' },
 } as const;
 
-/** 카드 세부사항 편집 입력 폭 — 브라우저 전체폭이 아닌 문서형 기본 페이지 */
-const CARD_DETAIL_PAGE_MAX_WIDTH_PX = 960;
 const WORK_BOARD_COLUMN_WIDTH_PX = 272;
 
 const isHexColor = (value?: string | null): value is string => Boolean(value && /^#[0-9a-fA-F]{6}$/.test(value));
@@ -2896,8 +2894,13 @@ const WorkBoardDetailPage: React.FC = () => {
         p: 0,
         pb: 2,
         flex: 1,
-        width: '100%',
+        // 카드 세부 입력 시 칸반 full-bleed 대신 일반 바디(mvsPageContentMaxWidth) 폭
+        // AppLayout `& > * { width/maxWidth: 100% }` 보다 우선
+        width: '100% !important',
+        maxWidth: cardDetail ? `${mvsPageContentMaxWidth}px !important` : '100% !important',
         minWidth: 0,
+        mx: cardDetail ? 'auto' : 0,
+        alignSelf: cardDetail ? 'center' : 'stretch',
         minHeight: '100%',
         display: 'flex',
         flexDirection: 'column',
@@ -3573,9 +3576,8 @@ const WorkBoardDetailPage: React.FC = () => {
               mt: 1.5,
               mb: 2,
               width: '100%',
-              maxWidth: CARD_DETAIL_PAGE_MAX_WIDTH_PX,
-              mx: 'auto',
-              alignSelf: 'center',
+              maxWidth: '100%',
+              minWidth: 0,
               height: 'auto',
               borderRadius: KANBAN_DETAIL_SHELL_RADIUS,
               boxShadow: '0 1px 0 #E2E8F0, 0 1px 2px rgba(15, 23, 42, 0.05)',

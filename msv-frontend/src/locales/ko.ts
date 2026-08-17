@@ -92,7 +92,7 @@ export default {
       selectPlaceholder: '선택하세요'
     },
     app: {
-      accountingTitle: '회계관리 (Tally)',
+      accountingTitle: '회계관리',
       accountingDesc: '종합적인 회계 및 재무 관리 기능을 제공하는 페이지입니다.',
       accountingFeature1: '차변/대변 관리',
       accountingFeature2: '계정과목 설정',
@@ -543,6 +543,7 @@ export default {
       ifscCode: 'IFSC 코드',
       ifscPlaceholder: '예: HDFC0001234',
       companySelect: '회사 선택',
+      companySelectRootHint: 'root는 소속 회사를 정확히 선택해야 합니다. 잘못된 회사 선택에 주의하세요.',
       userId: '사용자 ID',
       password: '비밀번호',
       passwordPlaceholderEdit: '변경 시에만 입력',
@@ -3247,6 +3248,9 @@ export default {
       preview: '파싱 미리보기',
       dryRun: '시뮬레이션',
       import: '임포트 실행',
+      reconciliation: '이관 대사 확인',
+      reconciliationPass: 'Tally 원본 거래와 MVS Draft 전표의 현재 이관 범위가 일치합니다.',
+      reconciliationFail: '대사 차이가 있습니다. 리포트와 원본 전표를 검토한 뒤 수정하세요.',
       previewTab: '파싱 미리보기',
       reportTab: '리포트',
       previewTitle: '파싱된 전표 미리보기',
@@ -3307,12 +3311,26 @@ export default {
         message: '메시지',
         context: '사유·상세',
       },
+      reconciliationColumns: {
+        check: '검증 항목',
+        source: 'Tally 원본',
+        mvs: 'MVS',
+        difference: '차이',
+        status: '결과',
+      },
+      reconciliationChecks: {
+        voucherCount: '전표 수',
+        debitTotal: '차변 합계',
+        creditTotal: '대변 합계',
+        ledgerMovements: '계정별 거래금액',
+      },
       resultSummary:
         '계정 매칭 {{matched}} · 계정 생성 {{createdAcc}} · 전표 생성 {{createdVch}} · 건너뜀 {{skipped}} · 실패 {{failed}}',
       success: {
         preview: '파일 파싱이 완료되었습니다.',
         dryRun: '시뮬레이션이 완료되었습니다.',
         import: '임포트가 완료되었습니다. 전표는 임시 상태입니다.',
+        reconciliation: '이관 대사를 완료했습니다.',
         logDownloaded: '임포트 리포트를 다운로드했습니다.',
       },
       errors: {
@@ -3320,6 +3338,7 @@ export default {
         noCompany: '회사를 선택해 주세요.',
         preview: '미리보기에 실패했습니다.',
         import: '임포트에 실패했습니다.',
+        reconciliation: '이관 대사에 실패했습니다.',
         fileTooLarge: '파일이 너무 큽니다. 최대 2GB까지 업로드할 수 있습니다.',
         noLogToDownload: '다운로드할 리포트가 없습니다.',
       },
@@ -3826,22 +3845,44 @@ export default {
     },
     balanceSheet: {
       title: '재무제표',
-      description: 'SEDA 엑셀과 동일한 시트(BS·PL·Capital·스케줄·시산표·GST 등)로 Tally 집계를 조회합니다. 스케줄 합계가 본표에 반영됩니다.',
+      description: 'BS·PL·Capital·스케줄·시산표·GST 등 시트로 Tally 집계를 조회합니다. 스케줄 합계가 본표에 반영됩니다.',
       from: '시작일',
-      asOf: '기준일',
+      asOf: '종료일',
       search: '조회',
       total: '합계',
       excelDownload: '엑셀 다운로드',
+      fiscalYear: '회계년도',
+      currentFy: '현재',
       periods: {
         q1: '1분기',
         q2: '2분기',
         q3: '3분기',
         q4: '4분기',
-        fiscalYear: '회계년도'
+        fiscalYear: '회계년도 전체'
       },
       hint: '시트 금액은 동일 MVS 집계(BS / 손익 / 시산표)에서 계산됩니다. 스케줄 합계가 본표(BS·PL)와 맞춰집니다.',
       unbalancedHint: '자산과 부채+자본이 일치하지 않습니다. Tally 계정 매핑·전표를 확인해 주세요.',
       formula: '자산 {{assets}} = 부채+자본 {{liabilityEquity}}',
+      imbalancePanel: {
+        title: '차이 원인 계정 (시산표 기준 Top {{n}})',
+        warning: '경고',
+        difference: '차이(자산 − 부채·자본)',
+        openTrialBalance: '시산표 탭 보기',
+        empty: '점검할 시산표·BS 계정이 없습니다. 기간을 조회한 뒤 다시 확인해 주세요.',
+        columns: {
+          rank: '#',
+          reason: '사유',
+          periodNet: '순이동',
+          bsAmount: 'BS'
+        },
+        reasons: {
+          atypical_asset: '자산·대변/−',
+          atypical_liability: '부채·차변/−',
+          atypical_equity: '자본·차변/−',
+          large_bs: 'BS 금액 큼',
+          large_tb: '시산 이동 큼'
+        }
+      },
       sheets: {
         bs: 'BS',
         pl: 'P&L',
@@ -3852,7 +3893,21 @@ export default {
         tradePayable: 'Trade Payables',
         outputGst: 'Output GST',
         inputGst: 'Input GST',
-        otherExpenses: 'Other Expense'
+        otherExpenses: 'Other Expense',
+        cashBank: 'Cash & Bank',
+        tradeReceivable: 'Trade Receivables',
+        inventory: 'Inventory',
+        investments: 'Investments',
+        loansAdvances: 'Loans & Advances',
+        borrowings: 'Borrowings',
+        provisions: 'Provisions',
+        tds: 'TDS',
+        revenue: 'Revenue',
+        otherIncome: 'Other Income',
+        purchases: 'Purchases',
+        employeeCost: 'Employee Cost',
+        financeCost: 'Finance Cost',
+        depreciation: 'Depreciation'
       },
       tabs: {
         statement: '재무상태표',
@@ -3898,6 +3953,7 @@ export default {
         outputGst: '해당 기간에 Output GST 내역이 없습니다.',
         inputGst: '해당 기간에 Input GST 내역이 없습니다.',
         otherExpenses: '해당 기간에 Other Expenses 내역이 없습니다.',
+        schedule: '해당 기간에 표시할 계정 내역이 없습니다.',
         hint: 'Tally 기초잔액·전표가 없습니다. 기간·회사를 확인하거나 Tally Data 불러오기를 실행해 주세요.',
         draftHint: ''
       },

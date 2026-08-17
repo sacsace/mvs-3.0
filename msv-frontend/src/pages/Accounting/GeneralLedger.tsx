@@ -200,6 +200,11 @@ const getLedgerPeriodRange = (
   return { from: `${startYear}-04-01`, to: today };
 };
 
+const parseUrlAccountId = (params: URLSearchParams): number | '' => {
+  const raw = Number(params.get('accountId') || params.get('account_id') || '');
+  return Number.isFinite(raw) && raw > 0 ? raw : '';
+};
+
 const LEDGER_PERIOD_KEYS: Array<Exclude<LedgerPeriodKey, 'custom'>> = [
   'all',
   'thisMonth',
@@ -352,10 +357,21 @@ const GeneralLedger: React.FC = () => {
   const [voucherPage, setVoucherPage] = useState(1);
   const [voucherViewMode, setVoucherViewMode] = useState<ListViewMode>('page');
 
-  const [ledgerAccountId, setLedgerAccountId] = useState<number | ''>('');
-  const [ledgerPeriod, setLedgerPeriod] = useState<LedgerPeriodKey>('fiscalYear');
-  const [ledgerFrom, setLedgerFrom] = useState(() => getLedgerPeriodRange('fiscalYear').from);
-  const [ledgerTo, setLedgerTo] = useState(() => getLedgerPeriodRange('fiscalYear').to);
+  const urlLedgerAccountId = parseUrlAccountId(searchParams);
+  const urlLedgerFrom = searchParams.get('from') || '';
+  const urlLedgerTo = searchParams.get('to') || '';
+  const prevCompanyIdRef = useRef<number | undefined>(undefined);
+
+  const [ledgerAccountId, setLedgerAccountId] = useState<number | ''>(urlLedgerAccountId);
+  const [ledgerPeriod, setLedgerPeriod] = useState<LedgerPeriodKey>(
+    urlLedgerFrom || urlLedgerTo ? 'custom' : 'fiscalYear'
+  );
+  const [ledgerFrom, setLedgerFrom] = useState(
+    () => urlLedgerFrom || getLedgerPeriodRange('fiscalYear').from
+  );
+  const [ledgerTo, setLedgerTo] = useState(
+    () => urlLedgerTo || getLedgerPeriodRange('fiscalYear').to
+  );
   const [ledgerData, setLedgerData] = useState<any>(null);
   const [ledgerExporting, setLedgerExporting] = useState(false);
   const [ledgerSortBy, setLedgerSortBy] = useState<LedgerSortKey>('date');
@@ -540,11 +556,27 @@ const GeneralLedger: React.FC = () => {
     [ledgerData]
   );
 
+  const skipUrlPeriodSyncRef = useRef(false);
+
+  const writeLedgerPeriodToUrl = (from: string, to: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'ledger');
+    if (ledgerAccountId) next.set('accountId', String(ledgerAccountId));
+    if (from) next.set('from', from);
+    else next.delete('from');
+    if (to) next.set('to', to);
+    else next.delete('to');
+    if (effectiveCompanyId) next.set('company_id', String(effectiveCompanyId));
+    skipUrlPeriodSyncRef.current = true;
+    setSearchParams(next, { replace: true });
+  };
+
   const applyLedgerPeriod = (key: Exclude<LedgerPeriodKey, 'custom'>) => {
     const { from, to } = getLedgerPeriodRange(key, periodRangeOptions);
     setLedgerPeriod(key);
     setLedgerFrom(from);
     setLedgerTo(to);
+    writeLedgerPeriodToUrl(from, to);
     void loadLedger(undefined, { from, to });
   };
 
@@ -760,10 +792,13 @@ const GeneralLedger: React.FC = () => {
   }, [effectiveCompanyId]);
 
   useEffect(() => {
+    const companyChanged =
+      prevCompanyIdRef.current !== undefined && prevCompanyIdRef.current !== effectiveCompanyId;
+    prevCompanyIdRef.current = effectiveCompanyId;
+
     setSelectedVoucher(null);
     setLedgerData(null);
     setTrialData(null);
-    setLedgerAccountId('');
     setAccountSearch('');
     setVoucherSearch('');
     appliedFyKeyRef.current = '';
@@ -771,9 +806,24 @@ const GeneralLedger: React.FC = () => {
     setVoucherPeriod('fiscalYear');
     setVoucherFrom(range.from);
     setVoucherTo(range.to);
-    setLedgerPeriod('fiscalYear');
-    setLedgerFrom(range.from);
-    setLedgerTo(range.to);
+
+    const urlId = parseUrlAccountId(searchParams);
+    const fromQ = searchParams.get('from') || '';
+    const toQ = searchParams.get('to') || '';
+    if (companyChanged && !urlId) {
+      setLedgerAccountId('');
+      setLedgerPeriod('fiscalYear');
+      setLedgerFrom(range.from);
+      setLedgerTo(range.to);
+    } else if (urlId) {
+      setLedgerAccountId(urlId);
+      if (fromQ || toQ) {
+        setLedgerPeriod('custom');
+        setLedgerFrom(fromQ || range.from);
+        setLedgerTo(toQ || range.to);
+      }
+    }
+
     setTrialPeriod('fiscalYear');
     setTrialFrom(range.from);
     setTrialTo(range.to);
@@ -781,7 +831,9 @@ const GeneralLedger: React.FC = () => {
     setDetailOpen(false);
     void loadVouchers({ from: range.from, to: range.to });
     reloadAccounts();
-  }, [effectiveCompanyId, loadVouchers, reloadAccounts]);
+    // loadVouchers 참조가 바뀌어도 URL 계정을 초기화하지 않는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveCompanyId]);
 
   // 회계연도 마스터 로드 후 기간이 '현재 회계년도'이면 날짜를 마스터 FY에 맞춤
   useEffect(() => {
@@ -813,15 +865,46 @@ const GeneralLedger: React.FC = () => {
   ]);
 
   useEffect(() => {
-    if (ledgerAccounts.length && !ledgerAccountId) {
-      setLedgerAccountId(ledgerAccounts[0].id);
+    const urlId = parseUrlAccountId(searchParams);
+    const urlCode = String(searchParams.get('code') || '').trim().toLowerCase();
+    if (urlId) {
+      setLedgerAccountId(urlId);
+      return;
     }
-  }, [ledgerAccounts, ledgerAccountId]);
+    if (urlCode && ledgerAccounts.length) {
+      const found = ledgerAccounts.find((a) => String(a.code || '').toLowerCase() === urlCode);
+      if (found) {
+        setLedgerAccountId(Number(found.id));
+        return;
+      }
+    }
+    if (ledgerAccounts.length && !ledgerAccountId) {
+      setLedgerAccountId(Number(ledgerAccounts[0].id));
+    }
+  }, [ledgerAccounts, ledgerAccountId, searchParams]);
 
   useEffect(() => {
-    if (tab === 1 && ledgerAccountId) loadLedger();
+    if (skipUrlPeriodSyncRef.current) {
+      skipUrlPeriodSyncRef.current = false;
+      return;
+    }
+    if (!urlLedgerFrom && !urlLedgerTo) return;
+    setLedgerPeriod('custom');
+    if (urlLedgerFrom) setLedgerFrom(urlLedgerFrom);
+    if (urlLedgerTo) setLedgerTo(urlLedgerTo);
+  }, [urlLedgerFrom, urlLedgerTo]);
+
+  useEffect(() => {
+    if (tab === 1 && ledgerAccountId) {
+      const fromQ = urlLedgerFrom || undefined;
+      const toQ = urlLedgerTo || undefined;
+      void loadLedger(
+        Number(ledgerAccountId),
+        fromQ || toQ ? { from: fromQ, to: toQ } : undefined
+      );
+    }
     if (tab === 2) loadTrial();
-  }, [tab, ledgerAccountId, loadLedger, loadTrial]);
+  }, [tab, ledgerAccountId, loadLedger, loadTrial, urlLedgerFrom, urlLedgerTo]);
 
   const handleTab = (_: React.SyntheticEvent, idx: number) => {
     setTab(idx);
@@ -1117,6 +1200,7 @@ const GeneralLedger: React.FC = () => {
     setTab(1);
     const next = new URLSearchParams(searchParams);
     next.set('tab', 'ledger');
+    next.set('accountId', String(accountId));
     if (effectiveCompanyId) next.set('company_id', String(effectiveCompanyId));
     setSearchParams(next, { replace: true });
     loadLedger(accountId);
@@ -1531,12 +1615,26 @@ const GeneralLedger: React.FC = () => {
                 <Autocomplete
                   size="small"
                   options={ledgerAccounts}
-                  value={ledgerAccounts.find((a) => a.id === ledgerAccountId) || null}
+                  value={
+                    ledgerAccounts.find((a) => Number(a.id) === Number(ledgerAccountId)) || null
+                  }
                   onChange={(_, account) => {
-                    setLedgerAccountId(account?.id ?? '');
+                    const nextId = account?.id ? Number(account.id) : '';
+                    setLedgerAccountId(nextId);
+                    const next = new URLSearchParams(searchParams);
+                    next.set('tab', 'ledger');
+                    if (nextId) {
+                      next.set('accountId', String(nextId));
+                      if (account?.code) next.set('code', String(account.code));
+                    } else {
+                      next.delete('accountId');
+                      next.delete('code');
+                    }
+                    if (effectiveCompanyId) next.set('company_id', String(effectiveCompanyId));
+                    setSearchParams(next, { replace: true });
                   }}
                   getOptionLabel={(a) => getGlAccountLabel(a, i18n.language)}
-                  isOptionEqualToValue={(a, b) => a.id === b.id}
+                  isOptionEqualToValue={(a, b) => Number(a.id) === Number(b.id)}
                   autoHighlight
                   openOnFocus
                   selectOnFocus
@@ -1638,7 +1736,10 @@ const GeneralLedger: React.FC = () => {
                   variant="contained"
                   disableElevation
                   startIcon={<SearchIcon fontSize="small" />}
-                  onClick={() => loadLedger(undefined, { from: ledgerFrom, to: ledgerTo })}
+                  onClick={() => {
+                    writeLedgerPeriodToUrl(ledgerFrom, ledgerTo);
+                    void loadLedger(undefined, { from: ledgerFrom, to: ledgerTo });
+                  }}
                   sx={{ ...mvsBodyPrimaryBtnSx, height: 40, whiteSpace: 'nowrap', flex: '0 0 auto' }}
                 >
                   {t('generalLedger.ledger.search')}

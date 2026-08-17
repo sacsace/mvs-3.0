@@ -1,6 +1,71 @@
 import { api } from '../client';
 
 export const accountingService = {
+  // SAP Excel / CSV Import
+  inspectSapImport: async (
+    file: File,
+    params?: { company_id?: number; sheetName?: string; headerRowNumber?: number }
+  ) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (params?.company_id) formData.append('company_id', String(params.company_id));
+    if (params?.sheetName) formData.append('sheetName', params.sheetName);
+    if (params?.headerRowNumber) formData.append('headerRowNumber', String(params.headerRowNumber));
+    const response = await api.post('/accounting/sap/inspect', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  getSapImportTemplates: async (params?: { company_id?: number }) => {
+    const response = await api.get('/accounting/sap/templates', { params });
+    return response.data;
+  },
+
+  previewSapImport: async (
+    file: File,
+    template: {
+      columnMapping: Record<string, string>;
+      documentGroupKeys: string[];
+      amountMode: 'separate_columns' | 'amount_indicator';
+      debitCreditConfig?: { debitIndicators?: string[]; creditIndicators?: string[] };
+    },
+    params?: { company_id?: number }
+  ) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('template', JSON.stringify(template));
+    if (params?.company_id) formData.append('company_id', String(params.company_id));
+    const response = await api.post('/accounting/sap/preview', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  getSapImportMappings: async (params?: { company_id?: number; mappingType?: 'gl' | 'party' | 'gst' }) => {
+    const response = await api.get('/accounting/sap/mappings', { params });
+    return response.data;
+  },
+
+  createSapImportMapping: async (
+    data: { mappingType: 'gl' | 'party' | 'gst'; sourceCode?: string; sourceName?: string; targetId: number },
+    companyId?: number
+  ) => {
+    const response = await api.post('/accounting/sap/mappings', {
+      ...data,
+      ...(companyId ? { company_id: companyId } : {}),
+    });
+    return response.data;
+  },
+
+  approveSapImportMapping: async (id: number, reason: string, companyId?: number) => {
+    const response = await api.post(`/accounting/sap/mappings/${id}/approve`, {
+      reason,
+      ...(companyId ? { company_id: companyId } : {}),
+    });
+    return response.data;
+  },
+
   // ?�보?�스 목록 조회
   getInvoices: async (params?: any) => {
     const response = await api.get('/accounting/invoices', { params });
@@ -455,7 +520,12 @@ export const accountingService = {
     return response.data;
   },
 
-  getTrialBalance: async (params?: { from?: string; to?: string; company_id?: number }) => {
+  getTrialBalance: async (params?: {
+    from?: string;
+    to?: string;
+    company_id?: number;
+    tallyOnly?: boolean;
+  }) => {
     const response = await api.get('/accounting/gl/trial-balance', { params });
     return response.data;
   },
@@ -494,6 +564,22 @@ export const accountingService = {
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
       transformRequest: [(data) => data],
+    });
+    return response.data;
+  },
+
+  /** Tally Import Batch summary */
+  getTallyImportBatch: async (batchId: number, companyId?: number) => {
+    const response = await api.get(`/accounting/tally/batches/${batchId}`, {
+      params: companyId ? { company_id: companyId } : undefined,
+    });
+    return response.data;
+  },
+
+  /** Tally source-to-MVS voucher movement reconciliation */
+  getTallyImportReconciliation: async (batchId: number, companyId?: number) => {
+    const response = await api.get(`/accounting/tally/batches/${batchId}/reconciliation`, {
+      params: companyId ? { company_id: companyId } : undefined,
     });
     return response.data;
   },

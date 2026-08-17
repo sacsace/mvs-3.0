@@ -580,7 +580,7 @@ export const sendInvoiceEmail = async (req: RequestWithUser, res: Response) => {
       `,
       attachments: [
         {
-          filename: (filename || `${invPlain.invoice_number}.pdf`).replace(/[^\w.\-]+/g, '_'),
+          filename: (filename || `${invPlain.invoice_number}.pdf`).replace(/[^\w.-]+/g, '_'),
           content: pdfBuffer,
           contentType: 'application/pdf'
         }

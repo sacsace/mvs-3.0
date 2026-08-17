@@ -89,7 +89,7 @@ export const ensureAccountingMasters = async ({
   const byCode = new Map<string, any>();
   accounts.forEach((a: any) => byCode.set(a.code, a));
 
-  let created = { voucherTypes: 0, gstCodes: 0, tdsCodes: 0, transactionItems: 0, bankAccounts: 0, financialYears: 0 };
+  const created = { voucherTypes: 0, gstCodes: 0, tdsCodes: 0, transactionItems: 0, bankAccounts: 0, financialYears: 0 };
 
   const vtCount = await (AcVoucherType as any).count({ where: { tenant_id: tenantId, company_id: companyId } });
   if (vtCount === 0) {
