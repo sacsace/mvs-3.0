@@ -37,6 +37,10 @@ interface UserAttributes {
   ot_eligible?: boolean;
   /** 이전 직장 경력 [{ company_name, position, start_date, end_date, description }] */
   career_history?: any[] | null;
+  /** 학력 [{ school_name, degree, major, start_date, end_date, description }] */
+  education_history?: any[] | null;
+  /** 자격증 [{ name, issuer, certificate_number, issue_date, expiry_date, file_url }] */
+  certificate_history?: any[] | null;
   settings?: any;
   created_at?: Date;
   updated_at?: Date;
@@ -78,6 +82,8 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   public is_payment_officer?: boolean;
   public ot_eligible?: boolean;
   public career_history?: any[] | null;
+  public education_history?: any[] | null;
+  public certificate_history?: any[] | null;
   public settings?: any;
   public readonly created_at!: Date;
   public readonly updated_at!: Date;
@@ -222,6 +228,14 @@ User.init(
       defaultValue: false
     },
     career_history: {
+      type: DataTypes.JSON,
+      allowNull: true
+    },
+    education_history: {
+      type: DataTypes.JSON,
+      allowNull: true
+    },
+    certificate_history: {
       type: DataTypes.JSON,
       allowNull: true
     },

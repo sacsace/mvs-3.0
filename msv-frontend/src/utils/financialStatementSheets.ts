@@ -18,13 +18,20 @@ export type AmountRow = {
 export type ComparativeLine = {
   /** 좌측 인덱스 (A, B, 1, 2, 3 등) — 엑셀 BS 첫 열 */
   index?: string;
+  /** 동적 계정명 등 — labelKey 없을 때 표시 */
   label: string;
+  /** i18n 키 (예: balanceSheet.lines.shareCapital) */
+  labelKey?: string;
   current: number | null;
   previous: number | null;
   indent?: 0 | 1 | 2;
   section?: boolean;
   total?: boolean;
   note?: string;
+  /** 대차 불일치 시 당기 금액 강조 */
+  mismatchCurrent?: boolean;
+  /** 대차 불일치 시 전기 금액 강조 */
+  mismatchPrevious?: boolean;
 };
 
 export type BsBundle = {
@@ -194,43 +201,136 @@ export function buildBsSheet(current: BsBundle | null, previous: BsBundle | null
     sumAmounts(advanceP) +
     sumAmounts(otherAssetP);
 
+  const mismatchCurrent = Math.abs(equityLiabTotalC - assetsTotalC) > 0.05;
+  const mismatchPrevious = Math.abs(equityLiabTotalP - assetsTotalP) > 0.05;
+
   return [
-    line('EQUITY AND LIABILITIES (지분과 부채)', null, null, { section: true, indent: 0, index: 'A' }),
-    line("Shareholders' funds (주주자금)", null, null, { indent: 0, index: '1' }),
-    line('(a) Share capital (주식자본)', sumAmounts(shareCapitalC), sumAmounts(shareCapitalP), { note: '1' }),
+    line('EQUITY AND LIABILITIES', null, null, {
+      section: true,
+      indent: 0,
+      index: 'A',
+      labelKey: 'balanceSheet.lines.equityAndLiabilities',
+    }),
+    line("Shareholders' funds", null, null, {
+      indent: 0,
+      index: '1',
+      labelKey: 'balanceSheet.lines.shareholdersFunds',
+    }),
+    line('(a) Share capital', sumAmounts(shareCapitalC), sumAmounts(shareCapitalP), {
+      note: '1',
+      labelKey: 'balanceSheet.lines.shareCapital',
+    }),
     line(
-      '(b) Reserves and surplus (적립금 및 잉여금)',
+      '(b) Reserves and surplus',
       sumAmounts(reservesC) + (current?.netProfit || 0),
       sumAmounts(reservesP) + (previous?.netProfit || 0),
-      { note: '2' }
+      { note: '2', labelKey: 'balanceSheet.lines.reservesAndSurplus' }
     ),
-    line('Non-current liabilities (비유동 부채)', null, null, { indent: 0, index: '2' }),
-    line('(a) Long-term borrowings (장기차입금)', sumAmounts(longBorrowC), sumAmounts(longBorrowP), { note: '3' }),
-    line('(b) Deferred tax liabilities (net) (이연법인세부채)', 0, 0),
-    line('Current liabilities (유동부채)', null, null, { indent: 0, index: '3' }),
-    line('(a) Short Term Borrowings (단기차입금)', 0, 0),
-    line('(b) Trade payables (무역채무)', sumAmounts(payablesC), sumAmounts(payablesP)),
-    line('(c) Other current liabilities (기타유동부채)', sumAmounts(otherLiabC), sumAmounts(otherLiabP), {
+    line('Non-current liabilities', null, null, {
+      indent: 0,
+      index: '2',
+      labelKey: 'balanceSheet.lines.nonCurrentLiabilities',
+    }),
+    line('(a) Long-term borrowings', sumAmounts(longBorrowC), sumAmounts(longBorrowP), {
+      note: '3',
+      labelKey: 'balanceSheet.lines.longTermBorrowings',
+    }),
+    line('(b) Deferred tax liabilities (net)', 0, 0, {
+      labelKey: 'balanceSheet.lines.deferredTaxLiabilities',
+    }),
+    line('Current liabilities', null, null, {
+      indent: 0,
+      index: '3',
+      labelKey: 'balanceSheet.lines.currentLiabilities',
+    }),
+    line('(a) Short Term Borrowings', 0, 0, {
+      labelKey: 'balanceSheet.lines.shortTermBorrowings',
+    }),
+    line('(b) Trade payables', sumAmounts(payablesC), sumAmounts(payablesP), {
+      labelKey: 'balanceSheet.lines.tradePayables',
+    }),
+    line('(c) Other current liabilities', sumAmounts(otherLiabC), sumAmounts(otherLiabP), {
       note: '4',
+      labelKey: 'balanceSheet.lines.otherCurrentLiabilities',
     }),
-    line('(d) Short-term provisions (단기충당금)', sumAmounts(provisionsC), sumAmounts(provisionsP)),
-    line('Total', equityLiabTotalC, equityLiabTotalP, { total: true, indent: 0 }),
-    line('ASSETS (자산)', null, null, { section: true, indent: 0, index: 'B' }),
-    line('Non-current assets (비유동 자산)', null, null, { indent: 0, index: '1' }),
-    line('(a) Fixed assets (고정자산)', null, null, { indent: 1 }),
-    line('(i) Tangible assets (유형자산)', sumAmounts(fixedC), sumAmounts(fixedP), { indent: 2, note: '5' }),
-    line('(b) Non-current investments (비유동투자)', sumAmounts(investC), sumAmounts(investP)),
-    line('Current assets (유동 자산)', null, null, { indent: 0, index: '2' }),
-    line('(a) Inventories (재고자산)', sumAmounts(invC), sumAmounts(invP)),
-    line('(b) Trade receivables (매출채권)', sumAmounts(recvC), sumAmounts(recvP)),
-    line('(c) Cash and cash equivalents (현금 및 현금성자산)', sumAmounts(cashC), sumAmounts(cashP), {
+    line('(d) Short-term provisions', sumAmounts(provisionsC), sumAmounts(provisionsP), {
+      labelKey: 'balanceSheet.lines.shortTermProvisions',
+    }),
+    line('Total', equityLiabTotalC, equityLiabTotalP, {
+      total: true,
+      indent: 0,
+      mismatchCurrent,
+      mismatchPrevious,
+      labelKey: 'balanceSheet.lines.total',
+    }),
+    line('ASSETS', null, null, {
+      section: true,
+      indent: 0,
+      index: 'B',
+      labelKey: 'balanceSheet.lines.assets',
+    }),
+    line('Non-current assets', null, null, {
+      indent: 0,
+      index: '1',
+      labelKey: 'balanceSheet.lines.nonCurrentAssets',
+    }),
+    line('(a) Fixed assets', null, null, {
+      indent: 1,
+      labelKey: 'balanceSheet.lines.fixedAssets',
+    }),
+    line('(i) Tangible assets', sumAmounts(fixedC), sumAmounts(fixedP), {
+      indent: 2,
+      note: '5',
+      labelKey: 'balanceSheet.lines.tangibleAssets',
+    }),
+    line('(b) Non-current investments', sumAmounts(investC), sumAmounts(investP), {
+      labelKey: 'balanceSheet.lines.nonCurrentInvestments',
+    }),
+    line('Current assets', null, null, {
+      indent: 0,
+      index: '2',
+      labelKey: 'balanceSheet.lines.currentAssets',
+    }),
+    line('(a) Inventories', sumAmounts(invC), sumAmounts(invP), {
+      labelKey: 'balanceSheet.lines.inventories',
+    }),
+    line('(b) Trade receivables', sumAmounts(recvC), sumAmounts(recvP), {
+      labelKey: 'balanceSheet.lines.tradeReceivables',
+    }),
+    line('(c) Cash and cash equivalents', sumAmounts(cashC), sumAmounts(cashP), {
       note: '6',
+      labelKey: 'balanceSheet.lines.cashAndCashEquivalents',
     }),
-    line('(d) Short-term loans and advances (단기대여금 및 선급금)', sumAmounts(advanceC), sumAmounts(advanceP)),
-    line('(e) Other Current Assets (기타 유동자산)', sumAmounts(otherAssetC), sumAmounts(otherAssetP), {
+    line('(d) Short-term loans and advances', sumAmounts(advanceC), sumAmounts(advanceP), {
+      labelKey: 'balanceSheet.lines.shortTermLoansAndAdvances',
+    }),
+    line('(e) Other Current Assets', sumAmounts(otherAssetC), sumAmounts(otherAssetP), {
       note: '7',
+      labelKey: 'balanceSheet.lines.otherCurrentAssets',
     }),
-    line('Total', assetsTotalC, assetsTotalP, { total: true, indent: 0 }),
+    line('Total', assetsTotalC, assetsTotalP, {
+      total: true,
+      indent: 0,
+      mismatchCurrent,
+      mismatchPrevious,
+      labelKey: 'balanceSheet.lines.total',
+    }),
+    ...(mismatchCurrent || mismatchPrevious
+      ? [
+          line(
+            'Difference (Assets − Equity & Liabilities)',
+            Number((assetsTotalC - equityLiabTotalC).toFixed(2)),
+            Number((assetsTotalP - equityLiabTotalP).toFixed(2)),
+            {
+              total: true,
+              indent: 0,
+              mismatchCurrent,
+              mismatchPrevious,
+              labelKey: 'balanceSheet.lines.difference',
+            }
+          ),
+        ]
+      : []),
   ];
 }
 
@@ -278,24 +378,65 @@ export function buildPlSheet(current: PlBundle | null, previous: PlBundle | null
   const pbtP = totalRevP - totalExpP;
 
   return [
-    line('A  CONTINUING OPERATIONS', null, null, { section: true, indent: 0 }),
-    line('1  Revenue from operations (net)', revenueC, revenueP, { note: '8' }),
-    line('2  Other Income', otherIncomeC, otherIncomeP, { note: '9' }),
-    line('3  Total Revenue (1+2)', totalRevC, totalRevP, { total: true, indent: 0 }),
-    line('4  Expenses', null, null, { indent: 0 }),
-    line('(a) Cost of materials consumed', 0, 0),
-    line('(b) Purchases', sumAmounts(purchaseC), sumAmounts(purchaseP)),
-    line('(c) Changes in inventories', 0, 0),
-    line('(d) Employee benefits expenses', sumAmounts(empC), sumAmounts(empP)),
-    line('(e) Finance costs', sumAmounts(finC), sumAmounts(finP)),
-    line('(f) Depreciation and amortisation expenses', sumAmounts(depC), sumAmounts(depP)),
-    line('(g) Other expenses', sumAmounts(otherExpC), sumAmounts(otherExpP), { note: '10' }),
-    line('Total Expenses', totalExpC, totalExpP, { total: true, indent: 0 }),
-    line('5  Profit / (Loss) before tax (3 - 4)', pbtC, pbtP, { total: true, indent: 0 }),
-    line('6  Tax Expense', null, null, { indent: 0 }),
-    line('(a) Current tax expense', 0, 0),
-    line('(b) Deferred tax', 0, 0),
-    line('7  Profit / (Loss) from continuing operations', pbtC, pbtP, { total: true, indent: 0 }),
+    line('A  CONTINUING OPERATIONS', null, null, {
+      section: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.continuingOperations',
+    }),
+    line('1  Revenue from operations (net)', revenueC, revenueP, {
+      note: '8',
+      labelKey: 'balanceSheet.lines.revenueFromOperations',
+    }),
+    line('2  Other Income', otherIncomeC, otherIncomeP, {
+      note: '9',
+      labelKey: 'balanceSheet.lines.otherIncome',
+    }),
+    line('3  Total Revenue (1+2)', totalRevC, totalRevP, {
+      total: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.totalRevenue',
+    }),
+    line('4  Expenses', null, null, { indent: 0, labelKey: 'balanceSheet.lines.expenses' }),
+    line('(a) Cost of materials consumed', 0, 0, {
+      labelKey: 'balanceSheet.lines.costOfMaterials',
+    }),
+    line('(b) Purchases', sumAmounts(purchaseC), sumAmounts(purchaseP), {
+      labelKey: 'balanceSheet.lines.purchases',
+    }),
+    line('(c) Changes in inventories', 0, 0, {
+      labelKey: 'balanceSheet.lines.changesInInventories',
+    }),
+    line('(d) Employee benefits expenses', sumAmounts(empC), sumAmounts(empP), {
+      labelKey: 'balanceSheet.lines.employeeBenefits',
+    }),
+    line('(e) Finance costs', sumAmounts(finC), sumAmounts(finP), {
+      labelKey: 'balanceSheet.lines.financeCosts',
+    }),
+    line('(f) Depreciation and amortisation expenses', sumAmounts(depC), sumAmounts(depP), {
+      labelKey: 'balanceSheet.lines.depreciation',
+    }),
+    line('(g) Other expenses', sumAmounts(otherExpC), sumAmounts(otherExpP), {
+      note: '10',
+      labelKey: 'balanceSheet.lines.otherExpenses',
+    }),
+    line('Total Expenses', totalExpC, totalExpP, {
+      total: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.totalExpenses',
+    }),
+    line('5  Profit / (Loss) before tax (3 - 4)', pbtC, pbtP, {
+      total: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.profitBeforeTax',
+    }),
+    line('6  Tax Expense', null, null, { indent: 0, labelKey: 'balanceSheet.lines.taxExpense' }),
+    line('(a) Current tax expense', 0, 0, { labelKey: 'balanceSheet.lines.currentTax' }),
+    line('(b) Deferred tax', 0, 0, { labelKey: 'balanceSheet.lines.deferredTax' }),
+    line('7  Profit / (Loss) from continuing operations', pbtC, pbtP, {
+      total: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.profitFromContinuing',
+    }),
   ];
 }
 
@@ -314,24 +455,56 @@ export function buildCapitalSheet(current: BsBundle | null, previous: BsBundle |
   const closingSurplusP = reservesP + profitP;
 
   return [
-    line('Note 1  SHARE CAPITAL', null, null, { section: true, indent: 0 }),
-    line('Issued, Subscribed and Paid up', capitalC, capitalP),
-    line('Total', capitalC, capitalP, { total: true, indent: 0 }),
-    line('Note 2  RESERVES AND SURPLUS', null, null, { section: true, indent: 0 }),
-    line('(A) Share Premium / Other reserves', reservesC, reservesP),
-    line('(B) Surplus / (Deficit) in Statement of P&L', null, null, { indent: 0 }),
-    line('Opening balance', openingSurplusC, reservesP - profitP),
-    line('Add: Profit / (Loss) for the year', profitC, profitP),
-    line('Closing balance (B)', closingSurplusC, closingSurplusP, { total: true }),
+    line('Note 1  SHARE CAPITAL', null, null, {
+      section: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.note1ShareCapital',
+    }),
+    line('Issued, Subscribed and Paid up', capitalC, capitalP, {
+      labelKey: 'balanceSheet.lines.issuedSubscribedPaidUp',
+    }),
+    line('Total', capitalC, capitalP, {
+      total: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.total',
+    }),
+    line('Note 2  RESERVES AND SURPLUS', null, null, {
+      section: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.note2Reserves',
+    }),
+    line('(A) Share Premium / Other reserves', reservesC, reservesP, {
+      labelKey: 'balanceSheet.lines.sharePremiumOtherReserves',
+    }),
+    line('(B) Surplus / (Deficit) in Statement of P&L', null, null, {
+      indent: 0,
+      labelKey: 'balanceSheet.lines.surplusDeficit',
+    }),
+    line('Opening balance', openingSurplusC, reservesP - profitP, {
+      labelKey: 'balanceSheet.lines.openingBalance',
+    }),
+    line('Add: Profit / (Loss) for the year', profitC, profitP, {
+      labelKey: 'balanceSheet.lines.addProfitForYear',
+    }),
+    line('Closing balance (B)', closingSurplusC, closingSurplusP, {
+      total: true,
+      labelKey: 'balanceSheet.lines.closingBalanceB',
+    }),
     line('Total (A)+(B)', reservesC + closingSurplusC, reservesP + closingSurplusP, {
       total: true,
       indent: 0,
+      labelKey: 'balanceSheet.lines.totalAB',
     }),
-    line('Note 3  LONG TERM BORROWINGS', null, null, { section: true, indent: 0 }),
+    line('Note 3  LONG TERM BORROWINGS', null, null, {
+      section: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.note3LongTermBorrowings',
+    }),
     line(
       'Long-term borrowings',
       sumAmounts(pick(current?.liabilityRows || [], PAT.borrowing)),
-      sumAmounts(pick(previous?.liabilityRows || [], PAT.borrowing))
+      sumAmounts(pick(previous?.liabilityRows || [], PAT.borrowing)),
+      { labelKey: 'balanceSheet.lines.longTermBorrowingsPlain' }
     ),
   ];
 }
@@ -357,10 +530,18 @@ export function buildSchBsSheet(current: BsBundle | null, previous: BsBundle | n
   const otherAssetP = exclude(pa, new RegExp(`${PAT.fixed.source}|${PAT.cash.source}|${PAT.receivable.source}|${PAT.inventory.source}`, 'i'));
 
   const lines: ComparativeLine[] = [
-    line('Note 4  OTHER CURRENT LIABILITIES', null, null, { section: true, indent: 0 }),
+    line('Note 4  OTHER CURRENT LIABILITIES', null, null, {
+      section: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.note4OtherCurrentLiabilities',
+    }),
   ];
   if (tdsC.length || tdsP.length) {
-    lines.push(line('TDS Payable', sumAmounts(tdsC), sumAmounts(tdsP)));
+    lines.push(
+      line('TDS Payable', sumAmounts(tdsC), sumAmounts(tdsP), {
+        labelKey: 'balanceSheet.lines.tdsPayable',
+      })
+    );
   }
   const restLiabC = exclude(otherLiabC, PAT.tds);
   const restLiabP = exclude(otherLiabP, PAT.tds);
@@ -372,10 +553,25 @@ export function buildSchBsSheet(current: BsBundle | null, previous: BsBundle | n
     .filter((r) => !restLiabC.some((x) => x.name === r.name))
     .forEach((r) => lines.push(line(accountLineLabel(r.name), 0, r.amount)));
   lines.push(
-    line('Total', sumAmounts(otherLiabC), sumAmounts(otherLiabP), { total: true, indent: 0 }),
-    line('Note 5  FIXED TANGIBLE ASSETS', null, null, { section: true, indent: 0 }),
-    line('Closing balance', sumAmounts(fixedC), sumAmounts(fixedP), { total: true }),
-    line('Note 6  CASH AND CASH EQUIVALENTS', null, null, { section: true, indent: 0 })
+    line('Total', sumAmounts(otherLiabC), sumAmounts(otherLiabP), {
+      total: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.total',
+    }),
+    line('Note 5  FIXED TANGIBLE ASSETS', null, null, {
+      section: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.note5FixedTangible',
+    }),
+    line('Closing balance', sumAmounts(fixedC), sumAmounts(fixedP), {
+      total: true,
+      labelKey: 'balanceSheet.lines.closingBalance',
+    }),
+    line('Note 6  CASH AND CASH EQUIVALENTS', null, null, {
+      section: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.note6Cash',
+    })
   );
   cashC.forEach((r) => {
     const prev = cashP.find((x) => x.name === r.name);
@@ -385,15 +581,31 @@ export function buildSchBsSheet(current: BsBundle | null, previous: BsBundle | n
     .filter((r) => !cashC.some((x) => x.name === r.name))
     .forEach((r) => lines.push(line(accountLineLabel(r.name), 0, r.amount)));
   lines.push(
-    line('Total', sumAmounts(cashC), sumAmounts(cashP), { total: true, indent: 0 }),
-    line('Note 7  OTHER CURRENT ASSETS', null, null, { section: true, indent: 0 }),
-    line('Input GST', sumAmounts(inputGstC), sumAmounts(inputGstP))
+    line('Total', sumAmounts(cashC), sumAmounts(cashP), {
+      total: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.total',
+    }),
+    line('Note 7  OTHER CURRENT ASSETS', null, null, {
+      section: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.note7OtherCurrentAssets',
+    }),
+    line('Input GST', sumAmounts(inputGstC), sumAmounts(inputGstP), {
+      labelKey: 'balanceSheet.lines.inputGst',
+    })
   );
   exclude(otherAssetC, PAT.gstInput).forEach((r) => {
     const prev = otherAssetP.find((x) => x.name === r.name);
     lines.push(line(accountLineLabel(r.name), r.amount, prev?.amount || 0));
   });
-  lines.push(line('Total', sumAmounts(otherAssetC), sumAmounts(otherAssetP), { total: true, indent: 0 }));
+  lines.push(
+    line('Total', sumAmounts(otherAssetC), sumAmounts(otherAssetP), {
+      total: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.total',
+    })
+  );
   return lines;
 }
 
@@ -418,7 +630,11 @@ export function buildSchPlSheet(current: PlBundle | null, previous: PlBundle | n
   );
 
   const lines: ComparativeLine[] = [
-    line('Note 8  REVENUE FROM OPERATIONS', null, null, { section: true, indent: 0 }),
+    line('Note 8  REVENUE FROM OPERATIONS', null, null, {
+      section: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.note8Revenue',
+    }),
   ];
   (revC.length ? revC : ci).forEach((r) => {
     const prev = (revP.length ? revP : pi).find((x) => x.name === r.name);
@@ -429,18 +645,32 @@ export function buildSchPlSheet(current: PlBundle | null, previous: PlBundle | n
       'Total',
       revC.length ? sumAmounts(revC) : sumAmounts(ci),
       revP.length ? sumAmounts(revP) : sumAmounts(pi),
-      { total: true, indent: 0 }
+      { total: true, indent: 0, labelKey: 'balanceSheet.lines.total' }
     ),
-    line('Note 9  OTHER INCOME', null, null, { section: true, indent: 0 })
+    line('Note 9  OTHER INCOME', null, null, {
+      section: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.note9OtherIncome',
+    })
   );
   othIncC.forEach((r) => {
     const prev = othIncP.find((x) => x.name === r.name);
     lines.push(line(accountLineLabel(r.name), r.amount, prev?.amount || 0));
   });
-  if (!othIncC.length && !othIncP.length) lines.push(line('(None)', 0, 0));
+  if (!othIncC.length && !othIncP.length) {
+    lines.push(line('(None)', 0, 0, { labelKey: 'balanceSheet.lines.none' }));
+  }
   lines.push(
-    line('Total', sumAmounts(othIncC), sumAmounts(othIncP), { total: true, indent: 0 }),
-    line('Note 10  OTHER EXPENSES', null, null, { section: true, indent: 0 })
+    line('Total', sumAmounts(othIncC), sumAmounts(othIncP), {
+      total: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.total',
+    }),
+    line('Note 10  OTHER EXPENSES', null, null, {
+      section: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.note10OtherExpenses',
+    })
   );
   otherExpC.forEach((r) => {
     const prev = otherExpP.find((x) => x.name === r.name);
@@ -449,7 +679,13 @@ export function buildSchPlSheet(current: PlBundle | null, previous: PlBundle | n
   otherExpP
     .filter((r) => !otherExpC.some((x) => x.name === r.name))
     .forEach((r) => lines.push(line(accountLineLabel(r.name), 0, r.amount)));
-  lines.push(line('Total', sumAmounts(otherExpC), sumAmounts(otherExpP), { total: true, indent: 0 }));
+  lines.push(
+    line('Total', sumAmounts(otherExpC), sumAmounts(otherExpP), {
+      total: true,
+      indent: 0,
+      labelKey: 'balanceSheet.lines.total',
+    })
+  );
   return lines;
 }
 

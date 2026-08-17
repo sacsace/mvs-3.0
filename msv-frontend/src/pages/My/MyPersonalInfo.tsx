@@ -52,6 +52,15 @@ type CareerEntry = {
   description: string;
 };
 
+type EducationEntry = {
+  school_name: string;
+  degree: string;
+  major: string;
+  start_date: string;
+  end_date: string;
+  description: string;
+};
+
 type ProfileDetail = {
   userid?: string;
   username?: string;
@@ -77,6 +86,7 @@ type ProfileDetail = {
   ot_eligible?: boolean | null;
   is_payment_officer?: boolean | null;
   career_history?: CareerEntry[] | null;
+  education_history?: EducationEntry[] | null;
   created_at?: string | null;
 };
 
@@ -104,6 +114,20 @@ const normalizeCareer = (raw: unknown): CareerEntry[] => {
       description: String(row?.description ?? '').trim(),
     }))
     .filter((c) => c.company_name);
+};
+
+const normalizeEducation = (raw: unknown): EducationEntry[] => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((row: any) => ({
+      school_name: String(row?.school_name ?? '').trim(),
+      degree: String(row?.degree ?? '').trim(),
+      major: String(row?.major ?? '').trim(),
+      start_date: String(row?.start_date ?? '').trim(),
+      end_date: String(row?.end_date ?? '').trim(),
+      description: String(row?.description ?? '').trim(),
+    }))
+    .filter((e) => e.school_name);
 };
 
 const formatSalaryInr = (value: unknown): string => {
@@ -445,6 +469,7 @@ const MyPersonalInfo: React.FC = () => {
   };
 
   const careers = normalizeCareer(profile?.career_history);
+  const educations = normalizeEducation(profile?.education_history);
   const displayAvatarSrc =
     avatarPreviewUrl || (profile?.avatar_url ? getUploadUrl(profile.avatar_url) : undefined);
 
@@ -856,6 +881,54 @@ const MyPersonalInfo: React.FC = () => {
                           {c.description ? (
                             <Typography variant="body2" sx={{ ...valueSx, mt: 0.75 }}>
                               {c.description}
+                            </Typography>
+                          ) : null}
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+
+              <Accordion defaultExpanded sx={accordionSx}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography sx={sectionTitleSx}>{t('userManagement.sectionEducation')}</Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  {educations.length === 0 ? (
+                    <Typography variant="body1" sx={valueSx}>
+                      {t('userManagement.educationEmpty')}
+                    </Typography>
+                  ) : (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      {educations.map((e, idx) => (
+                        <Box
+                          key={idx}
+                          sx={{
+                            borderBottom:
+                              idx < educations.length - 1
+                                ? `1px solid ${theme.palette.divider}`
+                                : 'none',
+                            pb: idx < educations.length - 1 ? 1.5 : 0,
+                          }}
+                        >
+                          <Typography variant="body1" sx={{ ...valueSx, fontWeight: 600 }}>
+                            {e.school_name}
+                            {e.degree ? ` · ${e.degree}` : ''}
+                            {e.major ? ` · ${e.major}` : ''}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                            {(e.start_date
+                              ? new Date(e.start_date).toLocaleDateString(dateLocale)
+                              : '—') +
+                              ' ~ ' +
+                              (e.end_date
+                                ? new Date(e.end_date).toLocaleDateString(dateLocale)
+                                : t('userManagement.educationPresent'))}
+                          </Typography>
+                          {e.description ? (
+                            <Typography variant="body2" sx={{ ...valueSx, mt: 0.75 }}>
+                              {e.description}
                             </Typography>
                           ) : null}
                         </Box>

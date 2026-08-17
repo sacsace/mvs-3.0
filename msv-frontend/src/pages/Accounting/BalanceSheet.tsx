@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -244,15 +244,15 @@ const compactTableSx = {
     borderLeft: 'none',
     borderRight: 'none',
     borderTop: 'none',
-    py: 0.45,
-    lineHeight: 1.25,
+    py: '2px !important',
+    lineHeight: 1.15,
   },
 } as const;
 
 const compactHeadSx = {
   '& .MuiTableCell-head': {
-    py: 0.85,
-    lineHeight: 1.25,
+    py: '4px !important',
+    lineHeight: 1.2,
   },
 } as const;
 
@@ -306,6 +306,7 @@ const BalanceSheet: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
+  const autoLoadedKeyRef = useRef('');
 
   const currentFinancialYear = useMemo(
     () => resolveCurrentFinancialYear(financialYears),
@@ -404,8 +405,12 @@ const BalanceSheet: React.FC = () => {
   }, [from, asOf, effectiveCompanyId, companyQuery, t]);
 
   useEffect(() => {
+    const key = `${effectiveCompanyId || ''}:${from}:${asOf}`;
+    // React 개발 StrictMode의 effect 재실행으로 같은 5개 재무 API가 중복 호출되는 것을 방지한다.
+    if (autoLoadedKeyRef.current === key) return;
+    autoLoadedKeyRef.current = key;
     void load();
-  }, [load]);
+  }, [load, effectiveCompanyId, from, asOf]);
 
   const applyPeriod = (key: BsPeriodKey) => {
     const range = getBalanceSheetPeriodRange(key, currentFinancialYear);
@@ -587,7 +592,7 @@ const BalanceSheet: React.FC = () => {
 
               return (
                 <TableRow
-                  key={`${row.index || ''}-${row.label}-${idx}`}
+                  key={`${row.index || ''}-${row.labelKey || row.label}-${idx}`}
                   hover={!isSection && !isTotal}
                   sx={isTotal ? totalRowSx : undefined}
                 >
@@ -603,10 +608,12 @@ const BalanceSheet: React.FC = () => {
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
+                      color:
+                        row.mismatchCurrent || row.mismatchPrevious ? 'error.main' : 'inherit',
                       ...(isTotal ? { textAlign: 'center', pl: 1.5 } : { pl: 1.5 + labelIndent * 1.75 }),
                     }}
                   >
-                    {row.label}
+                    {row.labelKey ? t(row.labelKey) : row.label}
                   </TableCell>
                   <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
                     {isSection || isCategory || isTotal || !noteKey ? (
@@ -637,7 +644,11 @@ const BalanceSheet: React.FC = () => {
                   </TableCell>
                   <TableCell
                     align="right"
-                    sx={{ fontVariantNumeric: 'tabular-nums', fontWeight: isTotal ? 700 : 400 }}
+                    sx={{
+                      fontVariantNumeric: 'tabular-nums',
+                      fontWeight: isTotal ? 700 : 400,
+                      color: row.mismatchCurrent ? 'error.main' : 'inherit',
+                    }}
                   >
                     {showAmount && row.current !== null ? formatInr(row.current) : ''}
                   </TableCell>
@@ -647,6 +658,7 @@ const BalanceSheet: React.FC = () => {
                       fontVariantNumeric: 'tabular-nums',
                       fontWeight: isTotal ? 700 : 400,
                       bgcolor: `${excelPrevColBg} !important`,
+                      color: row.mismatchPrevious ? 'error.main' : 'inherit',
                     }}
                   >
                     {showAmount && row.previous !== null ? formatInr(row.previous) : ''}

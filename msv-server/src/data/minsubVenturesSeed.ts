@@ -111,6 +111,8 @@ const SUB_MENUS: Record<string, Array<{ name_ko: string; name_en: string; route:
     { name_ko: '예산 관리', name_en: 'Budget', route: '/accounting/budget', icon: 'account_balance', order: 7 },
     { name_ko: '자산 관리', name_en: 'Assets', route: '/accounting/assets', icon: 'account_balance', order: 8 },
     { name_ko: '손익계산서', name_en: 'Profit & Loss', route: '/accounting/profit-and-loss', icon: 'trending_up', order: 9 },
+    { name_ko: '법인세 계산', name_en: 'Corporate Tax', route: '/accounting/corporate-tax', icon: 'payments', order: 10 },
+    { name_ko: 'Advance Tax', name_en: 'Advance Tax', route: '/accounting/advance-tax', icon: 'payments', order: 11 },
   ],
   '/communication': [
     { name_ko: '이메일', name_en: 'Email', route: '/communication/email', icon: 'email', order: 2 },

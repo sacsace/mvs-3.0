@@ -30,6 +30,7 @@ import { useTranslation } from 'react-i18next';
 import { loginInfoService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { useStore } from '../../store';
+import { canAccessSystemLoginHistory } from '../../utils/canAccessSystemLoginHistory';
 import {
   mvsKpiCardSx,
   mvsBodyCardSx,
@@ -109,6 +110,8 @@ function formatDateTimeExact(value?: string | null) {
 const SystemLoginHistoryTab: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useStore();
+  const [accessChecked, setAccessChecked] = useState(false);
+  const [hasAccess, setHasAccess] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>('');
   const [loginLogs, setLoginLogs] = useState<LoginLog[]>([]);
@@ -123,6 +126,25 @@ const SystemLoginHistoryTab: React.FC = () => {
     start_date: '',
     end_date: '',
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const allowed = await canAccessSystemLoginHistory(user);
+      if (cancelled) return;
+      setHasAccess(allowed);
+      setAccessChecked(true);
+      if (!allowed) {
+        setCompanies([]);
+        setSelectedCompanyId('');
+        setLoginLogs([]);
+        setErrorMessage(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.role, user?.company_id]);
 
   const selectedCompany = useMemo(
     () => companies.find((company) => company.id === selectedCompanyId),
@@ -165,6 +187,11 @@ const SystemLoginHistoryTab: React.FC = () => {
   } as const;
 
   const loadCompanies = useCallback(async () => {
+    if (!hasAccess) {
+      setCompanies([]);
+      setSelectedCompanyId('');
+      return;
+    }
     try {
       const companyList = await useReferenceDataStore.getState().fetchCompanies();
       setCompanies(companyList);
@@ -188,10 +215,14 @@ const SystemLoginHistoryTab: React.FC = () => {
     } catch (error: any) {
       setErrorMessage(error?.response?.data?.message || t('loginInfoManagement.errors.loadCompaniesFailed'));
     }
-  }, [selectedCompanyId, t, user?.company_id]);
+  }, [hasAccess, selectedCompanyId, t, user?.company_id]);
 
   const loadLoginLogs = useCallback(
     async (companyId?: number, filters = logFilters) => {
+      if (!hasAccess) {
+        setLoginLogs([]);
+        return;
+      }
       setLogLoading(true);
       setErrorMessage(null);
       try {
@@ -216,20 +247,25 @@ const SystemLoginHistoryTab: React.FC = () => {
         setLogLoading(false);
       }
     },
-    [logFilters, t]
+    [hasAccess, logFilters, t]
   );
 
   useEffect(() => {
-    loadCompanies();
-  }, [loadCompanies]);
+    if (!accessChecked || !hasAccess) return;
+    void loadCompanies();
+  }, [accessChecked, hasAccess, loadCompanies]);
 
   useEffect(() => {
+    if (!hasAccess) {
+      setLoginLogs([]);
+      return;
+    }
     if (selectedCompanyId) {
       void loadLoginLogs(Number(selectedCompanyId));
     } else {
       setLoginLogs([]);
     }
-  }, [loadLoginLogs, selectedCompanyId]);
+  }, [hasAccess, loadLoginLogs, selectedCompanyId]);
 
   useEffect(() => {
     setPage(1);
@@ -308,6 +344,18 @@ const SystemLoginHistoryTab: React.FC = () => {
       { label: 'Company ID', value: log.company_id != null ? String(log.company_id) : '-' },
     ];
   }, [selectedLog, t]);
+
+  if (!accessChecked) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+        <CircularProgress size={28} />
+      </Box>
+    );
+  }
+
+  if (!hasAccess) {
+    return null;
+  }
 
   return (
     <Box>

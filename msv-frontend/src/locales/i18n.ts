@@ -62,15 +62,15 @@ const initialOsLang = detectOsLanguage();
 
 // 언어는 OS 기본값 → 사용자 UI 설정(API / 메뉴 스토어)으로 동기화
 i18n.use(initReactI18next).init({
-  resources: {
+    resources: {
     ko,
-  },
+    },
   lng: initialOsLang,
   fallbackLng: initialOsLang === 'en' ? 'en' : 'ko',
-  interpolation: {
+    interpolation: {
     escapeValue: false,
-  },
-  react: {
+    },
+    react: {
     useSuspense: false,
   },
 });

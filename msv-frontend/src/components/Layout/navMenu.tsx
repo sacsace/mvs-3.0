@@ -307,6 +307,8 @@ const getIconByRoute = (route: string): React.ReactElement | null => {
   if (normalized.includes('/accounting/expense')) return <AttachMoney />;
   if (normalized.includes('/accounting/assets')) return <AccountBalance />;
   if (normalized.includes('/accounting/statistics')) return <Assessment />;
+  if (normalized.includes('/accounting/corporate-tax')) return <Payments />;
+  if (normalized.includes('/accounting/advance-tax')) return <Payments />;
 
   if (normalized.includes('/customers/contracts')) return <Description />;
 

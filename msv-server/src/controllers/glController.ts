@@ -4,7 +4,6 @@ import { GlAccount, GlVoucher, GlVoucherLine } from '../models';
 import { RequestWithUser } from '../types';
 import {
   assertBalanced,
-  computeTotals,
   createGlVoucherWithLines,
   ensureDefaultChartOfAccounts,
   postVoucherToLedger,
@@ -19,42 +18,74 @@ const parseAmount = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-/** 손익·재무상태표: Tally 임포트 전표만 (draft 포함, 수동 전표 제외) */
-const buildTallyStatementVoucherWhere = (params: {
-  tenantId: number;
-  companyId: number;
-  dateField?: 'voucher_date';
-  from?: string;
-  to?: string;
-  asOf?: string;
-}) => {
-  const where: Record<string, unknown> = {
-    tenant_id: params.tenantId,
-    company_id: params.companyId,
-    is_active: true,
-    // 임포트는 draft로 생성되므로 draft+posted 모두 집계
-    status: { [Op.in]: ['draft', 'posted', 'approved', 'review_required'] },
-    input_mode: 'tally_import',
-  };
-
-  if (params.asOf) {
-    where.voucher_date = { [Op.lte]: params.asOf };
-  } else if (params.from || params.to) {
-    const range: Record<symbol, string> = {};
-    if (params.from) range[Op.gte] = params.from;
-    if (params.to) range[Op.lte] = params.to;
-    where.voucher_date = range;
-  }
-
-  return where;
-};
-
 /** Tally에서 가져온 계정과목만 (수동/한글 기본 COA 제외) */
 const tallyAccountWhereExtra = {
   [Op.or]: [
     { code: { [Op.iLike]: 'TLY%' } },
     { search_aliases: { [Op.iLike]: '%guid:%' } },
   ],
+};
+
+type LedgerMovement = { accountId: number; debit: number; credit: number };
+
+/**
+ * 전표 라인을 계정별로 한 번에 합산한다.
+ * 기존에는 계정 수만큼 전표 라인을 조회(N+1)해 재무제표가 느려졌다.
+ */
+const getLedgerMovements = async (params: {
+  tenantId: number;
+  companyId: number;
+  from?: string;
+  to?: string;
+  tallyOnly?: boolean;
+  postedOnly?: boolean;
+}): Promise<Map<number, LedgerMovement>> => {
+  const replacements: Record<string, unknown> = {
+    tenantId: params.tenantId,
+    companyId: params.companyId,
+  };
+  const clauses = [
+    'v.tenant_id = :tenantId',
+    'v.company_id = :companyId',
+    'v.is_active = true',
+  ];
+
+  if (params.tallyOnly) {
+    clauses.push("v.input_mode = 'tally_import'");
+    clauses.push("v.status IN ('draft', 'posted', 'approved', 'review_required')");
+  } else if (params.postedOnly) {
+    clauses.push("v.status = 'posted'");
+  }
+  if (params.from) {
+    clauses.push('v.voucher_date >= :from');
+    replacements.from = params.from;
+  }
+  if (params.to) {
+    clauses.push('v.voucher_date <= :to');
+    replacements.to = params.to;
+  }
+
+  const [rows] = await (GlVoucherLine as any).sequelize.query(
+    `SELECT
+       l.account_id AS "accountId",
+       COALESCE(SUM(l.debit), 0) AS debit,
+       COALESCE(SUM(l.credit), 0) AS credit
+     FROM gl_voucher_lines l
+     INNER JOIN gl_vouchers v ON v.id = l.voucher_id
+     WHERE ${clauses.join(' AND ')}
+     GROUP BY l.account_id`,
+    { replacements }
+  );
+
+  return new Map(
+    (rows as any[]).map((row) => {
+      const accountId = Number(row.accountId);
+      return [
+        accountId,
+        { accountId, debit: parseAmount(row.debit), credit: parseAmount(row.credit) },
+      ];
+    })
+  );
 };
 
 const buildAccountTree = (rows: any[]) => {
@@ -499,24 +530,22 @@ export const getTrialBalance = async (req: RequestWithUser, res: Response) => {
       order: [['code', 'ASC']],
     });
 
-    const voucherWhere: any = { tenant_id: tenantId, company_id: companyId, status: 'posted', is_active: true };
-    if (from || to) {
-      voucherWhere.voucher_date = {};
-      if (from) voucherWhere.voucher_date[Op.gte] = from;
-      if (to) voucherWhere.voucher_date[Op.lte] = to;
-    }
+    const movements = await getLedgerMovements({
+      tenantId,
+      companyId,
+      from,
+      to,
+      postedOnly: true,
+    });
 
     const rows = [];
     let totalDebit = 0;
     let totalCredit = 0;
 
     for (const account of accounts) {
-      const lines = await (GlVoucherLine as any).findAll({
-        where: { account_id: account.id },
-        include: [{ model: GlVoucher, as: 'voucher', required: true, where: voucherWhere }],
-      });
-      const debit = lines.reduce((sum: number, line: any) => sum + parseAmount(line.debit), 0);
-      const credit = lines.reduce((sum: number, line: any) => sum + parseAmount(line.credit), 0);
+      const movement = movements.get(Number(account.id));
+      const debit = movement?.debit || 0;
+      const credit = movement?.credit || 0;
       if (debit === 0 && credit === 0 && parseAmount(account.current_balance) === 0) continue;
       totalDebit += debit;
       totalCredit += credit;
@@ -580,11 +609,12 @@ export const getProfitAndLoss = async (req: RequestWithUser, res: Response) => {
       order: [['code', 'ASC']],
     });
 
-    const voucherWhere = buildTallyStatementVoucherWhere({
+    const movements = await getLedgerMovements({
       tenantId,
       companyId,
       from,
       to,
+      tallyOnly: true,
     });
 
     const incomeRows: any[] = [];
@@ -593,12 +623,9 @@ export const getProfitAndLoss = async (req: RequestWithUser, res: Response) => {
     let totalExpense = 0;
 
     for (const account of accounts) {
-      const lines = await (GlVoucherLine as any).findAll({
-        where: { account_id: account.id },
-        include: [{ model: GlVoucher, as: 'voucher', required: true, where: voucherWhere }],
-      });
-      const debit = lines.reduce((sum: number, line: any) => sum + parseAmount(line.debit), 0);
-      const credit = lines.reduce((sum: number, line: any) => sum + parseAmount(line.credit), 0);
+      const movement = movements.get(Number(account.id));
+      const debit = movement?.debit || 0;
+      const credit = movement?.credit || 0;
 
       const row = {
         accountId: account.id,
@@ -696,18 +723,20 @@ export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
     });
 
     // 재무상태표: Tally 기초잔액 + Tally 전표(draft 포함) 이동
-    const positionWhere = buildTallyStatementVoucherWhere({
+    const positionMovements = await getLedgerMovements({
       tenantId,
       companyId,
-      asOf,
+      to: asOf,
+      tallyOnly: true,
     });
 
     // 당기손익(자본 반영)용 기간 — from~asOf
-    const pnlWhere = buildTallyStatementVoucherWhere({
+    const pnlMovements = await getLedgerMovements({
       tenantId,
       companyId,
       from,
       to: asOf,
+      tallyOnly: true,
     });
 
     const applyDelta = (nature: string, debit: number, credit: number) =>
@@ -721,12 +750,9 @@ export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
     let totalEquity = 0;
 
     for (const account of accounts) {
-      const lines = await (GlVoucherLine as any).findAll({
-        where: { account_id: account.id },
-        include: [{ model: GlVoucher, as: 'voucher', required: true, where: positionWhere }],
-      });
-      const debit = lines.reduce((sum: number, line: any) => sum + parseAmount(line.debit), 0);
-      const credit = lines.reduce((sum: number, line: any) => sum + parseAmount(line.credit), 0);
+      const movement = positionMovements.get(Number(account.id));
+      const debit = movement?.debit || 0;
+      const credit = movement?.credit || 0;
       const opening = parseAmount(account.opening_balance);
       const amount = Number((opening + applyDelta(String(account.nature), debit, credit)).toFixed(2));
       if (amount === 0) continue;
@@ -769,12 +795,9 @@ export const getBalanceSheet = async (req: RequestWithUser, res: Response) => {
     let periodIncome = 0;
     let periodExpense = 0;
     for (const account of pnlAccounts) {
-      const lines = await (GlVoucherLine as any).findAll({
-        where: { account_id: account.id },
-        include: [{ model: GlVoucher, as: 'voucher', required: true, where: pnlWhere }],
-      });
-      const debit = lines.reduce((sum: number, line: any) => sum + parseAmount(line.debit), 0);
-      const credit = lines.reduce((sum: number, line: any) => sum + parseAmount(line.credit), 0);
+      const movement = pnlMovements.get(Number(account.id));
+      const debit = movement?.debit || 0;
+      const credit = movement?.credit || 0;
       if (account.nature === 'income') periodIncome += credit - debit;
       else periodExpense += debit - credit;
     }

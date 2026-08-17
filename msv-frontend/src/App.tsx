@@ -87,6 +87,8 @@ const ExpenseReceiptUpload = lazyPage(() => import('./pages/Accounting/ExpenseRe
 const GeneralLedger = lazyPage(() => import('./pages/Accounting/GeneralLedger'));
 const ProfitAndLoss = lazyPage(() => import('./pages/Accounting/ProfitAndLoss'));
 const BalanceSheet = lazyPage(() => import('./pages/Accounting/BalanceSheet'));
+const CorporateTax = lazyPage(() => import('./pages/Accounting/CorporateTax'));
+const AdvanceTax = lazyPage(() => import('./pages/Accounting/AdvanceTax'));
 const TallyImport = lazyPage(() => import('./pages/Accounting/TallyImport'));
 const ContractManagement = lazyPage(() => import('./pages/Sales/ContractManagement'));
 const RegularInvoice = lazyPage(() => import('./pages/Invoice/RegularInvoice'));
@@ -357,6 +359,8 @@ function App() {
             <Route path="accounting/trial-balance" element={<Navigate to="/accounting/books?tab=trial" replace />} />
             <Route path="accounting/profit-and-loss" element={<ProfitAndLoss />} />
             <Route path="accounting/balance-sheet" element={<BalanceSheet />} />
+            <Route path="accounting/corporate-tax" element={<CorporateTax />} />
+            <Route path="accounting/advance-tax" element={<AdvanceTax />} />
             <Route path="accounting/voucher-entry" element={<Navigate to="/accounting/tally-import" replace />} />
             <Route path="accounting/voucher-list" element={<Navigate to="/accounting/books?tab=vouchers" replace />} />
             <Route path="accounting/settings/masters" element={<Navigate to="/accounting/books" replace />} />

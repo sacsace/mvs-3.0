@@ -71,6 +71,8 @@ import {
   Visibility as VisibilityIcon,
   VisibilityOff as VisibilityOffIcon,
   Lock as LockOutlinedIcon,
+  AttachFile as AttachFileIcon,
+  OpenInNew as OpenInNewIcon,
 } from '@mui/icons-material';
 import { useSearchParams } from 'react-router-dom';
 import { useStore, useMenuStore } from '../../store';
@@ -275,29 +277,33 @@ function getAccordionFormSx(_theme: Theme) {
   return {
     '&:before': { display: 'none' },
     boxShadow: 'none',
-    border: '1px solid #E8EDF3',
+    border: '1px solid #CBD5E1',
     borderRadius: '8px',
-    mb: 2,
+    mb: 1,
     bgcolor: '#FFFFFF',
     overflow: 'hidden' as const,
     '&:last-of-type': { mb: 0 },
     '& .MuiAccordionSummary-root': {
-      minHeight: 44,
+      minHeight: '40px !important',
       py: 0,
-      px: 2,
-      bgcolor: '#F8FAFC',
-      borderBottom: '1px solid #E8EDF3',
+      px: 1.25,
+      bgcolor: '#E2E8F0',
+      borderBottom: '1px solid #CBD5E1',
       borderRadius: '8px 8px 0 0',
       '&.Mui-expanded': {
-        minHeight: 44,
-        borderBottom: '1px solid #E8EDF3',
+        minHeight: '40px !important',
+        borderBottom: '1px solid #CBD5E1',
       },
     },
-    '& .MuiAccordionSummary-content': { my: 1 },
+    '& .MuiAccordionSummary-content': {
+      my: '6px !important',
+      '&.Mui-expanded': { my: '6px !important' },
+    },
+    '& .MuiAccordionSummary-expandIconWrapper': { py: 0 },
     '& .MuiAccordionDetails-root': {
       pt: 2,
-      pb: 2.5,
-      px: 2,
+      pb: 1.25,
+      px: 1.25,
     },
     '&.MuiAccordion-root.Mui-expanded': {
       borderRadius: '8px',
@@ -309,16 +315,17 @@ function getAccordionFormSx(_theme: Theme) {
 }
 
 const userFormSectionTitleSx = {
-  fontSize: '0.9375rem',
+  fontSize: '0.8125rem',
   fontWeight: 700,
   letterSpacing: '-0.01em',
+  lineHeight: 1.25,
   color: 'text.primary',
 } as const;
 
 const highlightPayrollFieldsSx = {
   display: 'flex',
   flexDirection: 'column' as const,
-  gap: 2,
+  gap: 1.5,
   width: '100%',
   boxSizing: 'border-box' as const,
 };
@@ -342,7 +349,7 @@ const hrHintSx = {
 const highlightBankFieldsSx = {
   display: 'grid',
   gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-  gap: 2.5,
+  gap: 1.5,
   alignItems: 'flex-start',
   boxSizing: 'border-box' as const,
 };
@@ -361,6 +368,7 @@ type CareerEntry = {
   start_date: string;
   end_date: string;
   description: string;
+  certificate_url: string;
 };
 
 const emptyCareerEntry = (): CareerEntry => ({
@@ -369,6 +377,7 @@ const emptyCareerEntry = (): CareerEntry => ({
   start_date: '',
   end_date: '',
   description: '',
+  certificate_url: '',
 });
 
 const normalizeCareerForm = (raw: unknown): CareerEntry[] => {
@@ -376,6 +385,67 @@ const normalizeCareerForm = (raw: unknown): CareerEntry[] => {
   return raw.map((row: any) => ({
     company_name: String(row?.company_name ?? '').trim(),
     position: String(row?.position ?? '').trim(),
+    start_date: String(row?.start_date ?? '').trim(),
+    end_date: String(row?.end_date ?? '').trim(),
+    description: String(row?.description ?? '').trim(),
+    certificate_url: String(row?.certificate_url ?? '').trim(),
+  }));
+};
+
+type CertificateEntry = {
+  name: string;
+  issuer: string;
+  certificate_number: string;
+  issue_date: string;
+  expiry_date: string;
+  file_url: string;
+};
+
+const emptyCertificateEntry = (): CertificateEntry => ({
+  name: '',
+  issuer: '',
+  certificate_number: '',
+  issue_date: '',
+  expiry_date: '',
+  file_url: '',
+});
+
+const normalizeCertificateForm = (raw: unknown): CertificateEntry[] => {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((row: any) => ({
+    name: String(row?.name ?? '').trim(),
+    issuer: String(row?.issuer ?? '').trim(),
+    certificate_number: String(row?.certificate_number ?? '').trim(),
+    issue_date: String(row?.issue_date ?? '').trim(),
+    expiry_date: String(row?.expiry_date ?? '').trim(),
+    file_url: String(row?.file_url ?? '').trim(),
+  }));
+};
+
+type EducationEntry = {
+  school_name: string;
+  degree: string;
+  major: string;
+  start_date: string;
+  end_date: string;
+  description: string;
+};
+
+const emptyEducationEntry = (): EducationEntry => ({
+  school_name: '',
+  degree: '',
+  major: '',
+  start_date: '',
+  end_date: '',
+  description: '',
+});
+
+const normalizeEducationForm = (raw: unknown): EducationEntry[] => {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((row: any) => ({
+    school_name: String(row?.school_name ?? '').trim(),
+    degree: String(row?.degree ?? '').trim(),
+    major: String(row?.major ?? '').trim(),
     start_date: String(row?.start_date ?? '').trim(),
     end_date: String(row?.end_date ?? '').trim(),
     description: String(row?.description ?? '').trim(),
@@ -404,7 +474,7 @@ const UserManagement: React.FC = () => {
   const userDetailSectionTitleSx = useMemo(
     () => ({
       fontWeight: 600 as const,
-      fontSize: '1rem',
+      fontSize: '0.8125rem',
       color: theme.palette.mode === 'dark' ? alpha(theme.palette.common.white, 0.92) : theme.palette.grey[900]
     }),
     [theme]
@@ -474,6 +544,8 @@ const UserManagement: React.FC = () => {
   const [positions, setPositions] = useState<{ id: number; name: string; sort_order: number }[]>([]);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreviewUrl, setAvatarPreviewUrl] = useState('');
+  const [careerCertificateFiles, setCareerCertificateFiles] = useState<Record<number, File>>({});
+  const [certificateCopyFiles, setCertificateCopyFiles] = useState<Record<number, File>>({});
   const [existingAvatarUrl, setExistingAvatarUrl] = useState('');
   /** 0: 사용자 목록, 1: 사용자 추가/수정 폼, 2: 부서 관리, 3: 직책 관리 */
   const [pageTab, setPageTab] = useState<0 | 1 | 2 | 3>(0);
@@ -501,6 +573,8 @@ const UserManagement: React.FC = () => {
     bank_account: '',
     bank_ifsc: '',
     career_history: [] as CareerEntry[],
+    education_history: [] as EducationEntry[],
+    certificate_history: [] as CertificateEntry[],
     // 계정 정보
     userid: '',
     password: '',
@@ -530,6 +604,8 @@ const UserManagement: React.FC = () => {
     bank_account: string;
     bank_ifsc: string;
     career_history: CareerEntry[];
+    education_history: EducationEntry[];
+    certificate_history: CertificateEntry[];
     userid: string;
     password: string;
     role: string;
@@ -766,6 +842,8 @@ const UserManagement: React.FC = () => {
 
     setEditingUser(null);
     resetAvatarInput();
+    setCareerCertificateFiles({});
+    setCertificateCopyFiles({});
     setFormData({
       employee_number: '',
       username: prefillEmail.split('@')[0] || '',
@@ -788,6 +866,8 @@ const UserManagement: React.FC = () => {
       bank_account: '',
       bank_ifsc: '',
       career_history: [],
+      education_history: [],
+      certificate_history: [],
       userid: prefillEmail,
       password: '',
       role: 'user',
@@ -850,6 +930,8 @@ const UserManagement: React.FC = () => {
     }
     setEditingUser(null);
     resetAvatarInput();
+    setCareerCertificateFiles({});
+    setCertificateCopyFiles({});
     setFormData({
       employee_number: '',
       username: '',
@@ -872,6 +954,8 @@ const UserManagement: React.FC = () => {
       bank_account: '',
       bank_ifsc: '',
       career_history: [],
+      education_history: [],
+      certificate_history: [],
       userid: '',
       password: '',
       role: 'user',
@@ -890,6 +974,8 @@ const UserManagement: React.FC = () => {
   const handleEditUser = (user: User) => {
     setEditingUser(user);
     resetAvatarInput(user.avatar_url || '');
+    setCareerCertificateFiles({});
+    setCertificateCopyFiles({});
     setFormData({
       employee_number: (user as any).employee_number || '',
       username: user.username,
@@ -918,6 +1004,8 @@ const UserManagement: React.FC = () => {
       bank_account: normalizeBankAccountDigits((user as any).bank_account || ''),
       bank_ifsc: normalizeIfsc((user as any).bank_ifsc || ''),
       career_history: normalizeCareerForm((user as any).career_history),
+      education_history: normalizeEducationForm((user as any).education_history),
+      certificate_history: normalizeCertificateForm((user as any).certificate_history),
       userid: user.userid,
       password: '',
       role: user.role,
@@ -1162,6 +1250,12 @@ const UserManagement: React.FC = () => {
       submitData.career_history = normalizeCareerForm(submitData.career_history).filter(
         (row: CareerEntry) => row.company_name.length > 0
       );
+      submitData.education_history = normalizeEducationForm(submitData.education_history).filter(
+        (row: EducationEntry) => row.school_name.length > 0
+      );
+      submitData.certificate_history = normalizeCertificateForm(submitData.certificate_history).filter(
+        (row: CertificateEntry) => row.name.length > 0
+      );
 
       if (
         submitData.role === 'audit' &&
@@ -1222,7 +1316,41 @@ const UserManagement: React.FC = () => {
         }
       }
 
+      if (Object.keys(careerCertificateFiles).length && Number.isFinite(savedUserId)) {
+        const careerHistoryWithFiles = [...submitData.career_history];
+        await Promise.all(
+          Object.entries(careerCertificateFiles).map(async ([index, file]) => {
+            const certificateForm = new FormData();
+            certificateForm.append('certificate', file);
+            const response = await api.post(`/users/${savedUserId}/career-certificate`, certificateForm, {
+              headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            const row = careerHistoryWithFiles[Number(index)];
+            if (row) row.certificate_url = response.data?.data?.certificate_url || '';
+          })
+        );
+        await api.put(`/users/${savedUserId}`, { career_history: careerHistoryWithFiles });
+      }
+
+      if (Object.keys(certificateCopyFiles).length && Number.isFinite(savedUserId)) {
+        const certificateHistoryWithFiles = [...submitData.certificate_history];
+        await Promise.all(
+          Object.entries(certificateCopyFiles).map(async ([index, file]) => {
+            const certificateForm = new FormData();
+            certificateForm.append('certificate', file);
+            const response = await api.post(`/users/${savedUserId}/certificate-copy`, certificateForm, {
+              headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            const row = certificateHistoryWithFiles[Number(index)];
+            if (row) row.file_url = response.data?.data?.file_url || '';
+          })
+        );
+        await api.put(`/users/${savedUserId}`, { certificate_history: certificateHistoryWithFiles });
+      }
+
       resetAvatarInput();
+      setCareerCertificateFiles({});
+      setCertificateCopyFiles({});
       setSalaryUnlocked(false);
       setSalaryPasswordForSubmit('');
       setSalaryBaseline('');
@@ -1264,6 +1392,15 @@ const UserManagement: React.FC = () => {
     }
   };
 
+  const getGenderLabel = (g: string | undefined) => {
+    switch (g) {
+      case 'male': return t('userManagement.genderMale');
+      case 'female': return t('userManagement.genderFemale');
+      case 'other': return t('userManagement.genderOther');
+      default: return '';
+    }
+  };
+
   const getEmploymentTypeLabel = (type: string | undefined) => {
     switch (type) {
       case 'fulltime': return t('userManagement.empFulltime');
@@ -1271,17 +1408,32 @@ const UserManagement: React.FC = () => {
       case 'contract': return t('userManagement.empContract');
       case 'parttime': return t('userManagement.empParttime');
       case 'intern': return t('userManagement.empIntern');
-      default: return '-';
+      default: return '';
     }
   };
 
-  const getGenderLabel = (g: string | undefined) => {
-    switch (g) {
-      case 'male': return t('userManagement.genderMale');
-      case 'female': return t('userManagement.genderFemale');
-      case 'other': return t('userManagement.genderOther');
-      default: return '-';
-    }
+  const hasDetailValue = (value: unknown) => {
+    if (value == null) return false;
+    const text = String(value).trim();
+    return text.length > 0 && text !== '-' && text !== '—';
+  };
+
+  const renderDetailField = (
+    label: string,
+    value: React.ReactNode,
+    opts?: { show?: boolean; fullWidth?: boolean; valueSx?: SxProps<Theme> }
+  ) => {
+    if (opts?.show === false) return null;
+    return (
+      <Box sx={opts?.fullWidth ? { gridColumn: { xs: '1', sm: '1 / -1' } } : undefined}>
+        <Typography variant="body2" sx={userDetailLabelSx}>
+          {label}
+        </Typography>
+        <Typography variant="body1" sx={{ ...userDetailValueSx, ...(opts?.valueSx as object) }}>
+          {value}
+        </Typography>
+      </Box>
+    );
   };
 
   const getStatusColor = (status: string) => {
@@ -2254,15 +2406,15 @@ const UserManagement: React.FC = () => {
                   <Box sx={{
                     display: 'grid',
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 2.5,
+                    gap: 1.5,
                   }}>
                     <Box
                       sx={{
                         gridColumn: '1 / -1',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 2,
-                        p: 1.5,
+                        gap: 1.5,
+                        p: 1,
                         border: `1px dashed ${theme.palette.divider}`,
                         borderRadius: 2,
                       }}
@@ -2420,14 +2572,14 @@ const UserManagement: React.FC = () => {
               </Accordion>
 
               {/* 인사 정보 섹션 */}
-              <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
+              <Accordion sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography component="h3" sx={userFormSectionTitleSx}>
                     {t('userManagement.sectionHr')}
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                     <TextField
                       fullWidth
                       size="small"
@@ -2682,23 +2834,23 @@ const UserManagement: React.FC = () => {
               </Accordion>
 
               {/* 경력 정보 */}
-              <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
+              <Accordion sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography component="h3" sx={userFormSectionTitleSx}>
                     {t('userManagement.sectionCareer')}
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
                     {t('userManagement.careerHint')}
                   </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                     {(formData.career_history || []).map((entry, idx) => (
                       <Box
                         key={idx}
                         sx={{
                           border: `1px solid ${theme.palette.divider}`,
-                          p: 1.5,
+                          p: 1,
                           display: 'grid',
                           gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
                           gap: 1.5,
@@ -2772,6 +2924,50 @@ const UserManagement: React.FC = () => {
                           }}
                           sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}
                         />
+                        <Box
+                          sx={{
+                            gridColumn: { xs: '1', sm: '1 / -1' },
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                          }}
+                        >
+                          <Button
+                            component="label"
+                            size="small"
+                            variant="outlined"
+                            startIcon={<AttachFileIcon fontSize="small" />}
+                          >
+                            {t('userManagement.careerCertificateAttach')}
+                            <input
+                              hidden
+                              type="file"
+                              accept=".pdf,image/jpeg,image/png"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setCareerCertificateFiles((prev) => ({ ...prev, [idx]: file }));
+                                }
+                              }}
+                            />
+                          </Button>
+                          {careerCertificateFiles[idx]?.name ? (
+                            <Typography variant="caption" color="text.secondary">
+                              {careerCertificateFiles[idx].name}
+                            </Typography>
+                          ) : entry.certificate_url ? (
+                            <Button
+                              size="small"
+                              component="a"
+                              href={getUploadUrl(entry.certificate_url)}
+                              target="_blank"
+                              rel="noreferrer"
+                              startIcon={<OpenInNewIcon fontSize="small" />}
+                            >
+                              {t('userManagement.careerCertificateView')}
+                            </Button>
+                          ) : null}
+                        </Box>
                         <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
                           <Button
                             size="small"
@@ -2807,8 +3003,302 @@ const UserManagement: React.FC = () => {
                 </AccordionDetails>
               </Accordion>
 
+              {/* 학력 정보 */}
+              <Accordion sx={getAccordionFormSx(theme)}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography component="h3" sx={userFormSectionTitleSx}>
+                    {t('userManagement.sectionEducation')}
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+                    {t('userManagement.educationHint')}
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {(formData.education_history || []).map((entry, idx) => (
+                      <Box
+                        key={idx}
+                        sx={{
+                          border: `1px solid ${theme.palette.divider}`,
+                          p: 1,
+                          display: 'grid',
+                          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+                          gap: 1.5,
+                        }}
+                      >
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label={t('userManagement.educationSchool')}
+                          {...OUTLINED_FIELD}
+                          value={entry.school_name}
+                          onChange={(e) => {
+                            const next = [...formData.education_history];
+                            next[idx] = { ...next[idx], school_name: e.target.value };
+                            setFormData({ ...formData, education_history: next });
+                          }}
+                        />
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label={t('userManagement.educationDegree')}
+                          {...OUTLINED_FIELD}
+                          value={entry.degree}
+                          onChange={(e) => {
+                            const next = [...formData.education_history];
+                            next[idx] = { ...next[idx], degree: e.target.value };
+                            setFormData({ ...formData, education_history: next });
+                          }}
+                        />
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label={t('userManagement.educationMajor')}
+                          {...OUTLINED_FIELD}
+                          value={entry.major}
+                          onChange={(e) => {
+                            const next = [...formData.education_history];
+                            next[idx] = { ...next[idx], major: e.target.value };
+                            setFormData({ ...formData, education_history: next });
+                          }}
+                          sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}
+                        />
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type="date"
+                          label={t('userManagement.educationStartDate')}
+                          {...OUTLINED_FIELD}
+                          value={entry.start_date}
+                          onChange={(e) => {
+                            const next = [...formData.education_history];
+                            next[idx] = { ...next[idx], start_date: e.target.value };
+                            setFormData({ ...formData, education_history: next });
+                          }}
+                          InputLabelProps={{ shrink: true }}
+                        />
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type="date"
+                          label={t('userManagement.educationEndDate')}
+                          {...OUTLINED_FIELD}
+                          value={entry.end_date}
+                          onChange={(e) => {
+                            const next = [...formData.education_history];
+                            next[idx] = { ...next[idx], end_date: e.target.value };
+                            setFormData({ ...formData, education_history: next });
+                          }}
+                          InputLabelProps={{ shrink: true }}
+                          helperText={t('userManagement.educationEndDateHint')}
+                        />
+                        <TextField
+                          fullWidth
+                          size="small"
+                          multiline
+                          minRows={2}
+                          label={t('userManagement.educationDescription')}
+                          {...OUTLINED_FIELD}
+                          value={entry.description}
+                          onChange={(e) => {
+                            const next = [...formData.education_history];
+                            next[idx] = { ...next[idx], description: e.target.value };
+                            setFormData({ ...formData, education_history: next });
+                          }}
+                          sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}
+                        />
+                        <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                          <Button
+                            size="small"
+                            color="error"
+                            startIcon={<DeleteIcon fontSize="small" />}
+                            onClick={() =>
+                              setFormData({
+                                ...formData,
+                                education_history: formData.education_history.filter((_, i) => i !== idx),
+                              })
+                            }
+                          >
+                            {t('userManagement.educationRemove')}
+                          </Button>
+                        </Box>
+                      </Box>
+                    ))}
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<AddIcon fontSize="small" />}
+                      onClick={() =>
+                        setFormData({
+                          ...formData,
+                          education_history: [...(formData.education_history || []), emptyEducationEntry()],
+                        })
+                      }
+                      sx={{ alignSelf: 'flex-start', ...mvsBodyOutlinedBtnSx }}
+                    >
+                      {t('userManagement.educationAdd')}
+                    </Button>
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
+
+              {/* 자격증 정보 */}
+              <Accordion sx={getAccordionFormSx(theme)}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography component="h3" sx={userFormSectionTitleSx}>
+                    {t('userManagement.sectionCertificate')}
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
+                    {t('userManagement.certificateHint')}
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {(formData.certificate_history || []).map((entry, idx) => (
+                      <Box
+                        key={idx}
+                        sx={{
+                          border: `1px solid ${theme.palette.divider}`,
+                          p: 1,
+                          display: 'grid',
+                          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+                          gap: 1.5,
+                        }}
+                      >
+                        {([
+                          ['name', 'certificateName'],
+                          ['issuer', 'certificateIssuer'],
+                          ['certificate_number', 'certificateNumber'],
+                        ] as const).map(([field, label]) => (
+                          <TextField
+                            key={field}
+                            fullWidth
+                            size="small"
+                            label={t(`userManagement.${label}`)}
+                            {...OUTLINED_FIELD}
+                            value={entry[field]}
+                            onChange={(e) => {
+                              const next = [...formData.certificate_history];
+                              next[idx] = { ...next[idx], [field]: e.target.value };
+                              setFormData({ ...formData, certificate_history: next });
+                            }}
+                            sx={field === 'certificate_number' ? { gridColumn: { xs: '1', sm: '1 / -1' } } : undefined}
+                          />
+                        ))}
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type="date"
+                          label={t('userManagement.certificateIssueDate')}
+                          {...OUTLINED_FIELD}
+                          value={entry.issue_date}
+                          onChange={(e) => {
+                            const next = [...formData.certificate_history];
+                            next[idx] = { ...next[idx], issue_date: e.target.value };
+                            setFormData({ ...formData, certificate_history: next });
+                          }}
+                          InputLabelProps={{ shrink: true }}
+                        />
+                        <TextField
+                          fullWidth
+                          size="small"
+                          type="date"
+                          label={t('userManagement.certificateExpiryDate')}
+                          {...OUTLINED_FIELD}
+                          value={entry.expiry_date}
+                          onChange={(e) => {
+                            const next = [...formData.certificate_history];
+                            next[idx] = { ...next[idx], expiry_date: e.target.value };
+                            setFormData({ ...formData, certificate_history: next });
+                          }}
+                          InputLabelProps={{ shrink: true }}
+                        />
+                        <Box
+                          sx={{
+                            gridColumn: { xs: '1', sm: '1 / -1' },
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1,
+                          }}
+                        >
+                          <Button
+                            component="label"
+                            size="small"
+                            variant="outlined"
+                            startIcon={<AttachFileIcon fontSize="small" />}
+                          >
+                            {t('userManagement.certificateCopyAttach')}
+                            <input
+                              hidden
+                              type="file"
+                              accept=".pdf,image/jpeg,image/png"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setCertificateCopyFiles((prev) => ({ ...prev, [idx]: file }));
+                                }
+                              }}
+                            />
+                          </Button>
+                          {certificateCopyFiles[idx]?.name ? (
+                            <Typography variant="caption" color="text.secondary">
+                              {certificateCopyFiles[idx].name}
+                            </Typography>
+                          ) : entry.file_url ? (
+                            <Button
+                              size="small"
+                              component="a"
+                              href={getUploadUrl(entry.file_url)}
+                              target="_blank"
+                              rel="noreferrer"
+                              startIcon={<OpenInNewIcon fontSize="small" />}
+                            >
+                              {t('userManagement.certificateCopyView')}
+                            </Button>
+                          ) : null}
+                        </Box>
+                        <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                          <Button
+                            size="small"
+                            color="error"
+                            startIcon={<DeleteIcon fontSize="small" />}
+                            onClick={() => {
+                              setCertificateCopyFiles((prev) => {
+                                const next = { ...prev };
+                                delete next[idx];
+                                return next;
+                              });
+                              setFormData({
+                                ...formData,
+                                certificate_history: formData.certificate_history.filter((_, i) => i !== idx),
+                              });
+                            }}
+                          >
+                            {t('userManagement.certificateRemove')}
+                          </Button>
+                        </Box>
+                      </Box>
+                    ))}
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<AddIcon fontSize="small" />}
+                      onClick={() =>
+                        setFormData({
+                          ...formData,
+                          certificate_history: [...(formData.certificate_history || []), emptyCertificateEntry()],
+                        })
+                      }
+                      sx={{ alignSelf: 'flex-start', ...mvsBodyOutlinedBtnSx }}
+                    >
+                      {t('userManagement.certificateAdd')}
+                    </Button>
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
+
               {/* 개인 은행 계좌 */}
-              <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
+              <Accordion sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                   <Typography component="h3" sx={userFormSectionTitleSx}>
                     {t('userManagement.sectionBank')}
@@ -2870,7 +3360,7 @@ const UserManagement: React.FC = () => {
                   <Box sx={{
                     display: 'grid',
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-                    gap: 2.5,
+                    gap: 1.5,
                   }}>
                     {user?.role === 'root' && !editingUser && (
                       <TextField
@@ -3036,216 +3526,171 @@ const UserManagement: React.FC = () => {
           </Typography>
         </DialogTitle>
         <DialogContent dividers>
-          {selectedUser && (
+          {selectedUser && (() => {
+            const su = selectedUser as any;
+            const genderLabel = getGenderLabel(su.gender);
+            const phoneDisplay = formatPhoneDisplay(su.phone || '');
+            const emergencyPhoneDisplay = formatPhoneDisplay(su.emergency_phone || '');
+            const hireDateDisplay = su.hire_date
+              ? new Date(su.hire_date).toLocaleDateString(dateLocale)
+              : '';
+            const birthDateDisplay = su.birth_date
+              ? new Date(su.birth_date).toLocaleDateString(dateLocale)
+              : '';
+            const employmentLabel = getEmploymentTypeLabel(su.employment_type);
+            const positionLabel = formatPositionLabel(selectedUser.position, i18n.language);
+            const hasSalary =
+              Boolean(selectedUser.has_salary) ||
+              (su.salary != null && su.salary !== '');
+            const careers = normalizeCareerForm(su.career_history).filter((c) => c.company_name);
+            const educations = normalizeEducationForm(su.education_history).filter((e) => e.school_name);
+            const certificates = normalizeCertificateForm(su.certificate_history).filter((c) => c.name);
+            const hasBank =
+              hasDetailValue(su.bank_name) ||
+              hasDetailValue(su.bank_account) ||
+              hasDetailValue(su.bank_ifsc);
+            const hasHr =
+              hasDetailValue(hireDateDisplay) ||
+              hasDetailValue(employmentLabel) ||
+              hasDetailValue(selectedUser.department) ||
+              hasDetailValue(positionLabel) ||
+              hasSalary;
+
+            return (
             <Box>
-              {/* 기본 정보 */}
               <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6" sx={userDetailSectionTitleSx}>
+                  <Typography component="h3" sx={userDetailSectionTitleSx}>
                     {t('userManagement.sectionBasic')}
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Box sx={{ 
-                    display: 'grid', 
+                  <Box sx={{
+                    display: 'grid',
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
                     gap: 2.25,
                   }}>
-                    <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.profilePhoto')}
-                      </Typography>
-                      {(() => {
-                        const photoUrl = selectedUser.avatar_url
-                          ? getUploadUrl(selectedUser.avatar_url)
-                          : '';
-                        return (
-                          <Avatar
-                            src={photoUrl || undefined}
-                            alt={selectedUser.username}
-                            onClick={() => {
-                              if (photoUrl) setPhotoPreviewUrl(photoUrl);
-                            }}
-                            sx={{
-                              width: 96,
-                              height: 96,
-                              mt: 1,
-                              bgcolor: 'action.selected',
-                              fontSize: '2rem',
-                              cursor: photoUrl ? 'zoom-in' : 'default',
-                              transition: 'box-shadow 0.2s ease, transform 0.2s ease',
-                              ...(photoUrl
-                                ? {
-                                    '&:hover': {
-                                      boxShadow: 4,
-                                      transform: 'scale(1.03)',
-                                    },
-                                  }
-                                : {}),
-                            }}
-                          >
-                            {selectedUser.username?.trim().charAt(0).toUpperCase()}
-                          </Avatar>
-                        );
-                      })()}
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.employeeNumber')}
-                      </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>
-                        {(selectedUser as any).employee_number || '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.name')}
-                      </Typography>
-                      <Typography variant="body1" sx={{ ...userDetailValueSx, fontWeight: 600 }}>
-                        {selectedUser.username}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.dateOfBirth')}
-                      </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>
-                        {(selectedUser as any).birth_date 
-                          ? new Date((selectedUser as any).birth_date).toLocaleDateString(dateLocale)
-                          : '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.gender')}
-                      </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>
-                        {getGenderLabel((selectedUser as any).gender)}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.phoneNumber')}
-                      </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>
-                        {formatPhoneDisplay((selectedUser as any).phone || '') || '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.email')}
-                      </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>
-                        {selectedUser.email}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.paymentOfficer')}
-                      </Typography>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            checked={Boolean((selectedUser as any).is_payment_officer)}
-                            disabled
-                          />
-                        }
-                        label={(selectedUser as any).is_payment_officer ? t('userManagement.paymentOfficerAssigned') : t('userManagement.paymentOfficerNotAssigned')}
-                      />
-                    </Box>
-                    <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.address')}
-                      </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>
-                        {(selectedUser as any).address || '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.emergencyContactName')}
-                      </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>
-                        {(selectedUser as any).emergency_contact || '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.emergencyContactPhone')}
-                      </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>
-                        {formatPhoneDisplay((selectedUser as any).emergency_phone || '') || '-'}
-                      </Typography>
-                    </Box>
+                    {su.avatar_url ? (
+                      <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                        <Typography variant="body2" sx={userDetailLabelSx}>
+                          {t('userManagement.profilePhoto')}
+                        </Typography>
+                        {(() => {
+                          const photoUrl = getUploadUrl(su.avatar_url);
+                          return (
+                            <Avatar
+                              src={photoUrl || undefined}
+                              alt={selectedUser.username}
+                              onClick={() => {
+                                if (photoUrl) setPhotoPreviewUrl(photoUrl);
+                              }}
+                              sx={{
+                                width: 96,
+                                height: 96,
+                                mt: 1,
+                                bgcolor: 'action.selected',
+                                fontSize: '2rem',
+                                cursor: photoUrl ? 'zoom-in' : 'default',
+                                transition: 'box-shadow 0.2s ease, transform 0.2s ease',
+                                ...(photoUrl
+                                  ? {
+                                      '&:hover': {
+                                        boxShadow: 4,
+                                        transform: 'scale(1.03)',
+                                      },
+                                    }
+                                  : {}),
+                              }}
+                            >
+                              {selectedUser.username?.trim().charAt(0).toUpperCase()}
+                            </Avatar>
+                          );
+                        })()}
+                      </Box>
+                    ) : null}
+                    {renderDetailField(t('userManagement.employeeNumber'), su.employee_number, {
+                      show: hasDetailValue(su.employee_number),
+                    })}
+                    {renderDetailField(t('userManagement.name'), selectedUser.username, {
+                      show: hasDetailValue(selectedUser.username),
+                      valueSx: { fontWeight: 600 },
+                    })}
+                    {renderDetailField(t('userManagement.dateOfBirth'), birthDateDisplay, {
+                      show: hasDetailValue(birthDateDisplay),
+                    })}
+                    {renderDetailField(t('userManagement.gender'), genderLabel, {
+                      show: hasDetailValue(genderLabel),
+                    })}
+                    {renderDetailField(t('userManagement.phoneNumber'), phoneDisplay, {
+                      show: hasDetailValue(phoneDisplay),
+                    })}
+                    {renderDetailField(t('userManagement.email'), selectedUser.email, {
+                      show: hasDetailValue(selectedUser.email),
+                    })}
+                    {su.is_payment_officer ? (
+                      <Box>
+                        <Typography variant="body2" sx={userDetailLabelSx}>
+                          {t('userManagement.paymentOfficer')}
+                        </Typography>
+                        <FormControlLabel
+                          control={<Checkbox checked disabled />}
+                          label={t('userManagement.paymentOfficerAssigned')}
+                        />
+                      </Box>
+                    ) : null}
+                    {renderDetailField(t('userManagement.address'), su.address, {
+                      show: hasDetailValue(su.address),
+                      fullWidth: true,
+                    })}
+                    {renderDetailField(t('userManagement.emergencyContactName'), su.emergency_contact, {
+                      show: hasDetailValue(su.emergency_contact),
+                    })}
+                    {renderDetailField(
+                      t('userManagement.emergencyContactPhone'),
+                      emergencyPhoneDisplay,
+                      { show: hasDetailValue(emergencyPhoneDisplay) }
+                    )}
                   </Box>
                 </AccordionDetails>
               </Accordion>
 
-              {/* 인사 정보 */}
-              <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
+              {hasHr ? (
+              <Accordion sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6" sx={userDetailSectionTitleSx}>
+                  <Typography component="h3" sx={userDetailSectionTitleSx}>
                     {t('userManagement.sectionHr')}
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Box sx={{ 
-                    display: 'grid', 
+                  <Box sx={{
+                    display: 'grid',
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
                     gap: 2.25,
                   }}>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.hireDate')}
-                      </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>
-                        {(selectedUser as any).hire_date 
-                          ? new Date((selectedUser as any).hire_date).toLocaleDateString(dateLocale)
-                          : '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.employmentType')}
-                      </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>
-                        {getEmploymentTypeLabel((selectedUser as any).employment_type)}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.department')}
-                      </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>
-                        {selectedUser.department || '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.positionTitle')}
-                      </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>
-                        {formatPositionLabel(selectedUser.position, i18n.language) || '-'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.salary')}
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        <Typography variant="body1" sx={userDetailValueSx}>
-                          {viewSalaryRevealed != null && viewSalaryRevealed !== ''
-                            ? formatSalaryInr(viewSalaryRevealed)
-                            : selectedUser.has_salary ||
-                                ((selectedUser as any).salary != null &&
-                                  (selectedUser as any).salary !== '')
-                              ? t('userManagement.salaryMasked')
-                              : '-'}
+                    {renderDetailField(t('userManagement.hireDate'), hireDateDisplay, {
+                      show: hasDetailValue(hireDateDisplay),
+                    })}
+                    {renderDetailField(t('userManagement.employmentType'), employmentLabel, {
+                      show: hasDetailValue(employmentLabel),
+                    })}
+                    {renderDetailField(t('userManagement.department'), selectedUser.department, {
+                      show: hasDetailValue(selectedUser.department),
+                    })}
+                    {renderDetailField(t('userManagement.positionTitle'), positionLabel, {
+                      show: hasDetailValue(positionLabel),
+                    })}
+                    {hasSalary ? (
+                      <Box>
+                        <Typography variant="body2" sx={userDetailLabelSx}>
+                          {t('userManagement.salary')}
                         </Typography>
-                        {selectedUser.has_salary ||
-                        ((selectedUser as any).salary != null &&
-                          (selectedUser as any).salary !== '') ? (
-                          viewSalaryRevealed != null && viewSalaryRevealed !== '' ? (
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          <Typography variant="body1" sx={userDetailValueSx}>
+                            {viewSalaryRevealed != null && viewSalaryRevealed !== ''
+                              ? formatSalaryInr(viewSalaryRevealed)
+                              : t('userManagement.salaryMasked')}
+                          </Typography>
+                          {viewSalaryRevealed != null && viewSalaryRevealed !== '' ? (
                             <IconButton
                               size="small"
                               aria-label={t('personalSettings.salaryHide')}
@@ -3263,16 +3708,16 @@ const UserManagement: React.FC = () => {
                             >
                               <VisibilityIcon fontSize="small" />
                             </IconButton>
-                          )
-                        ) : null}
+                          )}
+                        </Box>
                       </Box>
-                    </Box>
+                    ) : null}
                     <Box sx={{ gridColumn: { xs: '1 / -1', sm: '1 / -1' } }}>
                       <Typography variant="body2" sx={userDetailLabelSx}>
                         {t('userManagement.otEligible')}
                       </Typography>
                       <Typography variant="body1" sx={userDetailValueSx}>
-                        {(selectedUser as any).ot_eligible !== false
+                        {su.ot_eligible !== false
                           ? t('userManagement.otEligibleYes')
                           : t('userManagement.otEligibleNo')}
                       </Typography>
@@ -3280,69 +3725,179 @@ const UserManagement: React.FC = () => {
                   </Box>
                 </AccordionDetails>
               </Accordion>
+              ) : null}
 
-              {/* 경력 정보 */}
-              <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
+              {careers.length > 0 ? (
+              <Accordion sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6" sx={userDetailSectionTitleSx}>
+                  <Typography component="h3" sx={userDetailSectionTitleSx}>
                     {t('userManagement.sectionCareer')}
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  {(() => {
-                    const careers = normalizeCareerForm((selectedUser as any).career_history).filter(
-                      (c) => c.company_name
-                    );
-                    if (careers.length === 0) {
-                      return (
-                        <Typography variant="body1" sx={userDetailValueSx}>
-                          {t('userManagement.careerEmpty')}
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {careers.map((c, idx) => (
+                      <Box
+                        key={idx}
+                        sx={{
+                          borderBottom:
+                            idx < careers.length - 1
+                              ? `1px solid ${theme.palette.divider}`
+                              : 'none',
+                          pb: idx < careers.length - 1 ? 1.5 : 0,
+                        }}
+                      >
+                        <Typography variant="body1" sx={{ ...userDetailValueSx, fontWeight: 600 }}>
+                          {c.company_name}
+                          {c.position ? ` · ${c.position}` : ''}
                         </Typography>
-                      );
-                    }
-                    return (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        {careers.map((c, idx) => (
-                          <Box
-                            key={idx}
-                            sx={{
-                              borderBottom:
-                                idx < careers.length - 1
-                                  ? `1px solid ${theme.palette.divider}`
-                                  : 'none',
-                              pb: idx < careers.length - 1 ? 1.5 : 0,
-                            }}
+                        {(c.start_date || c.end_date) ? (
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                            {(c.start_date
+                              ? new Date(c.start_date).toLocaleDateString(dateLocale)
+                              : '—') +
+                              ' ~ ' +
+                              (c.end_date
+                                ? new Date(c.end_date).toLocaleDateString(dateLocale)
+                                : t('userManagement.careerPresent'))}
+                          </Typography>
+                        ) : null}
+                        {c.description ? (
+                          <Typography variant="body2" sx={{ ...userDetailValueSx, mt: 0.75 }}>
+                            {c.description}
+                          </Typography>
+                        ) : null}
+                        {c.certificate_url ? (
+                          <Button
+                            size="small"
+                            component="a"
+                            href={getUploadUrl(c.certificate_url)}
+                            target="_blank"
+                            rel="noreferrer"
+                            startIcon={<OpenInNewIcon fontSize="small" />}
+                            sx={{ mt: 0.5 }}
                           >
-                            <Typography variant="body1" sx={{ ...userDetailValueSx, fontWeight: 600 }}>
-                              {c.company_name}
-                              {c.position ? ` · ${c.position}` : ''}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
-                              {(c.start_date
-                                ? new Date(c.start_date).toLocaleDateString(dateLocale)
-                                : '—') +
-                                ' ~ ' +
-                                (c.end_date
-                                  ? new Date(c.end_date).toLocaleDateString(dateLocale)
-                                  : t('userManagement.careerPresent'))}
-                            </Typography>
-                            {c.description ? (
-                              <Typography variant="body2" sx={{ ...userDetailValueSx, mt: 0.75 }}>
-                                {c.description}
-                              </Typography>
-                            ) : null}
-                          </Box>
-                        ))}
+                            {t('userManagement.careerCertificateView')}
+                          </Button>
+                        ) : null}
                       </Box>
-                    );
-                  })()}
+                    ))}
+                  </Box>
                 </AccordionDetails>
               </Accordion>
+              ) : null}
 
-              {/* 개인 은행 계좌 */}
-              <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
+              {educations.length > 0 ? (
+              <Accordion sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6" sx={userDetailSectionTitleSx}>
+                  <Typography component="h3" sx={userDetailSectionTitleSx}>
+                    {t('userManagement.sectionEducation')}
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {educations.map((e, idx) => (
+                      <Box
+                        key={idx}
+                        sx={{
+                          borderBottom:
+                            idx < educations.length - 1
+                              ? `1px solid ${theme.palette.divider}`
+                              : 'none',
+                          pb: idx < educations.length - 1 ? 1.25 : 0,
+                        }}
+                      >
+                        <Typography variant="body1" sx={{ ...userDetailValueSx, fontWeight: 600 }}>
+                          {e.school_name}
+                          {e.degree ? ` · ${e.degree}` : ''}
+                          {e.major ? ` · ${e.major}` : ''}
+                        </Typography>
+                        {(e.start_date || e.end_date) ? (
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                            {(e.start_date
+                              ? new Date(e.start_date).toLocaleDateString(dateLocale)
+                              : '—') +
+                              ' ~ ' +
+                              (e.end_date
+                                ? new Date(e.end_date).toLocaleDateString(dateLocale)
+                                : t('userManagement.educationPresent'))}
+                          </Typography>
+                        ) : null}
+                        {e.description ? (
+                          <Typography variant="body2" sx={{ ...userDetailValueSx, mt: 0.75 }}>
+                            {e.description}
+                          </Typography>
+                        ) : null}
+                      </Box>
+                    ))}
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
+              ) : null}
+
+              {certificates.length > 0 ? (
+              <Accordion sx={getAccordionFormSx(theme)}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography component="h3" sx={userDetailSectionTitleSx}>
+                    {t('userManagement.sectionCertificate')}
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    {certificates.map((c, idx) => (
+                      <Box
+                        key={idx}
+                        sx={{
+                          borderBottom:
+                            idx < certificates.length - 1
+                              ? `1px solid ${theme.palette.divider}`
+                              : 'none',
+                          pb: idx < certificates.length - 1 ? 1.25 : 0,
+                        }}
+                      >
+                        <Typography variant="body1" sx={{ ...userDetailValueSx, fontWeight: 600 }}>
+                          {c.name}
+                          {c.issuer ? ` · ${c.issuer}` : ''}
+                        </Typography>
+                        {c.certificate_number ? (
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                            {c.certificate_number}
+                          </Typography>
+                        ) : null}
+                        {(c.issue_date || c.expiry_date) ? (
+                          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                            {(c.issue_date
+                              ? new Date(c.issue_date).toLocaleDateString(dateLocale)
+                              : '—') +
+                              (c.expiry_date
+                                ? ` ~ ${new Date(c.expiry_date).toLocaleDateString(dateLocale)}`
+                                : '')}
+                          </Typography>
+                        ) : null}
+                        {c.file_url ? (
+                          <Button
+                            size="small"
+                            component="a"
+                            href={getUploadUrl(c.file_url)}
+                            target="_blank"
+                            rel="noreferrer"
+                            startIcon={<OpenInNewIcon fontSize="small" />}
+                            sx={{ mt: 0.5, alignSelf: 'flex-start' }}
+                          >
+                            {t('userManagement.certificateCopyView')}
+                          </Button>
+                        ) : null}
+                      </Box>
+                    ))}
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
+              ) : null}
+
+              {hasBank ? (
+              <Accordion sx={getAccordionFormSx(theme)}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Typography component="h3" sx={userDetailSectionTitleSx}>
                     {t('userManagement.sectionBank')}
                   </Typography>
                 </AccordionSummary>
@@ -3354,63 +3909,46 @@ const UserManagement: React.FC = () => {
                       gap: 2.25,
                     }}
                   >
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.bankName')}
-                      </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>{(selectedUser as any).bank_name || '—'}</Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.accountNumber')}
-                      </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>
-                        {(selectedUser as any).bank_account
-                          ? formatBankAccountDisplay(String((selectedUser as any).bank_account))
-                          : '—'}
-                      </Typography>
-                    </Box>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.ifscCode')}
-                      </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>
-                        {(selectedUser as any).bank_ifsc
-                          ? formatIfscDisplay(String((selectedUser as any).bank_ifsc))
-                          : '—'}
-                      </Typography>
-                    </Box>
+                    {renderDetailField(t('userManagement.bankName'), su.bank_name, {
+                      show: hasDetailValue(su.bank_name),
+                    })}
+                    {renderDetailField(
+                      t('userManagement.accountNumber'),
+                      formatBankAccountDisplay(String(su.bank_account || '')),
+                      { show: hasDetailValue(su.bank_account) }
+                    )}
+                    {renderDetailField(
+                      t('userManagement.ifscCode'),
+                      formatIfscDisplay(String(su.bank_ifsc || '')),
+                      { show: hasDetailValue(su.bank_ifsc) }
+                    )}
                   </Box>
                 </AccordionDetails>
               </Accordion>
+              ) : null}
 
-              {/* 계정 정보 */}
               <Accordion defaultExpanded sx={getAccordionFormSx(theme)}>
                 <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Typography variant="h6" sx={userDetailSectionTitleSx}>
+                  <Typography component="h3" sx={userDetailSectionTitleSx}>
                     {t('userManagement.sectionAccount')}
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
-                  <Box sx={{ 
-                    display: 'grid', 
+                  <Box sx={{
+                    display: 'grid',
                     gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
                     gap: 2.25,
                   }}>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.userId')}
-                      </Typography>
-                      <Typography variant="body1" sx={{ ...userDetailValueSx, fontWeight: 600 }}>
-                        {selectedUser.userid}
-                      </Typography>
-                    </Box>
+                    {renderDetailField(t('userManagement.userId'), selectedUser.userid, {
+                      show: hasDetailValue(selectedUser.userid),
+                      valueSx: { fontWeight: 600 },
+                    })}
                     <Box>
                       <Typography variant="body2" sx={userDetailLabelSx}>
                         {t('userManagement.roleLabel')}
                       </Typography>
-                      <Chip 
-                        label={getRoleLabel(selectedUser.role)} 
+                      <Chip
+                        label={getRoleLabel(selectedUser.role)}
                         color={getRoleColor(selectedUser.role) as any}
                         size="small"
                       />
@@ -3419,25 +3957,25 @@ const UserManagement: React.FC = () => {
                       <Typography variant="body2" sx={userDetailLabelSx}>
                         {t('userManagement.statusLabel')}
                       </Typography>
-                      <Chip 
-                        label={getStatusLabel(selectedUser.status)} 
+                      <Chip
+                        label={getStatusLabel(selectedUser.status)}
                         color={getStatusColor(selectedUser.status) as any}
                         size="small"
                       />
                     </Box>
-                    <Box>
-                      <Typography variant="body2" sx={userDetailLabelSx}>
-                        {t('userManagement.createdAt')}
-                      </Typography>
-                      <Typography variant="body1" sx={userDetailValueSx}>
-                        {new Date(selectedUser.created_at).toLocaleDateString(dateLocale)}
-                      </Typography>
-                    </Box>
+                    {renderDetailField(
+                      t('userManagement.createdAt'),
+                      selectedUser.created_at
+                        ? new Date(selectedUser.created_at).toLocaleDateString(dateLocale)
+                        : '',
+                      { show: Boolean(selectedUser.created_at) }
+                    )}
                   </Box>
                 </AccordionDetails>
               </Accordion>
             </Box>
-          )}
+            );
+          })()}
         </DialogContent>
         <DialogActions sx={{ p: 2, gap: 1 }}>
           <Button onClick={() => setOpenViewDialog(false)} sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600 }}>

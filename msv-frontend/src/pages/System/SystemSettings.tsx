@@ -54,6 +54,7 @@ import { useTranslation } from 'react-i18next';
 import { systemSettingsService } from '../../services/api';
 import { getUploadUrl } from '../../utils/uploadUrl';
 import { useStore, useMenuStore } from '../../store';
+import { canAccessSystemLoginHistory } from '../../utils/canAccessSystemLoginHistory';
 import SystemLoginHistoryTab from './SystemLoginHistoryTab';
 
 /** 시스템 설정 폼: 필드·섹션 간 여유 있는 줄간격 */
@@ -141,8 +142,26 @@ const SystemSettings: React.FC = () => {
   const { user } = useStore();
   const { language, setLanguage } = useMenuStore();
   const [settingsTab, setSettingsTab] = useState(0);
+  const [canAccessLoginHistory, setCanAccessLoginHistory] = useState(false);
   const canManageAll = user?.role === 'root' || user?.role === 'admin';
   const isRoot = user?.role === 'root';
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const allowed = await canAccessSystemLoginHistory(user);
+      if (!cancelled) setCanAccessLoginHistory(allowed);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.role, user?.company_id]);
+
+  useEffect(() => {
+    if (!canAccessLoginHistory && settingsTab !== 0) {
+      setSettingsTab(0);
+    }
+  }, [canAccessLoginHistory, settingsTab]);
   const [settings, setSettings] = useState({
     general: {
       companyName: 'MVS',
@@ -772,7 +791,10 @@ const SystemSettings: React.FC = () => {
         >
           <Tabs
             value={settingsTab}
-            onChange={(_, v) => setSettingsTab(v)}
+            onChange={(_, v) => {
+              if (v === 1 && !canAccessLoginHistory) return;
+              setSettingsTab(v);
+            }}
             sx={{
               minHeight: 40,
               '& .MuiTab-root': {
@@ -784,7 +806,9 @@ const SystemSettings: React.FC = () => {
             }}
           >
             <Tab label={t('systemSettings.tabs.basic')} />
-            <Tab label={t('systemSettings.tabs.systemLoginHistory')} />
+            {canAccessLoginHistory ? (
+              <Tab label={t('systemSettings.tabs.systemLoginHistory')} />
+            ) : null}
           </Tabs>
           {settingsTab === 0 ? (
             <Button
@@ -803,7 +827,7 @@ const SystemSettings: React.FC = () => {
       </Card>
 
       <Box sx={mvsBodyListZoneSx}>
-      {settingsTab === 1 && <SystemLoginHistoryTab />}
+      {settingsTab === 1 && canAccessLoginHistory ? <SystemLoginHistoryTab /> : null}
 
       {settingsTab === 0 && (
       <Box

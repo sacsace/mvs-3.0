@@ -106,6 +106,44 @@ const avatarUpload = multer({
   }
 });
 
+const careerCertificateDir = ensureUploadSubdir('career-certificates');
+const careerCertificateUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, careerCertificateDir),
+    filename: (req, file, cb) => {
+      const userId = String(req.params.id || 'user').replace(/\D/g, '') || 'user';
+      const ext = path.extname(file.originalname || '').toLowerCase() || '.pdf';
+      cb(null, `career_${userId}_${Date.now()}_${randomBytes(6).toString('hex')}${ext}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const allowed = new Set(['.pdf', '.jpg', '.jpeg', '.png']);
+    if (allowed.has(ext)) return cb(null, true);
+    cb(new Error('경력증명서는 PDF, JPG 또는 PNG 파일만 업로드할 수 있습니다.'));
+  },
+});
+
+const certificateCopyDir = ensureUploadSubdir('certificate-copies');
+const certificateCopyUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, certificateCopyDir),
+    filename: (req, file, cb) => {
+      const userId = String(req.params.id || 'user').replace(/\D/g, '') || 'user';
+      const ext = path.extname(file.originalname || '').toLowerCase() || '.pdf';
+      cb(null, `cert_${userId}_${Date.now()}_${randomBytes(6).toString('hex')}${ext}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const allowed = new Set(['.pdf', '.jpg', '.jpeg', '.png']);
+    if (allowed.has(ext)) return cb(null, true);
+    cb(new Error('자격증 사본은 PDF, JPG 또는 PNG 파일만 업로드할 수 있습니다.'));
+  },
+});
+
 // 회사명에서 약자 추출 함수
 const getCompanyAbbreviation = (companyName: string): string => {
   if (!companyName) return 'COMP';
@@ -208,7 +246,7 @@ const SELF_PROFILE_ATTRIBUTES = [
   'employee_number', 'birth_date', 'gender', 'phone', 'address',
   'emergency_contact', 'emergency_phone', 'avatar_url', 'company_id', 'session_version',
   'hire_date', 'employment_type', 'salary', 'bank_name', 'bank_account', 'bank_ifsc',
-  'ot_eligible', 'is_payment_officer', 'career_history', 'created_at', 'tenant_id',
+  'ot_eligible', 'is_payment_officer', 'career_history', 'education_history', 'certificate_history', 'created_at', 'tenant_id',
 ];
 
 const maskSalaryInUserPayload = (raw: any) => {
@@ -234,6 +272,7 @@ const sanitizeCareerHistory = (raw: unknown): Array<{
   start_date: string;
   end_date: string;
   description: string;
+  certificate_url: string;
 }> => {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -243,8 +282,52 @@ const sanitizeCareerHistory = (raw: unknown): Array<{
       start_date: String(row?.start_date ?? '').trim(),
       end_date: String(row?.end_date ?? '').trim(),
       description: String(row?.description ?? '').trim(),
+      certificate_url: String(row?.certificate_url ?? '').trim(),
     }))
     .filter((row) => row.company_name.length > 0);
+};
+
+const sanitizeCertificateHistory = (raw: unknown): Array<{
+  name: string;
+  issuer: string;
+  certificate_number: string;
+  issue_date: string;
+  expiry_date: string;
+  file_url: string;
+}> => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((row: any) => ({
+      name: String(row?.name ?? '').trim(),
+      issuer: String(row?.issuer ?? '').trim(),
+      certificate_number: String(row?.certificate_number ?? '').trim(),
+      issue_date: String(row?.issue_date ?? '').trim(),
+      expiry_date: String(row?.expiry_date ?? '').trim(),
+      file_url: String(row?.file_url ?? '').trim(),
+    }))
+    .filter((row) => row.name.length > 0);
+};
+
+/** 학력 배열 정규화 — 학교명이 있는 항목만 저장 */
+const sanitizeEducationHistory = (raw: unknown): Array<{
+  school_name: string;
+  degree: string;
+  major: string;
+  start_date: string;
+  end_date: string;
+  description: string;
+}> => {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((row: any) => ({
+      school_name: String(row?.school_name ?? '').trim(),
+      degree: String(row?.degree ?? '').trim(),
+      major: String(row?.major ?? '').trim(),
+      start_date: String(row?.start_date ?? '').trim(),
+      end_date: String(row?.end_date ?? '').trim(),
+      description: String(row?.description ?? '').trim(),
+    }))
+    .filter((row) => row.school_name.length > 0);
 };
 
 const verifyCurrentUserPassword = async (req: express.Request, password: unknown) => {
@@ -617,7 +700,7 @@ router.get('/', async (req, res) => {
       ...baseAttributes,
       'employee_number', 'birth_date', 'gender', 'phone', 'address',
       'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-      'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'career_history'
+      'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'career_history', 'education_history', 'certificate_history'
     ];
 
     let users: any[];
@@ -789,6 +872,70 @@ router.post(
   }
 );
 
+/** 경력증명서 파일 업로드 */
+router.post(
+  '/:id/career-certificate',
+  requireAdminRootOrUserMenuPermission('can_edit'),
+  careerCertificateUpload.single('certificate'),
+  async (req, res) => {
+    const uploadedPath = req.file?.path;
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: '첨부할 경력증명서 파일을 선택해주세요.' });
+      }
+      const targetUser = await (User as any).findOne({
+        where: { id: req.params.id, tenant_id: (req as any).user.tenant_id },
+        attributes: ['id'],
+      });
+      if (!targetUser) {
+        return res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
+      }
+      return res.json({
+        success: true,
+        data: {
+          certificate_url: `/uploads/career-certificates/${req.file.filename}`,
+          original_name: req.file.originalname,
+        },
+      });
+    } catch (error: any) {
+      if (uploadedPath) await fs.promises.unlink(uploadedPath).catch(() => undefined);
+      return res.status(500).json({ success: false, message: error.message || '경력증명서 업로드에 실패했습니다.' });
+    }
+  }
+);
+
+/** 자격증 사본 파일 업로드 */
+router.post(
+  '/:id/certificate-copy',
+  requireAdminRootOrUserMenuPermission('can_edit'),
+  certificateCopyUpload.single('certificate'),
+  async (req, res) => {
+    const uploadedPath = req.file?.path;
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: '첨부할 자격증 사본 파일을 선택해주세요.' });
+      }
+      const targetUser = await (User as any).findOne({
+        where: { id: req.params.id, tenant_id: (req as any).user.tenant_id },
+        attributes: ['id'],
+      });
+      if (!targetUser) {
+        return res.status(404).json({ success: false, message: '사용자를 찾을 수 없습니다.' });
+      }
+      return res.json({
+        success: true,
+        data: {
+          file_url: `/uploads/certificate-copies/${req.file.filename}`,
+          original_name: req.file.originalname,
+        },
+      });
+    } catch (error: any) {
+      if (uploadedPath) await fs.promises.unlink(uploadedPath).catch(() => undefined);
+      return res.status(500).json({ success: false, message: error.message || '자격증 사본 업로드에 실패했습니다.' });
+    }
+  }
+);
+
 // 사용자 상세 조회
 router.get('/:id', async (req, res) => {
   try {
@@ -827,7 +974,7 @@ router.get('/:id', async (req, res) => {
             ...baseAttributes,
             'employee_number', 'birth_date', 'gender', 'phone', 'address', 
             'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-            'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'career_history'
+            'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'career_history', 'education_history', 'certificate_history'
           ]
         });
         if (userWithHrFields) {
@@ -904,7 +1051,9 @@ router.post(
       bank_name, bank_account, bank_ifsc,
       is_payment_officer,
       ot_eligible,
-      career_history
+      career_history,
+      education_history,
+      certificate_history
     } = req.body;
 
     // 필수 필드 검증
@@ -1095,6 +1244,12 @@ router.post(
     if (career_history !== undefined) {
       userData.career_history = sanitizeCareerHistory(career_history);
     }
+    if (education_history !== undefined) {
+      userData.education_history = sanitizeEducationHistory(education_history);
+    }
+    if (certificate_history !== undefined) {
+      userData.certificate_history = sanitizeCertificateHistory(certificate_history);
+    }
 
     const user = await (User as any).create(userData);
 
@@ -1155,7 +1310,9 @@ router.put(
       bank_name, bank_account, bank_ifsc,
       is_payment_officer,
       ot_eligible,
-      career_history
+      career_history,
+      education_history,
+      certificate_history
     } = req.body;
 
     // root나 audit 권한이면 모든 사용자 조회 가능, 아니면 자신의 회사 사용자만
@@ -1187,7 +1344,7 @@ router.put(
               ...baseAttributes,
               'employee_number', 'birth_date', 'gender', 'phone', 'address', 
               'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-              'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'career_history'
+              'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'career_history', 'education_history', 'certificate_history'
             ]
           });
           if (userWithHrFields) {
@@ -1359,6 +1516,12 @@ router.put(
     if (career_history !== undefined) {
       updateData.career_history = sanitizeCareerHistory(career_history);
     }
+    if (education_history !== undefined) {
+      updateData.education_history = sanitizeEducationHistory(education_history);
+    }
+    if (certificate_history !== undefined) {
+      updateData.certificate_history = sanitizeCertificateHistory(certificate_history);
+    }
 
     // 비밀번호 변경 (있는 경우만)
     if (password) {
@@ -1411,7 +1574,7 @@ router.put(
             ...responseBaseAttributes,
             'employee_number', 'birth_date', 'gender', 'phone', 'address', 
             'emergency_contact', 'emergency_phone', 'hire_date', 'employment_type', 'salary',
-            'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'career_history'
+            'bank_name', 'bank_account', 'bank_ifsc', 'ot_eligible', 'career_history', 'education_history', 'certificate_history'
           ]
         });
         if (userWithHrFields) {
