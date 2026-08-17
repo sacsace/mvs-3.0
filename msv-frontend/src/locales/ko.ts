@@ -463,6 +463,8 @@ export default {
       placeholderEmployeeAuto: '비워두면 자동 생성됩니다',
       helperEmployeeAuto: '회사명 약자와 시퀀스 번호로 자동 생성됩니다',
       helperEmployeePending: '회사 선택 후 자동 생성된 번호가 표시됩니다',
+      helperEmployeeRootEditable: 'root만 사원번호를 직접 수정할 수 있습니다. 같은 회사 내 중복은 불가합니다.',
+      helperEmployeeRootCreate: '비워 두면 자동 발번됩니다. root는 직접 입력할 수도 있습니다.',
       dateOfBirth: '생년월일',
       gender: '성별',
       selectPlaceholder: '선택하세요',

@@ -463,6 +463,8 @@ export default {
       placeholderEmployeeAuto: 'Leave blank for auto-generation',
       helperEmployeeAuto: 'Auto-generated from company abbreviation and sequence number',
       helperEmployeePending: 'Select a company to preview the auto-generated number',
+      helperEmployeeRootEditable: 'Only root can edit employee numbers. Duplicates within the same company are not allowed.',
+      helperEmployeeRootCreate: 'Leave blank to auto-generate. Root may also enter a custom number.',
       dateOfBirth: 'Date of Birth',
       gender: 'Gender',
       selectPlaceholder: 'Select',

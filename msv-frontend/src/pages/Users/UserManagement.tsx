@@ -1382,7 +1382,12 @@ const UserManagement: React.FC = () => {
         if (user?.role === 'root' && (formData as { company_id?: number }).company_id) {
           submitData.company_id = (formData as { company_id?: number }).company_id;
         }
-        submitData.employee_number = '';
+        // root가 사원번호를 직접 입력하지 않으면 서버 자동 발번
+        if (!(user?.role === 'root' && String(submitData.employee_number || '').trim())) {
+          submitData.employee_number = '';
+        } else {
+          submitData.employee_number = String(submitData.employee_number).trim();
+        }
         const createResponse = await api.post('/users', submitData);
         savedUserId = Number(createResponse.data?.data?.id);
         setSuccess(t('userManagement.userCreated'));
@@ -2515,13 +2520,19 @@ const UserManagement: React.FC = () => {
                           ? t('common.loading')
                           : formData.employee_number
                       }
-                      disabled
+                      onChange={(e) => {
+                        if (user?.role !== 'root') return;
+                        setFormData({ ...formData, employee_number: e.target.value });
+                      }}
+                      disabled={user?.role !== 'root'}
                       helperText={
-                        !editingUser
-                          ? user?.role === 'root' && !(formData as { company_id?: number }).company_id
-                            ? t('userManagement.helperEmployeePending')
-                            : t('userManagement.helperEmployeeAuto')
-                          : ''
+                        user?.role === 'root'
+                          ? editingUser
+                            ? t('userManagement.helperEmployeeRootEditable')
+                            : t('userManagement.helperEmployeeRootCreate')
+                          : !editingUser
+                            ? t('userManagement.helperEmployeeAuto')
+                            : ''
                       }
                       sx={{
                         '& .MuiInputBase-input.Mui-disabled': {

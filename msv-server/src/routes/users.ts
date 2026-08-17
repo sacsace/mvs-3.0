@@ -1172,6 +1172,25 @@ router.post(
         // 회사 정보를 찾을 수 없는 경우 기본값
         finalEmployeeNumber = await generateEmployeeNumber(targetCompanyId, 'Company');
       }
+    } else {
+      finalEmployeeNumber = String(finalEmployeeNumber).trim();
+      // root가 직접 입력한 경우 같은 회사 내 중복 방지
+      if ((req as any).user.role === 'root') {
+        const duplicateEmp = await (User as any).findOne({
+          where: {
+            company_id: targetCompanyId,
+            employee_number: finalEmployeeNumber,
+            status: { [Op.ne]: 'inactive' },
+          },
+          attributes: ['id'],
+        });
+        if (duplicateEmp) {
+          return res.status(409).json({
+            success: false,
+            message: '같은 회사에 이미 사용 중인 사원번호입니다.',
+          });
+        }
+      }
     }
 
     // 날짜 필드 처리
@@ -1511,7 +1530,31 @@ router.put(
     } else if (position !== undefined) {
       updateData.position = position || null;
     }
-    if (employee_number !== undefined) updateData.employee_number = employee_number || null;
+    if (employee_number !== undefined) {
+      if (currentUserRole !== 'root') {
+        // 사원번호 변경은 root만 허용 (비-root 요청의 해당 필드는 무시)
+      } else {
+        const trimmedEmpNo = String(employee_number || '').trim();
+        if (trimmedEmpNo) {
+          const duplicateEmp = await (User as any).findOne({
+            where: {
+              company_id: effectiveCompanyId,
+              employee_number: trimmedEmpNo,
+              id: { [Op.ne]: id },
+              status: { [Op.ne]: 'inactive' },
+            },
+            attributes: ['id', 'employee_number'],
+          });
+          if (duplicateEmp) {
+            return res.status(409).json({
+              success: false,
+              message: '같은 회사에 이미 사용 중인 사원번호입니다.',
+            });
+          }
+        }
+        updateData.employee_number = trimmedEmpNo || null;
+      }
+    }
     if (birth_date !== undefined) updateData.birth_date = birth_date || null;
     if (gender !== undefined) updateData.gender = gender || null;
     if (phone !== undefined) updateData.phone = phone || null;
