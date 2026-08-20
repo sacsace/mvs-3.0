@@ -332,7 +332,7 @@ const CompanyManagement: React.FC = () => {
     login_period_end: '',
     login_time_start: '09:00:00',
     login_time_end: '18:00:00',
-    timezone: 'Asia/Seoul',
+    timezone: 'Asia/Kolkata',
     mvs_start_date: '',
     mvs_end_date: '',
     settings: {}
@@ -432,7 +432,7 @@ const CompanyManagement: React.FC = () => {
                 login_period_end: company.login_period_end || '',
                 login_time_start: company.login_time_start || '09:00:00',
                 login_time_end: company.login_time_end || '18:00:00',
-                timezone: company.timezone || 'Asia/Seoul',
+                timezone: company.timezone || 'Asia/Kolkata',
                 settings: company.settings || {}
               };
             });
@@ -470,7 +470,7 @@ const CompanyManagement: React.FC = () => {
                 login_period_end: company.login_period_end || '',
                 login_time_start: company.login_time_start || '09:00:00',
                 login_time_end: company.login_time_end || '18:00:00',
-                timezone: company.timezone || 'Asia/Seoul',
+                timezone: company.timezone || 'Asia/Kolkata',
                 settings: company.settings || {}
               };
               setCompanies([transformedCompany]);
@@ -534,7 +534,7 @@ const CompanyManagement: React.FC = () => {
       login_period_end: '',
       login_time_start: '09:00:00',
       login_time_end: '18:00:00',
-      timezone: 'Asia/Seoul',
+      timezone: 'Asia/Kolkata',
       mvs_start_date: '',
       mvs_end_date: '',
       settings: {}
@@ -744,7 +744,7 @@ const CompanyManagement: React.FC = () => {
           login_period_end: company.login_period_end || '',
           login_time_start: company.login_time_start || '09:00:00',
           login_time_end: company.login_time_end || '18:00:00',
-          timezone: company.timezone || 'Asia/Seoul',
+          timezone: company.timezone || 'Asia/Kolkata',
           settings: company.settings || {}
         }));
         
@@ -804,7 +804,7 @@ const CompanyManagement: React.FC = () => {
                 login_period_end: company.login_period_end || '',
                 login_time_start: company.login_time_start || '09:00:00',
                 login_time_end: company.login_time_end || '18:00:00',
-                timezone: company.timezone || 'Asia/Seoul',
+                timezone: company.timezone || 'Asia/Kolkata',
                 settings: company.settings || {}
               }));
 
@@ -856,7 +856,7 @@ const CompanyManagement: React.FC = () => {
               login_period_end: company.login_period_end || '',
               login_time_start: company.login_time_start || '09:00:00',
               login_time_end: company.login_time_end || '18:00:00',
-              timezone: company.timezone || 'Asia/Seoul',
+              timezone: company.timezone || 'Asia/Kolkata',
               settings: company.settings || {} }));
 
             setCompanies(transformedCompanies);

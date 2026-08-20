@@ -1,5 +1,6 @@
 import express from 'express';
 import { Request, Response } from 'express';
+import { Op } from 'sequelize';
 import { Partner, PartnerGstNumber } from '../models';
 import sequelize from '../config/database';
 import { authenticateToken } from '../middleware/auth';
@@ -21,6 +22,37 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const invalidatePartnersCache = async () => {
   await referenceCacheDel('ref:partners:*');
+};
+
+/** 동일 회사(tenant+company) 내 회사명 중복 — 정규화 후 대소문자 무시 */
+const findDuplicatePartnerByCompanyName = async ({
+  tenantId,
+  companyId,
+  companyName,
+  excludeId,
+}: {
+  tenantId: number;
+  companyId: number;
+  companyName: string;
+  excludeId?: number;
+}) => {
+  const normalized = normalizePartnerCompanyName(companyName);
+  if (!normalized) return null;
+  const where: Record<string, unknown> = {
+    tenant_id: tenantId,
+    company_id: companyId,
+    [Op.and]: sequelize.where(
+      sequelize.fn('lower', sequelize.col('company_name')),
+      normalized.toLowerCase()
+    ),
+  };
+  if (excludeId != null && Number.isFinite(excludeId) && excludeId > 0) {
+    where.id = { [Op.ne]: excludeId };
+  }
+  return (Partner as any).findOne({
+    where,
+    attributes: ['id', 'company_name', 'business_number', 'email', 'status'],
+  });
 };
 
 // Multer 설정 (메모리 스토리지)
@@ -185,11 +217,31 @@ router.post(
     }
 
     // 파트너 생성
+    const normalizedCompanyName = normalizePartnerCompanyName(partnerFormData.companyName);
+    const duplicateByName = await findDuplicatePartnerByCompanyName({
+      tenantId,
+      companyId,
+      companyName: normalizedCompanyName,
+    });
+    if (duplicateByName) {
+      return res.status(409).json({
+        success: false,
+        message: `이미 등록된 회사명입니다: ${duplicateByName.company_name}`,
+        code: 'DUPLICATE_COMPANY_NAME',
+        data: {
+          id: duplicateByName.id,
+          companyName: duplicateByName.company_name,
+          businessNumber: duplicateByName.business_number,
+          email: duplicateByName.email,
+        },
+      });
+    }
+
     const partner = await (Partner as any).create({
       ...partnerFormData,
       tenant_id: tenantId,
       company_id: companyId,
-      company_name: normalizePartnerCompanyName(partnerFormData.companyName),
+      company_name: normalizedCompanyName,
       business_number: partnerFormData.businessNumber,
       pan_number: partnerFormData.panNumber || null,
       representative: partnerFormData.representative || null,
@@ -353,10 +405,33 @@ router.put(
     }
 
     // 파트너 정보 업데이트
+    const nextCompanyName = partnerData.companyName
+      ? normalizePartnerCompanyName(partnerData.companyName)
+      : partner.company_name;
+    if (partnerData.companyName) {
+      const duplicateByName = await findDuplicatePartnerByCompanyName({
+        tenantId,
+        companyId,
+        companyName: nextCompanyName,
+        excludeId: Number(id),
+      });
+      if (duplicateByName) {
+        return res.status(409).json({
+          success: false,
+          message: `이미 등록된 회사명입니다: ${duplicateByName.company_name}`,
+          code: 'DUPLICATE_COMPANY_NAME',
+          data: {
+            id: duplicateByName.id,
+            companyName: duplicateByName.company_name,
+            businessNumber: duplicateByName.business_number,
+            email: duplicateByName.email,
+          },
+        });
+      }
+    }
+
     await partner.update({
-      company_name: partnerData.companyName
-        ? normalizePartnerCompanyName(partnerData.companyName)
-        : partner.company_name,
+      company_name: nextCompanyName,
       business_number: partnerData.businessNumber || partner.business_number,
       pan_number: partnerData.panNumber !== undefined ? partnerData.panNumber : partner.pan_number,
       representative: partnerData.representative !== undefined ? partnerData.representative : partner.representative,
@@ -678,6 +753,8 @@ router.post('/excel/import', authenticateToken, upload.single('file'), async (re
       failed: [] as any[],
       total: data.length
     };
+    const seenCompanyNames = new Set<string>();
+    const seenBusinessNumbers = new Set<string>();
 
     // 각 행 처리
     for (let i = 0; i < data.length; i++) {
@@ -719,11 +796,21 @@ router.post('/excel/import', authenticateToken, upload.single('file'), async (re
         }
 
         // 중복 사업자번호 확인
+        const businessNumber = row['사업자번호'].toString().trim();
+        if (seenBusinessNumbers.has(businessNumber.toLowerCase())) {
+          results.failed.push({
+            row: i + 2,
+            data: row,
+            error: '파일 내에 동일한 사업자번호가 중복되어 있습니다.',
+          });
+          continue;
+        }
+
         const existingPartner = await (Partner as any).findOne({
           where: {
             tenant_id: tenantId,
             company_id: companyId,
-            business_number: row['사업자번호'].toString().trim()
+            business_number: businessNumber
           }
         });
 
@@ -736,12 +823,37 @@ router.post('/excel/import', authenticateToken, upload.single('file'), async (re
           continue;
         }
 
+        const companyName = normalizePartnerCompanyName(row['회사명']);
+        const companyNameKey = companyName.toLowerCase();
+        if (seenCompanyNames.has(companyNameKey)) {
+          results.failed.push({
+            row: i + 2,
+            data: row,
+            error: `파일 내에 동일한 회사명이 중복되어 있습니다: ${companyName}`,
+          });
+          continue;
+        }
+
+        const duplicateByName = await findDuplicatePartnerByCompanyName({
+          tenantId,
+          companyId,
+          companyName,
+        });
+        if (duplicateByName) {
+          results.failed.push({
+            row: i + 2,
+            data: row,
+            error: `이미 등록된 회사명입니다: ${duplicateByName.company_name}`,
+          });
+          continue;
+        }
+
         // 파트너 생성
         const partner = await (Partner as any).create({
           tenant_id: tenantId,
           company_id: companyId,
-          company_name: normalizePartnerCompanyName(row['회사명']),
-          business_number: row['사업자번호'].toString().trim(),
+          company_name: companyName,
+          business_number: businessNumber,
           pan_number: row['PAN 번호'] ? row['PAN 번호'].toString().trim() : null,
           representative: row['대표자명'] ? row['대표자명'].toString().trim() : null,
           business_type: (row['업종'] && ['partner', 'customer', 'other'].includes(row['업종'].toString().toLowerCase())) 
@@ -779,6 +891,8 @@ router.post('/excel/import', authenticateToken, upload.single('file'), async (re
           companyName: row['회사명'],
           businessNumber: row['사업자번호']
         });
+        seenCompanyNames.add(companyNameKey);
+        seenBusinessNumbers.add(businessNumber.toLowerCase());
       } catch (error: any) {
         results.failed.push({
           row: i + 2,

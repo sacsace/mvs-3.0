@@ -484,6 +484,32 @@ const PartnerManagement: React.FC = () => {
     // Reflect normalized name in the form immediately
     setFormData((prev) => ({ ...prev, companyName: formDataWithValidGst.companyName }));
 
+    const duplicateInList = partners.find((p) => {
+      if (p.recordSource === 'room_guest') return false;
+      if (selectedPartner && p.id === selectedPartner.id) return false;
+      if (
+        isLegacyCustomer &&
+        selectedPartner?.recordSource === 'customer' &&
+        p.recordSource === 'customer' &&
+        p.sourceId === selectedPartner.sourceId
+      ) {
+        return false;
+      }
+      return (
+        normalizePartnerCompanyName(p.companyName).toLowerCase() ===
+        formDataWithValidGst.companyName.toLowerCase()
+      );
+    });
+    if (duplicateInList) {
+      setNotify({
+        message: t('partnerManagement.duplicateCompanyName', {
+          name: formDataWithValidGst.companyName,
+        }),
+        severity: 'warning',
+      });
+      return;
+    }
+
     try {
       if (isLegacyCustomer && selectedPartner?.sourceId) {
         const payload = {

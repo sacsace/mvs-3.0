@@ -41,6 +41,10 @@ import { ensureUploadRoot } from './utils/uploadPath';
 import { requestProfiler } from './middleware/requestProfiler';
 import { activityLogMiddleware } from './middleware/activityLogMiddleware';
 import { startLoginLogRetentionScheduler } from './services/loginLogRetentionService';
+import {
+  buildApiContentSecurityPolicy,
+  forceHttpsRedirect,
+} from './middleware/securityHeaders';
 
 // 환경 변수 검증 및 출력
 validateEnv();
@@ -97,6 +101,7 @@ connectDB()
 const socketService = new SocketService(server);
 
 // 미들웨어 설정
+app.use(forceHttpsRedirect);
 app.use(compression({
   filter: (req, res) => {
     if (req.path === '/health' || req.path === '/api/health') return false;
@@ -104,17 +109,54 @@ app.use(compression({
   },
   threshold: 1024,
 }));
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginResourcePolicy: { policy: 'cross-origin' }
-}));
-if (process.env.NODE_ENV === 'production') {
-  app.use(helmet.hsts({
-    maxAge: 31536000,
-    includeSubDomains: true,
-    preload: true
-  }));
-}
+/**
+ * 보안 응답 헤더 (Helmet) — 취약점 스캔(HSTS/클릭재킹/MIME/Referrer/COOP 등) 대응.
+ * - API CSP는 default-src none + frame-ancestors none
+ * - CORP cross-origin: FE↔BE 분리 도메인에서 업로드/리소스 허용
+ * - HSTS·HTTPS 리다이렉트는 production (또는 FORCE_HTTPS=1)
+ */
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: {
+        defaultSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+        baseUri: ["'none'"],
+        formAction: ["'none'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginOpenerPolicy: { policy: 'same-origin' },
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    frameguard: { action: 'deny' },
+    noSniff: true,
+    originAgentCluster: true,
+    dnsPrefetchControl: { allow: false },
+    permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+    hidePoweredBy: true,
+    hsts:
+      process.env.NODE_ENV === 'production' || process.env.FORCE_HTTPS === '1'
+        ? {
+            maxAge: 31536000,
+            includeSubDomains: true,
+            preload: true,
+          }
+        : false,
+  })
+);
+app.use((_req, res, next) => {
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
+  );
+  // helmet CSP와 중복되어도 스캐너·프록시 환경에서 누락 방지
+  if (!res.getHeader('Content-Security-Policy')) {
+    res.setHeader('Content-Security-Policy', buildApiContentSecurityPolicy());
+  }
+  next();
+});
 // CORS 설정 - 여러 origin 허용
 const getCorsOrigins = (): string[] => {
   // 환경 변수가 명시적으로 설정되어 있으면 사용

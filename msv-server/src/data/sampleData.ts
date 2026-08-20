@@ -69,7 +69,7 @@ export const sampleCompanies = [
     subscription_status: 'active',
     login_time_start: '09:00:00',
     login_time_end: '18:00:00',
-    timezone: 'Asia/Seoul',
+    timezone: 'Asia/Kolkata',
     settings: {}
   },
   {
@@ -86,7 +86,7 @@ export const sampleCompanies = [
     subscription_status: 'active',
     login_time_start: '09:00:00',
     login_time_end: '18:00:00',
-    timezone: 'Asia/Seoul',
+    timezone: 'Asia/Kolkata',
     settings: {}
   },
   {
@@ -103,7 +103,7 @@ export const sampleCompanies = [
     subscription_status: 'active',
     login_time_start: '09:00:00',
     login_time_end: '18:00:00',
-    timezone: 'Asia/Seoul',
+    timezone: 'Asia/Kolkata',
     settings: {}
   }
 ];

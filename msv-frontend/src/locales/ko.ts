@@ -1087,6 +1087,7 @@ export default {
       importLoading: '가져오는 중...',
       importButton: '가져오기',
       gstMinOneRequired: 'GST 번호를 최소 1개 이상 입력해주세요.',
+      duplicateCompanyName: '이미 등록된 회사명입니다: {{name}}',
       saveError: '파트너 저장 중 오류가 발생했습니다.',
       gstMaxTen: 'GST 번호는 최대 10개까지 등록할 수 있습니다.',
       gstMinOneNeeded: 'GST 번호는 최소 1개 이상 필요합니다.',
@@ -1947,7 +1948,10 @@ export default {
         deleteFailed: '카드 삭제에 실패했습니다.',
         noDeletePermission: '카드를 삭제할 권한이 없습니다.',
         commentPlaceholder: '댓글을 입력하세요',
-        noComments: '아직 댓글이 없습니다.'
+        noComments: '아직 댓글이 없습니다.',
+        copyLink: '링크 복사',
+        copyLinkSuccess: '작업 링크를 복사했습니다. 메신저·메일에 붙여넣어 공유하세요.',
+        copyLinkFailed: '링크 복사에 실패했습니다. 주소창의 URL을 직접 복사해 주세요.'
       },
       deleteConfirm: {
         title: '작업 보드 삭제',
@@ -3240,7 +3244,29 @@ export default {
     tallyImport: {
       title: 'Tally Data 불러오기',
       description:
-        'Tally에서 Export한 XML/JSON을 올려 계정과목·전표를 MSV로 가져옵니다. 전표는 임시(draft)로만 생성되며 자동 전기되지 않습니다.',
+        'Tally Export XML/JSON을 검토한 뒤 MVS 임시 전표로 변환합니다. 전표는 draft 상태로만 생성되며 자동 전기되지 않습니다.',
+      wizard: {
+        upload: '파일 업로드',
+        inspect: '파일 구조 확인',
+        mapping: '매핑',
+        review: '오류 검토',
+        preview: '전표 미리보기',
+        complete: '변환 완료',
+      },
+      steps: {
+        uploadTitle: '1. Tally 파일 업로드',
+        uploadHint: '지원 형식: XML, JSON · 최대 2GB. 파일은 구조 확인 후 서버에 보관하지 않습니다.',
+        inspectTitle: '2. 파일 구조 확인',
+        mappingTitle: '3. 임포트 옵션',
+        mappingHint: 'Tally Ledger·Voucher를 MVS 계정·전표로 가져올 범위와 자동 생성 규칙을 선택합니다.',
+        reviewTitle: '4. 오류 검토',
+        reviewClean: '현재 검증 범위에서 오류가 없습니다. 아래에서 전표를 확인한 뒤 임포트를 실행하세요.',
+        previewTitle: '5. 전표 미리보기',
+        completeTitle: '6. 변환 완료',
+        inspectButton: '파일 구조 확인',
+        reviewButton: '오류 검토 실행',
+        importButton: '임포트 실행',
+      },
       booksLink: '회계장부',
       moreTools: '관리·도구',
       selectFile: '파일 선택',
@@ -3268,6 +3294,7 @@ export default {
         fileReadyHint: '위에서 파싱 미리보기 · 시뮬레이션 · 임포트 실행을 진행하세요. 이슈는 리포트 탭에 모두 기록됩니다.',
       },
       emptyVouchers: '파일에서 전표를 찾지 못했습니다. Ledger만 포함된 Export일 수 있습니다.',
+      emptyLedgers: '파일에서 Ledger 목록을 찾지 못했습니다.',
       emptyIssues: '이슈 없음',
       emptyErrors: '실패 로그가 없습니다.',
       logFilter: {
@@ -3300,6 +3327,9 @@ export default {
         file: '파일',
       },
       columns: {
+        order: '순서',
+        ledgerName: 'Ledger 이름',
+        parent: '상위 그룹',
         date: '일자',
         type: '유형',
         number: '번호',
@@ -3340,6 +3370,7 @@ export default {
         import: '임포트에 실패했습니다.',
         reconciliation: '이관 대사에 실패했습니다.',
         fileTooLarge: '파일이 너무 큽니다. 최대 2GB까지 업로드할 수 있습니다.',
+        unsupportedFormat: 'XML 또는 JSON 파일만 업로드할 수 있습니다.',
         noLogToDownload: '다운로드할 리포트가 없습니다.',
       },
     },

@@ -210,7 +210,7 @@ Company.init(
     timezone: {
       type: DataTypes.STRING(50),
       allowNull: false,
-      defaultValue: 'Asia/Seoul'
+      defaultValue: 'Asia/Kolkata'
     },
     settings: {
       type: DataTypes.JSON,

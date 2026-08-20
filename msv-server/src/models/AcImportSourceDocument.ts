@@ -50,8 +50,8 @@ AcImportSourceDocument.init(
     tenant_id: { type: DataTypes.INTEGER, allowNull: false },
     company_id: { type: DataTypes.INTEGER, allowNull: false },
     source_system: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'sap' },
-    source_company_code: { type: DataTypes.STRING(50), allowNull: true },
-    fiscal_year: { type: DataTypes.STRING(20), allowNull: true },
+    source_company_code: { type: DataTypes.STRING(50), allowNull: true, defaultValue: '' },
+    fiscal_year: { type: DataTypes.STRING(20), allowNull: true, defaultValue: '' },
     source_document_number: { type: DataTypes.STRING(80), allowNull: false },
     source_document_key: { type: DataTypes.STRING(255), allowNull: false },
     source_posting_date: { type: DataTypes.DATEONLY, allowNull: true },
@@ -63,7 +63,22 @@ AcImportSourceDocument.init(
     source_correlation_id: { type: DataTypes.STRING(80), allowNull: false },
     is_active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
   },
-  { sequelize, tableName: 'ac_import_source_documents', underscored: true, timestamps: true }
+  {
+    sequelize,
+    tableName: 'ac_import_source_documents',
+    underscored: true,
+    timestamps: true,
+    hooks: {
+      beforeValidate: (row: AcImportSourceDocument) => {
+        if (row.source_company_code == null || row.source_company_code === '') {
+          row.source_company_code = row.source_system === 'tally' ? 'TALLY' : 'NA';
+        }
+        if (row.fiscal_year == null || row.fiscal_year === '') {
+          row.fiscal_year = 'NA';
+        }
+      },
+    },
+  }
 );
 
 export default AcImportSourceDocument;

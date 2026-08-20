@@ -357,7 +357,7 @@ export const register = async (req: Request, res: Response) => {
         login_period_end: usageEndDate,
         login_time_start: '00:00:00',
         login_time_end: '23:59:59',
-        timezone: 'Asia/Seoul',
+        timezone: 'Asia/Kolkata',
         settings: {
           onboarding: {
             initialized: true,

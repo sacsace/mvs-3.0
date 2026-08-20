@@ -1014,6 +1014,7 @@ export default {
       importLoading: 'Importing...',
       importButton: 'Import',
       gstMinOneRequired: 'Please enter at least one GST number.',
+      duplicateCompanyName: 'A company with this name already exists: {{name}}',
       saveError: 'An error occurred while saving the partner.',
       gstMaxTen: 'You can register up to 10 GST numbers.',
       gstMinOneNeeded: 'At least one GST number is required.',
@@ -1875,7 +1876,10 @@ export default {
         deleteFailed: 'Failed to delete card.',
         noDeletePermission: 'You do not have permission to delete cards.',
         commentPlaceholder: 'Write a comment',
-        noComments: 'No comments yet.'
+        noComments: 'No comments yet.',
+        copyLink: 'Copy link',
+        copyLinkSuccess: 'Task link copied. Paste it in chat or email to share.',
+        copyLinkFailed: 'Could not copy the link. Please copy the URL from the address bar.'
       },
       deleteConfirm: {
         title: 'Delete Work Board',
@@ -3168,7 +3172,29 @@ export default {
     tallyImport: {
       title: 'Load Tally Data',
       description:
-        'Upload a Tally Export (XML/JSON) to bring ledgers and vouchers into MSV. Vouchers are created as draft only and are never auto-posted.',
+        'Review a Tally Export (XML/JSON), then convert it into MVS draft vouchers.',
+      wizard: {
+        upload: 'File upload',
+        inspect: 'Structure check',
+        mapping: 'Mapping',
+        review: 'Review errors',
+        preview: 'Voucher preview',
+        complete: 'Complete',
+      },
+      steps: {
+        uploadTitle: '1. Tally file upload',
+        uploadHint: 'Supported formats: XML, JSON · Max 2GB. Files are not kept on the server after structure check.',
+        inspectTitle: '2. Structure check',
+        mappingTitle: '3. Import options',
+        mappingHint: 'Choose what to import from Tally and how unmatched ledgers/parties should be created in MVS.',
+        reviewTitle: '4. Review errors',
+        reviewClean: 'No errors in the current validation scope. Review vouchers below, then run import.',
+        previewTitle: '5. Voucher preview',
+        completeTitle: '6. Conversion complete',
+        inspectButton: 'Check structure',
+        reviewButton: 'Run error review',
+        importButton: 'Run import',
+      },
       booksLink: 'General Ledger',
       moreTools: 'Tools',
       selectFile: 'Select file',
@@ -3197,6 +3223,7 @@ export default {
           'Use Parse preview, Simulate, or Run import above. All issues are recorded in the Report tab.',
       },
       emptyVouchers: 'No vouchers found. The file may contain masters only.',
+      emptyLedgers: 'No ledger list found in the file.',
       emptyIssues: 'No issues',
       emptyErrors: 'No failure logs.',
       logFilter: {
@@ -3229,6 +3256,9 @@ export default {
         file: 'File',
       },
       columns: {
+        order: 'No.',
+        ledgerName: 'Ledger name',
+        parent: 'Parent group',
         date: 'Date',
         type: 'Type',
         number: 'Number',
@@ -3269,6 +3299,7 @@ export default {
         import: 'Import failed.',
         reconciliation: 'Migration reconciliation failed.',
         fileTooLarge: 'File is too large. Maximum upload size is 2GB.',
+        unsupportedFormat: 'Only XML or JSON files can be uploaded.',
         noLogToDownload: 'There is no report to download.',
       },
     },

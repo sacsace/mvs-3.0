@@ -3,40 +3,28 @@ import {
   Alert,
   Box,
   Button,
-  Card,
-  CardContent,
   Checkbox,
   Chip,
   CircularProgress,
   FormControlLabel,
-  ListItemIcon,
-  Menu,
-  MenuItem,
   Pagination,
+  Paper,
   Snackbar,
   Stack,
-  Tab,
-  Tabs,
   Table,
   TableBody,
   TableCell,
-  TableContainer,
   TableHead,
   TableRow,
   Tooltip,
   Typography,
-  useMediaQuery,
 } from '@mui/material';
-import { useTheme, type SxProps, type Theme } from '@mui/material/styles';
 import {
-  Assessment as ReportIcon,
+  CheckCircle as CheckCircleIcon,
   CloudUpload as UploadIcon,
   Download as DownloadIcon,
   MenuBook as BooksIcon,
-  MoreHoriz as MoreHorizIcon,
-  Preview as PreviewIcon,
   RestartAlt as ResetIcon,
-  Science as DryRunIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -46,22 +34,21 @@ import { useAccountingCompany } from '../../hooks/useAccountingCompany';
 import { accountingService } from '../../services/api';
 import {
   mvsBodyCardSx,
-  mvsBodyFilterWrapSx,
-  mvsBodyListTableSx,
-  mvsBodyListZoneSx,
   mvsBodyOutlinedBtnSx,
   mvsBodyPaginationSx,
   mvsBodyPrimaryBtnSx,
-  mvsKpiCardSx,
   mvsPageRootSx,
-  mvsTableBodyRowSx,
   mvsTableHeadHighlightSx,
-  mvsTableScrollSx,
 } from '../../theme/mvsLayout';
 
 const ROWS_PER_PAGE = 10;
 /** Keep in sync with server default `TALLY_IMPORT_MAX_MB` (2048 = 2GB) */
 const TALLY_IMPORT_MAX_BYTES = 2048 * 1024 * 1024;
+const SUPPORTED_EXTENSIONS = ['xml', 'json', 'txt'];
+const wizardTableSx = {
+  border: '1px solid #B4B4B4',
+  '& .MuiTableCell-root': { borderColor: '#B4B4B4' },
+} as const;
 
 const cellEllipsisSx = {
   overflow: 'hidden',
@@ -69,43 +56,6 @@ const cellEllipsisSx = {
   whiteSpace: 'nowrap',
   maxWidth: 0,
 } as const;
-
-const tableSx = {
-  width: '100%',
-  tableLayout: 'fixed' as const,
-  minWidth: 560,
-  borderCollapse: 'collapse',
-  bgcolor: 'transparent',
-  '& .MuiTableCell-root': {
-    borderLeft: 'none',
-    borderRight: 'none',
-    borderTop: 'none',
-  },
-} as const;
-
-const listStateBoxSx = {
-  ...mvsBodyListTableSx,
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  textAlign: 'center',
-  py: { xs: 6, sm: 8 },
-  px: 3,
-  gap: 1.5,
-} as const;
-
-const tableBodyRowSx: SxProps<Theme> = (theme) => {
-  const base = typeof mvsTableBodyRowSx === 'function' ? mvsTableBodyRowSx(theme) : mvsTableBodyRowSx;
-  const rowBg = theme.palette.mode === 'light' ? '#FFFFFF' : theme.palette.background.paper;
-  const hoverBg = theme.palette.mode === 'light' ? '#EFF6FF' : theme.palette.action.hover;
-  return {
-    ...(base as object),
-    '& .MuiTableRow-root:nth-of-type(odd)': { bgcolor: rowBg },
-    '& .MuiTableRow-root:nth-of-type(even)': { bgcolor: rowBg },
-    '& .MuiTableRow-root:hover': { bgcolor: hoverBg },
-  };
-};
 
 type PreviewData = {
   format: string;
@@ -157,8 +107,6 @@ type ReportIssue = {
   at: string;
 };
 
-type ListTab = 'preview' | 'report';
-
 type IssueLevelFilter = 'all' | 'error' | 'warn' | 'info';
 
 const ISSUE_LEVEL_ORDER: Record<string, number> = { error: 0, warn: 1, info: 2 };
@@ -195,9 +143,7 @@ const IssueLevelChip: React.FC<{ level: string; label: string }> = ({ level, lab
 
 const TallyImport: React.FC = () => {
   const { t } = useTranslation();
-  const theme = useTheme();
   const navigate = useNavigate();
-  const isCompactToolbar = useMediaQuery(theme.breakpoints.down('md'));
   const fileRef = useRef<HTMLInputElement>(null);
   const {
     canSelectCompany,
@@ -220,48 +166,25 @@ const TallyImport: React.FC = () => {
   const [result, setResult] = useState<ImportResult | null>(null);
   const [reconciliation, setReconciliation] = useState<ReconciliationData | null>(null);
   const [reportIssues, setReportIssues] = useState<ReportIssue[]>([]);
-  const [listTab, setListTab] = useState<ListTab>('preview');
   const [previewPage, setPreviewPage] = useState(1);
   const [issuesPage, setIssuesPage] = useState(1);
   const [issueLevelFilter, setIssueLevelFilter] = useState<IssueLevelFilter>('all');
-  const [toolbarMenuAnchor, setToolbarMenuAnchor] = useState<null | HTMLElement>(null);
+
+  const wizardSteps = useMemo(
+    () => [
+      t('tallyImport.wizard.upload'),
+      t('tallyImport.wizard.inspect'),
+      t('tallyImport.wizard.mapping'),
+      t('tallyImport.wizard.review'),
+      t('tallyImport.wizard.preview'),
+      t('tallyImport.wizard.complete'),
+    ],
+    [t]
+  );
 
   const booksHref = effectiveCompanyId
     ? `/accounting/books?tab=vouchers&company_id=${effectiveCompanyId}`
     : '/accounting/books?tab=vouchers';
-
-  const kpiItems = useMemo(() => {
-    if (result) {
-      return [
-        { key: 'ledgers', label: t('tallyImport.kpi.parsedLedgers'), value: result.parsed.ledgers },
-        { key: 'vouchers', label: t('tallyImport.kpi.parsedVouchers'), value: result.parsed.vouchers },
-        { key: 'createdAcc', label: t('tallyImport.kpi.createdAccounts'), value: result.ledgers.created },
-        { key: 'createdVch', label: t('tallyImport.kpi.createdVouchers'), value: result.vouchers.created },
-      ];
-    }
-    if (preview) {
-      return [
-        { key: 'ledgers', label: t('tallyImport.kpi.parsedLedgers'), value: preview.totals.ledgers },
-        { key: 'vouchers', label: t('tallyImport.kpi.parsedVouchers'), value: preview.totals.vouchers },
-        {
-          key: 'format',
-          label: t('tallyImport.kpi.format'),
-          value: String(preview.format || '-').toUpperCase(),
-        },
-        {
-          key: 'file',
-          label: t('tallyImport.kpi.file'),
-          value: file?.name ? '1' : '0',
-        },
-      ];
-    }
-    return [
-      { key: 'ledgers', label: t('tallyImport.kpi.parsedLedgers'), value: 0 },
-      { key: 'vouchers', label: t('tallyImport.kpi.parsedVouchers'), value: 0 },
-      { key: 'createdAcc', label: t('tallyImport.kpi.createdAccounts'), value: 0 },
-      { key: 'createdVch', label: t('tallyImport.kpi.createdVouchers'), value: 0 },
-    ];
-  }, [preview, result, file, t]);
 
   const previewRows = preview?.vouchers || [];
   const previewPageCount = Math.max(1, Math.ceil(previewRows.length / ROWS_PER_PAGE));
@@ -321,7 +244,6 @@ const TallyImport: React.FC = () => {
     setReportIssues((prev) => [...prev, ...rows]);
     setIssuesPage(1);
     if (opts?.switchToReport !== false) {
-      setListTab('report');
       const failed = rows.some((r) => r.level === 'error');
       setIssueLevelFilter(failed ? 'error' : 'all');
     }
@@ -335,7 +257,6 @@ const TallyImport: React.FC = () => {
     setPreviewPage(1);
     setIssuesPage(1);
     setIssueLevelFilter('all');
-    setListTab('preview');
   };
 
   const handleDownloadImportLog = async () => {
@@ -401,8 +322,6 @@ const TallyImport: React.FC = () => {
     }
   };
 
-  const closeToolbarMenu = () => setToolbarMenuAnchor(null);
-
   const handleReset = () => {
     setFile(null);
     setImportLedgers(true);
@@ -411,6 +330,22 @@ const TallyImport: React.FC = () => {
     setCreateMissingParties(true);
     clearSessionResults();
     if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const chooseFile = (selected: File | undefined) => {
+    setError('');
+    clearSessionResults();
+    if (!selected) return;
+    const extension = selected.name.split('.').pop()?.toLowerCase() || '';
+    if (!SUPPORTED_EXTENSIONS.includes(extension)) {
+      setError(t('tallyImport.errors.unsupportedFormat'));
+      return;
+    }
+    if (selected.size > TALLY_IMPORT_MAX_BYTES) {
+      setError(t('tallyImport.errors.fileTooLarge'));
+      return;
+    }
+    setFile(selected);
   };
 
   const buildFormData = (dryRun?: boolean) => {
@@ -442,7 +377,6 @@ const TallyImport: React.FC = () => {
       const res = await accountingService.previewTallyImport(fd, effectiveCompanyId);
       setPreview(res?.data || null);
       setPreviewPage(1);
-      setListTab('preview');
       const data = res?.data;
       appendReportIssues(
         'preview',
@@ -510,65 +444,17 @@ const TallyImport: React.FC = () => {
     }
   };
 
-  const secondaryActions = (
-    <>
-      <Button
-        variant="outlined"
-        size="small"
-        startIcon={<BooksIcon fontSize="small" />}
-        sx={mvsBodyOutlinedBtnSx}
-        onClick={() => navigate(booksHref)}
-      >
-        {t('tallyImport.booksLink')}
-      </Button>
-      <Button
-        variant="outlined"
-        size="small"
-        startIcon={<DryRunIcon fontSize="small" />}
-        sx={mvsBodyOutlinedBtnSx}
-        disabled={!file || loading}
-        onClick={() => handleImport(true)}
-      >
-        {t('tallyImport.dryRun')}
-      </Button>
-      <Button
-        variant="outlined"
-        size="small"
-        startIcon={<PreviewIcon fontSize="small" />}
-        sx={mvsBodyOutlinedBtnSx}
-        disabled={!file || loading}
-        onClick={handlePreview}
-      >
-        {t('tallyImport.preview')}
-      </Button>
-      <Button
-        variant={listTab === 'report' ? 'contained' : 'outlined'}
-        size="small"
-        startIcon={<ReportIcon fontSize="small" />}
-        sx={{
-          ...mvsBodyOutlinedBtnSx,
-          ...(listTab === 'report' ? { boxShadow: 'none', color: '#fff' } : {}),
-        }}
-        disabled={reportIssues.length === 0 && !result}
-        onClick={() => setListTab('report')}
-      >
-        {t('tallyImport.reportTab')}
-        {reportIssues.length > 0 ? ` (${reportIssues.length})` : ''}
-      </Button>
-      <Button
-        variant="outlined"
-        size="small"
-        startIcon={<ReportIcon fontSize="small" />}
-        sx={mvsBodyOutlinedBtnSx}
-        disabled={!result?.batchId || loading}
-        onClick={() => void handleReconciliation()}
-      >
-        {t('tallyImport.reconciliation')}
-      </Button>
-    </>
-  );
+  const activeStep = result && !result.dryRun
+    ? 5
+    : result?.dryRun || (preview && reportIssues.some((issue) => issue.source === 'dryRun'))
+      ? 3
+      : preview
+        ? 2
+        : 0;
 
-  const showList = Boolean(preview || result || reportIssues.length > 0);
+  const reviewIssueRows = reportIssues.filter((issue) => issue.source !== 'preview' || issue.level !== 'info');
+  const errorCount = reviewIssueRows.filter((issue) => issue.level === 'error').length;
+  const warnCount = reviewIssueRows.filter((issue) => issue.level === 'warn').length;
 
   return (
     <Box sx={mvsPageRootSx}>
@@ -582,629 +468,337 @@ const TallyImport: React.FC = () => {
         onChangeCompany={changeCompany}
       />
 
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr 1fr', md: 'repeat(4, 1fr)' },
-          gap: 2.5,
-          mb: 3,
-        }}
-      >
-        {kpiItems.map((item) => (
-          <Card key={item.key} elevation={0} sx={mvsKpiCardSx}>
-            <CardContent sx={{ py: 2.25, px: 2.5, '&:last-child': { pb: 2.25 } }}>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontWeight: 600, letterSpacing: '0.02em' }}
-              >
-                {item.label}
-              </Typography>
-              <Typography
-                variant="h5"
-                sx={{ mt: 0.75, fontWeight: 600, letterSpacing: '-0.02em', color: 'text.primary' }}
-              >
-                {loading ? '…' : item.value}
-              </Typography>
-            </CardContent>
-          </Card>
-        ))}
-      </Box>
-
-      {reconciliation && (
-        <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 2 }}>
-          <CardContent sx={{ py: 2, '&:last-child': { pb: 2 } }}>
-            <Stack spacing={1.25}>
-              <Alert severity={reconciliation.status === 'PASS' ? 'success' : 'warning'} variant="outlined">
-                {reconciliation.status === 'PASS'
-                  ? t('tallyImport.reconciliationPass')
-                  : t('tallyImport.reconciliationFail')}
-              </Alert>
-              <Typography variant="body2" color="text.secondary">
-                {reconciliation.note}
-              </Typography>
-              <TableContainer sx={{ border: '1px solid #D1D5DB' }}>
-                <Table size="small" sx={tableSx}>
-                  <TableHead sx={mvsTableHeadHighlightSx}>
-                    <TableRow>
-                      <TableCell>{t('tallyImport.reconciliationColumns.check')}</TableCell>
-                      <TableCell align="right">{t('tallyImport.reconciliationColumns.source')}</TableCell>
-                      <TableCell align="right">{t('tallyImport.reconciliationColumns.mvs')}</TableCell>
-                      <TableCell align="right">{t('tallyImport.reconciliationColumns.difference')}</TableCell>
-                      <TableCell>{t('tallyImport.reconciliationColumns.status')}</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    <TableRow sx={tableBodyRowSx}>
-                      <TableCell>{t('tallyImport.reconciliationChecks.voucherCount')}</TableCell>
-                      <TableCell align="right">{reconciliation.checks.voucherCount.source}</TableCell>
-                      <TableCell align="right">{reconciliation.checks.voucherCount.mvs}</TableCell>
-                      <TableCell align="right">-</TableCell>
-                      <TableCell>{reconciliation.checks.voucherCount.status}</TableCell>
-                    </TableRow>
-                    <TableRow sx={tableBodyRowSx}>
-                      <TableCell>{t('tallyImport.reconciliationChecks.debitTotal')}</TableCell>
-                      <TableCell align="right">{reconciliation.checks.debitTotal.source}</TableCell>
-                      <TableCell align="right">{reconciliation.checks.debitTotal.mvs}</TableCell>
-                      <TableCell align="right">{reconciliation.checks.debitTotal.difference}</TableCell>
-                      <TableCell>{reconciliation.checks.debitTotal.status}</TableCell>
-                    </TableRow>
-                    <TableRow sx={tableBodyRowSx}>
-                      <TableCell>{t('tallyImport.reconciliationChecks.creditTotal')}</TableCell>
-                      <TableCell align="right">{reconciliation.checks.creditTotal.source}</TableCell>
-                      <TableCell align="right">{reconciliation.checks.creditTotal.mvs}</TableCell>
-                      <TableCell align="right">{reconciliation.checks.creditTotal.difference}</TableCell>
-                      <TableCell>{reconciliation.checks.creditTotal.status}</TableCell>
-                    </TableRow>
-                    <TableRow sx={tableBodyRowSx}>
-                      <TableCell>{t('tallyImport.reconciliationChecks.ledgerMovements')}</TableCell>
-                      <TableCell align="right">-</TableCell>
-                      <TableCell align="right">-</TableCell>
-                      <TableCell align="right">{reconciliation.checks.ledgerMovements.differenceCount}</TableCell>
-                      <TableCell>{reconciliation.checks.ledgerMovements.status}</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Stack>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 0 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: { xs: 'column', md: 'row' },
-            flexWrap: 'wrap',
-            alignItems: { xs: 'stretch', md: 'center' },
-            justifyContent: { md: 'space-between' },
-            gap: { xs: 1.25, md: 1 },
-            px: { xs: 2, sm: 2.5 },
-            py: 1.5,
-            bgcolor: '#FFFFFF',
-          }}
-        >
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 1, minWidth: 0 }}>
-            {isCompactToolbar ? (
-              <>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<MoreHorizIcon fontSize="small" />}
-                  onClick={(e) => setToolbarMenuAnchor(e.currentTarget)}
-                  sx={mvsBodyOutlinedBtnSx}
-                >
-                  {t('tallyImport.moreTools')}
-                </Button>
-                <Menu
-                  anchorEl={toolbarMenuAnchor}
-                  open={Boolean(toolbarMenuAnchor)}
-                  onClose={closeToolbarMenu}
-                  anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-                  transformOrigin={{ vertical: 'top', horizontal: 'left' }}
-                  slotProps={{
-                    paper: {
-                      sx: {
-                        mt: 0.5,
-                        minWidth: 220,
-                        borderRadius: '8px',
-                        border: '1px solid #CBD5E1',
-                        boxShadow: '0 8px 24px rgba(15, 23, 42, 0.1)',
-                      },
-                    },
-                  }}
-                >
-                  <MenuItem
-                    onClick={() => {
-                      closeToolbarMenu();
-                      navigate(booksHref);
-                    }}
-                  >
-                    <ListItemIcon>
-                      <BooksIcon fontSize="small" />
-                    </ListItemIcon>
-                    {t('tallyImport.booksLink')}
-                  </MenuItem>
-                  <MenuItem
-                    disabled={!file || loading}
-                    onClick={() => {
-                      closeToolbarMenu();
-                      void handleImport(true);
-                    }}
-                  >
-                    <ListItemIcon>
-                      <DryRunIcon fontSize="small" />
-                    </ListItemIcon>
-                    {t('tallyImport.dryRun')}
-                  </MenuItem>
-                  <MenuItem
-                    disabled={!file || loading}
-                    onClick={() => {
-                      closeToolbarMenu();
-                      void handlePreview();
-                    }}
-                  >
-                    <ListItemIcon>
-                      <PreviewIcon fontSize="small" />
-                    </ListItemIcon>
-                    {t('tallyImport.preview')}
-                  </MenuItem>
-                  <MenuItem
-                    disabled={reportIssues.length === 0 && !result}
-                    onClick={() => {
-                      closeToolbarMenu();
-                      setListTab('report');
-                    }}
-                  >
-                    <ListItemIcon>
-                      <ReportIcon fontSize="small" />
-                    </ListItemIcon>
-                    {t('tallyImport.reportTab')}
-                    {reportIssues.length > 0 ? ` (${reportIssues.length})` : ''}
-                  </MenuItem>
-                  <MenuItem
-                    disabled={!result?.batchId || loading}
-                    onClick={() => {
-                      closeToolbarMenu();
-                      void handleReconciliation();
-                    }}
-                  >
-                    <ListItemIcon>
-                      <ReportIcon fontSize="small" />
-                    </ListItemIcon>
-                    {t('tallyImport.reconciliation')}
-                  </MenuItem>
-                </Menu>
-              </>
-            ) : (
-              secondaryActions
-            )}
-          </Box>
-          <Box
-            sx={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: 1,
-              flexShrink: 0,
-              width: { xs: '100%', md: 'auto' },
-              ml: { md: 'auto' },
-            }}
-          >
-            <Button
-              variant="contained"
-              disableElevation
-              size="small"
-              startIcon={
-                loading ? <CircularProgress size={16} color="inherit" /> : <UploadIcon fontSize="small" />
-              }
-              sx={mvsBodyPrimaryBtnSx}
-              disabled={!file || loading}
-              onClick={() => handleImport(false)}
-            >
-              {t('tallyImport.import')}
-            </Button>
-          </Box>
-        </Box>
-
-        <Box sx={mvsBodyFilterWrapSx}>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".xml,.json,.txt,application/xml,text/xml,application/json"
-            hidden
-            onChange={(e) => {
-              const next = e.target.files?.[0] || null;
-              setFile(next);
-              clearSessionResults();
-            }}
-          />
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: 'auto minmax(0, 1fr) auto' },
-              gap: 1.5,
-              alignItems: 'center',
-              mb: 1.5,
-            }}
-          >
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<UploadIcon fontSize="small" />}
-              sx={{ ...mvsBodyOutlinedBtnSx, height: 40 }}
-              onClick={() => fileRef.current?.click()}
-            >
-              {t('tallyImport.selectFile')}
-            </Button>
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                minWidth: 0,
-              }}
-              title={file?.name || undefined}
-            >
-              {file?.name || t('tallyImport.noFile')}
-            </Typography>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<ResetIcon fontSize="small" />}
-              onClick={handleReset}
-              sx={{
-                ...mvsBodyOutlinedBtnSx,
-                height: 40,
-                whiteSpace: 'nowrap',
-                width: { xs: '100%', sm: 'auto' },
-                minWidth: { sm: 120 },
-              }}
-            >
-              {t('common.reset')}
-            </Button>
-          </Box>
-
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: { xs: 0.5, sm: 1.5 }, alignItems: 'center' }}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={importLedgers}
-                  onChange={(e) => setImportLedgers(e.target.checked)}
-                  size="small"
-                />
-              }
-              label={
-                <Typography variant="body2" sx={{ fontSize: '0.8125rem' }}>
-                  {t('tallyImport.options.importLedgers')}
-                </Typography>
-              }
-              sx={{ mr: 1 }}
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={importVouchers}
-                  onChange={(e) => setImportVouchers(e.target.checked)}
-                  size="small"
-                />
-              }
-              label={
-                <Typography variant="body2" sx={{ fontSize: '0.8125rem' }}>
-                  {t('tallyImport.options.importVouchers')}
-                </Typography>
-              }
-              sx={{ mr: 1 }}
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={createMissingLedgers}
-                  onChange={(e) => setCreateMissingLedgers(e.target.checked)}
-                  size="small"
-                />
-              }
-              label={
-                <Typography variant="body2" sx={{ fontSize: '0.8125rem' }}>
-                  {t('tallyImport.options.createMissing')}
-                </Typography>
-              }
-              sx={{ mr: 1 }}
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={createMissingParties}
-                  onChange={(e) => setCreateMissingParties(e.target.checked)}
-                  size="small"
-                />
-              }
-              label={
-                <Typography variant="body2" sx={{ fontSize: '0.8125rem' }}>
-                  {t('tallyImport.options.createParties')}
-                </Typography>
-              }
-            />
-          </Box>
-
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5, lineHeight: 1.5 }}>
-            {t('tallyImport.hint')}
-          </Typography>
-        </Box>
-      </Card>
-
-      <Box sx={mvsBodyListZoneSx}>
-        {loading && !showList ? (
-          <Box sx={listStateBoxSx}>
-            <CircularProgress size={36} />
-            <Typography variant="body2" color="text.secondary">
-              {t('tallyImport.empty.loading')}
-            </Typography>
-          </Box>
-        ) : !showList && !file ? (
-          <Box sx={listStateBoxSx}>
-            <UploadIcon sx={{ fontSize: 40, color: 'text.disabled' }} />
-            <Typography variant="body1" color="text.secondary">
-              {t('tallyImport.empty.noItems')}
-            </Typography>
-            <Button
-              variant="contained"
-              disableElevation
-              size="small"
-              startIcon={<UploadIcon fontSize="small" />}
-              sx={mvsBodyPrimaryBtnSx}
-              onClick={() => fileRef.current?.click()}
-            >
-              {t('tallyImport.selectFile')}
-            </Button>
-          </Box>
-        ) : !showList && file ? (
-          <Box sx={listStateBoxSx}>
-            <UploadIcon sx={{ fontSize: 40, color: 'text.disabled' }} />
-            <Typography variant="body1" color="text.secondary" sx={{ px: 2, maxWidth: 480 }}>
-              {t('tallyImport.empty.fileReady', { name: file.name })}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {t('tallyImport.empty.fileReadyHint')}
-            </Typography>
-          </Box>
-        ) : (
-          <>
-            <Box sx={{ borderBottom: '1px solid #CBD5E1', bgcolor: '#fff', px: { xs: 1, sm: 1.5 } }}>
-              <Tabs
-                value={listTab}
-                onChange={(_e, v: ListTab) => setListTab(v)}
-                variant="scrollable"
-                scrollButtons="auto"
+      <Paper elevation={0} sx={{ ...mvsBodyCardSx, p: { xs: 1.25, sm: 2 }, mb: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'stretch', minWidth: 0, overflowX: 'auto' }}>
+          {wizardSteps.map((label, index) => {
+            const current = index === activeStep;
+            const completed = index < activeStep;
+            return (
+              <Box
+                key={label}
                 sx={{
-                  minHeight: 42,
-                  '& .MuiTab-root': { minHeight: 42, textTransform: 'none', fontWeight: 600 },
+                  minWidth: { xs: 116, sm: 138 },
+                  flex: 1,
+                  px: 1,
+                  py: 0.75,
+                  border: '1px solid',
+                  borderColor: current ? 'primary.main' : completed ? '#70AD47' : '#B4B4B4',
+                  borderLeftWidth: index === 0 ? 1 : 0,
+                  bgcolor: current ? '#C6EFCE' : '#FFFFFF',
+                  color: current ? 'text.primary' : 'text.secondary',
+                  fontSize: '0.75rem',
+                  fontWeight: current ? 700 : 500,
+                  whiteSpace: 'nowrap',
+                  textAlign: 'center',
                 }}
               >
-                <Tab
-                  value="preview"
-                  label={t('tallyImport.previewTab')}
-                  disabled={!preview}
-                />
-                <Tab
-                  value="report"
-                  label={`${t('tallyImport.reportTab')}${
-                    reportIssues.length > 0 ? ` (${reportIssues.length})` : ''
-                  }`}
-                  disabled={reportIssues.length === 0 && !result}
-                />
-              </Tabs>
-            </Box>
-
-            {listTab === 'preview' && preview && (
-              <Box sx={{ mb: 0 }}>
-                {previewRows.length === 0 ? (
-                  <Box sx={listStateBoxSx}>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('tallyImport.emptyVouchers')}
-                    </Typography>
-                  </Box>
-                ) : (
-                  <>
-                    <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
-                      <Table size="small" sx={tableSx}>
-                        <TableHead sx={mvsTableHeadHighlightSx}>
-                          <TableRow>
-                            <TableCell sx={{ width: '14%' }}>{renderEllipsis(t('tallyImport.columns.date'))}</TableCell>
-                            <TableCell sx={{ width: '16%' }}>{renderEllipsis(t('tallyImport.columns.type'))}</TableCell>
-                            <TableCell sx={{ width: '18%' }}>{renderEllipsis(t('tallyImport.columns.number'))}</TableCell>
-                            <TableCell sx={{ width: '12%' }}>{renderEllipsis(t('tallyImport.columns.lines'))}</TableCell>
-                            <TableCell sx={{ width: '20%' }} align="right">
-                              {renderEllipsis(t('tallyImport.columns.debit'))}
-                            </TableCell>
-                            <TableCell sx={{ width: '20%' }} align="right">
-                              {renderEllipsis(t('tallyImport.columns.credit'))}
-                            </TableCell>
-                          </TableRow>
-                        </TableHead>
-                        <TableBody sx={tableBodyRowSx}>
-                          {pagedPreview.map((v, idx) => (
-                            <TableRow key={`${v.voucherNumber}-${idx}`}>
-                              <TableCell sx={cellEllipsisSx}>{renderEllipsis(v.date)}</TableCell>
-                              <TableCell sx={cellEllipsisSx}>{renderEllipsis(v.voucherType)}</TableCell>
-                              <TableCell sx={cellEllipsisSx}>{renderEllipsis(v.voucherNumber)}</TableCell>
-                              <TableCell sx={cellEllipsisSx}>{v.lineCount}</TableCell>
-                              <TableCell align="right" sx={cellEllipsisSx}>
-                                {Number(v.totalDebit || 0).toLocaleString()}
-                              </TableCell>
-                              <TableCell align="right" sx={cellEllipsisSx}>
-                                {Number(v.totalCredit || 0).toLocaleString()}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                    {previewRows.length > ROWS_PER_PAGE && (
-                      <Box sx={mvsBodyPaginationSx}>
-                        <Pagination
-                          count={previewPageCount}
-                          page={previewPage}
-                          onChange={(_e, p) => setPreviewPage(p)}
-                          color="primary"
-                          shape="rounded"
-                          size="small"
-                        />
-                      </Box>
-                    )}
-                  </>
-                )}
+                {completed ? <CheckCircleIcon sx={{ fontSize: 15, mr: 0.45, verticalAlign: 'text-bottom' }} /> : null}
+                {index + 1}. {label}
               </Box>
-            )}
+            );
+          })}
+        </Box>
+      </Paper>
 
-            {listTab === 'report' && (
-              <Box>
-                {result && (
-                  <Alert
-                    severity={result.vouchers.failed > 0 ? 'warning' : 'success'}
-                    sx={{
-                      mb: 1.5,
-                      mt: 1.5,
-                      mx: { xs: 1.5, sm: 2 },
-                      borderRadius: '8px',
-                      border: '1px solid #CBD5E1',
-                      boxShadow: 'none',
-                    }}
-                  >
-                    {t('tallyImport.resultSummary', {
-                      matched: result.ledgers.matched,
-                      createdAcc: result.ledgers.created,
-                      createdVch: result.vouchers.created,
-                      skipped: result.vouchers.skipped,
-                      failed: result.vouchers.failed,
-                    })}
-                    {result.dryRun ? ` · ${t('tallyImport.resultDryRun')}` : ''}
-                  </Alert>
-                )}
-                <Stack
-                  direction="row"
-                  flexWrap="wrap"
-                  useFlexGap
-                  spacing={1}
-                  sx={{
-                    mb: 1.5,
-                    mt: result ? 0 : 1.5,
-                    px: { xs: 1.5, sm: 2 },
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  <Stack direction="row" flexWrap="wrap" useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ mr: 0.5 }}>
-                      {t('tallyImport.logFilter.label')}
-                    </Typography>
-                    {(
-                      [
-                        { key: 'all' as const, count: issueCounts.all },
-                        { key: 'error' as const, count: issueCounts.error },
-                        { key: 'warn' as const, count: issueCounts.warn },
-                        { key: 'info' as const, count: issueCounts.info },
-                      ] as const
-                    ).map(({ key, count }) => (
-                      <Button
-                        key={key}
-                        size="small"
-                        variant={issueLevelFilter === key ? 'contained' : 'outlined'}
-                        color={
-                          key === 'error'
-                            ? 'error'
-                            : key === 'warn'
-                              ? 'warning'
-                              : key === 'info'
-                                ? 'info'
-                                : 'inherit'
-                        }
-                        disabled={key !== 'all' && count === 0}
-                        onClick={() => {
-                          setIssueLevelFilter(key);
-                          setIssuesPage(1);
-                        }}
-                        sx={{
-                          ...mvsBodyOutlinedBtnSx,
-                          minWidth: 0,
-                          px: 1.25,
-                          ...(issueLevelFilter === key
-                            ? { boxShadow: 'none', color: '#fff' }
-                            : {}),
-                        }}
-                      >
-                        {t(`tallyImport.logFilter.${key}`)} ({count})
-                      </Button>
-                    ))}
-                  </Stack>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<DownloadIcon fontSize="small" />}
-                    disabled={issueRows.length === 0}
-                    onClick={handleDownloadImportLog}
-                    sx={mvsBodyOutlinedBtnSx}
-                  >
-                    {t('tallyImport.downloadLog')}
-                  </Button>
-                </Stack>
-                <TableContainer sx={{ ...mvsBodyListTableSx, ...mvsTableScrollSx, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
-                  <Table size="small" sx={tableSx}>
-                    <TableHead sx={mvsTableHeadHighlightSx}>
-                      <TableRow>
-                        <TableCell sx={{ width: '10%' }}>{renderEllipsis(t('tallyImport.columns.level'))}</TableCell>
-                        <TableCell sx={{ width: '12%' }}>{renderEllipsis(t('tallyImport.columns.source'))}</TableCell>
-                        <TableCell sx={{ width: '40%' }}>{renderEllipsis(t('tallyImport.columns.message'))}</TableCell>
-                        <TableCell sx={{ width: '38%' }}>{renderEllipsis(t('tallyImport.columns.context'))}</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody sx={tableBodyRowSx}>
-                      {pagedIssues.map((issue, idx) => (
-                        <TableRow key={`${issue.source}-${issue.level}-${issue.message}-${idx}`}>
-                          <TableCell>
-                            <IssueLevelChip level={issue.level} label={issueLevelLabel(issue.level)} />
-                          </TableCell>
-                          <TableCell sx={cellEllipsisSx}>
-                            {renderEllipsis(issueSourceLabel(issue.source))}
-                          </TableCell>
-                          <TableCell sx={cellEllipsisSx}>{renderEllipsis(issue.message)}</TableCell>
-                          <TableCell sx={cellEllipsisSx}>{renderEllipsis(issue.context || '-')}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-                {issueRows.length === 0 && (
-                  <Box sx={{ ...listStateBoxSx, mt: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      {issueLevelFilter === 'error'
-                        ? t('tallyImport.emptyErrors')
-                        : t('tallyImport.emptyIssues')}
-                    </Typography>
-                  </Box>
-                )}
-                {issueRows.length > ROWS_PER_PAGE && (
-                  <Box sx={mvsBodyPaginationSx}>
-                    <Pagination
-                      count={issuesPageCount}
-                      page={issuesPage}
-                      onChange={(_e, p) => setIssuesPage(p)}
-                      color="primary"
-                      shape="rounded"
+      <Paper elevation={0} sx={{ ...mvsBodyCardSx, p: { xs: 1.5, sm: 2 }, borderRadius: 0 }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.35 }}>
+          {t('tallyImport.steps.uploadTitle')}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          {t('tallyImport.steps.uploadHint')}
+        </Typography>
+        {error ? <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert> : null}
+        <Box sx={{ display: 'flex', alignItems: { xs: 'stretch', sm: 'center' }, flexDirection: { xs: 'column', sm: 'row' }, gap: 1 }}>
+          <Button variant="outlined" startIcon={<UploadIcon />} onClick={() => fileRef.current?.click()}>
+            {t('tallyImport.selectFile')}
+          </Button>
+          <input
+            ref={fileRef}
+            hidden
+            type="file"
+            accept=".xml,.json,.txt,application/xml,text/xml,application/json"
+            onChange={(event) => chooseFile(event.target.files?.[0])}
+          />
+          <Typography variant="body2" sx={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {file ? `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)` : t('tallyImport.noFile')}
+          </Typography>
+          <Button variant="outlined" startIcon={<ResetIcon fontSize="small" />} onClick={handleReset} sx={{ ...mvsBodyOutlinedBtnSx }}>
+            {t('common.reset')}
+          </Button>
+          <Button
+            variant="contained"
+            disableElevation
+            sx={{ ...mvsBodyPrimaryBtnSx, ml: { xs: 0, sm: 'auto' } }}
+            onClick={() => void handlePreview()}
+            disabled={!file || loading || !effectiveCompanyId}
+          >
+            {loading && !preview ? <CircularProgress size={18} color="inherit" /> : t('tallyImport.steps.inspectButton')}
+          </Button>
+        </Box>
+      </Paper>
+
+      {preview ? (
+        <Paper elevation={0} sx={{ ...mvsBodyCardSx, mt: 1.5, p: { xs: 1.5, sm: 2 }, borderRadius: 0 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 0.5 }}>
+            {t('tallyImport.steps.inspectTitle')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }}>
+            {preview.fileName || file?.name} · {String(preview.format || '-').toUpperCase()} · Ledger {preview.totals.ledgers} · Voucher {preview.totals.vouchers}
+          </Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 1, mb: 1.5 }}>
+            {[
+              [t('tallyImport.kpi.format'), String(preview.format || '-').toUpperCase()],
+              [t('tallyImport.kpi.parsedLedgers'), preview.totals.ledgers],
+              [t('tallyImport.kpi.parsedVouchers'), preview.totals.vouchers],
+              [t('tallyImport.kpi.file'), file?.name || '-'],
+            ].map(([label, value]) => (
+              <Box key={String(label)} sx={{ border: '1px solid #B4B4B4', px: 1, py: 0.75, bgcolor: '#FFFFFF' }}>
+                <Typography variant="caption" color="text.secondary">{label}</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</Typography>
+              </Box>
+            ))}
+          </Box>
+          {preview.ledgers.length > 0 ? (
+            <Table size="small" sx={wizardTableSx}>
+              <TableHead sx={mvsTableHeadHighlightSx}>
+                <TableRow>
+                  <TableCell width={60}>{t('tallyImport.columns.order')}</TableCell>
+                  <TableCell>{t('tallyImport.columns.ledgerName')}</TableCell>
+                  <TableCell>{t('tallyImport.columns.parent')}</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {preview.ledgers.slice(0, 20).map((ledger, index) => (
+                  <TableRow key={`${ledger.name}-${index}`}>
+                    <TableCell>{index + 1}</TableCell>
+                    <TableCell>{ledger.name}</TableCell>
+                    <TableCell>{ledger.parent || '-'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <Alert severity="info">{t('tallyImport.emptyLedgers')}</Alert>
+          )}
+
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mt: 2.5, mb: 0.5 }}>
+            {t('tallyImport.steps.mappingTitle')}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.25 }}>
+            {t('tallyImport.steps.mappingHint')}
+          </Typography>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: { xs: 0.5, sm: 1.5 }, alignItems: 'center', mb: 1.5 }}>
+            <FormControlLabel control={<Checkbox checked={importLedgers} onChange={(e) => setImportLedgers(e.target.checked)} size="small" />} label={<Typography variant="body2">{t('tallyImport.options.importLedgers')}</Typography>} />
+            <FormControlLabel control={<Checkbox checked={importVouchers} onChange={(e) => setImportVouchers(e.target.checked)} size="small" />} label={<Typography variant="body2">{t('tallyImport.options.importVouchers')}</Typography>} />
+            <FormControlLabel control={<Checkbox checked={createMissingLedgers} onChange={(e) => setCreateMissingLedgers(e.target.checked)} size="small" />} label={<Typography variant="body2">{t('tallyImport.options.createMissing')}</Typography>} />
+            <FormControlLabel control={<Checkbox checked={createMissingParties} onChange={(e) => setCreateMissingParties(e.target.checked)} size="small" />} label={<Typography variant="body2">{t('tallyImport.options.createParties')}</Typography>} />
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+            {t('tallyImport.hint')}
+          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button variant="contained" disableElevation sx={mvsBodyPrimaryBtnSx} onClick={() => void handleImport(true)} disabled={loading}>
+              {loading && !result ? <CircularProgress size={18} color="inherit" /> : t('tallyImport.steps.reviewButton')}
+            </Button>
+          </Box>
+        </Paper>
+      ) : null}
+
+      {result?.dryRun || result && !result.dryRun || reportIssues.some((issue) => issue.source === 'dryRun' || issue.source === 'import') ? (
+        <Paper elevation={0} sx={{ ...mvsBodyCardSx, mt: 1.5, p: { xs: 1.5, sm: 2 }, borderRadius: 0 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            {t('tallyImport.steps.reviewTitle')}
+          </Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(5, 1fr)' }, gap: 1, mb: 1.5 }}>
+            {[
+              [t('tallyImport.kpi.parsedLedgers'), preview?.totals.ledgers ?? result?.parsed.ledgers ?? 0],
+              [t('tallyImport.kpi.parsedVouchers'), preview?.totals.vouchers ?? result?.parsed.vouchers ?? 0],
+              [t('tallyImport.issueLevel.error'), errorCount],
+              [t('tallyImport.issueLevel.warn'), warnCount],
+              [t('tallyImport.logFilter.all'), reviewIssueRows.length],
+            ].map(([label, value]) => (
+              <Box key={String(label)} sx={{ border: '1px solid #B4B4B4', px: 1, py: 0.75, bgcolor: '#FFFFFF' }}>
+                <Typography variant="caption" color="text.secondary">{label}</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 700 }}>{value}</Typography>
+              </Box>
+            ))}
+          </Box>
+          {reviewIssueRows.length === 0 ? (
+            <Alert severity="success">{t('tallyImport.steps.reviewClean')}</Alert>
+          ) : (
+            <>
+              <Stack direction="row" flexWrap="wrap" useFlexGap spacing={1} sx={{ mb: 1.25, alignItems: 'center', justifyContent: 'space-between' }}>
+                <Stack direction="row" flexWrap="wrap" useFlexGap spacing={1} sx={{ alignItems: 'center' }}>
+                  {(['all', 'error', 'warn', 'info'] as const).map((key) => (
+                    <Button
+                      key={key}
                       size="small"
-                    />
-                  </Box>
-                )}
-              </Box>
-            )}
-          </>
-        )}
-      </Box>
+                      variant={issueLevelFilter === key ? 'contained' : 'outlined'}
+                      disabled={key !== 'all' && issueCounts[key] === 0}
+                      onClick={() => { setIssueLevelFilter(key); setIssuesPage(1); }}
+                      sx={{ ...mvsBodyOutlinedBtnSx, minWidth: 0, px: 1.25, ...(issueLevelFilter === key ? { boxShadow: 'none', color: '#fff' } : {}) }}
+                    >
+                      {t(`tallyImport.logFilter.${key}`)} ({issueCounts[key]})
+                    </Button>
+                  ))}
+                </Stack>
+                <Button size="small" variant="outlined" startIcon={<DownloadIcon fontSize="small" />} disabled={reportIssues.length === 0} onClick={() => void handleDownloadImportLog()} sx={mvsBodyOutlinedBtnSx}>
+                  {t('tallyImport.downloadLog')}
+                </Button>
+              </Stack>
+              <Table size="small" sx={wizardTableSx}>
+                <TableHead sx={mvsTableHeadHighlightSx}>
+                  <TableRow>
+                    <TableCell width={95}>{t('tallyImport.columns.level')}</TableCell>
+                    <TableCell width={95}>{t('tallyImport.columns.source')}</TableCell>
+                    <TableCell>{t('tallyImport.columns.message')}</TableCell>
+                    <TableCell>{t('tallyImport.columns.context')}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {pagedIssues.map((issue, idx) => (
+                    <TableRow key={`${issue.source}-${issue.level}-${idx}`}>
+                      <TableCell><IssueLevelChip level={issue.level} label={issueLevelLabel(issue.level)} /></TableCell>
+                      <TableCell sx={cellEllipsisSx}>{renderEllipsis(issueSourceLabel(issue.source))}</TableCell>
+                      <TableCell sx={cellEllipsisSx}>{renderEllipsis(issue.message)}</TableCell>
+                      <TableCell sx={cellEllipsisSx}>{renderEllipsis(issue.context || '-')}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {issueRows.length > ROWS_PER_PAGE ? (
+                <Box sx={mvsBodyPaginationSx}>
+                  <Pagination count={issuesPageCount} page={issuesPage} onChange={(_e, p) => setIssuesPage(p)} color="primary" shape="rounded" size="small" />
+                </Box>
+              ) : null}
+            </>
+          )}
+          {result?.dryRun ? (
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1.5, gap: 1 }}>
+              <Button variant="contained" disableElevation sx={mvsBodyPrimaryBtnSx} onClick={() => void handleImport(false)} disabled={loading || errorCount > 0}>
+                {loading ? <CircularProgress size={18} color="inherit" /> : t('tallyImport.steps.importButton')}
+              </Button>
+            </Box>
+          ) : null}
+        </Paper>
+      ) : null}
 
+      {preview ? (
+        <Paper elevation={0} sx={{ ...mvsBodyCardSx, mt: 1.5, p: { xs: 1.5, sm: 2 }, borderRadius: 0 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            {t('tallyImport.steps.previewTitle')}
+          </Typography>
+          {previewRows.length === 0 ? (
+            <Alert severity="info">{t('tallyImport.emptyVouchers')}</Alert>
+          ) : (
+            <>
+              <Table size="small" sx={wizardTableSx}>
+                <TableHead sx={mvsTableHeadHighlightSx}>
+                  <TableRow>
+                    <TableCell sx={{ width: '14%' }}>{t('tallyImport.columns.date')}</TableCell>
+                    <TableCell sx={{ width: '16%' }}>{t('tallyImport.columns.type')}</TableCell>
+                    <TableCell sx={{ width: '18%' }}>{t('tallyImport.columns.number')}</TableCell>
+                    <TableCell sx={{ width: '12%' }}>{t('tallyImport.columns.lines')}</TableCell>
+                    <TableCell sx={{ width: '20%' }} align="right">{t('tallyImport.columns.debit')}</TableCell>
+                    <TableCell sx={{ width: '20%' }} align="right">{t('tallyImport.columns.credit')}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {pagedPreview.map((v, idx) => (
+                    <TableRow key={`${v.voucherNumber}-${idx}`}>
+                      <TableCell sx={cellEllipsisSx}>{renderEllipsis(v.date)}</TableCell>
+                      <TableCell sx={cellEllipsisSx}>{renderEllipsis(v.voucherType)}</TableCell>
+                      <TableCell sx={cellEllipsisSx}>{renderEllipsis(v.voucherNumber)}</TableCell>
+                      <TableCell sx={cellEllipsisSx}>{v.lineCount}</TableCell>
+                      <TableCell align="right" sx={cellEllipsisSx}>{Number(v.totalDebit || 0).toLocaleString()}</TableCell>
+                      <TableCell align="right" sx={cellEllipsisSx}>{Number(v.totalCredit || 0).toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              {previewRows.length > ROWS_PER_PAGE ? (
+                <Box sx={mvsBodyPaginationSx}>
+                  <Pagination count={previewPageCount} page={previewPage} onChange={(_e, p) => setPreviewPage(p)} color="primary" shape="rounded" size="small" />
+                </Box>
+              ) : null}
+            </>
+          )}
+        </Paper>
+      ) : null}
+
+      {result && !result.dryRun ? (
+        <Paper elevation={0} sx={{ ...mvsBodyCardSx, mt: 1.5, p: { xs: 1.5, sm: 2 }, borderRadius: 0 }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+            {t('tallyImport.steps.completeTitle')}
+          </Typography>
+          <Alert severity={result.vouchers.failed > 0 ? 'warning' : 'success'} sx={{ mb: 1.5 }}>
+            {t('tallyImport.resultSummary', {
+              matched: result.ledgers.matched,
+              createdAcc: result.ledgers.created,
+              createdVch: result.vouchers.created,
+              skipped: result.vouchers.skipped,
+              failed: result.vouchers.failed,
+            })}
+          </Alert>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            <Button variant="outlined" startIcon={<BooksIcon fontSize="small" />} sx={mvsBodyOutlinedBtnSx} onClick={() => navigate(booksHref)}>
+              {t('tallyImport.booksLink')}
+            </Button>
+            <Button variant="outlined" sx={mvsBodyOutlinedBtnSx} disabled={!result.batchId || loading} onClick={() => void handleReconciliation()}>
+              {t('tallyImport.reconciliation')}
+            </Button>
+          </Box>
+          {reconciliation ? (
+            <Stack spacing={1.25} sx={{ mt: 1.5 }}>
+              <Alert severity={reconciliation.status === 'PASS' ? 'success' : 'warning'} variant="outlined">
+                {reconciliation.status === 'PASS' ? t('tallyImport.reconciliationPass') : t('tallyImport.reconciliationFail')}
+              </Alert>
+              <Typography variant="body2" color="text.secondary">{reconciliation.note}</Typography>
+              <Table size="small" sx={wizardTableSx}>
+                <TableHead sx={mvsTableHeadHighlightSx}>
+                  <TableRow>
+                    <TableCell>{t('tallyImport.reconciliationColumns.check')}</TableCell>
+                    <TableCell align="right">{t('tallyImport.reconciliationColumns.source')}</TableCell>
+                    <TableCell align="right">{t('tallyImport.reconciliationColumns.mvs')}</TableCell>
+                    <TableCell align="right">{t('tallyImport.reconciliationColumns.difference')}</TableCell>
+                    <TableCell>{t('tallyImport.reconciliationColumns.status')}</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>{t('tallyImport.reconciliationChecks.voucherCount')}</TableCell>
+                    <TableCell align="right">{reconciliation.checks.voucherCount.source}</TableCell>
+                    <TableCell align="right">{reconciliation.checks.voucherCount.mvs}</TableCell>
+                    <TableCell align="right">-</TableCell>
+                    <TableCell>{reconciliation.checks.voucherCount.status}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>{t('tallyImport.reconciliationChecks.debitTotal')}</TableCell>
+                    <TableCell align="right">{reconciliation.checks.debitTotal.source}</TableCell>
+                    <TableCell align="right">{reconciliation.checks.debitTotal.mvs}</TableCell>
+                    <TableCell align="right">{reconciliation.checks.debitTotal.difference}</TableCell>
+                    <TableCell>{reconciliation.checks.debitTotal.status}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>{t('tallyImport.reconciliationChecks.creditTotal')}</TableCell>
+                    <TableCell align="right">{reconciliation.checks.creditTotal.source}</TableCell>
+                    <TableCell align="right">{reconciliation.checks.creditTotal.mvs}</TableCell>
+                    <TableCell align="right">{reconciliation.checks.creditTotal.difference}</TableCell>
+                    <TableCell>{reconciliation.checks.creditTotal.status}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>{t('tallyImport.reconciliationChecks.ledgerMovements')}</TableCell>
+                    <TableCell align="right">-</TableCell>
+                    <TableCell align="right">-</TableCell>
+                    <TableCell align="right">{reconciliation.checks.ledgerMovements.differenceCount}</TableCell>
+                    <TableCell>{reconciliation.checks.ledgerMovements.status}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </Stack>
+          ) : null}
+        </Paper>
+      ) : null}
       <Snackbar open={!!error} autoHideDuration={6000} onClose={() => setError('')}>
         <Alert severity="error" onClose={() => setError('')}>
           {error}

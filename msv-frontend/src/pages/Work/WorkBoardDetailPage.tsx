@@ -38,6 +38,7 @@ import {
   Close as CloseIcon,
   DeleteOutline as DeleteIcon,
   EditOutlined as EditOutlinedIcon,
+  Link as LinkIcon,
   MoreHoriz as MoreHorizIcon,
   Notes as NotesIcon,
   PersonAdd as PersonAddIcon,
@@ -1950,46 +1951,97 @@ const WorkBoardDetailPage: React.FC = () => {
     }
   };
 
-  const openCardDetail = useCallback((card: BoardCard, listTitle: string, listId: number) => {
-    const blockCommentsUntilDetailSave =
-      lastQuickCreatedCardIdRef.current != null &&
-      Number(card.id) === Number(lastQuickCreatedCardIdRef.current);
-    setCardDetail({
-      cardId: card.id,
-      blockCommentsUntilDetailSave,
-      title: card.title || '',
-      description: normalizeRichTextHtml(card.description),
-      dueDate: formatDueDate(card.due_date),
-      color: card.color || '',
-      assigneeUserId:
-        card.assignee?.id != null
-          ? Number(card.assignee.id)
-          : card.assignee_user_id != null
-            ? Number(card.assignee_user_id)
-            : null,
-      referenceUserIds: Array.isArray(card.reference_user_ids)
-        ? card.reference_user_ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
-        : [],
-      createdBy: card.created_by != null ? Number(card.created_by) : null,
-      listId,
-      originalListId: listId,
-      listTitle
-    });
-    setCardComments(sortBoardCardCommentsThreaded(card.comments || []));
-    setNewComment('');
-    setReplyParentId(null);
-    setMentionedUserIds([]);
-    setMentionOpen(false);
-    setMentionQuery('');
-    setMentionHighlightIndex(0);
-  }, []);
+  /** 카드 상세 URL (?card=) — 공유·새로고침 시 동일 작업으로 복귀 */
+  const syncCardQueryParam = useCallback(
+    (cardId: number | null) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (cardId != null && Number.isInteger(cardId) && cardId > 0) {
+            if (next.get('card') === String(cardId)) return prev;
+            next.set('card', String(cardId));
+          } else {
+            if (!next.has('card')) return prev;
+            next.delete('card');
+          }
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
 
-  /** 알림 딥링크(?card=)로 진입 시 해당 카드 상세를 자동으로 연다 */
+  const openCardDetail = useCallback(
+    (card: BoardCard, listTitle: string, listId: number) => {
+      const blockCommentsUntilDetailSave =
+        lastQuickCreatedCardIdRef.current != null &&
+        Number(card.id) === Number(lastQuickCreatedCardIdRef.current);
+      deepLinkCardHandledRef.current = Number(card.id);
+      setCardDetail({
+        cardId: card.id,
+        blockCommentsUntilDetailSave,
+        title: card.title || '',
+        description: normalizeRichTextHtml(card.description),
+        dueDate: formatDueDate(card.due_date),
+        color: card.color || '',
+        assigneeUserId:
+          card.assignee?.id != null
+            ? Number(card.assignee.id)
+            : card.assignee_user_id != null
+              ? Number(card.assignee_user_id)
+              : null,
+        referenceUserIds: Array.isArray(card.reference_user_ids)
+          ? card.reference_user_ids.map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0)
+          : [],
+        createdBy: card.created_by != null ? Number(card.created_by) : null,
+        listId,
+        originalListId: listId,
+        listTitle
+      });
+      setCardComments(sortBoardCardCommentsThreaded(card.comments || []));
+      setNewComment('');
+      setReplyParentId(null);
+      setMentionedUserIds([]);
+      setMentionOpen(false);
+      setMentionQuery('');
+      setMentionHighlightIndex(0);
+      syncCardQueryParam(Number(card.id));
+    },
+    [syncCardQueryParam]
+  );
+
+  const buildCardDetailLink = useCallback(
+    (cardId: number) => {
+      const path = `/work/projects/${boardId}?card=${cardId}`;
+      if (typeof window === 'undefined') return path;
+      return `${window.location.origin}${path}`;
+    },
+    [boardId]
+  );
+
+  const copyCardDetailLink = useCallback(async () => {
+    if (!cardDetail?.cardId) return;
+    const url = buildCardDetailLink(Number(cardDetail.cardId));
+    try {
+      await navigator.clipboard.writeText(url);
+      showSuccessToast(
+        txt('작업 링크를 복사했습니다. 메신저·메일에 붙여넣어 공유하세요.', 'Task link copied. Paste it in chat or email to share.')
+      );
+    } catch {
+      showErrorPopup(
+        txt('링크 복사에 실패했습니다. 주소창의 URL을 직접 복사해 주세요.', 'Could not copy the link. Please copy the URL from the address bar.'),
+        txt('링크 복사', 'Copy link')
+      );
+    }
+  }, [buildCardDetailLink, cardDetail?.cardId, txt]);
+
+  /** 알림·공유 딥링크(?card=)로 진입 시 해당 카드 상세를 자동으로 연다 (URL은 공유용으로 유지) */
   useEffect(() => {
     if (!board?.lists || loading) return;
     const rawCardId = searchParams.get('card');
     if (!rawCardId) {
-      deepLinkCardHandledRef.current = null;
+      if (!cardDetail) deepLinkCardHandledRef.current = null;
       return;
     }
     const cardId = Number(rawCardId);
@@ -2005,13 +2057,10 @@ const WorkBoardDetailPage: React.FC = () => {
       if (card) {
         deepLinkCardHandledRef.current = cardId;
         openCardDetail(card, list.title, list.id);
-        const next = new URLSearchParams(searchParams);
-        next.delete('card');
-        setSearchParams(next, { replace: true });
         return;
       }
     }
-  }, [board, loading, searchParams, cardDetail?.cardId, openCardDetail, setSearchParams]);
+  }, [board, loading, searchParams, cardDetail, openCardDetail]);
 
   const submitCard = useCallback(async () => {
     if (!composerListId || !composerTitle.trim()) return;
@@ -2212,6 +2261,7 @@ const WorkBoardDetailPage: React.FC = () => {
   };
 
   const closeCardDetail = () => {
+    deepLinkCardHandledRef.current = null;
     setCardDetail(null);
     setCardComments([]);
     setNewComment('');
@@ -2220,6 +2270,7 @@ const WorkBoardDetailPage: React.FC = () => {
     setMentionOpen(false);
     setMentionQuery('');
     setMentionHighlightIndex(0);
+    syncCardQueryParam(null);
   };
 
   const persistCardDetail = async (forcedListId?: number, successMessage?: string) => {
@@ -3627,6 +3678,35 @@ const WorkBoardDetailPage: React.FC = () => {
           >
             {txt('뒤로 가기', 'Back')}
           </Button>
+          <Box sx={{ flex: 1 }} />
+          <Tooltip title={txt('작업 링크 복사', 'Copy task link')}>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<LinkIcon sx={{ fontSize: 18 }} />}
+              onClick={() => void copyCardDetailLink()}
+              sx={{
+                minWidth: 0,
+                px: 1.5,
+                py: 0.5,
+                height: 36,
+                fontWeight: 700,
+                fontSize: '0.875rem',
+                letterSpacing: '-0.01em',
+                textTransform: 'none',
+                borderRadius: KANBAN_CONTROL_RADIUS,
+                borderColor: '#CBD5E1',
+                color: '#0F172A',
+                bgcolor: '#FFFFFF',
+                '&:hover': {
+                  borderColor: '#94A3B8',
+                  bgcolor: '#F8FAFC',
+                },
+              }}
+            >
+              {txt('링크 복사', 'Copy link')}
+            </Button>
+          </Tooltip>
         </Box>
         <Box
           sx={{

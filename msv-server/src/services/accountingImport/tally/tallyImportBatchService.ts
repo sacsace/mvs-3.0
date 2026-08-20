@@ -98,8 +98,8 @@ export const finalizeTallyImportBatch = async ({
         source_document_key: documentKey(voucher, fallbackVoucherNo),
       },
       defaults: {
-        source_company_code: null,
-        fiscal_year: financialYear(voucher.date),
+        source_company_code: 'TALLY',
+        fiscal_year: financialYear(voucher.date) || 'NA',
         source_document_number: String(voucher.voucherNumber || fallbackVoucherNo).slice(0, 80),
         source_posting_date: voucher.date || null,
         raw_document: voucher,
