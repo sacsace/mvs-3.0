@@ -25,3 +25,63 @@ export const buildApiContentSecurityPolicy = () =>
     "base-uri 'none'",
     "form-action 'none'",
   ].join('; ');
+
+const BLOCKED_PREFIXES = [
+  '/.git',
+  '/.svn',
+  '/.hg',
+  '/.env',
+  '/.aws',
+  '/wp-admin',
+  '/wp-content',
+  '/wp-includes',
+  '/wp-json',
+  '/phpmyadmin',
+  '/pma',
+  '/server-status',
+  '/server-info',
+];
+
+const BLOCKED_EXACT = new Set([
+  '/phpinfo.php',
+  '/info.php',
+  '/test.php',
+  '/phpinfo',
+  '/elmah.axd',
+  '/trace.axd',
+  '/web.config',
+  '/xmlrpc.php',
+  '/composer.json',
+  '/composer.lock',
+]);
+
+const BLOCKED_SUFFIXES = ['.php', '.asp', '.aspx', '.axd', '.bak', '.sql'];
+
+export const isBlockedSensitivePath = (rawPath: string): boolean => {
+  const pathOnly = String(rawPath || '')
+    .split('?')[0]
+    .split('#')[0]
+    .toLowerCase();
+  if (!pathOnly || pathOnly === '/') return false;
+  if (BLOCKED_EXACT.has(pathOnly)) return true;
+  if (pathOnly.startsWith('/wp-json')) return true;
+  for (const prefix of BLOCKED_PREFIXES) {
+    if (pathOnly === prefix || pathOnly.startsWith(`${prefix}/`)) return true;
+  }
+  for (const suffix of BLOCKED_SUFFIXES) {
+    if (pathOnly.endsWith(suffix)) return true;
+  }
+  return false;
+};
+
+/**
+ * SPA/API catch-all 오탐 방지: 스캐너가 탐색하는 민감 경로를 404로 차단.
+ */
+export const blockSensitivePaths = (req: Request, res: Response, next: NextFunction) => {
+  if (isBlockedSensitivePath(req.path || req.url)) {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    return res.status(404).type('text/plain').send('Not Found');
+  }
+  return next();
+};

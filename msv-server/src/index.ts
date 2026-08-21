@@ -42,6 +42,7 @@ import { requestProfiler } from './middleware/requestProfiler';
 import { activityLogMiddleware } from './middleware/activityLogMiddleware';
 import { startLoginLogRetentionScheduler } from './services/loginLogRetentionService';
 import {
+  blockSensitivePaths,
   buildApiContentSecurityPolicy,
   forceHttpsRedirect,
 } from './middleware/securityHeaders';
@@ -102,6 +103,7 @@ const socketService = new SocketService(server);
 
 // 미들웨어 설정
 app.use(forceHttpsRedirect);
+app.use(blockSensitivePaths);
 app.use(compression({
   filter: (req, res) => {
     if (req.path === '/health' || req.path === '/api/health') return false;

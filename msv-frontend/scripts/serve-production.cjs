@@ -1,10 +1,12 @@
 /**
  * Railway 등에서 CRA build 정적 파일을 서빙.
  * - HTTP→HTTPS 리다이렉트 (X-Forwarded-Proto)
- * - 보안 헤더 + CSP (스캔 항목 대응)
+ * - 보안 헤더 + CSP
+ * - 민감 경로(.git, phpinfo, wp-json 등) 404 차단 (스캐너 SPA 오탐 방지)
  */
 const path = require('path');
 const express = require('express');
+const { blockSensitivePaths } = require('./blockSensitivePaths.cjs');
 
 const PORT = Number.parseInt(process.env.PORT || '3000', 10) || 3000;
 const isProd = process.env.NODE_ENV === 'production' || process.env.FORCE_HTTPS === '1';
@@ -48,9 +50,7 @@ const buildCsp = () => {
     "object-src 'none'",
     "frame-ancestors 'self'",
     "form-action 'self'",
-    // index.html SEO 언어 스크립트 + CRA 번들
     "script-src 'self' 'unsafe-inline'",
-    // MUI Emotion 인라인 스타일 + Google Fonts CSS
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: blob: https:",
@@ -59,6 +59,14 @@ const buildCsp = () => {
     "manifest-src 'self'",
     'upgrade-insecure-requests',
   ].join('; ');
+};
+
+const requestIsHttps = (req) => {
+  const forwarded = req.get('x-forwarded-proto');
+  if (forwarded) {
+    return forwarded.split(',')[0].trim().toLowerCase() === 'https';
+  }
+  return Boolean(req.secure);
 };
 
 /** 프록시 앞단에서 HTTP로 들어오면 HTTPS로 301 */
@@ -72,6 +80,9 @@ app.use((req, res, next) => {
   return res.redirect(301, `https://${host}${req.originalUrl}`);
 });
 
+/** 스캔 대응: .git / phpinfo / wp-json / server-status 등 */
+app.use(blockSensitivePaths);
+
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
@@ -84,7 +95,8 @@ app.use((req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
   res.setHeader('X-DNS-Prefetch-Control', 'off');
   res.setHeader('Content-Security-Policy', buildCsp());
-  if (isProd) {
+  // HTTPS로 들어온 요청(또는 프로덕션)에는 항상 HSTS
+  if (isProd || requestIsHttps(req)) {
     res.setHeader(
       'Strict-Transport-Security',
       'max-age=31536000; includeSubDomains; preload'
@@ -101,6 +113,7 @@ app.use(
   express.static(buildDir, {
     index: false,
     maxAge: '7d',
+    dotfiles: 'deny',
     setHeaders: (res, filePath) => {
       if (filePath.endsWith('index.html') || filePath.endsWith('serve.json')) {
         res.setHeader('Cache-Control', 'no-cache');
@@ -110,6 +123,7 @@ app.use(
 );
 
 app.get('*', (req, res) => {
+  // 정적 파일 미존재 + SPA — 민감 경로는 위에서 이미 차단됨
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(buildDir, 'index.html'), (err) => {
     if (err) {
