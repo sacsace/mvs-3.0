@@ -25,7 +25,8 @@ cmds = [
 
 [start]
 # 보안 헤더·HTTPS 리다이렉트·민감 경로 차단 포함 프로덕션 서버
-cmd = "npm run start:railway"
+# npm run 래퍼 없이 node 직접 기동 (production npm warn / SIGTERM 오탐 감소)
+cmd = "node scripts/serve-production.cjs"
 
 # 환경 변수 설정
 [env]
