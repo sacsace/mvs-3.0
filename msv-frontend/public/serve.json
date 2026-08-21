@@ -20,5 +20,17 @@
         }
       ]
     }
+  ],
+  "redirects": [
+    {
+      "source": "http://mvsystem.in/**",
+      "destination": "https://www.mvsystem.in/:splat",
+      "type": 301
+    },
+    {
+      "source": "https://mvsystem.in/**",
+      "destination": "https://www.mvsystem.in/:splat",
+      "type": 301
+    }
   ]
 }

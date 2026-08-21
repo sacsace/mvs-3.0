@@ -24,9 +24,8 @@ cmds = [
 ]
 
 [start]
-# 정적 파일 서빙 (Railway PORT 환경 변수 사용)
-# serve는 PORT 환경 변수를 자동으로 읽거나 -l 옵션으로 포트 지정
-cmd = "npx serve -s build -l $PORT"
+# 보안 헤더·HTTPS 리다이렉트·민감 경로 차단 포함 프로덕션 서버
+cmd = "npm run start:railway"
 
 # 환경 변수 설정
 [env]
@@ -34,6 +33,8 @@ NODE_ENV = "production"
 PORT = "$PORT"
 CI = "false"
 REACT_APP_API_URL = "https://api.mvsystem.in/api"
+CANONICAL_HOST = "www.mvsystem.in"
+FORCE_HTTPS = "1"
 
 # 변수 설정
 [variables]

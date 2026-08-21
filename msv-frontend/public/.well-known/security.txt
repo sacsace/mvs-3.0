@@ -1,0 +1,7 @@
+Contact: mailto:security@msventures.in
+Contact: https://www.msventures.in
+Expires: 2027-12-31T23:59:59.000Z
+Preferred-Languages: ko, en
+Canonical: https://www.mvsystem.in/.well-known/security.txt
+Policy: https://www.msventures.in
+Acknowledgments: https://www.mvsystem.in

@@ -1,15 +1,14 @@
 /**
- * 스캐너가 SPA catch-all(200 + index.html)을 .git/phpinfo 등으로 오인하지 않도록
+ * 스캐너가 SPA catch-all(200 + index.html)을 민감 파일 노출로 오인하지 않도록
  * 알려진 민감·레거시 경로를 404로 차단한다.
  */
 
-/** 경로 접두/정확 매칭용 (소문자 비교) */
+/** 경로 접두 매칭 (소문자). `/.env` 는 별도 처리(/.env.example 등). */
 const BLOCKED_PREFIXES = [
   '/.git',
   '/.svn',
   '/.hg',
   '/.bzr',
-  '/.env',
   '/.aws',
   '/.docker',
   '/.vscode',
@@ -24,6 +23,9 @@ const BLOCKED_PREFIXES = [
   '/adminer',
   '/server-status',
   '/server-info',
+  '/actuator',
+  '/graphql',
+  '/graphiql',
 ];
 
 const BLOCKED_EXACT = new Set([
@@ -38,13 +40,50 @@ const BLOCKED_EXACT = new Set([
   '/clientaccesspolicy.xml',
   '/composer.json',
   '/composer.lock',
+  '/package.json',
   '/package-lock.json',
   '/yarn.lock',
+  '/pnpm-lock.yaml',
   '/.gitignore',
   '/.gitattributes',
+  '/.ds_store',
   '/thumbs.db',
   '/desktop.ini',
+  '/readme.md',
+  '/readme.txt',
+  '/readme',
+  '/license',
+  '/license.md',
+  '/changelog.md',
+  '/config.json',
+  '/config.js',
+  '/config.yml',
+  '/config.yaml',
+  '/config.xml',
+  '/settings.json',
+  '/appsettings.json',
+  '/backup.zip',
+  '/backup.tar',
+  '/backup.tar.gz',
+  '/backup.sql',
+  '/dump.zip',
+  '/dump.sql',
+  '/db.zip',
+  '/database.zip',
+  '/site.zip',
+  '/www.zip',
+  '/src.zip',
+  '/dist.zip',
+  '/.env.example',
+  '/.env.local',
+  '/.env.production',
+  '/.env.development',
+  '/graphql',
+  '/graphiql',
 ]);
+
+/** /.well-known/security.txt 는 허용 — 그 외 well-known 민감 경로만 차단할 때 사용 */
+const ALLOWED_EXACT = new Set(['/.well-known/security.txt']);
 
 const BLOCKED_SUFFIXES = [
   '.php',
@@ -67,25 +106,35 @@ function isBlockedSensitivePath(rawPath) {
     .split('#')[0]
     .toLowerCase();
   if (!pathOnly || pathOnly === '/') return false;
+  if (ALLOWED_EXACT.has(pathOnly)) return false;
 
   if (BLOCKED_EXACT.has(pathOnly)) return true;
+
+  // /.env, /.env.*, /.env/...
+  if (pathOnly === '/.env' || pathOnly.startsWith('/.env.') || pathOnly.startsWith('/.env/')) {
+    return true;
+  }
 
   for (const prefix of BLOCKED_PREFIXES) {
     if (pathOnly === prefix || pathOnly.startsWith(`${prefix}/`)) return true;
   }
 
-  // /wp-json 전체
   if (pathOnly.startsWith('/wp-json')) return true;
 
   for (const suffix of BLOCKED_SUFFIXES) {
     if (pathOnly.endsWith(suffix)) return true;
   }
 
+  // 루트 근처 흔한 백업 아카이브 이름
+  if (/^\/(backup|dump|db|database|site|www|src|dist|html|public)(\.|[-_]).*\.(zip|tar|gz|tgz|rar|7z)$/.test(pathOnly)) {
+    return true;
+  }
+
   return false;
 }
 
 /**
- * Express middleware — 민감 경로 404 (본문 없음)
+ * Express middleware — 민감 경로 404
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  * @param {import('express').NextFunction} next

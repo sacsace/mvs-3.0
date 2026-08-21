@@ -12,3 +12,5 @@ restartPolicyMaxRetries = 10
 NODE_ENV = "production"
 PORT = "$PORT"
 CI = "false"
+CANONICAL_HOST = "www.mvsystem.in"
+FORCE_HTTPS = "1"
