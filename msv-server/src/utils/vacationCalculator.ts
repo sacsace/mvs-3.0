@@ -105,74 +105,106 @@ export function countVacationDaysInLeaveYear(
   return countInclusiveDateOnlyDays(overlapStart, overlapEnd);
 }
 
+type YearMonth = { year: number; month: number };
+
+function compareYearMonth(a: YearMonth, b: YearMonth): number {
+  if (a.year !== b.year) return a.year - b.year;
+  return a.month - b.month;
+}
+
+function maxYearMonth(a: YearMonth, b: YearMonth): YearMonth {
+  return compareYearMonth(a, b) >= 0 ? a : b;
+}
+
+function addCalendarMonths(ym: YearMonth, delta: number): YearMonth {
+  const d = new Date(ym.year, ym.month + delta, 1);
+  return { year: d.getFullYear(), month: d.getMonth() };
+}
+
+function yearMonthFromDate(date: Date): YearMonth {
+  return { year: date.getFullYear(), month: date.getMonth() };
+}
+
+/** 입사일 기준 첫 부여 월 (회계연도 4/1 입사만 입사월 포함, 그 외 입사월 제외·31일 입사 +1개월 제외) */
+export function getHireAccrualStartMonth(hireDate: Date, fiscalYearStart: Date): YearMonth {
+  const hire = new Date(hireDate);
+  hire.setHours(0, 0, 0, 0);
+  const fyStart = new Date(fiscalYearStart);
+  fyStart.setHours(0, 0, 0, 0);
+
+  const hireDay = hire.getDate();
+  const hireYm = yearMonthFromDate(hire);
+  const fyYm = yearMonthFromDate(fyStart);
+
+  if (hireYm.year === fyYm.year && hireYm.month === fyYm.month && hireDay === 1) {
+    return hireYm;
+  }
+  if (hireDay > 30) {
+    return addCalendarMonths(hireYm, 2);
+  }
+  return addCalendarMonths(hireYm, 1);
+}
+
+/** 연차 사용 가능일 기준 첫 부여 월 (월 중간이면 다음 달부터) */
+export function getEligibilityAccrualStartMonth(eligibilityDate: Date): YearMonth {
+  const eligibility = new Date(eligibilityDate);
+  eligibility.setHours(0, 0, 0, 0);
+  const ym = yearMonthFromDate(eligibility);
+  if (eligibility.getDate() > 1) {
+    return addCalendarMonths(ym, 1);
+  }
+  return ym;
+}
+
+export type AnnualLeaveAccrualPeriod = {
+  start: YearMonth;
+  end: YearMonth;
+  months: number;
+  accrualStartYmd: string;
+  accrualEndYmd: string;
+};
+
 /**
- * 회계연도 내 연차 부여 개월 수 (1개월 = 1일).
- * - 입사월은 제외, 다음 달부터 카운트 (입사일 1일이면 해당 월 포함)
- * - 입사일이 30일 초과(31일)면 한 달 더 미룸
- * - 회계연도 시작(4/1) · 연차 사용 가능일(입사+대기) 이전은 제외
+ * 입사일·휴가연도(회계연도) 교집합에서 연차 부여 개월 수 계산.
+ * 부여 시작 = max(입사 조정 월, 사용 가능 조정 월, 회계연도 시작 월)
+ * 부여 종료 = 회계연도 종료(3월)
  */
-export function countAnnualLeaveMonthsInLeaveYear(
+export function getAnnualLeaveAccrualPeriod(
   hireDate: Date,
   leaveYear: LeaveYearRange,
   eligibilityDate: Date
-): number {
+): AnnualLeaveAccrualPeriod | null {
   const hire = new Date(hireDate);
   hire.setHours(0, 0, 0, 0);
-  const eligibility = new Date(eligibilityDate);
-  eligibility.setHours(0, 0, 0, 0);
   const fyStart = new Date(leaveYear.start);
   fyStart.setHours(0, 0, 0, 0);
   const fyEnd = new Date(leaveYear.end);
   fyEnd.setHours(0, 0, 0, 0);
 
-  if (hire.getTime() > fyEnd.getTime()) return 0;
+  if (hire.getTime() > fyEnd.getTime()) return null;
 
-  const hireDay = hire.getDate();
-  let startYear = hire.getFullYear();
-  let startMonth = hire.getMonth();
-  if (hireDay > 30) {
-    const bumped = new Date(startYear, startMonth + 2, 1);
-    startYear = bumped.getFullYear();
-    startMonth = bumped.getMonth();
-  } else if (hireDay > 1) {
-    const bumped = new Date(startYear, startMonth + 1, 1);
-    startYear = bumped.getFullYear();
-    startMonth = bumped.getMonth();
-  }
+  const fyStartYm = yearMonthFromDate(fyStart);
+  const fyEndYm = yearMonthFromDate(fyEnd);
+  const hireStartYm = getHireAccrualStartMonth(hire, fyStart);
+  const eligibilityStartYm = getEligibilityAccrualStartMonth(eligibilityDate);
 
-  const clampMonth = (candidateYear: number, candidateMonth: number, floorYear: number, floorMonth: number) => {
-    if (candidateYear < floorYear || (candidateYear === floorYear && candidateMonth < floorMonth)) {
-      return { year: floorYear, month: floorMonth };
-    }
-    return { year: candidateYear, month: candidateMonth };
-  };
+  let startYm = maxYearMonth(hireStartYm, fyStartYm);
+  startYm = maxYearMonth(startYm, eligibilityStartYm);
 
-  let clamped = clampMonth(startYear, startMonth, fyStart.getFullYear(), fyStart.getMonth());
-  startYear = clamped.year;
-  startMonth = clamped.month;
-
-  // 연차 사용 가능일이 월 중간이면 해당 월은 제외하고 다음 달부터 부여
-  let eligibilityYear = eligibility.getFullYear();
-  let eligibilityMonth = eligibility.getMonth();
-  if (eligibility.getDate() > 1) {
-    const bumped = new Date(eligibilityYear, eligibilityMonth + 1, 1);
-    eligibilityYear = bumped.getFullYear();
-    eligibilityMonth = bumped.getMonth();
-  }
-  clamped = clampMonth(startYear, startMonth, eligibilityYear, eligibilityMonth);
-  startYear = clamped.year;
-  startMonth = clamped.month;
-
-  const endYear = fyEnd.getFullYear();
-  const endMonth = fyEnd.getMonth();
-  if (startYear > endYear || (startYear === endYear && startMonth > endMonth)) {
-    return 0;
+  if (compareYearMonth(startYm, fyEndYm) > 0) {
+    return {
+      start: startYm,
+      end: fyEndYm,
+      months: 0,
+      accrualStartYmd: toDateOnlyString(new Date(startYm.year, startYm.month, 1)),
+      accrualEndYmd: toDateOnlyString(fyEnd),
+    };
   }
 
   let count = 0;
-  let y = startYear;
-  let m = startMonth;
-  while (y < endYear || (y === endYear && m <= endMonth)) {
+  let y = startYm.year;
+  let m = startYm.month;
+  while (y < fyEndYm.year || (y === fyEndYm.year && m <= fyEndYm.month)) {
     count += 1;
     m += 1;
     if (m > 11) {
@@ -180,7 +212,36 @@ export function countAnnualLeaveMonthsInLeaveYear(
       y += 1;
     }
   }
-  return count;
+
+  return {
+    start: startYm,
+    end: fyEndYm,
+    months: count,
+    accrualStartYmd: toDateOnlyString(new Date(startYm.year, startYm.month, 1)),
+    accrualEndYmd: toDateOnlyString(fyEnd),
+  };
+}
+
+export function buildEmployeeAccrualLeaveYearLabel(
+  leaveYear: LeaveYearRange,
+  period: AnnualLeaveAccrualPeriod | null
+): string {
+  const fyShort = leaveYear.label.split(' ')[0] || leaveYear.label;
+  if (!period || period.months <= 0) {
+    return `${fyShort} (${toDateOnlyString(leaveYear.start)} ~ ${toDateOnlyString(leaveYear.end)})`;
+  }
+  return `${fyShort} (${period.accrualStartYmd} ~ ${period.accrualEndYmd})`;
+}
+
+/**
+ * @deprecated getAnnualLeaveAccrualPeriod 사용
+ */
+export function countAnnualLeaveMonthsInLeaveYear(
+  hireDate: Date,
+  leaveYear: LeaveYearRange,
+  eligibilityDate: Date
+): number {
+  return getAnnualLeaveAccrualPeriod(hireDate, leaveYear, eligibilityDate)?.months ?? 0;
 }
 
 /** 인도 회계연도(휴가 연도): 4/1 ~ 다음 해 3/31 */
@@ -556,8 +617,16 @@ export async function calculateAnnualLeave(userId: number, excludeVacationId?: n
     if (useForcedFixed) {
       totalEarnedDays = Math.max(0, policy.forceFixedAnnualDays);
     } else {
-      totalEarnedDays = countAnnualLeaveMonthsInLeaveYear(hireDate, leaveYear, eligibilityDate);
+      const accrual = getAnnualLeaveAccrualPeriod(hireDate, leaveYear, eligibilityDate);
+      totalEarnedDays = accrual?.months ?? 0;
     }
+
+    const accrualPeriod = useForcedFixed
+      ? null
+      : getAnnualLeaveAccrualPeriod(hireDate, leaveYear, eligibilityDate);
+    const leaveYearLabel = useForcedFixed
+      ? leaveYear.label
+      : buildEmployeeAccrualLeaveYearLabel(leaveYear, accrualPeriod);
 
     const vacationUsedDays = await getUsedDaysInLeaveYear(userId, 'annual', leaveYear, excludeVacationId);
     const absenceUsedDays = policy.deductAbsenceFromLeave
@@ -582,10 +651,10 @@ export async function calculateAnnualLeave(userId: number, excludeVacationId?: n
       policyStartDays: startDays,
       leaveYearStart,
       leaveYearEnd,
-      leaveYearLabel: leaveYear.label,
+      leaveYearLabel,
       fiscalYearStart: leaveYearStart,
       fiscalYearEnd: leaveYearEnd,
-      fiscalYearLabel: leaveYear.label,
+      fiscalYearLabel: leaveYearLabel,
     };
   } catch (error) {
     console.error('연차 계산 오류:', error);
@@ -794,7 +863,7 @@ export async function getUserLeaveBalanceSummary(userId: number): Promise<LeaveB
 
   return {
     ...baseRow,
-    leaveYearLabel: leaveYear.label,
+    leaveYearLabel: annualInfo.leaveYearLabel || leaveYear.label,
     canUseAnnualLeave: annualInfo.canUseAnnualLeave,
     balances,
   };

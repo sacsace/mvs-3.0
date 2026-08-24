@@ -4711,7 +4711,7 @@ export default {
       annualNotEligible: 'Annual leave waiting period. Accrual and use start after hire date + waiting days.',
       noLeaveBalances: 'No employee leave balances to display.',
       leaveBalancesHint:
-        'Total annual leave = remaining work months in the India fiscal year (1 Apr – 31 Mar), 1 day per month. The hire month is excluded; hires on the 31st skip one more month. Remaining = total minus used (approved leave + attendance absences). If “force fixed annual for 1+ year tenure” is on, those employees get the fixed days as the total. Pending or rejected requests are not deducted.',
+        'Total annual leave uses the intersection of the India fiscal year (1 Apr – 31 Mar), hire date, and leave eligibility. One day per accrual month; the Leave year column shows each employee’s accrual window. Hire month excluded except 4/1 hires; +1 month skip for 31st hires; mid-month eligibility skips that month.',
       leaveBalancesSearchPlaceholder: 'Search by employee, department, position, join date…',
       sickOptional: 'Optional',
       sickOptionalHint: 'Sick leave is not mandatory.',
@@ -4821,7 +4821,7 @@ export default {
       annualStartImmediate: 'Start immediately',
       currentSettingImmediate: 'Current setting: Annual leave available from date of join.',
       currentSettingDays: 'Current setting: Annual leave available {{days}} days after date of join.',
-      earnedLeaveDesc2: '1 day of annual leave per remaining work month in the fiscal year (hire month excluded; +1 month skip if hired on the 31st).',
+      earnedLeaveDesc2: '1 day per accrual month from hire date within the fiscal year (4/1 hire includes hire month; 31st hire and mid-month eligibility skip extra months).',
       earnedLeaveDesc2Forced:
         'Employees with {{years}}+ year(s) of service get a fixed {{days}} day(s) of annual leave for the fiscal year (accrual disabled).',
       earnedLeaveDesc3: 'Available annual leave is calculated within the India fiscal year (1 Apr – 31 Mar). Unused days do not carry over.',
