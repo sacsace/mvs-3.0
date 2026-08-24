@@ -598,7 +598,7 @@ async function getUsedDaysInLeaveYear(
  * 사용 가능 시점은 입사일+대기일 기준.
  * 총일수(예상) = 회계연도 내 근무 예정 개월 수 (1개월 1일, 입사월 제외·31일 입사 시 추가 1개월 제외)
  * 사용 = 승인된 연차 + 출퇴근 결근 차감 (대기·반려는 잔여 미차감)
- * 잔여 = max(0, 총일수 - 사용일수)
+ * 잔여 = max(0, 총일수 - 사용일수) — 대기 중에도 예상 잔여 표시(신청은 canUseAnnualLeave 로 차단)
  */
 export async function calculateAnnualLeave(userId: number, excludeVacationId?: number): Promise<AnnualLeaveInfo> {
   const empty: AnnualLeaveInfo = {
@@ -648,9 +648,7 @@ export async function calculateAnnualLeave(userId: number, excludeVacationId?: n
       ? await getAbsenceDeductionDaysInLeaveYear(userId, leaveYear)
       : 0;
     const usedDays = vacationUsedDays + absenceUsedDays;
-    const availableDays = canUseAnnualLeave
-      ? Math.max(0, totalEarnedDays - usedDays)
-      : 0;
+    const availableDays = Math.max(0, totalEarnedDays - usedDays);
 
     const leaveYearStart = toDateOnlyString(leaveYear.start);
     const leaveYearEnd = toDateOnlyString(leaveYear.end);
