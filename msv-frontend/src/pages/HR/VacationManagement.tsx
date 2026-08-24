@@ -2094,7 +2094,6 @@ const VacationManagement: React.FC = () => {
                     <Typography variant="body2" color="text.secondary" paragraph>
                       • {vacationPolicy?.forceFixedAnnualForTenure
                         ? t('vacationManagement.earnedLeaveDesc2Forced', {
-                            years: vacationPolicy?.forceFixedAnnualMinYears ?? 1,
                             days: vacationPolicy?.forceFixedAnnualDays ?? 12,
                           })
                         : t('vacationManagement.earnedLeaveDesc2')}

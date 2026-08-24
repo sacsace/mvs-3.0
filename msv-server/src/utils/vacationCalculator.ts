@@ -379,8 +379,8 @@ interface CompanyVacationPolicy {
   /** 출퇴근 결근(status=absent)을 연차에서 차감 (기본 true) */
   deductAbsenceFromLeave: boolean;
   /**
-   * 근속 N년 이상이면 회계연도 연차를 적립식(earnDays) 대신 고정 일수로 강제 부여.
-   * (인도 최소 12일 등)
+   * 켜면 회계연도 연차를 월별 적립 대신 고정 일수(기본 12일)로 부여.
+   * 근속 연수 조건 없음 — forceFixedAnnualMinYears 는 하위 호환용(미사용).
    */
   forceFixedAnnualForTenure: boolean;
   forceFixedAnnualDays: number;
@@ -610,9 +610,7 @@ export async function calculateAnnualLeave(userId: number, excludeVacationId?: n
       : Math.ceil((eligibilityDate.getTime() - today.getTime()) / DAY_MS);
 
     let totalEarnedDays = 0;
-    const useForcedFixed =
-      policy.forceFixedAnnualForTenure &&
-      hasMinServiceYears(hireDate, today, policy.forceFixedAnnualMinYears);
+    const useForcedFixed = policy.forceFixedAnnualForTenure === true;
 
     if (useForcedFixed) {
       totalEarnedDays = Math.max(0, policy.forceFixedAnnualDays);
