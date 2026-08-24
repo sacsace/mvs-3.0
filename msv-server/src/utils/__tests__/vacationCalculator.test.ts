@@ -1,9 +1,11 @@
 import {
   buildEmployeeAccrualLeaveYearLabel,
+  calculateAnnualLeaveTotalDays,
   countAnnualLeaveMonthsInLeaveYear,
   getAnnualLeaveAccrualPeriod,
   getDefaultIndiaFiscalYearRange,
   getHireAccrualStartMonth,
+  qualifiesForFullFiscalYearLeave,
 } from '../vacationCalculator';
 
 describe('annual leave accrual by hire date and fiscal year', () => {
@@ -65,5 +67,21 @@ describe('annual leave accrual by hire date and fiscal year', () => {
     const hire = new Date('2026-04-01');
     const start = getHireAccrualStartMonth(hire, fy2026.start);
     expect(start).toEqual({ year: 2026, month: 3 });
+  });
+
+  it('grants 12 days for full fiscal year when fixed policy is on', () => {
+    const hire = new Date('2026-04-01');
+    const eligibility = new Date('2026-04-01');
+    const policy = { forceFixedAnnualForTenure: true, forceFixedAnnualDays: 12 };
+    expect(qualifiesForFullFiscalYearLeave(hire, fy2026, eligibility)).toBe(true);
+    expect(calculateAnnualLeaveTotalDays(hire, fy2026, eligibility, policy)).toBe(12);
+  });
+
+  it('keeps month-based days for mid-year hire even when fixed policy is on', () => {
+    const hire = new Date('2026-07-13');
+    const eligibility = new Date('2026-07-13');
+    const policy = { forceFixedAnnualForTenure: true, forceFixedAnnualDays: 12 };
+    expect(qualifiesForFullFiscalYearLeave(hire, fy2026, eligibility)).toBe(false);
+    expect(calculateAnnualLeaveTotalDays(hire, fy2026, eligibility, policy)).toBe(8);
   });
 });

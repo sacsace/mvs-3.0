@@ -222,6 +222,35 @@ export function getAnnualLeaveAccrualPeriod(
   };
 }
 
+/** 회계연도 4월부터 3월까지 전 기간 부여 대상인지 (입사일·대기일 반영 후 부여 시작이 4월) */
+export function qualifiesForFullFiscalYearLeave(
+  hireDate: Date,
+  leaveYear: LeaveYearRange,
+  eligibilityDate: Date
+): boolean {
+  const period = getAnnualLeaveAccrualPeriod(hireDate, leaveYear, eligibilityDate);
+  if (!period || period.months < 12) return false;
+  const fyStartYm = yearMonthFromDate(leaveYear.start);
+  return period.start.year === fyStartYm.year && period.start.month === fyStartYm.month;
+}
+
+export function calculateAnnualLeaveTotalDays(
+  hireDate: Date,
+  leaveYear: LeaveYearRange,
+  eligibilityDate: Date,
+  policy: Pick<CompanyVacationPolicy, 'forceFixedAnnualForTenure' | 'forceFixedAnnualDays'>
+): number {
+  const accrual = getAnnualLeaveAccrualPeriod(hireDate, leaveYear, eligibilityDate);
+  const monthBased = accrual?.months ?? 0;
+  if (
+    policy.forceFixedAnnualForTenure === true &&
+    qualifiesForFullFiscalYearLeave(hireDate, leaveYear, eligibilityDate)
+  ) {
+    return Math.max(0, policy.forceFixedAnnualDays);
+  }
+  return monthBased;
+}
+
 export function buildEmployeeAccrualLeaveYearLabel(
   leaveYear: LeaveYearRange,
   period: AnnualLeaveAccrualPeriod | null
@@ -379,8 +408,8 @@ interface CompanyVacationPolicy {
   /** 출퇴근 결근(status=absent)을 연차에서 차감 (기본 true) */
   deductAbsenceFromLeave: boolean;
   /**
-   * 켜면 회계연도 연차를 월별 적립 대신 고정 일수(기본 12일)로 부여.
-   * 근속 연수 조건 없음 — forceFixedAnnualMinYears 는 하위 호환용(미사용).
+   * 켜면 회계연도 전체(4/1~3/31) 근무 대상자에게 고정 일수(기본 12일) 부여.
+   * 중도 입사는 입사일·대기일 기준 월별 일수(1개월=1일) 유지.
    */
   forceFixedAnnualForTenure: boolean;
   forceFixedAnnualDays: number;
@@ -609,22 +638,10 @@ export async function calculateAnnualLeave(userId: number, excludeVacationId?: n
       ? 0
       : Math.ceil((eligibilityDate.getTime() - today.getTime()) / DAY_MS);
 
-    let totalEarnedDays = 0;
-    const useForcedFixed = policy.forceFixedAnnualForTenure === true;
+    let totalEarnedDays = calculateAnnualLeaveTotalDays(hireDate, leaveYear, eligibilityDate, policy);
 
-    if (useForcedFixed) {
-      totalEarnedDays = Math.max(0, policy.forceFixedAnnualDays);
-    } else {
-      const accrual = getAnnualLeaveAccrualPeriod(hireDate, leaveYear, eligibilityDate);
-      totalEarnedDays = accrual?.months ?? 0;
-    }
-
-    const accrualPeriod = useForcedFixed
-      ? null
-      : getAnnualLeaveAccrualPeriod(hireDate, leaveYear, eligibilityDate);
-    const leaveYearLabel = useForcedFixed
-      ? leaveYear.label
-      : buildEmployeeAccrualLeaveYearLabel(leaveYear, accrualPeriod);
+    const accrualPeriod = getAnnualLeaveAccrualPeriod(hireDate, leaveYear, eligibilityDate);
+    const leaveYearLabel = buildEmployeeAccrualLeaveYearLabel(leaveYear, accrualPeriod);
 
     const vacationUsedDays = await getUsedDaysInLeaveYear(userId, 'annual', leaveYear, excludeVacationId);
     const absenceUsedDays = policy.deductAbsenceFromLeave

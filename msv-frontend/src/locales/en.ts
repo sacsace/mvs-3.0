@@ -4823,11 +4823,11 @@ export default {
       currentSettingDays: 'Current setting: Annual leave available {{days}} days after date of join.',
       earnedLeaveDesc2: '1 day per accrual month from hire date within the fiscal year (4/1 hire includes hire month; 31st hire and mid-month eligibility skip extra months).',
       earnedLeaveDesc2Forced:
-        'Fixed {{days}} day(s) of annual leave per fiscal year for all employees (monthly accrual disabled).',
+        'Full fiscal year (1 Apr – 31 Mar): fixed {{days}} day(s). Mid-year hires: months from hire date (1 month = 1 day).',
       earnedLeaveDesc3: 'Available annual leave is calculated within the India fiscal year (1 Apr – 31 Mar). Unused days do not carry over.',
-      forceFixedAnnualForTenure: 'Force fixed annual leave days',
+      forceFixedAnnualForTenure: 'Fixed annual leave for full fiscal-year employment',
       forceFixedAnnualHint:
-        'When enabled, every employee receives the fixed days below as the fiscal-year total instead of monthly accrual.',
+        'When enabled, employees accruing from April through March get the fixed days below (default 12). Mid-year hires still use monthly accrual from their hire date.',
       forceFixedAnnualDaysLabel: 'Forced annual leave days',
       fiscalYearResetNote: 'All leave balances reset at the end of the India fiscal year (1 April – 31 March). Unused days cannot be accumulated or carried forward.',
       leaveTypeDaysLabel: 'Annual leave days',
