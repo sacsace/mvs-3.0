@@ -105,6 +105,75 @@ export function countVacationDaysInLeaveYear(
   return countInclusiveDateOnlyDays(overlapStart, overlapEnd);
 }
 
+/**
+ * 회계연도 내 연차 부여 개월 수 (1개월 = 1일).
+ * - 입사월은 제외, 다음 달부터 카운트 (입사일 1일이면 해당 월 포함)
+ * - 입사일이 30일 초과(31일)면 한 달 더 미룸
+ * - 회계연도 시작(4/1) · 연차 사용 가능일(입사+대기) 이전은 제외
+ */
+export function countAnnualLeaveMonthsInLeaveYear(
+  hireDate: Date,
+  leaveYear: LeaveYearRange,
+  eligibilityDate: Date
+): number {
+  const hire = new Date(hireDate);
+  hire.setHours(0, 0, 0, 0);
+  const eligibility = new Date(eligibilityDate);
+  eligibility.setHours(0, 0, 0, 0);
+  const fyStart = new Date(leaveYear.start);
+  fyStart.setHours(0, 0, 0, 0);
+  const fyEnd = new Date(leaveYear.end);
+  fyEnd.setHours(0, 0, 0, 0);
+
+  if (hire.getTime() > fyEnd.getTime()) return 0;
+
+  const hireDay = hire.getDate();
+  let startYear = hire.getFullYear();
+  let startMonth = hire.getMonth();
+  if (hireDay > 30) {
+    const bumped = new Date(startYear, startMonth + 2, 1);
+    startYear = bumped.getFullYear();
+    startMonth = bumped.getMonth();
+  } else if (hireDay > 1) {
+    const bumped = new Date(startYear, startMonth + 1, 1);
+    startYear = bumped.getFullYear();
+    startMonth = bumped.getMonth();
+  }
+
+  const clampMonth = (candidateYear: number, candidateMonth: number, floorYear: number, floorMonth: number) => {
+    if (candidateYear < floorYear || (candidateYear === floorYear && candidateMonth < floorMonth)) {
+      return { year: floorYear, month: floorMonth };
+    }
+    return { year: candidateYear, month: candidateMonth };
+  };
+
+  let clamped = clampMonth(startYear, startMonth, fyStart.getFullYear(), fyStart.getMonth());
+  startYear = clamped.year;
+  startMonth = clamped.month;
+  clamped = clampMonth(startYear, startMonth, eligibility.getFullYear(), eligibility.getMonth());
+  startYear = clamped.year;
+  startMonth = clamped.month;
+
+  const endYear = fyEnd.getFullYear();
+  const endMonth = fyEnd.getMonth();
+  if (startYear > endYear || (startYear === endYear && startMonth > endMonth)) {
+    return 0;
+  }
+
+  let count = 0;
+  let y = startYear;
+  let m = startMonth;
+  while (y < endYear || (y === endYear && m <= endMonth)) {
+    count += 1;
+    m += 1;
+    if (m > 11) {
+      m = 0;
+      y += 1;
+    }
+  }
+  return count;
+}
+
 /** 인도 회계연도(휴가 연도): 4/1 ~ 다음 해 3/31 */
 export function getDefaultIndiaFiscalYearRange(referenceDate: Date = new Date()): LeaveYearRange {
   const ref = new Date(referenceDate);
@@ -428,7 +497,7 @@ async function getUsedDaysInLeaveYear(
 /**
  * 연차: 인도 회계연도(4/1~3/31) 예상 부여·사용 (이월 불가).
  * 사용 가능 시점은 입사일+대기일 기준.
- * 총일수(예상) = (대기일 이후 ~ 휴가연도 종료일, 휴가연도 교집합 일수) / earnDays
+ * 총일수(예상) = 회계연도 내 근무 예정 개월 수 (1개월 1일, 입사월 제외·31일 입사 시 추가 1개월 제외)
  * 사용 = 승인된 연차 + 출퇴근 결근 차감 (대기·반려는 잔여 미차감)
  * 잔여 = max(0, 총일수 - 사용일수)
  */
@@ -454,7 +523,6 @@ export async function calculateAnnualLeave(userId: number, excludeVacationId?: n
 
     const policy = await getCompanyVacationPolicy(user.company_id);
     const startDays = policy.annualLeaveStartDays;
-    const earnDays = Math.max(1, policy.annualLeaveEarnDays || 20);
 
     const hireDate = new Date(user.hire_date);
     const today = new Date();
@@ -478,20 +546,10 @@ export async function calculateAnnualLeave(userId: number, excludeVacationId?: n
         hasMinServiceYears(hireDate, today, policy.forceFixedAnnualMinYears);
 
       if (useForcedFixed) {
-        // 근속 충족 시 회계연도 연차를 고정 일수로 강제 (적립식 무시)
+        // 근속 충족 시 회계연도 연차를 고정 일수로 강제 (월별 적립 무시)
         totalEarnedDays = Math.max(0, policy.forceFixedAnnualDays);
       } else {
-        // 회계연도 전체(시작~종료) 기준 예상 부여 — 오늘까지 적립분이 아님
-        const periodStart = new Date(
-          Math.max(eligibilityDate.getTime(), leaveYear.start.getTime(), hireDate.getTime())
-        );
-        periodStart.setHours(0, 0, 0, 0);
-        const periodEndYmd = toDateOnlyString(leaveYear.end);
-        const periodStartYmd = toDateOnlyString(periodStart);
-        const eligibleDays = countInclusiveDateOnlyDays(periodStartYmd, periodEndYmd);
-        if (eligibleDays > 0) {
-          totalEarnedDays = Math.floor(eligibleDays / earnDays);
-        }
+        totalEarnedDays = countAnnualLeaveMonthsInLeaveYear(hireDate, leaveYear, eligibilityDate);
       }
     }
 
