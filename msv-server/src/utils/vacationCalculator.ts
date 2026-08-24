@@ -150,7 +150,16 @@ export function countAnnualLeaveMonthsInLeaveYear(
   let clamped = clampMonth(startYear, startMonth, fyStart.getFullYear(), fyStart.getMonth());
   startYear = clamped.year;
   startMonth = clamped.month;
-  clamped = clampMonth(startYear, startMonth, eligibility.getFullYear(), eligibility.getMonth());
+
+  // 연차 사용 가능일이 월 중간이면 해당 월은 제외하고 다음 달부터 부여
+  let eligibilityYear = eligibility.getFullYear();
+  let eligibilityMonth = eligibility.getMonth();
+  if (eligibility.getDate() > 1) {
+    const bumped = new Date(eligibilityYear, eligibilityMonth + 1, 1);
+    eligibilityYear = bumped.getFullYear();
+    eligibilityMonth = bumped.getMonth();
+  }
+  clamped = clampMonth(startYear, startMonth, eligibilityYear, eligibilityMonth);
   startYear = clamped.year;
   startMonth = clamped.month;
 
@@ -540,17 +549,14 @@ export async function calculateAnnualLeave(userId: number, excludeVacationId?: n
       : Math.ceil((eligibilityDate.getTime() - today.getTime()) / DAY_MS);
 
     let totalEarnedDays = 0;
-    if (canUseAnnualLeave) {
-      const useForcedFixed =
-        policy.forceFixedAnnualForTenure &&
-        hasMinServiceYears(hireDate, today, policy.forceFixedAnnualMinYears);
+    const useForcedFixed =
+      policy.forceFixedAnnualForTenure &&
+      hasMinServiceYears(hireDate, today, policy.forceFixedAnnualMinYears);
 
-      if (useForcedFixed) {
-        // 근속 충족 시 회계연도 연차를 고정 일수로 강제 (월별 적립 무시)
-        totalEarnedDays = Math.max(0, policy.forceFixedAnnualDays);
-      } else {
-        totalEarnedDays = countAnnualLeaveMonthsInLeaveYear(hireDate, leaveYear, eligibilityDate);
-      }
+    if (useForcedFixed) {
+      totalEarnedDays = Math.max(0, policy.forceFixedAnnualDays);
+    } else {
+      totalEarnedDays = countAnnualLeaveMonthsInLeaveYear(hireDate, leaveYear, eligibilityDate);
     }
 
     const vacationUsedDays = await getUsedDaysInLeaveYear(userId, 'annual', leaveYear, excludeVacationId);
@@ -558,7 +564,9 @@ export async function calculateAnnualLeave(userId: number, excludeVacationId?: n
       ? await getAbsenceDeductionDaysInLeaveYear(userId, leaveYear)
       : 0;
     const usedDays = vacationUsedDays + absenceUsedDays;
-    const availableDays = Math.max(0, totalEarnedDays - usedDays);
+    const availableDays = canUseAnnualLeave
+      ? Math.max(0, totalEarnedDays - usedDays)
+      : 0;
 
     const leaveYearStart = toDateOnlyString(leaveYear.start);
     const leaveYearEnd = toDateOnlyString(leaveYear.end);

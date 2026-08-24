@@ -29,4 +29,10 @@ describe('countAnnualLeaveMonthsInLeaveYear', () => {
     const eligibility = new Date('2026-10-01');
     expect(countAnnualLeaveMonthsInLeaveYear(hire, fy2026, eligibility)).toBe(6);
   });
+
+  it('counts Oct–Mar as 6 months for Aug 10 hire with 30-day wait (eligible Sep 9)', () => {
+    const hire = new Date('2026-08-10');
+    const eligibility = new Date('2026-09-09');
+    expect(countAnnualLeaveMonthsInLeaveYear(hire, fy2026, eligibility)).toBe(6);
+  });
 });

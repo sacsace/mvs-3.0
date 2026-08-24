@@ -1915,7 +1915,10 @@ const VacationManagement: React.FC = () => {
                                 absenceUsed: 0,
                               };
                               const noHireDate = !row.hireDate;
-                              const annualLocked = key === 'annual' && !row.canUseAnnualLeave;
+                              const annualWaiting =
+                                key === 'annual' && !row.canUseAnnualLeave && (bal.quota || 0) > 0;
+                              const annualLocked =
+                                key === 'annual' && !row.canUseAnnualLeave && (bal.quota || 0) === 0;
                               const showDash = noHireDate || annualLocked;
                               const usedBreakdown =
                                 key === 'annual' && (bal.absenceUsed || 0) > 0
@@ -1934,7 +1937,9 @@ const VacationManagement: React.FC = () => {
                                         ? noHireDate
                                           ? t('vacationManagement.hireDateRequired')
                                           : t('vacationManagement.annualNotEligible')
-                                        : `${t('vacationManagement.quotaDays')}: ${bal.quota} · ${usedBreakdown} · ${t('vacationManagement.remainingDays')}: ${bal.remaining}`
+                                        : annualWaiting
+                                          ? `${t('vacationManagement.annualNotEligible')} · ${t('vacationManagement.quotaDays')}: ${bal.quota}`
+                                          : `${t('vacationManagement.quotaDays')}: ${bal.quota} · ${usedBreakdown} · ${t('vacationManagement.remainingDays')}: ${bal.remaining}`
                                     }
                                   >
                                     <Box
@@ -1952,9 +1957,11 @@ const VacationManagement: React.FC = () => {
                                           fontVariantNumeric: 'tabular-nums',
                                           color: showDash
                                             ? 'text.disabled'
-                                            : bal.remaining <= 0
+                                            : annualWaiting
                                               ? 'text.secondary'
-                                              : 'text.primary',
+                                              : bal.remaining <= 0
+                                                ? 'text.secondary'
+                                                : 'text.primary',
                                         }}
                                       >
                                         {showDash
