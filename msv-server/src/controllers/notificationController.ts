@@ -111,7 +111,7 @@ export const getActionInbox = async (req: Request, res: Response) => {
             requesterName: row.requester_name || '',
             expenseTitle: row.title || row.expense_id || '',
             amount: row.total_amount != null ? String(row.total_amount) : '',
-            currency: row.currency || 'KRW'
+            currency: row.currency || 'INR'
           }
         });
       }

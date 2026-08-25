@@ -27,6 +27,7 @@ import {
   updateExpenseReport,
   deleteExpenseReport,
   updateExpenseReportStatus,
+  changeExpenseApprover,
   uploadExpenseReceiptById,
   requestExpensePayment,
   rejectExpensePayment,
@@ -226,8 +227,9 @@ const sapImportStorage = multer.diskStorage({
     cb(null, `${Date.now()}_${safeName}`);
   },
 });
+/** SAP Excel/CSV can be large — default 2GB (override with SAP_IMPORT_MAX_MB) */
 const SAP_IMPORT_MAX_BYTES =
-  Math.max(1, Number(process.env.SAP_IMPORT_MAX_MB) || 100) * 1024 * 1024;
+  Math.max(1, Number(process.env.SAP_IMPORT_MAX_MB) || 2048) * 1024 * 1024;
 const sapImportUpload = multer({
   storage: sapImportStorage,
   limits: { fileSize: SAP_IMPORT_MAX_BYTES },
@@ -588,7 +590,7 @@ router.post(
     total_amount: { type: 'number' },
     currency: { type: 'string', maxLength: 10 },
     purpose: { type: 'string' },
-    status: { type: 'string', oneOf: ['draft', 'submitted', 'in_review', 'approved', 'rejected', 'paid'] },
+    status: { type: 'string', oneOf: ['draft', 'submitted'] },
     priority: { type: 'string', oneOf: ['low', 'medium', 'high', 'urgent'] },
     due_date: { type: 'string', pattern: datePattern },
     notes: { type: 'string' }
@@ -608,7 +610,7 @@ router.put(
     total_amount: { type: 'number' },
     currency: { type: 'string', maxLength: 10 },
     purpose: { type: 'string', minLength: 1 },
-    status: { type: 'string', oneOf: ['draft', 'submitted', 'in_review', 'approved', 'rejected', 'paid'] },
+    status: { type: 'string', oneOf: ['draft', 'submitted'] },
     priority: { type: 'string', oneOf: ['low', 'medium', 'high', 'urgent'] },
     due_date: { type: 'string', pattern: datePattern },
     notes: { type: 'string' }
@@ -620,9 +622,17 @@ router.put(
   '/expenses/:id/status',
   restrictAuditToReadOnly,
   validateBody({
-    status: { required: true, type: 'string', oneOf: ['draft', 'submitted', 'in_review', 'approved', 'rejected', 'paid'] }
+    status: { required: true, type: 'string', oneOf: ['submitted', 'approved', 'rejected'] }
   }),
   updateExpenseReportStatus
+);
+router.put(
+  '/expenses/:id/approver',
+  restrictAuditToReadOnly,
+  validateBody({
+    approver_id: { required: true, type: 'number' }
+  }),
+  changeExpenseApprover
 );
 router.post('/expenses/:id/request-payment', restrictAuditToReadOnly, requestExpensePayment);
 router.post(

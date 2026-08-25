@@ -31,7 +31,8 @@ import {
   mvsTableHeadHighlightSx,
 } from '../../theme/mvsLayout';
 
-const SAP_IMPORT_MAX_BYTES = 100 * 1024 * 1024;
+/** Keep in sync with server default `SAP_IMPORT_MAX_MB` (2048 = 2GB) */
+const SAP_IMPORT_MAX_BYTES = 2048 * 1024 * 1024;
 const SUPPORTED_EXTENSIONS = ['xlsx', 'xls', 'csv'];
 const WIZARD_STEPS = ['파일 업로드', '컬럼 확인', '매핑', '오류 검토', '전표 미리보기', '변환 완료'];
 
@@ -148,7 +149,7 @@ const SapImport: React.FC = () => {
       return;
     }
     if (selected.size > SAP_IMPORT_MAX_BYTES) {
-      setError('파일 크기는 100MB 이하여야 합니다.');
+      setError('파일 크기는 2GB 이하여야 합니다.');
       return;
     }
     setFile(selected);
@@ -302,7 +303,7 @@ const SapImport: React.FC = () => {
           1. SAP 파일 업로드
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-          지원 형식: XLSX, XLS, CSV · 최대 100MB. 파일은 컬럼 확인 후 서버에 보관하지 않습니다.
+          지원 형식: XLSX, XLS, CSV · 최대 2GB. 파일은 컬럼 확인 후 서버에 보관하지 않습니다.
         </Typography>
 
         {error ? <Alert severity="error" sx={{ mb: 1.5 }}>{error}</Alert> : null}

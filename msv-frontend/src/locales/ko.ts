@@ -3241,6 +3241,110 @@ export default {
         codeNameRequired: '코드와 계정과목명은 필수입니다.',
       },
     },
+    gsEncCostAnalysis: {
+      title: 'GS E&C 원가분석',
+      subtitle:
+        'GAS 표준계정과 Tally 누계 보조부를 매칭해 원가를 조회·합산합니다. (브라우저 로컬 저장) 서버 DB에 저장되지 않는 스팟 기능입니다.',
+      spotNotice:
+        'GAS 표준계정과 누계 보조부(Journal) 엑셀을 업로드하면 이 PC 브라우저에만 보관됩니다.',
+      tabs: {
+        accounts: 'GAS 계정체계',
+        ledger: '원가 내역',
+        summary: '서머리',
+      },
+      actions: {
+        uploadGas: 'GAS 계정 업로드',
+        uploadLedger: '누계 보조부/PDF 업로드',
+        appendLedger: '월별 추가 import (엑셀/PDF)',
+        rematch: '한글명 재매칭',
+        clearAccounts: '전체 계정과목 삭제',
+        clearLocal: '로컬 데이터 삭제',
+        exportExcel: 'Excel 다운로드',
+      },
+      searchPlaceholder: '계정·한글명·적요·거래처 검색',
+      matchFilter: '매칭',
+      matchAll: '전체',
+      matchMatched: '매칭됨',
+      matchUnmatched: '미매칭',
+      summaryGroup: '합산 기준',
+      unmatched: '미매칭',
+      cellEditHint: '더블클릭하여 수정',
+      filters: {
+        periodFrom: '시작일',
+        periodTo: '종료일',
+        allPeriod: '전체',
+        item: '항목',
+        itemPlaceholder: '계정명·Cost Category·Division',
+      },
+      basicInfo: {
+        title: '기본 정보',
+        hint: '기준월·환율을 입력하면 원가 내역 필터와 Amount(KRW) 환산에 사용됩니다. (엑셀 상단 환율이 있으면 자동 반영)',
+        periodMonth: '기준월 (YYYY-MM)',
+        fxRate: '환율 (KRW / INR)',
+        projectName: '프로젝트/비고',
+      },
+      cols: {
+        accountCode: '계정과목',
+        nameKo: '계정명칭(한국어)',
+        nameEn: '계정명칭',
+        companyName: '법인명',
+        accountType: '계정구분',
+        voucherNo: 'Voucher No.',
+        voucherDate: 'Voucher Date',
+        account: 'Account',
+        accountName: 'Account name',
+        accountNameTally: 'Account name-Tally',
+        accountNameHqEn: 'Account name-HQ(English)',
+        matchedNameKo: 'Account name',
+        costCategory: 'Cost Category',
+        month: 'Month',
+        amountInr: 'Amount(INR)',
+        amountKrw: 'Amount(KRW)',
+        clientName: 'Client Name',
+        narration: 'Narration',
+        division: 'Division',
+        gsIndiaCost: 'GS india',
+        gsIndia: 'GS india',
+        groupLabel: '구분',
+        count: '건수',
+        share: '비중',
+      },
+      summaryStrip: {
+        rows: '표시 건수',
+        inr: '합계 INR',
+        krw: '합계 KRW',
+        group: '현재 합산',
+      },
+      stats: {
+        accounts: '계정 {{count}}건',
+        ledger: '{{count}}건 · 매칭 {{matched}} / 미매칭 {{unmatched}} · INR {{inr}}',
+      },
+      empty: {
+        accounts: 'GAS 표준계정 엑셀을 업로드하세요.',
+        ledger: '누계 보조부(Journal) 엑셀 또는 표 형태 PDF를 업로드하세요.',
+        summary: '표시할 원가 내역이 없습니다.',
+      },
+      success: {
+        gasLoaded: 'GAS 계정 {{count}}건을 불러왔습니다.',
+        ledgerLoaded: '보조부 {{count}}건 import (합계 {{total}}건).',
+        rematched: 'GAS 계정으로 한글명을 다시 매칭했습니다.',
+        accountsCleared: '전체 계정과목을 삭제했습니다.',
+        cleared: '로컬 원가분석 데이터를 삭제했습니다.',
+        excelDownloaded: 'Excel 파일을 다운로드했습니다.',
+      },
+      errors: {
+        gasEmpty: 'GAS 계정 데이터를 찾지 못했습니다. 시트 헤더(계정과목)를 확인하세요.',
+        gasFailed: 'GAS 계정 파일 읽기에 실패했습니다.',
+        ledgerEmpty: '누계 보조부 데이터를 찾지 못했습니다. Voucher/Account 헤더를 확인하세요.',
+        ledgerFailed: '누계 보조부 파일 읽기에 실패했습니다.',
+        exportEmpty: '다운로드할 데이터가 없습니다. 필터를 확인하세요.',
+        exportFailed: 'Excel 다운로드에 실패했습니다.',
+        pdfImageOnly:
+          '이미지(스캔) PDF는 임포트할 수 없습니다. 글자 선택이 되는 표 PDF 또는 엑셀을 사용해 주세요.',
+        pdfNoTable:
+          'PDF에서 Voucher/Account 표 헤더를 찾지 못했습니다. 원가내역과 같은 컬럼 헤더가 있는지 확인하세요.',
+      },
+    },
     tallyImport: {
       title: 'Tally Data 불러오기',
       description:
@@ -4247,7 +4351,7 @@ export default {
       title: '지출결의서',
       unknown: '알 수 없음',
       tabs: {
-        written: '제가 작성한 지출결의서',
+        written: '내가 작성한 지출 결의서',
         received: '내가 받은 지출결의서',
         transfer: '송금할 리스트'
       },
@@ -4258,7 +4362,9 @@ export default {
         editDetail: '수정하기',
         transferLog: '송금 로그',
         approve: '승인',
+        accept: '수락',
         reject: '반려',
+        resubmit: '재요청',
         backToList: '목록으로'
       },
       filters: {
@@ -4296,12 +4402,15 @@ export default {
         urgent: '긴급'
       },
       columns: {
+        no: '번호',
         expenseInfo: '지출 정보',
         requester: '신청자',
+        approver: '승인자',
         amount: '금액',
         status: '상태',
         priority: '우선순위',
         submittedAt: '제출일',
+        createdAt: '작성일',
         actions: '작업'
       },
       dialog: {
@@ -4327,12 +4436,37 @@ export default {
         paymentApprovedReason: '승인 사유: {{reason}}',
         paymentRejectedLine: '반려: {{datetime}} · {{user}}',
         paymentRejectedReason: '반려 사유: {{reason}}',
+        rejectedComment: '반려 의견',
+        amountInclTax: '세금 포함',
         columns: {
           invoiceDate: '송장 일자',
           description: '설명',
           qty: '수량',
           unitPrice: '단가',
           amount: '금액'
+        }
+      },
+      flow: {
+        empty: '아직 기록된 변경이 없습니다.',
+        columns: {
+          time: '일시',
+          action: '구분',
+          approver: '승인권자',
+          actor: '변경자',
+          status: '상태'
+        },
+        actions: {
+          assigned: '지정',
+          reassigned: '변경',
+          changed: '변경',
+          approved: '수락',
+          rejected: '반려'
+        },
+        status: {
+          pending: '대기',
+          superseded: '변경됨',
+          accepted: '수락',
+          rejected: '반려'
         }
       },
       detailActions: {
@@ -4342,12 +4476,16 @@ export default {
         executePayment: '결제 실행',
         retryTransfer: '송금 재시도',
         print: '인쇄',
-        pdfDownload: 'PDF 다운로드'
+        pdfDownload: 'PDF 다운로드',
+        pdfDownloading: 'PDF 생성 중...'
       },
       voucher: {
         subtitle: '지급 전표',
         prepared: '작성',
         approved: '승인',
+        autoGenerated: '자동 생성',
+        departmentRole: '부서/직책',
+        sectionRequest: '지출 신청',
         sectionBasic: '기본 정보',
         sectionVendor: '대금을 받는 협력업체',
         sectionItems: '항목',
@@ -4355,6 +4493,7 @@ export default {
         sectionReceipts: '영수증 첨부',
         vendorGroupDoc: '업체·전표',
         vendorGroupPayout: '입금 계좌',
+        companyLogoAlt: '회사 로고',
         labelTitle: '제목',
         labelPurpose: '지출 목적',
         labelDateCreated: '작성일자',
@@ -4362,6 +4501,11 @@ export default {
         labelVoucherNumber: '전표 번호',
         labelGstNumber: 'GST 번호',
         labelVoucherDate: '전표 일자',
+        labelRepresentative: '대표자',
+        labelPartnerAddress: '주소',
+        labelPartnerPhone: '전화번호',
+        labelPartnerEmail: '이메일',
+        labelPanNumber: 'PAN 번호',
         labelAccountHolder: '계좌 예금주',
         labelBankName: '은행명',
         labelAccountNumber: '계좌 번호',
@@ -4411,10 +4555,15 @@ export default {
         paymentCompleted: '결제 완료 처리 및 송금 요청이 완료되었습니다.',
         transferRetried: '송금 재시도가 완료되었습니다.',
         finalApproved: '최종 승인되었습니다.',
-        paymentRejected: '결제 요청이 반려되었습니다.'
+        paymentRejected: '결제 요청이 반려되었습니다.',
+        approverChanged: '승인권자가 변경되었습니다.',
+        resubmitted: '지출결의서를 재요청했습니다.',
+        pdfDownloaded: 'PDF 파일로 저장했습니다.'
       },
       errors: {
         loadFailed: '지출 데이터를 불러오는데 실패했습니다.',
+        pdfTargetMissing: 'PDF 생성 대상을 찾지 못했습니다.',
+        pdfDownloadFailed: 'PDF 저장에 실패했습니다.',
         createDraftFailed: '지출결의서 초안 생성에 실패했습니다.',
         requiredTitlePurpose: '제목과 지출 목적은 필수입니다.',
         draftNotReadyRetry: '초안이 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.',
@@ -4432,7 +4581,12 @@ export default {
         rejectReasonRequired: '반려 사유를 입력해주세요.',
         qrGenerateFailed: 'QR 코드를 생성하지 못했습니다.',
         submitResponseFailed: '제출에 실패했습니다.',
-        paymentRejectResponseFailed: '결제 반려 처리에 실패했습니다.'
+        paymentRejectResponseFailed: '결제 반려 처리에 실패했습니다.',
+        cannotSelectSelf: '본인을 승인권자로 지정할 수 없습니다.',
+        cannotSelectRequester: '신청자를 승인권자로 지정할 수 없습니다.',
+        changeApproverFailed: '승인권자 변경에 실패했습니다.',
+        approverRequired: '승인권자를 선택해주세요.',
+        resubmitFailed: '재요청에 실패했습니다.'
       }
     },
     login: {

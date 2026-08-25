@@ -1788,7 +1788,7 @@ export default {
       selectCompanyHint: 'Job titles are registered per company. Select a company first.',
     },
     workAssigneeList: {
-      title: 'Work Assignment List',
+      title: 'Client List',
       description: 'Assign clients by person. Drag cards to move them to another assignee.',
       empty: 'No assignees yet. Add an assignee to get started.',
       actions: {
@@ -3169,6 +3169,110 @@ export default {
         codeNameRequired: 'Code and account name are required.',
       },
     },
+    gsEncCostAnalysis: {
+      title: 'GS E&C Cost Analysis',
+      subtitle:
+        'Match GAS chart of accounts with Tally cumulative ledger for cost review. (browser local only) Spot tool — data is not saved to the server DB.',
+      spotNotice:
+        'Uploaded GAS accounts and cumulative ledger (Journal) Excel files are stored on this PC browser only.',
+      tabs: {
+        accounts: 'GAS Accounts',
+        ledger: 'Cost Lines',
+        summary: 'Summary',
+      },
+      actions: {
+        uploadGas: 'Upload GAS Accounts',
+        uploadLedger: 'Upload ledger / PDF',
+        appendLedger: 'Append monthly import (Excel/PDF)',
+        rematch: 'Rematch Korean names',
+        clearAccounts: 'Delete all accounts',
+        clearLocal: 'Clear local data',
+        exportExcel: 'Download Excel',
+      },
+      searchPlaceholder: 'Search account, Korean name, narration, client',
+      matchFilter: 'Match',
+      matchAll: 'All',
+      matchMatched: 'Matched',
+      matchUnmatched: 'Unmatched',
+      summaryGroup: 'Group by',
+      unmatched: 'Unmatched',
+      cellEditHint: 'Double-click to edit',
+      filters: {
+        periodFrom: 'From date',
+        periodTo: 'To date',
+        allPeriod: 'All',
+        item: 'Item',
+        itemPlaceholder: 'Account / Cost Category / Division',
+      },
+      basicInfo: {
+        title: 'Basic information',
+        hint: 'Period and FX rate filter the ledger and fill Amount(KRW) when missing. FX in the Excel header is applied automatically when found.',
+        periodMonth: 'Period month (YYYY-MM)',
+        fxRate: 'FX rate (KRW / INR)',
+        projectName: 'Project / note',
+      },
+      cols: {
+        accountCode: 'Account Code',
+        nameKo: 'Account Name (KO)',
+        nameEn: 'Account Name (EN)',
+        companyName: 'Company',
+        accountType: 'Type',
+        voucherNo: 'Voucher No.',
+        voucherDate: 'Voucher Date',
+        account: 'Account',
+        accountName: 'Account name',
+        accountNameTally: 'Account name-Tally',
+        accountNameHqEn: 'Account name-HQ(English)',
+        matchedNameKo: 'Account name',
+        costCategory: 'Cost Category',
+        month: 'Month',
+        amountInr: 'Amount(INR)',
+        amountKrw: 'Amount(KRW)',
+        clientName: 'Client Name',
+        narration: 'Narration',
+        division: 'Division',
+        gsIndiaCost: 'GS india',
+        gsIndia: 'GS india',
+        groupLabel: 'Group',
+        count: 'Count',
+        share: 'Share',
+      },
+      summaryStrip: {
+        rows: 'Rows',
+        inr: 'Total INR',
+        krw: 'Total KRW',
+        group: 'Grouped by',
+      },
+      stats: {
+        accounts: '{{count}} accounts',
+        ledger: '{{count}} rows · matched {{matched}} / unmatched {{unmatched}} · INR {{inr}}',
+      },
+      empty: {
+        accounts: 'Upload the GAS standard chart Excel file.',
+        ledger: 'Upload cumulative ledger Excel or a text-based table PDF.',
+        summary: 'No cost lines to summarize.',
+      },
+      success: {
+        gasLoaded: 'Loaded {{count}} GAS accounts.',
+        ledgerLoaded: 'Imported {{count}} ledger rows (total {{total}}).',
+        rematched: 'Korean names rematched from GAS accounts.',
+        accountsCleared: 'All GAS accounts deleted.',
+        cleared: 'Local cost-analysis data cleared.',
+        excelDownloaded: 'Excel file downloaded.',
+      },
+      errors: {
+        gasEmpty: 'No GAS accounts found. Check sheet headers (계정과목 / Account Code).',
+        gasFailed: 'Failed to read GAS accounts file.',
+        ledgerEmpty: 'No ledger rows found. Check Voucher/Account headers.',
+        ledgerFailed: 'Failed to read ledger file.',
+        exportEmpty: 'No rows to export. Check your filters.',
+        exportFailed: 'Failed to download Excel.',
+        pdfImageOnly:
+          'Scanned/image-only PDFs cannot be imported. Use a text-based table PDF or Excel.',
+        pdfNoTable:
+          'Could not find a Voucher/Account table header in the PDF. Use the same column headers as Cost Lines.',
+      },
+    },
     tallyImport: {
       title: 'Load Tally Data',
       description:
@@ -4188,7 +4292,9 @@ export default {
         editDetail: 'Edit',
         transferLog: 'Transfer Log',
         approve: 'Approve',
+        accept: 'Accept',
         reject: 'Reject',
+        resubmit: 'Re-request',
         backToList: 'Back to List'
       },
       filters: {
@@ -4226,12 +4332,15 @@ export default {
         urgent: 'Urgent'
       },
       columns: {
+        no: 'No.',
         expenseInfo: 'Expense Info',
         requester: 'Requester',
+        approver: 'Approver',
         amount: 'Amount',
         status: 'Status',
         priority: 'Priority',
         submittedAt: 'Submitted Date',
+        createdAt: 'Created Date',
         actions: 'Actions'
       },
       dialog: {
@@ -4257,12 +4366,37 @@ export default {
         paymentApprovedReason: 'Approval reason: {{reason}}',
         paymentRejectedLine: 'Rejected: {{datetime}} · {{user}}',
         paymentRejectedReason: 'Rejection reason: {{reason}}',
+        rejectedComment: 'Rejection comment',
+        amountInclTax: 'Incl. tax',
         columns: {
           invoiceDate: 'Invoice date',
           description: 'Description',
           qty: 'Qty',
           unitPrice: 'Unit Price',
           amount: 'Amount'
+        }
+      },
+      flow: {
+        empty: 'No approval changes recorded yet.',
+        columns: {
+          time: 'Time',
+          action: 'Action',
+          approver: 'Approver',
+          actor: 'Changed by',
+          status: 'Status'
+        },
+        actions: {
+          assigned: 'Assigned',
+          reassigned: 'Changed',
+          changed: 'Changed',
+          approved: 'Accepted',
+          rejected: 'Rejected'
+        },
+        status: {
+          pending: 'Pending',
+          superseded: 'Superseded',
+          accepted: 'Accepted',
+          rejected: 'Rejected'
         }
       },
       detailActions: {
@@ -4272,19 +4406,24 @@ export default {
         executePayment: 'Execute payment',
         retryTransfer: 'Retry transfer',
         print: 'Print',
-        pdfDownload: 'Download PDF'
+        pdfDownload: 'Download PDF',
+        pdfDownloading: 'Generating PDF...'
       },
       voucher: {
         subtitle: 'Payment voucher',
         prepared: 'Prepared',
         approved: 'Approved',
+        autoGenerated: 'Auto-generated',
+        departmentRole: 'Department / Role',
+        sectionRequest: 'Expense request',
         sectionBasic: 'Basic information',
-        sectionVendor: 'Vendor (payee)',
+        sectionVendor: 'Vendor receiving payment',
         sectionItems: 'Line items',
         sectionTax: 'Tax / total',
         sectionReceipts: 'Receipt attachments',
         vendorGroupDoc: 'Vendor & voucher',
         vendorGroupPayout: 'Payout account',
+        companyLogoAlt: 'Company logo',
         labelTitle: 'Title',
         labelPurpose: 'Purpose of expenditure',
         labelDateCreated: 'Created date',
@@ -4292,6 +4431,11 @@ export default {
         labelVoucherNumber: 'Voucher number',
         labelGstNumber: 'GST number',
         labelVoucherDate: 'Voucher date',
+        labelRepresentative: 'Representative',
+        labelPartnerAddress: 'Address',
+        labelPartnerPhone: 'Phone',
+        labelPartnerEmail: 'Email',
+        labelPanNumber: 'PAN number',
         labelAccountHolder: 'Account holder',
         labelBankName: 'Bank name',
         labelAccountNumber: 'Account number',
@@ -4341,10 +4485,15 @@ export default {
         paymentCompleted: 'Payment completion and transfer request are completed.',
         transferRetried: 'Transfer retry completed.',
         finalApproved: 'Final approval completed.',
-        paymentRejected: 'Payment request has been rejected.'
+        paymentRejected: 'Payment request has been rejected.',
+        approverChanged: 'Approver has been changed.',
+        resubmitted: 'Expense report has been re-requested.',
+        pdfDownloaded: 'Saved as PDF.'
       },
       errors: {
         loadFailed: 'Failed to load expense data.',
+        pdfTargetMissing: 'Could not find content to export as PDF.',
+        pdfDownloadFailed: 'Failed to save PDF.',
         createDraftFailed: 'Failed to create expense report draft.',
         requiredTitlePurpose: 'Title and purpose are required.',
         draftNotReadyRetry: 'Draft is not ready yet. Please try again shortly.',
@@ -4362,7 +4511,12 @@ export default {
         rejectReasonRequired: 'Please enter a rejection reason.',
         qrGenerateFailed: 'Could not generate the QR code.',
         submitResponseFailed: 'Submit failed.',
-        paymentRejectResponseFailed: 'Payment rejection failed.'
+        paymentRejectResponseFailed: 'Payment rejection failed.',
+        cannotSelectSelf: 'You cannot select yourself as the approver.',
+        cannotSelectRequester: 'The requester cannot be the approver.',
+        changeApproverFailed: 'Failed to change the approver.',
+        approverRequired: 'Please select an approver.',
+        resubmitFailed: 'Failed to re-request the expense report.'
       }
     },
     login: {

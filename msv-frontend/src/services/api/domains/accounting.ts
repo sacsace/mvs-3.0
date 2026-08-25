@@ -13,6 +13,10 @@ export const accountingService = {
     if (params?.headerRowNumber) formData.append('headerRowNumber', String(params.headerRowNumber));
     const response = await api.post('/accounting/sap/inspect', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 600000,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      transformRequest: [(data) => data],
     });
     return response.data;
   },
@@ -38,6 +42,10 @@ export const accountingService = {
     if (params?.company_id) formData.append('company_id', String(params.company_id));
     const response = await api.post('/accounting/sap/preview', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 600000,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      transformRequest: [(data) => data],
     });
     return response.data;
   },
@@ -174,8 +182,18 @@ export const accountingService = {
   },
 
   // 지출결?�서 ?�태 변�?
-  updateExpenseReportStatus: async (id: number, status: string) => {
-    const response = await api.put(`/accounting/expenses/${id}/status`, { status });
+  updateExpenseReportStatus: async (id: number, status: string, extra?: { reason?: string }) => {
+    const response = await api.put(`/accounting/expenses/${id}/status`, {
+      status,
+      ...(extra?.reason ? { reason: extra.reason } : {}),
+    });
+    return response.data;
+  },
+
+  changeExpenseApprover: async (id: number, approverId: number) => {
+    const response = await api.put(`/accounting/expenses/${id}/approver`, {
+      approver_id: approverId,
+    });
     return response.data;
   },
 

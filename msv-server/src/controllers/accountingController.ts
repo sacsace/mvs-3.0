@@ -2063,7 +2063,10 @@ export const getExpenseReports = async (req: RequestWithUser, res: Response) => 
       order: [['created_at', 'DESC']]
     });
 
-    res.json({ success: true, data: expenses });
+    res.json({
+      success: true,
+      data: expenses.map((row: any) => sanitizeExpenseForUser(row, req.user)),
+    });
   } catch (error: any) {
     console.error('지출결의서 조회 오류:', error);
     res.status(500).json({ success: false, message: '지출결의서를 불러오는데 실패했습니다.' });
@@ -2081,11 +2084,355 @@ export const getExpenseReportById = async (req: RequestWithUser, res: Response) 
     if (!expense) {
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
     }
-    res.json({ success: true, data: expense });
+    res.json({ success: true, data: sanitizeExpenseForUser(expense, req.user) });
   } catch (error: any) {
     console.error('지출결의서 상세 조회 오류:', error);
     res.status(500).json({ success: false, message: '지출결의서 상세 조회에 실패했습니다.' });
   }
+};
+
+const EXPENSE_VOUCHER_PREFIX = 'PV';
+
+const parseExpenseVoucherSeq = (value: unknown, year: number) => {
+  const text = String(value || '').trim().toUpperCase();
+  const match = text.match(new RegExp(`^${EXPENSE_VOUCHER_PREFIX}-${year}-(\\d+)$`));
+  return match ? Number(match[1]) : 0;
+};
+
+const readExpenseVoucherNo = (itemsValue: any) => {
+  if (!itemsValue) return '';
+  let parsed = itemsValue;
+  if (typeof itemsValue === 'string') {
+    try {
+      parsed = JSON.parse(itemsValue);
+    } catch {
+      return '';
+    }
+  }
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    return String(parsed.meta?.voucherNo || '').trim();
+  }
+  return '';
+};
+
+const mergeExpenseItemsMeta = (itemsValue: any, extraMeta: Record<string, any>) => {
+  let parsed = itemsValue;
+  if (typeof itemsValue === 'string') {
+    try {
+      parsed = JSON.parse(itemsValue);
+    } catch {
+      parsed = [];
+    }
+  }
+  if (Array.isArray(parsed) || parsed == null) {
+    return { rows: Array.isArray(parsed) ? parsed : [], meta: { ...extraMeta } };
+  }
+  if (typeof parsed === 'object') {
+    return {
+      rows: Array.isArray(parsed.rows) ? parsed.rows : [],
+      meta: { ...(parsed.meta && typeof parsed.meta === 'object' ? parsed.meta : {}), ...extraMeta },
+    };
+  }
+  return { rows: [], meta: { ...extraMeta } };
+};
+
+const allocateExpenseVoucherNo = async (tenantId: number, companyId: number) => {
+  const year = new Date().getFullYear();
+  const rows = await (ExpenseReport as any).findAll({
+    where: { tenant_id: tenantId, company_id: companyId, is_active: true },
+    attributes: ['expense_id', 'items'],
+  });
+  let maxSeq = 0;
+  for (const row of rows) {
+    maxSeq = Math.max(
+      maxSeq,
+      parseExpenseVoucherSeq(row.expense_id, year),
+      parseExpenseVoucherSeq(readExpenseVoucherNo(row.items), year)
+    );
+  }
+  return `${EXPENSE_VOUCHER_PREFIX}-${year}-${String(maxSeq + 1).padStart(4, '0')}`;
+};
+
+const toPositiveInt = (value: unknown): number | null => {
+  if (value == null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+const parseApprovalFlow = (value: any): any[] => {
+  if (!value) return [];
+  let parsed = value;
+  if (typeof value === 'string') {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && typeof parsed === 'object' && Array.isArray(parsed.rows)) return parsed.rows;
+  return [];
+};
+
+const canManageExpenseTransfer = (user: any) =>
+  user?.role === 'admin' || user?.role === 'root' || user?.is_payment_officer === true;
+
+const EXPENSE_TRANSFER_SECRET_KEYS = [
+  'bank_transfer_logs',
+  'bank_transfer_payload',
+  'bank_transfer_error',
+] as const;
+
+const EXPENSE_CLIENT_UPDATE_BLOCKLIST = [
+  'id',
+  'tenant_id',
+  'company_id',
+  'requester_id',
+  'requester_name',
+  'expense_id',
+  'approval_flow',
+  'current_approver_id',
+  'status',
+  'is_active',
+  'created_at',
+  'updated_at',
+  'deleted_at',
+  'submitted_at',
+  'payment_request_status',
+  'payment_requested_at',
+  'payment_requested_by',
+  'payment_completed_at',
+  'payment_completed_by',
+  'payment_approved_reason',
+  'payment_approved_at',
+  'payment_approved_by',
+  'payment_rejected_reason',
+  'payment_rejected_at',
+  'payment_rejected_by',
+  'bank_transfer_provider',
+  'bank_transfer_status',
+  'bank_transfer_reference',
+  'bank_transfer_error',
+  'bank_transfer_payload',
+  'bank_transfer_logs',
+  'approval_id',
+] as const;
+
+const sanitizeExpenseForUser = (expense: any, user: any) => {
+  const data = expense?.toJSON ? expense.toJSON() : { ...(expense || {}) };
+  if (canManageExpenseTransfer(user)) return data;
+  for (const key of EXPENSE_TRANSFER_SECRET_KEYS) {
+    if (key in data) data[key] = null;
+  }
+  return data;
+};
+
+const readExpenseApproverId = (expense: any, itemsOverride?: any): number | null => {
+  const meta = mergeExpenseItemsMeta(itemsOverride != null ? itemsOverride : expense?.items, {}).meta;
+  return toPositiveInt(meta.approvedById ?? meta.checkedById) || toPositiveInt(expense?.current_approver_id);
+};
+
+const loadCompanyUser = async (
+  userId: number,
+  tenantId: number | undefined,
+  companyId: number | undefined
+) => {
+  return (User as any).findOne({
+    where: { id: userId, tenant_id: tenantId, company_id: companyId },
+    attributes: ['id', 'username', 'department', 'position'],
+  });
+};
+
+type ApproverAssignResult =
+  | {
+      ok: true;
+      unchanged: boolean;
+      current_approver_id: number;
+      approval_flow: any[];
+      items: any;
+      nextApprover: any;
+      prevId: number | null;
+    }
+  | { ok: false; status: number; message: string };
+
+const assignExpenseApprover = async (params: {
+  expense: any;
+  itemsSource?: any;
+  flowSource?: any;
+  nextApproverId: number;
+  actor: { id: number; username?: string };
+  tenantId: number | undefined;
+  companyId: number | undefined;
+  action: 'assigned' | 'reassigned';
+}): Promise<ApproverAssignResult> => {
+  const { expense, nextApproverId, actor, tenantId, companyId, action } = params;
+  if (nextApproverId === Number(actor.id)) {
+    return { ok: false, status: 400, message: '본인을 승인권자로 지정할 수 없습니다.' };
+  }
+  if (toPositiveInt(expense.requester_id) === nextApproverId) {
+    return { ok: false, status: 400, message: '신청자를 승인권자로 지정할 수 없습니다.' };
+  }
+
+  const nextApprover = await loadCompanyUser(nextApproverId, tenantId, companyId);
+  if (!nextApprover) {
+    return { ok: false, status: 400, message: '승인권자를 찾을 수 없습니다.' };
+  }
+
+  const itemsSource = params.itemsSource != null ? params.itemsSource : expense.items;
+  const prevId = readExpenseApproverId(expense, itemsSource);
+  if (prevId === nextApproverId) {
+    return {
+      ok: true,
+      unchanged: true,
+      current_approver_id: nextApproverId,
+      approval_flow: parseApprovalFlow(params.flowSource != null ? params.flowSource : expense.approval_flow),
+      items: itemsSource,
+      nextApprover,
+      prevId,
+    };
+  }
+
+  const flow = parseApprovalFlow(params.flowSource != null ? params.flowSource : expense.approval_flow).map(
+    (step: any) => ({ ...step })
+  );
+  const nowIso = new Date().toISOString();
+  const prevUser = prevId ? await loadCompanyUser(prevId, tenantId, companyId) : null;
+
+  if (flow.length === 0 && prevId) {
+    flow.push({
+      id: 1,
+      stepOrder: 1,
+      approverId: prevId,
+      approverName: prevUser?.username || '',
+      approverDepartment: prevUser?.department || '-',
+      approverPosition: prevUser?.position || '-',
+      status: 'skipped',
+      action: 'assigned',
+      assignedAt: expense.submitted_at || expense.created_at || nowIso,
+      approvedAt: nowIso,
+      escalated: true,
+      escalatedToId: nextApprover.id,
+      escalatedToName: nextApprover.username,
+    });
+  }
+
+  for (const step of flow) {
+    if (step.status === 'pending') {
+      step.status = 'skipped';
+      step.approvedAt = nowIso;
+      step.escalated = true;
+      step.escalatedToId = nextApprover.id;
+      step.escalatedToName = nextApprover.username;
+    }
+  }
+
+  const maxId = flow.reduce((max: number, step: any) => Math.max(max, Number(step.id) || 0), 0);
+  const maxOrder = flow.reduce((max: number, step: any) => Math.max(max, Number(step.stepOrder) || 0), 0);
+
+  flow.push({
+    id: maxId + 1,
+    stepOrder: maxOrder + 1,
+    approverId: nextApprover.id,
+    approverName: nextApprover.username,
+    approverDepartment: nextApprover.department || '-',
+    approverPosition: nextApprover.position || '-',
+    status: 'pending',
+    action,
+    changedById: actor.id,
+    changedByName: actor.username || '',
+    previousApproverId: prevId,
+    previousApproverName: prevUser?.username,
+    assignedAt: nowIso,
+  });
+
+  return {
+    ok: true,
+    unchanged: false,
+    current_approver_id: nextApprover.id,
+    approval_flow: flow,
+    items: mergeExpenseItemsMeta(itemsSource, {
+      approvedById: String(nextApprover.id),
+      checkedById: String(nextApprover.id),
+    }),
+    nextApprover,
+    prevId,
+  };
+};
+
+const recordExpenseDecision = (
+  expense: any,
+  status: 'approved' | 'rejected',
+  actor: { id: number; username?: string },
+  reason?: string
+) => {
+  const flow = parseApprovalFlow(expense.approval_flow).map((step: any) => ({ ...step }));
+  const nowIso = new Date().toISOString();
+  let updated = false;
+  for (const step of flow) {
+    if (step.status === 'pending' && toPositiveInt(step.approverId) === Number(actor.id)) {
+      step.status = status;
+      step.action = status;
+      step.approvedAt = nowIso;
+      step.changedById = actor.id;
+      step.changedByName = actor.username || '';
+      if (reason) step.comment = reason;
+      updated = true;
+    }
+  }
+  if (!updated) {
+    const maxId = flow.reduce((max: number, step: any) => Math.max(max, Number(step.id) || 0), 0);
+    const maxOrder = flow.reduce((max: number, step: any) => Math.max(max, Number(step.stepOrder) || 0), 0);
+    flow.push({
+      id: maxId + 1,
+      stepOrder: maxOrder + 1,
+      approverId: actor.id,
+      approverName: actor.username || '',
+      status,
+      action: status,
+      changedById: actor.id,
+      changedByName: actor.username || '',
+      comment: reason,
+      assignedAt: nowIso,
+      approvedAt: nowIso,
+    });
+  }
+  return flow;
+};
+
+const reopenRejectedExpense = (expense: any, actor: { id: number; username?: string }) => {
+  const designatedId = readExpenseApproverId(expense);
+  const flow = parseApprovalFlow(expense.approval_flow).map((step: any) => ({ ...step }));
+  const nowIso = new Date().toISOString();
+  const lastNamed = [...flow].reverse().find((step) => toPositiveInt(step.approverId) === designatedId);
+  const maxId = flow.reduce((max: number, step: any) => Math.max(max, Number(step.id) || 0), 0);
+  const maxOrder = flow.reduce((max: number, step: any) => Math.max(max, Number(step.stepOrder) || 0), 0);
+  if (designatedId) {
+    flow.push({
+      id: maxId + 1,
+      stepOrder: maxOrder + 1,
+      approverId: designatedId,
+      approverName: lastNamed?.approverName || '',
+      approverDepartment: lastNamed?.approverDepartment || '-',
+      approverPosition: lastNamed?.approverPosition || '-',
+      status: 'pending',
+      action: 'assigned',
+      changedById: actor.id,
+      changedByName: actor.username || '',
+      assignedAt: nowIso,
+    });
+  }
+  return {
+    approval_flow: flow,
+    payment_request_status: 'not_requested',
+    payment_requested_at: null,
+    payment_requested_by: null,
+    payment_approved_reason: null,
+    payment_approved_at: null,
+    payment_approved_by: null,
+    payment_rejected_reason: null,
+    payment_rejected_at: null,
+    payment_rejected_by: null,
+  };
 };
 
 // 지출결의서 생성
@@ -2099,13 +2446,12 @@ export const createExpenseReport = async (req: RequestWithUser, res: Response) =
       requester_department,
       requester_position,
       total_amount = 0,
-      currency = 'KRW',
+      currency = 'INR',
       purpose,
       items = [],
       status = 'draft',
       priority = 'medium',
       current_approver_id,
-      approval_flow = [],
       submitted_at,
       due_date,
       notes,
@@ -2114,12 +2460,47 @@ export const createExpenseReport = async (req: RequestWithUser, res: Response) =
 
     const safeTitle = typeof title === 'string' ? title : '';
     const safePurpose = typeof purpose === 'string' ? purpose : '';
+    const createStatus = status === 'submitted' ? 'submitted' : 'draft';
 
-    if (status !== 'draft' && (!safeTitle.trim() || !safePurpose.trim())) {
+    if (createStatus === 'submitted' && (!safeTitle.trim() || !safePurpose.trim())) {
       return res.status(400).json({ success: false, message: '필수 항목이 누락되었습니다.' });
     }
 
-    const generatedId = expense_id || `EXP-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+    const voucherNo = await allocateExpenseVoucherNo(tenant_id, company_id);
+    const itemsWithVoucher = mergeExpenseItemsMeta(items, { voucherNo });
+    const generatedId = voucherNo;
+
+    let itemsFinal = itemsWithVoucher;
+    let approvalFlow: any[] = [];
+    let nextApproverId = toPositiveInt(current_approver_id)
+      || toPositiveInt(itemsWithVoucher.meta?.approvedById);
+
+    if (nextApproverId) {
+      const assigned = await assignExpenseApprover({
+        expense: {
+          requester_id,
+          items: mergeExpenseItemsMeta(itemsWithVoucher, { approvedById: '', checkedById: '' }),
+          approval_flow: [],
+          current_approver_id: null,
+        },
+        itemsSource: mergeExpenseItemsMeta(itemsWithVoucher, { approvedById: '', checkedById: '' }),
+        nextApproverId,
+        actor: { id: requester_id, username: req.user.username },
+        tenantId: tenant_id,
+        companyId: company_id,
+        action: 'assigned',
+      });
+      if (assigned.ok === false) {
+        return res.status(assigned.status).json({ success: false, message: assigned.message });
+      }
+      if (!assigned.unchanged) {
+        itemsFinal = assigned.items;
+        approvalFlow = assigned.approval_flow;
+        nextApproverId = assigned.current_approver_id;
+      }
+    } else if (createStatus === 'submitted') {
+      return res.status(400).json({ success: false, message: '승인권자를 선택해주세요.' });
+    }
 
     const expense = await (ExpenseReport as any).create({
       tenant_id,
@@ -2131,25 +2512,25 @@ export const createExpenseReport = async (req: RequestWithUser, res: Response) =
       requester_department,
       requester_position,
       total_amount,
-      currency,
+      currency: 'INR',
       purpose: safePurpose,
-      items,
-      status,
+      items: itemsFinal,
+      status: createStatus,
       priority,
-      current_approver_id,
-      approval_flow,
-      submitted_at,
+      current_approver_id: nextApproverId,
+      approval_flow: approvalFlow,
+      submitted_at: createStatus === 'submitted' ? new Date() : null,
       due_date,
       notes,
       attachments,
       is_active: true
     });
 
-    if (status === 'submitted') {
+    if (createStatus === 'submitted') {
       notifyExpenseReportSubmitted(req, expense);
     }
 
-    res.status(201).json({ success: true, data: expense });
+    res.status(201).json({ success: true, data: sanitizeExpenseForUser(expense, req.user) });
   } catch (error: any) {
     console.error('지출결의서 생성 오류:', error);
     res.status(500).json({ success: false, message: '지출결의서 생성에 실패했습니다.' });
@@ -2160,7 +2541,7 @@ export const createExpenseReport = async (req: RequestWithUser, res: Response) =
 export const updateExpenseReport = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id } = req.user;
+    const { tenant_id, company_id, id: user_id, username } = req.user;
     const expense = await (ExpenseReport as any).findOne({
       where: { id, tenant_id, company_id, is_active: true }
     });
@@ -2168,17 +2549,87 @@ export const updateExpenseReport = async (req: RequestWithUser, res: Response) =
     if (!expense) {
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
     }
+    if (Number(expense.requester_id) !== Number(user_id)) {
+      return res.status(403).json({ success: false, message: '작성자만 수정할 수 있습니다.' });
+    }
 
-    const prevStatus = expense.status;
-    await expense.update({ ...req.body });
+    const prevStatus = String(expense.status || 'draft');
+    if (!['draft', 'rejected'].includes(prevStatus)) {
+      return res.status(400).json({ success: false, message: '검토 중이거나 처리된 문서는 수정할 수 없습니다.' });
+    }
+
+    const requestedStatus = String(req.body?.status || prevStatus);
+    if (requestedStatus !== 'draft' && requestedStatus !== 'submitted') {
+      return res.status(400).json({ success: false, message: '허용되지 않은 상태입니다.' });
+    }
+    const isSubmit = requestedStatus === 'submitted';
+
+    const nextBody: Record<string, any> = { ...req.body };
+    for (const key of EXPENSE_CLIENT_UPDATE_BLOCKLIST) {
+      delete nextBody[key];
+    }
+
+    const existingNo = readExpenseVoucherNo(expense.items);
+    if (nextBody.items != null) {
+      nextBody.items = mergeExpenseItemsMeta(
+        nextBody.items,
+        { voucherNo: existingNo || await allocateExpenseVoucherNo(tenant_id, company_id) }
+      );
+    }
+
+    const incomingApproverId =
+      toPositiveInt(req.body?.current_approver_id)
+      || toPositiveInt(
+        mergeExpenseItemsMeta(nextBody.items != null ? nextBody.items : expense.items, {}).meta.approvedById
+      );
+    const existingApproverId = readExpenseApproverId(expense);
+
+    if (isSubmit && !incomingApproverId && !existingApproverId) {
+      return res.status(400).json({ success: false, message: '승인권자를 선택해주세요.' });
+    }
+
+    if (prevStatus === 'rejected' && isSubmit) {
+      Object.assign(
+        nextBody,
+        reopenRejectedExpense(expense, { id: user_id, username })
+      );
+    }
+
+    if (incomingApproverId) {
+      const assigned = await assignExpenseApprover({
+        expense,
+        itemsSource: nextBody.items != null ? nextBody.items : expense.items,
+        flowSource: nextBody.approval_flow != null ? nextBody.approval_flow : expense.approval_flow,
+        nextApproverId: incomingApproverId,
+        actor: { id: user_id, username },
+        tenantId: tenant_id,
+        companyId: company_id,
+        action: existingApproverId ? 'reassigned' : 'assigned',
+      });
+      if (assigned.ok === false) {
+        return res.status(assigned.status).json({ success: false, message: assigned.message });
+      }
+      if (!assigned.unchanged) {
+        nextBody.current_approver_id = assigned.current_approver_id;
+        nextBody.approval_flow = assigned.approval_flow;
+        nextBody.items = assigned.items;
+      }
+    }
+
+    nextBody.status = isSubmit ? 'submitted' : prevStatus;
+    nextBody.currency = 'INR';
+    if (isSubmit && !expense.submitted_at) {
+      nextBody.submitted_at = new Date();
+    }
+
+    await expense.update(nextBody);
     await expense.reload();
 
-    const nextStatus = expense.status;
-    if (nextStatus === 'submitted' && prevStatus !== 'submitted') {
+    if (isSubmit && prevStatus !== 'submitted') {
       notifyExpenseReportSubmitted(req, expense);
     }
 
-    res.json({ success: true, data: expense });
+    res.json({ success: true, data: sanitizeExpenseForUser(expense, req.user) });
   } catch (error: any) {
     console.error('지출결의서 수정 오류:', error);
     res.status(500).json({ success: false, message: '지출결의서 수정에 실패했습니다.' });
@@ -2198,6 +2649,13 @@ export const deleteExpenseReport = async (req: RequestWithUser, res: Response) =
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
     }
 
+    if (Number(expense.requester_id) !== Number(req.user.id)) {
+      return res.status(403).json({ success: false, message: '작성자만 삭제할 수 있습니다.' });
+    }
+    if (['submitted', 'in_review', 'approved', 'paid'].includes(String(expense.status))) {
+      return res.status(400).json({ success: false, message: '검토 중이거나 처리된 문서는 삭제할 수 없습니다.' });
+    }
+
     await expense.update({ is_active: false });
     res.json({ success: true });
   } catch (error: any) {
@@ -2210,8 +2668,8 @@ export const deleteExpenseReport = async (req: RequestWithUser, res: Response) =
 export const updateExpenseReportStatus = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
-    const { tenant_id, company_id } = req.user;
+    const { status, reason } = req.body;
+    const { tenant_id, company_id, id: user_id } = req.user;
     const expense = await (ExpenseReport as any).findOne({
       where: { id, tenant_id, company_id, is_active: true }
     });
@@ -2221,17 +2679,158 @@ export const updateExpenseReportStatus = async (req: RequestWithUser, res: Respo
     }
 
     const prevStatus = expense.status;
-    await expense.update({ status });
+    const designatedId = readExpenseApproverId(expense);
+
+    if (!['submitted', 'approved', 'rejected'].includes(String(status))) {
+      return res.status(400).json({ success: false, message: '허용되지 않은 상태입니다.' });
+    }
+
+    if (status === 'submitted') {
+      if (Number(expense.requester_id) !== Number(user_id)) {
+        return res.status(403).json({ success: false, message: '작성자만 재요청할 수 있습니다.' });
+      }
+      if (!['draft', 'rejected', 'submitted', 'in_review'].includes(String(prevStatus))) {
+        return res.status(400).json({ success: false, message: '이 문서는 재요청할 수 없습니다.' });
+      }
+      if (!designatedId) {
+        return res.status(400).json({ success: false, message: '승인권자를 선택해주세요.' });
+      }
+    }
+
+    if (status === 'approved' || status === 'rejected') {
+      if (!['submitted', 'in_review'].includes(String(prevStatus))) {
+        return res.status(400).json({
+          success: false,
+          message: '반려된 문서는 재요청 후에만 승인할 수 있습니다.',
+        });
+      }
+      if (!designatedId || designatedId !== Number(user_id)) {
+        return res.status(403).json({ success: false, message: '지정된 승인권자만 처리할 수 있습니다.' });
+      }
+    }
+
+    const patch: Record<string, any> = { status };
+    if (status === 'submitted' && prevStatus === 'rejected') {
+      Object.assign(patch, reopenRejectedExpense(expense, { id: user_id, username: req.user.username }));
+    }
+    if (status === 'rejected' && typeof reason === 'string' && reason.trim()) {
+      patch.items = mergeExpenseItemsMeta(expense.items, {
+        rejectedReason: reason.trim(),
+        rejectedById: user_id,
+        rejectedAt: new Date().toISOString(),
+      });
+    }
+    if (status === 'rejected') {
+      patch.payment_request_status = 'not_requested';
+      patch.payment_requested_at = null;
+      patch.payment_requested_by = null;
+    }
+    if (status === 'approved' || status === 'rejected') {
+      patch.approval_flow = recordExpenseDecision(
+        expense,
+        status,
+        { id: user_id, username: req.user.username },
+        typeof reason === 'string' ? reason.trim() : undefined
+      );
+    }
+    await expense.update(patch);
     await expense.reload();
 
     if (status === 'submitted' && prevStatus !== 'submitted') {
       notifyExpenseReportSubmitted(req, expense);
     }
 
-    res.json({ success: true, data: expense });
+    res.json({ success: true, data: sanitizeExpenseForUser(expense, req.user) });
   } catch (error: any) {
     console.error('지출결의서 상태 변경 오류:', error);
     res.status(500).json({ success: false, message: '지출결의서 상태 변경에 실패했습니다.' });
+  }
+};
+
+export const changeExpenseApprover = async (req: RequestWithUser, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { tenant_id, company_id, id: user_id, username } = req.user;
+    const nextApproverId = toPositiveInt(req.body?.approver_id);
+    if (!nextApproverId) {
+      return res.status(400).json({ success: false, message: '승인권자를 선택해주세요.' });
+    }
+
+    const expense = await (ExpenseReport as any).findOne({
+      where: { id, tenant_id, company_id, is_active: true }
+    });
+    if (!expense) {
+      return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
+    }
+    if (['approved', 'rejected', 'paid'].includes(expense.status)) {
+      return res.status(400).json({ success: false, message: '완료된 문서는 승인권자를 변경할 수 없습니다.' });
+    }
+
+    const designatedId = readExpenseApproverId(expense);
+    const isRequester = Number(expense.requester_id) === Number(user_id);
+    const isCurrentApprover = designatedId != null && designatedId === Number(user_id);
+    if (!isRequester && !isCurrentApprover) {
+      return res.status(403).json({ success: false, message: '승인권자를 변경할 권한이 없습니다.' });
+    }
+
+    const assigned = await assignExpenseApprover({
+      expense,
+      nextApproverId,
+      actor: { id: user_id, username },
+      tenantId: tenant_id,
+      companyId: company_id,
+      action: designatedId ? 'reassigned' : 'assigned',
+    });
+    if (assigned.ok === false) {
+      return res.status(assigned.status).json({ success: false, message: assigned.message });
+    }
+    if (assigned.unchanged) {
+      return res.json({ success: true, data: sanitizeExpenseForUser(expense, req.user) });
+    }
+
+    await expense.update({
+      current_approver_id: assigned.current_approver_id,
+      approval_flow: assigned.approval_flow,
+      items: assigned.items,
+      status: expense.status === 'draft' ? 'draft' : 'in_review',
+    });
+    await expense.reload();
+
+    const actorName = username || '사용자';
+    const titleShort = String(expense.title || expense.expense_id || '지출결의서').slice(0, 80);
+    notifyUser(
+      req,
+      assigned.current_approver_id,
+      '지출결의서 승인권자 지정',
+      `${actorName}님이 "${titleShort}" 지출결의서의 승인권자로 지정했습니다.`,
+      'info',
+      {
+        feature: 'expense_report',
+        expense_id: expense.id,
+        expense_no: expense.expense_id,
+        href: '/accounting/expense',
+      }
+    );
+    if (assigned.prevId && assigned.prevId !== assigned.current_approver_id && assigned.prevId !== user_id) {
+      notifyUser(
+        req,
+        assigned.prevId,
+        '지출결의서 승인권자 변경',
+        `${actorName}님이 "${titleShort}" 지출결의서의 승인권자를 변경했습니다.`,
+        'info',
+        {
+          feature: 'expense_report',
+          expense_id: expense.id,
+          expense_no: expense.expense_id,
+          href: '/accounting/expense',
+        }
+      );
+    }
+
+    res.json({ success: true, data: sanitizeExpenseForUser(expense, req.user) });
+  } catch (error: any) {
+    console.error('지출결의서 승인권자 변경 오류:', error);
+    res.status(500).json({ success: false, message: '승인권자 변경에 실패했습니다.' });
   }
 };
 
@@ -2319,7 +2918,7 @@ export const uploadExpenseReceiptById = async (req: RequestWithUser, res: Respon
       .map((file) => path.join('expense-receipts', file.filename as string).replace(/\\/g, '/'));
     attachments.push(...newPaths);
     await expense.update({ attachments });
-    res.json({ success: true, message: '영수증이 첨부되었습니다.', paths: newPaths, data: expense });
+    res.json({ success: true, message: '영수증이 첨부되었습니다.', paths: newPaths, data: sanitizeExpenseForUser(expense, req.user) });
   } catch (error: any) {
     console.error('영수증 업로드 오류(웹):', error);
     res.status(500).json({ success: false, message: '영수증 업로드에 실패했습니다.' });
@@ -2418,17 +3017,19 @@ const notifyPaymentOfficers = async (
 
 const canApproveExpense = (expense: any, user: any) => {
   if (!user) return false;
-  if (user.role === 'admin' || user.role === 'root') return true;
+  if (expense.status !== 'approved') return false;
   const meta = parseExpenseItemsMeta(expense.items);
   const approvedById = meta.approvedById ? Number(meta.approvedById) : null;
-  return approvedById !== null && approvedById === user.id;
+  if (approvedById !== null && approvedById === user.id) return true;
+  const currentId = expense.current_approver_id != null ? Number(expense.current_approver_id) : null;
+  return currentId !== null && currentId === user.id;
 };
 
 const buildBankTransferPayload = (expense: any) => {
   const meta = parseExpenseItemsMeta(expense.items);
   return {
     amount: Number(expense.total_amount || 0),
-    currency: expense.currency || 'KRW',
+    currency: expense.currency || 'INR',
     beneficiaryName: meta.acHolder || meta.accountHolder || '',
     beneficiaryAccount: meta.accountNumber || '',
     ifsc: meta.ifsc || '',
@@ -2451,6 +3052,9 @@ export const requestExpensePayment = async (req: RequestWithUser, res: Response)
     }
     if (expense.requester_id !== user_id) {
       return res.status(403).json({ success: false, message: '작성자만 결제 요청을 할 수 있습니다.' });
+    }
+    if (expense.status !== 'approved') {
+      return res.status(400).json({ success: false, message: '지출결의서가 승인된 후에만 결제 요청을 할 수 있습니다.' });
     }
 
     const approvalId = expense.approval_id;
@@ -2488,7 +3092,6 @@ export const requestExpensePayment = async (req: RequestWithUser, res: Response)
       payment_rejected_reason: null,
       payment_rejected_at: null,
       payment_rejected_by: null,
-      status: 'in_review'
     });
 
     const meta = parseExpenseItemsMeta(expense.items);
@@ -2507,7 +3110,7 @@ export const requestExpensePayment = async (req: RequestWithUser, res: Response)
       }
     );
 
-    res.json({ success: true, data: expense });
+    res.json({ success: true, data: sanitizeExpenseForUser(expense, req.user) });
   } catch (error: any) {
     console.error('결제 요청 오류:', error);
     res.status(500).json({ success: false, message: '결제 요청에 실패했습니다.' });
@@ -2534,7 +3137,6 @@ export const rejectExpensePayment = async (req: RequestWithUser, res: Response) 
       payment_rejected_reason: reason || null,
       payment_rejected_at: new Date(),
       payment_rejected_by: req.user.id,
-      status: 'rejected'
     });
 
     notifyUser(
@@ -2545,7 +3147,7 @@ export const rejectExpensePayment = async (req: RequestWithUser, res: Response) 
       'warning',
       { expenseId: expense.id, expenseNo: expense.expense_id }
     );
-    res.json({ success: true, data: expense });
+    res.json({ success: true, data: sanitizeExpenseForUser(expense, req.user) });
   } catch (error: any) {
     console.error('결제 반려 오류:', error);
     res.status(500).json({ success: false, message: '결제 반려에 실패했습니다.' });
@@ -2596,7 +3198,7 @@ export const approveExpensePayment = async (req: RequestWithUser, res: Response)
       'info',
       { expenseId: expense.id, expenseNo: expense.expense_id }
     );
-    res.json({ success: true, data: expense });
+    res.json({ success: true, data: sanitizeExpenseForUser(expense, req.user) });
   } catch (error: any) {
     console.error('결제 승인 오류:', error);
     res.status(500).json({ success: false, message: '결제 승인에 실패했습니다.' });
@@ -2618,7 +3220,7 @@ export const completeExpensePayment = async (req: RequestWithUser, res: Response
     if (expense.payment_request_status !== 'approved') {
       return res.status(400).json({ success: false, message: '최종 승인 후 결제를 실행할 수 있습니다.' });
     }
-    if (!(req.user.role === 'admin' || req.user.role === 'root' || req.user.is_payment_officer)) {
+    if (!canManageExpenseTransfer(req.user)) {
       return res.status(403).json({ success: false, message: '송금 권한이 없습니다.' });
     }
 
@@ -2651,7 +3253,7 @@ export const completeExpensePayment = async (req: RequestWithUser, res: Response
         'warning',
         { expenseId: expense.id, expenseNo: expense.expense_id }
       );
-      return res.json({ success: true, data: expense, message: '결제 완료 처리됨. 은행 송금 제공자가 설정되지 않았습니다.' });
+      return res.json({ success: true, data: sanitizeExpenseForUser(expense, req.user), message: '결제 완료 처리됨. 은행 송금 제공자가 설정되지 않았습니다.' });
     }
 
     const payload = buildBankTransferPayload(expense);
@@ -2682,7 +3284,7 @@ export const completeExpensePayment = async (req: RequestWithUser, res: Response
         'success',
         { expenseId: expense.id, expenseNo: expense.expense_id }
       );
-      return res.json({ success: true, data: expense, transfer: result });
+      return res.json({ success: true, data: sanitizeExpenseForUser(expense, req.user), transfer: result });
     } catch (transferError: any) {
       transferLogs.unshift({
         timestamp: new Date().toISOString(),
@@ -2735,7 +3337,7 @@ export const retryExpenseTransfer = async (req: RequestWithUser, res: Response) 
     if (!expense) {
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
     }
-    if (!(req.user.role === 'admin' || req.user.role === 'root' || req.user.is_payment_officer)) {
+    if (!canManageExpenseTransfer(req.user)) {
       return res.status(403).json({ success: false, message: '송금 권한이 없습니다.' });
     }
     const transferProvider = provider || expense.bank_transfer_provider || env.DEFAULT_BANK_PROVIDER;
@@ -2770,7 +3372,7 @@ export const retryExpenseTransfer = async (req: RequestWithUser, res: Response) 
       'success',
       { expenseId: expense.id, expenseNo: expense.expense_id }
     );
-    res.json({ success: true, data: expense, transfer: result });
+    res.json({ success: true, data: sanitizeExpenseForUser(expense, req.user), transfer: result });
   } catch (error: any) {
     const transferErrorMessage = error?.message || '송금 재시도 실패';
     try {

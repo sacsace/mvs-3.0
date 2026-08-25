@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { accountingService } from '../../services/api';
+import { useStore } from '../../store';
 
 const formatJson = (value: any) => {
   if (!value) return '-';
@@ -24,13 +25,20 @@ const formatJson = (value: any) => {
 const ExpenseTransferLog: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useStore();
   const [loading, setLoading] = useState(true);
   const [expense, setExpense] = useState<any>(null);
   const [error, setError] = useState('');
+  const canViewTransferLog = Boolean(user?.is_payment_officer);
 
   useEffect(() => {
     const loadExpense = async () => {
       if (!id) return;
+      if (!canViewTransferLog) {
+        setError('송금 로그를 볼 권한이 없습니다.');
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       try {
         const response = await accountingService.getExpenseReport(Number(id));
@@ -45,7 +53,7 @@ const ExpenseTransferLog: React.FC = () => {
       }
     };
     loadExpense();
-  }, [id]);
+  }, [id, canViewTransferLog]);
 
   if (loading) {
     return (

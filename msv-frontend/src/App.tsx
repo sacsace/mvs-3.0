@@ -91,6 +91,7 @@ const CorporateTax = lazyPage(() => import('./pages/Accounting/CorporateTax'));
 const AdvanceTax = lazyPage(() => import('./pages/Accounting/AdvanceTax'));
 const TallyImport = lazyPage(() => import('./pages/Accounting/TallyImport'));
 const SapImport = lazyPage(() => import('./pages/Accounting/SapImport'));
+const GsEncCostAnalysis = lazyPage(() => import('./pages/Accounting/GsEncCostAnalysis'));
 const ContractManagement = lazyPage(() => import('./pages/Sales/ContractManagement'));
 const RegularInvoice = lazyPage(() => import('./pages/Invoice/RegularInvoice'));
 
@@ -356,6 +357,7 @@ function App() {
             <Route path="accounting/chart-of-accounts" element={<Navigate to="/accounting/books?tab=accounts" replace />} />
             <Route path="accounting/tally-import" element={<TallyImport />} />
             <Route path="accounting/sap-import" element={<SapImport />} />
+            <Route path="accounting/gs-enc-cost" element={<GsEncCostAnalysis />} />
             <Route path="accounting/vouchers" element={<Navigate to="/accounting/books?tab=vouchers" replace />} />
             <Route path="accounting/ledger" element={<Navigate to="/accounting/books?tab=ledger" replace />} />
             <Route path="accounting/trial-balance" element={<Navigate to="/accounting/books?tab=trial" replace />} />

@@ -255,7 +255,7 @@ const PartnerManagement: React.FC = () => {
   const [page, setPage] = useState(1);
 
   const formatPartners = useCallback((partnersData: any[]): Partner[] => {
-    return partnersData.map((p: any) => ({
+    const mapped = partnersData.map((p: any) => ({
       id: p.id,
       companyName: p.company_name,
       businessNumber: p.business_number,
@@ -279,6 +279,11 @@ const PartnerManagement: React.FC = () => {
       recordSource: 'partner' as const,
       sourceId: p.id,
     }));
+    const byId = new Map<number, Partner>();
+    for (const row of mapped) {
+      if (!byId.has(row.id)) byId.set(row.id, row);
+    }
+    return Array.from(byId.values());
   }, []);
 
   const formatCustomersAsPartners = useCallback((customersData: any[], existingPartners: Partner[]): Partner[] => {
@@ -289,6 +294,11 @@ const PartnerManagement: React.FC = () => {
       existingPartners
         .map((p) => String(p.businessNumber || '').trim().toLowerCase())
         .filter((v) => v && !v.startsWith('tally-') && v !== '-')
+    );
+    const partnerEmailKeys = new Set(
+      existingPartners
+        .map((p) => String(p.email || '').trim().toLowerCase())
+        .filter((v) => v && v !== '-')
     );
 
     return customersData
@@ -302,6 +312,8 @@ const PartnerManagement: React.FC = () => {
         if (sourceType === 'customer') {
           if (nameKey && partnerNameKeys.has(nameKey)) return null;
           if (biz && partnerBizKeys.has(biz.toLowerCase())) return null;
+          const emailKey = String(c.email || '').trim().toLowerCase();
+          if (emailKey && partnerEmailKeys.has(emailKey)) return null;
         }
 
         const listId = sourceType === 'room_guest' ? Number(c.id) : CUSTOMER_LIST_ID_OFFSET + Number(c.id);
@@ -374,7 +386,29 @@ const PartnerManagement: React.FC = () => {
 
       const partnerRows = formatPartners(partnersData);
       const customerRows = formatCustomersAsPartners(customersRaw, partnerRows);
-      setPartners([...partnerRows, ...customerRows]);
+      const merged = [...partnerRows, ...customerRows];
+      const seenNameEmail = new Map<string, Partner>();
+      const unique: Partner[] = [];
+      for (const row of merged) {
+        const nameKey = normalizePartnerCompanyName(row.companyName).toLowerCase();
+        const emailKey = String(row.email || '').trim().toLowerCase();
+        const key = nameKey ? `${nameKey}|${emailKey}` : '';
+        if (!key) {
+          unique.push(row);
+          continue;
+        }
+        const existing = seenNameEmail.get(key);
+        if (!existing) {
+          seenNameEmail.set(key, row);
+          unique.push(row);
+          continue;
+        }
+        if (existing.recordSource !== 'partner' && row.recordSource === 'partner') {
+          unique[unique.indexOf(existing)] = row;
+          seenNameEmail.set(key, row);
+        }
+      }
+      setPartners(unique);
     } catch {
       setPartners([]);
     } finally {

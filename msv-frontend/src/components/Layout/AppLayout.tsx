@@ -48,6 +48,7 @@ const isFullBleedBodyRoute = (pathname: string): boolean => {
   if (pathname === '/basic-info/login-info' || pathname.startsWith('/basic-info/login-info/')) return true;
   if (pathname === '/hr/payroll' || pathname.startsWith('/hr/payroll/')) return true;
   if (pathname === '/hr/payslip-send' || pathname.startsWith('/hr/payslip-send/')) return true;
+  if (pathname === '/accounting/gs-enc-cost' || pathname.startsWith('/accounting/gs-enc-cost/')) return true;
   return false;
 };
 
@@ -297,13 +298,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             boxShadow: 'none',
             paddingLeft: {
               xs: 'max(8px, env(safe-area-inset-left))',
-              sm: 1.5,
-              md: `${WORK_AREA_OUTSET + 8}px`,
+              sm: fullBleedBody ? 1 : 1.5,
+              md: fullBleedBody ? 1.5 : `${WORK_AREA_OUTSET + 8}px`,
             },
             paddingRight: {
               xs: 'max(8px, env(safe-area-inset-right))',
-              sm: 1.5,
-              md: `${WORK_AREA_OUTSET + 8}px`,
+              sm: fullBleedBody ? 1 : 1.5,
+              md: fullBleedBody ? 1.5 : `${WORK_AREA_OUTSET + 8}px`,
             },
             paddingTop: { xs: 0.75, sm: `${HEADER_MENU_GAP_PX + 4}px` },
             paddingBottom: {

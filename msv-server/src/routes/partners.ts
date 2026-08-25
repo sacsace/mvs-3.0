@@ -24,6 +24,34 @@ const invalidatePartnersCache = async () => {
   await referenceCacheDel('ref:partners:*');
 };
 
+const partnerGstInclude = {
+  model: PartnerGstNumber,
+  as: 'gstNumbers',
+  where: { is_active: true },
+  required: false,
+  separate: true,
+  attributes: ['id', 'gst_number'],
+} as const;
+
+/** GST JOIN으로 같은 파트너가 여러 행이 되어도 id 기준으로 한 건만 반환 */
+const serializePartners = (partners: any[]) => {
+  const byId = new Map<number, any>();
+  for (const partner of partners) {
+    const partnerData = partner.toJSON ? partner.toJSON() : { ...partner };
+    const id = Number(partnerData.id);
+    const gstNumbers = (partnerData.gstNumbers || [])
+      .map((gst: any) => (typeof gst === 'string' ? gst : gst?.gst_number))
+      .filter(Boolean);
+    const existing = byId.get(id);
+    if (!existing) {
+      byId.set(id, { ...partnerData, gstNumbers: Array.from(new Set(gstNumbers)) });
+      continue;
+    }
+    existing.gstNumbers = Array.from(new Set([...(existing.gstNumbers || []), ...gstNumbers]));
+  }
+  return Array.from(byId.values());
+};
+
 /** 동일 회사(tenant+company) 내 회사명 중복 — 정규화 후 대소문자 무시 */
 const findDuplicatePartnerByCompanyName = async ({
   tenantId,
@@ -102,20 +130,11 @@ router.get('/', authenticateToken, async (req: Request, res: Response) => {
 
     const partners = await (Partner as any).findAll({
       where: whereClause,
-      include: [{
-        model: PartnerGstNumber,
-        as: 'gstNumbers',
-        where: { is_active: true },
-        required: false
-      }],
+      include: [partnerGstInclude],
       order: [['created_at', 'DESC']]
     });
 
-    const partnersData = partners.map((partner: any) => {
-      const partnerData = partner.toJSON ? partner.toJSON() : partner;
-      partnerData.gstNumbers = partnerData.gstNumbers?.map((gst: any) => gst.gst_number) || [];
-      return partnerData;
-    });
+    const partnersData = serializePartners(partners);
 
     const payload = { success: true, data: partnersData };
     await referenceCacheSet(cacheKey, JSON.stringify(payload));
@@ -634,19 +653,13 @@ router.get('/excel/export', authenticateToken, async (req: Request, res: Respons
 
     const partners = await (Partner as any).findAll({
       where: whereClause,
-      include: [{
-        model: PartnerGstNumber,
-        as: 'gstNumbers',
-        where: { is_active: true },
-        required: false
-      }],
+      include: [partnerGstInclude],
       order: [['created_at', 'DESC']]
     });
 
     // Excel 데이터 형식으로 변환
-    const excelData = partners.map((partner: any) => {
-      const partnerData = partner.toJSON ? partner.toJSON() : partner;
-      const gstNumbers = partnerData.gstNumbers?.map((gst: any) => gst.gst_number) || [];
+    const excelData = serializePartners(partners).map((partnerData: any) => {
+      const gstNumbers = partnerData.gstNumbers || [];
       
       return {
         '회사명': partnerData.company_name || '',

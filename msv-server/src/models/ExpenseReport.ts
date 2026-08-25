@@ -120,7 +120,7 @@ ExpenseReport.init(
     requester_department: { type: DataTypes.STRING(100), allowNull: true },
     requester_position: { type: DataTypes.STRING(100), allowNull: true },
     total_amount: { type: DataTypes.DECIMAL(15, 2), allowNull: false, defaultValue: 0 },
-    currency: { type: DataTypes.STRING(10), allowNull: false, defaultValue: 'KRW' },
+    currency: { type: DataTypes.STRING(10), allowNull: false, defaultValue: 'INR' },
     purpose: { type: DataTypes.TEXT, allowNull: false },
     items: { type: DataTypes.JSONB, allowNull: true, defaultValue: '[]' },
     status: {
