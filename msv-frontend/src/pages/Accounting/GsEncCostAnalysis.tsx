@@ -479,6 +479,14 @@ const EditableLedgerCell: React.FC<EditableLedgerCellProps> = ({
   );
 };
 
+const getLastMonthDateRange = (now = new Date()): { from: string; to: string } => {
+  const fromDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const toDate = new Date(now.getFullYear(), now.getMonth(), 0);
+  const toYmd = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return { from: toYmd(fromDate), to: toYmd(toDate) };
+};
+
 const GsEncCostAnalysis: React.FC = () => {
   const { t } = useTranslation();
   const gasInputRef = useRef<HTMLInputElement>(null);
@@ -489,8 +497,8 @@ const GsEncCostAnalysis: React.FC = () => {
   const [ledger, setLedger] = useState<LedgerRow[]>(() => loadLedgerRows());
   const [basicInfo, setBasicInfo] = useState<GsEncBasicInfo>(() => loadBasicInfo());
   const [search, setSearch] = useState('');
-  const [periodFrom, setPeriodFrom] = useState('');
-  const [periodTo, setPeriodTo] = useState('');
+  const [periodFrom, setPeriodFrom] = useState(() => getLastMonthDateRange().from);
+  const [periodTo, setPeriodTo] = useState(() => getLastMonthDateRange().to);
   const [itemFilter, setItemFilter] = useState('');
   const [matchFilter, setMatchFilter] = useState<'all' | 'matched' | 'unmatched'>('all');
   const [exporting, setExporting] = useState(false);
@@ -625,8 +633,12 @@ const GsEncCostAnalysis: React.FC = () => {
         .filter((m) => m && m !== '-')
         .sort();
       if (months.length && mode === 'replace') {
-        setPeriodFrom(months[0]);
-        setPeriodTo(months[months.length - 1]);
+        const fromMonth = months[0];
+        const toMonth = months[months.length - 1];
+        setPeriodFrom(`${fromMonth}-01`);
+        const [y, m] = toMonth.split('-').map(Number);
+        const lastDay = new Date(y, m, 0).getDate();
+        setPeriodTo(`${toMonth}-${String(lastDay).padStart(2, '0')}`);
       }
       setSuccess(
         t('gsEncCostAnalysis.success.ledgerLoaded', {
@@ -655,8 +667,9 @@ const GsEncCostAnalysis: React.FC = () => {
     setAccounts([]);
     setLedger([]);
     setBasicInfo({ periodMonth: '', fxRate: 0, projectName: '' });
-    setPeriodFrom('');
-    setPeriodTo('');
+    const lastMonth = getLastMonthDateRange();
+    setPeriodFrom(lastMonth.from);
+    setPeriodTo(lastMonth.to);
     setItemFilter('');
     setSearch('');
     setSuccess(t('gsEncCostAnalysis.success.cleared'));

@@ -3250,7 +3250,7 @@ export default {
       tabs: {
         accounts: 'GAS 계정체계',
         ledger: '원가 내역',
-        summary: '서머리',
+        summary: '요약',
       },
       actions: {
         uploadGas: 'GAS 계정 업로드',
