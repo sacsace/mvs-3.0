@@ -14,15 +14,28 @@ import * as XLSX from 'xlsx';
 import { pushNotification } from './notificationController';
 import SocketService from '../services/socketService';
 
-/** 응답용: start~end 포함 일수로 days 보정 */
+/** 응답용: 반차가 아니면 start~end 포함 일수로 days 보정 */
 function withCorrectedVacationDays(vacation: any) {
   if (!vacation) return vacation;
   const plain = typeof vacation.toJSON === 'function' ? vacation.toJSON() : { ...vacation };
+  if (plain.is_half_day) {
+    plain.days = 0.5;
+    return plain;
+  }
   const corrected = countInclusiveDateOnlyDays(plain.start_date, plain.end_date);
   if (corrected > 0) {
     plain.days = corrected;
   }
   return plain;
+}
+
+function resolveVacationDays(startYmd: string, endYmd: string, isHalfDay: boolean): number | null {
+  if (isHalfDay) {
+    if (startYmd !== endYmd) return null;
+    return 0.5;
+  }
+  const days = countInclusiveDateOnlyDays(startYmd, endYmd);
+  return days > 0 ? days : null;
 }
 
 // 휴가 목록 조회
@@ -211,7 +224,7 @@ export const createVacation = async (req: AuthRequest, res: Response) => {
     const companyId = req.user?.company_id;
     const userId = req.user?.id;
     const userRole = req.user?.role;
-    const { user_id, vacation_type, start_date, end_date, reason, attachments, approved_by } = req.body;
+    const { user_id, vacation_type, start_date, end_date, reason, attachments, approved_by, is_half_day } = req.body;
 
     // 사용할 user_id 결정 (관리자는 다른 사용자 대신 신청 가능)
     const targetUserId = (userRole === 'admin' || userRole === 'root') && user_id ? user_id : userId;
@@ -238,11 +251,14 @@ export const createVacation = async (req: AuthRequest, res: Response) => {
         message: '종료일은 시작일 이후여야 합니다.',
       });
     }
-    const days = countInclusiveDateOnlyDays(startYmd, endYmd);
-    if (days <= 0) {
+    const isHalfDay = Boolean(is_half_day) && vacation_type === 'annual';
+    const days = resolveVacationDays(startYmd, endYmd, isHalfDay);
+    if (days == null) {
       return res.status(400).json({
         success: false,
-        message: '휴가 일수가 올바르지 않습니다.',
+        message: isHalfDay
+          ? '반차는 시작일과 종료일이 같은 하루만 신청할 수 있습니다.'
+          : '휴가 일수가 올바르지 않습니다.',
       });
     }
 
@@ -282,6 +298,7 @@ export const createVacation = async (req: AuthRequest, res: Response) => {
       user_id: targetUserId,
       vacation_type,
       is_active: true,
+      is_half_day: isHalfDay,
       start_date: startYmd,
       end_date: endYmd,
       days,
@@ -357,7 +374,7 @@ export const updateVacation = async (req: AuthRequest, res: Response) => {
     const companyId = req.user?.company_id;
     const userRole = req.user?.role;
     const userId = req.user?.id;
-    const { vacation_type, start_date, end_date, reason, attachments, approved_by } = req.body;
+    const { vacation_type, start_date, end_date, reason, attachments, approved_by, is_half_day } = req.body;
 
     const whereClause: any = { id, is_active: true };
 
@@ -433,19 +450,23 @@ export const updateVacation = async (req: AuthRequest, res: Response) => {
         message: '종료일은 시작일 이후여야 합니다.',
       });
     }
-    const days = countInclusiveDateOnlyDays(finalStartYmd, finalEndYmd);
-    if (days <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: '휴가 일수가 올바르지 않습니다.',
-      });
-    }
-
-    // 연차 유형으로 변경하거나 연차 일수가 변경된 경우 검증
     const finalVacationType = vacation_type || vacation.vacation_type;
     const finalStartDate = finalStartYmd;
     const finalEndDate = finalEndYmd;
-    const finalDays = days;
+    const isHalfDay =
+      is_half_day !== undefined
+        ? Boolean(is_half_day) && finalVacationType === 'annual'
+        : Boolean(vacation.is_half_day) && finalVacationType === 'annual';
+    const finalDays = resolveVacationDays(finalStartDate, finalEndDate, isHalfDay);
+    if (finalDays == null) {
+      return res.status(400).json({
+        success: false,
+        message: isHalfDay
+          ? '반차는 시작일과 종료일이 같은 하루만 신청할 수 있습니다.'
+          : '휴가 일수가 올바르지 않습니다.',
+      });
+    }
+
     if (finalVacationType) {
       const validation = await validateVacationLeaveRequest(vacation.user_id, finalVacationType, finalDays, vacation.id);
       if (!validation.valid) {
@@ -484,6 +505,7 @@ export const updateVacation = async (req: AuthRequest, res: Response) => {
           start_date: finalStartDate,
           end_date: finalEndDate,
           days: finalDays,
+          is_half_day: isHalfDay,
           reason: reason !== undefined ? reason : vacation.reason,
           attachments: attachments !== undefined ? JSON.stringify(attachments) : vacation.attachments
         };
@@ -658,8 +680,9 @@ export const approveVacation = async (req: AuthRequest, res: Response) => {
       status: 'approved',
       approved_by: userId,
       approved_date: new Date().toISOString().split('T')[0],
-      // 승인 시 기간 기준 일수 재동기화 (과거 저장 오류 보정)
-      days: countInclusiveDateOnlyDays(vacation.start_date, vacation.end_date) || vacation.days,
+      days: vacation.is_half_day
+        ? 0.5
+        : countInclusiveDateOnlyDays(vacation.start_date, vacation.end_date) || vacation.days,
     });
 
     // 사용자 정보 포함하여 반환
@@ -1200,7 +1223,10 @@ export const exportVacationsToExcel = async (req: AuthRequest, res: Response) =>
         '사원번호': vacationData.user?.employee_number || '',
         '부서': vacationData.user?.department || '',
         '직책': vacationData.user?.position || '',
-        '휴가 유형': vacationTypeMap[vacationData.vacation_type] || vacationData.vacation_type,
+        '휴가 유형':
+          vacationData.is_half_day && vacationData.vacation_type === 'annual'
+            ? '반차'
+            : vacationTypeMap[vacationData.vacation_type] || vacationData.vacation_type,
         '시작일': vacationData.start_date 
           ? new Date(vacationData.start_date).toISOString().split('T')[0] 
           : '',

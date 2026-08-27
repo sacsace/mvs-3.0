@@ -581,15 +581,16 @@ async function getUsedDaysInLeaveYear(
 
   const rows = await (Vacation as any).findAll({
     where: whereClause,
-    attributes: ['id', 'start_date', 'end_date', 'days'],
+    attributes: ['id', 'start_date', 'end_date', 'days', 'is_half_day'],
   });
 
   return rows.reduce((sum: number, row: any) => {
     const fromRange = countVacationDaysInLeaveYear(row.start_date, row.end_date, leaveYear);
+    const stored = Number(row.days);
+    const isHalf = Boolean(row.is_half_day) || stored === 0.5;
+    if (isHalf && fromRange > 0) return sum + 0.5;
     if (fromRange > 0) return sum + fromRange;
-    // 날짜가 비정상일 때만 저장된 days로 폴백
-    const fallback = Number(row.days);
-    return sum + (Number.isFinite(fallback) && fallback > 0 ? fallback : 0);
+    return sum + (Number.isFinite(stored) && stored > 0 ? stored : 0);
   }, 0);
 }
 

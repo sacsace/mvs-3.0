@@ -51,8 +51,9 @@ const VACATION_TYPE_KEYS = [
 ] as const;
 type VacationTypeKey = (typeof VACATION_TYPE_KEYS)[number];
 
-const VACATION_TYPE_ICONS: Record<VacationTypeKey, React.ReactNode> = {
+const VACATION_TYPE_ICONS: Record<VacationTypeKey | 'half', React.ReactNode> = {
   annual: <HomeIcon />,
+  half: <HomeIcon />,
   sick: <SickIcon />,
   personal: <PersonIcon />,
   study: <StudyIcon />,
@@ -120,15 +121,24 @@ const VacationRequest: React.FC = () => {
     [t]
   );
 
-  const allVacationTypes = useMemo(
-    () =>
-      VACATION_TYPE_KEYS.map((key) => ({
+  const allVacationTypes = useMemo(() => {
+    const types: Array<{ key: string; name: string; icon: React.ReactNode }> = [];
+    for (const key of VACATION_TYPE_KEYS) {
+      types.push({
         key,
         name: t(`vacationManagement.${key}`),
-        icon: VACATION_TYPE_ICONS[key]
-      })),
-    [t]
-  );
+        icon: VACATION_TYPE_ICONS[key],
+      });
+      if (key === 'annual') {
+        types.push({
+          key: 'half',
+          name: t('vacationManagement.half'),
+          icon: VACATION_TYPE_ICONS.half,
+        });
+      }
+    }
+    return types;
+  }, [t]);
 
   const loadUsers = useCallback(async () => {
     try {
@@ -152,7 +162,7 @@ const VacationRequest: React.FC = () => {
       if (response.success && response.data) {
         const vacation = response.data;
         setFormData({
-          vacationType: vacation.vacation_type,
+          vacationType: vacation.is_half_day && vacation.vacation_type === 'annual' ? 'half' : vacation.vacation_type,
           startDate: vacation.start_date,
           endDate: vacation.end_date,
           reason: vacation.reason,
@@ -228,8 +238,12 @@ const VacationRequest: React.FC = () => {
     }
   };
 
-  const calculateDays = (startDate: string, endDate: string): number => {
+  const isHalfDay = formData.vacationType === 'half';
+  const usesAnnualBalance = formData.vacationType === 'annual' || isHalfDay;
+
+  const calculateDays = (startDate: string, endDate: string, halfDay = isHalfDay): number => {
     if (!startDate || !endDate) return 0;
+    if (halfDay) return startDate === endDate ? 0.5 : 0;
     const startYmd = String(startDate).slice(0, 10);
     const endYmd = String(endDate).slice(0, 10);
     const startMatch = startYmd.match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -259,7 +273,11 @@ const VacationRequest: React.FC = () => {
         setError(t('vacationManagement.request.startAfterEnd'));
         return;
       }
-      if (formData.vacationType === 'annual') {
+      if (isHalfDay && formData.startDate !== formData.endDate) {
+        setError(t('vacationManagement.request.halfDaySameDate'));
+        return;
+      }
+      if (usesAnnualBalance) {
         if (!annualLeaveInfo || !annualLeaveInfo.canUseAnnualLeave) {
           setError(t('vacationManagement.request.cannotUseAnnualLeave'));
           return;
@@ -310,16 +328,20 @@ const VacationRequest: React.FC = () => {
       return;
     }
 
-    const days = calculateDays(formData.startDate, formData.endDate);
+    const isHalf = formData.vacationType === 'half';
+    const startDate = formData.startDate;
+    const endDate = isHalf ? formData.startDate : formData.endDate;
+    const days = calculateDays(startDate, endDate, isHalf);
 
     setSaving(true);
     try {
       const vacationData: any = {
         user_id: user?.id,
-        vacation_type: formData.vacationType,
-        start_date: formData.startDate,
-        end_date: formData.endDate,
+        vacation_type: isHalf ? 'annual' : formData.vacationType,
+        start_date: startDate,
+        end_date: endDate,
         days,
+        is_half_day: isHalf,
         reason: formData.reason
       };
 
@@ -353,7 +375,11 @@ const VacationRequest: React.FC = () => {
     if (!vacationPolicy?.availableTypes || vacationPolicy.availableTypes.length === 0) {
       return allVacationTypes;
     }
-    return allVacationTypes.filter((type) => vacationPolicy.availableTypes!.includes(type.key));
+    return allVacationTypes.filter((type) =>
+      type.key === 'half'
+        ? vacationPolicy.availableTypes!.includes('annual')
+        : vacationPolicy.availableTypes!.includes(type.key)
+    );
   }, [allVacationTypes, vacationPolicy?.availableTypes]);
 
   useEffect(() => {
@@ -422,7 +448,14 @@ const VacationRequest: React.FC = () => {
                     <FormControl fullWidth required>
                       <Select
                         value={formData.vacationType}
-                        onChange={(e) => setFormData({ ...formData, vacationType: e.target.value })}
+                        onChange={(e) => {
+                          const nextType = e.target.value;
+                          setFormData((prev) => ({
+                            ...prev,
+                            vacationType: nextType,
+                            endDate: nextType === 'half' && prev.startDate ? prev.startDate : prev.endDate,
+                          }));
+                        }}
                         displayEmpty
                         sx={{
                           '& .MuiSelect-select': {
@@ -446,7 +479,7 @@ const VacationRequest: React.FC = () => {
                     </FormControl>
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
-                    {formData.vacationType === 'annual' && annualLeaveInfo && (
+                    {usesAnnualBalance && annualLeaveInfo && (
                       <Alert
                         severity={annualLeaveInfo.canUseAnnualLeave ? 'info' : 'warning'}
                         sx={{
@@ -494,7 +527,7 @@ const VacationRequest: React.FC = () => {
                         )}
                       </Alert>
                     )}
-                    {formData.startDate && formData.endDate && formData.vacationType !== 'annual' && (
+                    {formData.startDate && formData.endDate && !usesAnnualBalance && (
                       <Alert severity="info" sx={{ borderRadius: 1, '& .MuiAlert-message': { fontWeight: 500 } }}>
                         {t('vacationManagement.request.totalLeaveDays')}:{' '}
                         <strong>
@@ -504,7 +537,7 @@ const VacationRequest: React.FC = () => {
                         </strong>
                       </Alert>
                     )}
-                    {formData.startDate && formData.endDate && formData.vacationType === 'annual' && (
+                    {formData.startDate && formData.endDate && usesAnnualBalance && (
                       <Alert severity="info" sx={{ borderRadius: 1, '& .MuiAlert-message': { fontWeight: 500 } }}>
                         {t('vacationManagement.request.requestedLeaveDays')}:{' '}
                         <strong>
@@ -532,7 +565,14 @@ const VacationRequest: React.FC = () => {
                       fullWidth
                       type="date"
                       value={formData.startDate}
-                      onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                      onChange={(e) => {
+                        const startDate = e.target.value;
+                        setFormData((prev) => ({
+                          ...prev,
+                          startDate,
+                          endDate: prev.vacationType === 'half' ? startDate : prev.endDate,
+                        }));
+                      }}
                       required
                       sx={{ '& .MuiInputBase-input': { py: 1.5 } }}
                     />
@@ -542,13 +582,16 @@ const VacationRequest: React.FC = () => {
                       {t('vacationManagement.request.endDateLabel')} *
                     </Typography>
                     <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                      {t('vacationManagement.request.endDateHint')}
+                      {isHalfDay
+                        ? t('vacationManagement.request.halfDaySameDateHint')
+                        : t('vacationManagement.request.endDateHint')}
                     </Typography>
                     <TextField
                       fullWidth
                       type="date"
                       value={formData.endDate}
                       onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                      disabled={isHalfDay}
                       required
                       sx={{ '& .MuiInputBase-input': { py: 1.5 } }}
                     />
@@ -559,7 +602,7 @@ const VacationRequest: React.FC = () => {
                     variant="contained"
                     onClick={handleNext}
                     disabled={
-                      formData.vacationType === 'annual' &&
+                      usesAnnualBalance &&
                       annualLeaveInfo &&
                       (!annualLeaveInfo.canUseAnnualLeave || annualLeaveInfo.availableDays <= 0)
                     }

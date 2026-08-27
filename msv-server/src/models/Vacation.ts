@@ -18,6 +18,7 @@ interface VacationAttributes {
   start_date: Date;
   end_date: Date;
   days: number;
+  is_half_day?: boolean;
   reason: string;
   status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   applied_date: Date;
@@ -30,7 +31,7 @@ interface VacationAttributes {
   updated_at?: Date;
 }
 
-interface VacationCreationAttributes extends Optional<VacationAttributes, 'id' | 'approved_by' | 'approved_date' | 'rejection_reason' | 'attachments' | 'created_at' | 'updated_at'> {}
+interface VacationCreationAttributes extends Optional<VacationAttributes, 'id' | 'approved_by' | 'approved_date' | 'rejection_reason' | 'attachments' | 'is_half_day' | 'created_at' | 'updated_at'> {}
 
 class Vacation extends Model<VacationAttributes, VacationCreationAttributes> implements VacationAttributes {
   public id!: number;
@@ -49,6 +50,7 @@ class Vacation extends Model<VacationAttributes, VacationCreationAttributes> imp
   public start_date!: Date;
   public end_date!: Date;
   public days!: number;
+  public is_half_day!: boolean;
   public reason!: string;
   public status!: 'pending' | 'approved' | 'rejected' | 'cancelled';
   public applied_date!: Date;
@@ -102,8 +104,13 @@ Vacation.init(
       allowNull: false
     },
     days: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.DECIMAL(4, 1),
       allowNull: false
+    },
+    is_half_day: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
     },
     reason: {
       type: DataTypes.TEXT,

@@ -110,6 +110,7 @@ interface VacationRequest {
   startDate: string;
   endDate: string;
   days: number;
+  isHalfDay?: boolean;
   reason: string;
   status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   appliedDate: string;
@@ -370,7 +371,8 @@ const VacationManagement: React.FC = () => {
           vacationType: v.vacation_type,
           startDate: v.start_date,
           endDate: v.end_date,
-          days: v.days,
+          days: Number(v.days),
+          isHalfDay: Boolean(v.is_half_day),
           reason: v.reason,
           status: v.status,
           appliedDate: v.applied_date,
@@ -446,7 +448,8 @@ const VacationManagement: React.FC = () => {
           vacationType: v.vacation_type,
           startDate: v.start_date,
           endDate: v.end_date,
-          days: v.days,
+          days: Number(v.days),
+          isHalfDay: Boolean(v.is_half_day),
           reason: v.reason,
           status: v.status,
           appliedDate: v.applied_date,
@@ -863,6 +866,7 @@ const VacationManagement: React.FC = () => {
 
   const vacationTypes = [
     { key: 'annual', name: t('vacationManagement.annual'), icon: <HomeIcon />, color: 'primary' },
+    { key: 'half', name: t('vacationManagement.half'), icon: <HomeIcon />, color: 'primary' },
     { key: 'sick', name: t('vacationManagement.sick'), icon: <SickIcon />, color: 'error' },
     { key: 'personal', name: t('vacationManagement.personal'), icon: <PersonIcon />, color: 'default' },
     { key: 'study', name: t('vacationManagement.study'), icon: <StudyIcon />, color: 'info' },
@@ -883,8 +887,9 @@ const VacationManagement: React.FC = () => {
     return <Chip label={config.label} color={config.color} size="small" />;
   };
 
-  const getTypeChip = (type: string) => {
-    const typeConfig = vacationTypes.find(t => t.key === type);
+  const getTypeChip = (type: string, isHalfDay = false) => {
+    const typeKey = isHalfDay && type === 'annual' ? 'half' : type;
+    const typeConfig = vacationTypes.find(t => t.key === typeKey);
     return (
       <Chip
         icon={typeConfig?.icon}
@@ -1421,7 +1426,7 @@ const VacationManagement: React.FC = () => {
                       </Box>
                     </Box>
                   </TableCell>
-                  <TableCell>{getTypeChip(request.vacationType)}</TableCell>
+                  <TableCell>{getTypeChip(request.vacationType, request.isHalfDay)}</TableCell>
                   <TableCell>
                     <Typography variant="body2" noWrap title={`${request.startDate} ~ ${request.endDate}`}>
                       {request.startDate} ~ {request.endDate}
@@ -2767,7 +2772,7 @@ const VacationManagement: React.FC = () => {
                     휴가 유형
                   </Typography>
                   <Box sx={{ mb: 2 }}>
-                    {getTypeChip(selectedVacation.vacationType)}
+                    {getTypeChip(selectedVacation.vacationType, selectedVacation.isHalfDay)}
                   </Box>
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
