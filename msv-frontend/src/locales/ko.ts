@@ -1859,7 +1859,7 @@ export default {
       selectCompanyHint: '직책은 회사마다 따로 등록됩니다. 관리할 회사를 먼저 선택하세요.',
     },
     workAssigneeList: {
-      title: '업무 담당 리스트',
+      title: '고객사 리스트',
       description: '담당자별 고객사 배정입니다. 카드를 드래그해 다른 담당자로 옮길 수 있습니다.',
       empty: '등록된 담당자가 없습니다. 담당자를 추가해 주세요.',
       actions: {

@@ -27,6 +27,7 @@ import {
   Typography,
   Autocomplete,
   FormControlLabel,
+  InputBase,
   Switch
 } from '@mui/material';
 import {
@@ -440,7 +441,7 @@ const hexToRgba = (hex: string, alphaValue: number) => {
   return `rgba(${r}, ${g}, ${b}, ${alphaValue})`;
 };
 
-/** 댓글 멘션 토큰: @[표시이름] 또는 @token (레거시 userid 등) */
+/** 댓글 멘션 토큰: @[표시이름|userid] 또는 @token (레거시) */
 const COMMENT_MENTION_TOKEN_RE = /@\[([^\]]+)\]|@([^\s@]+)/g;
 
 const normalizeMentionLookupKey = (value: string): string =>
@@ -449,7 +450,94 @@ const normalizeMentionLookupKey = (value: string): string =>
     .trim()
     .toLowerCase();
 
-/** 댓글 본문의 @멘션을 사용자명 칩으로 표시 */
+const findMemberByMentionToken = (
+  rawToken: string,
+  members?: Array<{ id: number; label: string; userid: string }>
+) => {
+  const lookup = normalizeMentionLookupKey(rawToken);
+  return members?.find((member) => {
+    const byName = normalizeMentionLookupKey(member.label) === lookup;
+    const byUserid = String(member.userid || '').trim().toLowerCase() === rawToken.toLowerCase();
+    const byUseridNorm = normalizeMentionLookupKey(member.userid) === lookup;
+    return byName || byUserid || byUseridNorm;
+  });
+};
+
+/** 멘션 원형 칩 — 이름 전체 표시 (잘림 없음) */
+function MentionUserIdChip({
+  name,
+  userId,
+  title,
+}: {
+  name: string;
+  userId?: number;
+  title?: string;
+}) {
+  const label = String(name || '').trim() || '?';
+  return (
+    <Box
+      component="span"
+      title={title || label}
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        verticalAlign: 'middle',
+        flexShrink: 0,
+        minWidth: 28,
+        height: 28,
+        px: 1,
+        borderRadius: '999px',
+        bgcolor: userId != null ? getAvatarColor(userId) : '#64748B',
+        color: '#FFFFFF',
+        fontSize: '0.75rem',
+        fontWeight: 700,
+        lineHeight: 1.2,
+        mx: 0.2,
+        boxSizing: 'border-box',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </Box>
+  );
+}
+
+type ComposerCommentPart =
+  | { type: 'text'; text: string }
+  | { type: 'mention'; userid: string; id?: number; label?: string };
+
+const splitComposerComment = (
+  value: string,
+  members?: Array<{ id: number; label: string; userid: string }>
+): { parts: ComposerCommentPart[]; tail: string } => {
+  const re = /@\[([^\]]+)\]/g;
+  const parts: ComposerCommentPart[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(value)) !== null) {
+    if (m.index > last) {
+      parts.push({ type: 'text', text: value.slice(last, m.index) });
+    }
+    const raw = String(m[1] || '').trim();
+    const matched = findMemberByMentionToken(raw, members);
+    parts.push({
+      type: 'mention',
+      userid: matched?.userid || raw,
+      id: matched?.id,
+      label: matched?.label || raw,
+    });
+    last = m.index + m[0].length;
+  }
+  return { parts, tail: value.slice(last) };
+};
+
+const joinComposerComment = (parts: ComposerCommentPart[], tail: string): string =>
+  parts
+    .map((p) => (p.type === 'mention' ? `@[${p.label || p.userid}]` : p.text))
+    .join('') + tail;
+
+/** 댓글 본문의 @멘션을 원형 이름 칩으로 표시 */
 function renderCommentWithMentions(
   text: string,
   members?: Array<{ id: number; label: string; userid: string }>
@@ -465,30 +553,15 @@ function renderCommentWithMentions(
       out.push(text.slice(last, m.index));
     }
     const rawToken = String(m[1] || m[2] || '').trim();
-    const lookup = normalizeMentionLookupKey(rawToken);
-    const matched = members?.find((member) => {
-      const byName = normalizeMentionLookupKey(member.label) === lookup;
-      const byUserid = String(member.userid || '').trim().toLowerCase() === rawToken.toLowerCase();
-      const byUseridNorm = normalizeMentionLookupKey(member.userid) === lookup;
-      return byName || byUserid || byUseridNorm;
-    });
+    const matched = findMemberByMentionToken(rawToken, members);
     const displayName = matched?.label || rawToken;
     out.push(
-      <Box
-        component="span"
+      <MentionUserIdChip
         key={`mention-${m.index}-${key++}`}
-        sx={{
-          color: '#4C6A6E',
-          fontWeight: 700,
-          bgcolor: alpha('#1D4E7C', 0.14),
-          px: 0.45,
-          py: 0.1,
-          borderRadius: 0.75,
-          border: `1px solid ${alpha('#1D4E7C', 0.28)}`,
-        }}
-      >
-        @{displayName}
-      </Box>
+        name={displayName}
+        userId={matched?.id}
+        title={matched?.userid ? `${displayName} (${matched.userid})` : displayName}
+      />
     );
     last = m.index + m[0].length;
   }
@@ -1575,14 +1648,11 @@ const WorkBoardDetailPage: React.FC = () => {
     boardPanRef.current.moved = true;
     boardPanRef.current.lastX = e.clientX;
     boardPanRef.current.lastY = e.clientY;
-    // 좌우: 칸반 가로 스크롤 컨테이너 / 상하: 브라우저 스크롤
+    // 좌우·상하: 칸반 스크롤 컨테이너 (뷰포트 하단 가로 스크롤)
     const hScroll = boardHScrollRef.current;
-    if (hScroll && dx !== 0) {
-      hScroll.scrollLeft -= dx;
-    }
-    if (dy !== 0) {
-      window.scrollBy(0, -dy);
-    }
+    if (!hScroll) return;
+    if (dx !== 0) hScroll.scrollLeft -= dx;
+    if (dy !== 0) hScroll.scrollTop -= dy;
   }, []);
 
   const handleBoardPanPointerUp = useCallback(
@@ -2877,18 +2947,26 @@ const WorkBoardDetailPage: React.FC = () => {
   }, []);
   const mentionCandidates = useMemo<MemberOption[]>(() => {
     const keyword = mentionQuery.trim().toLowerCase();
-    if (!keyword) return memberOptions.slice(0, 6);
-    return memberOptions
-      .filter((member) => {
-        const normalizedName = member.label.replace(/\s+/g, '').toLowerCase();
-        return (
-          member.userid.toLowerCase().includes(keyword) ||
-          member.label.toLowerCase().includes(keyword) ||
-          normalizedName.includes(keyword)
-        );
-      })
-      .slice(0, 6);
-  }, [memberOptions, mentionQuery]);
+    const assigneeId =
+      cardDetail?.assigneeUserId != null ? Number(cardDetail.assigneeUserId) : null;
+    const filtered = !keyword
+      ? [...memberOptions]
+      : memberOptions.filter((member) => {
+          const normalizedName = member.label.replace(/\s+/g, '').toLowerCase();
+          return (
+            member.userid.toLowerCase().includes(keyword) ||
+            member.label.toLowerCase().includes(keyword) ||
+            normalizedName.includes(keyword)
+          );
+        });
+    // 카드 담당자를 목록 상단에 고정 (이전에 상위 6명만 보여 담당자가 빠지던 문제)
+    if (assigneeId == null) return filtered;
+    return filtered.sort((a, b) => {
+      if (a.id === assigneeId) return -1;
+      if (b.id === assigneeId) return 1;
+      return 0;
+    });
+  }, [memberOptions, mentionQuery, cardDetail?.assigneeUserId]);
 
   if (loading || !board) {
     return (
@@ -2905,6 +2983,10 @@ const WorkBoardDetailPage: React.FC = () => {
     !!cardDetail?.listId &&
     Number(cardDetail?.cardId) > 0 &&
     !commentsBlockedUntilSave;
+  const { parts: composerMentionParts, tail: composerTail } = splitComposerComment(
+    newComment,
+    memberOptions
+  );
 
   const handleCommentInputChange = (value: string) => {
     setNewComment(value);
@@ -2924,7 +3006,7 @@ const WorkBoardDetailPage: React.FC = () => {
     setNewComment((prev) =>
       prev.replace(/(?:^|\s)@[^\s@[\]]*$/, (token) => {
         const prefix = token.startsWith(' ') ? ' ' : '';
-        // 표시·매칭 모두 사용자명 기준 (@[이름] — 공백 이름 지원)
+        // 저장·표시는 사용자명 기준 (@[이름] → 원형 이름 칩)
         return `${prefix}@[${candidate.label}] `;
       })
     );
@@ -2943,7 +3025,7 @@ const WorkBoardDetailPage: React.FC = () => {
       onPointerCancel={handleBoardPanPointerUp}
       sx={{
         p: 0,
-        pb: 2,
+        pb: cardDetail ? 2 : 0,
         flex: 1,
         // 카드 세부 입력 시 칸반 full-bleed 대신 일반 바디(mvsPageContentMaxWidth) 폭
         // AppLayout `& > * { width/maxWidth: 100% }` 보다 우선
@@ -2952,10 +3034,11 @@ const WorkBoardDetailPage: React.FC = () => {
         minWidth: 0,
         mx: cardDetail ? 'auto' : 0,
         alignSelf: cardDetail ? 'center' : 'stretch',
-        minHeight: '100%',
+        minHeight: 0,
+        height: cardDetail ? 'auto' : '100%',
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'visible',
+        overflow: cardDetail ? 'visible' : 'hidden',
         boxSizing: 'border-box',
         background: 'transparent',
         cursor: boardPanning ? 'grabbing' : 'default',
@@ -3094,7 +3177,8 @@ const WorkBoardDetailPage: React.FC = () => {
 
       <Box
         sx={{
-          mb: 2.5,
+          mb: cardDetail ? 2.5 : 1.5,
+          flexShrink: 0,
           px: { xs: 1.25, sm: 1.5 },
           py: { xs: 1, sm: 1.15 },
           borderRadius: '8px',
@@ -3474,12 +3558,14 @@ const WorkBoardDetailPage: React.FC = () => {
             ref={boardHScrollRef}
             sx={{
               display: 'flex',
+              flex: 1,
+              minHeight: 0,
               width: '100%',
               maxWidth: '100%',
               minWidth: 0,
               boxSizing: 'border-box',
               overflowX: 'auto',
-              overflowY: 'visible',
+              overflowY: 'auto',
               cursor: boardPanning ? 'grabbing' : 'grab',
             }}
           >
@@ -3492,6 +3578,7 @@ const WorkBoardDetailPage: React.FC = () => {
                 pb: 0.5,
                 width: 'max-content',
                 minWidth: '100%',
+                minHeight: '100%',
                 boxSizing: 'border-box',
               }}
             >
@@ -4247,95 +4334,155 @@ const WorkBoardDetailPage: React.FC = () => {
           <Box
             sx={{
               display: 'flex',
+              alignItems: 'stretch',
+              gap: 1,
               mb: 0.75,
-              border: '1px solid #E2E8F0',
-              borderRadius: KANBAN_CONTROL_RADIUS,
-              overflow: 'hidden',
-              bgcolor: '#FFFFFF',
-              boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
             }}
           >
-            <TextField
-              fullWidth
-              multiline
-              minRows={1}
-              maxRows={6}
-              hiddenLabel
-              size="small"
-              placeholder={txt('댓글을 입력하세요 (Alt+Enter 줄바꿈)', 'Write a comment (Alt+Enter for new line)')}
-              value={newComment}
-              inputRef={commentInputRef}
-              onChange={(e) => handleCommentInputChange(e.target.value)}
-              disabled={!isCommentEnabled}
+            <Box
               sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 0,
-                  alignItems: 'flex-start',
-                  minHeight: 40,
-                  bgcolor: '#FFFFFF',
-                  '& fieldset': {
-                    border: 'none',
-                  },
-                },
-                '& .MuiInputBase-input': {
+                flex: 1,
+                minWidth: 0,
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 0.35,
+                px: 1,
+                py: 0.5,
+                minHeight: 40,
+                border: '1px solid #E2E8F0',
+                borderRadius: KANBAN_CONTROL_RADIUS,
+                bgcolor: '#FFFFFF',
+                boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+                cursor: isCommentEnabled ? 'text' : 'default',
+              }}
+              onClick={() => {
+                if (isCommentEnabled) commentInputRef.current?.focus();
+              }}
+            >
+              {composerMentionParts.map((part, index) =>
+                part.type === 'mention' ? (
+                  <MentionUserIdChip
+                    key={`composer-mention-${part.id ?? part.userid}-${index}`}
+                    name={part.label || part.userid}
+                    userId={part.id}
+                    title={part.userid ? `${part.label || part.userid} (${part.userid})` : part.label}
+                  />
+                ) : part.text ? (
+                  <Typography
+                    key={`composer-text-${index}`}
+                    component="span"
+                    sx={{
+                      fontSize: '0.875rem',
+                      color: '#1E293B',
+                      lineHeight: 1.45,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                    }}
+                  >
+                    {part.text}
+                  </Typography>
+                ) : null
+              )}
+              <InputBase
+                fullWidth
+                multiline
+                minRows={1}
+                maxRows={6}
+                inputRef={commentInputRef}
+                placeholder={
+                  composerMentionParts.length === 0
+                    ? txt('댓글을 입력하세요 (Alt+Enter 줄바꿈)', 'Write a comment (Alt+Enter for new line)')
+                    : undefined
+                }
+                value={composerTail}
+                disabled={!isCommentEnabled}
+                onChange={(e) =>
+                  handleCommentInputChange(joinComposerComment(composerMentionParts, e.target.value))
+                }
+                sx={{
+                  flex: 1,
+                  minWidth: 96,
+                  alignSelf: 'center',
                   fontSize: '0.875rem',
-                  py: '10px',
                   color: '#1E293B',
                   lineHeight: 1.45,
-                  '&::placeholder': {
-                    color: '#94A3B8',
-                    opacity: 1,
+                  '& .MuiInputBase-input': {
+                    py: 0.5,
+                    '&::placeholder': {
+                      color: '#94A3B8',
+                      opacity: 1,
+                    },
                   },
-                },
-                '& .Mui-disabled': {
-                  WebkitTextFillColor: '#94A3B8',
-                },
-              }}
-              onKeyDown={(e) => {
-                if (mentionOpen && mentionCandidates.length > 0) {
-                  if (e.key === 'ArrowDown') {
+                  '&.Mui-disabled': {
+                    WebkitTextFillColor: '#94A3B8',
+                  },
+                }}
+                onKeyDown={(e) => {
+                  if (
+                    e.key === 'Backspace' &&
+                    !composerTail &&
+                    composerMentionParts.length > 0 &&
+                    !mentionOpen
+                  ) {
                     e.preventDefault();
-                    setMentionHighlightIndex((prev) => (prev + 1) % mentionCandidates.length);
-                    return;
-                  }
-                  if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    setMentionHighlightIndex((prev) => (prev - 1 + mentionCandidates.length) % mentionCandidates.length);
-                    return;
-                  }
-                  if (e.key === 'Enter' && !e.altKey && !e.shiftKey) {
-                    e.preventDefault();
-                    const candidate = mentionCandidates[mentionHighlightIndex] || mentionCandidates[0];
-                    if (candidate) {
-                      insertMention(candidate);
+                    const nextParts = [...composerMentionParts];
+                    const removed = nextParts.pop();
+                    if (removed?.type === 'mention' && removed.id != null) {
+                      setMentionedUserIds((prev) => prev.filter((id) => id !== removed.id));
+                      handleCommentInputChange(joinComposerComment(nextParts, ''));
+                    } else if (removed?.type === 'text') {
+                      handleCommentInputChange(joinComposerComment(nextParts, removed.text));
                     }
                     return;
                   }
-                  if (e.key === 'Escape') {
-                    setMentionOpen(false);
+                  if (mentionOpen && mentionCandidates.length > 0) {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      setMentionHighlightIndex((prev) => (prev + 1) % mentionCandidates.length);
+                      return;
+                    }
+                    if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      setMentionHighlightIndex(
+                        (prev) => (prev - 1 + mentionCandidates.length) % mentionCandidates.length
+                      );
+                      return;
+                    }
+                    if (e.key === 'Enter' && !e.altKey && !e.shiftKey) {
+                      e.preventDefault();
+                      const candidate = mentionCandidates[mentionHighlightIndex] || mentionCandidates[0];
+                      if (candidate) {
+                        insertMention(candidate);
+                      }
+                      return;
+                    }
+                    if (e.key === 'Escape') {
+                      setMentionOpen(false);
+                      return;
+                    }
+                  }
+                  // Alt+Enter / Shift+Enter → 줄바꿈 (기본 동작 유지)
+                  if (e.key === 'Enter' && (e.altKey || e.shiftKey)) {
                     return;
                   }
-                }
-                // Alt+Enter / Shift+Enter → 줄바꿈 (기본 동작 유지)
-                if (e.key === 'Enter' && (e.altKey || e.shiftKey)) {
-                  return;
-                }
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  void submitComment();
-                }
-              }}
-            />
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void submitComment();
+                  }
+                }}
+              />
+            </Box>
             <Popper
               open={mentionOpen && mentionCandidates.length > 0}
               anchorEl={commentInputRef.current}
               placement="top-start"
               sx={{
                 zIndex: 2000,
-                width: commentInputRef.current?.clientWidth || 320
+                width: Math.max(commentInputRef.current?.clientWidth || 0, 280)
               }}
             >
-              <Paper variant="outlined" sx={{ mt: 0.5, maxHeight: 220, overflowY: 'auto' }}>
+              <Paper variant="outlined" sx={{ mt: 0.5, maxHeight: 280, overflowY: 'auto' }}>
                 {mentionCandidates.map((candidate, index) => (
                   <MenuItem
                     key={candidate.id}
@@ -4344,13 +4491,23 @@ const WorkBoardDetailPage: React.FC = () => {
                       event.preventDefault();
                       insertMention(candidate);
                     }}
+                    sx={{ gap: 1, py: 0.75 }}
                   >
-                    {candidate.label}
-                    {candidate.userid ? (
-                      <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                        {candidate.userid}
+                    <MentionUserIdChip
+                      name={candidate.label}
+                      userId={candidate.id}
+                      title={candidate.userid ? `${candidate.label} (${candidate.userid})` : candidate.label}
+                    />
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+                        {candidate.label}
                       </Typography>
-                    ) : null}
+                      {candidate.userid ? (
+                        <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
+                          {candidate.userid}
+                        </Typography>
+                      ) : null}
+                    </Box>
                   </MenuItem>
                 ))}
               </Paper>
@@ -4363,14 +4520,14 @@ const WorkBoardDetailPage: React.FC = () => {
               sx={{
                 minWidth: 80,
                 px: 1.5,
-                height: 40,
+                height: 'auto',
+                minHeight: 40,
                 alignSelf: 'stretch',
-                borderRadius: 0,
+                borderRadius: KANBAN_CONTROL_RADIUS,
                 boxShadow: 'none',
                 fontWeight: 700,
                 fontSize: '0.8125rem',
                 textTransform: 'none',
-                borderLeft: '1px solid #E2E8F0',
                 bgcolor: 'primary.main',
                 color: '#FFFFFF',
                 '&:hover': {

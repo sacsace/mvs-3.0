@@ -307,11 +307,17 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               md: fullBleedBody ? 1.5 : `${WORK_AREA_OUTSET + 8}px`,
             },
             paddingTop: { xs: 0.75, sm: `${HEADER_MENU_GAP_PX + 4}px` },
-            paddingBottom: {
-              xs: 'max(12px, env(safe-area-inset-bottom))',
-              sm: 2,
-              md: `${WORK_AREA_OUTSET + 16}px`,
-            },
+            paddingBottom: fullBleedBody
+              ? {
+                  xs: 'max(0px, env(safe-area-inset-bottom))',
+                  sm: 0,
+                  md: 0,
+                }
+              : {
+                  xs: 'max(12px, env(safe-area-inset-bottom))',
+                  sm: 2,
+                  md: `${WORK_AREA_OUTSET + 16}px`,
+                },
             '& > *': {
               width: '100%',
               maxWidth: bodyMaxWidth,
@@ -354,7 +360,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 width: '100%',
                 maxWidth: '100%',
                 overflowX: 'hidden',
-                overflowY: 'visible',
+                overflowY: fullBleedBody ? 'auto' : 'visible',
                 color: 'text.primary',
                 fontSize: { xs: '13px', sm: '13.5px' },
                 lineHeight: 1.6,

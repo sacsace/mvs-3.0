@@ -81,7 +81,7 @@ const SUB_MENUS: Record<string, Array<{ name_ko: string; name_en: string; route:
   ],
   '/work': [
     { name_ko: '업무 관리', name_en: 'Projects', route: '/work/projects', icon: 'view_kanban', order: 1 },
-    { name_ko: '업무 담당 리스트', name_en: 'Work Assignment List', route: '/work/assignee-list', icon: 'assignment_ind', order: 2 },
+    { name_ko: '고객사 리스트', name_en: 'Client List', route: '/work/assignee-list', icon: 'assignment_ind', order: 2 },
     { name_ko: '계약 관리', name_en: 'Contracts', route: '/customers/contracts', icon: 'description', order: 3 },
     { name_ko: '전자결재', name_en: 'Approval', route: '/work/approval', icon: 'approval', order: 4 },
     { name_ko: '업무 보고서', name_en: 'Reports', route: '/work/reports', icon: 'assessment', order: 5 },

@@ -2767,10 +2767,9 @@ export const changeExpenseApprover = async (req: RequestWithUser, res: Response)
     }
 
     const designatedId = readExpenseApproverId(expense);
-    const isRequester = Number(expense.requester_id) === Number(user_id);
     const isCurrentApprover = designatedId != null && designatedId === Number(user_id);
-    if (!isRequester && !isCurrentApprover) {
-      return res.status(403).json({ success: false, message: '승인권자를 변경할 권한이 없습니다.' });
+    if (!isCurrentApprover) {
+      return res.status(403).json({ success: false, message: '승인 요청을 받은 승인자만 승인권자를 변경할 수 있습니다.' });
     }
 
     const assigned = await assignExpenseApprover({

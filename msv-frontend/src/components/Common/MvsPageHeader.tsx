@@ -62,6 +62,7 @@ const MvsPageHeader: React.FC<MvsPageHeaderProps> = ({
         gap: 2,
         mb,
         width: '100%',
+        flexShrink: 0,
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25, flex: { xs: '1 1 100%', sm: '1 1 280px' }, minWidth: 0 }}>
