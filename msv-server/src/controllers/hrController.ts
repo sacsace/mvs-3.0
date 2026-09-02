@@ -916,7 +916,7 @@ export const sendPayrollPayslip = async (req: RequestWithUser, res: Response) =>
  */
 export const sendImportedPayslip = async (req: RequestWithUser, res: Response) => {
   try {
-    const { tenant_id, company_id, id: senderId } = req.user;
+    const { tenant_id, company_id, id: senderId, role } = req.user;
     const to = String(req.body?.to || '').trim();
     const employeeName = String(req.body?.employee_name || '').trim().slice(0, 120);
     const period = String(req.body?.payroll_period || '').trim().slice(0, 30);
@@ -937,10 +937,34 @@ export const sendImportedPayslip = async (req: RequestWithUser, res: Response) =
       return res.status(400).json({ success: false, message: '유효한 PDF 데이터가 필요합니다.' });
     }
 
-    const companyRow = await Company.findOne({ where: { id: company_id, tenant_id } });
+    // root/audit: body.company_id로 발송 회사 지정 / 그 외: 로그인 회사 고정
+    let effectiveCompanyId = Number(company_id);
+    if (role === 'root' || role === 'audit') {
+      const requested = Number(req.body?.company_id);
+      if (Number.isFinite(requested) && requested > 0) {
+        effectiveCompanyId = requested;
+      }
+    }
+    if (!Number.isFinite(effectiveCompanyId) || effectiveCompanyId <= 0) {
+      return res.status(400).json({ success: false, message: '발송 회사를 선택해주세요.' });
+    }
+
+    const companyWhere: any = { id: effectiveCompanyId };
+    if (role !== 'root') {
+      companyWhere.tenant_id = tenant_id;
+    }
+    const companyRow = await Company.findOne({ where: companyWhere });
+    if (!companyRow) {
+      return res.status(404).json({ success: false, message: '발송 회사를 찾을 수 없습니다.' });
+    }
+    const scopeTenantId = Number((companyRow as any).tenant_id || tenant_id);
+
     const senderRow = await User.findOne({
-      where: { id: senderId, tenant_id, company_id },
-      attributes: ['id', 'settings']
+      where:
+        role === 'root' || role === 'audit'
+          ? { id: senderId }
+          : { id: senderId, tenant_id, company_id },
+      attributes: ['id', 'settings'],
     });
     const mailOpts = getResolvedMailTransportOptions(companyRow, senderRow);
     if (!mailOpts) {
@@ -991,8 +1015,8 @@ export const sendImportedPayslip = async (req: RequestWithUser, res: Response) =
     let matchedUser =
       (await (User as any).findOne({
         where: {
-          tenant_id,
-          company_id,
+          tenant_id: scopeTenantId,
+          company_id: effectiveCompanyId,
           status: 'active',
           [Op.and]: [Sequelize.where(Sequelize.fn('LOWER', Sequelize.col('email')), emailLower)]
         },
@@ -1002,8 +1026,8 @@ export const sendImportedPayslip = async (req: RequestWithUser, res: Response) =
     if (!matchedUser && empId) {
       matchedUser = await (User as any).findOne({
         where: {
-          tenant_id,
-          company_id,
+          tenant_id: scopeTenantId,
+          company_id: effectiveCompanyId,
           status: 'active',
           employee_number: empId
         },
@@ -1011,17 +1035,17 @@ export const sendImportedPayslip = async (req: RequestWithUser, res: Response) =
       });
     }
 
-    const dir = ensureUploadSubdir('payslips', String(tenant_id), String(company_id));
+    const dir = ensureUploadSubdir('payslips', String(scopeTenantId), String(effectiveCompanyId));
     const fileName = `payslip-${period || 'na'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.pdf`;
     const absPath = path.join(dir, fileName);
     await fs.promises.writeFile(absPath, pdfBuffer);
-    const pdfUrl = `/uploads/payslips/${tenant_id}/${company_id}/${fileName}`;
+    const pdfUrl = `/uploads/payslips/${scopeTenantId}/${effectiveCompanyId}/${fileName}`;
 
     // 같은 메일 + 같은 급여월 → 이전 활성 건 소프트 삭제 후 최신만 유지
     const previousRows = await (PayslipDelivery as any).findAll({
       where: {
-        tenant_id,
-        company_id,
+        tenant_id: scopeTenantId,
+        company_id: effectiveCompanyId,
         payroll_period: period || '',
         is_active: true,
         [Op.and]: [
@@ -1037,8 +1061,8 @@ export const sendImportedPayslip = async (req: RequestWithUser, res: Response) =
     }
 
     await (PayslipDelivery as any).create({
-      tenant_id,
-      company_id,
+      tenant_id: scopeTenantId,
+      company_id: effectiveCompanyId,
       user_id: matchedUser?.id ?? null,
       payroll_period: period || '',
       employee_name: employeeName || matchedUser?.username || null,
@@ -1064,7 +1088,7 @@ export const sendImportedPayslip = async (req: RequestWithUser, res: Response) =
     return res.json({
       success: true,
       message: '메일을 발송했고, 급여 명세서에 저장했습니다.',
-      data: { saved_for_user: true }
+      data: { saved_for_user: Boolean(matchedUser?.id), company_id: effectiveCompanyId }
     });
   } catch (error) {
     console.error('업로드 급여 명세서 메일 오류:', error);

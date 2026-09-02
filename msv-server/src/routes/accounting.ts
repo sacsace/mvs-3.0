@@ -157,6 +157,37 @@ const receiptUpload = multer({
   }
 });
 
+const remittanceProofsPath = ensureUploadSubdir('expense-remittance-proofs');
+const remittanceProofStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, remittanceProofsPath),
+  filename: (_req, file, cb) => {
+    let original = file.originalname || 'proof';
+    try {
+      original = Buffer.from(original, 'latin1').toString('utf8');
+    } catch {
+      // keep original
+    }
+    const ext = path.extname(original) || '.png';
+    const base =
+      path
+        .basename(original, ext)
+        .replace(/[\\/:*?"<>|]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 100) || 'proof';
+    cb(null, `${base}${ext}`);
+  }
+});
+const remittanceProofUpload = multer({
+  storage: remittanceProofStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+    if (allowed.includes(file.mimetype)) return cb(null, true);
+    cb(new Error('이미지 또는 PDF만 업로드 가능합니다.'));
+  }
+});
+
 const autoVoucherPath = ensureUploadSubdir('auto-vouchers');
 const autoVoucherStorage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, autoVoucherPath),
@@ -654,17 +685,13 @@ router.post(
 router.post(
   '/expenses/:id/complete-payment',
   restrictAuditToReadOnly,
-  validateBody({
-    provider: { type: 'string', oneOf: ['icici', 'kotak'] }
-  }),
+  remittanceProofUpload.single('proof'),
   completeExpensePayment
 );
 router.post(
   '/expenses/:id/retry-transfer',
   restrictAuditToReadOnly,
-  validateBody({
-    provider: { type: 'string', oneOf: ['icici', 'kotak'] }
-  }),
+  remittanceProofUpload.single('proof'),
   retryExpenseTransfer
 );
 

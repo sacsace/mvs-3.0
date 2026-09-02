@@ -242,19 +242,28 @@ export const accountingService = {
     return response.data;
   },
 
-  // 지출결?�서 결제 ?�료 처리 + ?�금
-  completeExpensePayment: async (id: number, provider?: 'icici' | 'kotak') => {
-    const response = await api.post(`/accounting/expenses/${id}/complete-payment`, { provider });
+  // 지출결의서 송금 처리 (금액 + 확인증 업로드, 은행 API 미사용)
+  completeExpensePayment: async (id: number, amount?: number, proof?: File) => {
+    const formData = new FormData();
+    if (amount != null) formData.append('amount', String(amount));
+    if (proof) formData.append('proof', proof);
+    const response = await api.post(`/accounting/expenses/${id}/complete-payment`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
     return response.data;
   },
 
-  // ?�???�금 ?�시??
-  retryExpenseTransfer: async (id: number, provider?: 'icici' | 'kotak') => {
-    const response = await api.post(`/accounting/expenses/${id}/retry-transfer`, { provider });
+  // Manual remittance retry (same as complete with proof)
+  retryExpenseTransfer: async (id: number, amount?: number, proof?: File) => {
+    const formData = new FormData();
+    if (amount != null) formData.append('amount', String(amount));
+    if (proof) formData.append('proof', proof);
+    const response = await api.post(`/accounting/expenses/${id}/retry-transfer`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
     return response.data;
   },
 
-  // ?�산 목록 조회
   getBudgets: async (params?: any) => {
     const response = await api.get('/accounting/budgets', { params });
     return response.data;
@@ -812,6 +821,7 @@ export const payrollService = {
     subject: string;
     message: string;
     pdf_base64: string;
+    company_id?: number;
   }) => {
     const response = await api.post('/hr/payslips/send-imported', data);
     return response.data;

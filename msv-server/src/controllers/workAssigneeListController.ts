@@ -3,6 +3,7 @@ import { Op } from 'sequelize';
 import { RequestWithUser } from '../types';
 import { WorkAssignee, WorkAssigneeItem } from '../models';
 import sequelize from '../config/database';
+import { resolveAssignedClientScope } from '../services/workAssigneeScope';
 
 function resolveScope(req: RequestWithUser) {
   const tenantId = req.user?.tenant_id;
@@ -155,10 +156,12 @@ export const createWorkAssignee = async (req: RequestWithUser, res: Response) =>
       transaction: t,
     })) as number | null;
 
+    const linkedUserId = Number(req.body?.user_id);
     const assignee = await WorkAssignee.create(
       {
         tenant_id: tenantId,
         company_id: companyId,
+        user_id: Number.isFinite(linkedUserId) && linkedUserId > 0 ? linkedUserId : null,
         name,
         title: req.body?.title != null ? String(req.body.title).trim() || null : null,
         email: req.body?.email != null ? String(req.body.email).trim() || null : null,
@@ -205,6 +208,10 @@ export const updateWorkAssignee = async (req: RequestWithUser, res: Response) =>
     }
     if (req.body?.email !== undefined) {
       patch.email = String(req.body.email).trim() || null;
+    }
+    if (req.body?.user_id !== undefined) {
+      const linkedUserId = Number(req.body.user_id);
+      patch.user_id = Number.isFinite(linkedUserId) && linkedUserId > 0 ? linkedUserId : null;
     }
 
     await assignee.update(patch);
@@ -330,8 +337,10 @@ export const createWorkAssigneeItem = async (req: RequestWithUser, res: Response
       where: { assignee_id: assigneeId, is_active: true },
     })) as number | null;
 
+    const partnerIdRaw = Number(req.body?.partner_id);
     const item = await WorkAssigneeItem.create({
       assignee_id: assigneeId,
+      partner_id: Number.isFinite(partnerIdRaw) && partnerIdRaw > 0 ? partnerIdRaw : null,
       name,
       note: req.body?.note != null ? String(req.body.note).trim() || null : null,
       is_highlighted: Boolean(req.body?.is_highlighted),
@@ -384,6 +393,10 @@ export const updateWorkAssigneeItem = async (req: RequestWithUser, res: Response
         });
       }
       patch.name = name;
+    }
+    if (req.body?.partner_id !== undefined) {
+      const partnerIdRaw = Number(req.body.partner_id);
+      patch.partner_id = Number.isFinite(partnerIdRaw) && partnerIdRaw > 0 ? partnerIdRaw : null;
     }
     if (req.body?.note !== undefined) {
       patch.note = String(req.body.note).trim() || null;
@@ -535,6 +548,29 @@ export const moveWorkAssigneeItem = async (req: RequestWithUser, res: Response) 
     return res.status(500).json({
       success: false,
       message: '담당 회사 이동 중 오류가 발생했습니다.',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+};
+
+/** 내 고객사 리스트 배정 범위 (매출/매입/지출 필터용) */
+export const getMyAssignedClientScope = async (req: RequestWithUser, res: Response) => {
+  try {
+    const scope = await resolveAssignedClientScope(req.user);
+    return res.json({
+      success: true,
+      data: {
+        enforced: scope.enforced,
+        partner_ids: scope.partnerIds,
+        customer_ids: scope.customerIds,
+        partner_names: scope.partnerNamesNormalized,
+      },
+    });
+  } catch (error: any) {
+    console.error('내 고객사 배정 범위 조회 오류:', error);
+    return res.status(500).json({
+      success: false,
+      message: '고객사 배정 범위 조회 중 오류가 발생했습니다.',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }

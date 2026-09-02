@@ -75,16 +75,17 @@ import {
   InsertDriveFile as FileIcon } from '@mui/icons-material';
 import { useStore } from '../../store';
 import { useNavigate } from 'react-router-dom';
-import { accountingService, companyService } from '../../services/api';
+import { accountingService, companyService, workAssigneeListService } from '../../services/api';
 import { resolveHeaderCompanyInfo, useReferenceDataStore } from '../../store/referenceDataStore';
 import { resolveRegisteredStateCodeFromCompanyLike } from '../HR/payroll/indianProfessionalTax';
-import { getUploadUrl } from '../../utils/uploadUrl';
+import { getUploadUrl, downloadUploadFile } from '../../utils/uploadUrl';
 import AuthMedia from '../../components/Common/AuthMedia';
 import QRCode from 'qrcode';
 import { useTranslation } from 'react-i18next';
 import {
   buildExpenseApprovalPdfFilename,
   downloadExpenseApprovalPdf,
+  EXPENSE_DOCUMENT_EXPORT_CSS,
 } from '../../utils/expenseApprovalPdf';
 
 const expenseApprovalFilterFieldSx = {
@@ -94,7 +95,7 @@ const expenseApprovalFilterFieldSx = {
 /** expense-receipts/1784..._IMG.jpg → IMG.jpg */
 const getReceiptDisplayName = (filePath: string): string => {
   const base = String(filePath || '').split(/[/\\]/).pop() || String(filePath || '');
-  return base.replace(/^\d{10 }_/, '') || base;
+  return base.replace(/^\d+_/, '') || base;
 };
 
 const isImageReceipt = (filePath: string): boolean =>
@@ -176,6 +177,7 @@ interface ExpenseApprovalItem {
   itemMeta?: Record<string, any>;
   approvalId?: number;
   paymentRequestStatus?: string;
+  paidAmount?: number;
   paymentRequestedAt?: string;
   paymentCompletedAt?: string;
   paymentApprovedReason?: string;
@@ -189,14 +191,20 @@ interface ExpenseApprovalItem {
   bankTransferReference?: string;
   bankTransferError?: string;
   bankTransferLogs?: Array<{
-    timestamp: string;
-    action: string;
-    status: string;
+    timestamp?: string;
+    action?: string;
+    status?: string;
     provider?: string | null;
+    amount?: number;
+    proof?: string;
+    proof_name?: string;
     payload?: any;
     response?: any;
     error?: string | null;
   }>;
+  remittanceHistory?: Array<{ timestamp?: string; amount?: number }>;
+  companyId?: number;
+  companyName?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -342,19 +350,26 @@ const ExpenseFlowStamp = ({
   label,
   name,
   muted,
+  wide,
+  children,
 }: {
   label: string;
   name: string;
   muted?: boolean;
+  wide?: boolean;
+  children?: React.ReactNode;
 }) => (
   <Box
     sx={{
-      width: 140,
+      width: wide ? 222 : 140,
       flexShrink: 0,
       border: `1px solid ${EXPENSE_STAMP_LINE}`,
       bgcolor: '#FFFFFF',
       overflow: 'hidden',
       opacity: muted ? 0.65 : 1,
+      display: 'flex',
+      flexDirection: 'column',
+      alignSelf: 'stretch',
     }}
   >
     <Box
@@ -373,26 +388,29 @@ const ExpenseFlowStamp = ({
     <Box
       sx={{
         minHeight: 44,
+        height: 44,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         px: 1,
       }}
     >
-      <Typography
-        sx={{
-          fontWeight: 700,
-          fontSize: '0.8125rem',
-          color: EXPENSE_STAMP_LABEL,
-          textAlign: 'center',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          maxWidth: '100%',
-        }}
-      >
-        {name}
-      </Typography>
+      {children || (
+        <Typography
+          sx={{
+            fontWeight: 700,
+            fontSize: '0.8125rem',
+            color: EXPENSE_STAMP_LABEL,
+            textAlign: 'center',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            maxWidth: '100%',
+          }}
+        >
+          {name}
+        </Typography>
+      )}
     </Box>
   </Box>
 );
@@ -551,6 +569,28 @@ const formatLocalYmd = (value?: Date | string | null) => {
   return `${y}-${m}-${day}`;
 };
 
+const takeFileNameSnippet = (value: string, maxChars: number) => {
+  const cleaned = String(value || '')
+    .replace(/[\\/:*?"<>|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned) return '';
+  return Array.from(cleaned).slice(0, maxChars).join('');
+};
+
+const buildRemittanceProofFileName = (file: File, partnerName?: string, description?: string) => {
+  const ymd = formatLocalYmd(new Date()).replace(/-/g, '');
+  const partner = takeFileNameSnippet(partnerName || '', 24) || 'Partner';
+  const desc = takeFileNameSnippet(description || '', 9) || 'item';
+  const fromName = String(file.name || '').split('.').pop() || '';
+  const fromType = (file.type.split('/')[1] || 'png').replace(/^jpeg$/i, 'jpg');
+  const ext = ((fromName.length <= 4 ? fromName : fromType)
+    .replace(/[^a-z0-9]/gi, '')
+    .slice(0, 4)
+    .toLowerCase() || 'png').replace(/^jpeg$/, 'jpg');
+  return `${ymd}_RT (${partner}) (${desc}).${ext}`;
+};
+
 const getTodayLocalYmd = () => formatLocalYmd(new Date());
 
 const formatAmount = (value: number) =>
@@ -569,13 +609,19 @@ const PRIORITY_SORT_ORDER: Record<string, number> = {
 };
 
 const STATUS_SORT_ORDER: Record<string, number> = {
-  draft: 0,
+  in_review: 0,
   submitted: 1,
-  in_review: 2,
+  draft: 2,
   approved: 3,
   paid: 4,
   rejected: 5,
 };
+
+const paidStatusChipSx = {
+  bgcolor: '#0E7490',
+  color: '#FFFFFF',
+  fontWeight: 600,
+} as const;
 
 type ExpenseListSortKey = 'createdAt' | 'title' | 'person' | 'amount' | 'status' | 'priority';
 
@@ -749,7 +795,8 @@ const ExpenseApproval: React.FC = () => {
   const theme = useTheme();
   const { user } = useStore();
   const navigate = useNavigate();
-  const hasTransferAccess = Boolean(user?.is_payment_officer);
+  const isRootUser = user?.role === 'root';
+  const hasTransferAccess = Boolean(user?.is_payment_officer) || isRootUser;
   const [expenses, setExpenses] = useState<ExpenseApprovalItem[]>([]);
   const [filteredExpenses, setFilteredExpenses] = useState<ExpenseApprovalItem[]>([]);
   const [, setLoading] = useState(false);
@@ -768,6 +815,8 @@ const ExpenseApproval: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
+  const [companyFilterId, setCompanyFilterId] = useState<number | ''>('');
+  const [companyOptions, setCompanyOptions] = useState<Array<{ id: number; name: string }>>([]);
   const [listSortKey, setListSortKey] = useState<ExpenseListSortKey | null>(null);
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
@@ -824,7 +873,11 @@ const ExpenseApproval: React.FC = () => {
   const [qrImage, setQrImage] = useState('');
   const [qrImageError, setQrImageError] = useState('');
   const [previewAttachment, setPreviewAttachment] = useState<string | null>(null);
-  const [bankProvider, setBankProvider] = useState<'icici' | 'kotak'>('icici');
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [paymentAmountInput, setPaymentAmountInput] = useState('');
+  const [paymentProofFile, setPaymentProofFile] = useState<File | null>(null);
+  const [paymentProofPreviewUrl, setPaymentProofPreviewUrl] = useState<string>('');
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const lastSavedPayloadRef = useRef<string>('');
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [uploadingReceipts, setUploadingReceipts] = useState(false);
@@ -881,6 +934,7 @@ const ExpenseApproval: React.FC = () => {
     itemMeta: parsedItems.meta,
     approvalId: expense.approval_id || undefined,
     paymentRequestStatus: expense.payment_request_status || undefined,
+    paidAmount: Number(expense.paid_amount || 0),
     paymentRequestedAt: expense.payment_requested_at || '',
     paymentCompletedAt: expense.payment_completed_at || '',
     paymentApprovedReason: expense.payment_approved_reason || '',
@@ -894,6 +948,9 @@ const ExpenseApproval: React.FC = () => {
     bankTransferReference: expense.bank_transfer_reference || undefined,
     bankTransferError: expense.bank_transfer_error || undefined,
     bankTransferLogs: Array.isArray(expense.bank_transfer_logs) ? expense.bank_transfer_logs : [],
+    remittanceHistory: Array.isArray(expense.remittance_history) ? expense.remittance_history : [],
+    companyId: Number(expense.company_id || 0) || undefined,
+    companyName: String(expense.company_name || expense.companyName || '').trim() || undefined,
     createdAt: expense.created_at || expense.createdAt || parsedItems.meta?.voucherDate || '',
     updatedAt: expense.updated_at || expense.updatedAt || ''
     };
@@ -930,10 +987,14 @@ const ExpenseApproval: React.FC = () => {
   const loadExpenseData = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await accountingService.getExpenseReports();
+      const params: Record<string, number> = {};
+      if (isRootUser && companyFilterId) {
+        params.company_id = Number(companyFilterId);
+      }
+      const response = await accountingService.getExpenseReports(params);
       if (response.success) {
         const list = Array.isArray(response.data) ? response.data : [];
-        setExpenses(list.map(mapExpense));
+        setExpenses(list.map((row: any) => mapExpense(row)));
       } else {
         setExpenses([]);
         setError(response.message || t('expenseApproval.errors.loadFailed'));
@@ -945,7 +1006,25 @@ const ExpenseApproval: React.FC = () => {
     }
   // mapExpense is a render-local mapper; listing it would refetch on every render
   // eslint-disable-next-line react-hooks/exhaustive-deps -- stable mapping helper
-  }, [t]);
+  }, [t, isRootUser, companyFilterId]);
+
+  const getTransferFilterKey = useCallback((expense: ExpenseApprovalItem) => {
+    const total = Number(expense.totalAmount || 0);
+    const paid = Number(expense.paidAmount || 0);
+    const remaining = Math.max(0, Math.round((total - paid) * 100) / 100);
+    if (String(expense.bankTransferStatus || '').toLowerCase() === 'failed') {
+      return 'transfer_failed';
+    }
+    if (
+      remaining <= 0 ||
+      String(expense.paymentRequestStatus || '').toLowerCase() === 'paid' ||
+      expense.status === 'paid'
+    ) {
+      return 'transfer_completed';
+    }
+    if (paid > 0) return 'transfer_partial';
+    return 'transfer_pending';
+  }, []);
 
   const buildExpensePayload = useCallback(
     (statusOverride?: ExpenseApprovalItem['status']) => ({
@@ -1004,6 +1083,8 @@ const ExpenseApproval: React.FC = () => {
     }
     if (listTab === 'received' && user?.id) {
       filtered = filtered.filter(expense => {
+        // 초안은 승인자가 지정돼 있어도 '승인 제출' 전까지 받은 목록에 노출하지 않음
+        if (expense.status === 'draft') return false;
         if (expense.currentApproverId === user.id) return true;
         if (expense.itemMeta?.checkedById && Number(expense.itemMeta.checkedById) === user.id) return true;
         if (expense.itemMeta?.approvedById && Number(expense.itemMeta.approvedById) === user.id) return true;
@@ -1014,32 +1095,50 @@ const ExpenseApproval: React.FC = () => {
       if (!hasTransferAccess) {
         filtered = [];
       } else {
-        filtered = filtered.filter(expense =>
-          expense.paymentRequestStatus === 'approved' ||
-          expense.bankTransferStatus === 'failed'
-        );
+        // 승인·지급완료 건을 송금 목록 대상으로 두고, 상태 필터로 송금완료까지 검색
+        filtered = filtered.filter((expense) => {
+          if (expense.status !== 'approved' && expense.status !== 'paid') return false;
+          const transferKey = getTransferFilterKey(expense);
+          if (!statusFilter) return true;
+          return transferKey === statusFilter;
+        });
       }
     }
 
     if (searchTerm) {
-      filtered = filtered.filter(expense =>
-        expense.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        expense.expenseId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        expense.requesterName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        expense.purpose.toLowerCase().includes(searchTerm.toLowerCase())
+      const q = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (expense) =>
+          expense.title.toLowerCase().includes(q) ||
+          expense.expenseId.toLowerCase().includes(q) ||
+          expense.requesterName.toLowerCase().includes(q) ||
+          expense.purpose.toLowerCase().includes(q) ||
+          String(expense.companyName || '')
+            .toLowerCase()
+            .includes(q)
       );
     }
 
-    if (statusFilter) {
-      filtered = filtered.filter(expense => expense.status === statusFilter);
+    // 송금 탭은 transfer_* 상태 필터를 위에서 적용
+    if (statusFilter && listTab !== 'transfer') {
+      filtered = filtered.filter((expense) => expense.status === statusFilter);
     }
 
     if (priorityFilter) {
-      filtered = filtered.filter(expense => expense.priority === priorityFilter);
+      filtered = filtered.filter((expense) => expense.priority === priorityFilter);
     }
 
     setFilteredExpenses(filtered);
-  }, [expenses, searchTerm, statusFilter, priorityFilter, listTab, user, hasTransferAccess]);
+  }, [
+    expenses,
+    searchTerm,
+    statusFilter,
+    priorityFilter,
+    listTab,
+    user,
+    hasTransferAccess,
+    getTransferFilterKey,
+  ]);
 
   const handleListSort = (key: ExpenseListSortKey) => {
     setPage(1);
@@ -1054,6 +1153,45 @@ const ExpenseApproval: React.FC = () => {
   useEffect(() => {
     loadExpenseData();
   }, [loadExpenseData]);
+
+  useEffect(() => {
+    if (!isRootUser) {
+      setCompanyOptions([]);
+      setCompanyFilterId('');
+      return;
+    }
+    let cancelled = false;
+    const tenantId = Number(user?.tenant_id);
+    (async () => {
+      try {
+        const res = await companyService.getCompanies();
+        const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+        if (cancelled) return;
+        setCompanyOptions(
+          rows
+            .map((c: any) => ({
+              id: Number(c.id),
+              name: String(c.name || c.company_name || '').trim(),
+              tenantId: Number(c.tenant_id || c.tenantId || 0),
+            }))
+            .filter(
+              (c: { id: number; name: string; tenantId: number }) =>
+                Number.isFinite(c.id) &&
+                c.id > 0 &&
+                c.name &&
+                (!Number.isFinite(tenantId) || tenantId <= 0 || !c.tenantId || c.tenantId === tenantId)
+            )
+            .map(({ id, name }: { id: number; name: string }) => ({ id, name }))
+            .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name))
+        );
+      } catch {
+        if (!cancelled) setCompanyOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isRootUser, user?.tenant_id]);
 
   useEffect(() => {
     if (!user) {
@@ -1112,7 +1250,15 @@ const ExpenseApproval: React.FC = () => {
       return;
     }
     setVoucherData((prev) => ({ ...prev, ...nextRates }));
-  }, [viewMode, voucherData.gstNumber, companyGstNumber, companyGstState]);
+  }, [
+    viewMode,
+    voucherData.gstNumber,
+    voucherData.igstRate,
+    voucherData.cgstRate,
+    voucherData.sgstRate,
+    companyGstNumber,
+    companyGstState,
+  ]);
 
   useEffect(() => {
     const loadApprovers = async () => {
@@ -1139,7 +1285,23 @@ const ExpenseApproval: React.FC = () => {
   useEffect(() => {
     const loadPartners = async () => {
       try {
-        const rows = await useReferenceDataStore.getState().fetchPartners();
+        const [rows, scopeRes] = await Promise.all([
+          useReferenceDataStore.getState().fetchPartners(),
+          workAssigneeListService.getMyScope().catch(() => null),
+        ]);
+        const scope = scopeRes?.data;
+        const allowedPartnerIds = new Set<number>(
+          Array.isArray(scope?.partner_ids)
+            ? scope.partner_ids.map((id: any) => Number(id)).filter((id: number) => id > 0)
+            : []
+        );
+        const allowedNames = new Set<string>(
+          Array.isArray(scope?.partner_names)
+            ? scope.partner_names.map((n: any) => String(n || '').trim().toLowerCase()).filter(Boolean)
+            : []
+        );
+        const enforce = Boolean(scope?.enforced);
+
         const normalized: PartnerOption[] = (Array.isArray(rows) ? rows : [])
           .map((p: any) => ({
             id: Number(p.id),
@@ -1160,7 +1322,12 @@ const ExpenseApproval: React.FC = () => {
                 ? p.gst_numbers
                 : [],
           }))
-          .filter((p) => Number.isFinite(p.id) && p.company_name);
+          .filter((p) => Number.isFinite(p.id) && p.company_name)
+          .filter((p) => {
+            if (!enforce) return true;
+            if (allowedPartnerIds.has(p.id)) return true;
+            return allowedNames.has(p.company_name.trim().toLowerCase());
+          });
         setPartners(normalized);
       } catch {
         setPartners([]);
@@ -1255,6 +1422,51 @@ const ExpenseApproval: React.FC = () => {
     return () => clearTimeout(timer);
   }, [formData, lineItems, voucherData, draftId, selectedExpense?.id, viewMode, isInitializingDraft, buildExpensePayload]);
 
+  const getExpenseRemainingAmount = useCallback((expense: ExpenseApprovalItem) => {
+    const total = Number(expense.totalAmount || 0);
+    const paid = Number(expense.paidAmount || 0);
+    return Math.max(0, Math.round((total - paid) * 100) / 100);
+  }, []);
+
+  const getExpenseRemittanceEntries = (expense: ExpenseApprovalItem) => {
+    const fromHistory = (expense.remittanceHistory || [])
+      .map((row) => ({
+        timestamp: String(row.timestamp || ''),
+        amount: Number(row.amount || 0),
+      }))
+      .filter((row) => Number.isFinite(row.amount) && row.amount > 0);
+    const source =
+      fromHistory.length > 0
+        ? fromHistory
+        : (expense.bankTransferLogs || [])
+            .map((log) => {
+              const amount = Number(log.amount ?? log.payload?.amount ?? 0);
+              const status = String(log.status || '').toLowerCase();
+              const ok = !status || ['success', 'completed', 'paid'].includes(status);
+              return { timestamp: String(log.timestamp || ''), amount, ok };
+            })
+            .filter((row) => row.ok && Number.isFinite(row.amount) && row.amount > 0)
+            .map(({ timestamp, amount }) => ({ timestamp, amount }));
+    return [...source].sort(
+      (a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime()
+    );
+  };
+
+  /** 목록/상세 상태: 송금까지 끝나면 문서 status와 무관하게 지급 완료로 표시 */
+  const resolveDisplayStatus = useCallback(
+    (expense: ExpenseApprovalItem): ExpenseApprovalItem['status'] | string => {
+      const remaining = getExpenseRemainingAmount(expense);
+      const paymentPaid = String(expense.paymentRequestStatus || '').toLowerCase() === 'paid';
+      const fullyRemitted =
+        paymentPaid ||
+        expense.status === 'paid' ||
+        (Number(expense.paidAmount || 0) > 0 && remaining <= 0 && ['approved', 'paid'].includes(expense.status));
+      if (fullyRemitted) return 'paid';
+      return expense.status;
+    },
+    [getExpenseRemainingAmount]
+  );
+
   const getStatusChip = (status: string) => {
     switch (status) {
       case 'draft':
@@ -1268,10 +1480,27 @@ const ExpenseApproval: React.FC = () => {
       case 'rejected':
         return <Chip label={t('expenseApproval.status.rejected')} color="error" size="small" />;
       case 'paid':
-        return <Chip label={t('expenseApproval.status.paid')} color="success" size="small" />;
+        return <Chip label={t('expenseApproval.status.paid')} size="small" sx={paidStatusChipSx} />;
       default:
         return <Chip label={t('expenseApproval.unknown')} color="default" size="small" />;
     }
+  };
+
+  /** 송금할 리스트용: 문서 초안 상태가 아니라 송금 진행 상태를 표시 */
+  const getTransferStatusChip = (expense: ExpenseApprovalItem) => {
+    const total = Number(expense.totalAmount || 0);
+    const paid = Number(expense.paidAmount || 0);
+    const remaining = Math.max(0, Math.round((total - paid) * 100) / 100);
+    if (expense.bankTransferStatus === 'failed') {
+      return <Chip label={t('expenseApproval.status.transferFailed')} color="error" size="small" />;
+    }
+    if (remaining <= 0 || expense.paymentRequestStatus === 'paid' || expense.status === 'paid') {
+      return <Chip label={t('expenseApproval.status.paid')} size="small" sx={paidStatusChipSx} />;
+    }
+    if (paid > 0) {
+      return <Chip label={t('expenseApproval.status.partialTransfer')} color="warning" size="small" />;
+    }
+    return <Chip label={t('expenseApproval.status.transferPending')} color="info" size="small" />;
   };
 
   const getPriorityChip = (priority: string) => {
@@ -1407,6 +1636,10 @@ const ExpenseApproval: React.FC = () => {
     }
     if (!voucherData.approvedById) {
       setError(t('expenseApproval.errors.approverRequired'));
+      return;
+    }
+    if (!currentAttachments.length && !String(voucherData.remarks || '').trim()) {
+      setError(t('expenseApproval.errors.receiptOrRemarksRequired'));
       return;
     }
     if (isSameUserId(voucherData.approvedById, user?.id)) {
@@ -1774,27 +2007,33 @@ const ExpenseApproval: React.FC = () => {
 
   const canEditExpense = (expense: ExpenseApprovalItem) => {
     if (!user?.id) return false;
-    if (listTab === 'received') return false;
+    if (listTab === 'received' || listTab === 'transfer') return false;
     if (!isSameUserId(expense.requesterId, user.id)) return false;
     return ['draft', 'rejected'].includes(expense.status);
   };
 
   const canResubmitExpense = (expense: ExpenseApprovalItem) => {
     if (!user?.id) return false;
-    if (listTab === 'received') return false;
+    if (listTab === 'received' || listTab === 'transfer') return false;
     if (!isSameUserId(expense.requesterId, user.id)) return false;
     return expense.status === 'rejected';
   };
 
   const canDeleteExpense = (expense: ExpenseApprovalItem) => {
     if (!user?.id) return false;
+    if (listTab === 'transfer') return false;
     if (!isSameUserId(expense.requesterId, user.id)) return false;
+    // 목록에 '지급 완료'로 보이는 건(문서 status와 무관) 삭제 불가
+    if (resolveDisplayStatus(expense) === 'paid') return false;
     if (['submitted', 'in_review', 'approved', 'paid'].includes(expense.status)) return false;
     return true;
   };
 
-  const getExpenseGrandTotal = (expense: ExpenseApprovalItem) =>
-    calcExpenseTax(expense.items, expense.itemMeta, companyGstNumber, companyGstState).grandTotal;
+  const getExpenseGrandTotal = useCallback(
+    (expense: ExpenseApprovalItem) =>
+      calcExpenseTax(expense.items, expense.itemMeta, companyGstNumber, companyGstState).grandTotal,
+    [companyGstNumber, companyGstState]
+  );
 
   const openReasonDialog = (type: 'payment-approve' | 'payment-reject' | 'expense-reject', id: number) => {
     setReasonDialogType(type);
@@ -1822,30 +2061,127 @@ const ExpenseApproval: React.FC = () => {
     }
   };
 
-  const handleCompletePayment = async (id: number) => {
+  const setRemittanceProofFile = useCallback((file: File | null) => {
+    if (!file) {
+      setPaymentProofFile(null);
+      return;
+    }
+    const meta = selectedExpense?.itemMeta || {};
+    const linkedPartner = partners.find((p) => String(p.id) === String(meta.partnerId || ''));
+    const named = new File(
+      [file],
+      buildRemittanceProofFileName(
+        file,
+        meta.department || linkedPartner?.company_name || '',
+        selectedExpense?.title || selectedExpense?.purpose || selectedExpense?.items?.[0]?.description || ''
+      ),
+      { type: file.type, lastModified: file.lastModified }
+    );
+    setPaymentProofFile(named);
+  }, [partners, selectedExpense]);
+
+  useEffect(() => {
+    if (!paymentProofFile || !paymentProofFile.type.startsWith('image/')) {
+      setPaymentProofPreviewUrl('');
+      return;
+    }
+    const url = URL.createObjectURL(paymentProofFile);
+    setPaymentProofPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [paymentProofFile]);
+
+  useEffect(() => {
+    if (!paymentDialogOpen) return;
+    const onPaste: EventListener = (event) => {
+      const items = (event as ClipboardEvent).clipboardData?.items;
+      if (!items?.length) return;
+      for (let i = 0; i < items.length; i += 1) {
+        const item = items[i];
+        if (!item.type.startsWith('image/')) continue;
+        const blob = item.getAsFile();
+        if (!blob) continue;
+        event.preventDefault();
+        const ext = (item.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+        const file = new File([blob], `paste.${ext}`, { type: item.type });
+        setRemittanceProofFile(file);
+        break;
+      }
+    };
+    window.addEventListener('paste', onPaste as EventListener);
+    return () => window.removeEventListener('paste', onPaste as EventListener);
+  }, [paymentDialogOpen, setRemittanceProofFile]);
+
+  const openPaymentDialog = (_mode: 'complete' | 'retry' = 'complete') => {
+    if (!selectedExpense) return;
+    const remaining = getExpenseRemainingAmount(selectedExpense);
+    setPaymentAmountInput(remaining > 0 ? String(remaining) : String(selectedExpense.totalAmount || ''));
+    setRemittanceProofFile(null);
+    setPaymentDialogOpen(true);
+  };
+
+  const handleCompletePayment = async (id: number, amount?: number, proof?: File | null) => {
     try {
-      const response = await accountingService.completeExpensePayment(id, bankProvider);
+      setPaymentSubmitting(true);
+      if (!proof) {
+        setError(t('expenseApproval.errors.remittanceProofRequired'));
+        return;
+      }
+      const response = await accountingService.completeExpensePayment(id, amount, proof);
       if (!response?.success) {
         throw new Error(response?.message || t('expenseApproval.errors.paymentCompleteFailed'));
       }
       await loadExpenseData();
-      setSuccess(t('expenseApproval.success.paymentCompleted'));
-    } catch {
-      setError(t('expenseApproval.errors.paymentCompleteFailed'));
+      if (response?.data) {
+        setSelectedExpense(mapExpense(response.data));
+      } else {
+        setSelectedExpense((prev) => {
+          if (!prev || prev.id !== id) return prev;
+          const remaining = Number(response?.remaining_amount);
+          const fullyPaid = Number.isFinite(remaining) ? remaining <= 0 : true;
+          return {
+            ...prev,
+            paidAmount: Number(response?.paid_amount ?? prev.paidAmount),
+            paymentRequestStatus: fullyPaid ? 'paid' : 'approved',
+            status: fullyPaid ? 'paid' : prev.status,
+          };
+        });
+      }
+      setPaymentDialogOpen(false);
+      setRemittanceProofFile(null);
+      const remaining = Number(response?.remaining_amount);
+      if (Number.isFinite(remaining) && remaining > 0) {
+        setSuccess(t('expenseApproval.success.partialPaymentCompleted', { remaining }));
+      } else {
+        setSuccess(t('expenseApproval.success.paymentCompleted'));
+      }
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.message ||
+          err?.message ||
+          t('expenseApproval.errors.paymentCompleteFailed')
+      );
+    } finally {
+      setPaymentSubmitting(false);
     }
   };
 
-  const handleRetryTransfer = async (id: number) => {
-    try {
-      const response = await accountingService.retryExpenseTransfer(id, bankProvider);
-      if (!response?.success) {
-        throw new Error(response?.message || t('expenseApproval.errors.transferRetryFailed'));
-      }
-      await loadExpenseData();
-      setSuccess(t('expenseApproval.success.transferRetried'));
-    } catch {
-      setError(t('expenseApproval.errors.transferRetryFailed'));
+  const submitPaymentDialog = async () => {
+    if (!selectedExpense) return;
+    const remaining = getExpenseRemainingAmount(selectedExpense);
+    const amount = Number(paymentAmountInput);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError(t('expenseApproval.errors.invalidPaymentAmount'));
+      return;
     }
+    if (remaining > 0 && amount > remaining + 0.001) {
+      setError(t('expenseApproval.errors.paymentExceedsRemaining', { remaining }));
+      return;
+    }
+    if (!paymentProofFile) {
+      setError(t('expenseApproval.errors.remittanceProofRequired'));
+      return;
+    }
+    await handleCompletePayment(selectedExpense.id, amount, paymentProofFile);
   };
 
   const handleApprovePayment = async (id: number, reason?: string) => {
@@ -1896,16 +2232,21 @@ const ExpenseApproval: React.FC = () => {
     return approvers.find((item) => item.id === id)?.name || `User ${id}`;
   };
 
-  const getExpenseApproverName = (expense: ExpenseApprovalItem) => {
-    const approvedById = expense.itemMeta?.approvedById ? Number(expense.itemMeta.approvedById) : null;
-    if (approvedById != null) {
-      const named = getUserNameById(approvedById);
-      if (named !== '-') return named;
-    }
-    if (expense.currentApproverName) return expense.currentApproverName;
-    if (expense.currentApproverId) return getUserNameById(expense.currentApproverId);
-    return '-';
-  };
+  const getExpenseApproverName = useCallback(
+    (expense: ExpenseApprovalItem) => {
+      const approvedById = expense.itemMeta?.approvedById ? Number(expense.itemMeta.approvedById) : null;
+      if (approvedById != null) {
+        const named = getUserNameById(approvedById);
+        if (named !== '-') return named;
+      }
+      if (expense.currentApproverName) return expense.currentApproverName;
+      if (expense.currentApproverId) return getUserNameById(expense.currentApproverId);
+      return '-';
+    },
+    // getUserNameById는 approvers에만 의존
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [approvers]
+  );
 
   const displayedExpenses = useMemo(() => {
     const rows = [...filteredExpenses];
@@ -1914,6 +2255,13 @@ const ExpenseApproval: React.FC = () => {
       left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' }) * dir;
     rows.sort((a, b) => {
       if (!listSortKey) {
+        if (listTab === 'received') {
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        }
+        const byStatus =
+          (STATUS_SORT_ORDER[resolveDisplayStatus(a)] ?? 99) -
+          (STATUS_SORT_ORDER[resolveDisplayStatus(b)] ?? 99);
+        if (byStatus !== 0) return byStatus;
         const byPriority =
           (PRIORITY_SORT_ORDER[a.priority] ?? 9) - (PRIORITY_SORT_ORDER[b.priority] ?? 9);
         if (byPriority !== 0) return byPriority;
@@ -1932,7 +2280,10 @@ const ExpenseApproval: React.FC = () => {
         case 'amount':
           return (getExpenseGrandTotal(a) - getExpenseGrandTotal(b)) * dir;
         case 'status':
-          return ((STATUS_SORT_ORDER[a.status] ?? 99) - (STATUS_SORT_ORDER[b.status] ?? 99)) * dir;
+          return (
+            ((STATUS_SORT_ORDER[resolveDisplayStatus(a)] ?? 99) -
+              (STATUS_SORT_ORDER[resolveDisplayStatus(b)] ?? 99)) * dir
+          );
         case 'priority':
           return ((PRIORITY_SORT_ORDER[a.priority] ?? 9) - (PRIORITY_SORT_ORDER[b.priority] ?? 9)) * dir;
         default:
@@ -1940,7 +2291,7 @@ const ExpenseApproval: React.FC = () => {
       }
     });
     return rows;
-  }, [filteredExpenses, listSortKey, listSortDir, listTab, getExpenseApproverName, getExpenseGrandTotal]);
+  }, [filteredExpenses, listSortKey, listSortDir, listTab, getExpenseApproverName, getExpenseGrandTotal, resolveDisplayStatus]);
 
   const selectableApprovers = useMemo(() => {
     const requesterId = viewMode === 'create' ? user?.id : selectedExpense?.requesterId ?? user?.id;
@@ -2007,8 +2358,32 @@ const ExpenseApproval: React.FC = () => {
     }
   };
 
+  const handlePrintExpense = () => {
+    if (!expensePdfRef.current || !selectedExpense) {
+      setError(t('expenseApproval.errors.pdfTargetMissing'));
+      return;
+    }
+    window.print();
+    setSuccess(t('expenseApproval.success.printed'));
+  };
+
   const dateLocale = useMemo(() => (i18n.language?.startsWith('ko') ? 'ko-KR' : 'en-US'), [i18n.language]);
   const formLangAttr = i18n.language?.startsWith('ko') ? 'ko' : 'en';
+
+  const formatRemittanceDateTime = (value?: string) => {
+    if (!value) return '-';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '-';
+    return parsed.toLocaleString(dateLocale, {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    });
+  };
 
   const softFieldSx = useMemo(
     () => ({
@@ -2094,16 +2469,30 @@ const ExpenseApproval: React.FC = () => {
       </DialogContent>
       <DialogActions>
         {previewAttachment ? (
-          <Button
-            variant="outlined"
-            startIcon={<OpenInNewIcon fontSize="small" />}
-            href={getUploadUrl(previewAttachment)}
-            target="_blank"
-            rel="noreferrer"
-            sx={mvsBodyOutlinedBtnSx}
-          >
-            {t('common.openInNew', { defaultValue: '새 탭에서 열기' })}
-          </Button>
+          <>
+            {isImageReceipt(previewAttachment) && (
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon fontSize="small" />}
+                onClick={() => {
+                  void downloadUploadFile(previewAttachment, getReceiptDisplayName(previewAttachment));
+                }}
+                sx={mvsBodyOutlinedBtnSx}
+              >
+                {t('common.download')}
+              </Button>
+            )}
+            <Button
+              variant="outlined"
+              startIcon={<OpenInNewIcon fontSize="small" />}
+              href={getUploadUrl(previewAttachment)}
+              target="_blank"
+              rel="noreferrer"
+              sx={mvsBodyOutlinedBtnSx}
+            >
+              {t('common.openInNew', { defaultValue: '새 탭에서 열기' })}
+            </Button>
+          </>
         ) : null}
         <Button onClick={() => setPreviewAttachment(null)} sx={mvsBodyOutlinedBtnSx}>
           {t('common.close')}
@@ -2208,8 +2597,8 @@ const ExpenseApproval: React.FC = () => {
                 <Box
                   sx={{
                     display: 'flex',
-                    alignItems: 'flex-start',
-                    justifyContent: { xs: 'flex-start', md: 'flex-end' },
+                    alignItems: 'center',
+                    justifyContent: 'flex-end',
                     gap: 1,
                     flexShrink: 0,
                   }}
@@ -2243,6 +2632,8 @@ const ExpenseApproval: React.FC = () => {
                       </Typography>
                     </Box>
                   </Box>
+
+                  <ArrowForwardIcon sx={{ color: '#94A3B8', fontSize: 20, flexShrink: 0 }} />
 
                   <Box sx={{ width: 222, border: `1px solid ${EXPENSE_STAMP_LINE}`, bgcolor: '#FFFFFF', overflow: 'hidden' }}>
                     <Box
@@ -2568,14 +2959,6 @@ const ExpenseApproval: React.FC = () => {
                   size="small"
                   sx={softFieldSx}
                 />
-                <TextField
-                  label={t('expenseApproval.voucher.labelPartnerAddress')}
-                  value={voucherData.partnerAddress}
-                  onChange={(e) => setVoucherData({ ...voucherData, partnerAddress: e.target.value })}
-                  fullWidth
-                  size="small"
-                  sx={{ ...softFieldSx, gridColumn: { md: '1 / -1' } }}
-                />
               </Box>
               <Typography
                 variant="caption"
@@ -2616,6 +2999,14 @@ const ExpenseApproval: React.FC = () => {
                   size="small"
                   sx={softFieldSx}
                 />
+                <TextField
+                  label={t('expenseApproval.voucher.labelPartnerAddress')}
+                  value={voucherData.partnerAddress}
+                  onChange={(e) => setVoucherData({ ...voucherData, partnerAddress: e.target.value })}
+                  fullWidth
+                  size="small"
+                  sx={{ ...softFieldSx, gridColumn: { md: '1 / -1' } }}
+                />
               </Box>
               </Box>
             </Box>
@@ -2650,20 +3041,20 @@ const ExpenseApproval: React.FC = () => {
                     } }}
                 >
                   <TableRow>
-                    <TableCell>{t('expenseApproval.voucher.tableNo')}</TableCell>
-                    <TableCell>{t('expenseApproval.voucher.tableInvoiceDate')}</TableCell>
+                    <TableCell sx={{ width: 40 }}>{t('expenseApproval.voucher.tableNo')}</TableCell>
+                    <TableCell sx={{ width: 140 }}>{t('expenseApproval.voucher.tableInvoiceDate')}</TableCell>
                     <TableCell>{t('expenseApproval.voucher.tableDescription')}</TableCell>
-                    <TableCell align="right">{t('expenseApproval.voucher.tableQty')}</TableCell>
-                    <TableCell align="right">{t('expenseApproval.voucher.tableUnitPrice')}</TableCell>
-                    <TableCell align="right">{t('expenseApproval.voucher.tableTotal')}</TableCell>
-                    <TableCell />
+                    <TableCell align="right" sx={{ width: 72 }}>{t('expenseApproval.voucher.tableQty')}</TableCell>
+                    <TableCell align="right" sx={{ width: 120 }}>{t('expenseApproval.voucher.tableUnitPrice')}</TableCell>
+                    <TableCell align="right" sx={{ width: 110 }}>{t('expenseApproval.voucher.tableTotal')}</TableCell>
+                    <TableCell sx={{ width: 40 }} />
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {lineItems.map((item, index) => (
                     <TableRow key={item.id}>
                       <TableCell sx={lineItemCellSx}>{index + 1}</TableCell>
-                      <TableCell sx={lineItemCellSx}>
+                      <TableCell sx={{ ...lineItemCellSx, width: 140 }}>
                         <TextField
                           type="date"
                           value={item.invoiceDate}
@@ -2688,7 +3079,7 @@ const ExpenseApproval: React.FC = () => {
                           sx={lineItemFieldSx}
                         />
                       </TableCell>
-                      <TableCell align="right" sx={lineItemCellSx}>
+                      <TableCell align="right" sx={{ ...lineItemCellSx, width: 72, maxWidth: 72 }}>
                         <TextField
                           type="number"
                           value={item.qty}
@@ -2696,13 +3087,16 @@ const ExpenseApproval: React.FC = () => {
                           onKeyDown={handleLineItemKeyDown(item.id, 'qty', index)}
                           size="small"
                           inputProps={{ min: 0 }}
-                          fullWidth
-                          placeholder={t('expenseApproval.voucher.placeholderQty')}
                           inputRef={setInputRef(item.id, 'qty')}
-                          sx={lineItemFieldSx}
+                          sx={{
+                            ...lineItemFieldSx,
+                            width: 64,
+                            maxWidth: 64,
+                            '& input': { textAlign: 'right', px: 0.75 },
+                          }}
                         />
                       </TableCell>
-                      <TableCell align="right" sx={lineItemCellSx}>
+                      <TableCell align="right" sx={{ ...lineItemCellSx, width: 120 }}>
                         <TextField
                           type="number"
                           value={item.unitPrice}
@@ -2934,12 +3328,22 @@ const ExpenseApproval: React.FC = () => {
             </Box>
 
             <TextField
-              label={t('expenseApproval.voucher.remarksIfAny')}
+              label={
+                currentAttachments.length
+                  ? t('expenseApproval.voucher.remarksIfAny')
+                  : t('expenseApproval.voucher.remarksRequired')
+              }
               value={voucherData.remarks}
               onChange={(e) => setVoucherData({ ...voucherData, remarks: e.target.value })}
               fullWidth
               multiline
               minRows={3}
+              required={!currentAttachments.length}
+              helperText={
+                currentAttachments.length
+                  ? undefined
+                  : t('expenseApproval.voucher.remarksRequiredHint')
+              }
               sx={{ mt: 2, ...softFieldSx }}
             />
 
@@ -3068,10 +3472,10 @@ const ExpenseApproval: React.FC = () => {
     const isPaymentRequested = selectedExpense.paymentRequestStatus === 'requested';
     const isPaymentApproved = selectedExpense.paymentRequestStatus === 'approved';
     const isPaymentPaid = selectedExpense.paymentRequestStatus === 'paid';
-    const canApproveThis = canUserApproveExpense(selectedExpense);
+    const canApproveThis = listTab !== 'transfer' && canUserApproveExpense(selectedExpense);
     const canEditThis = canEditExpense(selectedExpense);
     const canResubmitThis = canResubmitExpense(selectedExpense);
-    const canChangeApproverThis = canChangeExpenseApprover(selectedExpense);
+    const canChangeApproverThis = listTab !== 'transfer' && canChangeExpenseApprover(selectedExpense);
     const isExpenseApproved = selectedExpense.status === 'approved' || selectedExpense.status === 'paid';
     const taxSummary = calcExpenseTax(
       selectedExpense.items,
@@ -3079,11 +3483,12 @@ const ExpenseApproval: React.FC = () => {
       companyGstNumber,
       companyGstState
     );
+    const remittanceEntries = getExpenseRemittanceEntries(selectedExpense);
     const approvalFlowNodes = (() => {
       const steps = [...(selectedExpense.approvalFlow || [])].sort(
         (a, b) => (a.stepOrder || 0) - (b.stepOrder || 0)
       );
-      const nodes: Array<{ key: string; label: string; name: string; muted?: boolean }> = [
+      const nodes: Array<{ key: string; label: string; name: string; muted?: boolean; editable?: boolean }> = [
         {
           key: 'prepared',
           label: t('expenseApproval.voucher.prepared'),
@@ -3095,14 +3500,19 @@ const ExpenseApproval: React.FC = () => {
           key: 'approve',
           label: t('expenseApproval.voucher.approved'),
           name: approvedByName,
+          editable: true,
         });
       } else {
+        const lastIndex = steps.length - 1;
         steps.forEach((step, index) => {
           nodes.push({
             key: String(step.id || `${step.approverId}-${step.stepOrder}-${index}`),
             label: getExpenseFlowStampLabel(step, (key) => t(key)),
             name: step.approverName || getUserNameById(step.approverId),
             muted: step.status === 'skipped',
+            editable:
+              isSameUserId(step.approverId, approvedById) ||
+              (approvedById == null && index === lastIndex),
           });
         });
       }
@@ -3111,6 +3521,7 @@ const ExpenseApproval: React.FC = () => {
 
     return (
       <Box sx={{ ...mvsPageRootSx }}>
+        <Box className="expense-no-print">
         <MvsPageHeader
           title={t('expenseApproval.detail.title')}
           actions={
@@ -3170,6 +3581,7 @@ const ExpenseApproval: React.FC = () => {
             </>
           }
         />
+        </Box>
 
         <Card
           elevation={0}
@@ -3213,8 +3625,9 @@ const ExpenseApproval: React.FC = () => {
                 sx={{
                   display: 'flex',
                   flexDirection: 'column',
-                  alignItems: { xs: 'flex-start', md: 'flex-end' },
+                  alignItems: 'flex-end',
                   gap: 1,
+                  width: { xs: '100%', md: 'auto' },
                 }}
               >
                 <Typography
@@ -3223,111 +3636,117 @@ const ExpenseApproval: React.FC = () => {
                     fontSize: '1.125rem',
                     color: 'primary.main',
                     fontVariantNumeric: 'tabular-nums',
+                    textAlign: 'right',
                   }}
                 >
                   {displayExpenseCurrency(selectedExpense.currency)} {formatAmount(taxSummary.grandTotal)}
                 </Typography>
-                <Typography variant="caption" sx={{ color: 'text.secondary', mt: -0.5 }}>
+                <Typography variant="caption" sx={{ color: 'text.secondary', mt: -0.5, textAlign: 'right' }}>
                   {t('expenseApproval.detail.amountInclTax')}
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  <Box sx={{ width: 147, border: `1px solid ${EXPENSE_STAMP_LINE}`, bgcolor: '#FFFFFF', overflow: 'hidden' }}>
-                    <Box
-                      sx={{
-                        px: 0.5,
-                        py: 0.35,
-                        textAlign: 'center',
-                        bgcolor: EXPENSE_STAMP_HEADER_BG,
-                        borderBottom: `1px solid ${EXPENSE_STAMP_LINE}`,
-                      }}
-                    >
-                      <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.75rem', color: EXPENSE_STAMP_LABEL }}>
-                        {t('expenseApproval.voucher.prepared')}
-                      </Typography>
-                    </Box>
-                    <Box
-                      sx={{
-                        minHeight: 68,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        px: 0.5,
-                        py: 0.5,
-                      }}
-                    >
-                      <Typography sx={{ fontWeight: 700, fontSize: '0.8125rem', textAlign: 'center', color: EXPENSE_STAMP_LABEL }}>
-                        {selectedExpense.requesterName || '-'}
-                      </Typography>
-                    </Box>
-                  </Box>
-                  <Box sx={{ width: 222, border: `1px solid ${EXPENSE_STAMP_LINE}`, bgcolor: '#FFFFFF', overflow: 'hidden' }}>
-                    <Box
-                      sx={{
-                        px: 0.5,
-                        py: 0.35,
-                        textAlign: 'center',
-                        bgcolor: EXPENSE_STAMP_HEADER_BG,
-                        borderBottom: `1px solid ${EXPENSE_STAMP_LINE}`,
-                      }}
-                    >
-                      <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.75rem', color: EXPENSE_STAMP_LABEL }}>
-                        {t('expenseApproval.voucher.approved')}
-                      </Typography>
-                    </Box>
-                    <Box
-                      sx={{
-                        minHeight: 68,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        px: 0.5,
-                        py: 0.5,
-                      }}
-                    >
-                      {canChangeApproverThis ? (
-                        <Autocomplete
-                          fullWidth
-                          size="small"
-                          disabled={approverSaving}
-                          options={selectableApprovers}
-                          getOptionLabel={(option) => option.name}
-                          isOptionEqualToValue={(a, b) => Number(a.id) === Number(b.id)}
-                          value={
-                            selectableApprovers.find((item) => isSameUserId(item.id, approvedById))
-                            || approvers.find((item) => isSameUserId(item.id, approvedById))
-                            || null
-                          }
-                          onChange={(_, value) => {
-                            handleChangeApprover(value);
-                          }}
-                          renderInput={(params) => (
-                            <TextField
-                              {...params}
-                              placeholder={t('expenseApproval.placeholders.searchSimple')}
-                              variant="standard"
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: `repeat(${Math.min(4, Math.max(1, approvalFlowNodes.length))}, 168px)`,
+                    columnGap: 1,
+                    rowGap: 1,
+                    width: 'max-content',
+                    maxWidth: '100%',
+                    ml: 'auto',
+                  }}
+                >
+                  {approvalFlowNodes.map((node, index) => {
+                    const isLast = index === approvalFlowNodes.length - 1;
+                    const isRowEnd = (index + 1) % 4 === 0;
+                    const showArrow = !isLast && !isRowEnd;
+                    return (
+                      <Box
+                        key={node.key}
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          width: 168,
+                          height: 72,
+                        }}
+                      >
+                        <ExpenseFlowStamp
+                          label={node.label}
+                          name={node.name}
+                          muted={node.muted}
+                          wide={false}
+                        >
+                          {canChangeApproverThis && node.editable ? (
+                            <Autocomplete
+                              fullWidth
                               size="small"
-                              InputProps={{
-                                ...params.InputProps,
-                                disableUnderline: true,
+                              disabled={approverSaving}
+                              options={selectableApprovers}
+                              getOptionLabel={(option) => option.name}
+                              isOptionEqualToValue={(a, b) => Number(a.id) === Number(b.id)}
+                              value={
+                                selectableApprovers.find((item) => isSameUserId(item.id, approvedById))
+                                || approvers.find((item) => isSameUserId(item.id, approvedById))
+                                || null
+                              }
+                              onChange={(_, value) => {
+                                handleChangeApprover(value);
                               }}
                               sx={{
-                                '& .MuiInputBase-root': {
-                                  fontSize: '0.8125rem',
-                                  fontWeight: 600,
-                                  justifyContent: 'center',
+                                width: '100%',
+                                '& .MuiAutocomplete-endAdornment': {
+                                  top: '50%',
+                                  transform: 'translateY(-50%)',
+                                  right: 0,
                                 },
-                                '& .MuiInputBase-input': { textAlign: 'center', py: 0.25 },
                               }}
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  placeholder={t('expenseApproval.placeholders.searchSimple')}
+                                  variant="standard"
+                                  size="small"
+                                  InputProps={{
+                                    ...params.InputProps,
+                                    disableUnderline: true,
+                                  }}
+                                  sx={{
+                                    '& .MuiInputBase-root': {
+                                      fontSize: '0.8125rem',
+                                      fontWeight: 600,
+                                      justifyContent: 'center',
+                                      minHeight: 32,
+                                      height: 32,
+                                      alignItems: 'center',
+                                    },
+                                    '& .MuiInputBase-input': {
+                                      textAlign: 'center',
+                                      py: 0,
+                                      height: 32,
+                                      boxSizing: 'border-box',
+                                    },
+                                  }}
+                                />
+                              )}
                             />
-                          )}
-                        />
-                      ) : (
-                        <Typography sx={{ fontWeight: 700, fontSize: '0.8125rem', textAlign: 'center', color: EXPENSE_STAMP_LABEL }}>
-                          {approvedByName}
-                        </Typography>
-                      )}
-                    </Box>
-                  </Box>
+                          ) : undefined}
+                        </ExpenseFlowStamp>
+                        <Box
+                          sx={{
+                            width: 20,
+                            flexShrink: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          {showArrow ? (
+                            <ArrowForwardIcon sx={{ color: '#94A3B8', fontSize: 20 }} />
+                          ) : null}
+                        </Box>
+                      </Box>
+                    );
+                  })}
                 </Box>
               </Box>
             </Box>
@@ -3367,7 +3786,7 @@ const ExpenseApproval: React.FC = () => {
                 <Typography sx={{ fontWeight: 700, fontSize: '1rem', color: '#0F172A', lineHeight: 1.4 }}>
                   {selectedExpense.title || t('expenseApproval.detail.title')}
                 </Typography>
-                {getStatusChip(selectedExpense.status)}
+                {getStatusChip(resolveDisplayStatus(selectedExpense))}
                 {getPriorityChip(selectedExpense.priority)}
               </Box>
             </Box>
@@ -3467,14 +3886,6 @@ const ExpenseApproval: React.FC = () => {
                       </TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell sx={kvLabelCellSx}>{t('expenseApproval.voucher.labelPartnerAddress')}</TableCell>
-                      <TableCell colSpan={3} sx={{ fontWeight: 600, ...wrapCellSx }}>
-                        <ClampText title={String(partnerDetail.partnerAddress || '')}>
-                          {partnerDetail.partnerAddress}
-                        </ClampText>
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
                       <TableCell sx={kvLabelCellSx}>{t('expenseApproval.voucher.labelAccountHolder')}</TableCell>
                       <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
                         <ClampText title={String(partnerDetail.acHolder || '')}>{partnerDetail.acHolder}</ClampText>
@@ -3485,17 +3896,23 @@ const ExpenseApproval: React.FC = () => {
                       </TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell sx={{ ...kvLabelCellSx, borderBottom: 'none' }}>
-                        {t('expenseApproval.voucher.labelAccountNumber')}
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 600, borderBottom: 'none', ...wrapCellSx }}>
+                      <TableCell sx={kvLabelCellSx}>{t('expenseApproval.voucher.labelAccountNumber')}</TableCell>
+                      <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
                         <ClampText>{partnerDetail.accountNumber}</ClampText>
                       </TableCell>
-                      <TableCell sx={{ ...kvLabelCellSx, borderBottom: 'none' }}>
-                        {t('expenseApproval.voucher.labelIfsc')}
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 600, borderBottom: 'none', ...wrapCellSx }}>
+                      <TableCell sx={kvLabelCellSx}>{t('expenseApproval.voucher.labelIfsc')}</TableCell>
+                      <TableCell sx={{ fontWeight: 600, ...wrapCellSx }}>
                         <ClampText>{partnerDetail.ifsc}</ClampText>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell sx={{ ...kvLabelCellSx, borderBottom: 'none' }}>
+                        {t('expenseApproval.voucher.labelPartnerAddress')}
+                      </TableCell>
+                      <TableCell colSpan={3} sx={{ fontWeight: 600, borderBottom: 'none', ...wrapCellSx }}>
+                        <ClampText title={String(partnerDetail.partnerAddress || '')}>
+                          {partnerDetail.partnerAddress}
+                        </ClampText>
                       </TableCell>
                     </TableRow>
                   </TableBody>
@@ -3556,17 +3973,31 @@ const ExpenseApproval: React.FC = () => {
               </TableContainer>
             </Box>
 
-            <Box sx={{ width: { xs: '100%', sm: '25%' }, ml: { xs: 0, sm: 'auto' }, minWidth: 0 }}>
+            <Box sx={{ width: 'fit-content', maxWidth: '100%', ml: { xs: 0, sm: 'auto' } }}>
               <Typography variant="subtitle2" sx={sectionTitleSx}>{t('expenseApproval.voucher.sectionTax')}</Typography>
-              <TableContainer sx={{ border: `1px solid ${EXPENSE_LINE}`, overflowX: 'hidden' }}>
-                <Table size="small" sx={compactTableSx}>
+              <TableContainer sx={{ border: `1px solid ${EXPENSE_LINE}` }}>
+                <Table
+                  size="small"
+                  sx={{
+                    ...compactTableSx,
+                    tableLayout: 'auto',
+                    width: 'max-content',
+                    minWidth: '100%',
+                    '& .MuiTableCell-root': {
+                      ...compactTableSx['& .MuiTableCell-root'],
+                      whiteSpace: 'nowrap',
+                      overflow: 'visible',
+                      textOverflow: 'clip',
+                    },
+                  }}
+                >
                   <TableBody>
                     <TableRow sx={{ bgcolor: EXPENSE_HEADER_BG }}>
-                      <TableCell sx={{ color: EXPENSE_HEADER_FG, fontWeight: 600, ...wrapCellSx }}>
-                        <ClampText>{t('expenseApproval.voucher.taxSubtotal')}</ClampText>
+                      <TableCell sx={{ color: EXPENSE_HEADER_FG, fontWeight: 600 }}>
+                        {t('expenseApproval.voucher.taxSubtotal')}
                       </TableCell>
                       <TableCell sx={{ width: 48 }} />
-                      <TableCell align="right" sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: EXPENSE_HEADER_FG, width: '36%' }}>
+                      <TableCell align="right" sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: EXPENSE_HEADER_FG }}>
                         {formatAmount(taxSummary.subtotal)}
                       </TableCell>
                     </TableRow>
@@ -3576,9 +4007,7 @@ const ExpenseApproval: React.FC = () => {
                       { label: 'SGST (D)', rate: taxSummary.sgstRate, amount: taxSummary.sgstAmount },
                     ] as const).map((row) => (
                       <TableRow key={row.label}>
-                        <TableCell sx={wrapCellSx}>
-                          <ClampText>{row.label}</ClampText>
-                        </TableCell>
+                        <TableCell>{row.label}</TableCell>
                         <TableCell align="center" sx={{ color: 'text.secondary' }}>{row.rate}%</TableCell>
                         <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                           {formatAmount(row.amount)}
@@ -3587,9 +4016,7 @@ const ExpenseApproval: React.FC = () => {
                     ))}
                     {taxSummary.tdsEnabled ? (
                       <TableRow>
-                        <TableCell sx={wrapCellSx}>
-                          <ClampText>TDS (E)</ClampText>
-                        </TableCell>
+                        <TableCell>TDS (E)</TableCell>
                         <TableCell align="center" sx={{ color: 'text.secondary' }}>{taxSummary.tdsRate}%</TableCell>
                         <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                           −{formatAmount(taxSummary.tdsAmount)}
@@ -3597,40 +4024,55 @@ const ExpenseApproval: React.FC = () => {
                       </TableRow>
                     ) : null}
                     <TableRow sx={{ bgcolor: EXPENSE_TOTAL_BG }}>
-                      <TableCell sx={{ fontWeight: 700, borderBottom: 'none', color: EXPENSE_TOTAL_FG, ...wrapCellSx }}>
-                        <ClampText>{t('expenseApproval.voucher.grandTotal')}</ClampText>
+                      <TableCell sx={{ fontWeight: 700, borderBottom: 'none', color: EXPENSE_TOTAL_FG }}>
+                        {t('expenseApproval.voucher.grandTotal')}
                       </TableCell>
                       <TableCell sx={{ borderBottom: 'none' }} />
                       <TableCell align="right" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', borderBottom: 'none', color: EXPENSE_TOTAL_FG }}>
                         {displayExpenseCurrency(selectedExpense.currency)} {formatAmount(taxSummary.grandTotal)}
                       </TableCell>
                     </TableRow>
+                    {(Number(selectedExpense.paidAmount || 0) > 0 ||
+                      isPaymentApproved ||
+                      remittanceEntries.length > 0) && (
+                      <>
+                        {remittanceEntries.length > 0
+                          ? remittanceEntries.map((row, index) => (
+                              <TableRow key={`${row.timestamp || 'remit'}-${index}`}>
+                                <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                                  {t('expenseApproval.detail.paidAmount')} {formatRemittanceDateTime(row.timestamp)}
+                                </TableCell>
+                                <TableCell />
+                                <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                                  {displayExpenseCurrency(selectedExpense.currency)} {formatAmount(row.amount)}
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          : (
+                            <TableRow>
+                              <TableCell>{t('expenseApproval.detail.paidAmount')}</TableCell>
+                              <TableCell />
+                              <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                                {displayExpenseCurrency(selectedExpense.currency)}{' '}
+                                {formatAmount(Number(selectedExpense.paidAmount || 0))}
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 700 }}>
+                            {t('expenseApproval.detail.remainingAmount')}
+                          </TableCell>
+                          <TableCell />
+                          <TableCell align="right" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: 'warning.main' }}>
+                            {displayExpenseCurrency(selectedExpense.currency)}{' '}
+                            {formatAmount(getExpenseRemainingAmount(selectedExpense))}
+                          </TableCell>
+                        </TableRow>
+                      </>
+                    )}
                   </TableBody>
                 </Table>
               </TableContainer>
-            </Box>
-
-            {/* 승인 흐름 */}
-            <Box>
-              <Typography variant="subtitle2" sx={sectionTitleSx}>{t('expenseApproval.detail.approvalFlow')}</Typography>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  overflowX: 'auto',
-                  py: 0.5,
-                }}
-              >
-                {approvalFlowNodes.map((node, index) => (
-                  <React.Fragment key={node.key}>
-                    {index > 0 && (
-                      <ArrowForwardIcon sx={{ color: '#94A3B8', fontSize: 20, flexShrink: 0 }} />
-                    )}
-                    <ExpenseFlowStamp label={node.label} name={node.name} muted={node.muted} />
-                  </React.Fragment>
-                ))}
-              </Box>
             </Box>
 
             {/* 첨부파일 */}
@@ -3640,6 +4082,22 @@ const ExpenseApproval: React.FC = () => {
                 {renderAttachmentList(selectedExpense.attachments)}
               </Box>
             )}
+
+            {/* 송금 확인증 */}
+            {(() => {
+              const proofPaths = (selectedExpense.bankTransferLogs || [])
+                .map((log) => log.proof || log.payload?.proof)
+                .filter((p): p is string => Boolean(p));
+              if (proofPaths.length === 0) return null;
+              return (
+                <Box>
+                  <Typography variant="subtitle2" sx={sectionTitleSx}>
+                    {t('expenseApproval.detail.remittanceProofs')}
+                  </Typography>
+                  {renderAttachmentList(proofPaths)}
+                </Box>
+              );
+            })()}
 
             {/* 메모 */}
             {(selectedExpense.notes || meta.remarks) && (
@@ -3699,23 +4157,13 @@ const ExpenseApproval: React.FC = () => {
               </Box>
             )}
 
+          </CardContent>
+        </Card>
+
             <Box
-              className="expense-pdf-hide"
-              sx={{ mt: 3, display: 'flex', gap: 2, justifyContent: 'flex-end', flexWrap: 'wrap' }}
+              className="expense-no-print expense-pdf-hide"
+              sx={{ mt: 2, mb: 1, display: 'flex', gap: 2, justifyContent: 'flex-end', flexWrap: 'wrap' }}
             >
-              {isPaymentOfficer && isExpenseApproved && (
-                <FormControl size="small" sx={{ minWidth: 140 }}>
-                  <InputLabel>{t('expenseApproval.detailActions.transferBank')}</InputLabel>
-                  <Select
-                    label={t('expenseApproval.detailActions.transferBank')}
-                    value={bankProvider}
-                    onChange={(e) => setBankProvider(e.target.value as 'icici' | 'kotak')}
-                  >
-                    <MenuItem value="icici">ICICI</MenuItem>
-                    <MenuItem value="kotak">KOTAK</MenuItem>
-                  </Select>
-                </FormControl>
-              )}
               {isRequester && isExpenseApproved && !isPaymentRequested && !isPaymentApproved && !isPaymentPaid && (
                 <Button
                   variant="outlined"
@@ -3743,22 +4191,16 @@ const ExpenseApproval: React.FC = () => {
                   {t('expenseApproval.detailActions.finalApprove')}
                 </Button>
               )}
-              {isPaymentOfficer && isPaymentApproved && (
+              {isPaymentOfficer &&
+                isExpenseApproved &&
+                !isPaymentPaid &&
+                getExpenseRemainingAmount(selectedExpense) > 0 && (
                 <Button
                   variant="contained"
                   color="primary"
-                  onClick={() => handleCompletePayment(selectedExpense.id)}
+                  onClick={() => openPaymentDialog('complete')}
                 >
                   {t('expenseApproval.detailActions.executePayment')}
-                </Button>
-              )}
-              {isPaymentOfficer && selectedExpense.bankTransferStatus === 'failed' && (
-                <Button
-                  variant="outlined"
-                  color="warning"
-                  onClick={() => handleRetryTransfer(selectedExpense.id)}
-                >
-                  {t('expenseApproval.detailActions.retryTransfer')}
                 </Button>
               )}
               {isPaymentOfficer && (selectedExpense.bankTransferStatus || (selectedExpense.bankTransferLogs || []).length > 0) && (
@@ -3773,6 +4215,7 @@ const ExpenseApproval: React.FC = () => {
               <Button
                 variant="outlined"
                 startIcon={<PrintIcon />}
+                onClick={handlePrintExpense}
               >
                 {t('expenseApproval.detailActions.print')}
               </Button>
@@ -3838,8 +4281,175 @@ const ExpenseApproval: React.FC = () => {
                 </Button>
               </DialogActions>
             </Dialog>
-          </CardContent>
-        </Card>
+
+            <Dialog
+              open={paymentDialogOpen}
+              onClose={() => !paymentSubmitting && setPaymentDialogOpen(false)}
+              maxWidth="xs"
+              fullWidth
+            >
+              <DialogTitle>
+                {t('expenseApproval.dialog.executePaymentTitle')}
+              </DialogTitle>
+              <DialogContent>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  {t('expenseApproval.dialog.paymentAmountHint', {
+                    total: formatAmount(Number(selectedExpense.totalAmount || 0)),
+                    paid: formatAmount(Number(selectedExpense.paidAmount || 0)),
+                    remaining: formatAmount(getExpenseRemainingAmount(selectedExpense)),
+                    currency: displayExpenseCurrency(selectedExpense.currency),
+                  })}
+                </Typography>
+                <TextField
+                  autoFocus
+                  fullWidth
+                  type="number"
+                  label={t('expenseApproval.dialog.paymentAmount')}
+                  value={paymentAmountInput}
+                  onChange={(e) => setPaymentAmountInput(e.target.value)}
+                  inputProps={{ min: 0, step: '0.01' }}
+                  disabled={paymentSubmitting}
+                />
+                <Box
+                  tabIndex={0}
+                  sx={{
+                    mt: 1.5,
+                    p: 1.25,
+                    border: `1px dashed ${EXPENSE_LINE}`,
+                    bgcolor: EXPENSE_MUTED_BG,
+                    outline: 'none',
+                    '&:focus-within': { borderColor: 'primary.main' },
+                  }}
+                  onPaste={(e) => {
+                    const items = e.clipboardData?.items;
+                    if (!items?.length) return;
+                    for (let i = 0; i < items.length; i += 1) {
+                      const item = items[i];
+                      if (!item.type.startsWith('image/')) continue;
+                      const blob = item.getAsFile();
+                      if (!blob) continue;
+                      e.preventDefault();
+                      const ext = (item.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+                      const file = new File([blob], `paste.${ext}`, { type: item.type });
+                      setRemittanceProofFile(file);
+                      break;
+                    }
+                  }}
+                >
+                  <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary' }}>
+                    {t('expenseApproval.dialog.remittanceProof')} *
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 0.5 }}>
+                    <Button variant="outlined" component="label" disabled={paymentSubmitting}>
+                      {paymentProofFile
+                        ? paymentProofFile.name
+                        : t('expenseApproval.dialog.remittanceProofUpload')}
+                      <input
+                        hidden
+                        type="file"
+                        accept="image/*,application/pdf"
+                        onChange={(e) => setRemittanceProofFile(e.target.files?.[0] || null)}
+                      />
+                    </Button>
+                    {paymentProofFile && (
+                      <Button
+                        size="small"
+                        disabled={paymentSubmitting}
+                        onClick={() => setRemittanceProofFile(null)}
+                      >
+                        {t('common.delete')}
+                      </Button>
+                    )}
+                  </Box>
+                  {paymentProofPreviewUrl && (
+                    <Box
+                      component="img"
+                      src={paymentProofPreviewUrl}
+                      alt="remittance-proof"
+                      sx={{
+                        mt: 1,
+                        maxWidth: '100%',
+                        maxHeight: 160,
+                        objectFit: 'contain',
+                        border: `1px solid ${EXPENSE_LINE}`,
+                        display: 'block',
+                      }}
+                    />
+                  )}
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.75 }}>
+                    {t('expenseApproval.dialog.remittanceProofHint')}
+                  </Typography>
+                </Box>
+              </DialogContent>
+              <DialogActions>
+                <Button
+                  variant="outlined"
+                  onClick={() => setPaymentDialogOpen(false)}
+                  disabled={paymentSubmitting}
+                  sx={mvsBodyOutlinedBtnSx}
+                >
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  variant="contained"
+                  disableElevation
+                  onClick={() => void submitPaymentDialog()}
+                  disabled={paymentSubmitting || !paymentProofFile}
+                  sx={mvsBodyPrimaryBtnSx}
+                >
+                  {paymentSubmitting
+                    ? t('common.processing')
+                    : t('expenseApproval.detailActions.executePayment')}
+                </Button>
+              </DialogActions>
+            </Dialog>
+        <style>
+          {`
+            @page {
+              size: A4;
+              margin: 20mm 10mm 12mm 20mm;
+            }
+            @media print {
+              html, body, #root {
+                width: 100% !important;
+                height: auto !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #fff !important;
+              }
+              body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                background: #fff;
+              }
+              header, nav, aside,
+              .MuiDrawer-root,
+              .MuiAppBar-root,
+              .MuiToolbar-root,
+              .MuiBottomNavigation-root,
+              .MuiSnackbar-root,
+              .MuiDialog-root,
+              .expense-no-print,
+              .expense-pdf-hide {
+                display: none !important;
+              }
+              .expense-pdf-root {
+                position: fixed !important;
+                inset: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                border: none !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+                width: 100% !important;
+                background: #fff !important;
+                z-index: 9999 !important;
+                overflow: visible !important;
+              }
+              ${EXPENSE_DOCUMENT_EXPORT_CSS}
+            }
+          `}
+        </style>
         {attachmentPreviewDialog}
         {statusSnackbars}
       </Box>
@@ -3867,7 +4477,18 @@ const ExpenseApproval: React.FC = () => {
       <Card elevation={0} sx={{ ...mvsBodyCardSx, mb: 3 }}>
         <Tabs
           value={listTab}
-          onChange={(_, value) => setListTab(value)}
+          onChange={(_, value) => {
+            setListTab(value);
+            setStatusFilter('');
+            setPage(1);
+            if (value !== 'transfer') {
+              setCompanyFilterId('');
+            }
+            if (value === 'received') {
+              setListSortKey('createdAt');
+              setListSortDir('desc');
+            }
+          }}
           sx={{
             minHeight: 48,
             px: { xs: 1, sm: 1.5 },
@@ -3945,19 +4566,27 @@ const ExpenseApproval: React.FC = () => {
             px: { xs: 2, sm: 2.5 },
             py: 2,
             bgcolor: '#FFFFFF',
-            ...expenseApprovalFilterFieldSx,
             display: 'grid',
             gridTemplateColumns: {
               xs: '1fr',
-              sm: 'minmax(180px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) auto' },
+              sm:
+                isRootUser && listTab === 'transfer'
+                  ? 'minmax(160px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) minmax(140px, 1.2fr) auto'
+                  : 'minmax(180px, 2fr) minmax(120px, 1fr) minmax(120px, 1fr) auto',
+            },
             gap: 2,
-            alignItems: 'flex-end' }}
+            alignItems: 'flex-end',
+          }}
         >
             <TextField
               fullWidth
               size="small"
               label={t('expenseApproval.placeholders.searchSimple')}
-              placeholder={t('expenseApproval.placeholders.search')}
+              placeholder={
+                isRootUser && listTab === 'transfer'
+                  ? t('expenseApproval.placeholders.searchWithCompany')
+                  : t('expenseApproval.placeholders.search')
+              }
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputLabelProps={{ shrink: true }}
@@ -3975,12 +4604,28 @@ const ExpenseApproval: React.FC = () => {
               select
               label={t('expenseApproval.filters.status')}
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(1);
+              }}
               InputLabelProps={{ shrink: true }}
               SelectProps={{
                 displayEmpty: true,
+                MenuProps: {
+                  disableScrollLock: true,
+                  PaperProps: { sx: { maxHeight: 320 } },
+                },
                 renderValue: (selected) => {
                   if (selected === '' || selected == null) return t('expenseApproval.filters.all');
+                  if (listTab === 'transfer') {
+                    const transferLabels: Record<string, string> = {
+                      transfer_pending: t('expenseApproval.status.transferPending'),
+                      transfer_partial: t('expenseApproval.status.partialTransfer'),
+                      transfer_completed: t('expenseApproval.status.transferCompleted'),
+                      transfer_failed: t('expenseApproval.status.transferFailed'),
+                    };
+                    return transferLabels[String(selected)] ?? String(selected);
+                  }
                   const statusLabels: Record<string, string> = {
                     draft: t('expenseApproval.status.draft'),
                     submitted: t('expenseApproval.status.submitted'),
@@ -3993,12 +4638,41 @@ const ExpenseApproval: React.FC = () => {
               sx={expenseApprovalFilterFieldSx}
             >
               <MenuItem value="">{t('expenseApproval.filters.all')}</MenuItem>
-              <MenuItem value="draft">{t('expenseApproval.status.draft')}</MenuItem>
-              <MenuItem value="submitted">{t('expenseApproval.status.submitted')}</MenuItem>
-              <MenuItem value="in_review">{t('expenseApproval.status.inReview')}</MenuItem>
-              <MenuItem value="approved">{t('expenseApproval.status.approved')}</MenuItem>
-              <MenuItem value="rejected">{t('expenseApproval.status.rejected')}</MenuItem>
-              <MenuItem value="paid">{t('expenseApproval.status.paid')}</MenuItem>
+              {listTab === 'transfer'
+                ? [
+                    <MenuItem key="transfer_pending" value="transfer_pending">
+                      {t('expenseApproval.status.transferPending')}
+                    </MenuItem>,
+                    <MenuItem key="transfer_partial" value="transfer_partial">
+                      {t('expenseApproval.status.partialTransfer')}
+                    </MenuItem>,
+                    <MenuItem key="transfer_completed" value="transfer_completed">
+                      {t('expenseApproval.status.transferCompleted')}
+                    </MenuItem>,
+                    <MenuItem key="transfer_failed" value="transfer_failed">
+                      {t('expenseApproval.status.transferFailed')}
+                    </MenuItem>,
+                  ]
+                : [
+                    <MenuItem key="draft" value="draft">
+                      {t('expenseApproval.status.draft')}
+                    </MenuItem>,
+                    <MenuItem key="submitted" value="submitted">
+                      {t('expenseApproval.status.submitted')}
+                    </MenuItem>,
+                    <MenuItem key="in_review" value="in_review">
+                      {t('expenseApproval.status.inReview')}
+                    </MenuItem>,
+                    <MenuItem key="approved" value="approved">
+                      {t('expenseApproval.status.approved')}
+                    </MenuItem>,
+                    <MenuItem key="rejected" value="rejected">
+                      {t('expenseApproval.status.rejected')}
+                    </MenuItem>,
+                    <MenuItem key="paid" value="paid">
+                      {t('expenseApproval.status.paid')}
+                    </MenuItem>,
+                  ]}
             </TextField>
             <TextField
               fullWidth
@@ -4027,6 +4701,39 @@ const ExpenseApproval: React.FC = () => {
               <MenuItem value="high">{t('expenseApproval.priority.high')}</MenuItem>
               <MenuItem value="urgent">{t('expenseApproval.priority.urgent')}</MenuItem>
             </TextField>
+            {isRootUser && listTab === 'transfer' && (
+              <TextField
+                fullWidth
+                size="small"
+                select
+                label={t('expenseApproval.filters.company')}
+                value={companyFilterId === '' ? '' : String(companyFilterId)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCompanyFilterId(v === '' ? '' : Number(v));
+                  setPage(1);
+                }}
+                InputLabelProps={{ shrink: true }}
+                SelectProps={{
+                  displayEmpty: true,
+                  renderValue: (selected) => {
+                    if (selected === '' || selected == null) {
+                      return t('expenseApproval.filters.allCompanies');
+                    }
+                    const found = companyOptions.find((c) => String(c.id) === String(selected));
+                    return found?.name || String(selected);
+                  },
+                }}
+                sx={expenseApprovalFilterFieldSx}
+              >
+                <MenuItem value="">{t('expenseApproval.filters.allCompanies')}</MenuItem>
+                {companyOptions.map((c) => (
+                  <MenuItem key={c.id} value={String(c.id)}>
+                    {c.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
             <Button
               variant="outlined"
               startIcon={<FilterIcon sx={{ fontSize: 18 }} />}
@@ -4034,6 +4741,8 @@ const ExpenseApproval: React.FC = () => {
                 setSearchTerm('');
                 setStatusFilter('');
                 setPriorityFilter('');
+                setCompanyFilterId('');
+                setPage(1);
               }}
               sx={{ ...mvsBodyOutlinedBtnSx, height: 40, whiteSpace: 'nowrap' }}
             >
@@ -4047,7 +4756,9 @@ const ExpenseApproval: React.FC = () => {
         {paginatedExpenses.length === 0 ? (
           <Box sx={listStateBoxSx}>
             <Typography variant="body2" color="text.secondary">
-              {t('expenseApproval.empty.noResults', { defaultValue: '표시할 지출결의서가 없습니다.' })}
+              {listTab === 'transfer'
+                ? t('expenseApproval.empty.noTransferItems')
+                : t('expenseApproval.empty.noResults')}
             </Typography>
           </Box>
         ) : (
@@ -4057,8 +4768,9 @@ const ExpenseApproval: React.FC = () => {
               sx={{
                 borderCollapse: 'collapse',
                 bgcolor: 'transparent',
-                tableLayout: 'auto',
+                tableLayout: 'fixed',
                 width: '100%',
+                minWidth: { xs: 760, md: 0 },
                 '& .MuiTableCell-root': {
                   borderLeft: 'none',
                   borderRight: 'none',
@@ -4067,18 +4779,21 @@ const ExpenseApproval: React.FC = () => {
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   verticalAlign: 'middle',
+                  boxSizing: 'border-box',
                 },
               }}
             >
               <TableHead sx={mvsTableHeadHighlightSx}>
               <TableRow>
-                <TableCell sx={{ width: '1%', textAlign: 'center', whiteSpace: 'nowrap' }}>{t('expenseApproval.columns.no')}</TableCell>
+                <TableCell sx={{ width: 52, minWidth: 52, maxWidth: 52, textAlign: 'center', whiteSpace: 'nowrap' }}>
+                  {t('expenseApproval.columns.no')}
+                </TableCell>
                 <ExpenseListHeadCell
                   sortKey="createdAt"
                   activeKey={listSortKey}
                   direction={listSortDir}
                   onSort={handleListSort}
-                  sx={{ width: '1%' }}
+                  sx={{ width: 112, minWidth: 112, maxWidth: 112 }}
                 >
                   {t('expenseApproval.columns.createdAt')}
                 </ExpenseListHeadCell>
@@ -4087,6 +4802,7 @@ const ExpenseApproval: React.FC = () => {
                   activeKey={listSortKey}
                   direction={listSortDir}
                   onSort={handleListSort}
+                  sx={{ width: 'auto' }}
                 >
                   {t('expenseApproval.columns.expenseInfo')}
                 </ExpenseListHeadCell>
@@ -4095,7 +4811,7 @@ const ExpenseApproval: React.FC = () => {
                   activeKey={listSortKey}
                   direction={listSortDir}
                   onSort={handleListSort}
-                  sx={{ width: '1%' }}
+                  sx={{ width: 148, minWidth: 148, maxWidth: 148 }}
                 >
                   {listTab === 'written'
                     ? t('expenseApproval.columns.approver')
@@ -4106,7 +4822,7 @@ const ExpenseApproval: React.FC = () => {
                   activeKey={listSortKey}
                   direction={listSortDir}
                   onSort={handleListSort}
-                  sx={{ width: '1%' }}
+                  sx={{ width: 136, minWidth: 136, maxWidth: 136 }}
                 >
                   {t('expenseApproval.columns.amount')}
                 </ExpenseListHeadCell>
@@ -4115,7 +4831,7 @@ const ExpenseApproval: React.FC = () => {
                   activeKey={listSortKey}
                   direction={listSortDir}
                   onSort={handleListSort}
-                  sx={{ width: '1%', px: 0.75 }}
+                  sx={{ width: 148, minWidth: 148, maxWidth: 148 }}
                 >
                   {t('expenseApproval.columns.status')}
                 </ExpenseListHeadCell>
@@ -4124,11 +4840,23 @@ const ExpenseApproval: React.FC = () => {
                   activeKey={listSortKey}
                   direction={listSortDir}
                   onSort={handleListSort}
-                  sx={{ width: '1%', px: 0.75 }}
+                  sx={{ width: 108, minWidth: 108, maxWidth: 108 }}
                 >
                   {t('expenseApproval.columns.priority')}
                 </ExpenseListHeadCell>
-                <TableCell sx={{ width: '1%', whiteSpace: 'nowrap', px: 0.5, textAlign: 'center' }}>{t('expenseApproval.columns.actions')}</TableCell>
+                <TableCell
+                  sx={{
+                    width: 112,
+                    minWidth: 112,
+                    maxWidth: 112,
+                    whiteSpace: 'nowrap',
+                    pl: 1.5,
+                    pr: 3,
+                    textAlign: 'center',
+                  }}
+                >
+                  {t('expenseApproval.columns.actions')}
+                </TableCell>
               </TableRow>
               </TableHead>
               <TableBody sx={mvsTableBodyRowSx}>
@@ -4138,20 +4866,25 @@ const ExpenseApproval: React.FC = () => {
                     onClick={() => handleViewExpense(expense)}
                     sx={{ cursor: 'pointer', '&:active': { bgcolor: 'action.selected' } }}
                   >
-                  <TableCell sx={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums', width: '1%' }}>
+                  <TableCell sx={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums', width: 52, minWidth: 52, maxWidth: 52 }}>
                     {(page - 1) * itemsPerPage + index + 1}
                   </TableCell>
-                  <TableCell sx={{ width: '1%' }}>
+                  <TableCell sx={{ width: 112, minWidth: 112, maxWidth: 112 }}>
                     {formatLocalYmd(expense.createdAt)
                       ? new Date(`${formatLocalYmd(expense.createdAt)}T00:00:00`).toLocaleDateString(dateLocale)
                       : '-'}
                   </TableCell>
-                  <TableCell>
+                  <TableCell sx={{ minWidth: 0 }}>
                     <Typography variant="subtitle2" fontWeight="bold" noWrap>
                       {expense.title}
                     </Typography>
+                    {isRootUser && listTab === 'transfer' && expense.companyName ? (
+                      <Typography variant="caption" color="text.secondary" display="block" noWrap>
+                        {expense.companyName}
+                      </Typography>
+                    ) : null}
                   </TableCell>
-                  <TableCell sx={{ width: '1%' }}>
+                  <TableCell sx={{ width: 148, minWidth: 148, maxWidth: 148 }}>
                     {listTab === 'written' ? (
                       <Typography variant="body2" fontWeight="bold" noWrap>
                         {getExpenseApproverName(expense)}
@@ -4167,14 +4900,29 @@ const ExpenseApproval: React.FC = () => {
                     </Box>
                     )}
                   </TableCell>
-                  <TableCell sx={{ width: '1%' }}>
+                  <TableCell sx={{ width: 136, minWidth: 136, maxWidth: 136 }}>
                     <Typography variant="body2" fontWeight="bold" noWrap sx={{ fontVariantNumeric: 'tabular-nums' }}>
                       {displayExpenseCurrency(expense.currency)} {formatAmount(getExpenseGrandTotal(expense))}
                     </Typography>
+                    {listTab === 'transfer' && Number(expense.paidAmount || 0) > 0 && (
+                      <Typography variant="caption" color="text.secondary" display="block" noWrap>
+                        {t('expenseApproval.list.remainingShort', {
+                          amount: formatAmount(getExpenseRemainingAmount(expense)),
+                          currency: displayExpenseCurrency(expense.currency),
+                        })}
+                      </Typography>
+                    )}
                   </TableCell>
-                  <TableCell sx={{ width: '1%', px: 0.75 }}>{getStatusChip(expense.status)}</TableCell>
-                  <TableCell sx={{ width: '1%', px: 0.75 }}>{getPriorityChip(expense.priority)}</TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()} sx={{ width: '1%', px: 0.5, textAlign: 'center' }}>
+                  <TableCell sx={{ width: 148, minWidth: 148, maxWidth: 148 }}>
+                    {listTab === 'transfer'
+                      ? getTransferStatusChip(expense)
+                      : getStatusChip(resolveDisplayStatus(expense))}
+                  </TableCell>
+                  <TableCell sx={{ width: 108, minWidth: 108, maxWidth: 108 }}>{getPriorityChip(expense.priority)}</TableCell>
+                  <TableCell
+                    onClick={(e) => e.stopPropagation()}
+                    sx={{ width: 112, minWidth: 112, maxWidth: 112, pl: 1.5, pr: 3, textAlign: 'center' }}
+                  >
                     <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'center', flexWrap: 'nowrap' }}>
                       {listTab === 'transfer' && (
                         <Tooltip title={t('expenseApproval.actions.transferLog')}>
@@ -4187,7 +4935,7 @@ const ExpenseApproval: React.FC = () => {
                           </IconButton>
                         </Tooltip>
                       )}
-                      {listTab !== 'written' && canUserApproveExpense(expense) && (
+                      {listTab === 'received' && canUserApproveExpense(expense) && (
                         <>
                           <Tooltip title={t('expenseApproval.actions.accept')}>
                             <IconButton
@@ -4211,7 +4959,7 @@ const ExpenseApproval: React.FC = () => {
                           </Tooltip>
                         </>
                       )}
-                      {canDeleteExpense(expense) && (
+                      {listTab !== 'transfer' && canDeleteExpense(expense) && (
                       <Tooltip title={t('common.delete')}>
                         <IconButton
                           size="small"

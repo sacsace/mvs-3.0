@@ -7,7 +7,9 @@ import {
   DialogContent,
   GlobalStyles,
 } from '@mui/material';
+import DownloadIcon from '@mui/icons-material/Download';
 import { useTranslation } from 'react-i18next';
+import { downloadUploadFile } from '../../utils/uploadUrl';
 
 type PhotoPreviewContextValue = {
   openPhotoPreview: (url: string, alt?: string) => void;
@@ -173,7 +175,20 @@ export const PhotoPreviewProvider: React.FC<{ children: React.ReactNode }> = ({ 
             />
           ) : null}
         </DialogContent>
-        <DialogActions sx={{ justifyContent: 'center', pt: 1.5, pb: 0 }}>
+        <DialogActions sx={{ justifyContent: 'center', pt: 1.5, pb: 0, gap: 1 }} onClick={(e) => e.stopPropagation()}>
+          {previewUrl ? (
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={() => {
+                const named = previewAlt && /\.\w{2,4}$/.test(previewAlt) ? previewAlt : undefined;
+                void downloadUploadFile(previewUrl, named);
+              }}
+              sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600, bgcolor: '#fff' }}
+            >
+              {t('common.download', { defaultValue: 'Download' })}
+            </Button>
+          ) : null}
           <Button
             variant="contained"
             disableElevation

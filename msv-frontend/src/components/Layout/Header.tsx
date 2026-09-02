@@ -526,7 +526,7 @@ const Header: React.FC<HeaderProps> = ({
             variant="text"
             size="small"
             onClick={handleUpdatesMenu}
-            aria-label={language === 'en' ? 'Alarms' : '알람'}
+            aria-label={language === 'en' ? 'Notifications' : '알람'}
             aria-controls={Boolean(updatesAnchorEl) ? 'updates-menu' : undefined}
             aria-haspopup="true"
             aria-expanded={Boolean(updatesAnchorEl) ? 'true' : undefined}
@@ -576,7 +576,7 @@ const Header: React.FC<HeaderProps> = ({
                 sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, whiteSpace: 'nowrap', pr: unreadCount > 0 ? 0.75 : 0 }}
               >
                 <InboxIcon sx={{ fontSize: '1.05rem' }} />
-                {language === 'en' ? 'Alarms' : '알람'}
+                {language === 'en' ? 'Notifications' : '알람'}
               </Box>
             </Badge>
           </Button>

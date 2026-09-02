@@ -2,6 +2,7 @@ import { QueryTypes } from 'sequelize';
 import { Op, fn, col } from 'sequelize';
 import sequelize from '../config/database';
 import { User } from '../models';
+import { maskBankTransferSettingsForApi } from '../services/banking';
 
 /** 회사 이미지·기간 필드를 API 응답 형식으로 변환 */
 export function serializeCompanyBase(companyData: Record<string, any>): Record<string, any> {
@@ -26,6 +27,9 @@ export function serializeCompanyBase(companyData: Record<string, any>): Record<s
 
   out.mvs_start_date = toDateStr(out.login_period_start);
   out.mvs_end_date = toDateStr(out.login_period_end);
+  if (out.settings) {
+    out.settings = maskBankTransferSettingsForApi(out.settings);
+  }
   return out;
 }
 

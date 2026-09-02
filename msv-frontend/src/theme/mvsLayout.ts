@@ -56,6 +56,7 @@ export const mvsFilterToolbarSx: MvsStyleObject = {
 
 /** 검색·필터 입력(TextField·Select·Autocomplete) 테두리 — 페이지 sx에 spread */
 export const mvsSearchFieldSx: MvsStyleObject = {
+  bgcolor: 'transparent',
   '& .MuiOutlinedInput-root': {
     borderRadius: '8px',
     bgcolor: 'background.paper',

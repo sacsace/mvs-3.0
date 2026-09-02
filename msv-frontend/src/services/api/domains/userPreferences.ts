@@ -12,7 +12,6 @@ export type UserUiPreferencesData = {
   dashboardCards?: string[];
   quickActionRoutes?: string[];
   sidebarWidth?: number;
-  sidebarAutoCollapse?: boolean;
   language?: 'ko' | 'en';
   companyHolidayReminderShown?: Record<string, string>;
   roomInvoiceTaxSnapshot?: Record<string, unknown>;

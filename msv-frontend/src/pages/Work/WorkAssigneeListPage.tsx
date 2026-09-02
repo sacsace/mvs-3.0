@@ -16,6 +16,7 @@ import {
   TextField,
   Tooltip,
   Typography,
+  InputAdornment,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -26,6 +27,7 @@ import {
   FlagOutlined as FlagOutlinedIcon,
   MoreVert as MoreVertIcon,
   PersonAddAlt1 as PersonAddAlt1Icon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import {
   DndContext,
@@ -57,7 +59,7 @@ import { findMenuIdByPath } from '../../utils/findMenuByPath';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
-import { mvsPageRootFullBleedSx } from '../../theme/mvsLayout';
+import { mvsFilterFieldHeightSx, mvsPageRootFullBleedSx, mvsSearchFieldSx } from '../../theme/mvsLayout';
 
 type CompanyUserOption = {
   id: number;
@@ -117,6 +119,7 @@ const HIGHLIGHT_RED = '#DC2626';
 type AssigneeItem = {
   id: number;
   assignee_id: number;
+  partner_id?: number | null;
   name: string;
   note?: string | null;
   is_highlighted: boolean;
@@ -125,6 +128,7 @@ type AssigneeItem = {
 
 type Assignee = {
   id: number;
+  user_id?: number | null;
   name: string;
   title?: string | null;
   email?: string | null;
@@ -549,6 +553,7 @@ const WorkAssigneeListPage: React.FC = () => {
 
   const [assignees, setAssignees] = useState<Assignee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
   const [activeItem, setActiveItem] = useState<AssigneeItem | null>(null);
 
   const [assigneeDialogOpen, setAssigneeDialogOpen] = useState(false);
@@ -602,11 +607,42 @@ const WorkAssigneeListPage: React.FC = () => {
     load();
   }, [load]);
 
-  const loadCompanyUsers = useCallback(async () => {
+  const filteredAssignees = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return assignees;
+    return assignees
+      .map((a) => {
+        const assigneeHit =
+          String(a.name || '')
+            .toLowerCase()
+            .includes(q) ||
+          String(a.title || '')
+            .toLowerCase()
+            .includes(q) ||
+          String(a.email || '')
+            .toLowerCase()
+            .includes(q);
+        const matchedItems = (a.items || []).filter(
+          (item) =>
+            String(item.name || '')
+              .toLowerCase()
+              .includes(q) ||
+            String(item.note || '')
+              .toLowerCase()
+              .includes(q)
+        );
+        if (assigneeHit) return a;
+        if (matchedItems.length === 0) return null;
+        return { ...a, items: matchedItems };
+      })
+      .filter((a): a is Assignee => a != null);
+  }, [assignees, searchTerm]);
+
+  const loadCompanyUsers = useCallback(async (): Promise<CompanyUserOption[]> => {
     const companyId = user?.company_id != null ? Number(user.company_id) : NaN;
     if (!Number.isInteger(companyId) || companyId <= 0) {
       setCompanyUsers([]);
-      return;
+      return [];
     }
     setLoadingCompanyUsers(true);
     try {
@@ -622,8 +658,10 @@ const WorkAssigneeListPage: React.FC = () => {
         .map(toCompanyUserOption)
         .filter((o) => Number.isInteger(o.id) && o.id > 0 && o.name);
       setCompanyUsers(list);
+      return list;
     } catch {
       setCompanyUsers([]);
+      return [];
     } finally {
       setLoadingCompanyUsers(false);
     }
@@ -646,7 +684,17 @@ const WorkAssigneeListPage: React.FC = () => {
     });
     setSelectedCompanyUser(null);
     setAssigneeDialogOpen(true);
-    void loadCompanyUsers();
+    void (async () => {
+      const users = await loadCompanyUsers();
+      const byId =
+        a.user_id != null
+          ? users.find((u) => u.id === Number(a.user_id))
+          : null;
+      const byEmail = !byId && a.email
+        ? users.find((u) => u.email.toLowerCase() === String(a.email).trim().toLowerCase())
+        : null;
+      setSelectedCompanyUser(byId || byEmail || null);
+    })();
   };
 
   const availableCompanyUsers = useMemo(() => {
@@ -693,6 +741,7 @@ const WorkAssigneeListPage: React.FC = () => {
           name: assigneeForm.name.trim(),
           title: assigneeForm.title.trim() || null,
           email: assigneeForm.email.trim() || null,
+          user_id: selectedCompanyUser?.id ?? null,
         });
         if (!res.success) throw new Error(res.message);
       } else {
@@ -700,6 +749,7 @@ const WorkAssigneeListPage: React.FC = () => {
           name: assigneeForm.name.trim(),
           title: assigneeForm.title.trim() || undefined,
           email: assigneeForm.email.trim() || undefined,
+          user_id: selectedCompanyUser?.id,
           company_id: user?.company_id,
         });
         if (!res.success) throw new Error(res.message);
@@ -849,6 +899,7 @@ const WorkAssigneeListPage: React.FC = () => {
           name: itemForm.name.trim(),
           note: itemForm.note.trim() || null,
           is_highlighted: itemForm.is_highlighted,
+          partner_id: selectedPartner?.id ?? null,
         });
         if (!res.success) throw new Error(res.message);
       } else {
@@ -856,6 +907,7 @@ const WorkAssigneeListPage: React.FC = () => {
           name: itemForm.name.trim(),
           note: itemForm.note.trim() || undefined,
           is_highlighted: itemForm.is_highlighted,
+          partner_id: selectedPartner?.id,
         });
         if (!res.success) throw new Error(res.message);
       }
@@ -1070,6 +1122,45 @@ const WorkAssigneeListPage: React.FC = () => {
         }
       />
 
+      {!loading && assignees.length > 0 ? (
+        <Box
+          sx={{
+            mb: 2,
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'minmax(220px, 360px) auto' },
+            gap: 1.5,
+            alignItems: 'center',
+          }}
+        >
+          <TextField
+            size="small"
+            fullWidth
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder={t('workAssigneeList.search.boardPlaceholder')}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              ...mvsSearchFieldSx,
+              ...mvsFilterFieldHeightSx,
+            }}
+          />
+          {searchTerm.trim() ? (
+            <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+              {t('workAssigneeList.search.boardResult', {
+                count: filteredAssignees.reduce((n, a) => n + (a.items?.length || 0), 0),
+                columns: filteredAssignees.length,
+              })}
+            </Typography>
+          ) : null}
+        </Box>
+      ) : null}
+
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
           <CircularProgress />
@@ -1116,6 +1207,21 @@ const WorkAssigneeListPage: React.FC = () => {
             </Button>
           )}
         </Box>
+      ) : filteredAssignees.length === 0 ? (
+        <Box
+          sx={{
+            py: 5,
+            px: 3,
+            textAlign: 'center',
+            borderRadius: '8px',
+            border: '1px dashed #CBD5E1',
+            bgcolor: 'transparent',
+          }}
+        >
+          <Typography color="text.secondary" sx={{ fontSize: '0.9375rem', lineHeight: 1.65 }}>
+            {t('workAssigneeList.search.noBoardResults')}
+          </Typography>
+        </Box>
       ) : (
         <DndContext
           sensors={sensors}
@@ -1125,7 +1231,7 @@ const WorkAssigneeListPage: React.FC = () => {
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={assignees.map((a) => `assignee-${a.id}`)}
+            items={filteredAssignees.map((a) => `assignee-${a.id}`)}
             strategy={horizontalListSortingStrategy}
           >
             <Box
@@ -1137,7 +1243,7 @@ const WorkAssigneeListPage: React.FC = () => {
                 alignItems: 'stretch',
               }}
             >
-              {assignees.map((assignee) => (
+              {filteredAssignees.map((assignee) => (
                 <AssigneeColumn
                   key={assignee.id}
                   assignee={assignee}

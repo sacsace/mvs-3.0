@@ -4,6 +4,7 @@ import sequelize from '../config/database';
 interface WorkAssigneeItemAttributes {
   id: number;
   assignee_id: number;
+  partner_id?: number | null;
   name: string;
   note?: string | null;
   is_highlighted: boolean;
@@ -16,7 +17,14 @@ interface WorkAssigneeItemAttributes {
 interface WorkAssigneeItemCreationAttributes
   extends Optional<
     WorkAssigneeItemAttributes,
-    'id' | 'note' | 'is_highlighted' | 'sort_order' | 'is_active' | 'created_at' | 'updated_at'
+    | 'id'
+    | 'partner_id'
+    | 'note'
+    | 'is_highlighted'
+    | 'sort_order'
+    | 'is_active'
+    | 'created_at'
+    | 'updated_at'
   > {}
 
 class WorkAssigneeItem
@@ -25,6 +33,7 @@ class WorkAssigneeItem
 {
   public id!: number;
   public assignee_id!: number;
+  public partner_id?: number | null;
   public name!: string;
   public note?: string | null;
   public is_highlighted!: boolean;
@@ -44,6 +53,10 @@ WorkAssigneeItem.init(
     assignee_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
+    },
+    partner_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
     },
     name: {
       type: DataTypes.STRING(300),
@@ -80,6 +93,7 @@ WorkAssigneeItem.init(
       { fields: ['assignee_id'] },
       { fields: ['assignee_id', 'sort_order'] },
       { fields: ['assignee_id', 'is_active'] },
+      { fields: ['partner_id'] },
     ],
   }
 );

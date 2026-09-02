@@ -5,6 +5,7 @@ export default {
       description: 'MVS - Next-generation enterprise business management system',
     },
     common: {
+      processing: 'Processing...',
       login: 'Login',
       logout: 'Logout',
       save: 'Save',
@@ -867,7 +868,7 @@ export default {
         noResults: 'No companies match your search.',
         noResultsHint: 'Change the search term or reset filters.',
       },
-      editCompany: 'Edit Company',
+      editCompany: 'Edit Company Information',
       save: 'Save',
       cancel: 'Cancel',
       confirmDelete: 'Are you sure you want to delete this company?',
@@ -900,7 +901,19 @@ export default {
       saving: 'Saving...',
       addNewCompany: 'Add New Company',
       viewCompany: 'View Company Information',
-      contact: 'Contact'
+      contact: 'Contact',
+      bankTransferApiTitle: 'Remittance API settings',
+      bankTransferApiHint:
+        'ICICI/Kotak API used when this company remits expense voucher payments. Separate from partner beneficiary accounts.',
+      defaultBankProvider: 'Default remittance bank',
+      bankProviderEnvDefault: 'Environment default',
+      apiKeySaved: 'saved',
+      apiKeyKeepPlaceholder: 'Enter only to change (leave blank to keep)',
+      apiKeyPlaceholder: 'API Key',
+      bankTransferTestConnection: 'Test connection',
+      bankTransferTesting: 'Testing...',
+      bankTransferTestSuccess: 'Remittance API connection succeeded.',
+      bankTransferTestFailed: 'Remittance API connection test failed.'
     },
     partnerManagement: {
       pageTitle: 'Partners / Customers',
@@ -1084,11 +1097,11 @@ export default {
       applyRolePermissions: 'Apply {{role}} role defaults',
       roleLegendAdmin: '• Admin: Full access (View, Create, Edit, Delete)',
       roleLegendManager: '• Manager: Read/Write (View, Create, Edit)',
-      roleLegendUser: '• User: My Info & Work + notices + work projects (own cards)',
+      roleLegendUser: '• User: My Profile & Work + notices + work projects (own cards)',
       roleLegendAudit: '• Audit: Read-only (View only)',
       permissionTemplates: 'Permission templates',
-      myWorkspaceOnly: 'My Info & Work only',
-      myWorkspaceOnlyDesc: 'Grant My Info & Work, notices, and work projects (own cards) (clears other menu permissions)',
+      myWorkspaceOnly: 'My Profile & Work only',
+      myWorkspaceOnlyDesc: 'Grant My Profile & Work, notices, and work projects (own cards) (clears other menu permissions)',
       viewOnlyDesc: 'Grant view permission only to all menus',
       readWriteDesc: 'Grant view, create, and edit permissions to all menus',
       fullDesc: 'Grant full permissions to all menus (View, Create, Edit, Delete)',
@@ -1371,6 +1384,10 @@ export default {
           'Header rows and column order may differ by company. After upload, review auto-mapping and the pay month (YYYY-MM).',
         uploadSection: 'Excel upload',
         uploadButton: 'Upload payroll Excel',
+        senderCompany: 'Sending company',
+        senderCompanyPlaceholder: 'Select company',
+        senderCompanyHelper: 'Root can choose which company to use for PDF, mail, and {{company}}.',
+        selectCompanyRequired: 'Please select the sending company.',
         payMonth: 'Pay month',
         payMonthHelper: 'Detected from the sheet title. Edit if needed.',
         mappingSection: '1. Review Excel header mapping',
@@ -1806,6 +1823,9 @@ export default {
         partnerHint:
           'Search partners/clients registered to your company, or type a custom name. Clients already assigned to another person are unavailable.',
         noPartners: 'No available clients. Type a name or check other assignees.',
+        boardPlaceholder: 'Search assignee, client, or note',
+        boardResult: '{{count}} clients · {{columns}} assignees',
+        noBoardResults: 'No matching results.',
       },
       fields: {
         name: 'Name',
@@ -3773,7 +3793,7 @@ export default {
       }
     },
     purchaseSalesStats: {
-      title: 'Purchase/Sales Statistics',
+      title: 'Purchasing & Sales Statistics',
       description: 'Aggregates purchases and sales from tax invoices and expense reports issued in MVS. Separate from Tally data.',
       infoAlert: 'Sales are based on MVS tax invoices (standard and e-invoice); purchases are based on paid expense reports. Tally import data is not included.',
       downloadReport: 'Download Report',
@@ -4278,15 +4298,23 @@ export default {
       accountLabel: 'Account'
     },
     expenseApproval: {
-      title: 'Expense Report',
+      title: 'Expense Reports',
       unknown: 'Unknown',
       tabs: {
-        written: 'Reports I Wrote',
-        received: 'Reports I Received',
-        transfer: 'Transfer List'
+        written: 'My Requests',
+        received: 'Requests Received',
+        transfer: 'Remittance List'
       },
+      list: {
+        remainingShort: 'Remaining: {{currency}} {{amount}}'
+      },
+      empty: {
+        noResults: 'No expense reports to display.',
+        noTransferItems: 'Only approved expense reports with a remaining balance are shown.'
+      },
+
       actions: {
-        requestExpense: 'Request Expense',
+        requestExpense: 'Submit Expense Request',
         reset: 'Reset',
         view: 'View',
         editDetail: 'Edit',
@@ -4300,21 +4328,25 @@ export default {
       filters: {
         status: 'Status',
         priority: 'Priority',
-        all: 'All'
+        all: 'All',
+        paymentApprovedOnly: 'Approved for Payment Only',
+        company: 'Company',
+        allCompanies: 'All companies'
       },
       placeholders: {
-        search: 'Search title, requester',
+        search: 'Search by title or requester',
         searchSimple: 'Search',
-        searchCompany: 'Search company'
+        searchCompany: 'Search company',
+        searchWithCompany: 'Search by title, requester, or company'
       },
       form: {
         createTitle: 'Create Expense Report',
         editTitle: 'Edit Expense Report'
       },
       summary: {
-        totalExpense: 'Total Expense Amount',
+        totalExpense: 'Total Requested Amount',
         approvedAmount: 'Approved Amount',
-        pendingAmount: 'Pending Amount',
+        pendingAmount: 'Outstanding Amount',
         urgentRequests: 'Urgent Requests'
       },
       status: {
@@ -4323,7 +4355,11 @@ export default {
         inReview: 'In Review',
         approved: 'Approved',
         rejected: 'Rejected',
-        paid: 'Paid'
+        paid: 'Payment Completed',
+        transferPending: 'Awaiting Payment',
+        partialTransfer: 'Partially Paid',
+        transferCompleted: 'Remittance Completed',
+        transferFailed: 'Payment Failed'
       },
       priority: {
         low: 'Low',
@@ -4333,14 +4369,15 @@ export default {
       },
       columns: {
         no: 'No.',
-        expenseInfo: 'Expense Info',
+        expenseInfo: 'Expense Details',
         requester: 'Requester',
         approver: 'Approver',
+        company: 'Company',
         amount: 'Amount',
         status: 'Status',
         priority: 'Priority',
         submittedAt: 'Submitted Date',
-        createdAt: 'Created Date',
+        createdAt: 'Date Created',
         actions: 'Actions'
       },
       dialog: {
@@ -4350,7 +4387,16 @@ export default {
         finalApproveReasonTitle: 'Final Approval Reason',
         rejectReasonTitle: 'Rejection Reason',
         finalApproveReasonPlaceholder: 'Approval reason (optional)',
-        rejectReasonPlaceholder: 'Enter rejection reason'
+        rejectReasonPlaceholder: 'Enter rejection reason',
+        executePaymentTitle: 'Make Payment',
+        retryTransferTitle: 'Retry Payment',
+        paymentAmount: 'Payment amount',
+        paymentAmountHint:
+          'Total {{currency}} {{total}} / Paid {{currency}} {{paid}} / Remaining: {{currency}} {{remaining}}',
+        remittanceProof: 'Payment proof',
+        remittanceProofUpload: 'Choose proof file',
+        remittanceProofHint:
+          'Upload a bank transfer confirmation image or PDF. You can also paste a captured image with Ctrl+V.',
       },
       detail: {
         title: 'Expense Report Details',
@@ -4360,6 +4406,7 @@ export default {
         items: 'Expense Items',
         approvalFlow: 'Approval Flow',
         attachments: 'Attachments',
+        remittanceProofs: 'Payment proofs',
         notes: 'Notes',
         paymentProcessing: 'Payment processing',
         paymentApprovedLine: 'Approved: {{datetime}} · {{user}}',
@@ -4368,6 +4415,8 @@ export default {
         paymentRejectedReason: 'Rejection reason: {{reason}}',
         rejectedComment: 'Rejection comment',
         amountInclTax: 'Incl. tax',
+        paidAmount: 'Paid',
+        remainingAmount: 'Remaining',
         columns: {
           invoiceDate: 'Invoice date',
           description: 'Description',
@@ -4403,7 +4452,7 @@ export default {
         transferBank: 'Transfer bank',
         requestPayment: 'Request payment',
         finalApprove: 'Final approve',
-        executePayment: 'Execute payment',
+        executePayment: 'Remit',
         retryTransfer: 'Retry transfer',
         print: 'Print',
         pdfDownload: 'Download PDF',
@@ -4432,7 +4481,7 @@ export default {
         labelGstNumber: 'GST number',
         labelVoucherDate: 'Voucher date',
         labelRepresentative: 'Representative',
-        labelPartnerAddress: 'Address',
+        labelPartnerAddress: 'Corporate address',
         labelPartnerPhone: 'Phone',
         labelPartnerEmail: 'Email',
         labelPanNumber: 'PAN number',
@@ -4458,6 +4507,8 @@ export default {
         tdsApply: 'Apply TDS',
         grandTotal: 'Grand total (A+B+C+D)−E',
         remarksIfAny: 'Remarks (optional)',
+        remarksRequired: 'Remarks (required without receipt)',
+        remarksRequiredHint: 'If there is no receipt, enter the reason in remarks.',
         remarksInternal: 'Internal notes',
         receiptQr: 'Upload receipt from phone',
         receiptQrLoading: 'Generating QR…',
@@ -4482,13 +4533,15 @@ export default {
         approved: 'Expense report has been approved.',
         rejected: 'Expense report has been rejected.',
         paymentRequested: 'Payment request has been sent.',
-        paymentCompleted: 'Payment completion and transfer request are completed.',
+        paymentCompleted: 'Payment proof uploaded and payment recorded.',
+        partialPaymentCompleted: 'Partial payment completed. Remaining: {{remaining}}',
         transferRetried: 'Transfer retry completed.',
         finalApproved: 'Final approval completed.',
         paymentRejected: 'Payment request has been rejected.',
         approverChanged: 'Approver has been changed.',
         resubmitted: 'Expense report has been re-requested.',
-        pdfDownloaded: 'Saved as PDF.'
+        pdfDownloaded: 'Saved as PDF.',
+        printed: 'Expense report printed.'
       },
       errors: {
         loadFailed: 'Failed to load expense data.',
@@ -4504,9 +4557,11 @@ export default {
         deleteFailed: 'An error occurred while deleting.',
         approveFailed: 'An error occurred while approving.',
         rejectFailed: 'An error occurred while rejecting.',
-        paymentRequestFailed: 'An error occurred while requesting payment.',
+        paymentRequestFailed: 'An error occurred while requesting payment.',        transferRetryFailed: 'An error occurred while retrying transfer.',
         paymentCompleteFailed: 'An error occurred while completing payment.',
-        transferRetryFailed: 'An error occurred while retrying transfer.',
+        invalidPaymentAmount: 'Please enter a valid transfer amount.',
+        remittanceProofRequired: 'Please attach a payment confirmation file.',
+        paymentExceedsRemaining: 'Transfer amount cannot exceed the remaining balance ({{remaining}}).',
         finalApproveFailed: 'An error occurred during final approval.',
         rejectReasonRequired: 'Please enter a rejection reason.',
         qrGenerateFailed: 'Could not generate the QR code.',
@@ -4516,6 +4571,7 @@ export default {
         cannotSelectRequester: 'The requester cannot be the approver.',
         changeApproverFailed: 'Failed to change the approver.',
         approverRequired: 'Please select an approver.',
+        receiptOrRemarksRequired: 'Attach a receipt, or enter an explanation in remarks if there is no receipt.',
         resubmitFailed: 'Failed to re-request the expense report.'
       }
     },

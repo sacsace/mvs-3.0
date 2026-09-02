@@ -30,5 +30,40 @@ export const getUploadUrl = (path?: string | null): string => {
   return `${base}${sep}access_token=${encodeURIComponent(token)}`;
 };
 
+const fileNameFromUrl = (url: string, fallback = 'image') => {
+  try {
+    const path = decodeURIComponent(url.split('?')[0] || '');
+    const base = path.split('/').pop() || '';
+    return base.trim() || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+/** 인증 포함 업로드 파일을 로컬에 저장 */
+export const downloadUploadFile = async (pathOrUrl?: string | null, filename?: string) => {
+  const url =
+    pathOrUrl && (pathOrUrl.startsWith('http') || pathOrUrl.startsWith('blob:') || pathOrUrl.startsWith('data:'))
+      ? pathOrUrl
+      : getUploadUrl(pathOrUrl);
+  if (!url) return;
+  const suggested = (filename || fileNameFromUrl(url)).replace(/[\\/:*?"<>|]/g, '_') || 'image';
+  try {
+    const res = await fetch(url, { credentials: 'include' });
+    if (!res.ok) throw new Error('download failed');
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = suggested;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+  } catch {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+};
+
 /** 제품 이미지·미디어 경로 — getUploadUrl 별칭 */
 export const resolveMediaUrl = getUploadUrl;

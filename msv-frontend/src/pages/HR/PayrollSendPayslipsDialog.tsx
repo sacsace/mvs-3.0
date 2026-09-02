@@ -18,7 +18,7 @@ import {
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { PayrollGridRow } from './payroll/payrollGridTypes';
-import type { PayslipCompanyInfo, PayslipHeaderLayout } from './PayslipContent';
+import { toPayslipCompanyInfo, type PayslipCompanyInfo, type PayslipHeaderLayout } from './PayslipContent';
 import { generatePayslipPdfBlob, payslipBlobToBase64 } from './payrollPayslipPdf';
 import { payrollService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
@@ -71,12 +71,7 @@ const PayrollSendPayslipsDialog: React.FC<Props> = ({
       try {
         const company = await useReferenceDataStore.getState().fetchCompanyById(Number(user.company_id));
         if (!mounted) return;
-        setCompanyInfo({
-          name: company?.name || '',
-          address: company?.address || '',
-          phone: company?.phone || company?.phone_number || '',
-          email: company?.email || ''
-        });
+        setCompanyInfo(toPayslipCompanyInfo(company));
       } catch {
         if (mounted) setCompanyInfo(null);
       } finally {

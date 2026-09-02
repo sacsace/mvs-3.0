@@ -8,7 +8,8 @@ import sequelize from '../config/database';
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
 import { buildNodemailerTransportOptions, getResolvedMailTransportOptions } from '../utils/mailConfig';
-import { transferToBank } from '../services/banking';
+import { getCompanyBankTransferSettings } from '../services/banking';
+import type { CompanyBankTransferSettings, BankProvider } from '../services/banking';
 import {
   buildBuyerPartyFromCustomer,
   buildNicEInvoicePayload,
@@ -26,6 +27,11 @@ import {
   applyDepreciationToAssetPayload,
   calculateDepreciation,
 } from '../utils/assetDepreciation';
+import {
+  resolveAssignedClientScope,
+  expenseMatchesAssignedScope,
+  invoiceMatchesAssignedScope,
+} from '../services/workAssigneeScope';
 
 const ensureInvoiceColumns = async () => {
   try {
@@ -282,14 +288,42 @@ export const getInvoices = async (req: RequestWithUser, res: Response) => {
       order: [['invoice_date', 'DESC']]
     });
 
+    const clientScope = await resolveAssignedClientScope(req.user);
+    let rows = invoices.rows;
+    let total = invoices.count;
+    if (clientScope.enforced) {
+      // 페이지 내 필터 대신 회사 전체에서 배정 고객만 추리기 위해 재조회
+      const allRows = await (Invoice as any).findAll({
+        where: whereClause,
+        include: [
+          {
+            model: Customer,
+            as: 'customer',
+            attributes: ['id', 'name', 'email'],
+          },
+          {
+            model: User,
+            as: 'approver',
+            attributes: ['id', 'username', 'email'],
+            required: false,
+          },
+        ],
+        order: [['invoice_date', 'DESC']],
+      });
+      const scoped = allRows.filter((row: any) => invoiceMatchesAssignedScope(row, clientScope));
+      total = scoped.length;
+      const start = (Number(page) - 1) * Number(limit);
+      rows = scoped.slice(start, start + Number(limit));
+    }
+
     res.json({
       success: true,
-      data: invoices.rows,
+      data: rows,
       pagination: {
-        total: invoices.count,
+        total,
         page: Number(page),
         limit: Number(limit),
-        totalPages: Math.ceil(invoices.count / Number(limit))
+        totalPages: Math.ceil(total / Number(limit))
       }
     });
   } catch (error) {
@@ -367,6 +401,14 @@ export const getInvoice = async (req: RequestWithUser, res: Response) => {
 
     if (!invoice) {
       return res.status(404).json({ success: false, message: '인보이스를 찾을 수 없습니다.' });
+    }
+
+    const clientScope = await resolveAssignedClientScope(req.user);
+    if (clientScope.enforced && !invoiceMatchesAssignedScope(invoice, clientScope)) {
+      return res.status(403).json({
+        success: false,
+        message: '배정된 고객사의 매출 문서만 조회할 수 있습니다.',
+      });
     }
 
     res.json({ success: true, data: invoice });
@@ -1768,7 +1810,7 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
         [Op.between]: [`${start} 00:00:00`, `${end} 23:59:59`]
       };
     }
-    const allExpenses = await (ExpenseReport as any).findAll({
+    const allExpensesRaw = await (ExpenseReport as any).findAll({
       where: expenseWhereClause,
       attributes: [
         'id',
@@ -1781,32 +1823,50 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
         'purpose',
         'status',
         'payment_request_status',
-        'created_at'
+        'created_at',
+        'items',
       ],
       order: [['created_at', 'DESC']]
     });
 
+    const clientScope = await resolveAssignedClientScope(req.user);
+    const allInvoicesScoped = clientScope.enforced
+      ? allInvoices.filter((inv: any) => invoiceMatchesAssignedScope(inv, clientScope))
+      : allInvoices;
+    const allExpenses = clientScope.enforced
+      ? allExpensesRaw.filter((exp: any) => expenseMatchesAssignedScope(exp, clientScope))
+      : allExpensesRaw;
+    // room bookings: 고객사 리스트와 무관 → 스코프 시 직원 통계에서 제외
+    const allRoomBookingsScoped = clientScope.enforced ? [] : allRoomBookings;
+
     // 통계 계산 (매출: 발행/예약 기준, 수금: 결제완료 기준)
-    const invoiceSales = allInvoices.reduce((sum: number, inv: any) => sum + Number(inv.total_amount || 0), 0);
-    const roomBookingSales = allRoomBookings.reduce((sum: number, booking: any) => sum + Number(booking.total_amount || 0), 0);
+    const invoiceSales = allInvoicesScoped.reduce((sum: number, inv: any) => sum + Number(inv.total_amount || 0), 0);
+    const roomBookingSales = allRoomBookingsScoped.reduce((sum: number, booking: any) => sum + Number(booking.total_amount || 0), 0);
     // 총 매출은 인보이스 기준으로 계산 (화면 기대값과 일치)
     const totalRevenue = invoiceSales;
     const combinedRevenue = invoiceSales + roomBookingSales;
-    const collectedRevenue = allInvoices
+    const collectedRevenue = allInvoicesScoped
       .filter((inv: any) => inv.payment_status === 'paid' || inv.status === 'paid')
       .reduce((sum: number, inv: any) => sum + Number(inv.total_amount || 0), 0)
       ;
     const outstandingRevenue = Math.max(totalRevenue - collectedRevenue, 0);
 
+    const isCountedPurchase = (exp: any) => {
+      const status = String(exp.status || '').toLowerCase();
+      const payment = String(exp.payment_request_status || '').toLowerCase();
+      if (status === 'rejected' || payment === 'rejected') return false;
+      return status === 'paid' || payment === 'paid';
+    };
+
     const totalExpenses = allExpenses
-      .filter((exp: any) => exp.status === 'paid' || exp.payment_request_status === 'paid')
+      .filter(isCountedPurchase)
       .reduce((sum: number, exp: any) => sum + Number(exp.total_amount || 0), 0);
     const netProfit = totalRevenue - totalExpenses;
     
-    const totalInvoices = allInvoices.length;
-    const paidInvoices = allInvoices.filter((inv: any) => inv.payment_status === 'paid' || inv.status === 'paid').length;
-    const pendingInvoices = allInvoices.filter((inv: any) => inv.payment_status === 'pending').length;
-    const overdueInvoices = allInvoices.filter((inv: any) => {
+    const totalInvoices = allInvoicesScoped.length;
+    const paidInvoices = allInvoicesScoped.filter((inv: any) => inv.payment_status === 'paid' || inv.status === 'paid').length;
+    const pendingInvoices = allInvoicesScoped.filter((inv: any) => inv.payment_status === 'pending').length;
+    const overdueInvoices = allInvoicesScoped.filter((inv: any) => {
       if (inv.payment_status === 'pending' && inv.invoice_date) {
         const dueDate = new Date(inv.invoice_date);
         dueDate.setDate(dueDate.getDate() + 30); // 기본 30일 후
@@ -1846,14 +1906,14 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
       quarterMap.set(quarterKey, (quarterMap.get(quarterKey) || 0) + amount);
     };
 
-    allInvoices.forEach((inv: any) => {
+    allInvoicesScoped.forEach((inv: any) => {
       addTrendAmount(inv.invoice_date, Number(inv.total_amount || 0), trendByDay, trendByMonth, trendByQuarter);
     });
-    allRoomBookings.forEach((booking: any) => {
+    allRoomBookingsScoped.forEach((booking: any) => {
       addTrendAmount(booking.check_in_date, Number(booking.total_amount || 0), trendByDay, trendByMonth, trendByQuarter);
     });
     allExpenses.forEach((exp: any) => {
-      if (!(exp.status === 'paid' || exp.payment_request_status === 'paid')) return;
+      if (!isCountedPurchase(exp)) return;
       addTrendAmount(exp.created_at, Number(exp.total_amount || 0), expenseByDay, expenseByMonth, expenseByQuarter);
     });
 
@@ -1882,13 +1942,13 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
     const monthlyRevenueData = toTrendRows(Array.from(trendByMonth.entries()), Array.from(expenseByMonth.entries()), 'month');
     const quarterlyData = toTrendRows(Array.from(trendByQuarter.entries()), Array.from(expenseByQuarter.entries()), 'quarter');
 
-    const regularRevenue = allInvoices
+    const regularRevenue = allInvoicesScoped
       .filter((inv: any) => inv.invoice_category === 'regular' || inv.invoice_category === null)
       .reduce((sum: number, inv: any) => sum + Number(inv.total_amount || 0), 0);
-    const eInvoiceRevenue = allInvoices
+    const eInvoiceRevenue = allInvoicesScoped
       .filter((inv: any) => inv.invoice_category === 'e_invoice')
       .reduce((sum: number, inv: any) => sum + Number(inv.total_amount || 0), 0);
-    const roomBookingAllRevenue = allRoomBookings
+    const roomBookingAllRevenue = allRoomBookingsScoped
       .reduce((sum: number, booking: any) => sum + Number(booking.total_amount || 0), 0);
 
     const categoryRevenueRaw = [
@@ -1903,7 +1963,7 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
     }));
 
     const now = new Date();
-    const overdueRows = allInvoices.filter((inv: any) => {
+    const overdueRows = allInvoicesScoped.filter((inv: any) => {
       const paid = inv.payment_status === 'paid' || inv.status === 'paid';
       if (paid) return false;
       const invoiceDate = new Date(inv.invoice_date);
@@ -1911,8 +1971,8 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
       invoiceDate.setDate(invoiceDate.getDate() + 30);
       return now > invoiceDate;
     });
-    const paidRows = allInvoices.filter((inv: any) => inv.payment_status === 'paid' || inv.status === 'paid');
-    const pendingRows = allInvoices.filter((inv: any) => !(inv.payment_status === 'paid' || inv.status === 'paid'));
+    const paidRows = allInvoicesScoped.filter((inv: any) => inv.payment_status === 'paid' || inv.status === 'paid');
+    const pendingRows = allInvoicesScoped.filter((inv: any) => !(inv.payment_status === 'paid' || inv.status === 'paid'));
     const invoiceStatusData = [
       {
         status: 'Paid',
@@ -1953,7 +2013,7 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
     };
 
     const salesList = [
-      ...allInvoices.map((inv: any) => ({
+      ...allInvoicesScoped.map((inv: any) => ({
         id: inv.id,
         source: 'invoice',
         document_number: inv.invoice_number,
@@ -1965,7 +2025,7 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
         status: inv.status,
         payment_status: inv.payment_status
       })),
-      ...allRoomBookings.map((booking: any) => ({
+      ...allRoomBookingsScoped.map((booking: any) => ({
         id: booking.id,
         source: 'room_booking',
         document_number: booking.booking_id,
@@ -1988,7 +2048,9 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
 
     const salesTotal = salesList.reduce((sum, row) => sum + row.amount, 0);
 
-    const purchaseList = allExpenses.map((exp: any) => ({
+    const purchaseList = allExpenses
+      .filter(isCountedPurchase)
+      .map((exp: any) => ({
       id: exp.id,
       document_number: exp.expense_id,
       date: exp.created_at,
@@ -2003,9 +2065,7 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
     }));
 
     const purchaseTotal = purchaseList.reduce((sum, row) => sum + row.amount, 0);
-    const purchasePaidTotal = purchaseList
-      .filter((row) => row.status === 'paid' || row.payment_status === 'paid')
-      .reduce((sum, row) => sum + row.amount, 0);
+    const purchasePaidTotal = purchaseTotal;
 
     res.json({
       success: true,
@@ -2051,21 +2111,43 @@ export const getAccountingStats = async (req: RequestWithUser, res: Response) =>
 // 지출결의서 목록 조회
 export const getExpenseReports = async (req: RequestWithUser, res: Response) => {
   try {
-    const { tenant_id, company_id } = req.user;
-    const { status = '', priority = '' } = req.query;
-    const whereClause: any = { tenant_id, company_id, is_active: true };
+    const { tenant_id, company_id, role } = req.user;
+    const { status = '', priority = '', company_id: queryCompanyId } = req.query;
+    const whereClause: any = { tenant_id, is_active: true };
+
+    // root/audit: 테넌트 전체 또는 선택한 회사 / 그 외: 로그인 회사만
+    if (role === 'root' || role === 'audit') {
+      const parsedQueryCompanyId = Number(queryCompanyId);
+      if (Number.isFinite(parsedQueryCompanyId) && parsedQueryCompanyId > 0) {
+        whereClause.company_id = parsedQueryCompanyId;
+      }
+    } else {
+      whereClause.company_id = company_id;
+    }
 
     if (status) whereClause.status = status;
     if (priority) whereClause.priority = priority;
 
     const expenses = await (ExpenseReport as any).findAll({
       where: whereClause,
+      include: [{ model: Company, as: 'company', attributes: ['id', 'name'], required: false }],
       order: [['created_at', 'DESC']]
     });
 
+    const clientScope = await resolveAssignedClientScope(req.user);
+    const scopedExpenses = clientScope.enforced
+      ? expenses.filter((row: any) => expenseMatchesAssignedScope(row, clientScope))
+      : expenses;
+
     res.json({
       success: true,
-      data: expenses.map((row: any) => sanitizeExpenseForUser(row, req.user)),
+      data: scopedExpenses.map((row: any) => {
+        const data = sanitizeExpenseForUser(row, req.user);
+        const company = row?.company || data.company;
+        if (company?.name) data.company_name = company.name;
+        if (data.company) delete data.company;
+        return data;
+      }),
     });
   } catch (error: any) {
     console.error('지출결의서 조회 오류:', error);
@@ -2077,14 +2159,21 @@ export const getExpenseReports = async (req: RequestWithUser, res: Response) => 
 export const getExpenseReportById = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id } = req.user;
     const expense = await (ExpenseReport as any).findOne({
-      where: { id, tenant_id, company_id, is_active: true }
+      where: expenseScopeWhere(req.user, id),
+      include: [{ model: Company, as: 'company', attributes: ['id', 'name'], required: false }],
     });
     if (!expense) {
       return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
     }
-    res.json({ success: true, data: sanitizeExpenseForUser(expense, req.user) });
+    const clientScope = await resolveAssignedClientScope(req.user);
+    if (clientScope.enforced && !expenseMatchesAssignedScope(expense, clientScope)) {
+      return res.status(403).json({ success: false, message: '배정된 고객사의 지출결의서만 조회할 수 있습니다.' });
+    }
+    const data = sanitizeExpenseForUser(expense, req.user);
+    if (expense.company?.name) data.company_name = expense.company.name;
+    if (data.company) delete data.company;
+    res.json({ success: true, data });
   } catch (error: any) {
     console.error('지출결의서 상세 조회 오류:', error);
     res.status(500).json({ success: false, message: '지출결의서 상세 조회에 실패했습니다.' });
@@ -2136,6 +2225,17 @@ const mergeExpenseItemsMeta = (itemsValue: any, extraMeta: Record<string, any>) 
   return { rows: [], meta: { ...extraMeta } };
 };
 
+const expenseHasReceipts = (attachments: any) =>
+  (Array.isArray(attachments) ? attachments : []).some((p: any) => String(p || '').trim());
+
+const expenseHasRemarks = (itemsValue: any, notes?: string) => {
+  const remarks = String(mergeExpenseItemsMeta(itemsValue, {}).meta?.remarks || notes || '').trim();
+  return remarks.length > 0;
+};
+
+const receiptOrRemarksRequiredMessage =
+  '영수증을 첨부하거나, 영수증이 없으면 비고에 설명을 입력해주세요.';
+
 const allocateExpenseVoucherNo = async (tenantId: number, companyId: number) => {
   const year = new Date().getFullYear();
   const rows = await (ExpenseReport as any).findAll({
@@ -2176,6 +2276,16 @@ const parseApprovalFlow = (value: any): any[] => {
 
 const canManageExpenseTransfer = (user: any) =>
   user?.role === 'admin' || user?.role === 'root' || user?.is_payment_officer === true;
+
+/** root/audit는 테넌트 내 타사 지출결의서도 조회·송금 가능 */
+const expenseScopeWhere = (user: any, id?: number | string) => {
+  const where: any = { tenant_id: user.tenant_id, is_active: true };
+  if (id != null) where.id = id;
+  if (user?.role !== 'root' && user?.role !== 'audit') {
+    where.company_id = user.company_id;
+  }
+  return where;
+};
 
 const EXPENSE_TRANSFER_SECRET_KEYS = [
   'bank_transfer_logs',
@@ -2220,6 +2330,20 @@ const EXPENSE_CLIENT_UPDATE_BLOCKLIST = [
 
 const sanitizeExpenseForUser = (expense: any, user: any) => {
   const data = expense?.toJSON ? expense.toJSON() : { ...(expense || {}) };
+  const logs = Array.isArray(data.bank_transfer_logs) ? data.bank_transfer_logs : [];
+  data.remittance_history = logs
+    .map((log: any) => {
+      const amount = Number(log?.amount ?? log?.payload?.amount ?? 0);
+      const status = String(log?.status || '').toLowerCase();
+      const ok = !status || ['success', 'completed', 'paid'].includes(status);
+      return {
+        timestamp: log?.timestamp || null,
+        amount,
+        ok,
+      };
+    })
+    .filter((row: { amount: number; ok: boolean }) => row.ok && Number.isFinite(row.amount) && row.amount > 0)
+    .map(({ timestamp, amount }: { timestamp: string | null; amount: number }) => ({ timestamp, amount }));
   if (canManageExpenseTransfer(user)) return data;
   for (const key of EXPENSE_TRANSFER_SECRET_KEYS) {
     if (key in data) data[key] = null;
@@ -2465,9 +2589,23 @@ export const createExpenseReport = async (req: RequestWithUser, res: Response) =
     if (createStatus === 'submitted' && (!safeTitle.trim() || !safePurpose.trim())) {
       return res.status(400).json({ success: false, message: '필수 항목이 누락되었습니다.' });
     }
+    if (
+      createStatus === 'submitted' &&
+      !expenseHasReceipts(attachments) &&
+      !expenseHasRemarks(items, notes)
+    ) {
+      return res.status(400).json({ success: false, message: receiptOrRemarksRequiredMessage });
+    }
 
     const voucherNo = await allocateExpenseVoucherNo(tenant_id, company_id);
     const itemsWithVoucher = mergeExpenseItemsMeta(items, { voucherNo });
+    const clientScope = await resolveAssignedClientScope(req.user);
+    if (clientScope.enforced && !expenseMatchesAssignedScope({ items: itemsWithVoucher, title }, clientScope)) {
+      return res.status(403).json({
+        success: false,
+        message: '고객사 리스트에 배정된 거래처로만 지출결의서를 작성할 수 있습니다.',
+      });
+    }
     const generatedId = voucherNo;
 
     let itemsFinal = itemsWithVoucher;
@@ -2587,6 +2725,13 @@ export const updateExpenseReport = async (req: RequestWithUser, res: Response) =
     if (isSubmit && !incomingApproverId && !existingApproverId) {
       return res.status(400).json({ success: false, message: '승인권자를 선택해주세요.' });
     }
+    if (
+      isSubmit &&
+      !expenseHasReceipts(nextBody.attachments != null ? nextBody.attachments : expense.attachments) &&
+      !expenseHasRemarks(nextBody.items != null ? nextBody.items : expense.items, nextBody.notes != null ? nextBody.notes : expense.notes)
+    ) {
+      return res.status(400).json({ success: false, message: receiptOrRemarksRequiredMessage });
+    }
 
     if (prevStatus === 'rejected' && isSubmit) {
       Object.assign(
@@ -2652,8 +2797,14 @@ export const deleteExpenseReport = async (req: RequestWithUser, res: Response) =
     if (Number(expense.requester_id) !== Number(req.user.id)) {
       return res.status(403).json({ success: false, message: '작성자만 삭제할 수 있습니다.' });
     }
-    if (['submitted', 'in_review', 'approved', 'paid'].includes(String(expense.status))) {
-      return res.status(400).json({ success: false, message: '검토 중이거나 처리된 문서는 삭제할 수 없습니다.' });
+    const paymentStatus = String(expense.payment_request_status || '').toLowerCase();
+    const remaining = getExpenseRemainingAmount(expense);
+    const isPaid =
+      String(expense.status) === 'paid' ||
+      paymentStatus === 'paid' ||
+      (Number(expense.paid_amount || 0) > 0 && remaining <= 0);
+    if (isPaid || ['submitted', 'in_review', 'approved', 'paid'].includes(String(expense.status))) {
+      return res.status(400).json({ success: false, message: '검토 중이거나 지급 완료된 문서는 삭제할 수 없습니다.' });
     }
 
     await expense.update({ is_active: false });
@@ -2694,6 +2845,9 @@ export const updateExpenseReportStatus = async (req: RequestWithUser, res: Respo
       }
       if (!designatedId) {
         return res.status(400).json({ success: false, message: '승인권자를 선택해주세요.' });
+      }
+      if (!expenseHasReceipts(expense.attachments) && !expenseHasRemarks(expense.items, expense.notes)) {
+        return res.status(400).json({ success: false, message: receiptOrRemarksRequiredMessage });
       }
     }
 
@@ -3024,10 +3178,53 @@ const canApproveExpense = (expense: any, user: any) => {
   return currentId !== null && currentId === user.id;
 };
 
-const buildBankTransferPayload = (expense: any) => {
+const roundMoney = (value: number) => Math.round((Number(value) || 0) * 100) / 100;
+
+const getExpenseRemainingAmount = (expense: any) => {
+  const total = roundMoney(Number(expense.total_amount || 0));
+  const paid = roundMoney(Number(expense.paid_amount || 0));
+  return roundMoney(Math.max(0, total - paid));
+};
+
+const loadCompanyBankTransferSettings = async (
+  companyId: number,
+  tenantId: number
+): Promise<CompanyBankTransferSettings> => {
+  const company = await (Company as any).findOne({
+    where: { id: companyId, tenant_id: tenantId },
+    attributes: ['id', 'settings']
+  });
+  return getCompanyBankTransferSettings(company);
+};
+
+const resolveExpenseTransferProvider = (
+  requestedProvider: unknown,
+  expenseProvider: unknown,
+  companySettings?: CompanyBankTransferSettings | null
+): BankProvider | string | null => {
+  const candidate =
+    requestedProvider ||
+    expenseProvider ||
+    companySettings?.defaultProvider ||
+    env.DEFAULT_BANK_PROVIDER ||
+    null;
+  if (!candidate) return null;
+  return String(candidate);
+};
+
+const buildBankTransferPayload = (expense: any, transferAmount?: number) => {
   const meta = parseExpenseItemsMeta(expense.items);
+  const total = Number(expense.total_amount || 0);
+  const paid = Number(expense.paid_amount || 0);
+  const remaining = Math.max(0, roundMoney(total - paid));
+  const amount =
+    transferAmount != null && Number.isFinite(Number(transferAmount))
+      ? roundMoney(Number(transferAmount))
+      : remaining > 0
+        ? remaining
+        : total;
   return {
-    amount: Number(expense.total_amount || 0),
+    amount,
     currency: expense.currency || 'INR',
     beneficiaryName: meta.acHolder || meta.accountHolder || '',
     beneficiaryAccount: meta.accountNumber || '',
@@ -3038,7 +3235,6 @@ const buildBankTransferPayload = (expense: any) => {
   };
 };
 
-// 결제 요청 (승인자에게 요청 생성)
 export const requestExpensePayment = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
@@ -3208,211 +3404,134 @@ export const approveExpensePayment = async (req: RequestWithUser, res: Response)
 export const completeExpensePayment = async (req: RequestWithUser, res: Response) => {
   try {
     const { id } = req.params;
-    const { tenant_id, company_id, id: user_id } = req.user;
-    const { provider } = req.body || {};
+    const { id: user_id } = req.user;
+    const amountBody = req.body?.amount;
     const expense = await (ExpenseReport as any).findOne({
-      where: { id, tenant_id, company_id, is_active: true }
+      where: expenseScopeWhere(req.user, id),
     });
     if (!expense) {
-      return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
+      return res.status(404).json({ success: false, message: 'Expense report not found.' });
     }
-    if (expense.payment_request_status !== 'approved') {
-      return res.status(400).json({ success: false, message: '최종 승인 후 결제를 실행할 수 있습니다.' });
+    const paymentStatus = String(expense.payment_request_status || '').toLowerCase();
+    const docStatus = String(expense.status || '').toLowerCase();
+    const remittanceReady =
+      paymentStatus === 'approved' ||
+      (docStatus === 'approved' && paymentStatus !== 'rejected' && paymentStatus !== 'paid');
+    if (!remittanceReady) {
+      return res.status(400).json({
+        success: false,
+        message: 'Remittance is allowed only for approved expense reports.'
+      });
     }
     if (!canManageExpenseTransfer(req.user)) {
-      return res.status(403).json({ success: false, message: '송금 권한이 없습니다.' });
+      return res.status(403).json({ success: false, message: 'No remittance permission.' });
     }
 
-    const transferLogs = Array.isArray(expense.bank_transfer_logs) ? [...expense.bank_transfer_logs] : [];
-
-    await expense.update({
-      payment_request_status: 'paid',
-      payment_completed_at: new Date(),
-      payment_completed_by: user_id,
-      status: 'paid'
-    });
-
-    const transferProvider = provider || env.DEFAULT_BANK_PROVIDER;
-    if (!transferProvider) {
-      transferLogs.unshift({
-        timestamp: new Date().toISOString(),
-        action: 'complete',
-        status: 'skipped',
-        provider: null,
-        payload: null,
-        response: null,
-        error: '은행 송금 제공자가 설정되지 않았습니다.'
+    const proofFile = (req as any).file as
+      | { filename?: string; originalname?: string; mimetype?: string; size?: number }
+      | undefined;
+    if (!proofFile?.filename) {
+      return res.status(400).json({
+        success: false,
+        message: 'Remittance confirmation file is required.'
       });
-      await expense.update({ bank_transfer_logs: transferLogs });
-      notifyUser(
-        req,
-        expense.requester_id,
-        '결제 완료 처리됨',
-        '결제는 완료 처리되었으나 은행 송금 제공자가 설정되지 않았습니다.',
-        'warning',
-        { expenseId: expense.id, expenseNo: expense.expense_id }
-      );
-      return res.json({ success: true, data: sanitizeExpenseForUser(expense, req.user), message: '결제 완료 처리됨. 은행 송금 제공자가 설정되지 않았습니다.' });
     }
 
-    const payload = buildBankTransferPayload(expense);
-    try {
-      const result = await transferToBank(transferProvider, payload);
-      transferLogs.unshift({
-        timestamp: new Date().toISOString(),
-        action: 'complete',
-        status: 'success',
-        provider: transferProvider,
-        payload,
-        response: result,
-        error: null
-      });
-      await expense.update({
-        bank_transfer_provider: transferProvider,
-        bank_transfer_status: 'success',
-        bank_transfer_reference: result?.reference || result?.transactionId || null,
-        bank_transfer_payload: result,
-        bank_transfer_logs: transferLogs,
-        bank_transfer_error: null
-      });
-      notifyUser(
-        req,
-        expense.requester_id,
-        '송금 완료',
-        '은행 송금이 완료되었습니다.',
-        'success',
-        { expenseId: expense.id, expenseNo: expense.expense_id }
-      );
-      return res.json({ success: true, data: sanitizeExpenseForUser(expense, req.user), transfer: result });
-    } catch (transferError: any) {
-      transferLogs.unshift({
-        timestamp: new Date().toISOString(),
-        action: 'complete',
-        status: 'failed',
-        provider: transferProvider,
-        payload,
-        response: null,
-        error: transferError?.message || '송금 실패'
-      });
-      await expense.update({
-        bank_transfer_provider: transferProvider,
-        bank_transfer_status: 'failed',
-        bank_transfer_error: transferError?.message || '송금 실패',
-        bank_transfer_payload: payload,
-        bank_transfer_logs: transferLogs
-      });
-      notifyUser(
-        req,
-        expense.requester_id,
-        '송금 실패',
-        transferError?.message ? `은행 송금에 실패했습니다. 사유: ${transferError.message}` : '은행 송금에 실패했습니다.',
-        'error',
-        { expenseId: expense.id, expenseNo: expense.expense_id }
-      );
-      await notifyPaymentOfficers(
-        req,
-        '송금 실패',
-        `지출결의서 송금에 실패했습니다. 재시도가 필요합니다.`,
-        'error',
-        { expenseId: expense.id, expenseNo: expense.expense_id }
-      );
-      return res.status(502).json({ success: false, message: '은행 송금에 실패했습니다.', error: transferError?.message });
+    const totalAmount = roundMoney(Number(expense.total_amount || 0));
+    const paidBefore = roundMoney(Number(expense.paid_amount || 0));
+    const remaining = getExpenseRemainingAmount(expense);
+    if (remaining <= 0) {
+      return res.status(400).json({ success: false, message: 'Already fully paid.' });
     }
-  } catch (error: any) {
-    console.error('결제 완료 처리 오류:', error);
-    res.status(500).json({ success: false, message: '결제 완료 처리에 실패했습니다.' });
-  }
-};
 
-// 은행 송금 재시도
-export const retryExpenseTransfer = async (req: RequestWithUser, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { tenant_id, company_id } = req.user;
-    const { provider } = req.body || {};
-    const expense = await (ExpenseReport as any).findOne({
-      where: { id, tenant_id, company_id, is_active: true }
-    });
-    if (!expense) {
-      return res.status(404).json({ success: false, message: '지출결의서를 찾을 수 없습니다.' });
+    const requestedAmount =
+      amountBody != null && amountBody !== ''
+        ? roundMoney(Number(amountBody))
+        : remaining;
+    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Invalid remittance amount.' });
     }
-    if (!canManageExpenseTransfer(req.user)) {
-      return res.status(403).json({ success: false, message: '송금 권한이 없습니다.' });
+    if (requestedAmount > remaining + 0.001) {
+      return res.status(400).json({
+        success: false,
+        message: 'Remittance amount cannot exceed remaining balance (' + remaining + ').'
+      });
     }
-    const transferProvider = provider || expense.bank_transfer_provider || env.DEFAULT_BANK_PROVIDER;
-    if (!transferProvider) {
-      return res.status(400).json({ success: false, message: '은행 송금 제공자가 필요합니다.' });
-    }
-    const transferLogs = Array.isArray(expense.bank_transfer_logs) ? [...expense.bank_transfer_logs] : [];
-    const payload = buildBankTransferPayload(expense);
-    const result = await transferToBank(transferProvider, payload);
+
+    const proofPath = path
+      .join('expense-remittance-proofs', proofFile.filename)
+      .replace(/\\/g, '/');
+    const paidAfter = roundMoney(paidBefore + requestedAmount);
+    const isFullPayment = requestedAmount >= remaining - 0.001;
+    const transferLogs = Array.isArray(expense.bank_transfer_logs)
+      ? [...expense.bank_transfer_logs]
+      : [];
     transferLogs.unshift({
       timestamp: new Date().toISOString(),
-      action: 'retry',
+      action: 'manual_complete',
       status: 'success',
-      provider: transferProvider,
-      payload,
-      response: result,
-      error: null
+      provider: 'manual',
+      amount: requestedAmount,
+      proof: proofPath,
+      proof_name: proofFile.originalname || proofFile.filename,
+      payload: { amount: requestedAmount, proof: proofPath },
+      response: null,
+      error: null,
+      completed_by: user_id
     });
+
     await expense.update({
-      bank_transfer_provider: transferProvider,
+      paid_amount: paidAfter,
+      payment_request_status: isFullPayment ? 'paid' : 'approved',
+      payment_completed_at: isFullPayment ? new Date() : expense.payment_completed_at || null,
+      payment_completed_by: isFullPayment ? user_id : expense.payment_completed_by || null,
+      status: isFullPayment ? 'paid' : expense.status,
+      bank_transfer_provider: 'manual',
       bank_transfer_status: 'success',
-      bank_transfer_reference: result?.reference || result?.transactionId || null,
-      bank_transfer_payload: result,
-      bank_transfer_error: null,
-      bank_transfer_logs: transferLogs
+      bank_transfer_reference: proofPath,
+      bank_transfer_payload: {
+        amount: requestedAmount,
+        proof: proofPath,
+        proof_name: proofFile.originalname || proofFile.filename
+      },
+      bank_transfer_logs: transferLogs,
+      bank_transfer_error: null
     });
+
     notifyUser(
       req,
       expense.requester_id,
-      '송금 재시도 성공',
-      '은행 송금 재시도가 성공했습니다.',
+      isFullPayment ? 'Remittance recorded' : 'Partial remittance recorded',
+      isFullPayment
+        ? 'Remittance confirmation uploaded and payment marked complete.'
+        : 'Partial remittance ' +
+            requestedAmount +
+            ' recorded. Remaining ' +
+            roundMoney(totalAmount - paidAfter) +
+            '.',
       'success',
       { expenseId: expense.id, expenseNo: expense.expense_id }
     );
-    res.json({ success: true, data: sanitizeExpenseForUser(expense, req.user), transfer: result });
+
+    return res.json({
+      success: true,
+      data: sanitizeExpenseForUser(expense, req.user),
+      paid_amount: paidAfter,
+      remaining_amount: roundMoney(totalAmount - paidAfter),
+      proof: proofPath
+    });
   } catch (error: any) {
-    const transferErrorMessage = error?.message || '송금 재시도 실패';
-    try {
-      const { id } = req.params;
-      const { tenant_id, company_id } = req.user;
-      const expense = await (ExpenseReport as any).findOne({
-        where: { id, tenant_id, company_id, is_active: true }
-      });
-      if (expense) {
-        const transferLogs = Array.isArray(expense.bank_transfer_logs) ? [...expense.bank_transfer_logs] : [];
-        transferLogs.unshift({
-          timestamp: new Date().toISOString(),
-          action: 'retry',
-          status: 'failed',
-          provider: req.body?.provider || expense.bank_transfer_provider || env.DEFAULT_BANK_PROVIDER || null,
-          payload: buildBankTransferPayload(expense),
-          response: null,
-          error: transferErrorMessage
-        });
-        await expense.update({
-          bank_transfer_status: 'failed',
-          bank_transfer_error: transferErrorMessage,
-          bank_transfer_logs: transferLogs
-        });
-      }
-    } catch (logError) {
-      console.error('송금 재시도 로그 기록 오류:', logError);
-    }
-    console.error('은행 송금 재시도 오류:', error);
-    await notifyPaymentOfficers(
-      req,
-      '송금 재시도 실패',
-      '은행 송금 재시도에 실패했습니다.',
-      'error',
-      { expenseId: Number(req.params.id) }
-    );
-    res.status(502).json({ success: false, message: '은행 송금 재시도에 실패했습니다.', error: transferErrorMessage });
+    console.error('completeExpensePayment error:', error);
+    res.status(500).json({ success: false, message: 'Failed to complete payment.' });
   }
 };
 
-// 예산 목록 조회
+/** @deprecated bank auto-transfer removed — use completeExpensePayment with proof */
+export const retryExpenseTransfer = async (req: RequestWithUser, res: Response) => {
+  return completeExpensePayment(req, res);
+};
+
+
 export const getBudgets = async (req: RequestWithUser, res: Response) => {
   try {
     const { tenant_id, company_id, role } = req.user;

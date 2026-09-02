@@ -44,7 +44,6 @@ import {
   Email as EmailIcon,
   DisplaySettings as DisplaySettingsIcon,
   Download as DownloadIcon,
-  ViewSidebar as ViewSidebarIcon,
   NotificationsOutlined as NotificationsOutlinedIcon,
   Visibility,
   VisibilityOff,
@@ -181,7 +180,6 @@ const SystemSettings: React.FC = () => {
       theme: 'light',
       primaryColor: '#1D4E7C',
       fontSize: 'medium',
-      sidebarCollapsed: false,
       showNotifications: true
     },
     notifications: {
@@ -317,15 +315,6 @@ const SystemSettings: React.FC = () => {
       void loadBackupFiles();
     }
   }, [isRoot, loadBackupFiles]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.dispatchEvent(
-      new CustomEvent('mvs-sidebar-auto-collapse', {
-        detail: { collapsed: settings.appearance.sidebarCollapsed }
-      })
-    );
-  }, [settings.appearance.sidebarCollapsed]);
 
   const handleSettingChange = (category: string, key: string, value: any) => {
     let nextValue = value;
@@ -1012,30 +1001,6 @@ const SystemSettings: React.FC = () => {
               <Typography component="h2" sx={SECTION_TITLE}>화면 설정</Typography>
             </Box>
             <Divider sx={SECTION_DIVIDER} />
-
-            <Box sx={APPEARANCE_TOGGLE_ROW_SX}>
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25, minWidth: 0, flex: 1 }}>
-                <ViewSidebarIcon sx={{ fontSize: 20, color: 'primary.main', mt: 0.15, flexShrink: 0 }} />
-                <Box sx={{ minWidth: 0 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8125rem', lineHeight: 1.4 }}>
-                    사이드바 자동 접기
-                  </Typography>
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    sx={{ display: 'block', mt: 0.35, fontSize: '0.7rem', lineHeight: 1.45 }}
-                  >
-                    로그인 후 사이드바를 접힌 상태로 시작합니다.
-                  </Typography>
-                </Box>
-              </Box>
-              <Switch
-                size="small"
-                checked={settings.appearance.sidebarCollapsed}
-                onChange={(e) => handleSettingChange('appearance', 'sidebarCollapsed', e.target.checked)}
-                sx={{ flexShrink: 0 }}
-              />
-            </Box>
 
             <Box sx={APPEARANCE_TOGGLE_ROW_SX}>
               <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25, minWidth: 0, flex: 1 }}>

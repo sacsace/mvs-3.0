@@ -5,6 +5,7 @@ interface WorkAssigneeAttributes {
   id: number;
   tenant_id: number;
   company_id: number;
+  user_id?: number | null;
   name: string;
   title?: string | null;
   email?: string | null;
@@ -18,7 +19,15 @@ interface WorkAssigneeAttributes {
 interface WorkAssigneeCreationAttributes
   extends Optional<
     WorkAssigneeAttributes,
-    'id' | 'title' | 'email' | 'sort_order' | 'is_active' | 'created_by' | 'created_at' | 'updated_at'
+    | 'id'
+    | 'user_id'
+    | 'title'
+    | 'email'
+    | 'sort_order'
+    | 'is_active'
+    | 'created_by'
+    | 'created_at'
+    | 'updated_at'
   > {}
 
 class WorkAssignee
@@ -28,6 +37,7 @@ class WorkAssignee
   public id!: number;
   public tenant_id!: number;
   public company_id!: number;
+  public user_id?: number | null;
   public name!: string;
   public title?: string | null;
   public email?: string | null;
@@ -52,6 +62,10 @@ WorkAssignee.init(
     company_id: {
       type: DataTypes.INTEGER,
       allowNull: false,
+    },
+    user_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
     },
     name: {
       type: DataTypes.STRING(120),
@@ -90,6 +104,7 @@ WorkAssignee.init(
     indexes: [
       { fields: ['tenant_id', 'company_id'] },
       { fields: ['tenant_id', 'company_id', 'sort_order'] },
+      { fields: ['tenant_id', 'company_id', 'user_id'] },
     ],
   }
 );

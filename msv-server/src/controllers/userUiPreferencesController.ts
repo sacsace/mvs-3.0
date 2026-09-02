@@ -16,7 +16,6 @@ export type UserUiPreferencesPayload = {
   dashboardCards?: string[];
   quickActionRoutes?: string[];
   sidebarWidth?: number;
-  sidebarAutoCollapse?: boolean;
   language?: 'ko' | 'en';
   /** 회사 휴일 알림: 날짜키 -> 표시일 키 */
   companyHolidayReminderShown?: Record<string, string>;
@@ -82,19 +81,15 @@ export const getUserUiPreferences = async (req: AuthRequest, res: Response) => {
 
     const settings = (user.settings || {}) as Record<string, unknown>;
     const ui = (settings.ui || {}) as UserUiPreferencesPayload;
-    const appearance = (settings as { appearance?: { sidebarCollapsed?: boolean } }).appearance;
     const calendarSchedules =
       sanitizeSchedules(ui.calendarSchedules) ?? ui.calendarSchedules;
 
     const data: UserUiPreferencesPayload = {
       ...ui,
       calendarSchedules,
-      sidebarAutoCollapse:
-        ui.sidebarAutoCollapse !== undefined
-          ? ui.sidebarAutoCollapse
-          : appearance?.sidebarCollapsed,
       sidebarWidth: ui.sidebarWidth
     };
+    delete (data as { sidebarAutoCollapse?: boolean }).sidebarAutoCollapse;
 
     return res.json({ success: true, data });
   } catch (error: any) {
@@ -134,7 +129,6 @@ export const patchUserUiPreferences = async (req: AuthRequest, res: Response) =>
       'dashboardCards',
       'quickActionRoutes',
       'sidebarWidth',
-      'sidebarAutoCollapse',
       'language',
       'companyHolidayReminderShown',
       'roomInvoiceTaxSnapshot',
@@ -156,6 +150,7 @@ export const patchUserUiPreferences = async (req: AuthRequest, res: Response) =>
         }
       }
     }
+    delete (nextUi as { sidebarAutoCollapse?: boolean }).sidebarAutoCollapse;
 
     await user.update({
       settings: {

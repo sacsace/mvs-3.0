@@ -55,7 +55,7 @@ import { useMenuStore, useStore } from '../../store';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import { findMenuIdByPath } from '../../utils/findMenuByPath';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
-import { mvsOutlinedLabelProps, mvsPageRootFullBleedSx } from '../../theme/mvsLayout';
+import { mvsFilterFieldHeightSx, mvsOutlinedLabelProps, mvsPageRootFullBleedSx, mvsSearchFieldSx } from '../../theme/mvsLayout';
 
 /** 보드 색상 — 채도를 낮춘 시스템 톤에 가깝게 */
 const BOARD_COLOR_OPTIONS = [
@@ -584,19 +584,21 @@ const WorkBoardsPage: React.FC = () => {
         sx={{
           minWidth: { xs: '100%', sm: 220 },
           maxWidth: { xs: '100%', sm: 280 },
-          alignSelf: { xs: 'stretch', sm: 'center' },
-          bgcolor: '#FFFFFF',
+          alignSelf: { xs: 'stretch', sm: 'flex-end' },
+          mt: 1.25,
+          ...mvsSearchFieldSx,
+          ...mvsFilterFieldHeightSx,
           overflow: 'visible',
-          // shrink 라벨이 헤더 overflow에 잘리지 않도록 상단 여유
-          pt: 1,
-          mt: -0.5,
           '& .MuiFormLabel-root': {
             overflow: 'visible',
             maxWidth: 'none',
+            lineHeight: 1.2,
           },
           '& .MuiOutlinedInput-root': {
-            borderRadius: '8px',
-            height: 40,
+            overflow: 'visible',
+          },
+          '& .MuiOutlinedInput-notchedOutline': {
+            overflow: 'visible',
           },
         }}
       >
@@ -650,13 +652,23 @@ const WorkBoardsPage: React.FC = () => {
   };
 
   return (
-    <Box sx={{ ...mvsPageRootFullBleedSx, flex: 1, border: 'none' }}>
+    <Box sx={{ ...mvsPageRootFullBleedSx, flex: 1, border: 'none', overflow: 'visible' }}>
       <MvsPageHeader
         title={t('workBoards.title')}
         description={t('workBoards.description')}
         actions={
           isRootUser || canCreateBoard ? (
-            <>
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 1.25,
+                alignItems: 'flex-end',
+                justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                overflow: 'visible',
+                pt: 0.5,
+              }}
+            >
               {companySelectField}
               {canCreateBoard ? (
                 <Button
@@ -666,7 +678,6 @@ const WorkBoardsPage: React.FC = () => {
                   onClick={openCreateDialog}
                   sx={{
                     flexShrink: 0,
-                    alignSelf: 'center',
                     height: 40,
                     borderRadius: '8px',
                     px: 2.5,
@@ -677,7 +688,7 @@ const WorkBoardsPage: React.FC = () => {
                   {t('workBoards.actions.newBoard')}
                 </Button>
               ) : null}
-            </>
+            </Box>
           ) : undefined
         }
       />

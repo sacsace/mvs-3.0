@@ -29,8 +29,8 @@ import PayrollPayslipDialog from './PayrollPayslipDialog';
 import type { PayrollGridRow } from './payroll/payrollGridTypes';
 import { formatOtHourDisplay } from './payroll/payrollGridUtils';
 import { generatePayslipPdfBlob, payslipBlobToBase64 } from './payrollPayslipPdf';
-import { payrollService } from '../../services/api';
-import { shortCompanyName, type PayslipCompanyInfo } from './PayslipContent';
+import { payrollService, companyService } from '../../services/api';
+import { shortCompanyName, type PayslipCompanyInfo, toPayslipCompanyInfo } from './PayslipContent';
 import {
   mvsBodyCardSx,
   mvsBodyListTableSx,
@@ -656,6 +656,7 @@ const PayslipSendSystem: React.FC = () => {
   const theme = useTheme();
   const inputRef = useRef<HTMLInputElement>(null);
   const user = useStore((s) => s.user);
+  const isRootUser = user?.role === 'root';
   const p = 'payrollManagement.payslipSendSystem';
   const [headers, setHeaders] = useState<string[]>([]);
   const [columnFormulas, setColumnFormulas] = useState<Record<number, string>>({});
@@ -670,6 +671,10 @@ const PayslipSendSystem: React.FC = () => {
   const [error, setError] = useState('');
   const [payrollPeriod, setPayrollPeriod] = useState('');
   const [mappingSectionOpen, setMappingSectionOpen] = useState(false);
+  const [senderCompanyId, setSenderCompanyId] = useState<number | ''>(
+    user?.company_id != null && Number(user.company_id) > 0 ? Number(user.company_id) : ''
+  );
+  const [companyOptions, setCompanyOptions] = useState<Array<{ id: number; name: string }>>([]);
   const [mail, setMail] = useState({
     subject: '[{{company}}] {{month}} Payslip Attached ({{name}})',
     message:
@@ -677,21 +682,60 @@ const PayslipSendSystem: React.FC = () => {
   });
   const [companyInfo, setCompanyInfo] = useState<PayslipCompanyInfo | null>(null);
 
+  const effectiveCompanyId = useMemo(() => {
+    if (isRootUser) {
+      return typeof senderCompanyId === 'number' && senderCompanyId > 0 ? senderCompanyId : null;
+    }
+    const loginId = Number(user?.company_id);
+    return Number.isFinite(loginId) && loginId > 0 ? loginId : null;
+  }, [isRootUser, senderCompanyId, user?.company_id]);
+
   useEffect(() => {
-    if (!user?.company_id) return;
+    if (!isRootUser) {
+      setCompanyOptions([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await companyService.getCompanies();
+        const rows = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+        if (cancelled) return;
+        const list = rows
+          .map((c: any) => ({
+            id: Number(c.id),
+            name: String(c.name || c.company_name || '').trim(),
+          }))
+          .filter((c: { id: number; name: string }) => Number.isFinite(c.id) && c.id > 0 && c.name)
+          .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
+        setCompanyOptions(list);
+        if (
+          (senderCompanyId === '' || senderCompanyId == null) &&
+          user?.company_id != null &&
+          list.some((c: { id: number }) => c.id === Number(user.company_id))
+        ) {
+          setSenderCompanyId(Number(user.company_id));
+        }
+      } catch {
+        if (!cancelled) setCompanyOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isRootUser, user?.company_id]);
+
+  useEffect(() => {
+    if (!effectiveCompanyId) {
+      setCompanyInfo(null);
+      return;
+    }
     void useReferenceDataStore
       .getState()
-      .fetchCompanyById(Number(user.company_id))
-      .then((company) =>
-        setCompanyInfo({
-          name: company?.name || '',
-          address: company?.address || '',
-          phone: company?.phone || company?.phone_number || '',
-          email: company?.email || '',
-        })
-      )
+      .fetchCompanyById(effectiveCompanyId)
+      .then((company) => setCompanyInfo(toPayslipCompanyInfo(company)))
       .catch(() => setCompanyInfo(null));
-  }, [user?.company_id]);
+  }, [effectiveCompanyId]);
 
   const rebuildRows = useCallback(
     (
@@ -843,6 +887,10 @@ const PayslipSendSystem: React.FC = () => {
 
   const send = async () => {
     if (!selectedRows.length) return;
+    if (!effectiveCompanyId) {
+      setError(t(`${p}.selectCompanyRequired`));
+      return;
+    }
     setSending(true);
     setProgress({ done: 0, total: selectedRows.length });
     let ok = 0;
@@ -863,6 +911,7 @@ const PayslipSendSystem: React.FC = () => {
           subject: replaceTemplate(mail.subject, row),
           message: replaceTemplate(mail.message, row),
           pdf_base64: await payslipBlobToBase64(pdf),
+          company_id: effectiveCompanyId,
         });
         if (result.success) {
           ok += 1;
@@ -947,6 +996,38 @@ const PayslipSendSystem: React.FC = () => {
           />
         </Box>
         <Box sx={{ px: { xs: 2, sm: 2.5 }, py: 2, display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+          {isRootUser ? (
+            <TextField
+              select
+              size="small"
+              label={t(`${p}.senderCompany`)}
+              value={senderCompanyId === '' ? '' : String(senderCompanyId)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSenderCompanyId(v === '' ? '' : Number(v));
+              }}
+              sx={{ ...filterFieldSx, minWidth: { xs: '100%', sm: 280 }, maxWidth: { sm: 360 } }}
+              {...mvsOutlinedLabelProps}
+              helperText={t(`${p}.senderCompanyHelper`)}
+              SelectProps={{
+                displayEmpty: true,
+                renderValue: (selected) => {
+                  if (selected === '' || selected == null) return t(`${p}.senderCompanyPlaceholder`);
+                  const found = companyOptions.find((c) => String(c.id) === String(selected));
+                  return found?.name || String(selected);
+                },
+              }}
+            >
+              <MenuItem value="">
+                <em>{t(`${p}.senderCompanyPlaceholder`)}</em>
+              </MenuItem>
+              {companyOptions.map((c) => (
+                <MenuItem key={c.id} value={String(c.id)}>
+                  {c.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          ) : null}
           <TextField
             size="small"
             label={t(`${p}.payMonth`)}
@@ -1222,7 +1303,7 @@ const PayslipSendSystem: React.FC = () => {
                 variant="contained"
                 disableElevation
                 startIcon={<Email />}
-                disabled={sending || !selectedRows.length}
+                disabled={sending || !selectedRows.length || !effectiveCompanyId}
                 onClick={() => void send()}
                 sx={mvsBodyPrimaryBtnSx}
               >
@@ -1238,6 +1319,8 @@ const PayslipSendSystem: React.FC = () => {
         row={preview}
         onClose={() => setPreview(null)}
         forceEnglish
+        companyInfoOverride={companyInfo}
+        companyIdOverride={effectiveCompanyId}
       />
     </Box>
   );

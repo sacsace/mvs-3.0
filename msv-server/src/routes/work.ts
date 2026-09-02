@@ -89,6 +89,7 @@ import {
   updateWorkAssigneeItem,
   deleteWorkAssigneeItem,
   moveWorkAssigneeItem,
+  getMyAssignedClientScope,
 } from '../controllers/workAssigneeListController';
 import { authenticateToken, restrictAuditToReadOnly } from '../middleware/auth';
 import { requireMenuPermission, requireMenuPermissionAny } from '../middleware/menuPermission';
@@ -447,6 +448,7 @@ router.put(
 );
 
 // 업무 담당 리스트 (엑셀형 담당자 컬럼 + 담당 회사)
+router.get('/assignee-list/my-scope', getMyAssignedClientScope);
 router.get('/assignee-list', requireMenuPermission(MENU_WORK_ASSIGNEE_LIST, 'can_view'), getWorkAssigneeList);
 router.post(
   '/assignee-list/assignees',

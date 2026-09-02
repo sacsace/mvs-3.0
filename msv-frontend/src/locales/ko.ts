@@ -5,6 +5,7 @@ export default {
       description: 'MVS - 차세대 기업용 통합 업무 관리 시스템',
     },
     common: {
+      processing: '처리 중...',
       login: '로그인',
       logout: '로그아웃',
       save: '저장',
@@ -940,7 +941,7 @@ export default {
         noResults: '조건에 맞는 회사가 없습니다.',
         noResultsHint: '검색어를 변경하거나 초기화해 보세요.',
       },
-      editCompany: '회사 수정',
+      editCompany: '회사 정보 수정',
       save: '저장',
       cancel: '취소',
       confirmDelete: '정말로 이 회사를 삭제하시겠습니까?',
@@ -973,7 +974,19 @@ export default {
       saving: '저장 중...',
       addNewCompany: '새 회사 추가',
       viewCompany: '회사 정보 보기',
-      contact: '연락처'
+      contact: '연락처',
+      bankTransferApiTitle: '송금 API 설정',
+      bankTransferApiHint:
+        '이 회사에서 지출결의서 대금을 송금할 때 사용하는 ICICI/Kotak API입니다. 협력업체 입금 계좌와는 별개입니다.',
+      defaultBankProvider: '기본 송금 은행',
+      bankProviderEnvDefault: '환경변수 기본값',
+      apiKeySaved: '저장됨',
+      apiKeyKeepPlaceholder: '변경 시에만 입력 (비우면 유지)',
+      apiKeyPlaceholder: 'API Key',
+      bankTransferTestConnection: '연결 테스트',
+      bankTransferTesting: '테스트 중...',
+      bankTransferTestSuccess: '송금 API 연결에 성공했습니다.',
+      bankTransferTestFailed: '송금 API 연결 테스트에 실패했습니다.'
     },
     partnerManagement: {
       pageTitle: '파트너 업체/고객 관리',
@@ -1442,6 +1455,10 @@ export default {
           '제목 행·컬럼 순서는 회사마다 달라도 됩니다. 업로드 후 자동 매핑과 급여월(YYYY-MM)을 검수하세요.',
         uploadSection: '엑셀 업로드',
         uploadButton: '급여 엑셀 업로드',
+        senderCompany: '발송 회사',
+        senderCompanyPlaceholder: '회사 선택',
+        senderCompanyHelper: 'Root는 발송·PDF·메일({{company}})에 사용할 회사를 선택합니다.',
+        selectCompanyRequired: '발송 회사를 선택해주세요.',
         payMonth: '급여월',
         payMonthHelper: '시트 제목에서 자동 인식. 필요 시 수정',
         mappingSection: '1. 엑셀 헤더 매핑 검수',
@@ -1877,6 +1894,9 @@ export default {
         partnerHint:
           '로그인한 회사에 등록된 파트너/고객사를 검색해 선택하거나, 직접 입력할 수 있습니다. 이미 다른 담당자에게 등록된 고객사는 선택할 수 없습니다.',
         noPartners: '추가 가능한 고객사가 없습니다. 직접 입력하거나 다른 담당자 배정을 확인하세요.',
+        boardPlaceholder: '담당자, 고객사명, 메모 검색',
+        boardResult: '고객사 {{count}}건 · 담당자 {{columns}}명',
+        noBoardResults: '검색 결과가 없습니다.',
       },
       fields: {
         name: '이름',
@@ -4355,6 +4375,14 @@ export default {
         received: '내가 받은 지출결의서',
         transfer: '송금할 리스트'
       },
+      list: {
+        remainingShort: '잔금 {{currency}} {{amount}}'
+      },
+      empty: {
+        noResults: '표시할 지출결의서가 없습니다.',
+        noTransferItems: '승인된 지출결의서 중 잔금이 남은 건만 표시됩니다.'
+      },
+
       actions: {
         requestExpense: '지출 신청',
         reset: '초기화',
@@ -4370,12 +4398,16 @@ export default {
       filters: {
         status: '상태',
         priority: '우선순위',
-        all: '전체'
+        all: '전체',
+        paymentApprovedOnly: '승인됨',
+        company: '회사',
+        allCompanies: '전체 회사'
       },
       placeholders: {
         search: '제목, 신청자 검색',
         searchSimple: '검색',
-        searchCompany: '회사 검색'
+        searchCompany: '회사 검색',
+        searchWithCompany: '제목, 신청자, 회사 검색'
       },
       form: {
         createTitle: '지출결의서 작성',
@@ -4393,7 +4425,11 @@ export default {
         inReview: '검토중',
         approved: '승인됨',
         rejected: '반려됨',
-        paid: '지급완료'
+        paid: '지급 완료',
+        transferPending: '송금대기',
+        partialTransfer: '부분송금',
+        transferCompleted: '송금완료',
+        transferFailed: '송금실패'
       },
       priority: {
         low: '낮음',
@@ -4406,6 +4442,7 @@ export default {
         expenseInfo: '지출 정보',
         requester: '신청자',
         approver: '승인자',
+        company: '회사',
         amount: '금액',
         status: '상태',
         priority: '우선순위',
@@ -4420,7 +4457,16 @@ export default {
         finalApproveReasonTitle: '최종 승인 사유',
         rejectReasonTitle: '반려 사유',
         finalApproveReasonPlaceholder: '승인 사유 (선택)',
-        rejectReasonPlaceholder: '반려 사유를 입력하세요'
+        rejectReasonPlaceholder: '반려 사유를 입력하세요',
+        executePaymentTitle: '송금하기',
+        retryTransferTitle: '송금 재시도',
+        paymentAmount: '송금 금액',
+        paymentAmountHint:
+          '총액 {{currency}} {{total}} / 지급완료 {{currency}} {{paid}} / 잔금 {{currency}} {{remaining}}',
+        remittanceProof: '송금 확인증',
+        remittanceProofUpload: '확인증 파일 선택',
+        remittanceProofHint:
+          '은행 앱/이체 확인증 이미지 또는 PDF를 업로드하세요. 캡처 이미지는 Ctrl+V로 붙여넣을 수 있습니다.'
       },
       detail: {
         title: '지출결의서 상세',
@@ -4430,6 +4476,7 @@ export default {
         items: '지출 항목',
         approvalFlow: '승인 흐름',
         attachments: '첨부파일',
+        remittanceProofs: '송금 확인증',
         notes: '메모',
         paymentProcessing: '결제 처리 사유',
         paymentApprovedLine: '승인: {{datetime}} · {{user}}',
@@ -4438,6 +4485,8 @@ export default {
         paymentRejectedReason: '반려 사유: {{reason}}',
         rejectedComment: '반려 의견',
         amountInclTax: '세금 포함',
+        paidAmount: '지급 완료',
+        remainingAmount: '잔금',
         columns: {
           invoiceDate: '송장 일자',
           description: '설명',
@@ -4473,7 +4522,7 @@ export default {
         transferBank: '송금 은행',
         requestPayment: '결제 요청',
         finalApprove: '최종 승인',
-        executePayment: '결제 실행',
+        executePayment: '송금하기',
         retryTransfer: '송금 재시도',
         print: '인쇄',
         pdfDownload: 'PDF 다운로드',
@@ -4502,7 +4551,7 @@ export default {
         labelGstNumber: 'GST 번호',
         labelVoucherDate: '전표 일자',
         labelRepresentative: '대표자',
-        labelPartnerAddress: '주소',
+        labelPartnerAddress: '법인주소',
         labelPartnerPhone: '전화번호',
         labelPartnerEmail: '이메일',
         labelPanNumber: 'PAN 번호',
@@ -4528,6 +4577,8 @@ export default {
         tdsApply: 'TDS 적용',
         grandTotal: '최종 합계 (A+B+C+D)−E',
         remarksIfAny: '비고 (선택)',
+        remarksRequired: '비고 (영수증 없음 · 필수)',
+        remarksRequiredHint: '영수증이 없으면 비고에 사유를 입력해야 합니다.',
         remarksInternal: '비고',
         receiptQr: '휴대폰으로 영수증 올리기',
         receiptQrLoading: 'QR 생성 중...',
@@ -4552,13 +4603,15 @@ export default {
         approved: '지출결의서가 승인되었습니다.',
         rejected: '지출결의서가 반려되었습니다.',
         paymentRequested: '결제 요청이 전송되었습니다.',
-        paymentCompleted: '결제 완료 처리 및 송금 요청이 완료되었습니다.',
+        paymentCompleted: '송금 확인증이 등록되고 지급이 반영되었습니다.',
+        partialPaymentCompleted: '부분 송금이 완료되었습니다. 잔금: {{remaining}}',
         transferRetried: '송금 재시도가 완료되었습니다.',
         finalApproved: '최종 승인되었습니다.',
         paymentRejected: '결제 요청이 반려되었습니다.',
         approverChanged: '승인권자가 변경되었습니다.',
         resubmitted: '지출결의서를 재요청했습니다.',
-        pdfDownloaded: 'PDF 파일로 저장했습니다.'
+        pdfDownloaded: 'PDF 파일로 저장했습니다.',
+        printed: '지출결의서를 인쇄했습니다.'
       },
       errors: {
         loadFailed: '지출 데이터를 불러오는데 실패했습니다.',
@@ -4574,9 +4627,11 @@ export default {
         deleteFailed: '삭제 중 오류가 발생했습니다.',
         approveFailed: '승인 중 오류가 발생했습니다.',
         rejectFailed: '반려 중 오류가 발생했습니다.',
-        paymentRequestFailed: '결제 요청 중 오류가 발생했습니다.',
+        paymentRequestFailed: '결제 요청 중 오류가 발생했습니다.',        transferRetryFailed: '송금 재시도 중 오류가 발생했습니다.',
         paymentCompleteFailed: '결제 완료 처리 중 오류가 발생했습니다.',
-        transferRetryFailed: '송금 재시도 중 오류가 발생했습니다.',
+        invalidPaymentAmount: '송금 금액을 올바르게 입력해주세요.',
+        remittanceProofRequired: '송금 확인증 파일을 첨부해주세요.',
+        paymentExceedsRemaining: '송금 금액이 잔금({{remaining}})을 초과할 수 없습니다.',
         finalApproveFailed: '최종 승인 중 오류가 발생했습니다.',
         rejectReasonRequired: '반려 사유를 입력해주세요.',
         qrGenerateFailed: 'QR 코드를 생성하지 못했습니다.',
@@ -4586,6 +4641,7 @@ export default {
         cannotSelectRequester: '신청자를 승인권자로 지정할 수 없습니다.',
         changeApproverFailed: '승인권자 변경에 실패했습니다.',
         approverRequired: '승인권자를 선택해주세요.',
+        receiptOrRemarksRequired: '영수증을 첨부하거나, 영수증이 없으면 비고에 설명을 입력해주세요.',
         resubmitFailed: '재요청에 실패했습니다.'
       }
     },

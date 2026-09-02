@@ -71,7 +71,21 @@ export type PayslipCompanyInfo = {
   address?: string;
   phone?: string;
   email?: string;
+  /** data URL 또는 업로드 URL */
+  logo?: string;
 };
+
+/** 회사 API/캐시 객체를 명세서용 정보로 변환 */
+export function toPayslipCompanyInfo(company: any): PayslipCompanyInfo {
+  const logoRaw = company?.company_logo ?? company?.logo ?? '';
+  return {
+    name: company?.name || '',
+    address: company?.address || '',
+    phone: company?.phone || company?.phone_number || '',
+    email: company?.email || '',
+    logo: typeof logoRaw === 'string' ? logoRaw.trim() : '',
+  };
+}
 
 /** 회사별 명세서에서 선택 가능한 기본 헤더 배치 */
 export type PayslipHeaderLayout = 'standard' | 'compact' | 'companyFirst';
@@ -484,6 +498,7 @@ function PayslipHeader({
   paidDays,
   companyName,
   companyContact,
+  companyLogo,
   forPdf,
   layout = 'standard'
 }: {
@@ -494,6 +509,7 @@ function PayslipHeader({
   paidDays: string;
   companyName: string;
   companyContact: string;
+  companyLogo?: string;
   forPdf?: boolean;
   layout?: PayslipHeaderLayout;
 }) {
@@ -501,6 +517,8 @@ function PayslipHeader({
     { label: labels.workingMonth, value: displayText(workingMonth) },
     { label: labels.paidDays, value: displayText(paidDays) }
   ].filter((item) => item.value);
+  const logoSrc = String(companyLogo || '').trim();
+  const showCompanyBlock = layout !== 'compact' && (companyName !== '—' || Boolean(logoSrc));
 
   return (
     <Box
@@ -593,7 +611,7 @@ function PayslipHeader({
           </Box>
         </Box>
 
-        {layout !== 'compact' && companyName !== '—' ? (
+        {showCompanyBlock ? (
           <Box
             order={layout === 'companyFirst' ? 1 : 2}
             sx={{
@@ -606,12 +624,39 @@ function PayslipHeader({
               overflow: 'hidden'
             }}
           >
+            {logoSrc ? (
+              <Box
+                sx={{
+                  mb: companyName !== '—' || companyContact ? 1 : 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-start',
+                  maxWidth: '100%',
+                }}
+              >
+                <Box
+                  component="img"
+                  src={logoSrc}
+                  alt={companyName !== '—' ? companyName : labels.companyName}
+                  sx={{
+                    maxHeight: forPdf ? 48 : 56,
+                    maxWidth: forPdf ? 180 : 200,
+                    width: 'auto',
+                    height: 'auto',
+                    objectFit: 'contain',
+                    display: 'block',
+                  }}
+                />
+              </Box>
+            ) : null}
             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: 'block', mb: 0.5 }}>
               {labels.companyName}
             </Typography>
-            <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.35, color: 'text.primary' }}>
-              {companyName}
-            </Typography>
+            {companyName !== '—' ? (
+              <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.35, color: 'text.primary' }}>
+                {companyName}
+              </Typography>
+            ) : null}
             {companyContact ? (
               <Typography sx={{ ...mvsPageDescriptionSx, fontSize: '0.72rem', mt: 0.5, lineHeight: 1.45 }}>
                 {companyContact}
@@ -742,6 +787,7 @@ const PayslipContent = React.forwardRef<HTMLDivElement, Props>(function PayslipC
           paidDays={displayText(row.days_worked)}
           companyName={companyName}
           companyContact={companyContact}
+          companyLogo={companyInfo?.logo}
           forPdf={forPdf}
           layout={headerLayout}
         />

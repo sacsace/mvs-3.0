@@ -4,7 +4,7 @@
 export const MY_WORKSPACE_PARENT = {
   route: '/my',
   name_ko: '내 정보·업무',
-  name_en: 'My Info & Work',
+  name_en: 'My Profile & Work',
   icon: 'Person',
   order: 1,
   description: '내 정보·업무',

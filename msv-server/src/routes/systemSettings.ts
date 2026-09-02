@@ -40,7 +40,6 @@ const buildDefaultSettings = (company: Company) => ({
     theme: 'light',
     primaryColor: '#1976d2',
     fontSize: 'medium',
-    sidebarCollapsed: false,
     showNotifications: true
   },
   notifications: {
@@ -111,11 +110,15 @@ const buildSettingsResponse = (company: Company, user?: User | null) => {
       timezone: company.timezone || defaultSettings.general.timezone,
       ...((companySettings.general || {}) as Record<string, unknown>)
     },
-    appearance: {
-      ...defaultSettings.appearance,
-      ...((companySettings.appearance || {}) as Record<string, unknown>),
-      ...((userSettings.appearance || {}) as Record<string, unknown>)
-    },
+    appearance: (() => {
+      const merged = {
+        ...defaultSettings.appearance,
+        ...((companySettings.appearance || {}) as Record<string, unknown>),
+        ...((userSettings.appearance || {}) as Record<string, unknown>)
+      } as Record<string, unknown>;
+      delete merged.sidebarCollapsed;
+      return merged;
+    })(),
     mailServer: mergedMail
   };
 };
@@ -376,10 +379,12 @@ router.put('/', authenticateToken, async (req, res) => {
     const nextUserSettings = { ...existingUserSettings };
 
     if (settings.appearance && typeof settings.appearance === 'object') {
-      nextUserSettings.appearance = {
+      const nextAppearance = {
         ...((existingUserSettings.appearance || {}) as Record<string, unknown>),
         ...(settings.appearance as Record<string, unknown>)
       };
+      delete nextAppearance.sidebarCollapsed;
+      nextUserSettings.appearance = nextAppearance;
     }
 
     if (settings.appearance) {

@@ -29,7 +29,8 @@ import {
   CircularProgress,
   Tooltip,
   Checkbox,
-  Pagination } from '@mui/material';
+  Pagination,
+  Collapse } from '@mui/material';
 import MvsPageHeader from '../../components/Common/MvsPageHeader';
 import {
   mvsPageRootSx,
@@ -56,7 +57,9 @@ import {
   RestartAlt as ResetIcon,
   People as PeopleIcon,
   Close as CloseIcon,
-  PhotoCamera as PhotoCameraIcon
+  PhotoCamera as PhotoCameraIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon
 } from '@mui/icons-material';
 import { useStore } from '../../store';
 import { api } from '../../services/api';
@@ -69,6 +72,16 @@ import { alpha, useTheme, type SxProps, type Theme } from '@mui/material/styles'
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 import { useConfirmDialog } from '../../hooks/useConfirmDialog';
 import { useMenuRoutePermissionFlags } from '../../hooks/useMenuRoutePermissionFlags';
+
+type CompanyDialogSectionKey = 'tax' | 'bank' | 'transfer' | 'mvs' | 'images';
+
+const DEFAULT_COMPANY_DIALOG_SECTIONS: Record<CompanyDialogSectionKey, boolean> = {
+  tax: false,
+  bank: false,
+  transfer: false,
+  mvs: false,
+  images: false
+};
 
 /** 입력 중 회사명: 단어별 첫 글자 대문자·나머지 소문자 (공백·커서 유지) */
 function formatCompanyNameWhileTyping(raw: string): string {
@@ -303,6 +316,10 @@ const CompanyManagement: React.FC = () => {
   const [orderBy, setOrderBy] = useState<CompanySortKey>('name');
   const [openDialog, setOpenDialog] = useState(false);
   const [dialogMode, setDialogMode] = useState<'view' | 'edit' | 'add'>('view');
+  const [dialogSections, setDialogSections] = useState(DEFAULT_COMPANY_DIALOG_SECTIONS);
+  const toggleDialogSection = (key: CompanyDialogSectionKey) => {
+    setDialogSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
   const [formData, setFormData] = useState<Omit<Company, 'id' | 'tenant_id' | 'created_at' | 'updated_at'>>({
     name: '',
     business_number: '',
@@ -340,6 +357,7 @@ const CompanyManagement: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [testingBankProvider, setTestingBankProvider] = useState<'icici' | 'kotak' | null>(null);
   const [imageFiles, setImageFiles] = useState<CompanyImages>({
     company_logo: null,
     company_seal: null,
@@ -551,6 +569,7 @@ const CompanyManagement: React.FC = () => {
       ceo_signature: ''
     });
     setDialogMode('add');
+    setDialogSections(DEFAULT_COMPANY_DIALOG_SECTIONS);
     setOpenDialog(true);
   };
 
@@ -585,6 +604,7 @@ const CompanyManagement: React.FC = () => {
       ceo_signature: company.ceo_signature || ''
     });
     setDialogMode('edit');
+    setDialogSections(DEFAULT_COMPANY_DIALOG_SECTIONS);
     setOpenDialog(true);
   };
 
@@ -624,7 +644,43 @@ const CompanyManagement: React.FC = () => {
       ceo_signature: null
     });
     setDialogMode('view');
+    setDialogSections(DEFAULT_COMPANY_DIALOG_SECTIONS);
     setOpenDialog(true);
+  };
+
+  const handleTestBankConnection = async (provider: 'icici' | 'kotak') => {
+    setError('');
+    setSuccess('');
+    setTestingBankProvider(provider);
+    try {
+      const cred = formData.settings?.bank_transfer?.[provider] || {};
+      const response = await api.post('/company/bank-transfer/test', {
+        companyId: selectedCompany?.id,
+        provider,
+        apiUrl: cred.apiUrl || '',
+        apiKey: cred.apiKey || '',
+        transferPath: cred.transferPath || ''
+      });
+      if (response.data?.success) {
+        setSuccess(
+          response.data?.message ||
+            response.data?.data?.message ||
+            t('companyManagement.bankTransferTestSuccess')
+        );
+      } else {
+        setError(
+          response.data?.message || t('companyManagement.bankTransferTestFailed')
+        );
+      }
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.message ||
+          err?.message ||
+          t('companyManagement.bankTransferTestFailed')
+      );
+    } finally {
+      setTestingBankProvider(null);
+    }
   };
 
   // 회사 저장
@@ -1029,8 +1085,9 @@ const CompanyManagement: React.FC = () => {
     px: 3,
     gap: 1.5 } as const;
 
-  // 공통 TextField 스타일
+  // 공통 TextField 스타일 (한 줄 입력 높이 36px)
   const textFieldStyles = {
+    size: 'small' as const,
     InputLabelProps: {
       shrink: true,
       sx: {
@@ -1043,6 +1100,17 @@ const CompanyManagement: React.FC = () => {
     },
     sx: {
       '& .MuiOutlinedInput-root': {
+        height: 36,
+        minHeight: 36,
+        fontSize: '0.8125rem',
+        '& .MuiOutlinedInput-input': {
+          py: 0.75,
+          height: 'auto',
+          boxSizing: 'border-box'
+        },
+        '& textarea': {
+          py: 0.75
+        },
         '& .MuiOutlinedInput-notchedOutline': {
           borderColor: '#e0e0e0'
         },
@@ -1052,9 +1120,90 @@ const CompanyManagement: React.FC = () => {
         '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
           borderColor: '#1976d2',
           borderWidth: 2
+        },
+        '&.MuiInputBase-multiline': {
+          height: 'auto',
+          minHeight: 36
         }
       }
     }
+  };
+
+  const renderCollapsibleSection = (
+    key: CompanyDialogSectionKey,
+    title: string,
+    children: React.ReactNode,
+    hint?: string,
+    options?: { accent?: boolean }
+  ) => {
+    const open = dialogSections[key];
+    const accent = Boolean(options?.accent);
+    const headerBg = accent ? '#FFF4E5' : '#EAF2EA';
+    const headerBgOpen = accent ? '#FFE8CC' : '#DDEDDD';
+    const borderColor = accent ? '#F0C987' : '#B7C9B7';
+    return (
+      <Box
+        sx={{
+          mt: 0.75,
+          border: '1px solid',
+          borderColor,
+          borderLeft: accent ? '3px solid #E6A23C' : '1px solid',
+          borderLeftColor: accent ? '#E6A23C' : borderColor,
+          borderRadius: 0.75,
+          overflow: 'hidden',
+          bgcolor: 'background.paper'
+        }}
+      >
+        <Box
+          onClick={() => toggleDialogSection(key)}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1,
+            px: 1.25,
+            py: 0.75,
+            cursor: 'pointer',
+            userSelect: 'none',
+            bgcolor: open ? headerBgOpen : headerBg,
+            borderBottom: open ? '1px solid' : 'none',
+            borderColor,
+            '&:hover': { bgcolor: headerBgOpen }
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <Typography
+              variant="subtitle2"
+              sx={{
+                fontWeight: 700,
+                fontSize: '0.8125rem',
+                lineHeight: 1.3,
+                color: accent ? '#8A5A00' : 'text.primary'
+              }}
+            >
+              {title}
+            </Typography>
+            {hint ? (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block', mt: 0.2, fontSize: '0.68rem', lineHeight: 1.35 }}
+              >
+                {hint}
+              </Typography>
+            ) : null}
+          </Box>
+          <IconButton size="small" tabIndex={-1} sx={{ flexShrink: 0, p: 0.35 }} aria-label={open ? '접기' : '펼치기'}>
+            {open ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+          </IconButton>
+        </Box>
+        <Collapse in={open} timeout="auto" unmountOnExit>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, px: 1.25, py: 1.25 }}>
+            {children}
+          </Box>
+        </Collapse>
+      </Box>
+    );
   };
 
   // 이미지 업로드 컴포넌트 생성
@@ -1196,14 +1345,14 @@ const CompanyManagement: React.FC = () => {
             {success}
           </Alert>
         )}
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
           {/* 좌우 분할 레이아웃 */}
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2.5 }}>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 1 }}>
             {/* 왼쪽: 기본 정보 */}
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 <Box>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                  <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                     <span style={{ color: 'red' }}>*</span> 회사명
                   </Typography>
                   <TextField
@@ -1228,9 +1377,9 @@ const CompanyManagement: React.FC = () => {
                   />
                 </Box>
                 
-                <Box sx={{ display: 'flex', gap: 1.5 }}>
+                <Box sx={{ display: 'flex', gap: 1 }}>
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                    <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                       <span style={{ color: 'red' }}>*</span> 사업자등록번호
                     </Typography>
                     <TextField
@@ -1244,7 +1393,7 @@ const CompanyManagement: React.FC = () => {
                     />
                   </Box>
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                    <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                       업종
                     </Typography>
                     <TextField
@@ -1259,7 +1408,7 @@ const CompanyManagement: React.FC = () => {
                 </Box>
                 
                 <Box>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                  <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                     대표자명
                   </Typography>
                   <TextField
@@ -1275,11 +1424,11 @@ const CompanyManagement: React.FC = () => {
             </Box>
 
             {/* 오른쪽: 연락처 및 기타 정보 */}
-            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                <Box sx={{ display: 'flex', gap: 1.5 }}>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Box sx={{ display: 'flex', gap: 1 }}>
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                    <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                       전화번호
                     </Typography>
                     <TextField
@@ -1292,7 +1441,7 @@ const CompanyManagement: React.FC = () => {
                     />
                   </Box>
                   <Box sx={{ flex: 1 }}>
-                    <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                    <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                       이메일
                     </Typography>
                     <TextField
@@ -1308,7 +1457,7 @@ const CompanyManagement: React.FC = () => {
                 </Box>
                 
                 <Box>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                  <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                     웹사이트
                   </Typography>
                   <TextField
@@ -1322,7 +1471,7 @@ const CompanyManagement: React.FC = () => {
                 </Box>
                 
                 <Box>
-                  <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                  <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                     {t('companyManagement.status')}
                   </Typography>
                   <FormControl fullWidth disabled={dialogMode === 'view'} variant="outlined" size="small">
@@ -1332,11 +1481,14 @@ const CompanyManagement: React.FC = () => {
                       onChange={(e) => setFormData({...formData, subscription_status: e.target.value})}
                       sx={{
                         ...textFieldStyles.sx,
-                        height: '40px',
+                        height: 36,
+                        minHeight: 36,
                         '& .MuiSelect-select': {
-                          height: '40px',
+                          height: 36,
+                          py: 0.75,
                           display: 'flex',
-                          alignItems: 'center'
+                          alignItems: 'center',
+                          boxSizing: 'border-box'
                         }
                       }}
                     >
@@ -1352,14 +1504,12 @@ const CompanyManagement: React.FC = () => {
 
           {/* 주소 입력창 (전체 너비) */}
           <Box>
-            <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+            <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
               주소 <span style={{ color: 'red' }}>*</span>
             </Typography>
             <TextField
               fullWidth
               required
-              multiline
-              rows={2}
               value={formData.address}
               onChange={(e) => setFormData({...formData, address: e.target.value})}
               disabled={dialogMode === 'view'}
@@ -1367,25 +1517,16 @@ const CompanyManagement: React.FC = () => {
               error={!formData.address || formData.address.trim() === ''}
               helperText={(!formData.address || formData.address.trim() === '') ? '주소는 필수 입력 항목입니다.' : ''}
               {...textFieldStyles}
-              sx={{
-                ...textFieldStyles.sx,
-                '& .MuiOutlinedInput-root': {
-                  ...textFieldStyles.sx['& .MuiOutlinedInput-root'],
-                  height: 'auto',
-                  minHeight: '40px'
-                }
-              }}
             />
           </Box>
 
           {/* 세금 및 등록 번호 정보 */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 3 }}>
-            <Divider sx={{ mb: 2, borderWidth: 1.5, borderColor: 'divider' }} />
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.875rem', mb: 1 }}>
-              세금 및 등록 번호
-            </Typography>
-            
-            {/* GST 번호 (최대 10개) */}
+          {renderCollapsibleSection(
+            'tax',
+            '세금 및 등록 번호',
+            (
+              <>
+{/* GST 번호 (최대 10개) */}
             <Box>
               <Typography variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary', fontSize: '0.75rem' }}>
                 GST 번호 (최대 10개)
@@ -1458,9 +1599,9 @@ const CompanyManagement: React.FC = () => {
             </Box>
             
             {/* MSME, IEC, PAN */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 1.5 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 1 }}>
               <Box>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                   MSME 번호
                 </Typography>
                 <TextField
@@ -1473,7 +1614,7 @@ const CompanyManagement: React.FC = () => {
                 />
               </Box>
               <Box>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                   IEC 번호
                 </Typography>
                 <TextField
@@ -1486,7 +1627,7 @@ const CompanyManagement: React.FC = () => {
                 />
               </Box>
               <Box>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                   PAN 번호
                 </Typography>
                 <TextField
@@ -1499,17 +1640,19 @@ const CompanyManagement: React.FC = () => {
                 />
               </Box>
             </Box>
-          </Box>
+              </>
+            )
+          )}
 
           {/* 은행 정보 */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 3 }}>
-            <Divider sx={{ mb: 2, borderWidth: 1.5, borderColor: 'divider' }} />
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.875rem', mb: 1 }}>
-              은행 정보
-            </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 1.5 }}>
+          {renderCollapsibleSection(
+            'bank',
+            '은행 정보',
+            (
+              <>
+<Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 1 }}>
               <Box>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                   예금주
                 </Typography>
                 <TextField
@@ -1522,7 +1665,7 @@ const CompanyManagement: React.FC = () => {
                 />
               </Box>
               <Box>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                   은행명
                 </Typography>
                 <TextField
@@ -1535,7 +1678,7 @@ const CompanyManagement: React.FC = () => {
                 />
               </Box>
               <Box>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                   계좌번호
                 </Typography>
                 <TextField
@@ -1548,7 +1691,7 @@ const CompanyManagement: React.FC = () => {
                 />
               </Box>
               <Box>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                   IFSC 코드
                 </Typography>
                 <TextField
@@ -1561,7 +1704,7 @@ const CompanyManagement: React.FC = () => {
                 />
               </Box>
               <Box>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                   SWIFT 코드
                 </Typography>
                 <TextField
@@ -1574,40 +1717,321 @@ const CompanyManagement: React.FC = () => {
                 />
               </Box>
               <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                   은행 주소
                 </Typography>
                 <TextField
                   fullWidth
-                  multiline
-                  rows={2}
                   value={formData.bank_address || ''}
                   onChange={(e) => setFormData({...formData, bank_address: e.target.value})}
                   disabled={dialogMode === 'view'}
                   placeholder="은행 주소를 입력하세요"
                   {...textFieldStyles}
-                  sx={{
-                    ...textFieldStyles.sx,
-                    '& .MuiOutlinedInput-root': {
-                      ...textFieldStyles.sx['& .MuiOutlinedInput-root'],
-                      height: 'auto',
-                      minHeight: '40px'
-                    }
-                  }}
                 />
               </Box>
             </Box>
-          </Box>
+              </>
+            )
+          )}
+
+          {/* 송금 API (회사별) */}
+          {renderCollapsibleSection(
+            'transfer',
+            t('companyManagement.bankTransferApiTitle'),
+            (
+              <>
+<Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 1 }}>
+              <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
+                  {t('companyManagement.defaultBankProvider')}
+                </Typography>
+                <FormControl fullWidth size="small" disabled={dialogMode === 'view'}>
+                  <Select
+                    value={formData.settings?.bank_transfer?.defaultProvider || ''}
+                    displayEmpty
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        settings: {
+                          ...(formData.settings || {}),
+                          bank_transfer: {
+                            ...(formData.settings?.bank_transfer || {}),
+                            defaultProvider: e.target.value
+                          }
+                        }
+                      })
+                    }
+                  >
+                    <MenuItem value="">
+                      <em>{t('companyManagement.bankProviderEnvDefault')}</em>
+                    </MenuItem>
+                    <MenuItem value="icici">ICICI</MenuItem>
+                    <MenuItem value="kotak">Kotak</MenuItem>
+                  </Select>
+                </FormControl>
+              </Box>
+
+              <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem', mt: 0.5 }}>
+                  ICICI
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
+                  API URL
+                </Typography>
+                <TextField
+                  fullWidth
+                  value={formData.settings?.bank_transfer?.icici?.apiUrl || ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      settings: {
+                        ...(formData.settings || {}),
+                        bank_transfer: {
+                          ...(formData.settings?.bank_transfer || {}),
+                          icici: {
+                            ...(formData.settings?.bank_transfer?.icici || {}),
+                            apiUrl: e.target.value
+                          }
+                        }
+                      }
+                    })
+                  }
+                  disabled={dialogMode === 'view'}
+                  placeholder="https://..."
+                  {...textFieldStyles}
+                />
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
+                  Transfer Path
+                </Typography>
+                <TextField
+                  fullWidth
+                  value={formData.settings?.bank_transfer?.icici?.transferPath || ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      settings: {
+                        ...(formData.settings || {}),
+                        bank_transfer: {
+                          ...(formData.settings?.bank_transfer || {}),
+                          icici: {
+                            ...(formData.settings?.bank_transfer?.icici || {}),
+                            transferPath: e.target.value
+                          }
+                        }
+                      }
+                    })
+                  }
+                  disabled={dialogMode === 'view'}
+                  placeholder="/transfers"
+                  {...textFieldStyles}
+                />
+              </Box>
+              <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
+                  API Key
+                  {formData.settings?.bank_transfer?.icici?.apiKeySet
+                    ? ` (${t('companyManagement.apiKeySaved', '저장됨')})`
+                    : ''}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                  <TextField
+                    fullWidth
+                    type="password"
+                    autoComplete="new-password"
+                    value={
+                      formData.settings?.bank_transfer?.icici?.apiKey === '********'
+                        ? ''
+                        : formData.settings?.bank_transfer?.icici?.apiKey || ''
+                    }
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        settings: {
+                          ...(formData.settings || {}),
+                          bank_transfer: {
+                            ...(formData.settings?.bank_transfer || {}),
+                            icici: {
+                              ...(formData.settings?.bank_transfer?.icici || {}),
+                              apiKey: e.target.value
+                            }
+                          }
+                        }
+                      })
+                    }
+                    disabled={dialogMode === 'view'}
+                    placeholder={
+                      formData.settings?.bank_transfer?.icici?.apiKeySet
+                        ? t('companyManagement.apiKeyKeepPlaceholder', '변경 시에만 입력 (비우면 유지)')
+                        : t('companyManagement.apiKeyPlaceholder', 'API Key')
+                    }
+                    {...textFieldStyles}
+                  />
+                  {dialogMode !== 'view' && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      disabled={testingBankProvider !== null}
+                      onClick={() => handleTestBankConnection('icici')}
+                      sx={{
+                        ...mvsBodyOutlinedBtnSx,
+                        flexShrink: 0,
+                        height: 36,
+                        whiteSpace: 'nowrap',
+                        px: 1.5
+                      }}
+                    >
+                      {testingBankProvider === 'icici' ? (
+                        <CircularProgress size={16} />
+                      ) : (
+                        t('companyManagement.bankTransferTestConnection')
+                      )}
+                    </Button>
+                  )}
+                </Box>
+              </Box>
+
+              <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: '0.8rem', mt: 0.5 }}>
+                  Kotak
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
+                  API URL
+                </Typography>
+                <TextField
+                  fullWidth
+                  value={formData.settings?.bank_transfer?.kotak?.apiUrl || ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      settings: {
+                        ...(formData.settings || {}),
+                        bank_transfer: {
+                          ...(formData.settings?.bank_transfer || {}),
+                          kotak: {
+                            ...(formData.settings?.bank_transfer?.kotak || {}),
+                            apiUrl: e.target.value
+                          }
+                        }
+                      }
+                    })
+                  }
+                  disabled={dialogMode === 'view'}
+                  placeholder="https://..."
+                  {...textFieldStyles}
+                />
+              </Box>
+              <Box>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
+                  Transfer Path
+                </Typography>
+                <TextField
+                  fullWidth
+                  value={formData.settings?.bank_transfer?.kotak?.transferPath || ''}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      settings: {
+                        ...(formData.settings || {}),
+                        bank_transfer: {
+                          ...(formData.settings?.bank_transfer || {}),
+                          kotak: {
+                            ...(formData.settings?.bank_transfer?.kotak || {}),
+                            transferPath: e.target.value
+                          }
+                        }
+                      }
+                    })
+                  }
+                  disabled={dialogMode === 'view'}
+                  placeholder="/transfers"
+                  {...textFieldStyles}
+                />
+              </Box>
+              <Box sx={{ gridColumn: { xs: '1', sm: '1 / -1' } }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
+                  API Key
+                  {formData.settings?.bank_transfer?.kotak?.apiKeySet
+                    ? ` (${t('companyManagement.apiKeySaved', '저장됨')})`
+                    : ''}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                  <TextField
+                    fullWidth
+                    type="password"
+                    autoComplete="new-password"
+                    value={
+                      formData.settings?.bank_transfer?.kotak?.apiKey === '********'
+                        ? ''
+                        : formData.settings?.bank_transfer?.kotak?.apiKey || ''
+                    }
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        settings: {
+                          ...(formData.settings || {}),
+                          bank_transfer: {
+                            ...(formData.settings?.bank_transfer || {}),
+                            kotak: {
+                              ...(formData.settings?.bank_transfer?.kotak || {}),
+                              apiKey: e.target.value
+                            }
+                          }
+                        }
+                      })
+                    }
+                    disabled={dialogMode === 'view'}
+                    placeholder={
+                      formData.settings?.bank_transfer?.kotak?.apiKeySet
+                        ? t('companyManagement.apiKeyKeepPlaceholder', '변경 시에만 입력 (비우면 유지)')
+                        : t('companyManagement.apiKeyPlaceholder', 'API Key')
+                    }
+                    {...textFieldStyles}
+                  />
+                  {dialogMode !== 'view' && (
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      disabled={testingBankProvider !== null}
+                      onClick={() => handleTestBankConnection('kotak')}
+                      sx={{
+                        ...mvsBodyOutlinedBtnSx,
+                        flexShrink: 0,
+                        height: 36,
+                        whiteSpace: 'nowrap',
+                        px: 1.5
+                      }}
+                    >
+                      {testingBankProvider === 'kotak' ? (
+                        <CircularProgress size={16} />
+                      ) : (
+                        t('companyManagement.bankTransferTestConnection')
+                      )}
+                    </Button>
+                  )}
+                </Box>
+              </Box>
+            </Box>
+              </>
+            ),
+            t('companyManagement.bankTransferApiHint'),
+            { accent: true }
+          )}
 
           {/* MVS 사용 기간 */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 3 }}>
-            <Divider sx={{ mb: 2, borderWidth: 1.5, borderColor: 'divider' }} />
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.875rem', mb: 1 }}>
-              MVS 사용 기간
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1.5 }}>
+          {renderCollapsibleSection(
+            'mvs',
+            'MVS 사용 기간',
+            (
+              <>
+<Box sx={{ display: 'flex', gap: 1 }}>
               <Box sx={{ flex: 1 }}>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                   MVS 사용 시작일
                 </Typography>
                 <TextField
@@ -1620,7 +2044,7 @@ const CompanyManagement: React.FC = () => {
                 />
               </Box>
               <Box sx={{ flex: 1 }}>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary', fontSize: '0.75rem' }}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.25, color: 'text.secondary', fontSize: '0.75rem' }}>
                   MVS 사용 종료일
                 </Typography>
                 <TextField
@@ -1633,20 +2057,25 @@ const CompanyManagement: React.FC = () => {
                 />
               </Box>
             </Box>
-          </Box>
+              </>
+            )
+          )}
 
           {/* 하단: 이미지 정보 */}
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 3 }}>
-            <Divider sx={{ mb: 2, borderWidth: 1.5, borderColor: 'divider' }} />
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: 'text.primary', fontSize: '0.875rem', mb: 1 }}>
-              회사 이미지 정보
-            </Typography>
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2 }}>
-              {renderImageUpload('company_logo', '회사 로고')}
-              {renderImageUpload('company_seal', '회사 인장')}
-              {renderImageUpload('ceo_signature', '대표자 서명')}
-            </Box>
-          </Box>
+          {renderCollapsibleSection(
+            'images',
+            '회사 이미지 정보',
+            (
+              <>
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2 }}>
+                  {renderImageUpload('company_logo', '회사 로고')}
+                  {renderImageUpload('company_seal', '회사 인장')}
+                  {renderImageUpload('ceo_signature', '대표자 서명')}
+                </Box>
+              </>
+            )
+          )}
+
         </Box>
       </DialogContent>
       <DialogActions sx={{ p: 3, gap: 1 }}>

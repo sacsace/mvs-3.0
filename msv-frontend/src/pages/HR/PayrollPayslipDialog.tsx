@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, CircularProgress } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import PayslipContent, { type PayslipCompanyInfo, type PayslipHeaderLayout } from './PayslipContent';
+import PayslipContent, { type PayslipCompanyInfo, type PayslipHeaderLayout, toPayslipCompanyInfo } from './PayslipContent';
 import type { PayrollGridRow } from './payroll/payrollGridTypes';
 import { buildPayslipLabels, buildPayslipPdfFilename, downloadPayslipPdf, generatePayslipPdfBlob } from './payrollPayslipPdf';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
@@ -15,36 +15,46 @@ type Props = {
   /** @deprecated 명세서는 항상 영어. 호환용으로 남겨 둠 */
   forceEnglish?: boolean;
   headerLayout?: PayslipHeaderLayout;
+  /** 지정 시 로그인 회사 대신 이 회사 정보 사용 (root 발송 회사 선택) */
+  companyInfoOverride?: PayslipCompanyInfo | null;
+  companyIdOverride?: number | null;
 };
 
 const PayrollPayslipDialog: React.FC<Props> = ({
   open,
   row,
   onClose,
-  headerLayout = 'standard'
+  headerLayout = 'standard',
+  companyInfoOverride,
+  companyIdOverride,
 }) => {
   const { t } = useTranslation();
   const user = useStore((s) => s.user);
   const [downloading, setDownloading] = useState(false);
   const [companyInfo, setCompanyInfo] = useState<PayslipCompanyInfo | null>(null);
   const labels = buildPayslipLabels('en');
+  const resolvedCompanyId =
+    companyIdOverride != null && Number(companyIdOverride) > 0
+      ? Number(companyIdOverride)
+      : user?.company_id != null
+        ? Number(user.company_id)
+        : null;
 
   useEffect(() => {
+    if (companyInfoOverride != null) {
+      setCompanyInfo(companyInfoOverride);
+      return;
+    }
     let mounted = true;
     const loadCompanyInfo = async () => {
-      if (!open || !user?.company_id) {
+      if (!open || !resolvedCompanyId) {
         if (mounted) setCompanyInfo(null);
         return;
       }
       try {
-        const company = await useReferenceDataStore.getState().fetchCompanyById(Number(user.company_id));
+        const company = await useReferenceDataStore.getState().fetchCompanyById(resolvedCompanyId);
         if (!mounted) return;
-        setCompanyInfo({
-          name: company?.name || '',
-          address: company?.address || '',
-          phone: company?.phone || company?.phone_number || '',
-          email: company?.email || ''
-        });
+        setCompanyInfo(toPayslipCompanyInfo(company));
       } catch {
         if (mounted) setCompanyInfo(null);
       }
@@ -53,7 +63,7 @@ const PayrollPayslipDialog: React.FC<Props> = ({
     return () => {
       mounted = false;
     };
-  }, [open, user?.company_id]);
+  }, [open, resolvedCompanyId, companyInfoOverride]);
 
   const handleDownload = useCallback(async () => {
     if (!row) return;
@@ -62,13 +72,13 @@ const PayrollPayslipDialog: React.FC<Props> = ({
       const blob = await generatePayslipPdfBlob(row, companyInfo, {
         locale: 'en',
         headerLayout,
-        companyId: user?.company_id ?? null
+        companyId: resolvedCompanyId
       });
       downloadPayslipPdf(blob, buildPayslipPdfFilename(row.working_month, row.employee_name));
     } finally {
       setDownloading(false);
     }
-  }, [row, companyInfo, headerLayout, user?.company_id]);
+  }, [row, companyInfo, headerLayout, resolvedCompanyId]);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth scroll="paper">
@@ -82,7 +92,7 @@ const PayrollPayslipDialog: React.FC<Props> = ({
               row={row}
               labels={labels}
               companyInfo={companyInfo}
-              companyId={user?.company_id ?? null}
+              companyId={resolvedCompanyId}
               showTitle={false}
               wide
               headerLayout={headerLayout}

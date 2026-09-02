@@ -1,14 +1,15 @@
-/** 로컬 저장: 선명도 우선. 메일 첨부: Gmail(~25MB) 제한을 피하기 위해 JPEG·낮은 scale */
-type QuotationPdfPurpose = 'download' | 'email';
-
-/** A4 여백 (mm): 좌 2cm / 우 1cm / 상 2cm / 하 1cm */
-const PDF_MARGIN_LEFT_MM = 20;
-const PDF_MARGIN_RIGHT_MM = 10;
-const PDF_MARGIN_TOP_MM = 20;
-const PDF_MARGIN_BOTTOM_MM = 12;
+import {
+  DOCUMENT_PDF_CAPTURE_ROOT_ATTR,
+  DOCUMENT_PDF_FIT_ONE_PAGE_ITEM_THRESHOLD,
+  DOCUMENT_PDF_MARGINS_MM,
+  downloadDocumentPdf,
+  documentPdfToBase64,
+  ensurePdfExtension,
+  sanitizeFilenamePart,
+} from './pdf';
 
 /** 이 개수 미만이면 가급적 1페이지에 맞춤(축소). 이상이면 필요 시 여러 페이지 허용 */
-const FIT_ONE_PAGE_ITEM_THRESHOLD = 10;
+const FIT_ONE_PAGE_ITEM_THRESHOLD = DOCUMENT_PDF_FIT_ONE_PAGE_ITEM_THRESHOLD;
 
 function escapeHtmlText(s: string): string {
   return s
@@ -16,12 +17,6 @@ function escapeHtmlText(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
-}
-
-function truncateChars(s: string, max: number): string {
-  const t = String(s || '').trim();
-  if (t.length <= max) return t;
-  return t.slice(0, max);
 }
 
 /** 긴 주소를 대략 절반에서 두 줄로 나눔 (쉼표 우선) */
@@ -63,6 +58,7 @@ const PDF_CAPTURE_ROOT_ATTR = 'data-quotation-pdf-root';
 
 function resolvePdfCaptureRoot(doc: Document): HTMLElement | null {
   return (doc.querySelector(`[${PDF_CAPTURE_ROOT_ATTR}]`) ||
+    doc.querySelector(`[${DOCUMENT_PDF_CAPTURE_ROOT_ATTR}]`) ||
     doc.querySelector('.quotation-print-area')) as HTMLElement | null;
 }
 
@@ -771,213 +767,54 @@ function countItemizedRows(element: HTMLElement): number {
   return table.querySelectorAll('tbody tr').length;
 }
 
-function buildHtml2CanvasOptions(scale: number) {
-  return {
-    scale,
-    useCORS: true,
-    backgroundColor: '#ffffff',
-    logging: false,
-    onclone: (clonedDoc: Document) => {
+/**
+ * 견적서 DOM 영역을 캡처해 A4 PDF로 저장합니다. (승인 후 저장 등)
+ * 문서 PDF 표준 파이프라인(downloadDocumentPdf) 사용.
+ */
+export async function downloadQuotationPdf(element: HTMLElement, filename: string): Promise<void> {
+  const itemCount = countItemizedRows(element);
+  await downloadDocumentPdf({
+    element,
+    filename: ensurePdfExtension(filename),
+    margins: DOCUMENT_PDF_MARGINS_MM,
+    purpose: 'download',
+    itemCount,
+    fitOnePageItemThreshold: FIT_ONE_PAGE_ITEM_THRESHOLD,
+    captureRootAttr: DOCUMENT_PDF_CAPTURE_ROOT_ATTR,
+    onClone: (clonedDoc) => {
       const area = resolvePdfCaptureRoot(clonedDoc);
       if (area) {
         const fs = area.querySelector('fieldset');
-        if (fs) {
-          fs.removeAttribute('disabled');
-        }
+        if (fs) fs.removeAttribute('disabled');
       }
       sanitizeQuotationCloneForPdf(clonedDoc);
-    }
-  };
-}
-
-/**
- * 화면 레이아웃을 흔들지 않도록, A4 인쇄 폭을 적용한 복제본을 화면 밖에 만들어 캡처한다.
- * cloneNode는 input/textarea/select의 현재 값을 복사하지 않으므로 직접 옮겨준다.
- */
-function createOffscreenCaptureClone(
-  element: HTMLElement,
-  widthCss: string
-): { host: HTMLElement; clone: HTMLElement } {
-  const clone = element.cloneNode(true) as HTMLElement;
-  clone.setAttribute(PDF_CAPTURE_ROOT_ATTR, 'true');
-  clone.style.boxSizing = 'border-box';
-  clone.style.width = widthCss;
-  clone.style.maxWidth = widthCss;
-
-  const sources = element.querySelectorAll<HTMLElement>('input, textarea, select');
-  const targets = clone.querySelectorAll<HTMLElement>('input, textarea, select');
-  sources.forEach((src, index) => {
-    const dst = targets[index];
-    if (!dst) return;
-    if (src instanceof HTMLInputElement && dst instanceof HTMLInputElement) {
-      dst.value = src.value;
-      dst.setAttribute('value', src.value);
-      dst.checked = src.checked;
-    } else if (src instanceof HTMLTextAreaElement && dst instanceof HTMLTextAreaElement) {
-      dst.value = src.value;
-      dst.textContent = src.value;
-    } else if (src instanceof HTMLSelectElement && dst instanceof HTMLSelectElement) {
-      dst.value = src.value;
-    }
+    },
   });
-
-  // fixed + 화면 밖 좌표: 스크롤 영역·레이아웃에 영향을 주지 않아 화면이 흔들리지 않는다
-  const host = document.createElement('div');
-  host.setAttribute('aria-hidden', 'true');
-  host.style.cssText = [
-    'position:fixed',
-    'left:-10000px',
-    'top:0',
-    'z-index:-1',
-    'pointer-events:none',
-    'background:#ffffff',
-    `width:${widthCss}`,
-  ].join(';');
-  host.appendChild(clone);
-  document.body.appendChild(host);
-  return { host, clone };
-}
-
-/** 축소 샘플링으로 전부 흰색인지 확인 (오프스크린 캡처 실패 감지용) */
-function isBlankCanvas(canvas: HTMLCanvasElement): boolean {
-  if (!canvas.width || !canvas.height) return true;
-  try {
-    const probeSize = 40;
-    const probe = document.createElement('canvas');
-    probe.width = probeSize;
-    probe.height = probeSize;
-    const ctx = probe.getContext('2d');
-    if (!ctx) return false;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, probeSize, probeSize);
-    ctx.drawImage(canvas, 0, 0, probeSize, probeSize);
-    const { data } = ctx.getImageData(0, 0, probeSize, probeSize);
-    for (let i = 0; i < data.length; i += 4) {
-      if (data[i] < 245 || data[i + 1] < 245 || data[i + 2] < 245) return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function quotationElementToJsPdf(
-  element: HTMLElement,
-  purpose: QuotationPdfPurpose
-) {
-  const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
-    import('html2canvas'),
-    import('jspdf'),
-  ]);
-  const isEmail = purpose === 'email';
-  const scale = isEmail ? 1.35 : 2;
-
-  const pageWidth = 210;
-  const pageHeight = 297;
-  const marginTop = PDF_MARGIN_TOP_MM;
-  const marginBottom = PDF_MARGIN_BOTTOM_MM;
-  const marginLeft = PDF_MARGIN_LEFT_MM;
-  const marginRight = PDF_MARGIN_RIGHT_MM;
-  const printableWidthMm = pageWidth - marginLeft - marginRight;
-  const printableHeightMm = pageHeight - marginTop - marginBottom;
-
-  const itemCount = countItemizedRows(element);
-
-  const captureOffscreen = async (): Promise<HTMLCanvasElement | null> => {
-    const capture = createOffscreenCaptureClone(element, `${printableWidthMm}mm`);
-    try {
-      const captured = await html2canvas(capture.clone, buildHtml2CanvasOptions(scale));
-      return isBlankCanvas(captured) ? null : captured;
-    } catch {
-      return null;
-    } finally {
-      capture.host.remove();
-    }
-  };
-
-  // 오프스크린 캡처가 실패했을 때만 사용 (캡처 동안 화면 레이아웃이 잠시 변한다)
-  const captureFromScreen = async (): Promise<HTMLCanvasElement> => {
-    const prevWidth = element.style.width;
-    const prevMaxWidth = element.style.maxWidth;
-    const prevBoxSizing = element.style.boxSizing;
-    element.style.boxSizing = 'border-box';
-    element.style.width = `${printableWidthMm}mm`;
-    element.style.maxWidth = `${printableWidthMm}mm`;
-    try {
-      return await html2canvas(element, buildHtml2CanvasOptions(scale));
-    } finally {
-      element.style.width = prevWidth;
-      element.style.maxWidth = prevMaxWidth;
-      element.style.boxSizing = prevBoxSizing;
-    }
-  };
-
-  const canvas: HTMLCanvasElement = (await captureOffscreen()) ?? (await captureFromScreen());
-
-  const imgData = isEmail
-    ? canvas.toDataURL('image/jpeg', 0.87)
-    : canvas.toDataURL('image/png');
-  const imageFormat = isEmail ? 'JPEG' : 'PNG';
-
-  const pdf = new jsPDF('p', 'mm', 'a4');
-  let drawWidth = printableWidthMm;
-  let drawHeight = (canvas.height * drawWidth) / canvas.width;
-
-  // 아이템이 적으면(10개 미만) 한 페이지에 들어가도록 축소
-  const forceFitOnePage = itemCount < FIT_ONE_PAGE_ITEM_THRESHOLD;
-  if (forceFitOnePage && drawHeight > printableHeightMm) {
-    const fit = printableHeightMm / drawHeight;
-    drawWidth *= fit;
-    drawHeight = printableHeightMm;
-  }
-
-  const offsetX = marginLeft + (printableWidthMm - drawWidth) / 2;
-
-  if (drawHeight <= printableHeightMm + 0.2) {
-    pdf.addImage(imgData, imageFormat, offsetX, marginTop, drawWidth, drawHeight);
-    return pdf;
-  }
-
-  // 아이템 10개 이상이고 길면 여러 페이지
-  let heightLeft = drawHeight;
-  let position = marginTop;
-  pdf.addImage(imgData, imageFormat, offsetX, position, drawWidth, drawHeight);
-  heightLeft -= printableHeightMm;
-  while (heightLeft > 0.5) {
-    pdf.addPage();
-    position = marginTop - (drawHeight - heightLeft);
-    pdf.addImage(imgData, imageFormat, offsetX, position, drawWidth, drawHeight);
-    heightLeft -= printableHeightMm;
-  }
-
-  return pdf;
-}
-
-/**
- * 견적서 DOM 영역을 캡처해 A4 PDF로 저장합니다. (승인 후 저장 등)
- */
-export async function downloadQuotationPdf(element: HTMLElement, filename: string): Promise<void> {
-  const pdf = await quotationElementToJsPdf(element, 'download');
-  pdf.save(filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
 }
 
 /** 메일 첨부용 — 용량을 줄인 PDF를 base64(순수 페이로드)로 반환 (Gmail 등 메일 크기 제한 대응) */
 export async function quotationPdfToBase64(element: HTMLElement): Promise<string> {
-  const pdf = await quotationElementToJsPdf(element, 'email');
-  const dataUri = pdf.output('datauristring') as string;
-  const comma = dataUri.indexOf(',');
-  return comma >= 0 ? dataUri.slice(comma + 1) : dataUri;
+  const itemCount = countItemizedRows(element);
+  return documentPdfToBase64({
+    element,
+    margins: DOCUMENT_PDF_MARGINS_MM,
+    purpose: 'email',
+    itemCount,
+    fitOnePageItemThreshold: FIT_ONE_PAGE_ITEM_THRESHOLD,
+    captureRootAttr: DOCUMENT_PDF_CAPTURE_ROOT_ATTR,
+    onClone: (clonedDoc) => {
+      const area = resolvePdfCaptureRoot(clonedDoc);
+      if (area) {
+        const fs = area.querySelector('fieldset');
+        if (fs) fs.removeAttribute('disabled');
+      }
+      sanitizeQuotationCloneForPdf(clonedDoc);
+    },
+  });
 }
 
 function sanitizePdfFilenamePart(value: string, maxLen = 80): string {
-  return String(value || '')
-    .replace(/\bprivate\s+limited\b\.?/gi, '')
-    .replace(/\bpvt\.?\s*ltd\.?\b/gi, '')
-    .replace(/[\\/:*?"<>|]+/g, '_')
-    .replace(/\s+/g, ' ')
-    .replace(/[,\s]+$/g, '')
-    .trim()
-    .slice(0, maxLen);
+  return sanitizeFilenamePart(String(value || ''), { fallback: '', maxLength: maxLen });
 }
 
 const PDF_FILENAME_DETAIL_MAX = 15;

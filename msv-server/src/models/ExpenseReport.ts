@@ -29,6 +29,7 @@ interface ExpenseReportAttributes {
   payment_requested_by?: number;
   payment_completed_at?: Date;
   payment_completed_by?: number;
+  paid_amount?: number;
   payment_approved_reason?: string;
   payment_approved_at?: Date;
   payment_approved_by?: number;
@@ -91,6 +92,7 @@ class ExpenseReport extends Model<ExpenseReportAttributes, ExpenseReportCreation
   public payment_requested_by?: number;
   public payment_completed_at?: Date;
   public payment_completed_by?: number;
+  public paid_amount?: number;
   public payment_approved_reason?: string;
   public payment_approved_at?: Date;
   public payment_approved_by?: number;
@@ -145,6 +147,7 @@ ExpenseReport.init(
     payment_requested_by: { type: DataTypes.INTEGER, allowNull: true },
     payment_completed_at: { type: DataTypes.DATE, allowNull: true },
     payment_completed_by: { type: DataTypes.INTEGER, allowNull: true },
+    paid_amount: { type: DataTypes.DECIMAL(15, 2), allowNull: false, defaultValue: 0 },
     payment_approved_reason: { type: DataTypes.TEXT, allowNull: true },
     payment_approved_at: { type: DataTypes.DATE, allowNull: true },
     payment_approved_by: { type: DataTypes.INTEGER, allowNull: true },

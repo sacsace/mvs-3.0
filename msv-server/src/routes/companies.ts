@@ -15,6 +15,12 @@ import {
   referenceCacheSet,
   referenceCacheDel,
 } from '../utils/redisCache';
+import {
+  getCompanyBankTransferSettings,
+  mergeBankTransferSettings,
+  testBankApiConnection,
+  type BankProvider
+} from '../services/banking';
 
 const router = express.Router();
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -172,6 +178,93 @@ router.get('/', authenticateToken, async (req, res) => {
       success: false,
       message: '회사 정보 조회 중 오류가 발생했습니다.',
       error: process.env.NODE_ENV === 'development' ? error?.message : undefined
+    });
+  }
+});
+
+/** 송금 API 연결 테스트 (실제 송금 없음). companyId 없으면 요청 본문 자격증명만 사용 */
+router.post('/bank-transfer/test', authenticateToken, async (req, res) => {
+  try {
+    const userRole = (req as any).user.role;
+    const userCompanyId = (req as any).user.company_id;
+    const tenantId = (req as any).user.tenant_id;
+
+    if (userRole !== 'root' && userRole !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: '송금 API 테스트 권한이 없습니다.'
+      });
+    }
+
+    const provider = String(req.body?.provider || '').toLowerCase() as BankProvider;
+    if (provider !== 'icici' && provider !== 'kotak') {
+      return res.status(400).json({
+        success: false,
+        message: 'provider는 icici 또는 kotak이어야 합니다.'
+      });
+    }
+
+    const companyIdRaw = req.body?.companyId;
+    const companyId =
+      companyIdRaw != null && companyIdRaw !== ''
+        ? Number(companyIdRaw)
+        : NaN;
+
+    let companySettings = null as ReturnType<typeof getCompanyBankTransferSettings> | null;
+
+    if (Number.isFinite(companyId)) {
+      if (userRole === 'admin' && userCompanyId !== companyId) {
+        return res.status(403).json({
+          success: false,
+          message: '자신이 속한 회사의 API만 테스트할 수 있습니다.'
+        });
+      }
+
+      const whereClause: any = { id: companyId };
+      if (userRole !== 'root') {
+        whereClause.tenant_id = tenantId;
+      }
+
+      const company = await (Company as any).findOne({
+        where: whereClause,
+        attributes: ['id', 'settings']
+      });
+
+      if (!company) {
+        return res.status(404).json({
+          success: false,
+          message: '회사를 찾을 수 없습니다.'
+        });
+      }
+
+      companySettings = getCompanyBankTransferSettings(company.settings);
+    } else if (userRole === 'admin') {
+      return res.status(400).json({
+        success: false,
+        message: '회사 저장 후 연결을 테스트하거나 companyId를 전달하세요.'
+      });
+    }
+
+    const result = await testBankApiConnection({
+      provider,
+      companySettings,
+      override: {
+        apiUrl: req.body?.apiUrl,
+        apiKey: req.body?.apiKey,
+        transferPath: req.body?.transferPath
+      }
+    });
+
+    return res.json({
+      success: true,
+      data: result,
+      message: result.message
+    });
+  } catch (error: any) {
+    console.error('송금 API 연결 테스트 오류:', error);
+    return res.status(400).json({
+      success: false,
+      message: error?.message || '송금 API 연결 테스트에 실패했습니다.'
     });
   }
 });
@@ -657,6 +750,30 @@ router.put(
     
     // 요청 데이터 검증 및 정리
     const updateData = { ...req.body };
+
+    // settings.bank_transfer: API 키 마스킹 유지 + 기존 키 보존 병합
+    if (updateData.settings !== undefined) {
+      const existingCompany = await (Company as any).findOne({
+        where: { id: parseInt(id, 10), tenant_id: tenantId },
+        attributes: ['id', 'settings']
+      });
+      const existingSettings =
+        existingCompany?.settings && typeof existingCompany.settings === 'object'
+          ? { ...existingCompany.settings }
+          : {};
+      const incomingSettings =
+        updateData.settings && typeof updateData.settings === 'object'
+          ? { ...updateData.settings }
+          : {};
+      updateData.settings = {
+        ...existingSettings,
+        ...incomingSettings,
+        bank_transfer: mergeBankTransferSettings(
+          getCompanyBankTransferSettings(existingSettings),
+          getCompanyBankTransferSettings(incomingSettings)
+        )
+      };
+    }
     
     // mvs_start_date, mvs_end_date를 login_period_start, login_period_end로 매핑
     if (updateData.mvs_start_date !== undefined) {

@@ -119,14 +119,14 @@ const MvsPageHeader: React.FC<MvsPageHeaderProps> = ({
             display: 'flex',
             flexWrap: 'wrap',
             gap: 1,
-            alignItems: 'center',
+            alignItems: 'flex-end',
             justifyContent: { xs: 'flex-start', sm: 'flex-end' },
             flexShrink: 0,
             width: { xs: '100%', sm: 'auto' },
             maxWidth: { xs: '100%', sm: '58%' },
             overflow: 'visible',
-            // outlined 필드 shrink 라벨이 잘리지 않도록
-            pt: 1,
+            // outlined shrink 라벨·포커스 링 여유
+            pt: 1.5,
           }}
         >
           {actions}

@@ -543,8 +543,12 @@ AcImportIssue.belongsTo(AcImportSourceDocument, { foreignKey: 'source_document_i
 (WorkAssignee as any).belongsTo(Company, { foreignKey: 'company_id', as: 'company' });
 (User as any).hasMany(WorkAssignee, { foreignKey: 'created_by', as: 'createdWorkAssignees' });
 (WorkAssignee as any).belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+(User as any).hasMany(WorkAssignee, { foreignKey: 'user_id', as: 'workAssigneeColumns' });
+(WorkAssignee as any).belongsTo(User, { foreignKey: 'user_id', as: 'assignedUser' });
 (WorkAssignee as any).hasMany(WorkAssigneeItem, { foreignKey: 'assignee_id', as: 'items' });
 (WorkAssigneeItem as any).belongsTo(WorkAssignee, { foreignKey: 'assignee_id', as: 'assignee' });
+(Partner as any).hasMany(WorkAssigneeItem, { foreignKey: 'partner_id', as: 'workAssigneeItems' });
+(WorkAssigneeItem as any).belongsTo(Partner, { foreignKey: 'partner_id', as: 'partner' });
 
 // 전자근로계약
 (Tenant as any).hasMany(EmploymentContractTemplate, { foreignKey: 'tenant_id', as: 'employmentContractTemplates' });

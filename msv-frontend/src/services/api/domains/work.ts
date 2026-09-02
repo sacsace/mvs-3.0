@@ -323,11 +323,25 @@ export const workAssigneeListService = {
     const response = await api.get('/work/assignee-list', { params });
     return response.data;
   },
-  createAssignee: async (data: { name: string; title?: string; email?: string; company_id?: number }) => {
+  createAssignee: async (data: {
+    name: string;
+    title?: string;
+    email?: string;
+    user_id?: number;
+    company_id?: number;
+  }) => {
     const response = await api.post('/work/assignee-list/assignees', data);
     return response.data;
   },
-  updateAssignee: async (id: number, data: { name?: string; title?: string | null; email?: string | null }) => {
+  updateAssignee: async (
+    id: number,
+    data: {
+      name?: string;
+      title?: string | null;
+      email?: string | null;
+      user_id?: number | null;
+    }
+  ) => {
     const response = await api.put(`/work/assignee-list/assignees/${id}`, data);
     return response.data;
   },
@@ -341,16 +355,25 @@ export const workAssigneeListService = {
   },
   createItem: async (
     assigneeId: number,
-    data: { name: string; note?: string; is_highlighted?: boolean }
+    data: { name: string; note?: string; is_highlighted?: boolean; partner_id?: number }
   ) => {
     const response = await api.post(`/work/assignee-list/assignees/${assigneeId}/items`, data);
     return response.data;
   },
   updateItem: async (
     id: number,
-    data: { name?: string; note?: string | null; is_highlighted?: boolean }
+    data: {
+      name?: string;
+      note?: string | null;
+      is_highlighted?: boolean;
+      partner_id?: number | null;
+    }
   ) => {
     const response = await api.put(`/work/assignee-list/items/${id}`, data);
+    return response.data;
+  },
+  getMyScope: async () => {
+    const response = await api.get('/work/assignee-list/my-scope');
     return response.data;
   },
   deleteItem: async (id: number) => {

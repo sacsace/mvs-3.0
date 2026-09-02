@@ -35,6 +35,18 @@ export const companyService = {
   deleteCompany: async (id: number) => {
     const response = await api.delete(`/company/${id}`);
     return response.data;
+  },
+
+  /** 송금 API 연결 테스트 (실제 송금 없음) */
+  testBankTransferConnection: async (payload: {
+    provider: 'icici' | 'kotak';
+    companyId?: number;
+    apiUrl?: string;
+    apiKey?: string;
+    transferPath?: string;
+  }) => {
+    const response = await api.post('/company/bank-transfer/test', payload);
+    return response.data;
   }
 };
 
