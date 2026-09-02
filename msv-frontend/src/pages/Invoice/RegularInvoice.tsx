@@ -917,7 +917,7 @@ const RegularInvoice: React.FC = () => {
           code: 'Invoice',
           companyName: company,
           detail,
-          date: selectedInvoice.invoice_date || selectedInvoice.created_at,
+          date: selectedInvoice.invoice_date,
         })
       );
     } catch (error) {
@@ -963,7 +963,7 @@ const RegularInvoice: React.FC = () => {
         code: 'Invoice',
         companyName: company,
         detail,
-        date: selectedInvoice.invoice_date || selectedInvoice.created_at,
+        date: selectedInvoice.invoice_date,
       });
       const res = await accountingService.sendInvoiceEmail(selectedInvoice.id, {
         to: toEmail,
