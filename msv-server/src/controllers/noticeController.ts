@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { RequestWithUser } from '../types';
-import { Notice, NoticePoll, User } from '../models';
+import { Notice, NoticePoll, NoticeView, User } from '../models';
 import { Op } from 'sequelize';
 import {
   createPollForNotice,
@@ -133,8 +133,34 @@ export const getNotice = async (req: RequestWithUser, res: Response) => {
       return res.status(404).json({ success: false, message: '공지사항을 찾을 수 없습니다.' });
     }
 
-    // 조회수 증가
-    await notice.update({ views: notice.views + 1 });
+    // 조회수: 동일 사용자는 공지당 1회만 증가
+    let viewCount = Number(notice.views || 0);
+    if (user_id) {
+      try {
+        const [, created] = await (NoticeView as any).findOrCreate({
+          where: {
+            notice_id: notice.id,
+            user_id,
+          },
+          defaults: {
+            tenant_id,
+            company_id,
+            notice_id: notice.id,
+            user_id,
+          },
+        });
+        if (created) {
+          viewCount += 1;
+          await notice.update({ views: viewCount });
+        }
+      } catch (viewError: any) {
+        // 동시 요청 등으로 unique 충돌 시 이미 조회한 것으로 간주
+        const code = viewError?.parent?.code || viewError?.original?.code;
+        if (code !== '23505') {
+          throw viewError;
+        }
+      }
+    }
 
     const poll = await getAnonymousPollForNotice(Number(id), tenant_id, company_id, user_id);
 
@@ -155,7 +181,7 @@ export const getNotice = async (req: RequestWithUser, res: Response) => {
       expiresAt: notice.expires_at,
       attachments: notice.attachments ? JSON.parse(notice.attachments) : [],
       readCount: notice.read_count,
-      views: notice.views + 1,
+      views: viewCount,
       isPinned: notice.is_pinned || false,
       hasPoll: Boolean(poll),
       poll,

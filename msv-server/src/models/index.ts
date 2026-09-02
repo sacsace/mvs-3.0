@@ -44,6 +44,7 @@ import Notice from './Notice';
 import NoticePoll from './NoticePoll';
 import NoticePollOption from './NoticePollOption';
 import NoticePollVote from './NoticePollVote';
+import NoticeView from './NoticeView';
 import ExpenseReport from './ExpenseReport';
 import Budget from './Budget';
 import Asset from './Asset';
@@ -381,6 +382,11 @@ Product.hasMany(InventoryTransaction, { foreignKey: 'product_id', as: 'transacti
 (User as any).hasMany(Notice, { foreignKey: 'author_id', as: 'notices' });
 (Notice as any).belongsTo(User, { foreignKey: 'author_id', as: 'author' });
 
+(Notice as any).hasMany(NoticeView, { foreignKey: 'notice_id', as: 'viewsLog' });
+(NoticeView as any).belongsTo(Notice, { foreignKey: 'notice_id', as: 'notice' });
+(User as any).hasMany(NoticeView, { foreignKey: 'user_id', as: 'noticeViews' });
+(NoticeView as any).belongsTo(User, { foreignKey: 'user_id', as: 'viewer' });
+
 (Notice as any).hasOne(NoticePoll, { foreignKey: 'notice_id', as: 'poll' });
 (NoticePoll as any).belongsTo(Notice, { foreignKey: 'notice_id', as: 'notice' });
 (NoticePoll as any).hasMany(NoticePollOption, { foreignKey: 'poll_id', as: 'options' });
@@ -658,6 +664,7 @@ export {
   NoticePoll,
   NoticePollOption,
   NoticePollVote,
+  NoticeView,
   ExpenseReport,
   Budget,
   Asset,

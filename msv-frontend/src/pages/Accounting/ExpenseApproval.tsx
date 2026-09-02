@@ -1027,6 +1027,19 @@ const ExpenseApproval: React.FC = () => {
     return 'transfer_pending';
   }, []);
 
+  /** 목록에서 '지급 완료'로 취급 (문서 status와 무관하게 전액 송금 포함) */
+  const isExpensePaidForList = useCallback((expense: ExpenseApprovalItem) => {
+    const total = Number(expense.totalAmount || 0);
+    const paid = Number(expense.paidAmount || 0);
+    const remaining = Math.max(0, Math.round((total - paid) * 100) / 100);
+    const paymentPaid = String(expense.paymentRequestStatus || '').toLowerCase() === 'paid';
+    return (
+      paymentPaid ||
+      expense.status === 'paid' ||
+      (paid > 0 && remaining <= 0 && ['approved', 'paid'].includes(expense.status))
+    );
+  }, []);
+
   const buildExpensePayload = useCallback(
     (statusOverride?: ExpenseApprovalItem['status']) => ({
       title: formData.title,
@@ -1121,8 +1134,18 @@ const ExpenseApproval: React.FC = () => {
     }
 
     // 송금 탭은 transfer_* 상태 필터를 위에서 적용
-    if (statusFilter && listTab !== 'transfer') {
-      filtered = filtered.filter((expense) => expense.status === statusFilter);
+    if (listTab !== 'transfer') {
+      if (statusFilter === 'paid') {
+        // 지급완료는 명시 선택 시에만 표시
+        filtered = filtered.filter((expense) => isExpensePaidForList(expense));
+      } else if (statusFilter) {
+        filtered = filtered.filter(
+          (expense) => !isExpensePaidForList(expense) && expense.status === statusFilter
+        );
+      } else {
+        // 전체: 지급완료 제외
+        filtered = filtered.filter((expense) => !isExpensePaidForList(expense));
+      }
     }
 
     if (priorityFilter) {
@@ -1139,6 +1162,7 @@ const ExpenseApproval: React.FC = () => {
     user,
     hasTransferAccess,
     getTransferFilterKey,
+    isExpensePaidForList,
   ]);
 
   const handleListSort = (key: ExpenseListSortKey) => {
