@@ -3276,7 +3276,7 @@ export default {
         uploadGas: 'GAS 계정 업로드',
         uploadLedger: '누계 보조부/PDF 업로드',
         appendLedger: '월별 추가 import (엑셀/PDF)',
-        rematch: '한글명 재매칭',
+        rematch: '한글명 재매핑',
         clearAccounts: '전체 계정과목 삭제',
         clearLocal: '로컬 데이터 삭제',
         exportExcel: 'Excel 다운로드',
@@ -3347,7 +3347,7 @@ export default {
       success: {
         gasLoaded: 'GAS 계정 {{count}}건을 불러왔습니다.',
         ledgerLoaded: '보조부 {{count}}건 import (합계 {{total}}건).',
-        rematched: 'GAS 계정으로 한글명을 다시 매칭했습니다.',
+        rematched: '이전 누계 보조부·GAS 기준으로 한글명 재매핑했습니다. (매핑 {{mapped}} / {{total}})',
         accountsCleared: '전체 계정과목을 삭제했습니다.',
         cleared: '로컬 원가분석 데이터를 삭제했습니다.',
         excelDownloaded: 'Excel 파일을 다운로드했습니다.',

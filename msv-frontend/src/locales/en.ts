@@ -3275,7 +3275,7 @@ export default {
       success: {
         gasLoaded: 'Loaded {{count}} GAS accounts.',
         ledgerLoaded: 'Imported {{count}} ledger rows (total {{total}}).',
-        rematched: 'Korean names rematched from GAS accounts.',
+        rematched: 'Korean names remapped from prior ledger and GAS. (mapped {{mapped}} / {{total}})',
         accountsCleared: 'All GAS accounts deleted.',
         cleared: 'Local cost-analysis data cleared.',
         excelDownloaded: 'Excel file downloaded.',

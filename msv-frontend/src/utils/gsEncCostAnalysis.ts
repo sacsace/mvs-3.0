@@ -377,6 +377,16 @@ function sheetToObjects(
 
 type ParsedLedgerRow = Omit<LedgerRow, 'matchedNameKo' | 'matchedNameEn' | 'matchSource' | 'id'>;
 
+const hasHangul = (s: string): boolean => /[가-힣]/.test(s);
+
+function pickStrongHqKo(...candidates: Array<string | undefined>): string {
+  for (const c of candidates) {
+    const n = norm(c);
+    if (n && hasHangul(n)) return n;
+  }
+  return '';
+}
+
 function buildParsedLedgerRowFromFields(
   fields: Partial<Record<LedgerImportField, unknown>>
 ): ParsedLedgerRow | null {
@@ -398,13 +408,17 @@ function buildParsedLedgerRowFromFields(
 
   const month = toMonthKey(voucherDate, monthRaw);
 
+  const tally = accountNameTally || accountNameHqKo;
+  // 한글이 없으면 HQ 한글명으로 쓰지 않음(영문/Tally 복제 → 이후 학습 매핑으로 채움)
+  const hqKo = hasHangul(accountNameHqKo) ? accountNameHqKo : '';
+
   return {
     voucherNo,
     voucherDate,
     accountCode,
-    accountNameTally: accountNameTally || accountNameHqKo,
-    accountNameHqKo: accountNameHqKo || accountNameTally,
-    accountNameHqEn,
+    accountNameTally: tally,
+    accountNameHqKo: hqKo,
+    accountNameHqEn: accountNameHqEn || (!hasHangul(accountNameHqKo) ? accountNameHqKo : '') || '',
     amountInr,
     amountKrw: toNumber(fields.amountKrw),
     costCategory: norm(fields.costCategory),
@@ -470,30 +484,61 @@ function findGasAccountForRow(
 function learnTallyRef(
   map: Map<string, TallyAccountRef>,
   tallyName: string,
-  ref: TallyAccountRef
+  ref: Partial<TallyAccountRef> & { accountCode?: string }
 ): void {
-  if (!tallyName || !ref.accountCode) return;
+  if (!tallyName) return;
   const key = normKey(tallyName);
   const prev = map.get(key);
+  const learnedKo = hasHangul(norm(ref.nameKo)) ? norm(ref.nameKo) : '';
   const next: TallyAccountRef = {
-    accountCode: ref.accountCode,
-    nameKo: ref.nameKo || prev?.nameKo || '',
-    nameEn: ref.nameEn || prev?.nameEn || '',
+    accountCode: norm(ref.accountCode) || prev?.accountCode || '',
+    nameKo: learnedKo || prev?.nameKo || '',
+    nameEn: norm(ref.nameEn) || prev?.nameEn || '',
+    costCategory: norm(ref.costCategory) || prev?.costCategory || '',
+    clientName: norm(ref.clientName) || prev?.clientName || '',
+    gsIndiaCost: norm(ref.gsIndiaCost) || prev?.gsIndiaCost || '',
+    division: norm(ref.division) || prev?.division || '',
   };
-  if (!prev || next.nameKo || next.nameEn) map.set(key, next);
+  if (
+    !prev ||
+    next.accountCode ||
+    next.nameKo ||
+    next.nameEn ||
+    next.costCategory ||
+    next.clientName ||
+    next.gsIndiaCost
+  ) {
+    map.set(key, next);
+  }
 }
 
-function mergeTallyRefsIntoMap(map: Map<string, TallyAccountRef>, rows: Array<Partial<ParsedLedgerRow>>): void {
+function mergeTallyRefsIntoMap(
+  map: Map<string, TallyAccountRef>,
+  rows: Array<Partial<ParsedLedgerRow> | Partial<LedgerRow>>
+): void {
   for (const row of rows) {
     const tally = norm(row.accountNameTally);
-    const accountCode = norm(row.accountCode);
-    if (!tally || !accountCode) continue;
+    if (!tally) continue;
+    const hqKo = pickStrongHqKo(row.accountNameHqKo, (row as LedgerRow).matchedNameKo);
+    const hqEn = norm(row.accountNameHqEn) || norm((row as LedgerRow).matchedNameEn);
     learnTallyRef(map, tally, {
-      accountCode,
-      nameKo: norm(row.accountNameHqKo),
-      nameEn: norm(row.accountNameHqEn),
+      accountCode: norm(row.accountCode),
+      nameKo: hqKo,
+      nameEn: hqEn,
+      costCategory: norm(row.costCategory),
+      clientName: norm(row.clientName),
+      gsIndiaCost: norm(row.gsIndiaCost),
+      division: norm(row.division),
     });
   }
+}
+
+/** 저장된 원가 내역 + 로컬 tally map 을 합쳐 학습 사전 구성 */
+export function rebuildTallyAccountMapFromLedger(rows: Array<Partial<LedgerRow>>): Map<string, TallyAccountRef> {
+  const map = loadTallyAccountMap();
+  mergeTallyRefsIntoMap(map, rows);
+  saveTallyAccountMap(map);
+  return map;
 }
 
 export function loadTallyAccountMap(): Map<string, TallyAccountRef> {
@@ -501,7 +546,21 @@ export function loadTallyAccountMap(): Map<string, TallyAccountRef> {
     const raw = localStorage.getItem(LS_TALLY_MAP);
     if (!raw) return new Map();
     const parsed = JSON.parse(raw) as Record<string, TallyAccountRef>;
-    return new Map(Object.entries(parsed));
+    const map = new Map<string, TallyAccountRef>();
+    for (const [key, ref] of Object.entries(parsed || {})) {
+      if (!ref || typeof ref !== 'object') continue;
+      const nameKo = hasHangul(norm(ref.nameKo)) ? norm(ref.nameKo) : '';
+      map.set(key, {
+        accountCode: norm(ref.accountCode),
+        nameKo,
+        nameEn: norm(ref.nameEn),
+        costCategory: norm(ref.costCategory),
+        clientName: norm(ref.clientName),
+        gsIndiaCost: norm(ref.gsIndiaCost),
+        division: norm(ref.division),
+      });
+    }
+    return map;
   } catch {
     return new Map();
   }
@@ -615,14 +674,16 @@ function appendLedgerObjects(
       )
     );
 
+    const tally = accountNameTally || accountNameHqKo;
+    const hqKo = hasHangul(accountNameHqKo) ? accountNameHqKo : '';
     // 급여 배분처럼 전표·계정·금액이 같아도 엑셀 각 행은 합계에 포함해야 함 → 행 단위 유지
     out.push({
       voucherNo,
       voucherDate,
       accountCode,
-      accountNameTally: accountNameTally || accountNameHqKo,
-      accountNameHqKo: accountNameHqKo || accountNameTally,
-      accountNameHqEn,
+      accountNameTally: tally,
+      accountNameHqKo: hqKo,
+      accountNameHqEn: accountNameHqEn || (!hasHangul(accountNameHqKo) ? accountNameHqKo : '') || '',
       amountInr,
       amountKrw,
       costCategory,
@@ -799,29 +860,52 @@ export function matchLedgerRows(
   accounts: GasAccount[]
 ): LedgerRow[] {
   const lookups = buildAccountLookups(accounts);
-  const byTally = new Map<string, TallyAccountRef>();
-  loadTallyAccountMap().forEach((ref, tallyKey) => {
-    byTally.set(tallyKey, ref);
-  });
+  const byTally = loadTallyAccountMap();
+  // 이전(또는 함께 넘긴) 누계 보조부에서 한글·원가구분·거래처 등을 먼저 학습
+  mergeTallyRefsIntoMap(byTally, rows);
 
   const matched = rows.map((row, idx) => {
-    const tallyRef = row.accountNameTally ? byTally.get(normKey(row.accountNameTally)) : undefined;
-    const { gas, source: gasSource } = findGasAccountForRow(row, lookups, tallyRef);
+    const tallyKey = row.accountNameTally ? normKey(row.accountNameTally) : '';
+    const tallyRef = tallyKey ? byTally.get(tallyKey) : undefined;
+    const fileKo = pickStrongHqKo(row.accountNameHqKo, (row as LedgerRow).matchedNameKo);
+    const { gas, source: gasSource } = findGasAccountForRow(
+      { ...row, accountNameHqKo: fileKo || row.accountNameHqKo },
+      lookups,
+      tallyRef
+    );
+
+    const accountCode = row.accountCode || tallyRef?.accountCode || gas?.accountCode || '';
+    const accountNameHqKo =
+      pickStrongHqKo(gas?.nameKo, tallyRef?.nameKo, fileKo) ||
+      (fileKo ? fileKo : '') ||
+      '';
+    const accountNameHqEn =
+      norm(gas?.nameEn) ||
+      norm(tallyRef?.nameEn) ||
+      norm(row.accountNameHqEn) ||
+      row.accountNameTally ||
+      '';
+
+    const costCategory = norm(row.costCategory) || norm(tallyRef?.costCategory) || '';
+    const clientName = norm(row.clientName) || norm(tallyRef?.clientName) || '';
+    const gsIndiaCost = norm(row.gsIndiaCost) || norm(tallyRef?.gsIndiaCost) || '';
+    const division = norm(row.division) || norm(tallyRef?.division) || '';
 
     let matchSource: LedgerRow['matchSource'] = 'none';
     if (gas && gasSource) matchSource = gasSource;
-    else if (tallyRef?.nameKo || tallyRef?.nameEn || row.accountNameHqKo) matchSource = 'file';
+    else if (pickStrongHqKo(tallyRef?.nameKo, fileKo) || (tallyRef?.accountCode && accountNameHqKo)) {
+      matchSource = 'file';
+    }
 
-    const accountCode = row.accountCode || tallyRef?.accountCode || gas?.accountCode || '';
-    const accountNameHqKo = row.accountNameHqKo || tallyRef?.nameKo || gas?.nameKo || '';
-    const accountNameHqEn =
-      row.accountNameHqEn || tallyRef?.nameEn || gas?.nameEn || row.accountNameTally || '';
-
-    if (row.accountNameTally && accountCode) {
+    if (row.accountNameTally) {
       learnTallyRef(byTally, row.accountNameTally, {
         accountCode,
-        nameKo: gas?.nameKo || accountNameHqKo,
-        nameEn: gas?.nameEn || accountNameHqEn,
+        nameKo: accountNameHqKo,
+        nameEn: accountNameHqEn,
+        costCategory,
+        clientName,
+        gsIndiaCost,
+        division,
       });
     }
 
@@ -830,8 +914,12 @@ export function matchLedgerRows(
       accountCode,
       accountNameHqKo,
       accountNameHqEn,
+      costCategory,
+      clientName,
+      gsIndiaCost,
+      division,
       id: `${idx}-${row.voucherNo}-${row.voucherDate}-${accountCode}-${row.amountInr}-${row.accountNameTally}`,
-      matchedNameKo: gas?.nameKo || tallyRef?.nameKo || accountNameHqKo || '',
+      matchedNameKo: pickStrongHqKo(gas?.nameKo, tallyRef?.nameKo, accountNameHqKo) || accountNameHqKo,
       matchedNameEn: gas?.nameEn || tallyRef?.nameEn || accountNameHqEn || row.accountNameTally || '',
       matchSource,
     };

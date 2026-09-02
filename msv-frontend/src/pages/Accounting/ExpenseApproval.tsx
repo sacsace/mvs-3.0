@@ -1110,10 +1110,11 @@ const ExpenseApproval: React.FC = () => {
         filtered = [];
       } else {
         // 승인·지급완료 건을 송금 목록 대상으로 두고, 상태 필터로 송금완료까지 검색
+        // 기본(전체)에서는 지급/송금 완료 건 숨김 — transfer_completed 선택 시에만 표시
         filtered = filtered.filter((expense) => {
           if (expense.status !== 'approved' && expense.status !== 'paid') return false;
           const transferKey = getTransferFilterKey(expense);
-          if (!statusFilter) return true;
+          if (!statusFilter) return transferKey !== 'transfer_completed';
           return transferKey === statusFilter;
         });
       }

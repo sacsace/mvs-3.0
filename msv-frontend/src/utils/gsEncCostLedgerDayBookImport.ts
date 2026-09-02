@@ -8,6 +8,11 @@ export type TallyAccountRef = {
   accountCode: string;
   nameKo: string;
   nameEn: string;
+  /** 이전 누계 보조부에서 학습한 부가 매핑 */
+  costCategory?: string;
+  clientName?: string;
+  gsIndiaCost?: string;
+  division?: string;
 };
 
 const norm = (v: unknown): string =>

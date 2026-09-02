@@ -60,6 +60,7 @@ import {
   matchLedgerRows,
   parseGasAccountsWorkbook,
   parseLedgerWorkbook,
+  rebuildTallyAccountMapFromLedger,
   resolveAmountKrw,
   saveBasicInfo,
   saveGasAccounts,
@@ -487,6 +488,28 @@ const getLastMonthDateRange = (now = new Date()): { from: string; to: string } =
   return { from: toYmd(fromDate), to: toYmd(toDate) };
 };
 
+/** 저장된 원가 내역 월 범위로 기간 필터 초기화 (없으면 지난달) */
+const getInitialPeriodRange = (rows: LedgerRow[]): { from: string; to: string } => {
+  const months = rows
+    .map((r) => {
+      const m = formatLedgerMonth(r.month);
+      if (m && m !== '-') return m;
+      const d = formatLedgerDate(r.voucherDate);
+      return d && d !== '-' && d.length >= 7 ? d.slice(0, 7) : '';
+    })
+    .filter(Boolean)
+    .sort();
+  if (!months.length) return getLastMonthDateRange();
+  const fromMonth = months[0];
+  const toMonth = months[months.length - 1];
+  const [y, m] = toMonth.split('-').map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  return {
+    from: `${fromMonth}-01`,
+    to: `${toMonth}-${String(lastDay).padStart(2, '0')}`,
+  };
+};
+
 const GsEncCostAnalysis: React.FC = () => {
   const { t } = useTranslation();
   const gasInputRef = useRef<HTMLInputElement>(null);
@@ -494,11 +517,19 @@ const GsEncCostAnalysis: React.FC = () => {
 
   const [tab, setTab] = useState(0);
   const [accounts, setAccounts] = useState<GasAccount[]>(() => loadGasAccounts());
-  const [ledger, setLedger] = useState<LedgerRow[]>(() => loadLedgerRows());
+  const [ledger, setLedger] = useState<LedgerRow[]>(() => {
+    const rows = loadLedgerRows();
+    if (!rows.length) return rows;
+    // 이전 누계 보조부 학습사전 + GAS로 한글/원가구분 등 자동 재매핑
+    rebuildTallyAccountMapFromLedger(rows);
+    const rematched = matchLedgerRows(rows, loadGasAccounts());
+    saveLedgerRows(rematched);
+    return rematched;
+  });
   const [basicInfo, setBasicInfo] = useState<GsEncBasicInfo>(() => loadBasicInfo());
   const [search, setSearch] = useState('');
-  const [periodFrom, setPeriodFrom] = useState(() => getLastMonthDateRange().from);
-  const [periodTo, setPeriodTo] = useState(() => getLastMonthDateRange().to);
+  const [periodFrom, setPeriodFrom] = useState(() => getInitialPeriodRange(loadLedgerRows()).from);
+  const [periodTo, setPeriodTo] = useState(() => getInitialPeriodRange(loadLedgerRows()).to);
   const [itemFilter, setItemFilter] = useState('');
   const [matchFilter, setMatchFilter] = useState<'all' | 'matched' | 'unmatched'>('all');
   const [exporting, setExporting] = useState(false);
@@ -577,6 +608,7 @@ const GsEncCostAnalysis: React.FC = () => {
   };
 
   const rematchAndSave = (nextAccounts: GasAccount[], nextRawLedger: LedgerRow[]) => {
+    rebuildTallyAccountMapFromLedger(nextRawLedger);
     const rematched = matchLedgerRows(nextRawLedger, nextAccounts);
     setAccounts(nextAccounts);
     setLedger(rematched);
@@ -1226,13 +1258,20 @@ const GsEncCostAnalysis: React.FC = () => {
               </FormControl>
               <Button
                 variant="outlined"
-                disabled={busy || !accounts.length}
+                disabled={busy || !ledger.length}
                 sx={mvsBodyOutlinedBtnSx}
                 onClick={() => {
+                  rebuildTallyAccountMapFromLedger(ledger);
                   const rematched = matchLedgerRows(ledger, accounts);
+                  const mapped = rematched.filter((r) => r.matchSource !== 'none').length;
                   setLedger(rematched);
                   saveLedgerRows(rematched);
-                  setSuccess(t('gsEncCostAnalysis.success.rematched'));
+                  setSuccess(
+                    t('gsEncCostAnalysis.success.rematched', {
+                      mapped,
+                      total: rematched.length,
+                    })
+                  );
                 }}
               >
                 {t('gsEncCostAnalysis.actions.rematch')}
