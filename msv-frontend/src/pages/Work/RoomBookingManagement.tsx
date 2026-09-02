@@ -143,6 +143,49 @@ interface StoredInvoiceTaxRate {
   sgstRate: number;
 }
 
+/** 56th GST Council — 호텔 숙박(1박당 실제 공급가액) 신규 세율 적용일 */
+const HOTEL_ACCOMMODATION_GST_NEW_FROM = '2025-09-22';
+const HOTEL_ACCOMMODATION_GST_THRESHOLD_INR = 7500;
+
+const toYmdLocal = (value?: string | Date | null): string => {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    const s = value.trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    const parsed = new Date(s);
+    if (Number.isNaN(parsed.getTime())) return '';
+    value = parsed;
+  }
+  const d = value as Date;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+/**
+ * 숙박 요금(1실·1박, INR)에 따른 CGST/SGST 각각의 세율(%).
+ * - 2025-09-22 이후: ≤₹7,500 → 2.5+2.5(5%), >₹7,500 → 9+9(18%) — 전액 단일 세율
+ * - 이전: ≤₹2,500 → 2.5, ≤₹7,500 → 6, 초과 → 9
+ */
+const getHotelAccommodationGstSplitRate = (
+  nightlyRateInr?: number,
+  supplyDate?: string | Date | null
+): number => {
+  const rate = Number(nightlyRateInr);
+  if (!Number.isFinite(rate) || rate < 0) return 2.5;
+
+  const ymd = toYmdLocal(supplyDate) || toYmdLocal(new Date());
+  const useNewRule = ymd >= HOTEL_ACCOMMODATION_GST_NEW_FROM;
+
+  if (useNewRule) {
+    return rate <= HOTEL_ACCOMMODATION_GST_THRESHOLD_INR ? 2.5 : 9;
+  }
+  if (rate <= 2500) return 2.5;
+  if (rate <= HOTEL_ACCOMMODATION_GST_THRESHOLD_INR) return 6;
+  return 9;
+};
+
 interface RoomBookingManagementProps {
   dialogOnly?: boolean;
   initialFormState?: Partial<{
@@ -374,12 +417,16 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       });
     }
   };
-  const getAutoGstRate = (nightlyRate?: number) => {
-    if (!nightlyRate || !Number.isFinite(nightlyRate)) return 2.5;
-    if (nightlyRate <= 2500) return 2.5;
-    if (nightlyRate <= 7500) return 6;
-    return 9;
+  const getAutoGstRate = (nightlyRate?: number, supplyDate?: string | Date | null) =>
+    getHotelAccommodationGstSplitRate(nightlyRate, supplyDate);
+
+  const applyAutoGstFromNightly = (nightlyRate?: number, supplyDate?: string | Date | null) => {
+    const autoRate = getAutoGstRate(nightlyRate, supplyDate);
+    setCgstRate(autoRate);
+    setSgstRate(autoRate);
+    return autoRate;
   };
+
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelTargetId, setCancelTargetId] = useState<number | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -516,7 +563,16 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
 
   const persistInvoiceTaxRate = (bookingId: number, next: StoredInvoiceTaxRate) => {
     setInvoiceTaxSnapshot((prev) => {
-      const snapshot = { ...prev, [String(bookingId)]: next };
+      const key = String(bookingId);
+      const prevRate = prev[key];
+      if (
+        prevRate &&
+        Number(prevRate.cgstRate) === Number(next.cgstRate) &&
+        Number(prevRate.sgstRate) === Number(next.sgstRate)
+      ) {
+        return prev;
+      }
+      const snapshot = { ...prev, [key]: next };
       userUiPreferencesService.patch({ roomInvoiceTaxSnapshot: snapshot }).catch(() => {});
       return snapshot;
     });
@@ -557,16 +613,12 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
     setInvoiceUnitPrice(
       Number.isFinite(Number(nightly)) ? String(Number(nightly.toFixed(2))) : ''
     );
-    const autoRate = getAutoGstRate(nightly);
-    const storedRate = invoiceTaxSnapshot[String(selectedBooking.id)];
-    if (storedRate && Number.isFinite(storedRate.cgstRate) && Number.isFinite(storedRate.sgstRate)) {
-      setCgstRate(Number(storedRate.cgstRate));
-      setSgstRate(Number(storedRate.sgstRate));
-      return;
-    }
+    const supplyDate = selectedBooking.checkInDate || selectedBooking.checkOutDate;
+    const autoRate = getAutoGstRate(nightly, supplyDate);
     setCgstRate(autoRate);
     setSgstRate(autoRate);
-  }, [selectedBooking, invoiceTaxSnapshot]);
+    persistInvoiceTaxRate(selectedBooking.id, { cgstRate: autoRate, sgstRate: autoRate });
+  }, [selectedBooking]);
 
   useEffect(() => {
     const loadIssuerCompany = async () => {
@@ -2365,9 +2417,18 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     <TableCell align="right" sx={invoiceCellSx}>
                       <InputBase
                         value={formatCurrency(invoiceUnitPrice)}
-                        onChange={(event) =>
-                          setInvoiceUnitPrice(parseCurrencyInput(event.target.value))
-                        }
+                        onChange={(event) => {
+                          const next = parseCurrencyInput(event.target.value);
+                          setInvoiceUnitPrice(next);
+                          const nightly = Number(next);
+                          const supplyDate =
+                            selectedBooking.checkInDate || selectedBooking.checkOutDate;
+                          const autoRate = applyAutoGstFromNightly(nightly, supplyDate);
+                          persistInvoiceTaxRate(selectedBooking.id, {
+                            cgstRate: autoRate,
+                            sgstRate: autoRate,
+                          });
+                        }}
                         inputProps={{
                           inputMode: 'numeric',
                           'aria-label': 'Unit Price'
@@ -2461,6 +2522,15 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
                     Rs. {formatCurrency(sgstAmount.toFixed(2))}
                   </Typography>
                 </Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: 'block', mb: 0.75, lineHeight: 1.35 }}
+                >
+                  {effectiveUnitPrice <= HOTEL_ACCOMMODATION_GST_THRESHOLD_INR
+                    ? 'Accommodation GST 5% (≤ ₹7,500 / night)'
+                    : 'Accommodation GST 18% (> ₹7,500 / night)'}
+                </Typography>
                 <Divider sx={{ my: 1, borderColor: '#CBD5E1' }} />
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Typography variant="subtitle2" fontWeight={700}>
