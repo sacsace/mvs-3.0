@@ -14,6 +14,8 @@ export type BuildPagedPdfFromCanvasOptions = {
   /** 아이템 수 — threshold 미만이면 1페이지 맞춤 축소 */
   itemCount?: number;
   fitOnePageItemThreshold?: number;
+  /** true면 itemCount와 무관하게 한 페이지로 축소 */
+  forceFitOnePage?: boolean;
   compress?: boolean;
 };
 
@@ -53,7 +55,8 @@ export function buildPagedPdfFromCanvas(
   let drawWidth = printableWidthMm;
   let drawHeight = (canvas.height * drawWidth) / canvas.width;
 
-  const forceFitOnePage = itemCount < fitThreshold;
+  const forceFitOnePage =
+    Boolean(options.forceFitOnePage) || itemCount < fitThreshold;
   if (forceFitOnePage && drawHeight > printableHeightMm) {
     const fit = printableHeightMm / drawHeight;
     drawWidth *= fit;

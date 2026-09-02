@@ -2,6 +2,7 @@ import {
   DOCUMENT_PDF_CAPTURE_ROOT_ATTR,
   DOCUMENT_PDF_FIT_ONE_PAGE_ITEM_THRESHOLD,
   DOCUMENT_PDF_MARGINS_MM,
+  buildDocumentDownloadFilename,
   downloadDocumentPdf,
   documentPdfToBase64,
   ensurePdfExtension,
@@ -841,18 +842,19 @@ export function buildQuotationPdfFilename(opts: {
   detail?: string | null;
   quotationNumber?: string | null;
   date?: Date;
+  /** 발행 견적 Quot(기본) / 받은 견적 RQuot */
+  code?: 'Quot' | 'RQuot';
 }): string {
-  const d = opts.date ?? new Date();
-  const yyyymmdd = [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, '0'),
-    String(d.getDate()).padStart(2, '0'),
-  ].join('');
-  const company = sanitizePdfFilenamePart(opts.companyName || '') || 'Customer';
   const detail =
     buildFilenameDetailFromItems(opts.items) ||
     sanitizePdfFilenamePart(opts.detail || '', PDF_FILENAME_DETAIL_MAX) ||
     sanitizePdfFilenamePart(opts.quotationNumber || '', PDF_FILENAME_DETAIL_MAX) ||
     'Quotation';
-  return `${yyyymmdd}_Quot (${company}) (${detail}).pdf`;
+  return buildDocumentDownloadFilename({
+    code: opts.code || 'Quot',
+    companyName: opts.companyName,
+    detail,
+    date: opts.date,
+    detailMaxLength: PDF_FILENAME_DETAIL_MAX,
+  });
 }

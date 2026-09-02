@@ -75,6 +75,7 @@ import {
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import AuthMedia from '../../components/Common/AuthMedia';
 import { generateRoomBookingId } from '../../utils/bookingId';
+import { buildDocumentDownloadFilename } from '../../utils/pdf';
 
 const ROOM_BOOKING_MENU_ROUTES = [
   '/hotel/room-reservation',
@@ -2056,20 +2057,14 @@ const RoomBookingManagement: React.FC<RoomBookingManagementProps> = ({
       heightLeft -= printableHeight;
     }
 
-    const buildDateToken = (value?: string): string => {
-      const date = value ? new Date(value) : new Date();
-      const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
-      const y = safeDate.getFullYear();
-      const m = String(safeDate.getMonth() + 1).padStart(2, '0');
-      const d = String(safeDate.getDate()).padStart(2, '0');
-      return `${y}${m}${d}`;
-    };
-    const sanitizeFilePart = (value: string) =>
-      value.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim();
-    const recipientLabel = sanitizeFilePart(billTo.company || billTo.name || 'Recipient');
-    const descriptionLabel = sanitizeFilePart(invoiceDescription || 'Accommodation charge');
-    const dateToken = buildDateToken(selectedBooking?.checkInDate);
-    const filename = `${dateToken}_Invoice (${recipientLabel}) (${descriptionLabel}).pdf`;
+    const recipientLabel = billTo.company || billTo.name || 'Recipient';
+    const descriptionLabel = invoiceDescription || 'Accommodation charge';
+    const filename = buildDocumentDownloadFilename({
+      code: 'Invoice',
+      companyName: recipientLabel,
+      detail: descriptionLabel,
+      date: selectedBooking?.checkInDate,
+    });
     return { pdf, filename };
   };
 

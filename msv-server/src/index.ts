@@ -3,7 +3,9 @@
 import express from 'express';
 import cors from 'cors';
 import compression from 'compression';
+import fs from 'fs';
 import helmet from 'helmet';
+import path from 'path';
 import rateLimit from 'express-rate-limit';
 // 환경 변수 로드 (env.ts에서 monorepo .env 포함 로드)
 import { validateEnv, printEnvInfo } from './config/env';
@@ -107,6 +109,8 @@ app.use(blockSensitivePaths);
 app.use(compression({
   filter: (req, res) => {
     if (req.path === '/health' || req.path === '/api/health') return false;
+    // 업로드 바이너리(이미지/PDF) 압축 시 깨지거나 불필요하게 CPU 사용
+    if (req.path.startsWith('/uploads')) return false;
     return compression.filter(req, res);
   },
   threshold: 1024,
@@ -299,18 +303,41 @@ app.use((req: any, res, next) => {
 
 // 업로드 파일 정적 제공 (JWT 인증 필수) — 공개 URL은 /uploads, 디스크는 영구 볼륨/로컬 루트
 const uploadPath = ensureUploadRoot();
-console.log(
-  `[uploads] serving /uploads from ${uploadPath}` +
-    (process.env.RAILWAY_VOLUME_MOUNT_PATH
-      ? ` (volume mount ${process.env.RAILWAY_VOLUME_MOUNT_PATH})`
-      : '')
-);
+try {
+  const receiptsDir = path.join(uploadPath, 'expense-receipts');
+  const receiptCount = fs.existsSync(receiptsDir) ? fs.readdirSync(receiptsDir).length : 0;
+  console.log(
+    `[uploads] serving /uploads from ${uploadPath}` +
+      (process.env.RAILWAY_VOLUME_MOUNT_PATH
+        ? ` (volume mount ${process.env.RAILWAY_VOLUME_MOUNT_PATH})`
+        : '') +
+      ` · expense-receipts=${receiptCount}`
+  );
+} catch (err: any) {
+  console.log(
+    `[uploads] serving /uploads from ${uploadPath}` +
+      (process.env.RAILWAY_VOLUME_MOUNT_PATH
+        ? ` (volume mount ${process.env.RAILWAY_VOLUME_MOUNT_PATH})`
+        : '')
+  );
+  console.warn('[uploads] could not count expense-receipts:', err?.message || err);
+}
 app.use('/uploads', authenticateUploadAccess, express.static(uploadPath, {
   dotfiles: 'deny',
   index: false,
   redirect: false,
+  fallthrough: false,
   maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0,
+  setHeaders: (res) => {
+    // FE(www) ↔ BE 분리 도메인에서 <img>/fetch 가 가능하도록
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+  },
 }));
+// 인증은 됐지만 파일이 없을 때 명확한 404
+app.use('/uploads', (_req, res) => {
+  res.status(404).json({ success: false, message: '파일을 찾을 수 없습니다.' });
+});
 
 // 테스트용 API 제거 - 실제 menuRoutes에서 권한 기반으로 처리
 

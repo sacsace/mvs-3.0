@@ -72,6 +72,7 @@ import { useStore } from '../../store';
 import { accountingService, partnerService, companyService } from '../../services/api';
 import { useReferenceDataStore } from '../../store/referenceDataStore';
 import AuthMedia from '../../components/Common/AuthMedia';
+import { buildDocumentDownloadFilename } from '../../utils/pdf';
 
 interface InvoiceItem {
   id?: number;
@@ -902,7 +903,23 @@ const RegularInvoice: React.FC = () => {
     }
     try {
       const pdf = await generateInvoicePdf();
-      pdf.save(`${selectedInvoice.invoice_number}.pdf`);
+      const company =
+        selectedInvoice.customer_name ||
+        viewCustomer?.name ||
+        issuerCompany?.name ||
+        'Customer';
+      const detail =
+        selectedInvoice.invoice_number ||
+        buildInvoiceLineSummaryForEmail(selectedInvoice.items || [], 1) ||
+        'Invoice';
+      pdf.save(
+        buildDocumentDownloadFilename({
+          code: 'Invoice',
+          companyName: company,
+          detail,
+          date: selectedInvoice.invoice_date || selectedInvoice.created_at,
+        })
+      );
     } catch (error) {
       showSnackbar(tr('PDF 다운로드에 실패했습니다.', 'Failed to download PDF.'), 'error');
     }
@@ -935,11 +952,24 @@ const RegularInvoice: React.FC = () => {
         currency: selectedInvoice.currency || 'INR',
         summary
       });
+      const company =
+        (selectedInvoice.customer_name || viewCustomer.name || issuerCompany?.name || '').trim() ||
+        'Customer';
+      const detail =
+        selectedInvoice.invoice_number ||
+        buildInvoiceLineSummaryForEmail(selectedInvoice.items || [], 1) ||
+        'Invoice';
+      const attachmentFilename = buildDocumentDownloadFilename({
+        code: 'Invoice',
+        companyName: company,
+        detail,
+        date: selectedInvoice.invoice_date || selectedInvoice.created_at,
+      });
       const res = await accountingService.sendInvoiceEmail(selectedInvoice.id, {
         to: toEmail,
         subject: emailSubject,
         message: emailBody,
-        filename: `${selectedInvoice.invoice_number.replace(/[^\w.-]+/g, '_')}.pdf`
+        filename: attachmentFilename,
       });
       if (res?.success === false && res?.message) {
         showSnackbar(res.message, 'error');

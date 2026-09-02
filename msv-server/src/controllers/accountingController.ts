@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import fs from 'fs';
 import jwt from 'jsonwebtoken';
 import path from 'path';
 import { RequestWithUser } from '../types';
@@ -32,6 +33,7 @@ import {
   expenseMatchesAssignedScope,
   invoiceMatchesAssignedScope,
 } from '../services/workAssigneeScope';
+import { getUploadRoot } from '../utils/uploadPath';
 
 const ensureInvoiceColumns = async () => {
   try {
@@ -3040,6 +3042,11 @@ export const uploadExpenseReceiptByToken = async (req: Request, res: Response) =
       return res.status(403).json({ success: false, message: '권한이 없습니다.' });
     }
     const relativePath = path.join('expense-receipts', file.filename).replace(/\\/g, '/');
+    const absolutePath = path.join(getUploadRoot(), relativePath);
+    if (!fs.existsSync(absolutePath)) {
+      console.error('[upload] receipt missing on disk after multer:', absolutePath);
+      return res.status(500).json({ success: false, message: '파일 저장에 실패했습니다. 잠시 후 다시 시도해주세요.' });
+    }
     const attachments = Array.isArray(expense.attachments) ? [...expense.attachments] : [];
     attachments.push(relativePath);
     await expense.update({ attachments });
@@ -3069,6 +3076,16 @@ export const uploadExpenseReceiptById = async (req: RequestWithUser, res: Respon
     const newPaths = files
       .filter((file) => file.filename)
       .map((file) => path.join('expense-receipts', file.filename as string).replace(/\\/g, '/'));
+    for (const relativePath of newPaths) {
+      const absolutePath = path.join(getUploadRoot(), relativePath);
+      if (!fs.existsSync(absolutePath)) {
+        console.error('[upload] receipt missing on disk after multer:', absolutePath);
+        return res.status(500).json({
+          success: false,
+          message: '파일 저장에 실패했습니다. 잠시 후 다시 시도해주세요.',
+        });
+      }
+    }
     attachments.push(...newPaths);
     await expense.update({ attachments });
     res.json({ success: true, message: '영수증이 첨부되었습니다.', paths: newPaths, data: sanitizeExpenseForUser(expense, req.user) });

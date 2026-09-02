@@ -137,10 +137,15 @@ import { validateBody } from '../middleware/validate';
 const router = Router();
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
-// 영수증 업로드용 multer (인증 없이 토큰으로만 사용)
-const expenseReceiptsPath = ensureUploadSubdir('expense-receipts');
+// 영수증 업로드용 multer (인증 없이 토큰으로만 사용) — destination은 요청 시점에 해석(볼륨 마운트 반영)
 const receiptStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, expenseReceiptsPath),
+  destination: (_req, _file, cb) => {
+    try {
+      cb(null, ensureUploadSubdir('expense-receipts'));
+    } catch (error) {
+      cb(error as Error, '');
+    }
+  },
   filename: (_req, file, cb) => {
     const safeName = (file.originalname || 'file').replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const finalName = `${Date.now()}_${safeName}`;
@@ -157,9 +162,14 @@ const receiptUpload = multer({
   }
 });
 
-const remittanceProofsPath = ensureUploadSubdir('expense-remittance-proofs');
 const remittanceProofStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, remittanceProofsPath),
+  destination: (_req, _file, cb) => {
+    try {
+      cb(null, ensureUploadSubdir('expense-remittance-proofs'));
+    } catch (error) {
+      cb(error as Error, '');
+    }
+  },
   filename: (_req, file, cb) => {
     let original = file.originalname || 'proof';
     try {
@@ -188,9 +198,14 @@ const remittanceProofUpload = multer({
   }
 });
 
-const autoVoucherPath = ensureUploadSubdir('auto-vouchers');
 const autoVoucherStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, autoVoucherPath),
+  destination: (_req, _file, cb) => {
+    try {
+      cb(null, ensureUploadSubdir('auto-vouchers'));
+    } catch (error) {
+      cb(error as Error, '');
+    }
+  },
   filename: (_req, file, cb) => {
     const safeName = (file.originalname || 'document').replace(/[^a-zA-Z0-9.\-_]/g, '_');
     cb(null, `${Date.now()}_${safeName}`);

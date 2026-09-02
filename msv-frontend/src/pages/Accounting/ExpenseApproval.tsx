@@ -360,6 +360,7 @@ const ExpenseFlowStamp = ({
   children?: React.ReactNode;
 }) => (
   <Box
+    className="expense-flow-stamp"
     sx={{
       width: wide ? 222 : 140,
       flexShrink: 0,
@@ -1935,7 +1936,9 @@ const ExpenseApproval: React.FC = () => {
     accountingService.updateExpenseReportStatus(id, 'approved')
       .then(() => loadExpenseData())
       .then(() => {
-        setSelectedExpense((prev) => (prev && prev.id === id ? { ...prev, status: 'approved' } : prev));
+        setSelectedExpense(null);
+        setListTab('received');
+        setViewMode('list');
         setSuccess(t('expenseApproval.success.approved'));
       })
       .catch(() => {
@@ -2345,10 +2348,16 @@ const ExpenseApproval: React.FC = () => {
     setPdfDownloading(true);
     try {
       const meta = selectedExpense.itemMeta || {};
-      const filename = buildExpenseApprovalPdfFilename(
-        meta.voucherNo || selectedExpense.expenseId,
-        selectedExpense.title
-      );
+      const filename = buildExpenseApprovalPdfFilename({
+        companyName:
+          companyName ||
+          selectedExpense.companyName ||
+          selectedExpense.itemMeta?.department ||
+          '',
+        detail: selectedExpense.title || meta.voucherNo || selectedExpense.expenseId,
+        voucherNo: meta.voucherNo || selectedExpense.expenseId,
+        title: selectedExpense.title,
+      });
       await downloadExpenseApprovalPdf(root, filename);
       setSuccess(t('expenseApproval.success.pdfDownloaded'));
     } catch (pdfError: any) {
@@ -3662,6 +3671,7 @@ const ExpenseApproval: React.FC = () => {
                     return (
                       <Box
                         key={node.key}
+                        className="expense-flow-stamp-wrap"
                         sx={{
                           display: 'flex',
                           alignItems: 'center',

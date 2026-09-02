@@ -1,6 +1,12 @@
 export { loadPdfLibs, type PdfLibs } from './loadPdfLibs';
 export { sanitizeFilenamePart, ensurePdfExtension } from './sanitizeFilename';
 export {
+  buildDocumentDownloadFilename,
+  formatDownloadDateToken,
+  type BuildDocumentDownloadFilenameOptions,
+  type DocumentDownloadCode,
+} from './documentDownloadFilename';
+export {
   A4_PAGE_MM,
   DOCUMENT_PDF_MARGINS_MM,
   DOCUMENT_PDF_BASE_TYPOGRAPHY_CSS,

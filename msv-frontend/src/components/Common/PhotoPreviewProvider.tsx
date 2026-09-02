@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { downloadUploadFile } from '../../utils/uploadUrl';
 
 type PhotoPreviewContextValue = {
-  openPhotoPreview: (url: string, alt?: string) => void;
+  openPhotoPreview: (url: string, alt?: string, sourcePath?: string) => void;
   closePhotoPreview: () => void;
 };
 
@@ -31,7 +31,11 @@ export function usePhotoPreviewOptional(): PhotoPreviewContextValue | null {
   return useContext(PhotoPreviewContext);
 }
 
-function resolvePreviewUrlFromTarget(target: EventTarget | null): { url: string; alt: string } | null {
+function resolvePreviewUrlFromTarget(target: EventTarget | null): {
+  url: string;
+  alt: string;
+  sourcePath: string;
+} | null {
   if (!(target instanceof Element)) return null;
 
   // 헤더 유저 메뉴 등 — 미리보기 제외
@@ -51,7 +55,11 @@ function resolvePreviewUrlFromTarget(target: EventTarget | null): { url: string;
       (explicit instanceof HTMLImageElement ? explicit.alt : '') ||
       explicit.querySelector('img')?.alt ||
       '';
-    return { url, alt };
+    const sourcePath =
+      explicit.getAttribute('data-photo-preview-src') ||
+      explicit.querySelector('img')?.getAttribute('data-photo-preview-src') ||
+      url;
+    return { url, alt, sourcePath };
   }
 
   const avatarRoot = target.closest('.MuiAvatar-root');
@@ -59,7 +67,11 @@ function resolvePreviewUrlFromTarget(target: EventTarget | null): { url: string;
     const img = avatarRoot.querySelector('img.MuiAvatar-img, img') as HTMLImageElement | null;
     const url = img?.currentSrc || img?.src || '';
     if (!url) return null;
-    return { url, alt: img?.alt || '' };
+    return {
+      url,
+      alt: img?.alt || '',
+      sourcePath: img?.getAttribute('data-photo-preview-src') || url,
+    };
   }
 
   if (target instanceof HTMLImageElement) {
@@ -72,7 +84,11 @@ function resolvePreviewUrlFromTarget(target: EventTarget | null): { url: string;
     if (target.closest('button, a, [role="button"]') && !target.hasAttribute('data-photo-preview')) {
       return null;
     }
-    return { url, alt: target.alt || '' };
+    return {
+      url,
+      alt: target.alt || '',
+      sourcePath: target.getAttribute('data-photo-preview-src') || url,
+    };
   }
 
   return null;
@@ -82,17 +98,20 @@ export const PhotoPreviewProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const { t } = useTranslation();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewAlt, setPreviewAlt] = useState('');
+  const [previewSourcePath, setPreviewSourcePath] = useState('');
 
-  const openPhotoPreview = useCallback((url: string, alt = '') => {
+  const openPhotoPreview = useCallback((url: string, alt = '', sourcePath = '') => {
     const trimmed = String(url || '').trim();
     if (!trimmed) return;
     setPreviewUrl(trimmed);
     setPreviewAlt(alt);
+    setPreviewSourcePath(sourcePath || trimmed);
   }, []);
 
   const closePhotoPreview = useCallback(() => {
     setPreviewUrl(null);
     setPreviewAlt('');
+    setPreviewSourcePath('');
   }, []);
 
   useEffect(() => {
@@ -106,7 +125,7 @@ export const PhotoPreviewProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
       event.preventDefault();
       event.stopPropagation();
-      openPhotoPreview(resolved.url, resolved.alt);
+      openPhotoPreview(resolved.url, resolved.alt, resolved.sourcePath);
     };
 
     document.addEventListener('click', onClick, true);
@@ -182,7 +201,7 @@ export const PhotoPreviewProvider: React.FC<{ children: React.ReactNode }> = ({ 
               startIcon={<DownloadIcon />}
               onClick={() => {
                 const named = previewAlt && /\.\w{2,4}$/.test(previewAlt) ? previewAlt : undefined;
-                void downloadUploadFile(previewUrl, named);
+                void downloadUploadFile(previewSourcePath || previewUrl, named);
               }}
               sx={{ borderRadius: '8px', textTransform: 'none', fontWeight: 600, bgcolor: '#fff' }}
             >
